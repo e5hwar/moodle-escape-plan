@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/dropdown.tsx","./src/components/filters.tsx","./src/components/footer.tsx","./src/components/newtaskwizard.tsx","./src/components/sidebar.tsx","./src/components/taskdetail.tsx","./src/components/taskspage.tsx","./src/components/icons.tsx","./src/data/filters.ts","./src/data/tasks.ts"],"version":"5.9.3"}

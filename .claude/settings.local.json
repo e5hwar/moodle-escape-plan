@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npx vite *)",
+      "Bash(python3 -c ' *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Read(//private/tmp/design_pkg/ideas/**)",
+      "mcp__plugin_figma_figma__get_design_context",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "Bash(curl -s -o /tmp/sidebar.png \"https://www.figma.com/api/mcp/asset/969ed9bc-cc72-43ee-8d97-1ffef72ab3c4\")",
+      "Read(//tmp/**)",
+      "Bash(ls -la /var/folders/*/T/claude* 2>/dev/null | head; ls /tmp/ | grep -iE \"claude|paste|image\" 2>/dev/null | head)"
+    ]
+  }
+}
