@@ -90,6 +90,7 @@ const items: NavItem[] = [
     icon: "book",
     children: [
       { key: "tasks", label: "Tasks", navKey: "tasks" },
+      { key: "question-bank", label: "Question Bank", navKey: "question-bank" },
       { key: "certifications", label: "Certifications", navKey: "certs" },
     ],
   },
@@ -100,7 +101,7 @@ const items: NavItem[] = [
     icon: "layers",
     children: [
       { key: "industries", label: "Industries" },
-      { key: "content-links", label: "Content Links" },
+      { key: "content-links", label: "Content Links", navKey: "content-links" },
     ],
   },
   {
@@ -128,6 +129,8 @@ const items: NavItem[] = [
 const ACTIVE_MAP: Record<string, string> = {
   tasks: "tasks",
   certs: "certifications",
+  "content-links": "content-links",
+  "question-bank": "question-bank",
 };
 
 function findGroupForSubKey(subKey: string): string | undefined {
@@ -146,6 +149,7 @@ type Props = {
 
 export function Sidebar({ active = "tasks", onNavigate }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const activeSubKey = ACTIVE_MAP[active] ?? active;
   const activeGroupKey = useMemo(() => findGroupForSubKey(activeSubKey), [activeSubKey]);
 
@@ -162,123 +166,139 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
     else onNavigate?.(sub.key);
   }
 
-  if (collapsed) {
+  const showExpanded = !collapsed || hovered;
+  const isOverlay = collapsed && hovered;
+  const hostClass = `sidebar-host ${collapsed ? "sidebar-host--narrow" : "sidebar-host--wide"}`;
+  const onEnter = () => setHovered(true);
+  const onLeave = () => setHovered(false);
+
+  if (!showExpanded) {
     const iconRow = items.filter(
       (i): i is LinkItem | GroupItem => i.kind === "link" || i.kind === "group"
     );
     return (
-      <aside className="sidebar sidebar--collapsed">
-        <div className="sidebar__top-collapsed">
-          <button
-            className="sidebar__logo-btn"
-            aria-label="Expand sidebar"
-            onClick={() => setCollapsed(false)}
-          >
+      <div className={hostClass} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+        <aside className="sidebar sidebar--collapsed">
+          <div className="sidebar__top-collapsed">
+            <button
+              className="sidebar__logo-btn"
+              aria-label="Expand sidebar"
+              onClick={() => setCollapsed(false)}
+            >
+              <HardHatLogo size={28} />
+            </button>
+          </div>
+          <nav className="sidebar__nav-collapsed">
+            {iconRow.map((item) => {
+              const isActive =
+                item.kind === "group"
+                  ? item.key === activeGroupKey
+                  : item.key === activeSubKey;
+              return (
+                <button
+                  key={item.key}
+                  className={`sidebar__icon-btn ${isActive ? "is-active" : ""}`}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={() => {
+                    if (item.kind === "group") {
+                      setOpenGroups((prev) => ({ ...prev, [item.key]: true }));
+                      setCollapsed(false);
+                    } else {
+                      onNavigate?.(item.key);
+                    }
+                  }}
+                >
+                  {I[item.icon]}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+      </div>
+    );
+  }
+
+  return (
+    <div className={hostClass} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <aside className={`sidebar sidebar--expanded ${isOverlay ? "sidebar--overlay" : ""}`}>
+        <div className="sidebar__header">
+          <div className="sidebar__brand">
             <HardHatLogo size={28} />
+          </div>
+          <button
+            className="sidebar__collapse-icon"
+            aria-label={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
+            onClick={() => {
+              if (isOverlay) {
+                setCollapsed(false);
+              } else {
+                setCollapsed(true);
+              }
+            }}
+          >
+            {I.chevronsLeft}
           </button>
         </div>
-        <nav className="sidebar__nav-collapsed">
-          {iconRow.map((item) => {
-            const isActive =
-              item.kind === "group"
-                ? item.key === activeGroupKey
-                : item.key === activeSubKey;
+        <nav className="sidebar__nav">
+          {items.map((item, idx) => {
+            if (item.kind === "section") {
+              return (
+                <div key={`s-${idx}`} className="sidebar__section">
+                  {item.label}
+                </div>
+              );
+            }
+            if (item.kind === "group") {
+              const isOpen = !!openGroups[item.key];
+              const containsActive = item.key === activeGroupKey;
+              return (
+                <div key={item.key} className="sidebar__group">
+                  <button
+                    className={`sidebar__link ${containsActive && !isOpen ? "is-active" : ""}`}
+                    onClick={() => toggleGroup(item.key)}
+                    aria-expanded={isOpen}
+                  >
+                    <span className="sidebar__link-icon">{I[item.icon]}</span>
+                    <span className="sidebar__link-label">{item.label}</span>
+                    <span className={`sidebar__link-caret ${isOpen ? "is-open" : ""}`}>
+                      {I.chevronDown}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="sidebar__sublist">
+                      {item.children.map((sub) => {
+                        const isSubActive = sub.key === activeSubKey;
+                        return (
+                          <button
+                            key={sub.key}
+                            className={`sidebar__sublink ${isSubActive ? "is-active" : ""}`}
+                            onClick={() => handleSubClick(sub)}
+                          >
+                            <span className="sidebar__sublink-label">{sub.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            const isActive = item.key === activeSubKey;
             return (
               <button
                 key={item.key}
-                className={`sidebar__icon-btn ${isActive ? "is-active" : ""}`}
-                aria-label={item.label}
-                title={item.label}
-                onClick={() => {
-                  if (item.kind === "group") {
-                    setOpenGroups((prev) => ({ ...prev, [item.key]: true }));
-                    setCollapsed(false);
-                  } else {
-                    onNavigate?.(item.key);
-                  }
-                }}
+                className={`sidebar__link ${isActive ? "is-active" : ""}`}
+                onClick={() => onNavigate?.(item.key)}
               >
-                {I[item.icon]}
+                <span className="sidebar__link-icon">{I[item.icon]}</span>
+                <span className="sidebar__link-label">{item.label}</span>
               </button>
             );
           })}
         </nav>
       </aside>
-    );
-  }
-
-  return (
-    <aside className="sidebar sidebar--expanded">
-      <div className="sidebar__header">
-        <div className="sidebar__brand">
-          <HardHatLogo size={28} />
-        </div>
-        <button
-          className="sidebar__collapse-icon"
-          aria-label="Collapse sidebar"
-          onClick={() => setCollapsed(true)}
-        >
-          {I.chevronsLeft}
-        </button>
-      </div>
-      <nav className="sidebar__nav">
-        {items.map((item, idx) => {
-          if (item.kind === "section") {
-            return (
-              <div key={`s-${idx}`} className="sidebar__section">
-                {item.label}
-              </div>
-            );
-          }
-          if (item.kind === "group") {
-            const isOpen = !!openGroups[item.key];
-            const containsActive = item.key === activeGroupKey;
-            return (
-              <div key={item.key} className="sidebar__group">
-                <button
-                  className={`sidebar__link ${containsActive && !isOpen ? "is-active" : ""}`}
-                  onClick={() => toggleGroup(item.key)}
-                  aria-expanded={isOpen}
-                >
-                  <span className="sidebar__link-icon">{I[item.icon]}</span>
-                  <span className="sidebar__link-label">{item.label}</span>
-                  <span className={`sidebar__link-caret ${isOpen ? "is-open" : ""}`}>
-                    {I.chevronDown}
-                  </span>
-                </button>
-                {isOpen && (
-                  <div className="sidebar__sublist">
-                    {item.children.map((sub) => {
-                      const isSubActive = sub.key === activeSubKey;
-                      return (
-                        <button
-                          key={sub.key}
-                          className={`sidebar__sublink ${isSubActive ? "is-active" : ""}`}
-                          onClick={() => handleSubClick(sub)}
-                        >
-                          <span className="sidebar__sublink-label">{sub.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
-          const isActive = item.key === activeSubKey;
-          return (
-            <button
-              key={item.key}
-              className={`sidebar__link ${isActive ? "is-active" : ""}`}
-              onClick={() => onNavigate?.(item.key)}
-            >
-              <span className="sidebar__link-icon">{I[item.icon]}</span>
-              <span className="sidebar__link-label">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-    </aside>
+    </div>
   );
 }
 

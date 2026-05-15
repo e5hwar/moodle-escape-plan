@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { tasks as allTasks, type Task } from "../data/tasks";
 import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, type FilterState, type ColumnState } from "./Filters";
-import { CheckIcon, SearchIcon, SortIcon, ChevronLeftIcon } from "./icons";
+import { SearchIcon, SortIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -26,30 +26,6 @@ const MoreIcon = () => (
     <circle cx="19" cy="12" r="1.9" />
   </svg>
 );
-
-function SubtleCheckbox({
-  checked,
-  onClick,
-  label,
-}: {
-  checked: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  label?: string;
-}) {
-  return (
-    <span
-      className={`row-checkbox ${checked ? "checked" : ""}`}
-      onClick={onClick}
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-    >
-      {checked && <CheckIcon />}
-    </span>
-  );
-}
-
-const Caret = () => <span className="caret">▾</span>;
 
 type SortKey =
   | "id"
@@ -103,16 +79,6 @@ export function TasksPage() {
     dir: "desc",
   });
   const [page, setPage] = useState(1);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-
-  function toggleChecked(id: string) {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -146,21 +112,6 @@ export function TasksPage() {
   const paged = sorted.slice(start, start + PAGE_SIZE);
   const selected = sorted.find((t) => t.id === selectedId) ?? null;
 
-  const allOnPageChecked =
-    paged.length > 0 && paged.every((t) => checkedIds.has(t.id));
-
-  function toggleAllOnPage() {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (allOnPageChecked) {
-        paged.forEach((t) => next.delete(t.id));
-      } else {
-        paged.forEach((t) => next.add(t.id));
-      }
-      return next;
-    });
-  }
-
   function toggleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key
@@ -173,19 +124,8 @@ export function TasksPage() {
     <div className="tasks">
       <header className="tasks-header">
         <div>
-          <nav className="breadcrumb">
-            <button className="breadcrumb-back">
-              <ChevronLeftIcon />
-              BACK
-            </button>
-            <span className="breadcrumb-sep">/</span>
-            <span className="breadcrumb-item">MANAGE CONTENT</span>
-          </nav>
           <h1 className="tasks-title">Tasks</h1>
         </div>
-        <button className="resources-btn">
-          Resources <Caret />
-        </button>
       </header>
 
       <div className="tasks-row">
@@ -214,22 +154,6 @@ export function TasksPage() {
             <ColGroup columns={columns} />
             <thead>
               <tr>
-                <th
-                  className="col-checkbox"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleAllOnPage();
-                  }}
-                >
-                  <SubtleCheckbox
-                    checked={allOnPageChecked}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleAllOnPage();
-                    }}
-                    label="Select all on page"
-                  />
-                </th>
                 <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />
                 <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                 <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />
@@ -258,10 +182,8 @@ export function TasksPage() {
                     key={task.id}
                     task={task}
                     selected={task.id === selectedId}
-                    checked={checkedIds.has(task.id)}
                     columns={columns}
                     onClick={() => setSelectedId(task.id)}
-                    onToggleCheck={() => toggleChecked(task.id)}
                   />
                 ))}
               </tbody>
@@ -300,7 +222,6 @@ export function TasksPage() {
 function ColGroup({ columns }: { columns: ColumnState }) {
   return (
     <colgroup>
-      <col style={{ width: 40 }} />
       <col style={{ width: 100 }} />
       <col />
       <col style={{ width: 160 }} />
@@ -341,39 +262,19 @@ function SortableHeader({
 function TableRow({
   task,
   selected,
-  checked,
   columns,
   onClick,
-  onToggleCheck,
 }: {
   task: Task;
   selected: boolean;
-  checked: boolean;
   columns: ColumnState;
   onClick: () => void;
-  onToggleCheck: () => void;
 }) {
   return (
     <tr
       className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""}`}
       onClick={onClick}
     >
-      <td
-        className="col-checkbox"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleCheck();
-        }}
-      >
-        <SubtleCheckbox
-          checked={checked}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCheck();
-          }}
-          label={`Select ${task.id}`}
-        />
-      </td>
       <td className="col-id">{task.id}</td>
       <td className="col-name">{task.name}</td>
       <td className="col-type">{task.type}</td>

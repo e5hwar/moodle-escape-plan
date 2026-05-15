@@ -11,7 +11,16 @@
       "mcp__plugin_figma_figma__get_screenshot",
       "Bash(curl -s -o /tmp/sidebar.png \"https://www.figma.com/api/mcp/asset/969ed9bc-cc72-43ee-8d97-1ffef72ab3c4\")",
       "Read(//tmp/**)",
-      "Bash(ls -la /var/folders/*/T/claude* 2>/dev/null | head; ls /tmp/ | grep -iE \"claude|paste|image\" 2>/dev/null | head)"
+      "Bash(ls -la /var/folders/*/T/claude* 2>/dev/null | head; ls /tmp/ | grep -iE \"claude|paste|image\" 2>/dev/null | head)",
+      "Bash(npm install *)",
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:github.com)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git remote *)",
+      "Bash(gh --version)"
     ]
   }
 }
