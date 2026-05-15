@@ -10,12 +10,6 @@ import { SearchIcon, SmallXIcon, ChevronLeftIcon } from "./icons";
 
 type Focus = string | null;
 
-const KIND_LABELS: Record<LinkKind, string> = {
-  prerequisite: "Prerequisite",
-  recommended: "Recommended Next",
-  related: "Related (bidirectional)",
-};
-
 const KIND_PLURAL: Record<LinkKind, string> = {
   prerequisite: "Prerequisites",
   recommended: "Recommended Next",
@@ -395,7 +389,6 @@ type GroupItem = { other: string; strength: number; edge: Link };
 
 const NODE_W = 200;
 const NODE_H = 36;
-const NODE_PAD = 14;
 const GRAPH_H_BASE = 480;
 
 function GraphCard({
