@@ -122,7 +122,7 @@ export function SpotlightsPage() {
 
   const rows: Row[] = useMemo(() => {
     if (!creating) {
-      return filtered.map((item, i) => ({
+      return filtered.map((item) => ({
         kind: "spotlight" as const,
         item,
         queueIndex: list.indexOf(item),
