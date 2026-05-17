@@ -20,7 +20,8 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(git remote *)",
-      "Bash(gh --version)"
+      "Bash(gh --version)",
+      "mcp__453e1069-5787-40af-ab61-98cc2eddc814__get_design_context"
     ]
   }
 }

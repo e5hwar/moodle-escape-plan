@@ -136,13 +136,6 @@ export function ContentLinksPage() {
         <div className="tasks cl-page">
           <header className="tasks-header">
             <div>
-              <div className="breadcrumb">
-                <span className="breadcrumb-back">← Settings</span>
-                <span className="breadcrumb-sep">/</span>
-                <span className="breadcrumb-item" style={{ color: "var(--text)" }}>
-                  Content Links
-                </span>
-              </div>
               <h1 className="tasks-title">Content Links</h1>
               <div className="tasks-subtitle">
                 {focused ? (

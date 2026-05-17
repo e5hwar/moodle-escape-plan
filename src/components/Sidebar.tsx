@@ -57,8 +57,36 @@ const I = {
   ),
   spotlight: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M21 21l-4.35-4.35" />
+      <path d="M3 11l18-8-3 18-6-7-9-3z" />
+      <path d="M12 14l9-11" />
+    </svg>
+  ),
+  scholarship: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 10L12 5 2 10l10 5 10-5z" />
+      <path d="M6 12v5c3 2.5 9 2.5 12 0v-5" />
+      <path d="M22 10v6" />
+    </svg>
+  ),
+  trialExtension: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  users: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87" />
+      <path d="M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  ),
+  companies: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21V7l8-4v18" />
+      <path d="M11 9h8a2 2 0 012 2v10" />
+      <path d="M6 8v.01M6 12v.01M6 16v.01M15 13v.01M15 17v.01" />
     </svg>
   ),
   chevronDown: (
@@ -76,7 +104,7 @@ const I = {
 type IconKey = keyof typeof I;
 
 type SubItem = { key: string; label: string; navKey?: string };
-type LinkItem = { kind: "link"; key: string; label: string; icon: IconKey; navKey?: string };
+type LinkItem = { kind: "link"; key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 type GroupItem = { kind: "group"; key: string; label: string; icon: IconKey; children: SubItem[] };
 type SectionItem = { kind: "section"; label: string };
 type NavItem = LinkItem | GroupItem | SectionItem;
@@ -114,15 +142,39 @@ const items: NavItem[] = [
       { key: "awards", label: "Awards" },
     ],
   },
-  { kind: "link", key: "feedback", label: "Feedback", icon: "message" },
+  { kind: "link", key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
 
   { kind: "section", label: "Operations" },
   { kind: "link", key: "content-overrides", label: "Content Overrides", icon: "edit" },
   { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand" },
-  { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield" },
+  { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
+
+  { kind: "section", label: "Users" },
+  {
+    kind: "group",
+    key: "users",
+    label: "Users",
+    icon: "users",
+    children: [
+      { key: "manage-users", label: "Manage Users", navKey: "manage-users" },
+      { key: "scholarship", label: "Scholarship", navKey: "scholarship" },
+    ],
+  },
+  {
+    kind: "group",
+    key: "companies",
+    label: "Companies",
+    icon: "companies",
+    children: [
+      { key: "manage-companies", label: "Manage Companies", navKey: "manage-companies" },
+      { key: "register-company", label: "Register Company", navKey: "register-company" },
+      { key: "trial-extension", label: "Trial Extension", navKey: "trial-extension" },
+    ],
+  },
 
   { kind: "section", label: "System" },
   { kind: "link", key: "spotlight", label: "Spotlight", icon: "spotlight" },
+  { kind: "link", key: "product-config", label: "Product Config", icon: "edit", navKey: "product-config" },
 ];
 
 // Map external app keys ("tasks", "certs") to sidebar sub-item keys.
@@ -131,6 +183,10 @@ const ACTIVE_MAP: Record<string, string> = {
   certs: "certifications",
   "content-links": "content-links",
   "question-bank": "question-bank",
+  spotlight: "spotlight",
+  scholarship: "scholarship",
+  "trial-extension": "trial-extension",
+  feedback: "feedback",
 };
 
 function findGroupForSubKey(subKey: string): string | undefined {
@@ -289,10 +345,13 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
               <button
                 key={item.key}
                 className={`sidebar__link ${isActive ? "is-active" : ""}`}
-                onClick={() => onNavigate?.(item.key)}
+                onClick={() => onNavigate?.(item.navKey ?? item.key)}
               >
                 <span className="sidebar__link-icon">{I[item.icon]}</span>
                 <span className="sidebar__link-label">{item.label}</span>
+                {item.badge !== undefined && (
+                  <span className="sidebar__link-badge">{item.badge}</span>
+                )}
               </button>
             );
           })}
