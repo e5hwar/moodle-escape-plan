@@ -181,6 +181,27 @@ export function SpotlightsPage() {
                 <span>shown on the app Home Screen in queue order</span>
               </div>
             </div>
+            {!creating && (
+              <div className="tasks-header-actions">
+                <button className="new-task" onClick={openCreate}>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Create Spotlight
+                  <span className="cta-kbd">
+                    <EnterKeyIcon />
+                  </span>
+                </button>
+              </div>
+            )}
           </header>
 
           {creating && (
@@ -290,31 +311,13 @@ export function SpotlightsPage() {
         </div>
       </div>
 
-      <footer className="footer">
-        {creating ? (
+      {creating && (
+        <footer className="footer">
           <button className="btn-save-draft" onClick={closeCreate}>
             Cancel
           </button>
-        ) : (
-          <button className="new-task" onClick={openCreate}>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            New Spotlight
-            <span className="cta-kbd">
-              <EnterKeyIcon />
-            </span>
-          </button>
-        )}
-      </footer>
+        </footer>
+      )}
 
       {creating && (
         <CreateSpotlightPanel

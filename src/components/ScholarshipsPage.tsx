@@ -140,6 +140,25 @@ export function ScholarshipsPage() {
                 <span>Scholarships unlock all SkillCat Pro content for the recipient until they expire</span>
               </div>
             </div>
+            <div className="tasks-header-actions">
+              <button className="new-task" onClick={() => setAdding(true)}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create Scholarship
+                <span className="cta-kbd">
+                  <EnterKeyIcon />
+                </span>
+              </button>
+            </div>
           </header>
 
           <div className="tasks-row">
@@ -268,26 +287,6 @@ export function ScholarshipsPage() {
           </div>
         </div>
       </div>
-
-      <footer className="footer">
-        <button className="new-task" onClick={() => setAdding(true)}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add Scholarship
-          <span className="cta-kbd">
-            <EnterKeyIcon />
-          </span>
-        </button>
-      </footer>
 
       {adding && (
         <AddScholarshipModal

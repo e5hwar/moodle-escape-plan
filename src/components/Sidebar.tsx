@@ -15,78 +15,69 @@ const HardHatLogo = ({ size = 28 }: { size?: number }) => (
 
 const I = {
   book: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 2h13a1 1 0 011 1v15H6.5a1.5 1.5 0 100 3H20v1a1 1 0 01-1 1H6.5A2.5 2.5 0 014 20.5v-16A2.5 2.5 0 016.5 2H6z" />
     </svg>
   ),
   layers: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-      <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.55 2.11a1 1 0 01.9 0l9.5 4.75a.5.5 0 010 .9l-9.5 4.75a1 1 0 01-.9 0L2.05 7.76a.5.5 0 010-.9z" />
+      <path d="M2.55 11.55a.5.5 0 01.67-.22l8.78 4.4 8.78-4.4a.5.5 0 11.45.9l-9 4.5a1 1 0 01-.9 0l-9-4.5a.5.5 0 01-.22-.68z" />
+      <path d="M2.55 16.55a.5.5 0 01.67-.22l8.78 4.4 8.78-4.4a.5.5 0 11.45.9l-9 4.5a1 1 0 01-.9 0l-9-4.5a.5.5 0 01-.22-.68z" />
     </svg>
   ),
   award: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="6" />
-      <path d="M15.5 12.5L17 22l-5-3-5 3 1.5-9.5" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2a6 6 0 00-3.36 10.96l-1.13 7.18a.6.6 0 00.91.6L12 18.8l3.58 1.94a.6.6 0 00.91-.6l-1.13-7.18A6 6 0 0012 2z" />
     </svg>
   ),
   message: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M5 3h14a2 2 0 012 2v10a2 2 0 01-2 2H8.41l-4.7 4.7A.6.6 0 013 21.28V5a2 2 0 012-2z" />
     </svg>
   ),
   edit: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M14.7 2.79l6.5 6.5a1 1 0 010 1.41L11.4 20.5a1 1 0 01-.5.27l-6 1.2a.6.6 0 01-.71-.7l1.2-6a1 1 0 01.27-.5L15.5 5h-4.5a1 1 0 110-2h6.7l-3 .79z" />
+      <path d="M2 22l8-2H4v-6z" opacity="0" />
     </svg>
   ),
   hand: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 11V6a2 2 0 014 0v5" />
-      <path d="M13 9V5a2 2 0 014 0v9" />
-      <path d="M17 11V7a2 2 0 014 0v9a6 6 0 01-6 6h-2a6 6 0 01-6-6v-1l-3.5-3.5a2 2 0 012.83-2.83L9 11" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9 4.5a2 2 0 014 0v5a.5.5 0 001 0V3.5a2 2 0 014 0v6.5a.5.5 0 001 0V6.5a2 2 0 114 0V16a6 6 0 01-6 6h-2a6 6 0 01-5.66-3.93l-3.13-3.66a2 2 0 012.91-2.74L9 13.2z" />
     </svg>
   ),
   shield: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l8 3v6c0 5-3.5 9.3-8 11-4.5-1.7-8-6-8-11V5l8-3z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 1.6a1 1 0 00-.37.07l-8 3a1 1 0 00-.63.94v6.39c0 5.4 3.78 9.97 8.7 11.79a1 1 0 00.6 0c4.92-1.82 8.7-6.4 8.7-11.8V5.62a1 1 0 00-.63-.93l-8-3A1 1 0 0012 1.6z" />
     </svg>
   ),
   spotlight: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 11l18-8-3 18-6-7-9-3z" />
-      <path d="M12 14l9-11" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21.7 2.3a1 1 0 00-1.1-.22L2.4 9.55a1 1 0 00.06 1.86l7.4 2.46 2.46 7.4a1 1 0 001.86.06l7.47-18.2a1 1 0 00-.22-1.1.79.79 0 00-.2-.13L21.7 2.3z" />
     </svg>
   ),
   scholarship: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 10L12 5 2 10l10 5 10-5z" />
-      <path d="M6 12v5c3 2.5 9 2.5 12 0v-5" />
-      <path d="M22 10v6" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.55 2.6a1 1 0 01.9 0l10 5a.5.5 0 010 .9L21 9.13v6.37a.5.5 0 01-1 0V9.63l-2 1V14a1 1 0 01-.49.86C16.13 15.73 14.16 16.5 12 16.5s-4.13-.77-5.51-1.64A1 1 0 016 14v-3.37L1.55 8.5a.5.5 0 010-.9z" />
     </svg>
   ),
   trialExtension: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm.5 4a.75.75 0 011.5 0v5.69l3.16 2.1a.75.75 0 11-.83 1.25l-3.5-2.34A.75.75 0 0112 12V6z" />
     </svg>
   ),
   users: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
       <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 00-3-3.87" />
-      <path d="M16 3.13a4 4 0 010 7.75" />
+      <path d="M1.5 19A4 4 0 015.5 15h7A4 4 0 0116.5 19v1.5a.5.5 0 01-.5.5h-14a.5.5 0 01-.5-.5z" />
+      <path d="M16.2 4a4 4 0 010 6 4 4 0 003-3.87 4 4 0 00-3-3.87v1.74z" opacity="0.9" />
+      <path d="M18 14.5a4 4 0 014 4V20a.5.5 0 01-.5.5h-3.6a5 5 0 00-.95-3 5.5 5.5 0 00-1.95-1.74A.5.5 0 0116 15.4a4 4 0 012 0z" opacity="0.9" />
     </svg>
   ),
   companies: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 21V7l8-4v18" />
-      <path d="M11 9h8a2 2 0 012 2v10" />
-      <path d="M6 8v.01M6 12v.01M6 16v.01M15 13v.01M15 17v.01" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 21V7a1 1 0 01.55-.9l7-3.5A1 1 0 0112 3.5V9h7a2 2 0 012 2v10a1 1 0 01-1 1h-7v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4H4a1 1 0 01-1-1zM6 9.5h1v1.5H6V9.5zm0 4h1V15H6v-1.5zm0 4h1V19H6v-1.5zm9-3.5h1.5v1.5H15V14zm0 4h1.5v1.5H15V18z" />
     </svg>
   ),
   chevronDown: (
@@ -187,6 +178,7 @@ const ACTIVE_MAP: Record<string, string> = {
   scholarship: "scholarship",
   "trial-extension": "trial-extension",
   feedback: "feedback",
+  industries: "industries",
 };
 
 function findGroupForSubKey(subKey: string): string | undefined {
@@ -229,9 +221,7 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
   const onLeave = () => setHovered(false);
 
   if (!showExpanded) {
-    const iconRow = items.filter(
-      (i): i is LinkItem | GroupItem => i.kind === "link" || i.kind === "group"
-    );
+    let seenFirstSection = false;
     return (
       <div className={hostClass} onMouseEnter={onEnter} onMouseLeave={onLeave}>
         <aside className="sidebar sidebar--collapsed">
@@ -245,7 +235,20 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
             </button>
           </div>
           <nav className="sidebar__nav-collapsed">
-            {iconRow.map((item) => {
+            {items.map((item, idx) => {
+              if (item.kind === "section") {
+                if (!seenFirstSection) {
+                  seenFirstSection = true;
+                  return null;
+                }
+                return (
+                  <div
+                    key={`div-${idx}`}
+                    className="sidebar__divider-collapsed"
+                    aria-hidden="true"
+                  />
+                );
+              }
               const isActive =
                 item.kind === "group"
                   ? item.key === activeGroupKey

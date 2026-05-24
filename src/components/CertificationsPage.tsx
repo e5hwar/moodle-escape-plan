@@ -132,9 +132,18 @@ export function CertificationsPage({ onNewCert }: { onNewCert: () => void }) {
               <h1 className="tasks-title">Certifications</h1>
               <div className="tasks-subtitle">{allCerts.length} Certifications · all industries</div>
             </div>
-            <button className="resources-btn">
-              Resources <Caret />
-            </button>
+            <div className="tasks-header-actions">
+              <button className="resources-btn">
+                Resources <Caret />
+              </button>
+              <button className="new-task" onClick={onNewCert}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create Certification
+                <span className="cta-kbd"><EnterKeyIcon /></span>
+              </button>
+            </div>
           </header>
 
           <div className="tasks-row">
@@ -229,15 +238,6 @@ export function CertificationsPage({ onNewCert }: { onNewCert: () => void }) {
           </div>
         </div>
       </div>
-      <footer className="footer">
-        <button className="new-task" onClick={onNewCert}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          New Certification
-          <span className="cta-kbd"><EnterKeyIcon /></span>
-        </button>
-      </footer>
     </div>
   );
 }

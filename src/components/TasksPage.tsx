@@ -1,8 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { tasks as allTasks, type Task } from "../data/tasks";
-import { RotaryDialPreview } from "./RotaryDialPreview";
+// ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
+// the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
+// import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, type FilterState, type ColumnState } from "./Filters";
-import { SearchIcon, SortIcon } from "./icons";
+import { SearchIcon, SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
+import type { TaskTypeKey } from "./Footer";
+
+const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
+  { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon },
+  { key: "quiz", label: "Quiz", icon: QuizIcon },
+  { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon },
+  { key: "id-upload", label: "ID Upload", icon: IdCardIcon },
+  { key: "file", label: "File", icon: FileIcon },
+  { key: "deep-link", label: "Deep Link", icon: LinkIcon },
+  { key: "url", label: "URL", icon: GlobeIcon },
+];
 
 const PAGE_SIZE = 50;
 
@@ -59,8 +73,8 @@ function compare(a: Task, b: Task, key: SortKey): number {
   }
 }
 
-export function TasksPage() {
-  const [selectedId, setSelectedId] = useState<string | null>("T-1432");
+export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<FilterState>({
     creators: ["SkillCat"],
@@ -110,7 +124,8 @@ export function TasksPage() {
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
-  const selected = sorted.find((t) => t.id === selectedId) ?? null;
+  // `selected` was used by the archived RotaryDialPreview block below; restore
+  // alongside that JSX if you re-enable the preview panel.
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -125,6 +140,49 @@ export function TasksPage() {
       <header className="tasks-header">
         <div>
           <h1 className="tasks-title">Tasks</h1>
+        </div>
+        <div className="tasks-header-actions">
+          <Dropdown
+            align="right"
+            width={220}
+            trigger={({ toggle }) => (
+              <button className="new-task" onClick={toggle}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create Task
+                <span className="cta-kbd">C</span>
+              </button>
+            )}
+          >
+            {({ close }) => (
+              <div className="menu">
+                {TASK_TYPE_OPTIONS.map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    className="menu-item"
+                    onClick={() => {
+                      onNewTask(key);
+                      close();
+                    }}
+                  >
+                    <span className="menu-item-icon">
+                      <Icon />
+                    </span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Dropdown>
         </div>
       </header>
 
@@ -213,7 +271,9 @@ export function TasksPage() {
           </div>
         </div>
 
+        {/* ARCHIVED: Preview dial panel — re-enable by uncommenting:
         {selected && <RotaryDialPreview task={selected} onClose={() => setSelectedId(null)} />}
+        */}
       </div>
     </div>
   );

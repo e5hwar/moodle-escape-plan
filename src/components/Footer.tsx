@@ -39,7 +39,18 @@ export function Footer({ onNewTask }: Props) {
         width={220}
         trigger={({ toggle }) => (
           <button className="new-task" onClick={toggle}>
-            New Task
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Create Task
             <span className="cta-kbd">C</span>
           </button>
         )}

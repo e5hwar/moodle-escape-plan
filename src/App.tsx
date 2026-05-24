@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TasksPage } from "./components/TasksPage";
-import { Footer, type TaskTypeKey } from "./components/Footer";
+import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard } from "./components/NewTaskWizard";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { NewCertificationWizard } from "./components/NewCertificationWizard";
@@ -14,6 +14,7 @@ import { TrialExtensionPage } from "./components/TrialExtensionPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
 import { FeedbackFormVersions } from "./components/FeedbackFormVersions";
+import { IndustriesPage } from "./components/IndustriesPage";
 import {
   feedbackForms as seedForms,
   type FeedbackForm,
@@ -32,7 +33,8 @@ type View =
   | { name: "trial-extension" }
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string }
-  | { name: "feedback-versions"; formId: string };
+  | { name: "feedback-versions"; formId: string }
+  | { name: "industries" };
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "tasks" });
@@ -57,6 +59,8 @@ export default function App() {
         view.name === "feedback-detail" ||
         view.name === "feedback-versions"
       ? "feedback"
+      : view.name === "industries"
+      ? "industries"
       : "tasks";
 
   function navigate(key: string) {
@@ -69,6 +73,7 @@ export default function App() {
     else if (key === "scholarship") setView({ name: "scholarship" });
     else if (key === "trial-extension") setView({ name: "trial-extension" });
     else if (key === "feedback") setView({ name: "feedback" });
+    else if (key === "industries") setView({ name: "industries" });
   }
 
   function upsertForm(form: FeedbackForm) {
@@ -92,9 +97,8 @@ export default function App() {
       {view.name === "tasks" ? (
         <div className="main">
           <div className="workspace">
-            <TasksPage />
+            <TasksPage onNewTask={(t) => setView({ name: "new-task", taskType: t })} />
           </div>
-          <Footer onNewTask={(t) => setView({ name: "new-task", taskType: t })} />
         </div>
       ) : view.name === "certs" ? (
         <CertificationsPage onNewCert={() => setView({ name: "new-cert" })} />
@@ -110,6 +114,8 @@ export default function App() {
         <ScholarshipsPage />
       ) : view.name === "trial-extension" ? (
         <TrialExtensionPage />
+      ) : view.name === "industries" ? (
+        <IndustriesPage />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}

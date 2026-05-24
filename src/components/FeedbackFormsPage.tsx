@@ -83,6 +83,25 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
                 <span>shown on Task and Certification completion</span>
               </div>
             </div>
+            <div className="tasks-header-actions">
+              <button className="new-task" onClick={() => setCreating(true)}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create Form
+                <span className="cta-kbd">
+                  <EnterKeyIcon />
+                </span>
+              </button>
+            </div>
           </header>
 
           <div className="sp-controls">
@@ -183,26 +202,6 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
           </div>
         </div>
       </div>
-
-      <footer className="footer">
-        <button className="new-task" onClick={() => setCreating(true)}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          New Form
-          <span className="cta-kbd">
-            <EnterKeyIcon />
-          </span>
-        </button>
-      </footer>
 
       {creating && (
         <NewFeedbackFormModal
