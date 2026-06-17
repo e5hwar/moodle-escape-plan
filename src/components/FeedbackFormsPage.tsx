@@ -4,7 +4,7 @@ import {
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
-import { SearchIcon, EnterKeyIcon } from "./icons";
+import { SearchIcon, EnterKeyIcon, AddIcon } from "./icons";
 import { NewFeedbackFormModal } from "./NewFeedbackFormModal";
 
 type FilterKey = "all" | FormStatus;
@@ -85,17 +85,7 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setCreating(true)}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <AddIcon />
                 Create Form
                 <span className="cta-kbd">
                   <EnterKeyIcon />

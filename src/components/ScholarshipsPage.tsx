@@ -5,7 +5,7 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, SmallXIcon, EnterKeyIcon } from "./icons";
+import { SearchIcon, SortIcon, SmallXIcon, EnterKeyIcon, AddIcon } from "./icons";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
@@ -142,17 +142,7 @@ export function ScholarshipsPage() {
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setAdding(true)}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <AddIcon />
                 Create Scholarship
                 <span className="cta-kbd">
                   <EnterKeyIcon />

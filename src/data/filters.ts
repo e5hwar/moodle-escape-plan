@@ -47,10 +47,24 @@ export const TAG_GROUPS: { label: string; tags: string[] }[] = [
   },
 ];
 
-export type OptionalColumn = "tags" | "dateCreated" | "dateModified";
+export type OptionalColumn =
+  | "id"
+  | "type"
+  | "usedIn"
+  | "createdBy"
+  | "tags"
+  | "dateCreated"
+  | "dateModified";
 
 export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
+  { key: "id", label: "ID" },
+  { key: "type", label: "Type" },
+  { key: "usedIn", label: "Used in" },
+  { key: "createdBy", label: "Created By" },
   { key: "tags", label: "Tags" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },
 ];
+
+/** Columns that always render (no toggle). */
+export const FIXED_COLUMNS: { label: string }[] = [{ label: "Name" }];

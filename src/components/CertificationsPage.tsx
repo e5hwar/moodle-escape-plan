@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { certifications as allCerts, type Certification } from "../data/certifications";
-import { CheckIcon, SearchIcon, SortIcon, EnterKeyIcon } from "./icons";
+import { CheckIcon, SearchIcon, SortIcon, EnterKeyIcon, AddIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -137,9 +137,7 @@ export function CertificationsPage({ onNewCert }: { onNewCert: () => void }) {
                 Resources <Caret />
               </button>
               <button className="new-task" onClick={onNewCert}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <AddIcon />
                 Create Certification
                 <span className="cta-kbd"><EnterKeyIcon /></span>
               </button>

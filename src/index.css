@@ -604,6 +604,21 @@ a {
 }
 
 /* ===== Search ===== */
+/* Toolbar: search + edit columns on one line */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.toolbar .search-wrap {
+  flex: 0 0 360px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+
 .search-wrap {
   position: relative;
   margin-bottom: 18px;
@@ -611,10 +626,11 @@ a {
 
 .search-input {
   width: 100%;
-  padding: 12px 50px 12px 40px;
+  height: 40px;
+  padding: 0 50px 0 40px;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 12pt;
@@ -640,41 +656,23 @@ a {
 }
 
 .search-kbd {
+  /* Positioning + 24px height override (visuals come from the shared rule above) */
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 4px 10px;
-  min-width: 48px;
-  height: 30px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  line-height: 1;
+  height: 24px;
 }
 
 .kbd-cmd,
 .kbd-letter {
-  display: inline-block;
-  height: 16px;
-  line-height: 16px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .kbd-cmd {
-  font-size: 13pt;
-}
-
-.kbd-letter {
-  font-size: 10pt;
+  font-size: 10px;
 }
 
 /* ===== Filters row ===== */
@@ -695,7 +693,7 @@ a {
   padding: 0 12px;
   background: transparent;
   border: 1px dashed var(--border-strong);
-  border-radius: 999px;
+  border-radius: 8px;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
@@ -720,7 +718,7 @@ a {
   align-items: stretch;
   height: 24px;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   overflow: hidden;
   white-space: nowrap;
@@ -790,24 +788,52 @@ a {
   display: inline-flex;
 }
 
+/* Edit Columns — icon-only button above the row-actions column */
 .edit-columns-btn {
-  display: flex;
-  min-width: 120px;
-  padding: 8px 16px;
-  justify-content: center;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(217, 217, 217, 0.10) 0%, rgba(64, 64, 64, 0.10) 100%), rgba(13, 13, 13, 0.75);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .edit-columns-btn:hover {
-  filter: brightness(1.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+/* Hover tooltip */
+.edit-columns-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 20;
+}
+
+.edit-columns-btn:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ===== Dropdown popover ===== */
@@ -907,6 +933,50 @@ a {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
+}
+
+/* Edit Columns menu — Fixed / Active / Available sections */
+.cols-menu .dropdown-section-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 6px 10px 6px;
+}
+
+.cols-menu .cols-fixed-row {
+  padding: 7px 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.cols-menu .cols-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 10px;
+}
+
+.cols-menu .cols-row-label {
+  flex: 1;
+  text-align: left;
+}
+
+.cols-menu .cols-drag-handle {
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+}
+
+.cols-menu .cols-empty {
+  padding: 7px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-faint);
+  font-style: italic;
 }
 
 .dropdown-section-label {
@@ -1087,6 +1157,13 @@ a {
   font-family: var(--font-sans);
   font-size: 12pt;
   font-weight: 400;
+}
+
+/* Keep rows at a fixed height — truncate long text instead of wrapping. */
+.table tbody td:not(.col-actions):not(.col-checkbox) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table .col-id {
@@ -1507,7 +1584,7 @@ a {
   gap: 4px;
   height: 32px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 5px 9px;
   border-radius: 8px;
   background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.75) 29.09%, rgba(138, 49, 20, 0.75) 100%), rgba(13, 13, 13, 0.75);
   background-blend-mode: normal, normal;
@@ -1546,23 +1623,31 @@ a {
   color: rgba(255, 255, 255, 0.7);
 }
 
-.cta-kbd {
+/* Shared keyboard-shortcut chip — used by the CTA button (.cta-kbd) and the
+   search bar (.search-kbd). Width hugs content (single letter stays square via
+   min-width; multi-char like ⌘K grows naturally). */
+.cta-kbd,
+.search-kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   flex-shrink: 0;
-  margin-left: 6px;
-  width: 18px;
-  height: 18px;
-  padding: 0;
+  min-width: 18px;
+  padding: 0 4px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
+}
+
+.cta-kbd {
+  margin-left: 6px;
+  height: 18px;
 }
 
 /* =============================================================

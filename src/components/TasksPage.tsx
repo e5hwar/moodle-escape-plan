@@ -3,8 +3,8 @@ import { tasks as allTasks, type Task } from "../data/tasks";
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
-import { Filters, type FilterState, type ColumnState } from "./Filters";
-import { SearchIcon, SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon } from "./icons";
+import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
+import { SearchIcon, SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon, AddIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import type { TaskTypeKey } from "./Footer";
 
@@ -84,6 +84,10 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
     tags: [],
   });
   const [columns, setColumns] = useState<ColumnState>({
+    id: true,
+    type: true,
+    usedIn: true,
+    createdBy: true,
     tags: false,
     dateCreated: false,
     dateModified: false,
@@ -147,17 +151,7 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
             width={220}
             trigger={({ toggle }) => (
               <button className="new-task" onClick={toggle}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <AddIcon />
                 Create Task
                 <span className="cta-kbd">C</span>
               </button>
@@ -188,35 +182,41 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
 
       <div className="tasks-row">
         <div className="tasks-content">
-          <div className="search-wrap">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search Tasks by name, ID, or content…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
+          <div className="toolbar">
+            <div className="search-wrap">
+              <span className="search-icon">
+                <SearchIcon />
+              </span>
+              <input
+                className="search-input"
+                placeholder="Search Tasks by name, ID, or content…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
+            </div>
+
           </div>
 
-          <Filters
-            filters={filters}
-            setFilters={setFilters}
-            columns={columns}
-            setColumns={setColumns}
-          />
+          <Filters filters={filters} setFilters={setFilters} />
 
           <table className="table table-head">
             <ColGroup columns={columns} />
             <thead>
               <tr>
-                <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />
+                {columns.id && (
+                  <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />
+                )}
                 <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />
-                <SortableHeader col="usedIn" label="Used in" className="col-used" sort={sort} toggle={toggleSort} />
-                <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />
+                {columns.type && (
+                  <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />
+                )}
+                {columns.usedIn && (
+                  <SortableHeader col="usedIn" label="Used in" className="col-used" sort={sort} toggle={toggleSort} />
+                )}
+                {columns.createdBy && (
+                  <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />
+                )}
                 {columns.tags && (
                   <SortableHeader col="tags" label="Tags" className="col-tags" sort={sort} toggle={toggleSort} />
                 )}
@@ -226,7 +226,9 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
                 {columns.dateModified && (
                   <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />
                 )}
-                <th className="col-actions" />
+                <th className="col-actions">
+                  <EditColumnsButton columns={columns} setColumns={setColumns} />
+                </th>
               </tr>
             </thead>
           </table>
@@ -282,11 +284,11 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
 function ColGroup({ columns }: { columns: ColumnState }) {
   return (
     <colgroup>
-      <col style={{ width: 100 }} />
+      {columns.id && <col style={{ width: 100 }} />}
       <col />
-      <col style={{ width: 160 }} />
-      <col style={{ width: 180 }} />
-      <col style={{ width: 200 }} />
+      {columns.type && <col style={{ width: 160 }} />}
+      {columns.usedIn && <col style={{ width: 180 }} />}
+      {columns.createdBy && <col style={{ width: 200 }} />}
       {columns.tags && <col style={{ width: 200 }} />}
       {columns.dateCreated && <col style={{ width: 130 }} />}
       {columns.dateModified && <col style={{ width: 130 }} />}
@@ -335,22 +337,24 @@ function TableRow({
       className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""}`}
       onClick={onClick}
     >
-      <td className="col-id">{task.id}</td>
+      {columns.id && <td className="col-id">{task.id}</td>}
       <td className="col-name">{task.name}</td>
-      <td className="col-type">{task.type}</td>
-      <td className="col-used">
-        {task.usedIn.length === 0 ? (
-          "—"
-        ) : (
-          <>
-            {task.usedIn[0]}
-            {task.usedIn.length > 1 && (
-              <span className="used-extra">+{task.usedIn.length - 1}</span>
-            )}
-          </>
-        )}
-      </td>
-      <td className="col-creator">{task.createdBy}</td>
+      {columns.type && <td className="col-type">{task.type}</td>}
+      {columns.usedIn && (
+        <td className="col-used">
+          {task.usedIn.length === 0 ? (
+            "—"
+          ) : (
+            <>
+              {task.usedIn[0]}
+              {task.usedIn.length > 1 && (
+                <span className="used-extra">+{task.usedIn.length - 1}</span>
+              )}
+            </>
+          )}
+        </td>
+      )}
+      {columns.createdBy && <td className="col-creator">{task.createdBy}</td>}
       {columns.tags && (
         <td className="col-tags">
           {task.tags && task.tags.length > 0 ? (

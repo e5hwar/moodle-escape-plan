@@ -4,9 +4,10 @@ import {
   PlusCircleIcon,
   XCircleIcon,
   ChevronDownIcon,
-  SettingsIcon,
   SearchIcon,
   CheckIcon,
+  EditColumnsIcon,
+  DragHandleIcon,
 } from "./icons";
 import {
   CREATED_BY_IN_HOUSE,
@@ -16,6 +17,7 @@ import {
   VISIBILITIES,
   TAG_GROUPS,
   OPTIONAL_COLUMNS,
+  FIXED_COLUMNS,
   type OptionalColumn,
 } from "../data/filters";
 
@@ -32,11 +34,9 @@ export type ColumnState = Record<OptionalColumn, boolean>;
 type Props = {
   filters: FilterState;
   setFilters: (next: FilterState) => void;
-  columns: ColumnState;
-  setColumns: (next: ColumnState) => void;
 };
 
-export function Filters({ filters, setFilters, columns, setColumns }: Props) {
+export function Filters({ filters, setFilters }: Props) {
   const moreCount =
     filters.types.length + filters.visibilities.length + filters.tags.length;
 
@@ -77,9 +77,6 @@ export function Filters({ filters, setFilters, columns, setColumns }: Props) {
       <button className="filter-clear-link" onClick={clearAll}>
         Clear filters
       </button>
-      <div className="filters-end">
-        <EditColumnsButton columns={columns} setColumns={setColumns} />
-      </div>
     </div>
   );
 }
@@ -266,7 +263,7 @@ function MoreFiltersPill({
   );
 }
 
-function EditColumnsButton({
+export function EditColumnsButton({
   columns,
   setColumns,
 }: {
@@ -278,9 +275,16 @@ function EditColumnsButton({
       width={240}
       align="right"
       trigger={({ toggle }) => (
-        <button className="edit-columns-btn" onClick={toggle}>
-          <SettingsIcon />
-          Edit columns
+        <button
+          className="edit-columns-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
+          aria-label="Edit columns"
+          data-tooltip="Edit Columns"
+        >
+          <EditColumnsIcon />
         </button>
       )}
     >
@@ -528,18 +532,50 @@ function ColumnsBody({
   value: ColumnState;
   onApply: (v: ColumnState) => void;
 }) {
+  const active = OPTIONAL_COLUMNS.filter((c) => value[c.key]);
+  const available = OPTIONAL_COLUMNS.filter((c) => !value[c.key]);
   return (
-    <div className="dropdown-list">
+    <div className="dropdown-list cols-menu">
       <div className="dropdown-section">
-        <div className="dropdown-section-label">OPTIONAL COLUMNS</div>
-        {OPTIONAL_COLUMNS.map(({ key, label }) => (
-          <CheckRow
-            key={key}
-            label={label}
-            checked={value[key]}
-            onChange={() => onApply({ ...value, [key]: !value[key] })}
-          />
+        <div className="dropdown-section-label">Fixed columns</div>
+        {FIXED_COLUMNS.map(({ label }) => (
+          <div key={label} className="cols-fixed-row">
+            {label}
+          </div>
         ))}
+      </div>
+
+      <div className="dropdown-section">
+        <div className="dropdown-section-label">Active columns</div>
+        {active.length === 0 ? (
+          <div className="cols-empty">No active columns</div>
+        ) : (
+          active.map(({ key, label }) => (
+            <CheckRow
+              key={key}
+              label={label}
+              checked
+              draggable
+              onChange={() => onApply({ ...value, [key]: false })}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="dropdown-section">
+        <div className="dropdown-section-label">Available columns</div>
+        {available.length === 0 ? (
+          <div className="cols-empty">All columns are active</div>
+        ) : (
+          available.map(({ key, label }) => (
+            <CheckRow
+              key={key}
+              label={label}
+              checked={false}
+              onChange={() => onApply({ ...value, [key]: true })}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -549,17 +585,24 @@ function CheckRow({
   label,
   checked,
   onChange,
+  draggable = false,
 }: {
   label: string;
   checked: boolean;
   onChange: () => void;
+  draggable?: boolean;
 }) {
   return (
-    <button className="dropdown-item" onClick={onChange}>
+    <button className="dropdown-item cols-row" onClick={onChange}>
       <span className={`checkbox ${checked ? "checked" : ""}`}>
         {checked && <CheckIcon />}
       </span>
-      {label}
+      <span className="cols-row-label">{label}</span>
+      {draggable && (
+        <span className="cols-drag-handle" aria-hidden="true">
+          <DragHandleIcon />
+        </span>
+      )}
     </button>
   );
 }
