@@ -1,0 +1,240 @@
+import { useState } from "react";
+import { mediaUrl, type TaskSubmission } from "../data/reviewSubmissions";
+import { CheckBoldIcon, ChevronLeftIcon } from "./icons";
+
+function formatDate(iso: string): string {
+  if (!iso || iso === "—") return "—";
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const PlayIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+const AudioWaveIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4M21 12h0" />
+  </svg>
+);
+
+export function ReviewSubmissionDetail({
+  submission,
+  onBack,
+  onSubmit,
+}: {
+  submission: TaskSubmission;
+  onBack: () => void;
+  onSubmit: (result: { score: number; feedback: string; criteria: string[] }) => void;
+}) {
+  const [activeMedia, setActiveMedia] = useState(0);
+  const [checked, setChecked] = useState<string[]>([]);
+  const [score, setScore] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState("");
+
+  const media = submission.media[activeMedia];
+  const isReject = score !== null && score <= 4;
+  const isPass = score !== null && score >= 5;
+
+  function toggleCriterion(id: string) {
+    setChecked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  const stats: { label: string; value: string; tone?: "status" }[] = [
+    { label: "Status", value: submission.status, tone: "status" },
+    { label: "Progress", value: `${submission.progress}%` },
+    { label: "Completion", value: formatDate(submission.completion) },
+    { label: "Due Date", value: formatDate(submission.dueDate) },
+    { label: "Last Activity", value: submission.lastActivity },
+  ];
+
+  return (
+    <div className="main">
+      <div className="workspace">
+        <div className="tasks rh-detail">
+          {/* Breadcrumb */}
+          <div className="rh-crumbs">
+            <button className="rh-crumb-back" onClick={onBack}>
+              <ChevronLeftIcon />
+            </button>
+            <button className="rh-crumb-link" onClick={onBack}>
+              Review Hands-On Tasks
+            </button>
+            <span className="rh-crumb-sep">›</span>
+            <span className="rh-crumb-link">{submission.userName}</span>
+            <span className="rh-crumb-sep">›</span>
+            <span className="rh-crumb-current">{submission.taskName}</span>
+          </div>
+
+          {/* Title row */}
+          <div className="rh-title-row">
+            <div>
+              <h1 className="rh-title">{submission.taskName}</h1>
+              <div className="rh-title-sub">{submission.durationLabel}</div>
+            </div>
+            <div className="rh-versions">
+              {submission.versions.map((v, i) => (
+                <button key={v} className={`rh-version ${i === 0 ? "is-active" : ""}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Stat cards */}
+          <div className="rh-stats">
+            {stats.map((s) => (
+              <div className="rh-stat" key={s.label}>
+                <div className="rh-stat-label">{s.label}</div>
+                {s.tone === "status" ? (
+                  <div className="rh-stat-value">
+                    <span className="rh-status-pill">{s.value}</span>
+                  </div>
+                ) : (
+                  <div className="rh-stat-value">{s.value}</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Split body */}
+          <div className="rh-split">
+            {/* LEFT — the user's submission */}
+            <div className="rh-col rh-col--submission">
+              <div className="rh-section-eyebrow">Submission</div>
+
+              <div className="rh-media-stage">
+                {media.kind === "video" ? (
+                  <div className="rh-media-video">
+                    <img src={mediaUrl(media.seed, 1000, 640)} alt="" />
+                    <button className="rh-media-play" aria-label="Play video">
+                      <PlayIcon />
+                    </button>
+                    <span className="rh-media-duration">{media.duration}</span>
+                  </div>
+                ) : (
+                  <img className="rh-media-img" src={mediaUrl(media.seed, 1000, 640)} alt="" />
+                )}
+              </div>
+
+              <div className="rh-thumbs">
+                {submission.media.map((m, i) => (
+                  <button
+                    key={i}
+                    className={`rh-thumb ${i === activeMedia ? "is-active" : ""}`}
+                    onClick={() => setActiveMedia(i)}
+                  >
+                    <img src={mediaUrl(m.seed, 200, 200)} alt="" />
+                    {m.kind === "video" && (
+                      <span className="rh-thumb-play">
+                        <PlayIcon />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rh-desc">{submission.description}</div>
+
+              <div className="rh-audio">
+                <button className="rh-audio-play" aria-label="Play voice note">
+                  <PlayIcon />
+                </button>
+                <div className="rh-audio-wave">
+                  <AudioWaveIcon />
+                  <span className="rh-audio-label">{submission.audioLabel}</span>
+                </div>
+                <span className="rh-audio-time">{submission.audioDuration}</span>
+              </div>
+            </div>
+
+            {/* RIGHT — reviewer's evaluation */}
+            <div className="rh-col rh-col--review">
+              <div className="rh-review-card">
+                <div className="rh-review-head">
+                  <h2 className="rh-review-title">Review</h2>
+                  <p className="rh-review-sub">Score the submission and leave feedback for the learner.</p>
+                </div>
+
+                {/* Evaluation criteria */}
+                <div className="rh-field">
+                  <div className="rh-field-label">Evaluation Criteria</div>
+                  <div className="rh-criteria">
+                    {submission.criteria.map((c) => {
+                      const on = checked.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          className={`rh-criterion ${on ? "is-checked" : ""}`}
+                          onClick={() => toggleCriterion(c.id)}
+                        >
+                          <span className={`rh-criterion-box ${on ? "is-checked" : ""}`}>
+                            {on && <CheckBoldIcon />}
+                          </span>
+                          <span className="rh-criterion-label">{c.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Score */}
+                <div className="rh-field">
+                  <div className="rh-field-label">Score</div>
+                  <div className="rh-score-row">
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+                      const selected = score === n;
+                      const band = n <= 4 ? "reject" : "pass";
+                      return (
+                        <button
+                          key={n}
+                          className={`rh-score ${selected ? `is-selected rh-score--${band}` : ""}`}
+                          onClick={() => setScore(n)}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="rh-score-legend">
+                    <span className={`rh-legend rh-legend--reject ${isReject ? "is-on" : ""}`}>1–4: Rejected</span>
+                    <span className={`rh-legend rh-legend--pass ${isPass ? "is-on" : ""}`}>5–10: Pass</span>
+                  </div>
+                </div>
+
+                {/* Feedback */}
+                <div className="rh-field">
+                  <div className="rh-field-label">Feedback Notes</div>
+                  <textarea
+                    className="rh-feedback"
+                    placeholder="Explain the score and give the learner specific, actionable feedback…"
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    rows={5}
+                  />
+                </div>
+
+                <div className="rh-review-foot">
+                  <button className="btn-save-draft" onClick={onBack}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-publish rh-submit"
+                    disabled={score === null}
+                    onClick={() => score !== null && onSubmit({ score, feedback, criteria: checked })}
+                  >
+                    {isReject ? "Reject Submission" : isPass ? "Pass Submission" : "Submit Review"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

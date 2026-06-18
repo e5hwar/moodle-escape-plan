@@ -80,6 +80,13 @@ const I = {
       <path d="M3 21V7a1 1 0 01.55-.9l7-3.5A1 1 0 0112 3.5V9h7a2 2 0 012 2v10a1 1 0 01-1 1h-7v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4H4a1 1 0 01-1-1zM6 9.5h1v1.5H6V9.5zm0 4h1V15H6v-1.5zm0 4h1V19H6v-1.5zm9-3.5h1.5v1.5H15V14zm0 4h1.5v1.5H15V18z" />
     </svg>
   ),
+  idCard: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <circle cx="8" cy="11" r="2.1" />
+      <path d="M13 9.5h5.5M13 13h5.5M4.8 15.4a3.4 3.4 0 016.4 0" />
+    </svg>
+  ),
   chevronDown: (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 9l6 6 6-6" />
@@ -137,8 +144,9 @@ const items: NavItem[] = [
 
   { kind: "section", label: "Operations" },
   { kind: "link", key: "content-overrides", label: "Content Overrides", icon: "edit" },
-  { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand" },
+  { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
   { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
+  { kind: "link", key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },
 
   { kind: "section", label: "Users" },
   {
@@ -149,6 +157,7 @@ const items: NavItem[] = [
     children: [
       { key: "manage-users", label: "Manage Users", navKey: "manage-users" },
       { key: "scholarship", label: "Scholarship", navKey: "scholarship" },
+      { key: "offer-codes", label: "Offer Codes", navKey: "offer-codes" },
     ],
   },
   {
@@ -176,6 +185,7 @@ const ACTIVE_MAP: Record<string, string> = {
   "question-bank": "question-bank",
   spotlight: "spotlight",
   scholarship: "scholarship",
+  "offer-codes": "offer-codes",
   "trial-extension": "trial-extension",
   feedback: "feedback",
   industries: "industries",

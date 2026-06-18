@@ -4,8 +4,9 @@ import { tasks as allTasks, type Task } from "../data/tasks";
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
-import { SearchIcon, SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon, AddIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon, AddIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
+import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 
 const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
@@ -75,7 +76,9 @@ function compare(a: Task, b: Task, key: SortKey): number {
 
 export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // Search bar: committedQuery only changes on Enter. The certification filter is
+  // shared with the Filters row (filters.certifications) and applies on Enter.
+  const [committedQuery, setCommittedQuery] = useState("");
   const [filters, setFilters] = useState<FilterState>({
     creators: ["SkillCat"],
     certifications: [],
@@ -99,7 +102,7 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = committedQuery.trim().toLowerCase();
     return allTasks.filter((t) => {
       if (q && !(
         t.id.toLowerCase().includes(q) ||
@@ -112,7 +115,7 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
       if (filters.tags.length && !(t.tags ?? []).some((tag) => filters.tags.includes(tag))) return false;
       return true;
     });
-  }, [query, filters]);
+  }, [committedQuery, filters]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -123,7 +126,7 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
 
   useEffect(() => {
     setPage(1);
-  }, [query, filters, sort]);
+  }, [committedQuery, filters, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -183,19 +186,14 @@ export function TasksPage({ onNewTask }: { onNewTask: (t: TaskTypeKey) => void }
       <div className="tasks-row">
         <div className="tasks-content">
           <div className="toolbar">
-            <div className="search-wrap">
-              <span className="search-icon">
-                <SearchIcon />
-              </span>
-              <input
-                className="search-input"
-                placeholder="Search Tasks by name, ID, or content…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
-            </div>
-
+            <TasksSearch
+              tasks={allTasks}
+              certifications={filters.certifications}
+              onCertificationsChange={(c) => setFilters((prev) => ({ ...prev, certifications: c }))}
+              query={committedQuery}
+              onCommit={setCommittedQuery}
+              onSelectTask={setSelectedId}
+            />
           </div>
 
           <Filters filters={filters} setFilters={setFilters} />

@@ -15,6 +15,14 @@ import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
 import { FeedbackFormVersions } from "./components/FeedbackFormVersions";
 import { IndustriesPage } from "./components/IndustriesPage";
+import { CompaniesPage } from "./components/CompaniesPage";
+import { UsersPage } from "./components/UsersPage";
+import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
+import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
+import { OfferCodesPage } from "./components/OfferCodesPage";
+import { UserProfilePage } from "./components/UserProfilePage";
+import { PortfolioPage } from "./components/PortfolioPage";
+import { users as allUsers } from "./data/users";
 import {
   feedbackForms as seedForms,
   type FeedbackForm,
@@ -34,9 +42,40 @@ type View =
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string }
   | { name: "feedback-versions"; formId: string }
-  | { name: "industries" };
+  | { name: "industries" }
+  | { name: "companies"; query?: string }
+  | { name: "users" }
+  | { name: "offer-codes" }
+  | { name: "review-hands-on" }
+  | { name: "name-change-requests" };
 
 export default function App() {
+  // Standalone, full-tab pages opened from the Users table ("open in new tab").
+  // These render without the admin shell (no sidebar).
+  const params = new URLSearchParams(window.location.search);
+  const profileId = params.get("profile");
+  const portfolioId = params.get("portfolio");
+  if (profileId) {
+    const u = allUsers.find((x) => x.id === profileId);
+    return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
+  }
+  if (portfolioId) {
+    const u = allUsers.find((x) => x.id === portfolioId);
+    return u ? <PortfolioPage user={u} /> : <StandaloneNotFound id={portfolioId} />;
+  }
+
+  return <AdminApp />;
+}
+
+function StandaloneNotFound({ id }: { id: string }) {
+  return (
+    <div style={{ padding: 48, color: "#9a9aa0", fontFamily: "var(--font-sans)" }}>
+      No user found for “{id}”.
+    </div>
+  );
+}
+
+function AdminApp() {
   const [view, setView] = useState<View>({ name: "tasks" });
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
 
@@ -61,6 +100,16 @@ export default function App() {
       ? "feedback"
       : view.name === "industries"
       ? "industries"
+      : view.name === "companies"
+      ? "manage-companies"
+      : view.name === "users"
+      ? "manage-users"
+      : view.name === "offer-codes"
+      ? "offer-codes"
+      : view.name === "review-hands-on"
+      ? "review-hands-on"
+      : view.name === "name-change-requests"
+      ? "name-change-requests"
       : "tasks";
 
   function navigate(key: string) {
@@ -74,6 +123,11 @@ export default function App() {
     else if (key === "trial-extension") setView({ name: "trial-extension" });
     else if (key === "feedback") setView({ name: "feedback" });
     else if (key === "industries") setView({ name: "industries" });
+    else if (key === "manage-companies") setView({ name: "companies" });
+    else if (key === "manage-users") setView({ name: "users" });
+    else if (key === "offer-codes") setView({ name: "offer-codes" });
+    else if (key === "review-hands-on") setView({ name: "review-hands-on" });
+    else if (key === "name-change-requests") setView({ name: "name-change-requests" });
   }
 
   function upsertForm(form: FeedbackForm) {
@@ -116,6 +170,16 @@ export default function App() {
         <TrialExtensionPage />
       ) : view.name === "industries" ? (
         <IndustriesPage />
+      ) : view.name === "companies" ? (
+        <CompaniesPage initialQuery={view.query} />
+      ) : view.name === "users" ? (
+        <UsersPage onViewCompany={(name) => setView({ name: "companies", query: name })} />
+      ) : view.name === "offer-codes" ? (
+        <OfferCodesPage />
+      ) : view.name === "review-hands-on" ? (
+        <ReviewHandsOnPage />
+      ) : view.name === "name-change-requests" ? (
+        <NameChangeRequestsPage />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
