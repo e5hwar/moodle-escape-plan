@@ -10,14 +10,19 @@ import { SortIcon, XCircleIcon, ChevronDownIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
-/* ── Columns: Name is fixed; the rest are toggleable. Task + Submitted On are
-   shown by default; Email / Phone / Created By are the "additional" columns. ── */
-type ColKey = "task" | "submittedOn" | "email" | "phone" | "createdBy";
+const STATUS_OPTIONS: TaskSubmission["status"][] = ["Rejected", "Review Pending", "Completed"];
+
+/* ── Columns: Name is fixed; the rest are toggleable. Task + Status +
+   Submitted On are shown by default; Due Date / Email / Phone / Created By
+   are the "additional" columns. ── */
+type ColKey = "task" | "status" | "submittedOn" | "dueDate" | "email" | "phone" | "createdBy";
 type ColState = Record<ColKey, boolean>;
 
 const DEFAULT_COLUMNS: ColState = {
   task: true,
+  status: true,
   submittedOn: true,
+  dueDate: false,
   email: false,
   phone: false,
   createdBy: false,
@@ -41,7 +46,9 @@ type ColMeta = {
 
 const COLS: ColMeta[] = [
   { key: "task", label: "Task", className: "col-rh-task", width: 280, render: (s) => s.taskName, sortValue: (s) => s.taskName.toLowerCase() },
+  { key: "status", label: "Status", className: "col-rh-status", width: 150, render: (s) => <StatusPill status={s.status} />, sortValue: (s) => s.status },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
+  { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
   { key: "email", label: "Email", className: "col-rh-email", width: 220, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
   { key: "phone", label: "Phone Number", className: "col-rh-phone", width: 170, render: (s) => s.phone, sortValue: (s) => s.phone },
   { key: "createdBy", label: "Created By", className: "col-rh-creator", width: 190, render: (s) => s.createdBy, sortValue: (s) => s.createdBy.toLowerCase() },
@@ -52,7 +59,9 @@ const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 // drive this page's column set. Only the keys present here are shown.
 const EDIT_COLUMN_DEFS = [
   { key: "task", label: "Task" },
+  { key: "status", label: "Status" },
   { key: "submittedOn", label: "Submitted On" },
+  { key: "dueDate", label: "Due Date" },
   { key: "email", label: "Email" },
   { key: "phone", label: "Phone Number" },
   { key: "createdBy", label: "Created By" },
@@ -64,6 +73,7 @@ type SortDir = "asc" | "desc";
 export function ReviewHandsOnPage() {
   const [list, setList] = useState<TaskSubmission[]>(seed);
   const [columns, setColumns] = useState<ColState>(DEFAULT_COLUMNS);
+  const [statuses, setStatuses] = useState<string[]>(["Review Pending"]);
   const [types, setTypes] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
   const [tasks, setTasks] = useState<string[]>([]);
@@ -81,6 +91,7 @@ export function ReviewHandsOnPage() {
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return list.filter((s) => {
+      if (statuses.length && !statuses.includes(s.status)) return false;
       if (types.length && !types.includes(s.userType)) return false;
       if (companies.length && !(s.companyName && companies.includes(s.companyName))) return false;
       if (tasks.length && !tasks.includes(s.taskName)) return false;
@@ -92,7 +103,7 @@ export function ReviewHandsOnPage() {
         s.taskName.toLowerCase().includes(q)
       );
     });
-  }, [list, committedQuery, types, companies, tasks]);
+  }, [list, committedQuery, statuses, types, companies, tasks]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => {
@@ -107,13 +118,16 @@ export function ReviewHandsOnPage() {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, types, companies, tasks, sort]);
+  useEffect(() => setPage(1), [committedQuery, statuses, types, companies, tasks, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
   const colSpan = visibleCols.length + 1; // name + cols
+  // Natural table width (name col + optional cols + actions) so the table
+  // scrolls horizontally rather than crushing columns on a narrow page.
+  const tableMin = 190 + visibleCols.reduce((s, c) => s + c.width, 0) + 48;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -122,6 +136,7 @@ export function ReviewHandsOnPage() {
   }
 
   function clearFilters() {
+    setStatuses([]);
     setTypes([]);
     setCompanies([]);
     setTasks([]);
@@ -141,7 +156,7 @@ export function ReviewHandsOnPage() {
     );
   }
 
-  const hasFilters = types.length + companies.length + tasks.length > 0;
+  const hasFilters = statuses.length + types.length + companies.length + tasks.length > 0;
 
   return (
     <div className="main">
@@ -174,6 +189,7 @@ export function ReviewHandsOnPage() {
               </div>
 
               <div className="filters">
+                <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />
                 <MultiPill label="User Type" all={["B2C", "B2B"]} value={types} onApply={setTypes} />
                 <MultiPill
                   label="Company"
@@ -210,6 +226,7 @@ export function ReviewHandsOnPage() {
                 )}
               </div>
 
+              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup cols={visibleCols} />
                 <thead>
@@ -256,6 +273,7 @@ export function ReviewHandsOnPage() {
                   </tbody>
                 </table>
               </div>
+              </div>
 
               <div className="pagination">
                 <span>
@@ -285,6 +303,16 @@ function ColGroup({ cols }: { cols: ColMeta[] }) {
       ))}
       <col style={{ width: 48 }} />
     </colgroup>
+  );
+}
+
+function StatusPill({ status }: { status: TaskSubmission["status"] }) {
+  const key = status.toLowerCase().replace(/\s+/g, "-");
+  return (
+    <span className={`rh-status rh-status--${key}`}>
+      <span className="rh-status-dot" />
+      {status}
+    </span>
   );
 }
 

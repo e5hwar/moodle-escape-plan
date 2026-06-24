@@ -1,5 +1,19 @@
 export type TaskType = "xAPI" | "Quiz" | "ID Upload" | "Hands-On Task" | "File" | "URL";
 
+/** A graded Section of a sectioned Quiz Task. Present only on Quiz Tasks that
+ * use the sectioned structure with section-level grading (EPA/NATE-style exams).
+ * Editing such a Task opens the wizard pre-loaded with these Sections. */
+export type TaskQuizSection = {
+  name: string;
+  nameEs: string;
+  /** Number of questions drawn for the Section each attempt. */
+  questionCount: number;
+  /** Passing grade for the Section, as a percentage (0–100). */
+  passingPct: number;
+  /** Whether the Section must be cleared for the Quiz to count as passed. */
+  requiredToPass: boolean;
+};
+
 export type Task = {
   id: string;
   name: string;
@@ -7,6 +21,20 @@ export type Task = {
   usedIn: string[];
   createdBy: string;
   draft?: boolean;
+  discoverable?: boolean;
+  hidden?: boolean;
+  /** True when this Task is the certifying final exam for its certification. */
+  finalExam?: boolean;
+  /** True when the Task sits in an Access Restriction chain (a prerequisite gate
+   * for another Task/Certification). Such Tasks can't be hidden until removed
+   * from the chain. */
+  accessRestricted?: boolean;
+  /** True when a paywall is defined on the Task. Only Quiz Tasks support a
+   * paywall — see {@link canHavePaywall}. */
+  paywall?: boolean;
+  /** Section-level Quiz configuration. When set, the Quiz uses the sectioned
+   * structure with section-level grading. */
+  quizSections?: TaskQuizSection[];
   description?: string;
   updated?: string;
   visibility?: string;
@@ -48,8 +76,19 @@ export const tasks: Task[] = [
       requirements: "Project Title (required, 60 char) · Project Description (required, 500 char) · up to 5 images or videos. Reviewed manually with a 7/10 passing score.",
       skills: [{ icon: "🟨", name: "Soldering & Brazing" }],
     }),
-  T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B-Only", "Commercial HVAC"], "Mar 06, 2024", "Apr 25, 2026"),
-  T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", ["All-User"], "Feb 02, 2024", "Apr 18, 2026"),
+  T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B-Only", "Commercial HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
+  T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", ["All-User"], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
+  T("T-1198", "EPA 608 Universal Final Exam", "Quiz", ["EPA 608 Universal"], "SkillCat", ["All-User"], "Feb 14, 2024", "Apr 20, 2026", {
+    finalExam: true,
+    timeToComplete: "~90 minutes",
+    submissions: "874 attempts · 71% pass rate",
+    quizSections: [
+      { name: "Core", nameEs: "Núcleo", questionCount: 25, passingPct: 70, requiredToPass: true },
+      { name: "Type I", nameEs: "Tipo I", questionCount: 25, passingPct: 70, requiredToPass: true },
+      { name: "Type II", nameEs: "Tipo II", questionCount: 25, passingPct: 70, requiredToPass: true },
+      { name: "Type III", nameEs: "Tipo III", questionCount: 25, passingPct: 70, requiredToPass: true },
+    ],
+  }),
   T("T-1042", "EPA 608 Core – Refrigerant Recovery", "xAPI",
     ["EPA 608 Type I", "EPA 608 Type II", "EPA 608 Type III", "EPA 608 Universal"],
     "SkillCat", ["All-User", "Residential HVAC"], "Jan 14, 2024", "Apr 22, 2026"),
@@ -66,7 +105,7 @@ export const tasks: Task[] = [
   T("T-2165", "Thermostat Wiring Lab", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type I"], "SkillCat", ["All-User", "Residential HVAC"], "Mar 22, 2025", "Apr 11, 2026"),
   T("T-2132", "Capacitor Replacement Walkthrough", "xAPI", ["EPA 608 Type II"], "HVACR", ["B2B-Only", "Residential HVAC"], "Apr 01, 2025", "Apr 21, 2026"),
   T("T-2098", "Coil Cleaning Procedure", "Hands-On Task", ["HVAC Field Skills"], "ARS", ["B2B-Only", "Commercial HVAC"], "Apr 04, 2025", "Apr 14, 2026"),
-  T("T-2061", "Airflow Calibration Quiz", "Quiz", ["HVAC Field Skills"], "SkillCat", ["All-User"], "Apr 10, 2025", "Apr 24, 2026"),
+  T("T-2061", "Airflow Calibration Quiz", "Quiz", ["HVAC Field Skills"], "SkillCat", ["All-User"], "Apr 10, 2025", "Apr 24, 2026", { paywall: true }),
   T("T-2024", "Electrical Panel Lab", "Hands-On Task", ["Safety Bundle", "OSHA 30"], "NexTech", ["B2B-Only", "Commercial HVAC"], "Apr 12, 2025", "Apr 16, 2026"),
 
   T("T-1989", "Indoor Air Quality Test", "xAPI", ["HVAC Field Skills"], "SkillCat", ["All-User", "Residential HVAC"], "May 02, 2025", "Apr 07, 2026"),
@@ -75,7 +114,7 @@ export const tasks: Task[] = [
   T("T-1888", "Mini-Split Install Guide", "xAPI", ["HVAC Field Skills"], "ARS", ["B2B-Only", "Residential HVAC"], "Jun 12, 2025", "Apr 17, 2026"),
   T("T-1855", "Recovery Machine Setup", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Universal"], "SkillCat", ["All-User"], "Jun 25, 2025", "Apr 19, 2026"),
   T("T-1821", "Vacuum Pump Operation", "Hands-On Task", ["EPA 608 Type I"], "HVACR", ["B2B-Only", "Residential HVAC"], "Jul 02, 2025", "Apr 03, 2026"),
-  T("T-1788", "Manifold Gauge Use", "Quiz", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["All-User"], "Jul 14, 2025", "Apr 05, 2026"),
+  T("T-1788", "Manifold Gauge Use", "Quiz", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["All-User"], "Jul 14, 2025", "Apr 05, 2026", { paywall: true }),
   T("T-1755", "Pressure Test Module", "xAPI", ["EPA 608 Type II"], "NexTech", ["B2B-Only", "Commercial HVAC"], "Jul 22, 2025", "Apr 12, 2026"),
   T("T-1722", "Subcooling Calculation Quiz", "Quiz", ["EPA 608 Type I"], "SkillCat", ["All-User"], "Aug 04, 2025", "Apr 14, 2026"),
   T("T-1689", "Superheat Reading Lab", "Hands-On Task", ["EPA 608 Type I"], "ARS", ["B2B-Only", "Residential HVAC"], "Aug 12, 2025", "Apr 18, 2026"),
@@ -86,7 +125,7 @@ export const tasks: Task[] = [
   T("T-1555", "PVC Pipe Joining Lab", "Hands-On Task", [], "SkillCat", ["All-User", "Residential Plumbing"], "Sep 22, 2025", "Apr 11, 2026"),
   T("T-1521", "PEX Tubing Install Walkthrough", "xAPI", [], "ARS", ["B2B-Only", "Residential Plumbing"], "Oct 02, 2025", "Apr 13, 2026"),
   T("T-1488", "Sweat Soldering Lab", "Hands-On Task", [], "SkillCat", ["All-User", "Residential Plumbing"], "Oct 12, 2025", "Apr 17, 2026"),
-  T("T-1455", "Waste Line Layout Quiz", "Quiz", [], "NexTech", ["B2B-Only", "Commercial Plumbing"], "Oct 22, 2025", "Apr 21, 2026"),
+  T("T-1455", "Waste Line Layout Quiz", "Quiz", [], "NexTech", ["B2B-Only", "Commercial Plumbing"], "Oct 22, 2025", "Apr 21, 2026", { paywall: true }),
   T("T-1421", "Vent Stack Sizing", "File", [], "HVACR", ["B2B-Only", "Commercial Plumbing"], "Nov 01, 2025", "Apr 04, 2026"),
   T("T-1388", "Backflow Preventer Setup", "Hands-On Task", [], "Premium HVAC Services", ["B2B-Only", "Commercial Plumbing"], "Nov 12, 2025", "Apr 08, 2026"),
   T("T-1355", "Water Heater Service", "xAPI", [], "ARS", ["B2B-Only", "Residential Plumbing"], "Nov 22, 2025", "Apr 12, 2026"),
@@ -104,3 +143,47 @@ export const tasks: Task[] = [
   T("T-0988", "MultiFamily Service Visit", "Hands-On Task", [], "ARS", ["B2B-Only", "MultiFamily Maintenance"], "Mar 06, 2026", "Apr 29, 2026"),
   T("T-0955", "NexStar Onboarding", "URL", [], "SkillCat", ["B2B-Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
 ];
+
+// Tasks default to discoverable. Drafts are never discoverable, plus a handful
+// are explicitly hidden from search/browse below.
+const NOT_DISCOVERABLE = new Set([
+  "T-1543", // Refrigerant Pressure Chart
+  "T-2199", // Ductwork Installation Guide
+  "T-1922", // Boiler Inspection Checklist
+  "T-1421", // Vent Stack Sizing
+  "T-1255", // Drain Cleaning Module
+  "T-0955", // NexStar Onboarding
+]);
+for (const t of tasks) {
+  if (t.discoverable === undefined) t.discoverable = !t.draft && !NOT_DISCOVERABLE.has(t.id);
+}
+
+// Tasks that act as a prerequisite gate in an Access Restriction chain. These
+// can't be hidden until they're removed from the chain.
+const ACCESS_RESTRICTED = new Set([
+  "T-0234", // Government ID Upload — gates every certification's exam
+  "T-1156", // EPA 608 Type I Final Exam — gated behind the Core module
+]);
+for (const t of tasks) {
+  if (t.accessRestricted === undefined) t.accessRestricted = ACCESS_RESTRICTED.has(t.id);
+}
+
+/** Label used by the Discoverable filter. */
+export function discoverableLabel(task: Task): string {
+  return task.discoverable ? "Discoverable" : "Not discoverable";
+}
+
+/** Label used by the Final Exam filter. */
+export function finalExamLabel(task: Task): string {
+  return task.finalExam ? "Final Exam" : "Not Final Exam";
+}
+
+/** Only Quiz Tasks can have a paywall defined. */
+export function canHavePaywall(task: Task): boolean {
+  return task.type === "Quiz";
+}
+
+/** True when a paywall is actually in effect on the Task. */
+export function isPaid(task: Task): boolean {
+  return canHavePaywall(task) && !!task.paywall;
+}

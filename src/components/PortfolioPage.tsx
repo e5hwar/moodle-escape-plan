@@ -39,7 +39,7 @@ export function PortfolioPage({ user }: { user: User }) {
           <div className="pf-avatar">{initialsOf(user.name)}</div>
           <h1 className="pf-name">{user.name}</h1>
           <p className="pf-sub">
-            {p.fields.industryPreference} · {p.fields.careerStage}
+            {p.fields.industryPreference} · {p.fields.goal}
           </p>
           <span className="pf-public">Public Portfolio</span>
         </header>

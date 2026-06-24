@@ -114,7 +114,7 @@ export function NameChangeRequestsPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table ncr-table">
+                <table className="table sch-table ncr-table" style={{ minWidth: 1020 }}>
                   <colgroup>
                     <col style={{ width: "auto" }} />
                     <col style={{ width: "auto" }} />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   scholarships as seedScholarships,
   userBank,
@@ -58,6 +58,7 @@ export function ScholarshipsPage() {
   });
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
+  const [menu, setMenu] = useState<{ scholarship: Scholarship; rect: DOMRect } | null>(null);
 
   const counts = useMemo(() => {
     let active = 0;
@@ -114,6 +115,20 @@ export function ScholarshipsPage() {
 
   function handleRevoke(id: string) {
     setList((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function handleExtend(id: string) {
+    setList((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        // Extend 6 months from the later of today or the current expiry.
+        const base = new Date(
+          Math.max(new Date(s.expiresOn).getTime(), TODAY.getTime()),
+        );
+        base.setMonth(base.getMonth() + 6);
+        return { ...s, expiresOn: base.toISOString().slice(0, 10) };
+      }),
+    );
   }
 
   // Users already with an *active* scholarship — excluded from the picker.
@@ -189,7 +204,7 @@ export function ScholarshipsPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table">
+                <table className="table sch-table" style={{ minWidth: 820 }}>
                   <colgroup>
                     <col style={{ width: "auto" }} />
                     <col style={{ width: 140 }} />
@@ -231,7 +246,9 @@ export function ScholarshipsPage() {
                       <ScholarshipRow
                         key={s.id}
                         scholarship={s}
+                        selected={menu?.scholarship.id === s.id}
                         onRevoke={() => handleRevoke(s.id)}
+                        onOpenMenu={(rect) => setMenu({ scholarship: s, rect })}
                       />
                     ))}
                     {paged.length === 0 && (
@@ -285,6 +302,16 @@ export function ScholarshipsPage() {
           onAdd={handleAdd}
         />
       )}
+
+      {menu && (
+        <ScholarshipActionsMenu
+          scholarship={menu.scholarship}
+          rect={menu.rect}
+          onClose={() => setMenu(null)}
+          onExtend={() => handleExtend(menu.scholarship.id)}
+          onRevoke={() => handleRevoke(menu.scholarship.id)}
+        />
+      )}
     </div>
   );
 }
@@ -334,17 +361,21 @@ function StatusPill({ status }: { status: ScholarshipStatus }) {
 
 function ScholarshipRow({
   scholarship,
+  selected,
   onRevoke,
+  onOpenMenu,
 }: {
   scholarship: Scholarship;
+  selected: boolean;
   onRevoke: () => void;
+  onOpenMenu: (rect: DOMRect) => void;
 }) {
   const status = statusOf(scholarship);
   const days = daysFromToday(scholarship.expiresOn);
   const expiringSoon = status === "active" && days >= 0 && days <= 14;
 
   return (
-    <tr>
+    <tr className={selected ? "selected" : ""}>
       <td>
         <UserCell user={scholarship.user} />
       </td>
@@ -377,17 +408,156 @@ function ScholarshipRow({
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
-          aria-label="Revoke"
-          title="Revoke scholarship"
+          aria-label="More"
           onClick={(e) => {
             e.stopPropagation();
-            onRevoke();
+            onOpenMenu(e.currentTarget.getBoundingClientRect());
           }}
         >
-          <SmallXIcon />
+          <MoreIcon />
         </button>
+        <div className="row-action-bar">
+          <button
+            className="row-action-btn"
+            aria-label="Revoke"
+            title="Revoke scholarship"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRevoke();
+            }}
+          >
+            <SmallXIcon />
+          </button>
+          <button
+            className="row-action-btn"
+            aria-label="More"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMenu(e.currentTarget.getBoundingClientRect());
+            }}
+          >
+            <MoreIcon />
+          </button>
+        </div>
       </td>
     </tr>
+  );
+}
+
+/* ───────────────── Row actions menu (fixed-positioned) ───────────────── */
+
+const MoreIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="5" cy="12" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="19" cy="12" r="1.9" />
+  </svg>
+);
+
+const CalendarPlusIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="17" rx="2" />
+    <path d="M3 9h18M8 2v4M16 2v4M12 13v5M9.5 15.5h5" />
+  </svg>
+);
+
+const MailMenuIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 7l9 6 9-6" />
+  </svg>
+);
+
+const RevokeIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M15 9l-6 6M9 9l6 6" />
+  </svg>
+);
+
+function ScholarshipActionsMenu({
+  scholarship,
+  rect,
+  onClose,
+  onExtend,
+  onRevoke,
+}: {
+  scholarship: Scholarship;
+  rect: DOMRect;
+  onClose: () => void;
+  onExtend: () => void;
+  onRevoke: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const status = statusOf(scholarship);
+  const email = scholarship.user.email;
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let left = rect.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
+    setPos({ top, left });
+  }, [rect]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    }
+    function onScroll() { onClose(); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const item = (icon: JSX.Element, label: string, onPick: () => void, danger = false) => (
+    <button
+      className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      onClick={(e) => { e.stopPropagation(); onPick(); onClose(); }}
+    >
+      <span className="u-menu-item-icon">{icon}</span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="u-menu"
+      style={{
+        top: pos ? pos.top : rect.bottom + 6,
+        left: pos ? pos.left : rect.right - 220,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="u-menu-head">
+        <div className="u-menu-head-name">{scholarship.user.name}</div>
+        <div className="u-menu-head-id">
+          {scholarship.id} · {status === "active" ? "Active" : "Expired"}
+        </div>
+      </div>
+      <div className="u-menu-divider" />
+      {item(<CalendarPlusIcon />, "Extend 6 months", onExtend)}
+      {email &&
+        item(<MailMenuIcon />, "Copy user email", () => {
+          navigator.clipboard?.writeText(email);
+        })}
+      <div className="u-menu-divider" />
+      {item(<RevokeIcon />, "Revoke scholarship", onRevoke, true)}
+    </div>
   );
 }
 

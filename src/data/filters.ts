@@ -31,6 +31,10 @@ export const TASK_TYPES = [
 
 export const VISIBILITIES = ["Hidden", "Visible"];
 
+export const DISCOVERABLE_OPTIONS = ["Discoverable", "Not discoverable"];
+
+export const FINAL_EXAM_OPTIONS = ["Final Exam", "Not Final Exam"];
+
 export const TAG_GROUPS: { label: string; tags: string[] }[] = [
   { label: "USER TYPE", tags: ["All-User", "B2B-Only"] },
   { label: "PARTNERSHIP", tags: ["NexStar", "HVACR"] },
@@ -50,6 +54,7 @@ export const TAG_GROUPS: { label: string; tags: string[] }[] = [
 export type OptionalColumn =
   | "id"
   | "type"
+  | "paid"
   | "usedIn"
   | "createdBy"
   | "tags"
@@ -59,6 +64,7 @@ export type OptionalColumn =
 export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
   { key: "id", label: "ID" },
   { key: "type", label: "Type" },
+  { key: "paid", label: "Paid" },
   { key: "usedIn", label: "Used in" },
   { key: "createdBy", label: "Created By" },
   { key: "tags", label: "Tags" },

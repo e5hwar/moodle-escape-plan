@@ -5,9 +5,10 @@ import {
   type Question,
   type ResponseAnswer,
 } from "../data/feedbackForms";
-import { SearchIcon, SmallXIcon } from "./icons";
+import { SearchIcon, SmallXIcon, AddIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
 
-type View = "summary" | "individual";
+type View = "summary" | "individual" | "cohort";
 
 type Props = {
   form: FeedbackForm;
@@ -82,6 +83,12 @@ export function FeedbackFormResponses({ form, responses }: Props) {
             Individual responses
             <span className="sp-tab-count">{responses.length}</span>
           </button>
+          <button
+            className={`sp-tab ${view === "cohort" ? "is-active" : ""}`}
+            onClick={() => setView("cohort")}
+          >
+            Cohort builder
+          </button>
         </div>
       </div>
 
@@ -139,6 +146,10 @@ export function FeedbackFormResponses({ form, responses }: Props) {
             )}
           </div>
         </div>
+      )}
+
+      {view === "cohort" && (
+        <CohortBuilder form={form} responses={responses} />
       )}
 
       {active && (
@@ -506,6 +517,435 @@ function AnswerView({
         </ul>
       );
   }
+}
+
+// ---------------------- Cohort builder ----------------------
+
+type CohortFilter =
+  | { id: string; dim: "trigger"; value: string }
+  | { id: string; dim: "version"; value: number }
+  | { id: string; dim: "choice"; questionId: string; optionId: string }
+  | { id: string; dim: "scale"; questionId: string; op: "gte" | "lte"; value: number }
+  | { id: string; dim: "text"; questionId: string; value: string }
+  | { id: string; dim: "file"; questionId: string };
+
+function fid() {
+  return `cf-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function matchesFilter(r: FormResponse, f: CohortFilter): boolean {
+  switch (f.dim) {
+    case "trigger":
+      return r.triggerName === f.value;
+    case "version":
+      return r.formVersion === f.value;
+    case "choice": {
+      const a = r.answers.find((x) => x.questionId === f.questionId);
+      return !!a?.selectedOptionIds?.includes(f.optionId);
+    }
+    case "scale": {
+      const a = r.answers.find((x) => x.questionId === f.questionId);
+      if (typeof a?.scaleValue !== "number") return false;
+      return f.op === "gte" ? a.scaleValue >= f.value : a.scaleValue <= f.value;
+    }
+    case "text": {
+      const v = f.value.trim().toLowerCase();
+      if (!v) return true;
+      const a = r.answers.find((x) => x.questionId === f.questionId);
+      return !!a?.text?.toLowerCase().includes(v);
+    }
+    case "file": {
+      const a = r.answers.find((x) => x.questionId === f.questionId);
+      return (a?.files?.length ?? 0) > 0;
+    }
+  }
+}
+
+function shortQ(q: Question, i: number): string {
+  const text = q.textEn || "Untitled question";
+  return `Q${i + 1} · ${text.length > 40 ? text.slice(0, 40) + "…" : text}`;
+}
+
+function CohortBuilder({
+  form,
+  responses,
+}: {
+  form: FeedbackForm;
+  responses: FormResponse[];
+}) {
+  const [filters, setFilters] = useState<CohortFilter[]>([]);
+  const [breakdownId, setBreakdownId] = useState<string>(
+    form.questions[0]?.id ?? "",
+  );
+
+  const triggers = useMemo(
+    () => Array.from(new Set(responses.map((r) => r.triggerName))).sort(),
+    [responses],
+  );
+  const versions = useMemo(
+    () =>
+      Array.from(new Set(responses.map((r) => r.formVersion))).sort(
+        (a, b) => b - a,
+      ),
+    [responses],
+  );
+
+  const cohort = useMemo(
+    () => responses.filter((r) => filters.every((f) => matchesFilter(r, f))),
+    [responses, filters],
+  );
+
+  const pct =
+    responses.length === 0
+      ? 0
+      : Math.round((cohort.length / responses.length) * 100);
+
+  const breakdownQ = form.questions.find((q) => q.id === breakdownId);
+
+  function addFilter(dim: string) {
+    const firstQ = form.questions[0];
+    let next: CohortFilter | null = null;
+    if (dim === "trigger") {
+      next = { id: fid(), dim: "trigger", value: triggers[0] ?? "" };
+    } else if (dim === "version") {
+      next = { id: fid(), dim: "version", value: versions[0] ?? form.version };
+    } else {
+      const q = form.questions.find((x) => x.id === dim) ?? firstQ;
+      if (!q) return;
+      if (q.type === "single-select" || q.type === "multi-select") {
+        next = {
+          id: fid(),
+          dim: "choice",
+          questionId: q.id,
+          optionId: q.options?.[0]?.id ?? "",
+        };
+      } else if (q.type === "linear-scale") {
+        next = {
+          id: fid(),
+          dim: "scale",
+          questionId: q.id,
+          op: "gte",
+          value: q.scaleMin ?? 1,
+        };
+      } else if (q.type === "file-upload") {
+        next = { id: fid(), dim: "file", questionId: q.id };
+      } else {
+        next = { id: fid(), dim: "text", questionId: q.id, value: "" };
+      }
+    }
+    if (next) setFilters((prev) => [...prev, next as CohortFilter]);
+  }
+
+  function updateFilter(id: string, patch: Partial<CohortFilter>) {
+    setFilters((prev) =>
+      prev.map((f) => (f.id === id ? ({ ...f, ...patch } as CohortFilter) : f)),
+    );
+  }
+
+  function removeFilter(id: string) {
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function exportCohort() {
+    const headers = [
+      "Response ID",
+      "User",
+      "Email",
+      "Trigger",
+      "Version",
+      "Submitted",
+      ...form.questions.map((_q, i) => `Q${i + 1}`),
+    ];
+    const rows = cohort.map((r) => [
+      r.id,
+      r.userName,
+      r.userEmail,
+      r.triggerName,
+      `v${r.formVersion}`,
+      r.submittedAt,
+      ...form.questions.map((q) => csvAnswer(q, r.answers.find((a) => a.questionId === q.id))),
+    ]);
+    const csv = [headers, ...rows]
+      .map((cols) => cols.map(csvCell).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${form.id}-cohort.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="fb-cohort">
+      <div>
+        <h3 className="fb-section-title">Build a cohort on the fly</h3>
+        <p className="fb-section-sub">
+          Stack filters to slice the response set. Every filter narrows the
+          cohort further.
+        </p>
+      </div>
+
+      <div className="fb-cohort-filters">
+        {filters.map((f, i) => (
+          <div key={f.id} className="fb-cohort-filter">
+            {i > 0 && <span className="fb-cohort-and">and</span>}
+            <FilterRow
+              filter={f}
+              form={form}
+              triggers={triggers}
+              versions={versions}
+              onChange={(patch) => updateFilter(f.id, patch)}
+            />
+            <button
+              className="fb-cohort-remove"
+              aria-label="Remove filter"
+              onClick={() => removeFilter(f.id)}
+            >
+              <SmallXIcon />
+            </button>
+          </div>
+        ))}
+
+        <Dropdown
+          width={260}
+          trigger={({ toggle }) => (
+            <button className="fb-cohort-add" onClick={toggle}>
+              <AddIcon /> Add filter
+            </button>
+          )}
+        >
+          {({ close }) => (
+            <div className="fb-cohort-menu">
+              <button
+                className="fb-cohort-menu-item"
+                onClick={() => {
+                  addFilter("trigger");
+                  close();
+                }}
+              >
+                Trigger
+              </button>
+              <button
+                className="fb-cohort-menu-item"
+                onClick={() => {
+                  addFilter("version");
+                  close();
+                }}
+              >
+                Version
+              </button>
+              <div className="fb-cohort-menu-sep" />
+              {form.questions.map((q, i) => (
+                <button
+                  key={q.id}
+                  className="fb-cohort-menu-item"
+                  onClick={() => {
+                    addFilter(q.id);
+                    close();
+                  }}
+                >
+                  {shortQ(q, i)}
+                </button>
+              ))}
+            </div>
+          )}
+        </Dropdown>
+      </div>
+
+      <div className="fb-cohort-result">
+        <div className="fb-stat">
+          <div className="fb-stat-num">{cohort.length.toLocaleString()}</div>
+          <div className="fb-stat-label">
+            Cohort size · {pct}% of {responses.length.toLocaleString()}
+          </div>
+        </div>
+        <button
+          className="btn-save-draft"
+          onClick={exportCohort}
+          disabled={cohort.length === 0}
+        >
+          Export cohort
+        </button>
+      </div>
+
+      <div className="fb-cohort-breakdown">
+        <div className="fb-cohort-breakdown-head">
+          <span className="fb-cohort-breakdown-label">Breakdown</span>
+          <select
+            className="fb-q-scale-select"
+            value={breakdownId}
+            onChange={(e) => setBreakdownId(e.target.value)}
+          >
+            {form.questions.map((q, i) => (
+              <option key={q.id} value={q.id}>
+                {shortQ(q, i)}
+              </option>
+            ))}
+          </select>
+          <span className="fb-faint">— this cohort</span>
+        </div>
+        {cohort.length === 0 ? (
+          <div className="fb-empty">No responses match these filters.</div>
+        ) : breakdownQ ? (
+          <QuestionSummary
+            index={form.questions.indexOf(breakdownQ)}
+            question={breakdownQ}
+            responses={cohort}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function FilterRow({
+  filter,
+  form,
+  triggers,
+  versions,
+  onChange,
+}: {
+  filter: CohortFilter;
+  form: FeedbackForm;
+  triggers: string[];
+  versions: number[];
+  onChange: (patch: Partial<CohortFilter>) => void;
+}) {
+  if (filter.dim === "trigger") {
+    return (
+      <>
+        <span className="fb-cohort-dim">Trigger is</span>
+        <select
+          className="fb-q-scale-select"
+          value={filter.value}
+          onChange={(e) => onChange({ value: e.target.value })}
+        >
+          {triggers.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </>
+    );
+  }
+  if (filter.dim === "version") {
+    return (
+      <>
+        <span className="fb-cohort-dim">Version is</span>
+        <select
+          className="fb-q-scale-select"
+          value={filter.value}
+          onChange={(e) => onChange({ value: Number(e.target.value) })}
+        >
+          {versions.map((v) => (
+            <option key={v} value={v}>
+              v{v}
+            </option>
+          ))}
+        </select>
+      </>
+    );
+  }
+
+  const q = form.questions.find((x) => x.id === filter.questionId);
+  const qIndex = form.questions.findIndex((x) => x.id === filter.questionId);
+  const dimLabel = q ? `Q${qIndex + 1}` : "Question";
+
+  if (filter.dim === "choice") {
+    return (
+      <>
+        <span className="fb-cohort-dim">{dimLabel} includes</span>
+        <select
+          className="fb-q-scale-select"
+          value={filter.optionId}
+          onChange={(e) => onChange({ optionId: e.target.value })}
+        >
+          {(q?.options ?? []).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.textEn}
+            </option>
+          ))}
+        </select>
+      </>
+    );
+  }
+  if (filter.dim === "scale") {
+    return (
+      <>
+        <span className="fb-cohort-dim">{dimLabel} score is</span>
+        <select
+          className="fb-q-scale-select"
+          value={filter.op}
+          onChange={(e) => onChange({ op: e.target.value as "gte" | "lte" })}
+        >
+          <option value="gte">≥</option>
+          <option value="lte">≤</option>
+        </select>
+        <select
+          className="fb-q-scale-select"
+          value={filter.value}
+          onChange={(e) => onChange({ value: Number(e.target.value) })}
+        >
+          {scalePoints(q).map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </>
+    );
+  }
+  if (filter.dim === "file") {
+    return <span className="fb-cohort-dim">{dimLabel} included a file</span>;
+  }
+  return (
+    <>
+      <span className="fb-cohort-dim">{dimLabel} text contains</span>
+      <input
+        className="fb-cohort-input"
+        placeholder="keyword…"
+        value={filter.value}
+        onChange={(e) => onChange({ value: e.target.value })}
+      />
+    </>
+  );
+}
+
+function scalePoints(q?: Question): number[] {
+  const min = q?.scaleMin ?? 1;
+  const max = q?.scaleMax ?? 5;
+  const out: number[] = [];
+  for (let i = min; i <= max; i++) out.push(i);
+  return out;
+}
+
+function csvAnswer(q: Question, a?: ResponseAnswer): string {
+  if (!a) return "";
+  switch (q.type) {
+    case "single-select":
+    case "multi-select": {
+      const labels = (a.selectedOptionIds ?? [])
+        .map((id) => q.options?.find((o) => o.id === id)?.textEn)
+        .filter(Boolean) as string[];
+      if (a.otherText) labels.push(`Other: ${a.otherText}`);
+      return labels.join("; ");
+    }
+    case "linear-scale":
+      return a.scaleValue != null ? String(a.scaleValue) : "";
+    case "short-answer":
+      return a.text ?? "";
+    case "file-upload":
+      return (a.files ?? []).map((f) => f.name).join("; ");
+  }
+}
+
+function csvCell(value: string): string {
+  const v = value ?? "";
+  if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+  return v;
 }
 
 function labelForType(t: Question["type"]): string {

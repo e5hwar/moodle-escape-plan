@@ -6,6 +6,8 @@ export type SubmissionMedia =
 
 export type EvaluationCriterion = { id: string; label: string };
 
+export type SubmissionStatus = "Rejected" | "Review Pending" | "Completed";
+
 export type TaskSubmission = {
   id: string;
   userId: string;
@@ -22,12 +24,12 @@ export type TaskSubmission = {
 
   /* ── detail-view fields ── */
   durationLabel: string; // e.g. "Hands-on Task · 2 Hours"
-  status: "Submitted" | "In Review" | "Completed";
+  status: SubmissionStatus;
   progress: number; // percent
   completion: string; // ISO date or "—"
-  dueDate: string; // ISO date
+  dueDate?: string; // ISO date — B2B only (company-assigned deadline)
   lastActivity: string; // human label, e.g. "2 days ago"
-  versions: string[]; // ["V5","V4",…]
+  versions: string[]; // newest first: ["V3","V2","V1"] (always rooted at V1)
   media: SubmissionMedia[];
   description: string;
   audioLabel: string; // voice-note label
@@ -110,6 +112,12 @@ function buildSubmissions(): TaskSubmission[] {
           }
         : { kind: "image" as const, seed: `${u.id}-${m}` },
     );
+    // Newest-first version list, always anchored at V1. A user with 3 attempts
+    // gets ["V3","V2","V1"] — never "V5" with no V1 underneath it.
+    const versionCount = 1 + (k % 5);
+    const versions = Array.from({ length: versionCount }, (_, vi) => `V${versionCount - vi}`);
+    const status: SubmissionStatus =
+      k % 9 === 0 ? "Rejected" : k % 11 === 0 ? "Completed" : "Review Pending";
     return {
       id: `RS-${2400 - i * 7}`,
       userId: u.id,
@@ -122,12 +130,13 @@ function buildSubmissions(): TaskSubmission[] {
       submittedOn: isoDaysAgo(submittedDaysAgo),
       createdBy: u.userType === "B2B" && u.companyName ? u.companyName : "SkillCat",
       durationLabel: "Hands-on Task · 2 Hours",
-      status: "Submitted",
+      status,
       progress: 100,
       completion: isoDaysAgo(submittedDaysAgo),
-      dueDate: isoDaysAhead(15 + (k % 30)),
+      // Only B2B (company) learners have a company-assigned deadline.
+      dueDate: u.userType === "B2B" ? isoDaysAhead(15 + (k % 30)) : undefined,
       lastActivity: activityLabel(submittedDaysAgo),
-      versions: ["V5", "V4", "V3", "V2", "V1"].slice(0, 1 + (k % 5)),
+      versions,
       media,
       description: DESCRIPTIONS[k % DESCRIPTIONS.length],
       audioLabel: "Voice note",
@@ -142,4 +151,63 @@ export const reviewSubmissions: TaskSubmission[] = buildSubmissions();
 /** picsum.photos URL for a media seed (deterministic image per seed). */
 export function mediaUrl(seed: string, w = 800, h = 600): string {
   return `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
+}
+
+/* ── Previous-version views ───────────────────────────────────────────────
+   The latest submission lives at version index 0. Older versions (V4, V3…)
+   are derived deterministically from the same seed so the demo can navigate
+   between attempts of the same task by the same user. ── */
+
+function isoOffset(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Derived submission for an older attempt (idx 0 returns the latest as-is). */
+export function pastVersionOf(s: TaskSubmission, idx: number): TaskSubmission {
+  if (idx <= 0) return s;
+  const offsetDays = idx * 18;
+  const submitted = isoOffset(s.submittedOn, -offsetDays);
+  const h = uhash(s.id + ":v" + idx);
+  return {
+    ...s,
+    submittedOn: submitted,
+    completion: submitted,
+    lastActivity: activityLabel(offsetDays + 1),
+    status: "Rejected", // an older attempt is older precisely because it was rejected
+    media: s.media.map((m) => ({ ...m, seed: `${m.seed}-v${idx}` })),
+    description: DESCRIPTIONS[h % DESCRIPTIONS.length],
+    audioLabel: "Voice note · resubmission requested",
+  };
+}
+
+export type PastReview = {
+  score: number;
+  feedback: string;
+  reviewer: string;
+  reviewedOn: string;
+  passedCriteria: string[];
+};
+
+const PAST_FEEDBACK = [
+  "Missing pressure test and lockout/tagout steps. Please resubmit with the full safety procedure visible.",
+  "Refrigerant manifold readings aren't shown — record the gauge readings and charge weight on the next attempt.",
+  "Voice note skips torque specs and the wiring sequence verification — include those next time.",
+  "Lighting on the brazed joints makes verification impossible. Use better lighting on resubmission.",
+];
+
+const PAST_REVIEWERS = ["Aarti Sharma", "Marcus Lee", "Jenna Park", "Devon Reyes"];
+
+/** Read-only past review for an older attempt. */
+export function pastReviewOf(s: TaskSubmission, idx: number): PastReview {
+  const h = uhash(s.id + ":r" + idx);
+  const submitted = isoOffset(s.submittedOn, -idx * 18);
+  return {
+    score: 1 + (h % 4), // older attempts sit in the 1–4 "rejected" band
+    feedback: PAST_FEEDBACK[h % PAST_FEEDBACK.length],
+    reviewer: PAST_REVIEWERS[h % PAST_REVIEWERS.length],
+    reviewedOn: isoOffset(submitted, 2),
+    passedCriteria: s.criteria.filter((_, ci) => ((h + ci) % 3) > 0).map((c) => c.id),
+  };
 }

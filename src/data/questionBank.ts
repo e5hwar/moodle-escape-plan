@@ -2,9 +2,19 @@ export type QuestionType =
   | "Multiple choice"
   | "Multiple select"
   | "True/False"
-  | "Fill-in";
+  | "Match the following";
 
 export type QuestionStatus = "Active" | "Archived" | "Draft";
+
+// Backend authoring type → short label shown in the table.
+// Multiple choice and Multiple select are both MCQ on the backend.
+export type ShortQuestionType = "MCQ" | "T/F" | "Match";
+
+export function shortQuestionType(type: QuestionType): ShortQuestionType {
+  if (type === "True/False") return "T/F";
+  if (type === "Match the following") return "Match";
+  return "MCQ";
+}
 
 export type Question = {
   id: string;
@@ -13,6 +23,7 @@ export type Question = {
   status: QuestionStatus;
   categoryPath: string[]; // e.g. ["EPA 608", "Universal"]
   quizzes: string[]; // e.g. ["EPA Universal Exam", "EPA Type II"]
+  version: number; // bumped each time the question is edited
 };
 
 export type Subcategory = {
@@ -54,26 +65,27 @@ const Q = (
   status: QuestionStatus,
   categoryPath: string[],
   quizzes: string[],
-): Question => ({ id, type, text, status, categoryPath, quizzes });
+  version = 1,
+): Question => ({ id, type, text, status, categoryPath, quizzes, version });
 
 const EPA_UNI = ["EPA 608", "Universal"];
 
 export const questions: Question[] = [
   Q("Q-10421", "Multiple choice",
     "Which refrigerant is classified as an HFC and commonly used in residential AC systems?",
-    "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW"]),
+    "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW"], 3),
   Q("Q-10422", "Multiple choice",
     "What is the EPA-mandated leak rate threshold for commercial refrigeration systems?",
     "Active", EPA_UNI, ["EPA Universal Exam"]),
   Q("Q-10423", "True/False",
     "Recovery cylinders must be evacuated to 5 inHg before initial use.",
-    "Active", EPA_UNI, ["EPA Universal Exam", "EPA Type II"]),
+    "Active", EPA_UNI, ["EPA Universal Exam", "EPA Type II"], 2),
   Q("Q-10424", "Multiple choice",
     "Which of the following is NOT a CFC refrigerant phased out by the Montreal Protocol?",
     "Active", EPA_UNI, []),
   Q("Q-10425", "Multiple select",
     "Which devices can be used to identify refrigerant type in a sealed system? (Select all that apply)",
-    "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW", "HVAC Field Skills"]),
+    "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW", "HVAC Field Skills"], 4),
   Q("Q-10426", "Multiple choice",
     "At what temperature does R-410A typically boil at atmospheric pressure?",
     "Active", EPA_UNI, ["EPA Universal Exam"]),
@@ -83,9 +95,9 @@ export const questions: Question[] = [
   Q("Q-10428", "Multiple choice",
     "What service practice is required when a leak exceeds 35% in a commercial refrigeration appliance?",
     "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW", "EPA Type II"]),
-  Q("Q-10429", "Fill-in",
-    "The maximum allowable refrigerant leak from disposal equipment is _____ psig.",
-    "Archived", EPA_UNI, []),
+  Q("Q-10429", "Match the following",
+    "Match each refrigerant to its ASHRAE safety classification, then pair the recovery cylinder color to the correct refrigerant family used in residential and light-commercial service.",
+    "Archived", EPA_UNI, [], 2),
   Q("Q-10430", "Multiple choice",
     "Which type of recovery is required when non-condensables exceed 15%?",
     "Active", EPA_UNI, ["EPA Universal Exam"]),
@@ -105,9 +117,9 @@ export const questions: Question[] = [
   Q("Q-10435", "Multiple choice",
     "What is the maximum allowable working pressure of a typical DOT-4BA cylinder?",
     "Active", EPA_UNI, ["EPA Universal Exam", "NATE RTW"]),
-  Q("Q-10436", "Fill-in",
-    "The Clean Air Act, Section _____ governs refrigerant management.",
-    "Active", EPA_UNI, ["EPA Universal Exam"]),
+  Q("Q-10436", "Match the following",
+    "Match each Clean Air Act section to the activity it governs.",
+    "Active", EPA_UNI, ["EPA Universal Exam"], 5),
   Q("Q-10437", "Multiple select",
     "Select all approved refrigerant recovery methods for high-pressure appliances.",
     "Active", EPA_UNI, ["EPA Universal Exam"]),

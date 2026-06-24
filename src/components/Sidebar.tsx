@@ -87,6 +87,20 @@ const I = {
       <path d="M13 9.5h5.5M13 13h5.5M4.8 15.4a3.4 3.4 0 016.4 0" />
     </svg>
   ),
+  merge: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="5" r="2.6" />
+      <circle cx="6" cy="19" r="2.6" />
+      <circle cx="18" cy="12" r="2.6" />
+      <path d="M8.4 6.2 14 10.6M8.4 17.8 14 13.4" />
+    </svg>
+  ),
+  transfer: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8h13M13 4l4 4-4 4" />
+      <path d="M20 16H7M11 12l-4 4 4 4" />
+    </svg>
+  ),
   chevronDown: (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 9l6 6 6-6" />
@@ -143,10 +157,12 @@ const items: NavItem[] = [
   { kind: "link", key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
 
   { kind: "section", label: "Operations" },
-  { kind: "link", key: "content-overrides", label: "Content Overrides", icon: "edit" },
+  { kind: "link", key: "content-overrides", label: "Content Overrides", icon: "edit", navKey: "content-overrides" },
   { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
   { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
   { kind: "link", key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },
+  { kind: "link", key: "merge-accounts", label: "Merge Accounts", icon: "merge", navKey: "merge-accounts" },
+  { kind: "link", key: "transfer-subscription", label: "Transfer Subscription", icon: "transfer", navKey: "transfer-subscription" },
 
   { kind: "section", label: "Users" },
   {
@@ -167,8 +183,7 @@ const items: NavItem[] = [
     icon: "companies",
     children: [
       { key: "manage-companies", label: "Manage Companies", navKey: "manage-companies" },
-      { key: "register-company", label: "Register Company", navKey: "register-company" },
-      { key: "trial-extension", label: "Trial Extension", navKey: "trial-extension" },
+      { key: "trial-extension", label: "Complimentary Access", navKey: "trial-extension" },
     ],
   },
 

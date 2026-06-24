@@ -1,4 +1,12 @@
-import { buildUserProfile, type AwardRecord, type MeritTier } from "../data/userProfile";
+import { useMemo, useState } from "react";
+import {
+  buildUserProfile,
+  ZIP_LOCATIONS,
+  type AwardRecord,
+  type MeritTier,
+  type Purchase,
+  type PurchaseKind,
+} from "../data/userProfile";
 import type { User } from "../data/users";
 
 const TIER_HEX: Record<MeritTier, string> = {
@@ -141,11 +149,19 @@ export function UserProfilePage({ user }: { user: User }) {
         <Card title="Profile">
           <div className="prof-fields">
             <Field label="Language" value={p.fields.language} />
-            <Field label="Career Stage" value={p.fields.careerStage} />
+            <Field label="Goal" value={p.fields.goal} />
             <Field label="Industry Preference" value={p.fields.industryPreference} />
             <Field label="Current Company" value={p.fields.currentCompany ?? "—"} />
-            <Field label="Zip Code" value={p.fields.zipCode} />
+            <Field
+              label="Zip Code"
+              value={
+                ZIP_LOCATIONS[p.fields.zipCode]
+                  ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
+                  : p.fields.zipCode
+              }
+            />
             <Field label="Attribution" value={p.fields.attribution} />
+            <Field label="Notification Preference" value={p.fields.notificationPreference} />
             <Field label="Role" value={user.role} />
             <Field label="Joined SkillCat" value={formatDate(user.joinedOn)} />
             <Field label="Last Access" value={formatDate(user.lastAccess)} />
@@ -240,36 +256,7 @@ export function UserProfilePage({ user }: { user: User }) {
         </Card>
 
         {/* Purchases / bills */}
-        <Card title="Purchases & Bills" count={p.purchases.length}>
-          {p.purchases.length === 0 ? (
-            <div className="prof-empty">No purchases on record.</div>
-          ) : (
-            <table className="prof-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Item</th>
-                  <th>Type</th>
-                  <th>Platform</th>
-                  <th>Receipt</th>
-                  <th className="prof-table-num">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {p.purchases.map((pu, i) => (
-                  <tr key={i}>
-                    <td>{formatDate(pu.date)}</td>
-                    <td className="prof-td-strong">{pu.item}</td>
-                    <td><span className="prof-kind">{pu.kind}</span></td>
-                    <td className="prof-muted">{pu.platform}</td>
-                    <td className="prof-muted">{pu.receiptId}</td>
-                    <td className="prof-table-num">{money(pu.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
+        <PurchasesCard purchases={p.purchases} />
 
         {/* EPA Card */}
         <Card title="EPA Card Order">
@@ -304,9 +291,10 @@ export function UserProfilePage({ user }: { user: User }) {
         <Card title="NATE Details">
           {p.nate ? (
             <div className="prof-fields">
-              <Field label="Connect ID" value={p.nate.connectId} />
-              <Field label="Name" value={p.nate.name} />
+              <Field label="First Name" value={p.nate.firstName} />
+              <Field label="Last Name" value={p.nate.lastName} />
               <Field label="Email" value={p.nate.email} />
+              <Field label="NATE Connect ID" value={p.nate.connectId} />
             </div>
           ) : (
             <div className="prof-empty">No NATE registration on record.</div>
@@ -329,6 +317,163 @@ function Card({ title, count, children }: { title: string; count?: number; child
       {children}
     </section>
   );
+}
+
+/* ── Purchases & Bills — tabbed by category, with refunds for certs & attempts ── */
+const PURCHASE_TABS: { label: string; kind: PurchaseKind }[] = [
+  { label: "Subscription", kind: "Subscription" },
+  { label: "Certifications", kind: "Certification" },
+  { label: "Quiz Attempts", kind: "Quiz Attempt" },
+  { label: "Physical Products", kind: "EPA Card" },
+];
+
+// Refunds are issued by us only for purchases we process directly (Stripe/Google);
+// Apple in-app purchases are refunded by Apple. Limited to certs & quiz attempts.
+const REFUNDABLE_PLATFORMS = ["Stripe", "Google"];
+function isRefundable(pu: Purchase): boolean {
+  return (
+    (pu.kind === "Certification" || pu.kind === "Quiz Attempt") &&
+    REFUNDABLE_PLATFORMS.includes(pu.platform) &&
+    !pu.refunded
+  );
+}
+
+function PurchasesCard({ purchases }: { purchases: Purchase[] }) {
+  const [active, setActive] = useState<PurchaseKind>("Subscription");
+  // Track refunds applied in this session. Keyed by the purchase's index in the
+  // original array — receiptIds aren't unique across purchases, so they can't key this.
+  const [refunded, setRefunded] = useState<Record<number, boolean>>({});
+
+  // Tag each purchase with its stable index, then filter to the active tab.
+  const rows = useMemo(
+    () =>
+      purchases
+        .map((pu, idx) => ({ ...pu, idx, refunded: refunded[idx] || pu.refunded }))
+        .filter((pu) => pu.kind === active),
+    [purchases, active, refunded],
+  );
+
+  function refund(pu: Purchase & { idx: number }) {
+    if (!window.confirm(`Refund ${money(pu.amount)} for "${pu.item}"?\nReceipt ${pu.receiptId} · ${pu.platform}`)) return;
+    setRefunded((r) => ({ ...r, [pu.idx]: true }));
+  }
+
+  return (
+    <section className="prof-card">
+      <div className="prof-card-head">
+        <h2 className="prof-card-title">Purchases & Bills</h2>
+        <span className="prof-card-count">{purchases.length}</span>
+      </div>
+
+      <div className="prof-tabs" role="tablist">
+        {PURCHASE_TABS.map((t) => {
+          const n = purchases.filter((pu) => pu.kind === t.kind).length;
+          return (
+            <button
+              key={t.kind}
+              role="tab"
+              aria-selected={active === t.kind}
+              className={`prof-tab ${active === t.kind ? "prof-tab--active" : ""}`}
+              onClick={() => setActive(t.kind)}
+            >
+              {t.label}
+              <span className="prof-tab-count">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="prof-empty">No {active.toLowerCase()} purchases on record.</div>
+      ) : (
+        <table className="prof-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Item</th>
+              {active === "Certification" && <th>Type</th>}
+              {(active === "Certification" || active === "Quiz Attempt") && <th>Status</th>}
+              <th>Platform</th>
+              <th>Receipt</th>
+              <th className="prof-table-num">Amount</th>
+              {(active === "Certification" || active === "Quiz Attempt") && (
+                <th className="prof-table-actions">Actions</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((pu) => (
+              <tr key={pu.idx}>
+                <td>{formatDate(pu.date)}</td>
+                <td className="prof-td-strong">{pu.item}</td>
+                {active === "Certification" && (
+                  <td>
+                    <span className={`prof-flag ${pu.consumable ? "prof-flag--warn" : "prof-flag--ok"}`}>
+                      {pu.consumable ? "Consumable" : "Non-Consumable"}
+                    </span>
+                  </td>
+                )}
+                {active === "Certification" && (
+                  <td>{certStatusCell(pu)}</td>
+                )}
+                {active === "Quiz Attempt" && (
+                  <td>{attemptStatusCell(pu)}</td>
+                )}
+                <td className="prof-muted">{pu.platform}</td>
+                <td className="prof-muted">{pu.receiptId}</td>
+                <td className="prof-table-num">{money(pu.amount)}</td>
+                {(active === "Certification" || active === "Quiz Attempt") && (
+                  <td className="prof-table-actions">
+                    {pu.refunded ? (
+                      <span className="prof-status prof-status--muted">Refunded</span>
+                    ) : (
+                      <button
+                        className="prof-btn prof-btn--sm"
+                        disabled={!isRefundable(pu)}
+                        title={
+                          isRefundable(pu)
+                            ? "Issue a refund"
+                            : `${pu.platform} purchases are not refundable here`
+                        }
+                        onClick={() => refund(pu)}
+                      >
+                        Refund
+                      </button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function certStatusCell(pu: Purchase) {
+  if (!pu.consumable) return <span className="prof-status prof-status--ok">Lifetime access</span>;
+  const when = pu.expiresOn ? formatDate(pu.expiresOn) : "";
+  if (pu.certAccess === "Active")
+    return <span className="prof-status prof-status--ok">Active{when && ` · expires ${when}`}</span>;
+  if (pu.certAccess === "Expired")
+    return <span className="prof-status prof-status--warn">Expired{when && ` · ${when}`}</span>;
+  if (pu.certAccess === "Revoked")
+    return <span className="prof-status prof-status--bad">Revoked{when && ` · ${when}`}</span>;
+  return <span className="prof-muted">—</span>;
+}
+
+function attemptStatusCell(pu: Purchase) {
+  switch (pu.attemptState) {
+    case "Available":
+      return <span className="prof-status prof-status--ok">Available</span>;
+    case "In Progress":
+      return <span className="prof-status prof-status--warn">In Progress</span>;
+    case "Completed":
+      return <span className="prof-status prof-status--muted">Used · Completed</span>;
+    default:
+      return <span className="prof-muted">—</span>;
+  }
 }
 
 function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {

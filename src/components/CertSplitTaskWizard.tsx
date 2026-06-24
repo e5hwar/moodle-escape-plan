@@ -153,7 +153,7 @@ function CourseBlock({ course, index, highlightId }: { course: CertCourse; index
           ),
         )}
         {/* New (in-progress) task entry */}
-        {course.id === course.id && index === 1 && (
+        {highlightId === "new" && index === 1 && (
           <div className="cert-split-row in-lesson active">
             <span className="task-kind-badge quiz">Q</span>
             <span className="cert-split-row-name">New Quiz Task</span>
@@ -163,8 +163,6 @@ function CourseBlock({ course, index, highlightId }: { course: CertCourse; index
       </div>
     </div>
   );
-  // highlightId param reserved for future use — keeps prop signature stable
-  void highlightId;
 }
 
 function PlaceholderTab({ tab }: { tab: Tab }) {

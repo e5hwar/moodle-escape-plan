@@ -13,6 +13,8 @@ import {
   CREATED_BY_IN_HOUSE,
   CREATED_BY_B2B,
   CERTIFICATIONS,
+  DISCOVERABLE_OPTIONS,
+  FINAL_EXAM_OPTIONS,
   TASK_TYPES,
   VISIBILITIES,
   TAG_GROUPS,
@@ -24,6 +26,8 @@ import {
 export type FilterState = {
   creators: string[];
   certifications: string[];
+  discoverable: string[];
+  finalExam: string[];
   types: string[];
   visibilities: string[];
   tags: string[];
@@ -44,6 +48,8 @@ export function Filters({ filters, setFilters }: Props) {
     setFilters({
       creators: [],
       certifications: [],
+      discoverable: [],
+      finalExam: [],
       types: [],
       visibilities: [],
       tags: [],
@@ -59,6 +65,14 @@ export function Filters({ filters, setFilters }: Props) {
       <CertificationsPill
         value={filters.certifications}
         onApply={(v) => setFilters({ ...filters, certifications: v })}
+      />
+      <DiscoverablePill
+        value={filters.discoverable}
+        onApply={(v) => setFilters({ ...filters, discoverable: v })}
+      />
+      <FinalExamPill
+        value={filters.finalExam}
+        onApply={(v) => setFilters({ ...filters, finalExam: v })}
       />
       <MoreFiltersPill
         types={filters.types}
@@ -83,7 +97,7 @@ export function Filters({ filters, setFilters }: Props) {
 
 /* ─────────────────────────────────────────────────────────────── */
 
-function PillTrigger({
+export function PillTrigger({
   label,
   value,
   open,
@@ -130,7 +144,7 @@ function PillTrigger({
   );
 }
 
-function summarize(values: string[], all: string[]): string | null {
+export function summarize(values: string[], all: string[]): string | null {
   if (values.length === 0) return null;
   if (values.length === 1) return values[0];
   if (values.length === all.length) return "All";
@@ -220,6 +234,78 @@ function CertificationsPill({
   );
 }
 
+function DiscoverablePill({
+  value,
+  onApply,
+}: {
+  value: string[];
+  onApply: (v: string[]) => void;
+}) {
+  const summary = summarize(value, DISCOVERABLE_OPTIONS);
+
+  return (
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="Discoverable"
+          value={summary}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: DISCOVERABLE_OPTIONS }]}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+function FinalExamPill({
+  value,
+  onApply,
+}: {
+  value: string[];
+  onApply: (v: string[]) => void;
+}) {
+  const summary = summarize(value, FINAL_EXAM_OPTIONS);
+
+  return (
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="Final Exam"
+          value={summary}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: FINAL_EXAM_OPTIONS }]}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
 function MoreFiltersPill({
   types,
   visibilities,
@@ -297,7 +383,7 @@ export function EditColumnsButton({
 
 /* ────────────  Multi-select bodies ──────────── */
 
-function SectionedMultiSelect({
+export function SectionedMultiSelect({
   sections,
   value,
   onApply,
@@ -581,7 +667,7 @@ function ColumnsBody({
   );
 }
 
-function CheckRow({
+export function CheckRow({
   label,
   checked,
   onChange,

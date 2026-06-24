@@ -29,7 +29,7 @@ const FILTER_TITLE: Record<FilterKey, string> = {
   "id-reupload": "ID RE-UPLOADS",
 };
 
-export function ProctoringPage() {
+export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   const [list] = useState<Submission[]>(seedSubmissions);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
@@ -124,6 +124,11 @@ export function ProctoringPage() {
                 <span className="tasks-subtitle-dot" />
                 <span>Approve, reject, or request a new ID upload</span>
               </div>
+            </div>
+            <div className="tasks-header-actions">
+              <button className="btn-secondary" onClick={onManageIds}>
+                Manage IDs
+              </button>
             </div>
           </header>
 

@@ -20,7 +20,7 @@ export type UserColumnKey =
   | "role"
   | "subscription"
   | "language"
-  | "careerStage"
+  | "goal"
   | "attribution"
   | "zipCode"
   | "industryPreference"
@@ -39,7 +39,7 @@ export const USER_OPTIONAL_COLUMNS: { key: UserColumnKey; label: string }[] = [
   { key: "role", label: "Role" },
   { key: "subscription", label: "Subscription" },
   { key: "language", label: "Language" },
-  { key: "careerStage", label: "Career Stage" },
+  { key: "goal", label: "Goal" },
   { key: "attribution", label: "Attribution" },
   { key: "zipCode", label: "Zip Code" },
   { key: "industryPreference", label: "Industry Preference" },
@@ -53,14 +53,14 @@ export type UserFilterState = {
   subscriptions: string[];
   companies: string[];
   roles: string[];
-  careerStages: string[];
+  goals: string[];
   industries: string[];
 };
 
 export const USER_TYPES = ["B2C", "B2B"];
 export const SUBSCRIPTIONS = ["Free Trial", "Starter", "Subscriber", "Scholarship"];
 export const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
-export const CAREER_STAGES = ["Apprentice", "Journeyman", "Master"];
+export const GOALS = ["Looking for my first trades job", "Exploring careers in the skilled trades", "Focused on advancing my career", "Other"];
 export const INDUSTRIES = ["HVAC", "Electrical", "Plumbing", "Solar", "Refrigeration", "Appliance Repair"];
 const COMPANY_NAMES = companies.map((c) => c.name);
 
@@ -72,7 +72,7 @@ export function UsersFilters({
   setFilters: (next: UserFilterState) => void;
 }) {
   const moreCount =
-    filters.roles.length + filters.careerStages.length + filters.industries.length;
+    filters.roles.length + filters.goals.length + filters.industries.length;
 
   function clearAll() {
     setFilters({
@@ -80,7 +80,7 @@ export function UsersFilters({
       subscriptions: [],
       companies: [],
       roles: [],
-      careerStages: [],
+      goals: [],
       industries: [],
     });
   }
@@ -110,14 +110,14 @@ export function UsersFilters({
       />
       <MoreFiltersPill
         roles={filters.roles}
-        careerStages={filters.careerStages}
+        goals={filters.goals}
         industries={filters.industries}
         count={moreCount}
         onApply={(v) =>
           setFilters({
             ...filters,
             roles: v.roles,
-            careerStages: v.careerStages,
+            goals: v.goals,
             industries: v.industries,
           })
         }
@@ -268,16 +268,16 @@ export function MultiPill({
 
 function MoreFiltersPill({
   roles,
-  careerStages,
+  goals,
   industries,
   count,
   onApply,
 }: {
   roles: string[];
-  careerStages: string[];
+  goals: string[];
   industries: string[];
   count: number;
-  onApply: (v: { roles: string[]; careerStages: string[]; industries: string[] }) => void;
+  onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
   return (
     <Dropdown
@@ -288,14 +288,14 @@ function MoreFiltersPill({
           value={count > 0 ? `${count} active` : null}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ roles: [], careerStages: [], industries: [] })}
+          onClear={() => onApply({ roles: [], goals: [], industries: [] })}
         />
       )}
     >
       {({ close }) => (
         <MoreFiltersBody
           roles={roles}
-          careerStages={careerStages}
+          goals={goals}
           industries={industries}
           onApply={(v) => {
             onApply(v);
@@ -369,23 +369,23 @@ function SimpleMultiSelect({
 
 function MoreFiltersBody({
   roles,
-  careerStages,
+  goals,
   industries,
   onApply,
 }: {
   roles: string[];
-  careerStages: string[];
+  goals: string[];
   industries: string[];
-  onApply: (v: { roles: string[]; careerStages: string[]; industries: string[] }) => void;
+  onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
   const [draftRoles, setDraftRoles] = useState(roles);
-  const [draftStages, setDraftStages] = useState(careerStages);
+  const [draftGoals, setDraftGoals] = useState(goals);
   const [draftIndustries, setDraftIndustries] = useState(industries);
-  const [hovered, setHovered] = useState<"role" | "stage" | "industry" | null>(null);
+  const [hovered, setHovered] = useState<"role" | "goal" | "industry" | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
 
   useEffect(() => setDraftRoles(roles), [roles]);
-  useEffect(() => setDraftStages(careerStages), [careerStages]);
+  useEffect(() => setDraftGoals(goals), [goals]);
   useEffect(() => setDraftIndustries(industries), [industries]);
 
   function toggleIn(list: string[], setList: (v: string[]) => void, item: string) {
@@ -397,11 +397,11 @@ function MoreFiltersBody({
       <div className="cascading-root">
         <div className="dropdown-list">
           <SubmenuRow label="Role" count={draftRoles.length} active={hovered === "role"} onHover={(top) => { setHovered("role"); setHoveredTop(top); }} />
-          <SubmenuRow label="Career Stage" count={draftStages.length} active={hovered === "stage"} onHover={(top) => { setHovered("stage"); setHoveredTop(top); }} />
+          <SubmenuRow label="Goal" count={draftGoals.length} active={hovered === "goal"} onHover={(top) => { setHovered("goal"); setHoveredTop(top); }} />
           <SubmenuRow label="Industry Preference" count={draftIndustries.length} active={hovered === "industry"} onHover={(top) => { setHovered("industry"); setHoveredTop(top); }} />
         </div>
         <div className="dropdown-footer">
-          <button className="btn-apply" onClick={() => onApply({ roles: draftRoles, careerStages: draftStages, industries: draftIndustries })}>
+          <button className="btn-apply" onClick={() => onApply({ roles: draftRoles, goals: draftGoals, industries: draftIndustries })}>
             Apply
           </button>
         </div>
@@ -417,10 +417,10 @@ function MoreFiltersBody({
                 ))}
               </div>
             )}
-            {hovered === "stage" && (
+            {hovered === "goal" && (
               <div className="dropdown-section">
-                {CAREER_STAGES.map((s) => (
-                  <CheckRow key={s} label={s} checked={draftStages.includes(s)} onChange={() => toggleIn(draftStages, setDraftStages, s)} />
+                {GOALS.map((g) => (
+                  <CheckRow key={g} label={g} checked={draftGoals.includes(g)} onChange={() => toggleIn(draftGoals, setDraftGoals, g)} />
                 ))}
               </div>
             )}

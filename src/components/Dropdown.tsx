@@ -8,10 +8,26 @@ type Props = {
   width?: number;
   align?: "left" | "right";
   direction?: "down" | "up";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function Dropdown({ trigger, children, width = 300, align = "left", direction = "down" }: Props) {
-  const [open, setOpen] = useState(false);
+export function Dropdown({
+  trigger,
+  children,
+  width = 300,
+  align = "left",
+  direction = "down",
+  open: controlledOpen,
+  onOpenChange,
+}: Props) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +43,7 @@ export function Dropdown({ trigger, children, width = 300, align = "left", direc
 
   return (
     <div className="dropdown-wrap" ref={wrapRef}>
-      {trigger({ open, toggle: () => setOpen((o) => !o) })}
+      {trigger({ open, toggle: () => setOpen(!open) })}
       {open && (
         <div
           className={`dropdown ${direction === "up" ? "up" : ""}`}

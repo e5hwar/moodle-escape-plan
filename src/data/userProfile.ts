@@ -2,7 +2,12 @@ import { companies } from "./companies";
 import type { Platform, SubscriptionStatus, User } from "./users";
 
 export type Language = "English" | "Spanish";
-export type CareerStage = "Apprentice" | "Journeyman" | "Master";
+// Goal selected during onboarding ("Which best describes you?").
+export type OnboardingGoal =
+  | "Looking for my first trades job"
+  | "Exploring careers in the skilled trades"
+  | "Focused on advancing my career"
+  | "Other";
 export type MeritTier = "Bronze" | "Silver" | "Gold" | "Platinum";
 
 export type EpaStatus =
@@ -41,6 +46,11 @@ export type PurchaseKind =
   | "Quiz Attempt"
   | "EPA Card";
 
+/** Consumable certifications expire or can be revoked; non-consumables are lifetime. */
+export type CertAccess = "Active" | "Expired" | "Revoked";
+/** A purchased quiz attempt is either unused, mid-attempt, or used up. */
+export type AttemptState = "Available" | "In Progress" | "Completed";
+
 export type Purchase = {
   date: string;
   item: string;
@@ -48,6 +58,16 @@ export type Purchase = {
   amount: number;
   platform: string;
   receiptId: string;
+  /** Certification purchases — whether the cert is consumable (expires/revocable) or lifetime. */
+  consumable?: boolean;
+  /** Consumable certifications only — current access state. */
+  certAccess?: CertAccess;
+  /** Consumable certifications only — when access lapsed or will lapse. */
+  expiresOn?: string;
+  /** Quiz Attempt purchases — whether the attempt is still available, in progress, or used. */
+  attemptState?: AttemptState;
+  /** Stripe/Google certs & quiz attempts that have already been refunded. */
+  refunded?: boolean;
 };
 
 export type EpaCardOrder = {
@@ -59,15 +79,16 @@ export type EpaCardOrder = {
   tracking?: { carrier: string; number: string; url: string; shippedOn: string };
 };
 
-export type NateDetail = { connectId: string; name: string; email: string };
+export type NateDetail = { connectId: string; firstName: string; lastName: string; email: string };
 
 export type ProfileFields = {
   language: Language;
-  careerStage: CareerStage;
+  goal: OnboardingGoal;
   attribution: string;
   currentCompany?: string;
   zipCode: string;
   industryPreference: string;
+  notificationPreference: "Enabled" | "Disabled";
 };
 
 export type UserProfile = {
@@ -136,7 +157,29 @@ const GENERIC_CERTS = ["Workplace Safety 101"];
 
 const MERIT_TIERS: MeritTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
 const ATTRIBUTION = ["Google Ads", "Organic Search", "App Store Search", "TikTok Campaign", "Referral", "YouTube", "Partner: Snap-on", "Trade Show"];
+const GOALS: OnboardingGoal[] = ["Looking for my first trades job", "Exploring careers in the skilled trades", "Focused on advancing my career", "Other"];
 const ZIPS = ["94110", "10025", "77002", "60614", "30303", "85004", "98109", "33130", "19103", "80202", "78701", "97201"];
+
+// Pools for NATE form entries — a user may register under a slightly different
+// name or personal email than the one on their SkillCat profile.
+const NATE_FIRST_NAMES = ["Robert", "Michael", "James", "David", "Daniel", "Christopher", "Matthew", "Anthony", "Joshua", "Andrew", "William", "Joseph"];
+const NATE_LAST_NAMES = ["Johnson", "Williams", "Brown", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson"];
+const NATE_EMAILS = ["rjohnson@outlook.com", "mwilliams@yahoo.com", "jbrown1987@gmail.com", "dgarcia@icloud.com", "danielm@gmail.com", "chris.davis@hotmail.com", "matt.tech@gmail.com", "anthony.hvac@yahoo.com", "jharris@gmail.com", "andrew.l@outlook.com", "wmoore@gmail.com", "joe.tech@icloud.com"];
+
+export const ZIP_LOCATIONS: Record<string, { city: string; state: string; country: string }> = {
+  "94110": { city: "San Francisco", state: "CA", country: "USA" },
+  "10025": { city: "New York", state: "NY", country: "USA" },
+  "77002": { city: "Houston", state: "TX", country: "USA" },
+  "60614": { city: "Chicago", state: "IL", country: "USA" },
+  "30303": { city: "Atlanta", state: "GA", country: "USA" },
+  "85004": { city: "Phoenix", state: "AZ", country: "USA" },
+  "98109": { city: "Seattle", state: "WA", country: "USA" },
+  "33130": { city: "Miami", state: "FL", country: "USA" },
+  "19103": { city: "Philadelphia", state: "PA", country: "USA" },
+  "80202": { city: "Denver", state: "CO", country: "USA" },
+  "78701": { city: "Austin", state: "TX", country: "USA" },
+  "97201": { city: "Portland", state: "OR", country: "USA" },
+};
 
 function industryOf(user: User): string {
   if (user.userType === "B2B" && user.companyName) {
@@ -239,13 +282,16 @@ export function buildUserProfile(user: User): UserProfile {
     };
   }
 
-  // NATE — some HVAC/Refrigeration users have completed a NATE exam.
+  // NATE — any user may have filled in the NATE form in the app; it is not tied
+  // to industry preference or any other profile attribute. The name and email
+  // they enter on the NATE form can differ from their profile.
   const nate: NateDetail | undefined =
-    (industry === "HVAC" || industry === "Refrigeration") && h % 2 === 0
+    hash(user.id + ":nate") % 3 === 0
       ? {
-          connectId: "NATE-" + (100000 + (h % 900000)),
-          name: user.name,
-          email: user.email,
+          connectId: String(100000 + (h % 900000)),
+          firstName: pick(NATE_FIRST_NAMES, hash(user.id + ":natefirst")),
+          lastName: pick(NATE_LAST_NAMES, hash(user.id + ":natelast")),
+          email: pick(NATE_EMAILS, hash(user.id + ":nateemail")),
         }
       : undefined;
 
@@ -275,13 +321,34 @@ export function buildUserProfile(user: User): UserProfile {
     });
   }
   if (awards.some((a) => /Job-Ready/.test(a.certification))) {
+    // Job-Ready credential — a lifetime (non-consumable) certification.
     purchases.push({
       date: daysAgo(90 + (h % 120)),
       item: `${awards.find((a) => /Job-Ready/.test(a.certification))!.certification} (Certification)`,
       kind: "Certification",
       amount: 180,
-      platform: "Stripe",
+      platform: pick(["Stripe", "Google"], h + 4),
       receiptId: `RC-${(h + 7).toString(36).toUpperCase().slice(0, 6)}`,
+      consumable: false,
+      refunded: false,
+    });
+  }
+  if (industry === "HVAC" || industry === "Refrigeration") {
+    // EPA 608 — a consumable certification (renews; can lapse or be revoked).
+    const access = pick<CertAccess>(["Active", "Active", "Expired", "Revoked"], h + 3);
+    const bought = 120 + (h % 200);
+    purchases.push({
+      date: daysAgo(bought),
+      item: `${pick(["EPA 608 Universal", "EPA 608 Type II"], h)} (Certification)`,
+      kind: "Certification",
+      amount: 45,
+      platform: pick(["Stripe", "Google"], h + 2),
+      receiptId: `RC-${(h + 17).toString(36).toUpperCase().slice(0, 6)}`,
+      consumable: true,
+      certAccess: access,
+      // Active certs expire in the future; lapsed/revoked ones already passed.
+      expiresOn: access === "Active" ? daysAhead(120 + (h % 400)) : daysAgo(h % 90),
+      refunded: false,
     });
   }
   if (nate) {
@@ -291,8 +358,23 @@ export function buildUserProfile(user: User): UserProfile {
       item: `NATE Ready To Work: ${["First", "Second", "Third"][attempt - 1]} Attempt`,
       kind: "Quiz Attempt",
       amount: attempt === 1 ? 60 : attempt === 2 ? 50 : 45,
-      platform: "Stripe",
+      platform: pick(["Stripe", "Google"], h + 6),
       receiptId: `RC-${(h + 11).toString(36).toUpperCase().slice(0, 6)}`,
+      attemptState: pick<AttemptState>(["Available", "In Progress", "Completed"], h + 1),
+      refunded: false,
+    });
+  }
+  if (awards.some((a) => /Job-Ready/.test(a.certification))) {
+    // A purchased certification-exam attempt tied to the Job-Ready track.
+    purchases.push({
+      date: daysAgo(15 + (h % 30)),
+      item: `${industry} Certification Exam Attempt`,
+      kind: "Quiz Attempt",
+      amount: 25,
+      platform: pick(["Stripe", "Google"], h + 8),
+      receiptId: `RC-${(h + 19).toString(36).toUpperCase().slice(0, 6)}`,
+      attemptState: pick<AttemptState>(["Available", "In Progress", "Completed"], h + 5),
+      refunded: false,
     });
   }
   if (epaCard && epaCard.status !== "Canceled" && epaCard.status !== "Refunded") {
@@ -310,11 +392,12 @@ export function buildUserProfile(user: User): UserProfile {
   return {
     fields: {
       language: h % 5 === 0 ? "Spanish" : "English",
-      careerStage: pick<CareerStage>(["Apprentice", "Journeyman", "Master"], h),
+      goal: pick(GOALS, hash(user.id + ":goal")),
       attribution: pick(ATTRIBUTION, h),
       currentCompany: user.userType === "B2B" ? user.companyName : undefined,
       zipCode: pick(ZIPS, h),
       industryPreference: industry,
+      notificationPreference: hash(user.id + ":notif") % 4 === 0 ? "Disabled" : "Enabled",
     },
     skills,
     portfolioUrl: `https://skillcat.app/p/${user.id.toLowerCase()}`,

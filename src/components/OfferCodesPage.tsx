@@ -186,7 +186,7 @@ export function OfferCodesPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table">
+                <table className="table sch-table" style={{ minWidth: 760 }}>
                   <colgroup>
                     <col style={{ width: "auto" }} />
                     <col style={{ width: 280 }} />

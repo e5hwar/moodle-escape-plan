@@ -2,13 +2,23 @@ import { useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
-import { NewTaskWizard } from "./components/NewTaskWizard";
+import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
+import { AttemptsPage } from "./components/AttemptsPage";
+import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
+import { type Task } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
+import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard } from "./components/NewCertificationWizard";
+import { SkillsPage } from "./components/SkillsPage";
+import { AwardsPage } from "./components/AwardsPage";
+import { type Certification } from "./data/certifications";
 import { ContentLinksPage } from "./components/ContentLinksPage";
 import { QuestionBankPage } from "./components/QuestionBankPage";
+import { NewQuestionWizard } from "./components/NewQuestionWizard";
+import { type Question } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
+import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
 import { TrialExtensionPage } from "./components/TrialExtensionPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
@@ -16,10 +26,15 @@ import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
 import { FeedbackFormVersions } from "./components/FeedbackFormVersions";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
+import { NewCompanyWizard } from "./components/NewCompanyWizard";
 import { UsersPage } from "./components/UsersPage";
 import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
 import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
 import { OfferCodesPage } from "./components/OfferCodesPage";
+import { ContentOverridesPage } from "./components/ContentOverridesPage";
+import { ProductConfigPage } from "./components/ProductConfigPage";
+import { MergeAccountsPage } from "./components/MergeAccountsPage";
+import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
 import { PortfolioPage } from "./components/PortfolioPage";
 import { users as allUsers } from "./data/users";
@@ -27,16 +42,27 @@ import {
   feedbackForms as seedForms,
   type FeedbackForm,
 } from "./data/feedbackForms";
+import { companies as seedCompanies, type Company } from "./data/companies";
 
 type View =
   | { name: "tasks" }
   | { name: "certs" }
   | { name: "new-task"; taskType: TaskTypeKey }
+  | { name: "edit-task"; task: Task }
+  | { name: "attempts"; quizName: string }
+  | { name: "quiz-purchasers"; task: Task }
   | { name: "new-cert" }
+  | { name: "edit-cert"; cert: Certification }
+  | { name: "cert-purchasers"; cert: Certification }
   | { name: "content-links" }
+  | { name: "skills" }
+  | { name: "awards" }
   | { name: "question-bank" }
+  | { name: "new-question"; categoryPath?: string[] }
+  | { name: "edit-question"; question: Question }
   | { name: "spotlight" }
   | { name: "proctoring" }
+  | { name: "manage-ids" }
   | { name: "scholarship" }
   | { name: "trial-extension" }
   | { name: "feedback" }
@@ -44,10 +70,16 @@ type View =
   | { name: "feedback-versions"; formId: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
+  | { name: "new-company" }
+  | { name: "edit-company"; company: Company }
   | { name: "users" }
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
-  | { name: "name-change-requests" };
+  | { name: "name-change-requests" }
+  | { name: "content-overrides" }
+  | { name: "product-config" }
+  | { name: "merge-accounts" }
+  | { name: "transfer-subscription" };
 
 export default function App() {
   // Standalone, full-tab pages opened from the Users table ("open in new tab").
@@ -78,17 +110,24 @@ function StandaloneNotFound({ id }: { id: string }) {
 function AdminApp() {
   const [view, setView] = useState<View>({ name: "tasks" });
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
+  const [companies, setCompanies] = useState<Company[]>(seedCompanies);
 
   const sidebarActive =
-    view.name === "certs" || view.name === "new-cert"
+    view.name === "certs" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers"
       ? "certs"
       : view.name === "content-links"
       ? "content-links"
-      : view.name === "question-bank"
+      : view.name === "skills"
+      ? "skills"
+      : view.name === "awards"
+      ? "awards"
+      : view.name === "question-bank" ||
+        view.name === "new-question" ||
+        view.name === "edit-question"
       ? "question-bank"
       : view.name === "spotlight"
       ? "spotlight"
-      : view.name === "proctoring"
+      : view.name === "proctoring" || view.name === "manage-ids"
       ? "proctoring-review"
       : view.name === "scholarship"
       ? "scholarship"
@@ -100,7 +139,7 @@ function AdminApp() {
       ? "feedback"
       : view.name === "industries"
       ? "industries"
-      : view.name === "companies"
+      : view.name === "companies" || view.name === "new-company" || view.name === "edit-company"
       ? "manage-companies"
       : view.name === "users"
       ? "manage-users"
@@ -110,12 +149,22 @@ function AdminApp() {
       ? "review-hands-on"
       : view.name === "name-change-requests"
       ? "name-change-requests"
+      : view.name === "content-overrides"
+      ? "content-overrides"
+      : view.name === "product-config"
+      ? "product-config"
+      : view.name === "merge-accounts"
+      ? "merge-accounts"
+      : view.name === "transfer-subscription"
+      ? "transfer-subscription"
       : "tasks";
 
   function navigate(key: string) {
     if (key === "certs") setView({ name: "certs" });
     else if (key === "tasks") setView({ name: "tasks" });
     else if (key === "content-links") setView({ name: "content-links" });
+    else if (key === "skills") setView({ name: "skills" });
+    else if (key === "awards") setView({ name: "awards" });
     else if (key === "question-bank") setView({ name: "question-bank" });
     else if (key === "spotlight") setView({ name: "spotlight" });
     else if (key === "proctoring-review") setView({ name: "proctoring" });
@@ -128,6 +177,19 @@ function AdminApp() {
     else if (key === "offer-codes") setView({ name: "offer-codes" });
     else if (key === "review-hands-on") setView({ name: "review-hands-on" });
     else if (key === "name-change-requests") setView({ name: "name-change-requests" });
+    else if (key === "content-overrides") setView({ name: "content-overrides" });
+    else if (key === "product-config") setView({ name: "product-config" });
+    else if (key === "merge-accounts") setView({ name: "merge-accounts" });
+    else if (key === "transfer-subscription") setView({ name: "transfer-subscription" });
+  }
+
+  function addCompany(company: Omit<Company, "id">) {
+    const id = `CO-${String(companies.length + 1).padStart(3, "0")}`;
+    setCompanies((prev) => [{ id, ...company }, ...prev]);
+  }
+
+  function updateCompany(company: Company) {
+    setCompanies((prev) => prev.map((c) => (c.id === company.id ? company : c)));
   }
 
   function upsertForm(form: FeedbackForm) {
@@ -151,19 +213,60 @@ function AdminApp() {
       {view.name === "tasks" ? (
         <div className="main">
           <div className="workspace">
-            <TasksPage onNewTask={(t) => setView({ name: "new-task", taskType: t })} />
+            <TasksPage
+              onNewTask={(t) => setView({ name: "new-task", taskType: t })}
+              onEditTask={(task) => setView({ name: "edit-task", task })}
+              onViewAttempts={(task) => setView({ name: "attempts", quizName: task.name })}
+              onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
+            />
           </div>
         </div>
+      ) : view.name === "attempts" ? (
+        <AttemptsPage
+          quizName={view.quizName}
+          onBack={() => setView({ name: "tasks" })}
+        />
+      ) : view.name === "quiz-purchasers" ? (
+        <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks" })} />
       ) : view.name === "certs" ? (
-        <CertificationsPage onNewCert={() => setView({ name: "new-cert" })} />
+        <CertificationsPage
+          onNewCert={() => setView({ name: "new-cert" })}
+          onEditCert={(cert) => setView({ name: "edit-cert", cert })}
+          onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
+        />
+      ) : view.name === "cert-purchasers" ? (
+        <CertPurchasersPage cert={view.cert} onBack={() => setView({ name: "certs" })} />
       ) : view.name === "content-links" ? (
         <ContentLinksPage />
+      ) : view.name === "skills" ? (
+        <SkillsPage />
+      ) : view.name === "awards" ? (
+        <AwardsPage />
       ) : view.name === "question-bank" ? (
-        <QuestionBankPage />
+        <QuestionBankPage
+          onNewQuestion={(categoryPath) =>
+            setView({ name: "new-question", categoryPath })
+          }
+          onEditQuestion={(question) =>
+            setView({ name: "edit-question", question })
+          }
+        />
+      ) : view.name === "new-question" ? (
+        <NewQuestionWizard
+          initialCategoryPath={view.categoryPath}
+          onClose={() => setView({ name: "question-bank" })}
+        />
+      ) : view.name === "edit-question" ? (
+        <NewQuestionWizard
+          editingQuestion={view.question}
+          onClose={() => setView({ name: "question-bank" })}
+        />
       ) : view.name === "spotlight" ? (
         <SpotlightsPage />
       ) : view.name === "proctoring" ? (
-        <ProctoringPage />
+        <ProctoringPage onManageIds={() => setView({ name: "manage-ids" })} />
+      ) : view.name === "manage-ids" ? (
+        <ManageIdsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "scholarship" ? (
         <ScholarshipsPage />
       ) : view.name === "trial-extension" ? (
@@ -171,7 +274,24 @@ function AdminApp() {
       ) : view.name === "industries" ? (
         <IndustriesPage />
       ) : view.name === "companies" ? (
-        <CompaniesPage initialQuery={view.query} />
+        <CompaniesPage
+          companies={companies}
+          initialQuery={view.query}
+          onNewCompany={() => setView({ name: "new-company" })}
+          onEditCompany={(company) => setView({ name: "edit-company", company })}
+          onUpdateCompany={updateCompany}
+        />
+      ) : view.name === "new-company" ? (
+        <NewCompanyWizard
+          onClose={() => setView({ name: "companies" })}
+          onCreate={addCompany}
+        />
+      ) : view.name === "edit-company" ? (
+        <NewCompanyWizard
+          editCompany={view.company}
+          onClose={() => setView({ name: "companies" })}
+          onSave={updateCompany}
+        />
       ) : view.name === "users" ? (
         <UsersPage onViewCompany={(name) => setView({ name: "companies", query: name })} />
       ) : view.name === "offer-codes" ? (
@@ -180,6 +300,14 @@ function AdminApp() {
         <ReviewHandsOnPage />
       ) : view.name === "name-change-requests" ? (
         <NameChangeRequestsPage />
+      ) : view.name === "content-overrides" ? (
+        <ContentOverridesPage />
+      ) : view.name === "product-config" ? (
+        <ProductConfigPage />
+      ) : view.name === "merge-accounts" ? (
+        <MergeAccountsPage />
+      ) : view.name === "transfer-subscription" ? (
+        <TransferSubscriptionPage />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
@@ -206,6 +334,17 @@ function AdminApp() {
         <NewTaskWizard
           taskType={view.taskType}
           onClose={() => setView({ name: "tasks" })}
+        />
+      ) : view.name === "edit-task" ? (
+        <NewTaskWizard
+          taskType={taskTypeKey(view.task.type)}
+          editingTask={view.task}
+          onClose={() => setView({ name: "tasks" })}
+        />
+      ) : view.name === "edit-cert" ? (
+        <NewCertificationWizard
+          editingCert={view.cert}
+          onClose={() => setView({ name: "certs" })}
         />
       ) : (
         <NewCertificationWizard onClose={() => setView({ name: "certs" })} />

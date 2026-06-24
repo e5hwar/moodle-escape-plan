@@ -17,10 +17,13 @@ type ModalState =
   | { kind: "none" }
   | { kind: "new-industry" }
   | { kind: "new-sub"; industryKey: string }
-  | { kind: "rename-industry"; industryKey: string }
-  | { kind: "rename-sub"; industryKey: string; subKey: string }
+  | { kind: "edit-industry"; industryKey: string }
+  | { kind: "edit-sub"; industryKey: string; subKey: string }
   | { kind: "delete-confirm"; scope: Scope }
   | { kind: "add-certs"; scope: Scope };
+
+// Which row's 3-dot menu is open, plus where to anchor the popover.
+type MenuState = { scope: Scope; x: number; y: number } | null;
 
 const InfoIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -50,6 +53,17 @@ const MoreDotsIcon = () => (
     <circle cx="19" cy="12" r="1.9" />
   </svg>
 );
+const EyeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const EyeOffIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.9 5.2A9.5 9.5 0 0112 5c6.4 0 10 7 10 7a17 17 0 01-3.3 4.1M6.1 6.1A17 17 0 002 12s3.6 7 10 7a9.6 9.6 0 003.9-.8" />
+  </svg>
+);
 
 const CAREER_STAGES: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
 
@@ -59,6 +73,7 @@ export function IndustriesPage() {
   const [openIds, setOpenIds] = useState<Set<string>>(new Set(["hvac"]));
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  const [menu, setMenu] = useState<MenuState>(null);
 
   const orderedIndustries = useMemo(
     () =>
@@ -77,9 +92,13 @@ export function IndustriesPage() {
     return orderedIndustries.filter(
       (i) =>
         i.name.toLowerCase().includes(q) ||
+        (i.nameEs ?? "").toLowerCase().includes(q) ||
         i.subIndustries.some((s) => s.name.toLowerCase().includes(q)),
     );
   }, [orderedIndustries, search]);
+
+  // Drag reordering is only safe against the full, unfiltered order.
+  const canDrag = !search.trim();
 
   const currentIndustry =
     industries.find((i) => i.key === scope.industryKey) ?? industries[0];
@@ -99,7 +118,6 @@ export function IndustriesPage() {
 
   function pickIndustry(key: string) {
     setScope({ kind: "industry", industryKey: key });
-    setOpenIds((prev) => new Set([...prev, key]));
   }
 
   function pickSub(industryKey: string, subKey: string) {
@@ -107,91 +125,82 @@ export function IndustriesPage() {
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────────
-  function addIndustry(name: string, position: number) {
+  function addIndustry(name: string, nameEs: string, hidden: boolean) {
     setIndustries((prev) => {
       const key = `i-${Date.now()}`;
-      const clamped = Math.max(1, Math.min(position, prev.length + 1));
-      // Shift positions >= clamped
-      const shifted = prev.map((i) =>
-        i.displayPosition >= clamped
-          ? { ...i, displayPosition: i.displayPosition + 1 }
-          : i,
-      );
+      const position = prev.length + 1;
       return [
-        ...shifted,
-        { key, name, displayPosition: clamped, certIds: [], subIndustries: [] },
+        ...prev,
+        {
+          key,
+          name,
+          nameEs: nameEs || undefined,
+          hidden,
+          displayPosition: position,
+          certIds: [],
+          subIndustries: [],
+        },
       ];
     });
   }
 
-  function addSub(industryKey: string, name: string, position: number) {
+  function addSub(industryKey: string, name: string, nameEs: string, hidden: boolean) {
     setIndustries((prev) =>
       prev.map((i) => {
         if (i.key !== industryKey) return i;
-        const subs = i.subIndustries;
-        const clamped = Math.max(1, Math.min(position, subs.length + 1));
-        const shifted = subs.map((s) =>
-          s.displayPosition >= clamped
-            ? { ...s, displayPosition: s.displayPosition + 1 }
-            : s,
-        );
         const newSub: SubIndustry = {
           key: `s-${Date.now()}`,
           name,
-          displayPosition: clamped,
+          nameEs: nameEs || undefined,
+          hidden,
+          displayPosition: i.subIndustries.length + 1,
           certIds: [],
         };
-        return { ...i, subIndustries: [...shifted, newSub] };
+        return { ...i, subIndustries: [...i.subIndustries, newSub] };
+      }),
+    );
+    // Make sure the parent is expanded so the new Sub-Industry is visible.
+    setOpenIds((prev) => new Set([...prev, industryKey]));
+  }
+
+  function editIndustry(key: string, name: string, nameEs: string, hidden: boolean) {
+    setIndustries((prev) =>
+      prev.map((i) =>
+        i.key === key ? { ...i, name, nameEs: nameEs || undefined, hidden } : i,
+      ),
+    );
+  }
+
+  function editSub(industryKey: string, subKey: string, name: string, nameEs: string, hidden: boolean) {
+    setIndustries((prev) =>
+      prev.map((i) => {
+        if (i.key !== industryKey) return i;
+        return {
+          ...i,
+          subIndustries: i.subIndustries.map((s) =>
+            s.key === subKey ? { ...s, name, nameEs: nameEs || undefined, hidden } : s,
+          ),
+        };
       }),
     );
   }
 
-  function renameIndustry(key: string, name: string, position: number) {
-    setIndustries((prev) => {
-      const target = prev.find((i) => i.key === key);
-      if (!target) return prev;
-      const oldPos = target.displayPosition;
-      const clamped = Math.max(1, Math.min(position, prev.length));
-      const repositioned = prev.map((i) => {
-        if (i.key === key) return { ...i, name, displayPosition: clamped };
-        // Shift others
-        if (clamped < oldPos) {
-          if (i.displayPosition >= clamped && i.displayPosition < oldPos) {
-            return { ...i, displayPosition: i.displayPosition + 1 };
-          }
-        } else if (clamped > oldPos) {
-          if (i.displayPosition <= clamped && i.displayPosition > oldPos) {
-            return { ...i, displayPosition: i.displayPosition - 1 };
-          }
-        }
-        return i;
-      });
-      return repositioned;
-    });
+  function toggleIndustryHidden(key: string) {
+    setIndustries((prev) =>
+      prev.map((i) => (i.key === key ? { ...i, hidden: !i.hidden } : i)),
+    );
   }
 
-  function renameSub(industryKey: string, subKey: string, name: string, position: number) {
+  function toggleSubHidden(industryKey: string, subKey: string) {
     setIndustries((prev) =>
       prev.map((i) => {
         if (i.key !== industryKey) return i;
-        const target = i.subIndustries.find((s) => s.key === subKey);
-        if (!target) return i;
-        const oldPos = target.displayPosition;
-        const clamped = Math.max(1, Math.min(position, i.subIndustries.length));
-        const subs = i.subIndustries.map((s) => {
-          if (s.key === subKey) return { ...s, name, displayPosition: clamped };
-          if (clamped < oldPos) {
-            if (s.displayPosition >= clamped && s.displayPosition < oldPos) {
-              return { ...s, displayPosition: s.displayPosition + 1 };
-            }
-          } else if (clamped > oldPos) {
-            if (s.displayPosition <= clamped && s.displayPosition > oldPos) {
-              return { ...s, displayPosition: s.displayPosition - 1 };
-            }
-          }
-          return s;
-        });
-        return { ...i, subIndustries: subs };
+        return {
+          ...i,
+          subIndustries: i.subIndustries.map((s) =>
+            s.key === subKey ? { ...s, hidden: !s.hidden } : s,
+          ),
+        };
       }),
     );
   }
@@ -208,7 +217,6 @@ export function IndustriesPage() {
             : i,
         );
     });
-    // Reset selection
     const remaining = industries.filter((i) => i.key !== key);
     if (remaining[0]) {
       setScope({ kind: "industry", industryKey: remaining[0].key });
@@ -232,6 +240,32 @@ export function IndustriesPage() {
       }),
     );
     setScope({ kind: "industry", industryKey });
+  }
+
+  // Reorder the full industry list from a dragged ordering of keys.
+  function reorderIndustries(orderedKeys: string[]) {
+    setIndustries((prev) => {
+      const byKey = new Map(prev.map((i) => [i.key, i]));
+      return orderedKeys
+        .map((k) => byKey.get(k))
+        .filter((i): i is Industry => !!i)
+        .map((i, idx) => ({ ...i, displayPosition: idx + 1 }));
+    });
+  }
+
+  // Reorder Sub-Industries within a single Industry.
+  function reorderSubs(industryKey: string, orderedKeys: string[]) {
+    setIndustries((prev) =>
+      prev.map((i) => {
+        if (i.key !== industryKey) return i;
+        const byKey = new Map(i.subIndustries.map((s) => [s.key, s]));
+        const subs = orderedKeys
+          .map((k) => byKey.get(k))
+          .filter((s): s is SubIndustry => !!s)
+          .map((s, idx) => ({ ...s, displayPosition: idx + 1 }));
+        return { ...i, subIndustries: subs };
+      }),
+    );
   }
 
   function addCertsToScope(certIds: string[]) {
@@ -303,7 +337,6 @@ export function IndustriesPage() {
     return out;
   }
 
-  // Tags excluding the current scope (for "Also tagged in")
   function alsoTaggedIn(certId: string): { industryName: string; subName?: string }[] {
     return tagsForCert(certId).filter((t) => {
       if (scope.kind === "industry") {
@@ -314,6 +347,23 @@ export function IndustriesPage() {
     });
   }
 
+  // ─── Menu ────────────────────────────────────────────────────────────────
+  function openMenu(e: React.MouseEvent, menuScope: Scope) {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({ scope: menuScope, x: r.right, y: r.bottom });
+  }
+
+  const menuIsHidden = (() => {
+    if (!menu) return false;
+    const menuScope = menu.scope;
+    const ind = industries.find((i) => i.key === menuScope.industryKey);
+    if (!ind) return false;
+    if (menuScope.kind === "industry") return !!ind.hidden;
+    const sub = ind.subIndustries.find((s) => s.key === menuScope.subKey);
+    return !!sub?.hidden;
+  })();
+
   // ─── Render ───────────────────────────────────────────────────────────────
   const scopeCertIds =
     scope.kind === "industry" ? currentIndustry.certIds : currentSub?.certIds ?? [];
@@ -321,6 +371,9 @@ export function IndustriesPage() {
   const currentIndustryTotalCerts =
     currentIndustry.certIds.length +
     currentIndustry.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
+
+  const currentHidden =
+    scope.kind === "industry" ? !!currentIndustry.hidden : !!currentSub?.hidden;
 
   return (
     <div className="main">
@@ -346,72 +399,32 @@ export function IndustriesPage() {
               />
             </div>
 
-            <button
-              className="ind-rail-add"
-              onClick={() => setModal({ kind: "new-industry" })}
-            >
-              + Add Industry
-            </button>
-
             <div className="ind-tree">
-              {filteredIndustries.map((ind) => {
-                const isOpen = openIds.has(ind.key);
-                const hasSubs = ind.subIndustries.length > 0;
-                const industryActive =
-                  scope.kind === "industry" && scope.industryKey === ind.key;
-                const totalCerts =
-                  ind.certIds.length +
-                  ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
-                return (
-                  <div key={ind.key} className="ind-tree-group">
-                    <button
-                      className={`ind-tree-row ${industryActive ? "is-active" : ""}`}
-                      onClick={() => {
-                        if (hasSubs) toggleOpen(ind.key);
-                        pickIndustry(ind.key);
-                      }}
-                    >
-                      <span
-                        className={`ind-tree-caret ${isOpen ? "is-open" : ""} ${hasSubs ? "" : "is-hidden"}`}
-                      >
-                        <CaretRightIcon />
-                      </span>
-                      <span className="ind-tree-row-label">{ind.name}</span>
-                      <span className="ind-tree-row-count">{totalCerts}</span>
-                    </button>
-                    {hasSubs && isOpen && (
-                      <div className="ind-sublist">
-                        {[...ind.subIndustries]
-                          .sort((a, b) => a.displayPosition - b.displayPosition)
-                          .map((sub) => {
-                            const isActive =
-                              scope.kind === "sub" &&
-                              scope.industryKey === ind.key &&
-                              scope.subKey === sub.key;
-                            return (
-                              <button
-                                key={sub.key}
-                                className={`ind-sub-row ${isActive ? "is-active" : ""}`}
-                                onClick={() => pickSub(ind.key, sub.key)}
-                              >
-                                <span className="ind-sub-row-label">{sub.name}</span>
-                                <span className="ind-sub-row-count">{sub.certIds.length}</span>
-                              </button>
-                            );
-                          })}
-                        <button
-                          className="ind-sub-add"
-                          onClick={() =>
-                            setModal({ kind: "new-sub", industryKey: ind.key })
-                          }
-                        >
-                          + Add Sub-Industry
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {filteredIndustries.map((ind) => (
+                <IndustryTreeGroup
+                  key={ind.key}
+                  ind={ind}
+                  isOpen={openIds.has(ind.key)}
+                  scope={scope}
+                  canDrag={canDrag}
+                  orderedIndustries={orderedIndustries}
+                  onToggle={() => toggleOpen(ind.key)}
+                  onPickIndustry={() => pickIndustry(ind.key)}
+                  onPickSub={(subKey) => pickSub(ind.key, subKey)}
+                  onAddSub={() => setModal({ kind: "new-sub", industryKey: ind.key })}
+                  onMenu={openMenu}
+                  onReorderIndustries={reorderIndustries}
+                  onReorderSubs={(orderedKeys) => reorderSubs(ind.key, orderedKeys)}
+                />
+              ))}
+
+              {/* Add Industry sits under the last Industry in the list */}
+              <button
+                className="ind-rail-add"
+                onClick={() => setModal({ kind: "new-industry" })}
+              >
+                + Add Industry
+              </button>
             </div>
           </aside>
 
@@ -426,6 +439,7 @@ export function IndustriesPage() {
                   {scope.kind === "industry"
                     ? currentIndustry.name
                     : currentSub?.name ?? "—"}
+                  {currentHidden && <span className="ind-hidden-badge">Hidden</span>}
                 </h2>
                 <div className="ind-detail-sub">
                   {scope.kind === "industry" ? (
@@ -470,16 +484,16 @@ export function IndustriesPage() {
                   onClick={() =>
                     setModal(
                       scope.kind === "industry"
-                        ? { kind: "rename-industry", industryKey: scope.industryKey }
+                        ? { kind: "edit-industry", industryKey: scope.industryKey }
                         : {
-                            kind: "rename-sub",
+                            kind: "edit-sub",
                             industryKey: scope.industryKey,
                             subKey: scope.subKey,
                           },
                     )
                   }
                 >
-                  <PencilIcon /> Rename
+                  <PencilIcon /> Edit
                 </button>
                 <button
                   className="ind-detail-btn ind-detail-btn--danger"
@@ -535,20 +549,73 @@ export function IndustriesPage() {
         </div>
       </div>
 
+      {/* ─── Row 3-dot menu ─── */}
+      {menu && (
+        <>
+          <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
+          <div
+            className="ind-row-menu"
+            style={{ top: menu.y + 4, left: menu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="ind-row-menu-item"
+              onClick={() => {
+                setModal(
+                  menu.scope.kind === "industry"
+                    ? { kind: "edit-industry", industryKey: menu.scope.industryKey }
+                    : {
+                        kind: "edit-sub",
+                        industryKey: menu.scope.industryKey,
+                        subKey: menu.scope.subKey,
+                      },
+                );
+                setMenu(null);
+              }}
+            >
+              <PencilIcon /> Edit
+            </button>
+            <button
+              className="ind-row-menu-item"
+              onClick={() => {
+                if (menu.scope.kind === "industry") {
+                  toggleIndustryHidden(menu.scope.industryKey);
+                } else {
+                  toggleSubHidden(menu.scope.industryKey, menu.scope.subKey);
+                }
+                setMenu(null);
+              }}
+            >
+              {menuIsHidden ? <EyeIcon /> : <EyeOffIcon />}{" "}
+              {menuIsHidden ? "Show" : "Hide"}
+            </button>
+            <div className="ind-row-menu-sep" />
+            <button
+              className="ind-row-menu-item ind-row-menu-item--danger"
+              onClick={() => {
+                setModal({ kind: "delete-confirm", scope: menu.scope });
+                setMenu(null);
+              }}
+            >
+              <TrashIcon /> Delete
+            </button>
+          </div>
+        </>
+      )}
+
       {/* ─── Modals ─── */}
       {modal.kind === "new-industry" && (
         <NameModal
           title="New Industry"
           nameLabel="Name"
-          posLabel="Display position"
-          posHelp="Where this Industry appears in the browse order. Defaults to the end of the list — change to push it higher."
           nameHelp="Must be unique across all Industries."
           defaultName=""
-          defaultPos={industries.length + 1}
+          defaultNameEs=""
+          defaultHidden={false}
           existingNames={industries.map((i) => i.name.toLowerCase())}
           submitLabel="Create Industry"
-          onSubmit={(name, pos) => {
-            addIndustry(name, pos);
+          onSubmit={(name, nameEs, hidden) => {
+            addIndustry(name, nameEs, hidden);
             setModal({ kind: "none" });
           }}
           onCancel={() => setModal({ kind: "none" })}
@@ -562,15 +629,14 @@ export function IndustriesPage() {
           <NameModal
             title={`New Sub-Industry in ${parent.name}`}
             nameLabel="Name"
-            posLabel="Display position"
-            posHelp={`Where this Sub-Industry appears under ${parent.name}. Defaults to the end of the list — change to push it higher.`}
             nameHelp={`Must be unique within ${parent.name}. Can repeat across other Industries.`}
             defaultName=""
-            defaultPos={parent.subIndustries.length + 1}
+            defaultNameEs=""
+            defaultHidden={false}
             existingNames={parent.subIndustries.map((s) => s.name.toLowerCase())}
             submitLabel="Create Sub-Industry"
-            onSubmit={(name, pos) => {
-              addSub(modal.industryKey, name, pos);
+            onSubmit={(name, nameEs, hidden) => {
+              addSub(modal.industryKey, name, nameEs, hidden);
               setModal({ kind: "none" });
             }}
             onCancel={() => setModal({ kind: "none" })}
@@ -578,24 +644,23 @@ export function IndustriesPage() {
         );
       })()}
 
-      {modal.kind === "rename-industry" && (() => {
+      {modal.kind === "edit-industry" && (() => {
         const ind = industries.find((i) => i.key === modal.industryKey);
         if (!ind) return null;
         return (
           <NameModal
-            title="Rename Industry"
+            title="Edit Industry"
             nameLabel="Name"
-            posLabel="Display position"
-            posHelp="Where this Industry appears in the browse order."
             nameHelp="Must be unique across all Industries."
             defaultName={ind.name}
-            defaultPos={ind.displayPosition}
+            defaultNameEs={ind.nameEs ?? ""}
+            defaultHidden={!!ind.hidden}
             existingNames={industries
               .filter((i) => i.key !== modal.industryKey)
               .map((i) => i.name.toLowerCase())}
             submitLabel="Save"
-            onSubmit={(name, pos) => {
-              renameIndustry(modal.industryKey, name, pos);
+            onSubmit={(name, nameEs, hidden) => {
+              editIndustry(modal.industryKey, name, nameEs, hidden);
               setModal({ kind: "none" });
             }}
             onCancel={() => setModal({ kind: "none" })}
@@ -603,25 +668,24 @@ export function IndustriesPage() {
         );
       })()}
 
-      {modal.kind === "rename-sub" && (() => {
+      {modal.kind === "edit-sub" && (() => {
         const parent = industries.find((i) => i.key === modal.industryKey);
         const sub = parent?.subIndustries.find((s) => s.key === modal.subKey);
         if (!parent || !sub) return null;
         return (
           <NameModal
-            title={`Rename Sub-Industry in ${parent.name}`}
+            title={`Edit Sub-Industry in ${parent.name}`}
             nameLabel="Name"
-            posLabel="Display position"
-            posHelp={`Where this Sub-Industry appears under ${parent.name}.`}
             nameHelp={`Must be unique within ${parent.name}.`}
             defaultName={sub.name}
-            defaultPos={sub.displayPosition}
+            defaultNameEs={sub.nameEs ?? ""}
+            defaultHidden={!!sub.hidden}
             existingNames={parent.subIndustries
               .filter((s) => s.key !== modal.subKey)
               .map((s) => s.name.toLowerCase())}
             submitLabel="Save"
-            onSubmit={(name, pos) => {
-              renameSub(modal.industryKey, modal.subKey, name, pos);
+            onSubmit={(name, nameEs, hidden) => {
+              editSub(modal.industryKey, modal.subKey, name, nameEs, hidden);
               setModal({ kind: "none" });
             }}
             onCancel={() => setModal({ kind: "none" })}
@@ -630,13 +694,13 @@ export function IndustriesPage() {
       })()}
 
       {modal.kind === "delete-confirm" && (() => {
-        const scope = modal.scope;
-        const ind = industries.find((i) => i.key === scope.industryKey);
+        const dScope = modal.scope;
+        const ind = industries.find((i) => i.key === dScope.industryKey);
         if (!ind) return null;
-        const isIndustry = scope.kind === "industry";
+        const isIndustry = dScope.kind === "industry";
         const sub =
-          scope.kind === "sub"
-            ? ind.subIndustries.find((s) => s.key === scope.subKey)
+          dScope.kind === "sub"
+            ? ind.subIndustries.find((s) => s.key === dScope.subKey)
             : null;
         const label = isIndustry ? ind.name : `${ind.name} › ${sub?.name}`;
         const certCount = isIndustry
@@ -652,10 +716,10 @@ export function IndustriesPage() {
             subCount={subCount}
             isIndustry={isIndustry}
             onConfirm={() => {
-              if (scope.kind === "industry") {
-                deleteIndustry(scope.industryKey);
+              if (dScope.kind === "industry") {
+                deleteIndustry(dScope.industryKey);
               } else {
-                deleteSub(scope.industryKey, scope.subKey);
+                deleteSub(dScope.industryKey, dScope.subKey);
               }
               setModal({ kind: "none" });
             }}
@@ -678,6 +742,211 @@ export function IndustriesPage() {
           onClose={() => setModal({ kind: "none" })}
         />
       )}
+    </div>
+  );
+}
+
+/* ─── Industry tree group (draggable industry + its sub list) ──────────────── */
+
+function IndustryTreeGroup({
+  ind,
+  isOpen,
+  scope,
+  canDrag,
+  orderedIndustries,
+  onToggle,
+  onPickIndustry,
+  onPickSub,
+  onAddSub,
+  onMenu,
+  onReorderIndustries,
+  onReorderSubs,
+}: {
+  ind: Industry;
+  isOpen: boolean;
+  scope: Scope;
+  canDrag: boolean;
+  orderedIndustries: Industry[];
+  onToggle: () => void;
+  onPickIndustry: () => void;
+  onPickSub: (subKey: string) => void;
+  onAddSub: () => void;
+  onMenu: (e: React.MouseEvent, scope: Scope) => void;
+  onReorderIndustries: (orderedKeys: string[]) => void;
+  onReorderSubs: (orderedKeys: string[]) => void;
+}) {
+  const industryActive =
+    scope.kind === "industry" && scope.industryKey === ind.key;
+  const totalCerts =
+    ind.certIds.length +
+    ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
+  const [isOver, setIsOver] = useState(false);
+
+  const orderedSubs = [...ind.subIndustries].sort(
+    (a, b) => a.displayPosition - b.displayPosition,
+  );
+
+  function onIndustryDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsOver(false);
+    const fromKey = e.dataTransfer.getData("ind/industry");
+    if (!fromKey || fromKey === ind.key) return;
+    const keys = orderedIndustries.map((i) => i.key);
+    const from = keys.indexOf(fromKey);
+    const to = keys.indexOf(ind.key);
+    if (from < 0 || to < 0) return;
+    keys.splice(from, 1);
+    keys.splice(to, 0, fromKey);
+    onReorderIndustries(keys);
+  }
+
+  return (
+    <div className="ind-tree-group">
+      <div
+        className={`ind-tree-row ${industryActive ? "is-active" : ""} ${ind.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
+        onDragOver={(e) => {
+          if (!canDrag) return;
+          if (e.dataTransfer.types.includes("ind/industry")) {
+            e.preventDefault();
+            setIsOver(true);
+          }
+        }}
+        onDragLeave={() => setIsOver(false)}
+        onDrop={onIndustryDrop}
+      >
+        <span
+          className={`ind-tree-drag ${canDrag ? "" : "is-disabled"}`}
+          draggable={canDrag}
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("ind/industry", ind.key);
+          }}
+          aria-hidden
+        >
+          <DragHandleIcon />
+        </span>
+        <button
+          className={`ind-tree-caret-btn ${isOpen ? "is-open" : ""}`}
+          onClick={onToggle}
+          aria-label={isOpen ? "Collapse" : "Expand"}
+        >
+          <CaretRightIcon />
+        </button>
+        <button className="ind-tree-main" onClick={onPickIndustry}>
+          <span className="ind-tree-row-label">{ind.name}</span>
+          {ind.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
+          <span className="ind-tree-row-count">{totalCerts}</span>
+        </button>
+        <button
+          className="ind-tree-menu-btn"
+          aria-label="Industry options"
+          onClick={(e) => onMenu(e, { kind: "industry", industryKey: ind.key })}
+        >
+          <MoreDotsIcon />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="ind-sublist">
+          {orderedSubs.map((sub) => (
+            <SubRow
+              key={sub.key}
+              sub={sub}
+              industryKey={ind.key}
+              active={
+                scope.kind === "sub" &&
+                scope.industryKey === ind.key &&
+                scope.subKey === sub.key
+              }
+              canDrag={canDrag}
+              orderedSubs={orderedSubs}
+              onPick={() => onPickSub(sub.key)}
+              onMenu={onMenu}
+              onReorderSubs={onReorderSubs}
+            />
+          ))}
+          <button className="ind-sub-add" onClick={onAddSub}>
+            + Add Sub-Industry
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubRow({
+  sub,
+  industryKey,
+  active,
+  canDrag,
+  orderedSubs,
+  onPick,
+  onMenu,
+  onReorderSubs,
+}: {
+  sub: SubIndustry;
+  industryKey: string;
+  active: boolean;
+  canDrag: boolean;
+  orderedSubs: SubIndustry[];
+  onPick: () => void;
+  onMenu: (e: React.MouseEvent, scope: Scope) => void;
+  onReorderSubs: (orderedKeys: string[]) => void;
+}) {
+  const [isOver, setIsOver] = useState(false);
+  // Sub drags carry their parent key so they can't cross into another Industry.
+  const dragType = `ind/sub/${industryKey}`;
+
+  function onSubDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsOver(false);
+    const fromKey = e.dataTransfer.getData(dragType);
+    if (!fromKey || fromKey === sub.key) return;
+    const keys = orderedSubs.map((s) => s.key);
+    const from = keys.indexOf(fromKey);
+    const to = keys.indexOf(sub.key);
+    if (from < 0 || to < 0) return;
+    keys.splice(from, 1);
+    keys.splice(to, 0, fromKey);
+    onReorderSubs(keys);
+  }
+
+  return (
+    <div
+      className={`ind-sub-row ${active ? "is-active" : ""} ${sub.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
+      onDragOver={(e) => {
+        if (!canDrag) return;
+        if (e.dataTransfer.types.includes(dragType)) {
+          e.preventDefault();
+          setIsOver(true);
+        }
+      }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={onSubDrop}
+    >
+      <span
+        className={`ind-sub-drag ${canDrag ? "" : "is-disabled"}`}
+        draggable={canDrag}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData(dragType, sub.key);
+        }}
+        aria-hidden
+      >
+        <DragHandleIcon />
+      </span>
+      <button className="ind-sub-main" onClick={onPick}>
+        <span className="ind-sub-row-label">{sub.name}</span>
+        {sub.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
+        <span className="ind-sub-row-count">{sub.certIds.length}</span>
+      </button>
+      <button
+        className="ind-tree-menu-btn"
+        aria-label="Sub-Industry options"
+        onClick={(e) => onMenu(e, { kind: "sub", industryKey, subKey: sub.key })}
+      >
+        <MoreDotsIcon />
+      </button>
     </div>
   );
 }
@@ -789,16 +1058,15 @@ function CertList({
   );
 }
 
-/* ─── Name + position modal ───────────────────────────────────────────────── */
+/* ─── Name + translation + visibility modal ───────────────────────────────── */
 
 function NameModal({
   title,
   nameLabel,
-  posLabel,
   nameHelp,
-  posHelp,
   defaultName,
-  defaultPos,
+  defaultNameEs,
+  defaultHidden,
   existingNames,
   submitLabel,
   onSubmit,
@@ -806,18 +1074,18 @@ function NameModal({
 }: {
   title: string;
   nameLabel: string;
-  posLabel: string;
   nameHelp: string;
-  posHelp: string;
   defaultName: string;
-  defaultPos: number;
+  defaultNameEs: string;
+  defaultHidden: boolean;
   existingNames: string[];
   submitLabel: string;
-  onSubmit: (name: string, pos: number) => void;
+  onSubmit: (name: string, nameEs: string, hidden: boolean) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(defaultName);
-  const [pos, setPos] = useState(String(defaultPos));
+  const [nameEs, setNameEs] = useState(defaultNameEs);
+  const [hidden, setHidden] = useState(defaultHidden);
 
   const trimmed = name.trim();
   const isDuplicate =
@@ -836,7 +1104,8 @@ function NameModal({
         <div className="ind-modal-body">
           <label className="ind-field">
             <span className="ind-field-label">
-              {nameLabel} <span className="ind-field-required">*</span>
+              {nameLabel} <span className="ind-field-flag">EN</span>{" "}
+              <span className="ind-field-required">*</span>
             </span>
             <input
               autoFocus
@@ -855,16 +1124,41 @@ function NameModal({
           </label>
 
           <label className="ind-field">
-            <span className="ind-field-label">{posLabel}</span>
+            <span className="ind-field-label">
+              {nameLabel} <span className="ind-field-flag">ES</span>
+            </span>
             <input
-              className="ind-field-input ind-field-input--narrow"
-              type="number"
-              min={1}
-              value={pos}
-              onChange={(e) => setPos(e.target.value)}
+              className="ind-field-input"
+              value={nameEs}
+              onChange={(e) => setNameEs(e.target.value)}
+              placeholder="e.g. Solar y Energías Renovables"
             />
-            <span className="ind-field-help">{posHelp}</span>
+            <span className="ind-field-help">
+              Spanish translation shown to Spanish-locale learners. Optional — falls back to the English name.
+            </span>
           </label>
+
+          <div className="ind-toggle-field">
+            <button
+              type="button"
+              className={`ind-toggle ${hidden ? "" : "is-on"}`}
+              role="switch"
+              aria-checked={!hidden}
+              onClick={() => setHidden((h) => !h)}
+            >
+              <span className="ind-toggle-knob" />
+            </button>
+            <div className="ind-toggle-text">
+              <span className="ind-toggle-title">
+                {hidden ? "Hidden" : "Visible"}
+              </span>
+              <span className="ind-toggle-sub">
+                {hidden
+                  ? "Won't appear to learners browsing the catalog."
+                  : "Appears to learners browsing the catalog."}
+              </span>
+            </div>
+          </div>
         </div>
         <div className="ind-modal-foot">
           <button className="ind-btn-secondary" onClick={onCancel}>Cancel</button>
@@ -873,8 +1167,7 @@ function NameModal({
             disabled={!isValid}
             onClick={() => {
               if (!isValid) return;
-              const n = Number(pos);
-              onSubmit(trimmed, Number.isFinite(n) && n > 0 ? Math.floor(n) : defaultPos);
+              onSubmit(trimmed, nameEs.trim(), hidden);
             }}
           >
             {submitLabel}

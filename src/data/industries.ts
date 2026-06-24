@@ -10,6 +10,10 @@ export type IndustryCert = {
 export type SubIndustry = {
   key: string;
   name: string;
+  // Spanish translation of the name, shown to Spanish-locale learners
+  nameEs?: string;
+  // Whether this Sub-Industry is visible to learners
+  hidden?: boolean;
   displayPosition: number;
   // Ordered cert ids tagged at this sub-industry level
   certIds: string[];
@@ -18,6 +22,10 @@ export type SubIndustry = {
 export type Industry = {
   key: string;
   name: string;
+  // Spanish translation of the name, shown to Spanish-locale learners
+  nameEs?: string;
+  // Whether this Industry is visible to learners
+  hidden?: boolean;
   displayPosition: number;
   subIndustries: SubIndustry[];
   // Ordered cert ids tagged at the industry level only (not via sub-industries)
@@ -51,6 +59,7 @@ export const industries: Industry[] = [
   {
     key: "hvac",
     name: "HVAC",
+    nameEs: "Climatización (HVAC)",
     displayPosition: 1,
     certIds: ["C-1001", "C-1002", "C-1003", "C-1004", "C-1005"],
     subIndustries: [
@@ -81,6 +90,7 @@ export const industries: Industry[] = [
   {
     key: "plumbing",
     name: "Plumbing",
+    nameEs: "Plomería",
     displayPosition: 2,
     certIds: ["P-3001", "P-3002", "P-3003"],
     subIndustries: [
@@ -113,6 +123,7 @@ export const industries: Industry[] = [
   {
     key: "electrical",
     name: "Electrical",
+    nameEs: "Electricidad",
     displayPosition: 3,
     certIds: ["P-4001", "P-4002"],
     subIndustries: [

@@ -27,7 +27,7 @@ const DEFAULT_COLUMNS: UserColumnState = {
   role: true,
   subscription: true,
   language: false,
-  careerStage: false,
+  goal: false,
   attribution: false,
   zipCode: false,
   industryPreference: false,
@@ -40,7 +40,7 @@ const EMPTY_FILTERS: UserFilterState = {
   subscriptions: [],
   companies: [],
   roles: [],
-  careerStages: [],
+  goals: [],
   industries: [],
 };
 
@@ -116,7 +116,7 @@ const SUB_ORDER: Record<SubscriptionStatus, number> = {
   Subscriber: 2,
   Scholarship: 3,
 };
-const STAGE_ORDER: Record<string, number> = { Apprentice: 0, Journeyman: 1, Master: 2 };
+const GOAL_ORDER: Record<string, number> = { "Looking for my first trades job": 0, "Exploring careers in the skilled trades": 1, "Focused on advancing my career": 2, Other: 3 };
 
 type Row = { u: User; f: ProfileFields };
 
@@ -138,7 +138,7 @@ const COLS: ColMeta[] = [
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: (u) => u.role, sortValue: (u) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: (u) => <SubscriptionCell user={u} />, sortValue: (u) => SUB_ORDER[u.subscriptionStatus] },
   { key: "language", label: "Language", className: "col-u-lang", width: 100, render: (_u, f) => f.language, sortValue: (_u, f) => f.language },
-  { key: "careerStage", label: "Career Stage", className: "col-u-stage", width: 130, render: (_u, f) => f.careerStage, sortValue: (_u, f) => STAGE_ORDER[f.careerStage] ?? 0 },
+  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: (_u, f) => f.goal, sortValue: (_u, f) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
   { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: (_u, f) => f.zipCode, sortValue: (_u, f) => f.zipCode },
   { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 165, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
@@ -191,7 +191,7 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
       if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
-      if (filters.careerStages.length && !filters.careerStages.includes(f.careerStage)) return false;
+      if (filters.goals.length && !filters.goals.includes(f.goal)) return false;
       if (filters.industries.length && !filters.industries.includes(f.industryPreference)) return false;
       if (!q) return true;
       return (
@@ -219,6 +219,9 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
 
   const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
   const colSpan = visibleCols.length + 2; // name + cols + actions
+  // Natural table width (name col + optional cols + actions) so the table
+  // scrolls horizontally rather than crushing columns on a narrow page.
+  const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 48;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -258,6 +261,7 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
 
               <UsersFilters filters={filters} setFilters={setFilters} />
 
+              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup cols={visibleCols} />
                 <thead>
@@ -298,6 +302,7 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
                     )}
                   </tbody>
                 </table>
+              </div>
               </div>
 
               <div className="pagination">
@@ -540,6 +545,7 @@ function UserActionsMenu({
         <div className="u-menu-head-id">{user.id}</div>
       </div>
       <div className="u-menu-divider" />
+      {item(<LoginAsIcon />, "Login As", () => {})}
       {item(<PortfolioIcon />, "View Portfolio", onViewPortfolio)}
       {item(<ExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
       {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
@@ -573,5 +579,11 @@ function openPortfolio(user: User) {
 const CompanyIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 13v.01M9 17v.01" />
+  </svg>
+);
+
+const LoginAsIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
   </svg>
 );
