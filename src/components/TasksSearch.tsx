@@ -159,7 +159,7 @@ export function TasksSearch({
 
   const placeholder = scoped
     ? `Search within ${scopeLabel}…`
-    : "Search Tasks by name, ID, or content…";
+    : "Search Tasks";
 
   return (
     <div className="usearch" ref={wrapRef}>

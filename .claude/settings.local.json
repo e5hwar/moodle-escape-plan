@@ -83,7 +83,28 @@
       "Bash(grep -rn \"type=\\\\\"search\\\\\"\\\\|placeholder=\\\\\"Search\\\\|placeholder={`Search\" /Users/ltd/Downloads/Moodle-Escape/src --include=\"*.tsx\" --include=\"*.ts\" -l)",
       "Bash(grep -rn 'placeholder=\"Search\\\\|placeholder={`Search' /Users/ltd/Downloads/Moodle-Escape/src --include=\"*.tsx\")",
       "Bash(git stash *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/components/ProductConfigPage.tsx)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/components/NewCertificationWizard.tsx)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/components/NewTaskWizard.tsx)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/data/tasks.ts)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/data/productConfig.ts)",
+      "Bash(grep -in \"paywall\\\\|price\\\\|usd\\\\|\\\\\\\\$\\\\|consumable\\\\|stripe\\\\|apple\\\\|google\" src/data/certifications.ts)",
+      "Bash(grep -in \"price\\\\|usd\\\\|\\\\\\\\$\\\\|paywall\\\\|seat\\\\|contract\" src/components/NewCompanyWizard.tsx)",
+      "Bash(grep -in \"price\\\\|usd\\\\|\\\\\\\\$\\\\|paywall\\\\|seat\\\\|contract\" src/data/companies.ts)",
+      "Bash(grep -n \"price\\\\|Price\\\\|paywall\\\\|Paywall\\\\|USD\\\\|\\\\\\\\$\" src/components/CertSplitTaskWizard.tsx)",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(echo \"==== tsc exit code: $? ====\")",
+      "Bash(sed -n '/^\\\\.app {/,/^}/p' src/index.css)",
+      "Bash(sed -n '/return \\(/,/att-page/p' src/components/AttemptsPage.tsx)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('scripts:',json.dumps\\(d.get\\('scripts',{}\\),indent=2\\)\\); print\\('deps:',list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)\\); print\\('devDeps:',list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "mcp__Figma__get_design_context",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(sort -u -t: -k2)",
+      "Bash(awk -F: '{print $1\": \"$2}')",
+      "Bash(sort -t' ' -k2)"
     ]
   }
 }

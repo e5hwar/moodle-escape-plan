@@ -67,10 +67,12 @@ type Filters = {
 export function AttemptsPage({
   quizName,
   onBack,
+  onViewAttempt,
 }: {
   /** The Task selected on the Tasks page — pre-fills the Quiz filter. */
   quizName: string;
   onBack: () => void;
+  onViewAttempt: (attempt: Attempt) => void;
 }) {
   const [list, setList] = useState<Attempt[]>(seed);
   const [filters, setFilters] = useState<Filters>({
@@ -254,7 +256,7 @@ export function AttemptsPage({
                       <AttemptRow
                         key={a.id}
                         attempt={a}
-                        onView={() => window.alert(`Opening attempt #${a.attemptNumber} for ${a.name}…`)}
+                        onView={() => onViewAttempt(a)}
                         onOpenMenu={(rect) => setMenu({ attempt: a, rect })}
                       />
                     ))}

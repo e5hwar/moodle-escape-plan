@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
   type User,
@@ -82,6 +82,21 @@ const VerifiedIcon = () => (
   </svg>
 );
 
+const MoreIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="5" cy="12" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="19" cy="12" r="1.9" />
+  </svg>
+);
+
+const RevokeIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M5.6 5.6l12.8 12.8" />
+  </svg>
+);
+
 type SortKey = "name" | PurchaserColumnKey;
 type SortDir = "asc" | "desc";
 
@@ -159,6 +174,7 @@ export function CertPurchasersPage({
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
+  const [menu, setMenu] = useState<{ row: Row; rect: DOMRect } | null>(null);
 
   const rows = useMemo<Row[]>(
     () =>
@@ -327,10 +343,9 @@ export function CertPurchasersPage({
                           key={row.u.id}
                           row={row}
                           cols={visibleCols}
-                          consumable={consumable}
                           selected={row.u.id === selectedId}
                           onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
-                          onRevoke={() => revokeAccess(row)}
+                          onOpenMenu={(rect) => setMenu({ row, rect })}
                         />
                       ))}
                       {paged.length === 0 && (
@@ -367,6 +382,16 @@ export function CertPurchasersPage({
           candidates={usersWithoutAccess(purchases, allUsers)}
           onGrant={grantAccess}
           onClose={() => setGranting(false)}
+        />
+      )}
+
+      {menu && (
+        <PurchaserActionsMenu
+          row={menu.row}
+          cert={cert}
+          rect={menu.rect}
+          onClose={() => setMenu(null)}
+          onRevoke={() => revokeAccess(menu.row)}
         />
       )}
     </div>
@@ -465,21 +490,17 @@ function AccessEndedCell({ purchase }: { purchase: CertPurchase }) {
 function PurchaserRow({
   row,
   cols,
-  consumable,
   selected,
   onClick,
-  onRevoke,
+  onOpenMenu,
 }: {
   row: Row;
   cols: ColMeta[];
-  consumable: boolean;
   selected: boolean;
   onClick: () => void;
-  onRevoke: () => void;
+  onOpenMenu: (rect: DOMRect) => void;
 }) {
   const { u, p } = row;
-  // Revoke applies to consumables with access still active.
-  const canRevoke = consumable && !p.accessEndedDate;
   return (
     <tr className={selected ? "selected" : ""} onClick={onClick}>
       <td className="col-name">
@@ -494,18 +515,128 @@ function PurchaserRow({
         </td>
       ))}
       <td className="col-actions">
-        {canRevoke && (
-          <div className="row-action-bar">
-            <button
-              className="row-action-btn cp-revoke-btn"
-              onClick={(e) => { e.stopPropagation(); onRevoke(); }}
-            >
-              Revoke access
-            </button>
-          </div>
-        )}
+        <button
+          className="row-action-btn lone-dots"
+          aria-label="More"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMenu(e.currentTarget.getBoundingClientRect());
+          }}
+        >
+          <MoreIcon />
+        </button>
+        <div className="row-action-bar">
+          <button
+            className="row-action-btn"
+            aria-label="More"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMenu(e.currentTarget.getBoundingClientRect());
+            }}
+          >
+            <MoreIcon />
+          </button>
+        </div>
       </td>
     </tr>
+  );
+}
+
+/* ─────────────── Three-dot row actions menu ─────────────── */
+/* Fixed-positioned so it escapes the table's scroll container. */
+
+function PurchaserActionsMenu({
+  row,
+  cert,
+  rect,
+  onClose,
+  onRevoke,
+}: {
+  row: Row;
+  cert: Certification;
+  rect: DOMRect;
+  onClose: () => void;
+  onRevoke: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let left = rect.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
+    setPos({ top, left });
+  }, [rect]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    }
+    function onScroll() {
+      onClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const canRevoke = isConsumableCert(cert) && !row.p.accessEndedDate;
+
+  const item = (
+    icon: JSX.Element,
+    label: string,
+    onPick: () => void,
+    danger = false,
+  ) => (
+    <button
+      className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick();
+        onClose();
+      }}
+    >
+      <span className="u-menu-item-icon">{icon}</span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="u-menu"
+      style={{
+        top: pos ? pos.top : rect.bottom + 6,
+        left: pos ? pos.left : rect.right - 210,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="u-menu-head">
+        <div className="u-menu-head-name">{row.u.name}</div>
+        <div className="u-menu-head-id">{row.u.email}</div>
+      </div>
+      <div className="u-menu-divider" />
+      {canRevoke ? (
+        item(<RevokeIcon />, "Revoke access", onRevoke, true)
+      ) : (
+        <div className="u-menu-empty">No actions available</div>
+      )}
+    </div>
   );
 }
 

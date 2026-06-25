@@ -1,137 +1,109 @@
-import { useState } from "react";
-import { CheckBoldIcon } from "./icons";
+import { NewTaskWizard } from "./NewTaskWizard";
+import type { TaskTypeKey } from "./Footer";
 import type { CertWizardData, CertCourse, CertTask, TaskKind } from "./NewCertificationWizard";
 
-const KIND_LETTER: Record<TaskKind, { letter: string; cls: string }> = {
-  xapi: { letter: "X", cls: "xapi" },
-  quiz: { letter: "Q", cls: "quiz" },
-  "hands-on": { letter: "H", cls: "handson" },
-  "id-upload": { letter: "ID", cls: "idup" },
-  file: { letter: "F", cls: "file" },
-  url: { letter: "U", cls: "url" },
+const KIND_LETTER: Record<TaskKind, { letter: string; cls: string; full: string }> = {
+  xapi: { letter: "X", cls: "xapi", full: "xAPI" },
+  quiz: { letter: "Q", cls: "quiz", full: "Quiz" },
+  "hands-on": { letter: "H", cls: "handson", full: "Hands-On" },
+  "id-upload": { letter: "ID", cls: "idup", full: "ID Upload" },
+  file: { letter: "F", cls: "file", full: "File" },
+  url: { letter: "U", cls: "url", full: "URL" },
 };
 
-type Tab = "details" | "questions" | "behavior" | "access";
+// The cert tree's CertTask.kind is a TaskKind; Footer's TaskTypeKey additionally
+// has "deep-link", which is represented as a URL Task within the cert structure.
+const TYPE_KEY_TO_KIND: Record<TaskTypeKey, TaskKind> = {
+  xapi: "xapi",
+  quiz: "quiz",
+  "hands-on": "hands-on",
+  "id-upload": "id-upload",
+  file: "file",
+  "deep-link": "url",
+  url: "url",
+};
+
+const TYPE_KEY_DURATION: Record<TaskTypeKey, string> = {
+  xapi: "10 min",
+  quiz: "15 min",
+  "hands-on": "30 min",
+  "id-upload": "2 min",
+  file: "5 min",
+  "deep-link": "5 min",
+  url: "5 min",
+};
 
 type Props = {
   cert: CertWizardData;
+  taskType: TaskTypeKey;
+  targetCourseId: string;
+  targetLessonId?: string;
   onClose: () => void;
   onAdd: (task: CertTask) => void;
 };
 
-export function CertSplitTaskWizard({ cert, onClose, onAdd }: Props) {
-  const [tab, setTab] = useState<Tab>("behavior");
-  const [done, setDone] = useState<Record<Tab, boolean>>({
-    details: true,
-    questions: true,
-    behavior: false,
-    access: false,
-  });
-  const [name] = useState("New Quiz Task");
-  const [scoreMethod, setScoreMethod] = useState("highest");
-  const [passMark, setPassMark] = useState("70");
-  const [maxScoreMode, setMaxScoreMode] = useState<"auto" | "manual">("auto");
-  const [attemptsMode, setAttemptsMode] = useState<"unlimited" | "limit">("limit");
-  const [attemptLimit, setAttemptLimit] = useState("3");
-
-  const tabs: { id: Tab; n: number; label: string }[] = [
-    { id: "details", n: 1, label: "Details" },
-    { id: "questions", n: 2, label: "Questions" },
-    { id: "behavior", n: 3, label: "Behavior" },
-    { id: "access", n: 4, label: "Access" },
-  ];
+export function CertSplitTaskWizard({
+  cert,
+  taskType,
+  targetCourseId,
+  targetLessonId,
+  onClose,
+  onAdd,
+}: Props) {
+  const kind = TYPE_KEY_TO_KIND[taskType];
 
   return (
+    // Three columns: the leftmost cert structure tree, then the real Task
+    // creation UI (its nav + content) embedded as the middle and right columns.
     <div className="cert-split">
       <aside className="cert-split-tree">
         <button className="cert-split-back" onClick={onClose}>‹ {cert.nameEn || "Untitled Certification"}</button>
         <div className="cert-split-tree-body">
           {cert.courses.map((co, idx) => (
-            <CourseBlock key={co.id} course={co} index={idx + 1} highlightId="new" />
+            <CourseBlock
+              key={co.id}
+              course={co}
+              index={idx + 1}
+              newKind={kind}
+              showNewIn={co.id === targetCourseId ? targetLessonId ?? "course" : null}
+            />
           ))}
           <button className="cert-split-add">+ Add Course</button>
         </div>
       </aside>
 
-      <div className="cert-split-main">
-        <div className="cert-split-header">
-          <h1 className="cert-split-task-title">
-            <span className="cert-split-task-icon">Q</span>
-            {name}
-            <span className="cert-split-quiz-badge">QUIZ</span>
-          </h1>
-
-          <div className="cert-split-tabs">
-            {tabs.map((t, i) => (
-              <button
-                key={t.id}
-                className={`cert-split-tab ${t.id === tab ? "active" : ""} ${done[t.id] ? "done" : ""}`}
-                onClick={() => setTab(t.id)}
-              >
-                <span className="cert-split-tab-num">
-                  {done[t.id] ? <CheckBoldIcon /> : t.n}
-                </span>
-                {t.label}
-                {i < tabs.length - 1 && <span className="cert-split-tab-sep" />}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="cert-split-body">
-          {tab === "behavior" ? (
-            <BehaviorTab
-              scoreMethod={scoreMethod}
-              setScoreMethod={setScoreMethod}
-              passMark={passMark}
-              setPassMark={setPassMark}
-              maxScoreMode={maxScoreMode}
-              setMaxScoreMode={setMaxScoreMode}
-              attemptsMode={attemptsMode}
-              setAttemptsMode={setAttemptsMode}
-              attemptLimit={attemptLimit}
-              setAttemptLimit={setAttemptLimit}
-            />
-          ) : (
-            <PlaceholderTab tab={tab} />
-          )}
-        </div>
-
-        <footer className="cert-split-footer">
-          <div className="cert-split-footer-left">
-            <span className="wizard-saved">Last saved 1 minute ago</span>
-            <button className="wizard-cancel" onClick={onClose}>Cancel</button>
-          </div>
-          <div className="wizard-actions">
-            <button className="btn-save-draft" onClick={onClose}>Save as draft</button>
-            <button
-              className="btn-publish"
-              onClick={() => {
-                setDone((d) => ({ ...d, [tab]: true }));
-                onAdd({
-                  id: `t-${Date.now()}`,
-                  name,
-                  kind: "quiz",
-                  duration: "10 min",
-                });
-              }}
-            >
-              Add to Certification
-            </button>
-          </div>
-        </footer>
-      </div>
+      <NewTaskWizard
+        taskType={taskType}
+        onClose={onClose}
+        savedLabel="Last saved 1 minute ago"
+        primaryLabel="Add to Certification"
+        onPrimary={(taskName) =>
+          onAdd({ id: `t-${Date.now()}`, name: taskName, kind, duration: TYPE_KEY_DURATION[taskType] })
+        }
+      />
     </div>
   );
 }
 
-function CourseBlock({ course, index, highlightId }: { course: CertCourse; index: number; highlightId: string }) {
+function CourseBlock({
+  course,
+  index,
+  newKind,
+  showNewIn,
+}: {
+  course: CertCourse;
+  index: number;
+  newKind: TaskKind;
+  // null → don't show the in-progress row here; "course" → directly under the
+  // course; otherwise the lesson id the new Task is being added to.
+  showNewIn: string | null;
+}) {
   return (
     <div className="cert-split-course">
       <div className="cert-split-course-header">
         <span className="cert-split-course-caret">▾</span>
         <span className="cert-split-course-num">{index}</span>
-        <span className="cert-split-course-name">{course.name}</span>
+        <span className="cert-split-course-name">{course.nameEn || "Untitled Course"}</span>
       </div>
       <div className="cert-split-course-body">
         {course.children.map((c) =>
@@ -142,176 +114,30 @@ function CourseBlock({ course, index, highlightId }: { course: CertCourse; index
             </div>
           ) : (
             <div key={c.lesson.id} className="cert-split-lesson">
-              <div className="cert-split-lesson-name">L {c.lesson.name.toUpperCase()}</div>
+              <div className="cert-split-lesson-name">L {(c.lesson.nameEn || "Untitled Lesson").toUpperCase()}</div>
               {c.lesson.tasks.map((t) => (
                 <div key={t.id} className="cert-split-row in-lesson">
                   <span className={`task-kind-badge ${KIND_LETTER[t.kind].cls}`}>{KIND_LETTER[t.kind].letter}</span>
                   <span className="cert-split-row-name">{t.name}</span>
                 </div>
               ))}
+              {showNewIn === c.lesson.id && <NewTaskRow kind={newKind} inLesson />}
             </div>
           ),
         )}
-        {/* New (in-progress) task entry */}
-        {highlightId === "new" && index === 1 && (
-          <div className="cert-split-row in-lesson active">
-            <span className="task-kind-badge quiz">Q</span>
-            <span className="cert-split-row-name">New Quiz Task</span>
-            <span className="cert-split-row-dot" />
-          </div>
-        )}
+        {showNewIn === "course" && <NewTaskRow kind={newKind} />}
       </div>
     </div>
   );
 }
 
-function PlaceholderTab({ tab }: { tab: Tab }) {
-  const labels: Record<Tab, string> = {
-    details: "Details",
-    questions: "Questions",
-    behavior: "Behavior",
-    access: "Access",
-  };
+// The in-progress Task being created, highlighted in the tree at its target.
+function NewTaskRow({ kind, inLesson }: { kind: TaskKind; inLesson?: boolean }) {
   return (
-    <>
-      <h2 className="form-section-title">{labels[tab]}</h2>
-      <p className="form-section-desc">
-        This tab uses the standard Task Creation UI, embedded in the split-screen Certification editor.
-      </p>
-    </>
-  );
-}
-
-function BehaviorTab({
-  scoreMethod,
-  setScoreMethod,
-  passMark,
-  setPassMark,
-  maxScoreMode,
-  setMaxScoreMode,
-  attemptsMode,
-  setAttemptsMode,
-  attemptLimit,
-  setAttemptLimit,
-}: {
-  scoreMethod: string;
-  setScoreMethod: (v: string) => void;
-  passMark: string;
-  setPassMark: (v: string) => void;
-  maxScoreMode: "auto" | "manual";
-  setMaxScoreMode: (v: "auto" | "manual") => void;
-  attemptsMode: "unlimited" | "limit";
-  setAttemptsMode: (v: "unlimited" | "limit") => void;
-  attemptLimit: string;
-  setAttemptLimit: (v: string) => void;
-}) {
-  return (
-    <>
-      <section className="form-section">
-        <h2 className="form-section-title">Behavior</h2>
-        <p className="form-section-desc">Scoring, attempts, and integrity controls.</p>
-
-        <h3 className="form-subsection-title">Scoring</h3>
-        <div className="form-sub-group">
-          <label className="form-sub-label">Score calculation</label>
-          <select className="form-select wide" value={scoreMethod} onChange={(e) => setScoreMethod(e.target.value)}>
-            <option value="highest">Highest grade</option>
-            <option value="latest">Latest attempt</option>
-            <option value="average">Average of attempts</option>
-            <option value="first">First attempt only</option>
-          </select>
-        </div>
-
-        <div className="form-sub-group">
-          <label className="form-sub-label">Pass mark</label>
-          <div className="time-row">
-            <input
-              type="text"
-              inputMode="numeric"
-              className="form-input no-spinner small"
-              value={passMark}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "" || /^\d+$/.test(v)) setPassMark(v);
-              }}
-            />
-            <span className="form-suffix">%</span>
-          </div>
-        </div>
-
-        <div className="form-sub-group">
-          <label className="form-sub-label">Maximum score</label>
-          <div className="radio-card-group">
-            <button
-              type="button"
-              className={`radio-card ${maxScoreMode === "auto" ? "selected" : ""}`}
-              onClick={() => setMaxScoreMode("auto")}
-            >
-              <span className="radio-dot" />
-              <div className="radio-card-text">
-                <div className="radio-card-title">Auto · 10.00</div>
-                <div className="radio-card-desc">Sum of all question points.</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              className={`radio-card ${maxScoreMode === "manual" ? "selected" : ""}`}
-              onClick={() => setMaxScoreMode("manual")}
-            >
-              <span className="radio-dot" />
-              <div className="radio-card-text">
-                <div className="radio-card-title">Set manually</div>
-                <div className="radio-card-desc">Override the calculated maximum.</div>
-              </div>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h3 className="form-subsection-title">Attempts</h3>
-        <div className="form-sub-group">
-          <label className="form-sub-label">Attempts allowed</label>
-          <div className="radio-card-group">
-            <button
-              type="button"
-              className={`radio-card ${attemptsMode === "unlimited" ? "selected" : ""}`}
-              onClick={() => setAttemptsMode("unlimited")}
-            >
-              <span className="radio-dot" />
-              <div className="radio-card-text">
-                <div className="radio-card-title">Unlimited attempts</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              className={`radio-card ${attemptsMode === "limit" ? "selected" : ""}`}
-              onClick={() => setAttemptsMode("limit")}
-            >
-              <span className="radio-dot" />
-              <div className="radio-card-text">
-                <div className="radio-card-title">
-                  Limit to{" "}
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="inline-num"
-                    value={attemptLimit}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "" || /^\d+$/.test(v)) setAttemptLimit(v);
-                    }}
-                  />{" "}
-                  attempts
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-      </section>
-    </>
+    <div className={`cert-split-row ${inLesson ? "in-lesson " : ""}active`}>
+      <span className={`task-kind-badge ${KIND_LETTER[kind].cls}`}>{KIND_LETTER[kind].letter}</span>
+      <span className="cert-split-row-name">New {KIND_LETTER[kind].full} Task</span>
+      <span className="cert-split-row-dot" />
+    </div>
   );
 }

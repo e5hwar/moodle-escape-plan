@@ -4,11 +4,14 @@ import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
 import { AttemptsPage } from "./components/AttemptsPage";
+import { AttemptViewerPage } from "./components/AttemptViewerPage";
+import { type Attempt } from "./data/attempts";
 import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
 import { type Task } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard } from "./components/NewCertificationWizard";
+import { NewCertificationStart } from "./components/NewCertificationStart";
 import { SkillsPage } from "./components/SkillsPage";
 import { AwardsPage } from "./components/AwardsPage";
 import { type Certification } from "./data/certifications";
@@ -50,7 +53,9 @@ type View =
   | { name: "new-task"; taskType: TaskTypeKey }
   | { name: "edit-task"; task: Task }
   | { name: "attempts"; quizName: string }
+  | { name: "attempt-viewer"; attempt: Attempt; quizName: string }
   | { name: "quiz-purchasers"; task: Task }
+  | { name: "new-cert-start" }
   | { name: "new-cert" }
   | { name: "edit-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
@@ -113,7 +118,7 @@ function AdminApp() {
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
 
   const sidebarActive =
-    view.name === "certs" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers"
+    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers"
       ? "certs"
       : view.name === "content-links"
       ? "content-links"
@@ -225,12 +230,20 @@ function AdminApp() {
         <AttemptsPage
           quizName={view.quizName}
           onBack={() => setView({ name: "tasks" })}
+          onViewAttempt={(attempt) =>
+            setView({ name: "attempt-viewer", attempt, quizName: view.quizName })
+          }
+        />
+      ) : view.name === "attempt-viewer" ? (
+        <AttemptViewerPage
+          attempt={view.attempt}
+          onBack={() => setView({ name: "attempts", quizName: view.quizName })}
         />
       ) : view.name === "quiz-purchasers" ? (
         <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks" })} />
       ) : view.name === "certs" ? (
         <CertificationsPage
-          onNewCert={() => setView({ name: "new-cert" })}
+          onNewCert={() => setView({ name: "new-cert-start" })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
         />
@@ -340,6 +353,11 @@ function AdminApp() {
           taskType={taskTypeKey(view.task.type)}
           editingTask={view.task}
           onClose={() => setView({ name: "tasks" })}
+        />
+      ) : view.name === "new-cert-start" ? (
+        <NewCertificationStart
+          onFromScratch={() => setView({ name: "new-cert" })}
+          onClose={() => setView({ name: "certs" })}
         />
       ) : view.name === "edit-cert" ? (
         <NewCertificationWizard

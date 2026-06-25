@@ -9,6 +9,7 @@ export type BillingCycle = "Monthly" | "Annual";
 export type Currency = "USD" | "CAD";
 export type SignUpChannel = "Self Sign-Up" | "Internal Sign-Up";
 export type PaymentCollection = "Automatic" | "Manual";
+export type TaxStatus = "Taxable" | "Tax Exempt" | "Reverse Charge";
 export type SubscriptionStatus =
   | "Active"
   | "Free Trial"
@@ -49,7 +50,10 @@ export type Company = {
   status?: SubscriptionStatus;
   seatsUsed?: number;
   ratePerSeat?: number;
+  taxStatus?: TaxStatus;
 };
+
+export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
 
 export const TIERS: Tier[] = [
   "Free Trial",

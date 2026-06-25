@@ -19,7 +19,7 @@ export type TaskTypeKey =
   | "deep-link"
   | "url";
 
-const TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
+export const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
   { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon },
   { key: "quiz", label: "Quiz", icon: QuizIcon },
   { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon },
@@ -48,7 +48,7 @@ export function Footer({ onNewTask }: Props) {
       >
         {({ close }) => (
           <div className="menu">
-            {TYPE_OPTIONS.map(({ key, label, icon: Icon }) => (
+            {TASK_TYPE_OPTIONS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 className="menu-item"

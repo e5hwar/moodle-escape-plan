@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
 import type { TaskTypeKey } from "./Footer";
 import type { Task, TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
+import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
 import {
   CheckBoldIcon,
   BoldIcon,
@@ -115,8 +116,7 @@ type PaywallMode = "common" | "per_attempt";
 type AttemptPrice = {
   id: string;
   attempt: string; // "1", "2", … — specific numbered attempts only
-  price: string;
-  currency: string;
+  priceIds: PriceIds;
 };
 
 type QuizResource = {
@@ -219,9 +219,9 @@ type WizardData = {
   // Quiz – Payments & Integrations (Step 8)
   paywallOn: boolean;
   paywallMode: PaywallMode;
-  commonPrice: string;
+  commonPriceIds: PriceIds;
   attemptPrices: AttemptPrice[];
-  subsequentPrice: string;
+  subsequentPriceIds: PriceIds;
   nateExam: boolean;
   nateIdEn: string;
   nateIdEs: string;
@@ -417,7 +417,7 @@ const SAMPLE_QUIZ_SECTIONS: QuizSection[] = [
 // attempts" is tracked separately (subsequentPrice) and always sits at the
 // bottom. Admins add Attempt 2, 3, … in between as needed.
 const DEFAULT_ATTEMPT_PRICES: AttemptPrice[] = [
-  { id: "ap1", attempt: "1", price: "60.00", currency: "USD" },
+  { id: "ap1", attempt: "1", priceIds: newPriceIds() },
 ];
 
 const INITIAL_DATA: WizardData = {
@@ -499,9 +499,9 @@ const INITIAL_DATA: WizardData = {
 
   paywallOn: false,
   paywallMode: "common",
-  commonPrice: "60.00",
+  commonPriceIds: newPriceIds(),
   attemptPrices: DEFAULT_ATTEMPT_PRICES,
-  subsequentPrice: "45.00",
+  subsequentPriceIds: newPriceIds(),
   nateExam: false,
   nateIdEn: "",
   nateIdEs: "",
@@ -641,6 +641,13 @@ type Props = {
   /** When set, the wizard opens in editing mode with this Task's details
    * prefilled instead of starting blank. */
   editingTask?: Task;
+  /** Embedding hooks — used when the Task creation UI is shown inside the
+   * Certification split-screen editor. When `onPrimary` is provided, the footer's
+   * primary action calls it (with the Task's current name) instead of `onClose`,
+   * and shows `primaryLabel`. `savedLabel` adds the "Last saved…" note on the left. */
+  primaryLabel?: string;
+  onPrimary?: (taskName: string) => void;
+  savedLabel?: string;
 };
 
 /** Pull the leading number out of a "~45 minutes" / "2 hours" style string. */
@@ -704,7 +711,7 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   };
 }
 
-export function NewTaskWizard({ taskType, onClose, editingTask }: Props) {
+export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, savedLabel }: Props) {
   const isEditing = !!editingTask;
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(taskType, editingTask));
@@ -819,6 +826,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask }: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
+          {savedLabel && <span className="wizard-saved">{savedLabel}</span>}
           <button className="wizard-cancel" onClick={onClose}>
             Cancel
           </button>
@@ -827,8 +835,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask }: Props) {
           <button className="btn-save-draft" onClick={onClose}>
             Save as draft
           </button>
-          <button className="btn-publish" onClick={onClose}>
-            {isEditing ? "Save changes" : "Publish"}
+          <button
+            className="btn-publish"
+            onClick={() => (onPrimary ? onPrimary(data.nameEn || `New ${TYPE_LABEL[taskType]}`) : onClose())}
+          >
+            {primaryLabel ?? (isEditing ? "Save changes" : "Publish")}
           </button>
         </div>
       </footer>
@@ -2649,16 +2660,16 @@ function PaywallPricing({ data, update }: StepProps) {
         <PerAttemptPrices data={data} update={update} />
       ) : (
         <div className="form-sub-group" style={{ marginTop: 16 }}>
-          <label className="form-sub-label">Price for every attempt</label>
-          <PriceInput
-            value={data.commonPrice}
-            onChange={(v) => update({ commonPrice: v })}
+          <label className="form-sub-label">Price IDs for every attempt</label>
+          <PriceIdFields
+            value={data.commonPriceIds}
+            onChange={(ids) => update({ commonPriceIds: ids })}
           />
         </div>
       )}
 
       <p className="form-help">
-        Each price point becomes a separate consumable product on Apple, Google, and Stripe.
+        Each price point maps to four products — Google, Apple, Stripe (B2C), and Stripe (B2B). Enter the Price ID for each.
       </p>
     </div>
   );
@@ -2668,13 +2679,13 @@ function PerAttemptPrices({ data, update }: StepProps) {
   const rows = data.attemptPrices;
   const nextNum = rows.length + 1;
 
-  const setRow = (id: string, price: string) =>
-    update({ attemptPrices: rows.map((r) => (r.id === id ? { ...r, price } : r)) });
+  const setRow = (id: string, priceIds: PriceIds) =>
+    update({ attemptPrices: rows.map((r) => (r.id === id ? { ...r, priceIds } : r)) });
   const addNext = () =>
     update({
       attemptPrices: [
         ...rows,
-        { id: `ap${Date.now()}`, attempt: String(nextNum), price: "0.00", currency: "USD" },
+        { id: `ap${Date.now()}`, attempt: String(nextNum), priceIds: newPriceIds() },
       ],
     });
   // Removing the last numbered attempt keeps the list contiguous (1, 2, 3 …).
@@ -2686,41 +2697,38 @@ function PerAttemptPrices({ data, update }: StepProps) {
         {rows.map((row, i) => {
           const removable = i === rows.length - 1 && rows.length > 1;
           return (
-            <div key={row.id} className="price-row">
-              <div className="price-row-text">
-                <div className="price-row-title">Attempt {row.attempt}</div>
+            <div key={row.id} className="price-id-block">
+              <div className="price-id-block-head">
+                <div className="price-id-block-title">Attempt {row.attempt}</div>
+                {removable && (
+                  <button
+                    className="price-row-x"
+                    aria-label={`Remove attempt ${row.attempt} price`}
+                    onClick={removeLast}
+                  >
+                    <SmallXIcon />
+                  </button>
+                )}
               </div>
-              <PriceInput value={row.price} onChange={(v) => setRow(row.id, v)} />
-              {removable ? (
-                <button
-                  className="price-row-x"
-                  aria-label={`Remove attempt ${row.attempt} price`}
-                  onClick={removeLast}
-                >
-                  <SmallXIcon />
-                </button>
-              ) : (
-                <span className="price-row-x-spacer" aria-hidden="true" />
-              )}
+              <PriceIdFields value={row.priceIds} onChange={(ids) => setRow(row.id, ids)} />
             </div>
           );
         })}
 
         {/* All subsequent attempts — always present, always at the bottom. */}
-        <div className="price-row">
-          <div className="price-row-text">
-            <div className="price-row-title">All subsequent attempts</div>
+        <div className="price-id-block">
+          <div className="price-id-block-head">
+            <div className="price-id-block-title">All subsequent attempts</div>
           </div>
-          <PriceInput
-            value={data.subsequentPrice}
-            onChange={(v) => update({ subsequentPrice: v })}
+          <PriceIdFields
+            value={data.subsequentPriceIds}
+            onChange={(ids) => update({ subsequentPriceIds: ids })}
           />
-          <span className="price-row-x-spacer" aria-hidden="true" />
         </div>
       </div>
 
       <button className="price-add" onClick={addNext}>
-        + Add price for attempt {nextNum}
+        + Add Price IDs for attempt {nextNum}
       </button>
     </div>
   );
@@ -2906,29 +2914,6 @@ function Toggle({
       >
         <span className="toggle-knob" />
       </button>
-    </div>
-  );
-}
-
-function PriceInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="price-input">
-      <span className="price-input-prefix">$</span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) onChange(v);
-        }}
-      />
     </div>
   );
 }

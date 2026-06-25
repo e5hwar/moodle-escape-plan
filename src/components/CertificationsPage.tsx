@@ -62,6 +62,35 @@ const TrashIcon = () => (
     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </svg>
 );
+const BackupIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+  </svg>
+);
+
+// Trigger a client-side file download (used for Certification backups).
+function downloadTextFile(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function backupCertification(cert: Certification) {
+  const payload = {
+    format: "skillcat-certification-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    certification: cert,
+  };
+  const safeName = cert.name.replace(/[^\w.-]+/g, "_");
+  downloadTextFile(`${cert.id}-${safeName}.cert.json`, JSON.stringify(payload, null, 2), "application/json");
+}
 
 type SortKey =
   | "id"
@@ -352,6 +381,7 @@ export function CertificationsPage({
           onEdit={() => onEditCert(menu.cert)}
           onDelete={() => deleteCert(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
+          onBackup={() => backupCertification(menu.cert)}
         />
       )}
     </div>
@@ -476,6 +506,7 @@ function CertActionsMenu({
   onEdit,
   onDelete,
   onViewPayers,
+  onBackup,
 }: {
   cert: Certification;
   rect: DOMRect;
@@ -484,6 +515,7 @@ function CertActionsMenu({
   onEdit: () => void;
   onDelete: () => void;
   onViewPayers: () => void;
+  onBackup: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -564,6 +596,7 @@ function CertActionsMenu({
       {item(<PencilIcon />, "Edit", onEdit)}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<PayersIcon />, "View who paid", onViewPayers)}
+      {item(<BackupIcon />, "Backup Certification", onBackup)}
       <div className="u-menu-divider" />
       {item(<TrashIcon />, "Delete", onDelete, true)}
     </div>

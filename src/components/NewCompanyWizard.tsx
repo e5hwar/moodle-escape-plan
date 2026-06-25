@@ -3,12 +3,14 @@ import {
   BILLING_CYCLES,
   CURRENCIES,
   CURRENCY_SYMBOL,
+  TAX_STATUSES,
   defaultRate,
   getCompanyBilling,
   type BillingCycle,
   type Company,
   type Currency,
   type PaymentCollection,
+  type TaxStatus,
   type Tier,
 } from "../data/companies";
 import { CheckBoldIcon, ChevronLeftIcon, SmallXIcon } from "./icons";
@@ -132,6 +134,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
 
   // Company details
   const [name, setName] = useState(editCompany?.name ?? "");
+  const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
   const [address, setAddress] = useState(editCompany?.address ?? "");
   const [contactName, setContactName] = useState(editCompany?.contactName ?? "");
   const [email, setEmail] = useState(editCompany?.email ?? "");
@@ -201,6 +204,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
       seats: seatCount,
       industry: industries.join(", "),
       partnership: partnerships.join(", "),
+      taxStatus,
       address: address.trim() || undefined,
       contactName: contactName.trim() || undefined,
       phone: phone.trim() || undefined,
@@ -258,6 +262,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
         <div className="cw-form-col">
           <Step1Details
             name={name} setName={setName}
+            taxStatus={taxStatus} setTaxStatus={setTaxStatus}
             address={address} setAddress={setAddress}
             contactName={contactName} setContactName={setContactName}
             email={email} setEmail={setEmail}
@@ -840,6 +845,7 @@ function OnSaveCard({
 
 function Step1Details({
   name, setName,
+  taxStatus, setTaxStatus,
   address, setAddress,
   contactName, setContactName,
   email, setEmail,
@@ -848,6 +854,7 @@ function Step1Details({
   partnerships, setPartnerships,
 }: {
   name: string; setName: (v: string) => void;
+  taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
   address: string; setAddress: (v: string) => void;
   contactName: string; setContactName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
@@ -872,6 +879,25 @@ function Step1Details({
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Tax status</label>
+        <div className="tab-switch">
+          {TAX_STATUSES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`tab-switch-tab ${taxStatus === t ? "active" : ""}`}
+              onClick={() => setTaxStatus(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <p className="form-help">
+          Controls how tax is applied on Stripe invoices for this company.
+        </p>
       </div>
 
       <div className="form-group">
@@ -1371,6 +1397,7 @@ function SuccessScreen({
             {company.phone && detail("Phone", company.phone)}
             {company.industry && detail("Industry", company.industry)}
             {company.partnership && detail("Partnership", company.partnership)}
+            {company.taxStatus && detail("Tax status", company.taxStatus)}
             <div className="success-divider" />
             {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Complimentary Access" : "Subscription")}
             {isSubscription && tier && detail("Tier", tier)}
