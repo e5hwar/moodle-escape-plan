@@ -568,12 +568,12 @@ a {
 .tasks-header .new-task,
 .tasks-header .cta-primary {
   width: auto;
-  height: 41px;
+  height: 32px;
   gap: 8px;
   padding: 0 34px;
   border-radius: 8px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
   border: 0.5px solid rgba(240, 85, 35, 0.15);
   box-shadow: none;
@@ -595,16 +595,16 @@ a {
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
 }
 
 .tasks-title {
   font-family: var(--font-sans);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
   color: #fff;
-  margin: 0 0 8px 0;
+  margin: 0 0 2px 0;
   line-height: 1.15;
 }
 
@@ -620,8 +620,8 @@ a {
   gap: 6px;
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
 }
 
 /* "* Required Fields" hint (Figma node 46:322): 12px Fira Sans Medium, accent
@@ -819,7 +819,7 @@ a {
 
 .search-kbd .kbd-letter {
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
 }
 
@@ -847,7 +847,7 @@ a {
   border: 1px dashed #3b3b3f;
   border-radius: 20px;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: #a8a8a8;
   white-space: nowrap;
@@ -908,7 +908,7 @@ a {
   gap: 6px;
   padding: 0 12px 0 0;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .filter-applied-main .label {
@@ -2422,27 +2422,26 @@ a {
   min-width: 0;
 }
 
-/* Wizard content header — mirrors the shared page header (.tasks-title): 32px
+/* Wizard content header — mirrors the shared page header (.tasks-title): 28px
    Fira Sans SemiBold white. */
 .wizard-title {
   font-family: var(--font-sans);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
   color: #fff;
-  margin: 0 0 8px;
+  margin: 0 0 2px;
   line-height: 1.15;
 }
 
 /* Wizard content subtext — mirrors the shared page subtext (.tasks-subtitle):
-   14px Fira Sans Medium, #a8a8a8. */
+   16px Fira Sans Regular, #a8a8a8. */
 .wizard-desc {
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
   color: #a8a8a8;
   margin: 0 0 28px;
-  max-width: 640px;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 /* When a "* Required Fields" note follows the subtext, tighten the gap above it
@@ -14534,7 +14533,7 @@ a {
 .usearch-kbd .kbd-cmd { font-size: 16px; }
 .usearch-kbd .kbd-letter {
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
 }
 
