@@ -147,6 +147,9 @@ const COLS: ColMeta[] = [
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
+// Columns that have no meaningful sort order (free-text, contact info, codes)
+const NON_SORTABLE_COLS = new Set<UserColumnKey>(["email", "phone", "company", "attribution", "zipCode"]);
+
 function compareRows(a: Row, b: Row, key: SortKey): number {
   if (key === "name") return a.u.name.localeCompare(b.u.name);
   const col = COL_BY_KEY.get(key)!;
@@ -268,7 +271,7 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
                   <tr>
                     <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                     {visibleCols.map((c) => (
-                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} />
+                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
                     ))}
                     <th className="col-actions">
                       <UsersEditColumns columns={columns} setColumns={setColumns} />
@@ -355,13 +358,22 @@ function SortableHeader({
   className,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: SortKey;
   label: string;
   className?: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

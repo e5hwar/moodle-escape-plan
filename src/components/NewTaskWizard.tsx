@@ -4,7 +4,6 @@ import type { Task, TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
 import {
-  CheckBoldIcon,
   BoldIcon,
   ItalicIcon,
   UnderlineIcon,
@@ -23,6 +22,7 @@ import {
   GearIcon,
   LockIcon,
 } from "./icons";
+import { WizardStepRail } from "./WizardStepRail";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -232,34 +232,7 @@ type WizardData = {
 const DEFAULT_COMPLETION: CompletionMode = "xapi";
 const DEFAULT_VISIBILITY: Visibility = "visible";
 
-const COMPLETION_LABELS: Record<CompletionMode, string> = {
-  none: "No completion tracking",
-  "on-view": "Completion upon viewing",
-  manual: "User manually marks completion",
-  xapi: "xAPI Completion Statement",
-};
-
-const VISIBILITY_LABELS: Record<Visibility, string> = {
-  visible: "Visible",
-  hidden: "Hidden",
-};
-
-const OPEN_IN_LABELS: Record<OpenIn, string> = {
-  external: "External Browser",
-  "in-app": "In-App Browser",
-};
-
-const ORIENTATION_LABELS: Record<Orientation, string> = {
-  portrait: "Portrait",
-  landscape: "Landscape",
-};
-
 const DEFAULT_OPEN_IN: OpenIn = "external";
-
-const FILE_OPEN_IN_LABELS: Record<FileOpenIn, string> = {
-  "in-app-viewer": "In-App Viewer",
-  "external-app": "External Application",
-};
 
 const DEFAULT_FILE_OPEN_IN: FileOpenIn = "in-app-viewer";
 
@@ -564,75 +537,6 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
   return XAPI_STEPS;
 }
 
-function stepSummary(
-  stepId: string,
-  data: WizardData,
-  taskType: TaskTypeKey,
-): string | null {
-  if (taskType === "hands-on") {
-    if (stepId === "submission") {
-      const t: string[] = [];
-      if (data.hoMediaTypes.images) t.push("Images");
-      if (data.hoMediaTypes.videos) t.push("Videos");
-      if (data.hoMediaTypes.audio) t.push("Audio");
-      return `${data.hoMediaMax || "0"} media · ${t.join("/") || "no media"}`;
-    }
-    if (stepId === "completion") {
-      const attempts =
-        data.maxAttemptsMode === "unlimited"
-          ? "Unlimited"
-          : `${data.maxAttempts || "—"} attempt${data.maxAttempts === "1" ? "" : "s"}`;
-      const mode =
-        data.hoCompletion === "reviewer_grade"
-          ? `Reviewer ≥ ${data.hoPassingGrade || "—"}/10`
-          : "Submission made";
-      return `${attempts} · ${mode}`;
-    }
-  }
-  if (stepId === "launch") {
-    if (taskType === "file") return FILE_OPEN_IN_LABELS[data.fileOpenIn];
-    const rotation = data.allowRotation
-      ? "Rotation on"
-      : `${ORIENTATION_LABELS[data.lockedOrientation]} locked`;
-    if (taskType === "url") {
-      if (data.openIn === "external") return OPEN_IN_LABELS.external;
-      return `In-App Browser · ${rotation}`;
-    }
-    return rotation;
-  }
-  if (stepId === "structure") {
-    return data.structure === "sectioned"
-      ? `${data.sections.length} section${data.sections.length === 1 ? "" : "s"}`
-      : "Single block";
-  }
-  if (stepId === "grading") {
-    return data.gradingModel === "section_level"
-      ? "Section-level grading"
-      : `Quiz-level · ${data.quizPassingPct || "—"}%`;
-  }
-  if (stepId === "attempts") {
-    return data.maxAttemptsMode === "unlimited"
-      ? "Unlimited attempts"
-      : `${data.maxAttempts || "—"} attempt${data.maxAttempts === "1" ? "" : "s"}`;
-  }
-  if (stepId === "payments") {
-    const bits = [data.paywallOn ? "Paid" : "Free"];
-    if (data.nateExam) bits.push("NATE");
-    return bits.join(" · ");
-  }
-  if (stepId === "completion") {
-    if (!data.completion) return null;
-    const label = COMPLETION_LABELS[data.completion];
-    return data.completion === DEFAULT_COMPLETION ? `Default: ${label}` : label;
-  }
-  if (stepId === "visibility" || stepId === "access") {
-    if (!data.visibility) return null;
-    const label = VISIBILITY_LABELS[data.visibility];
-    return data.visibility === DEFAULT_VISIBILITY ? `Default: ${label}` : label;
-  }
-  return null;
-}
-
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
 type Props = {
@@ -746,23 +650,16 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             {steps.map((s, i) => {
               const status =
                 i === step ? "active" : i < step ? "done" : "upcoming";
-              const summary = stepSummary(s.id, data, taskType);
-              const subText =
-                status === "active" ? s.desc : summary ?? s.sub;
               return (
                 <li
                   key={s.id}
                   className={`wizard-step ${status}`}
                   onClick={() => setStep(i)}
                 >
-                  <div className="wizard-step-rail">
-                    <span className="wizard-step-num">
-                      {status === "done" ? <CheckBoldIcon /> : i + 1}
-                    </span>
-                  </div>
+                  <WizardStepRail status={status} isLast={i === steps.length - 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">{subText}</div>
+                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -777,6 +674,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         <div className="wizard-content">
           <h1 className="wizard-title">{steps[step].label}</h1>
           <p className="wizard-desc">{steps[step].desc}</p>
+          <div className="required-fields-note">* Required Fields</div>
 
           {(() => {
             const criteriaLocked = isEditing && !criteriaUnlocked;
@@ -3087,21 +2985,24 @@ function LangField({
 }) {
   return (
     <div className="lang-field">
-      <input
-        className="lang-field-input"
-        value={en}
-        onChange={(e) => onChangeEn(e.target.value)}
-        placeholder={placeholderEn}
-      />
+      <div className="lang-field-row">
+        <span className="lang-tag">EN</span>
+        <input
+          className="lang-field-input"
+          value={en}
+          onChange={(e) => onChangeEn(e.target.value)}
+          placeholder={placeholderEn}
+        />
+      </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
+        <span className="lang-tag">ES</span>
         <input
           className="lang-field-input"
           value={es}
           onChange={(e) => onChangeEs(e.target.value)}
           placeholder={placeholderEs}
         />
-        <span className="lang-tag">ESPAÑOL</span>
       </div>
     </div>
   );

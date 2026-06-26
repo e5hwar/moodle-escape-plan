@@ -319,7 +319,7 @@ export function CertificationsPage({
                           {columns.payment && <SortableHeader col="payment" label="Payment" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.tasks && <SortableHeader col="tasks" label="Tasks" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.ceus && <SortableHeader col="ceus" label="CEUs" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />}
+                          {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                           {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                           {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
@@ -604,14 +604,22 @@ function CertActionsMenu({
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle,
+  col, label, className, sort, toggle, sortable = true,
 }: {
   col: SortKey;
   label: string;
   className?: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

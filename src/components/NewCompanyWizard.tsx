@@ -13,7 +13,8 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckBoldIcon, ChevronLeftIcon, SmallXIcon } from "./icons";
+import { CheckBoldIcon, SmallXIcon } from "./icons";
+import { WizardStepRail } from "./WizardStepRail";
 
 /* ─────────────── Constants ─────────────── */
 
@@ -163,6 +164,11 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
   const [savedPrices, setSavedPrices] = useState<SavedPrice[]>(buildDefaultSavedPrices);
   const [showNewPriceModal, setShowNewPriceModal] = useState(false);
 
+  // Two-step split-view wizard (matches the Tasks wizard shell): 0 = Company
+  // details, 1 = Plan. The billing-impact rail and the save action live on the
+  // Plan step; the footer drives navigation.
+  const [step, setStep] = useState(0);
+
   // Success
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
 
@@ -195,6 +201,51 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
     : !seatsValid
     ? "Enter at least one seat for a subscription."
     : "";
+
+  // Editing a running paid subscription → the rail shows a change preview (diff +
+  // proration); switching plan type away from subscription → a scheduled change.
+  // Both also drive the footer's primary-action label.
+  const change =
+    currentSub && plan === "subscription"
+      ? computeChange(currentSub, {
+          tier, cycle: billingCycle, rate: effectiveRate, seats: seatCount, payment, currency,
+        })
+      : null;
+  const planTypeChange =
+    currentSub && plan !== "subscription"
+      ? {
+          target: plan === "free-trial" ? "Free Trial" : "Complimentary Access",
+          renew: currentSub.nextBillingDate,
+        }
+      : null;
+  const saveCta = change
+    ? change.applyLabel
+    : planTypeChange
+    ? "Schedule change"
+    : isEdit
+    ? "Save changes"
+    : "Create company";
+
+  const STEPS: { id: string; label: string; sub: string; desc: string }[] = [
+    {
+      id: "details",
+      label: "Company details",
+      sub: "Identity & contact",
+      desc: "Identify the company and its primary contact. Industry and partnership are used for segmentation and reporting.",
+    },
+    {
+      id: "plan",
+      label: "Plan",
+      sub: "Access & billing",
+      desc: "Choose the access plan. Subscription plans require billing configuration.",
+    },
+  ];
+
+  // The Continue gate on step 1 only checks identity; seat validation belongs to
+  // the Plan step so the hint matches what the admin is looking at.
+  const stepHint = step === 0
+    ? (detailsValid ? "" : "Add a company name, account holder, and email to continue.")
+    : (canSave ? "" : saveHint);
 
   function handleCreate() {
     const company: Omit<Company, "id"> = {
@@ -246,68 +297,109 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
   }
 
   return (
-    <div className="wizard cw-wizard">
-      <div className="cw-topbar">
-        <div className="wizard-breadcrumb" style={{ margin: 0 }}>
-          <button className="wizard-back-btn" onClick={onClose}>
-            <ChevronLeftIcon />
-            BACK
-          </button>
-          <span className="sep">/</span>
-          <span className="wizard-current">{isEdit ? "EDIT COMPANY" : "NEW COMPANY"}</span>
+    <div className="wizard">
+      <div className="wizard-body">
+        <aside className="wizard-nav">
+          <div className="wizard-brand">
+            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-name">{isEdit ? "Edit" : "New"} Company</span>
+          </div>
+
+          <ol className="wizard-steps">
+            {STEPS.map((s, i) => {
+              const status = i === step ? "active" : i < step ? "done" : "upcoming";
+              const isLast = i === STEPS.length - 1;
+              return (
+                <li
+                  key={s.id}
+                  className={`wizard-step ${status}`}
+                  onClick={() => setStep(i)}
+                >
+                  <WizardStepRail status={status} isLast={isLast} />
+                  <div className="wizard-step-text">
+                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-sub">{s.sub}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+
+          <div className="wizard-progress">Step {step + 1} of {STEPS.length}</div>
+        </aside>
+
+        <div className="wizard-content">
+          {step === 0 ? (
+            <Step1Details
+              name={name} setName={setName}
+              taxStatus={taxStatus} setTaxStatus={setTaxStatus}
+              address={address} setAddress={setAddress}
+              contactName={contactName} setContactName={setContactName}
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              industries={industries} setIndustries={setIndustries}
+              partnerships={partnerships} setPartnerships={setPartnerships}
+            />
+          ) : (
+            <Step2Plan
+              plan={plan} setPlan={setPlan}
+              tier={tier} setTier={setTier}
+              billingCycle={billingCycle} setBillingCycle={setBillingCycle}
+              currency={currency} setCurrency={setCurrency}
+              priceStr={priceStr} setPriceStr={setPriceStr}
+              seats={seats} setSeats={setSeats}
+              payment={payment} setPayment={setPayment}
+              baseRate={baseRate} effectiveRate={effectiveRate}
+              monthlyTotal={monthlyTotal} seatCount={seatCount} sym={sym}
+              savedPrices={savedPrices}
+              onCreatePrice={() => setShowNewPriceModal(true)}
+              trialExpired={trialExpired}
+              hideSummary
+            />
+          )}
         </div>
+
+        {step === 1 && (
+          <BillingImpactRail
+            change={change}
+            planTypeChange={planTypeChange}
+            currentSub={currentSub}
+            plan={plan}
+            tier={tier}
+            billingCycle={billingCycle}
+            payment={payment}
+            effectiveRate={effectiveRate}
+            seatCount={seatCount}
+            monthlyTotal={monthlyTotal}
+            sym={sym}
+          />
+        )}
       </div>
 
-      <div className="cw-split">
-        <div className="cw-form-col">
-          <Step1Details
-            name={name} setName={setName}
-            taxStatus={taxStatus} setTaxStatus={setTaxStatus}
-            address={address} setAddress={setAddress}
-            contactName={contactName} setContactName={setContactName}
-            email={email} setEmail={setEmail}
-            phone={phone} setPhone={setPhone}
-            industries={industries} setIndustries={setIndustries}
-            partnerships={partnerships} setPartnerships={setPartnerships}
-          />
-
-          <div className="form-divider" style={{ margin: "32px 0" }} />
-
-          <Step2Plan
-            plan={plan} setPlan={setPlan}
-            tier={tier} setTier={setTier}
-            billingCycle={billingCycle} setBillingCycle={setBillingCycle}
-            currency={currency} setCurrency={setCurrency}
-            priceStr={priceStr} setPriceStr={setPriceStr}
-            seats={seats} setSeats={setSeats}
-            payment={payment} setPayment={setPayment}
-            baseRate={baseRate} effectiveRate={effectiveRate}
-            monthlyTotal={monthlyTotal} seatCount={seatCount} sym={sym}
-            savedPrices={savedPrices}
-            onCreatePrice={() => setShowNewPriceModal(true)}
-            trialExpired={trialExpired}
-            hideSummary
-          />
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left">
+          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          {stepHint && <span className="wizard-saved">{stepHint}</span>}
         </div>
-
-        <BillingImpact
-          plan={plan}
-          tier={tier}
-          billingCycle={billingCycle}
-          currency={currency}
-          payment={payment}
-          effectiveRate={effectiveRate}
-          seatCount={seatCount}
-          monthlyTotal={monthlyTotal}
-          sym={sym}
-          isEdit={isEdit}
-          currentSub={currentSub}
-          canSave={canSave}
-          saveHint={saveHint}
-          onSave={handleCreate}
-          onCancel={onClose}
-        />
-      </div>
+        <div className="wizard-actions">
+          {step > 0 && (
+            <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
+          )}
+          {step === 0 ? (
+            <button
+              className="btn-publish"
+              disabled={!detailsValid}
+              onClick={() => setStep(1)}
+            >
+              Continue
+            </button>
+          ) : (
+            <button className="btn-publish" disabled={!canSave} onClick={handleCreate}>
+              {saveCta}
+            </button>
+          )}
+        </div>
+      </footer>
 
       {showNewPriceModal && (
         <CreatePriceModal
@@ -542,51 +634,30 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   };
 }
 
-function BillingImpact({
-  plan, tier, billingCycle, currency, payment, effectiveRate, seatCount, monthlyTotal, sym,
-  isEdit, currentSub, canSave, saveHint, onSave, onCancel,
+// Presentational billing-impact rail shown on the Plan step. The change /
+// planTypeChange decisions and the primary-action label are computed by the
+// wizard; the footer owns the save button, so this only renders the card.
+function BillingImpactRail({
+  change, planTypeChange, currentSub,
+  plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
 }: {
+  change: ChangePreview | null;
+  planTypeChange: { target: string; renew: string } | null;
+  currentSub: CurrentSub | null;
   plan: Plan;
   tier: PaidTier;
   billingCycle: BillingCycle;
-  currency: Currency;
   payment: PaymentCollection;
   effectiveRate: number;
   seatCount: number;
   monthlyTotal: number;
   sym: string;
-  isEdit: boolean;
-  currentSub: CurrentSub | null;
-  canSave: boolean;
-  saveHint: string;
-  onSave: () => void;
-  onCancel: () => void;
 }) {
-  // Editing a running paid subscription → show the change preview (diff + proration).
-  const change =
-    currentSub && plan === "subscription"
-      ? computeChange(currentSub, {
-          tier, cycle: billingCycle, rate: effectiveRate, seats: seatCount, payment, currency,
-        })
-      : null;
-
-  // Editing a paid sub but switching the plan type away from subscription.
-  const planTypeChange =
-    currentSub && plan !== "subscription"
-      ? {
-          target: plan === "free-trial" ? "Free Trial" : "Complimentary Access",
-          renew: currentSub.nextBillingDate,
-        }
-      : null;
-
   let cardBody: React.ReactNode;
-  let cta: string;
 
   if (change) {
     cardBody = <ChangeCard change={change} />;
-    cta = change.applyLabel;
   } else if (planTypeChange) {
-    cta = "Schedule change";
     cardBody = (
       <>
         <div className="cw-impact-head">Billing impact</div>
@@ -638,22 +709,11 @@ function BillingImpact({
         sym={sym}
       />
     );
-    cta = isEdit ? "Save changes" : "Create company";
   }
 
   return (
     <aside className="cw-impact">
       <div className="cw-impact-card">{cardBody}</div>
-
-      <div className="cw-impact-actions">
-        <button className="btn-publish cw-impact-cta" disabled={!canSave} onClick={onSave}>
-          {cta}
-        </button>
-        <button className="wizard-cancel cw-impact-cancel" onClick={onCancel}>Cancel</button>
-        {!canSave && saveHint && (
-          <div className="cw-impact-hint">{saveHint}</div>
-        )}
-      </div>
     </aside>
   );
 }
@@ -869,6 +929,7 @@ function Step1Details({
         Identify the company and its primary contact. Industry and partnership are used for
         segmentation and reporting.
       </p>
+      <div className="required-fields-note">* Required Fields</div>
 
       <div className="form-group">
         <label className="form-label">Company name <span className="req">*</span></label>
@@ -1007,6 +1068,7 @@ function Step2Plan({
     <>
       <h1 className="wizard-title">Plan selection</h1>
       <p className="wizard-desc">Choose the access plan. Subscription plans require billing configuration.</p>
+      <div className="required-fields-note">* Required Fields</div>
 
       <div className="form-group">
         <label className="form-label">Plan</label>

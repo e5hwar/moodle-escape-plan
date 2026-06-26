@@ -37,6 +37,15 @@ export function CertFilters({ filters, setFilters }: Props) {
   const moreCount =
     (filters.ceu.trim() ? 1 : 0) + (filters.keyword.trim() ? 1 : 0);
 
+  const hasFilters =
+    filters.industries.length +
+      filters.careerStages.length +
+      filters.types.length +
+      filters.creators.length +
+      filters.visibilities.length +
+      moreCount >
+    0;
+
   function clearAll() {
     setFilters({
       industries: [],
@@ -77,9 +86,11 @@ export function CertFilters({ filters, setFilters }: Props) {
         count={moreCount}
         onApply={(v) => setFilters({ ...filters, ceu: v.ceu, keyword: v.keyword })}
       />
-      <button className="filter-clear-link" onClick={clearAll}>
-        Clear filters
-      </button>
+      {hasFilters && (
+        <button className="filter-clear-link" onClick={clearAll}>
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 }

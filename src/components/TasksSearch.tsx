@@ -1,31 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "../data/tasks";
-import { CERTIFICATIONS } from "../data/filters";
+import { CERTIFICATIONS, TASK_TYPES } from "../data/filters";
 import { SearchIcon } from "./icons";
+import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-const CERT_PREFIX = "CERTIFICATIONS:";
+const CERT_PREFIX = "Certification:";
+const TYPE_PREFIX = "Type:";
 
 type Opt =
   | { kind: "cert-filter" }
-  | { kind: "task"; task: Task }
-  | { kind: "cert"; name: string };
+  | { kind: "type-filter" }
+  | { kind: "search" }
+  | { kind: "cert"; name: string }
+  | { kind: "type"; name: string };
 
 export function TasksSearch({
   tasks,
   certifications: applied,
   onCertificationsChange,
+  types: appliedTypes,
+  onTypesChange,
   query,
   onCommit,
-  onSelectTask,
 }: {
   tasks: Task[];
   /** Certification filter currently applied to the table (shared with the Filters row). */
   certifications: string[];
   onCertificationsChange: (next: string[]) => void;
+  /** Task-type filter currently applied to the table (shared with the Filters row). */
+  types: string[];
+  onTypesChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
-  onSelectTask: (id: string) => void;
 }) {
   const [text, setText] = useState(query);
   // Certifications picked in THIS search session (not yet applied). On Enter they
@@ -42,28 +49,26 @@ export function TasksSearch({
     return m;
   }, [tasks]);
 
+  const typeCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    tasks.forEach((t) => m.set(t.type, (m.get(t.type) ?? 0) + 1));
+    return m;
+  }, [tasks]);
+
   const scoped = draft.length > 0;
-  const scopeLabel = draft.length === 1 ? draft[0] : `${draft.length} certifications`;
+  const scopeName = draft.length === 1 ? draft[0] : `${draft.length} selected`;
+  const scopeLabel = draft.length === 1 ? "Certification:" : "Certifications:";
 
-  // "CERTIFICATIONS:" prefix puts us in certification-selection mode (case-insensitive).
+  // Prefix detection (case-insensitive) puts the box into a filter-selection mode.
   const certMatch = text.match(/^\s*certifications?:\s*(.*)$/i);
+  const typeMatch = text.match(/^\s*type:\s*(.*)$/i);
   const inCertMode = certMatch != null;
+  const inTypeMode = !inCertMode && typeMatch != null;
+  const inMode = inCertMode || inTypeMode;
   const certQuery = certMatch ? certMatch[1] : "";
-  const taskQuery = inCertMode ? "" : text;
-
-  const taskResults = useMemo(() => {
-    const base = scoped ? tasks.filter((t) => t.usedIn.some((c) => draft.includes(c))) : tasks;
-    const q = taskQuery.trim().toLowerCase();
-    const matched = q
-      ? base.filter(
-          (t) =>
-            t.id.toLowerCase().includes(q) ||
-            t.name.toLowerCase().includes(q) ||
-            t.type.toLowerCase().includes(q),
-        )
-      : base;
-    return matched.slice(0, MAX_RESULTS);
-  }, [tasks, scoped, draft, taskQuery]);
+  const typeQuery = typeMatch ? typeMatch[1] : "";
+  const taskQuery = inMode ? "" : text;
+  const hasQuery = taskQuery.trim().length > 0;
 
   const certResults = useMemo(() => {
     const q = certQuery.trim().toLowerCase();
@@ -72,19 +77,34 @@ export function TasksSearch({
     ).slice(0, MAX_RESULTS);
   }, [certQuery, draft, applied]);
 
-  const showDefaultTasks = !inCertMode && (scoped || taskQuery.trim().length > 0);
+  const typeResults = useMemo(() => {
+    const q = typeQuery.trim().toLowerCase();
+    return TASK_TYPES.filter(
+      (t) => !appliedTypes.includes(t) && t.toLowerCase().includes(q),
+    ).slice(0, MAX_RESULTS);
+  }, [typeQuery, appliedTypes]);
 
+  // Options available to keyboard navigation, in render order.
   const optionCount = inCertMode
     ? certResults.length
-    : 1 + (showDefaultTasks ? taskResults.length : 0);
+    : inTypeMode
+      ? typeResults.length
+      : 2 + (hasQuery ? 1 : 0);
 
   function optionAt(i: number): Opt | null {
     if (inCertMode) return certResults[i] ? { kind: "cert", name: certResults[i] } : null;
+    if (inTypeMode) return typeResults[i] ? { kind: "type", name: typeResults[i] } : null;
     if (i === 0) return { kind: "cert-filter" };
-    return taskResults[i - 1] ? { kind: "task", task: taskResults[i - 1] } : null;
+    if (i === 1) return { kind: "type-filter" };
+    if (i === 2 && hasQuery) return { kind: "search" };
+    return null;
   }
 
-  useEffect(() => setActive(-1), [text, draft.length]);
+  // When the user has typed free text, preselect the "Search for…" row (the last
+  // option) so pressing Enter searches immediately; arrowing moves the highlight off it.
+  useEffect(() => {
+    setActive(!inMode && hasQuery ? 2 : -1);
+  }, [text, draft.length, inMode, hasQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,13 +123,16 @@ export function TasksSearch({
     inputRef.current?.focus();
   }
 
-  function clearCerts() {
-    setDraft([]);
+  function addType(name: string) {
+    onTypesChange(Array.from(new Set([...appliedTypes, name])));
+    setText("");
+    setActive(-1);
+    setOpen(true);
     inputRef.current?.focus();
   }
 
-  // Run a search against the table: pending certs move into the applied filter
-  // (the Filters row pill) and clear from the bar.
+  // Run a free-text search against the table: pending certs move into the applied
+  // filter (the Filters row pill) and clear from the bar.
   function commitSearch(q: string) {
     onCertificationsChange(Array.from(new Set([...applied, ...draft])));
     onCommit(q);
@@ -122,12 +145,16 @@ export function TasksSearch({
       setText(CERT_PREFIX);
       setActive(-1);
       inputRef.current?.focus();
+    } else if (opt.kind === "type-filter") {
+      setText(TYPE_PREFIX);
+      setActive(-1);
+      inputRef.current?.focus();
     } else if (opt.kind === "cert") {
       addCert(opt.name);
+    } else if (opt.kind === "type") {
+      addType(opt.name);
     } else {
-      onSelectTask(opt.task.id);
-      setText(opt.task.name);
-      commitSearch(opt.task.name);
+      commitSearch(taskQuery);
     }
   }
 
@@ -149,6 +176,10 @@ export function TasksSearch({
         if (certResults[0]) return addCert(certResults[0]);
         return;
       }
+      if (inTypeMode) {
+        if (typeResults[0]) return addType(typeResults[0]);
+        return;
+      }
       commitSearch(taskQuery);
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -156,10 +187,6 @@ export function TasksSearch({
       setDraft(draft.slice(0, -1));
     }
   }
-
-  const placeholder = scoped
-    ? `Search within ${scopeLabel}…`
-    : "Search Tasks";
 
   return (
     <div className="usearch" ref={wrapRef}>
@@ -169,17 +196,14 @@ export function TasksSearch({
         </span>
         {scoped && (
           <span className="usearch-scope">
-            <span className="usearch-scope-label">Certification</span>
-            <span className="usearch-scope-name">{scopeLabel}</span>
-            <button className="usearch-scope-x" aria-label="Clear certification filter" onClick={clearCerts}>
-              ✕
-            </button>
+            <span className="usearch-scope-label">{scopeLabel}</span>
+            <span className="usearch-scope-name">{scopeName}</span>
           </span>
         )}
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder={placeholder}
+          placeholder="Search Tasks"
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -196,34 +220,19 @@ export function TasksSearch({
 
       {open && (
         <div className="usearch-panel">
-          {!inCertMode && (
+          {!inMode && (
             <>
               <div className="usearch-head">Suggested filters</div>
               <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "cert-filter" })}>
-                <span className="usearch-chip">CERTIFICATIONS:</span>
-                <span className="usearch-row-ex">CERTIFICATIONS:EPA 608</span>
-                <span className="usearch-row-desc">Filter tasks by certification</span>
+                <span className="usearch-chip">Certification:</span>
+                <span className="usearch-row-ex">Certification: EPA 608 Universal</span>
+                <span className="usearch-row-desc">Filter Tasks by Certification</span>
               </OptionRow>
-
-              {showDefaultTasks && (
-                <div className="usearch-head">{scoped ? `Tasks in ${scopeLabel}` : "Tasks"}</div>
-              )}
-              {showDefaultTasks && taskResults.length === 0 && (
-                <div className="usearch-empty">
-                  No matching tasks{scoped ? ` in ${scopeLabel}` : ""}
-                  {taskQuery.trim() ? ` for “${taskQuery.trim()}”` : ""}.
-                </div>
-              )}
-              {showDefaultTasks &&
-                taskResults.map((t, i) => (
-                  <TaskOption
-                    key={t.id}
-                    task={t}
-                    active={active === i + 1}
-                    onHover={() => setActive(i + 1)}
-                    onClick={() => activate({ kind: "task", task: t })}
-                  />
-                ))}
+              <OptionRow active={active === 1} onHover={() => setActive(1)} onClick={() => activate({ kind: "type-filter" })}>
+                <span className="usearch-chip">Type:</span>
+                <span className="usearch-row-ex">Type: Quiz</span>
+                <span className="usearch-row-desc">Filter by Task Type</span>
+              </OptionRow>
             </>
           )}
 
@@ -237,7 +246,7 @@ export function TasksSearch({
               ) : (
                 certResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "cert", name })}>
-                    <span className="usearch-chip">CERTIFICATIONS:</span>
+                    <span className="usearch-chip">Certification:</span>
                     <span className="usearch-row-ex">{name}</span>
                     <span className="usearch-row-desc">{certCounts.get(name) ?? 0} tasks</span>
                   </OptionRow>
@@ -246,10 +255,36 @@ export function TasksSearch({
             </>
           )}
 
-          <div className="usearch-foot">
-            <span className="usearch-kbd-inline">↵</span>
-            {inCertMode ? "Select a certification to filter" : "Show results in the table"}
-          </div>
+          {inTypeMode && (
+            <>
+              <div className="usearch-head">Task type</div>
+              {typeResults.length === 0 ? (
+                <div className="usearch-empty">
+                  {typeQuery.trim() ? `No types match “${typeQuery.trim()}”.` : "All task types are already applied."}
+                </div>
+              ) : (
+                typeResults.map((name, i) => (
+                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "type", name })}>
+                    <span className="usearch-chip">Type:</span>
+                    <span className="usearch-row-ex">{name}</span>
+                    <span className="usearch-row-desc">{typeCounts.get(name) ?? 0} tasks</span>
+                  </OptionRow>
+                ))
+              )}
+            </>
+          )}
+
+          {!inMode && hasQuery ? (
+            <SearchForRow
+              query={taskQuery.trim()}
+              scope="Tasks"
+              active={active === 2}
+              onHover={() => setActive(2)}
+              onClick={() => commitSearch(taskQuery)}
+            />
+          ) : (
+            <SearchHints />
+          )}
         </div>
       )}
     </div>
@@ -275,38 +310,6 @@ function OptionRow({
       onClick={onClick}
     >
       {children}
-    </button>
-  );
-}
-
-function TaskOption({
-  task,
-  active,
-  onHover,
-  onClick,
-}: {
-  task: Task;
-  active: boolean;
-  onHover: () => void;
-  onClick: () => void;
-}) {
-  const usedIn =
-    task.usedIn.length === 0
-      ? "Not in any certification"
-      : `Used in ${task.usedIn[0]}${task.usedIn.length > 1 ? ` +${task.usedIn.length - 1}` : ""}`;
-  return (
-    <button
-      className={`usearch-row usearch-task ${active ? "active" : ""}`}
-      onMouseEnter={onHover}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-    >
-      <span className="usearch-task-id">{task.id}</span>
-      <span className="usearch-user-text">
-        <span className="usearch-user-name">{task.name}</span>
-        <span className="usearch-user-sub">{usedIn}</span>
-      </span>
-      <span className="usearch-row-desc">{task.type}</span>
     </button>
   );
 }

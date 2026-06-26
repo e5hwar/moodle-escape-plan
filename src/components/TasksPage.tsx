@@ -301,6 +301,9 @@ export function TasksPage({
       <header className="tasks-header">
         <div>
           <h1 className="tasks-title">Tasks</h1>
+          <div className="tasks-subtitle">
+            {taskList.length} tasks · standalone &amp; certification content
+          </div>
         </div>
         <div className="tasks-header-actions">
           <Dropdown
@@ -347,9 +350,10 @@ export function TasksPage({
               tasks={taskList}
               certifications={filters.certifications}
               onCertificationsChange={(c) => setFilters((prev) => ({ ...prev, certifications: c }))}
+              types={filters.types}
+              onTypesChange={(t) => setFilters((prev) => ({ ...prev, types: t }))}
               query={committedQuery}
               onCommit={setCommittedQuery}
-              onSelectTask={setSelectedId}
             />
           </div>
 
@@ -373,13 +377,13 @@ export function TasksPage({
                       <SortableHeader col="paid" label="Paid" className="col-type" sort={sort} toggle={toggleSort} />
                     )}
                     {columns.usedIn && !panelOpen && (
-                      <SortableHeader col="usedIn" label="Used in" className="col-used" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="usedIn" label="Used in" className="col-used" sort={sort} toggle={toggleSort} sortable={false} />
                     )}
                     {columns.createdBy && !panelOpen && (
-                      <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />
                     )}
                     {columns.tags && !panelOpen && (
-                      <SortableHeader col="tags" label="Tags" className="col-tags" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="tags" label="Tags" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
                     )}
                     {columns.dateCreated && !panelOpen && (
                       <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />
@@ -486,13 +490,22 @@ function SortableHeader({
   className,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: SortKey;
   label: string;
   className?: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

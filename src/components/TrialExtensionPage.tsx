@@ -298,7 +298,14 @@ export function TrialExtensionPage() {
   );
 }
 
-function SortableHeader({ col, label, sort, toggle }: { col: SortKey; label: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void }) {
+function SortableHeader({ col, label, sort, toggle, sortable = true }: { col: SortKey; label: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void; sortable?: boolean }) {
+  if (!sortable) {
+    return (
+      <th className="no-sort">
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th onClick={() => toggle(col)}>
@@ -542,6 +549,7 @@ function GrantAccessModal({
               ? "Update the expiry date for this grant. Setting a future date re-activates expired access."
               : "Select a user and set an expiry date. The user gets full Pro access until that date at no charge."}
           </p>
+          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="sch-modal-body">

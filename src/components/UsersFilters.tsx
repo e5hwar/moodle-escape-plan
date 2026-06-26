@@ -74,6 +74,13 @@ export function UsersFilters({
   const moreCount =
     filters.roles.length + filters.goals.length + filters.industries.length;
 
+  const hasFilters =
+    filters.types.length +
+      filters.subscriptions.length +
+      filters.companies.length +
+      moreCount >
+    0;
+
   function clearAll() {
     setFilters({
       types: [],
@@ -122,9 +129,11 @@ export function UsersFilters({
           })
         }
       />
-      <button className="filter-clear-link" onClick={clearAll}>
-        Clear filters
-      </button>
+      {hasFilters && (
+        <button className="filter-clear-link" onClick={clearAll}>
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 }

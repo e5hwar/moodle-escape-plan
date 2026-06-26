@@ -40,6 +40,7 @@ type ColMeta = {
   label: string;
   className: string;
   width: number;
+  sortable?: boolean;
   render: (s: TaskSubmission) => React.ReactNode;
   sortValue: (s: TaskSubmission) => string | number;
 };
@@ -49,9 +50,9 @@ const COLS: ColMeta[] = [
   { key: "status", label: "Status", className: "col-rh-status", width: 150, render: (s) => <StatusPill status={s.status} />, sortValue: (s) => s.status },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
   { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
-  { key: "email", label: "Email", className: "col-rh-email", width: 220, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
-  { key: "phone", label: "Phone Number", className: "col-rh-phone", width: 170, render: (s) => s.phone, sortValue: (s) => s.phone },
-  { key: "createdBy", label: "Created By", className: "col-rh-creator", width: 190, render: (s) => s.createdBy, sortValue: (s) => s.createdBy.toLowerCase() },
+  { key: "email", label: "Email", className: "col-rh-email", width: 220, sortable: false, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
+  { key: "phone", label: "Phone Number", className: "col-rh-phone", width: 170, sortable: false, render: (s) => s.phone, sortValue: (s) => s.phone },
+  { key: "createdBy", label: "Created By", className: "col-rh-creator", width: 190, sortable: false, render: (s) => s.createdBy, sortValue: (s) => s.createdBy.toLowerCase() },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
@@ -221,7 +222,7 @@ export function ReviewHandsOnPage() {
                 ))}
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear filters
+                    Clear Filters
                   </button>
                 )}
               </div>
@@ -233,7 +234,7 @@ export function ReviewHandsOnPage() {
                   <tr>
                     <SortableHeader col="name" label="User Name" className="col-name" sort={sort} toggle={toggleSort} />
                     {visibleCols.map((c) => (
-                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} />
+                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={c.sortable} />
                     ))}
                     <th className="col-actions">
                       <UsersEditColumns
@@ -322,13 +323,22 @@ function SortableHeader({
   className,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: SortKey;
   label: string;
   className?: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

@@ -297,12 +297,14 @@ export function SkillsPage() {
               <div className="filters">
                 <StatusPill value={statusFilter} onApply={setStatusFilter} />
                 <CreatedByPill value={creatorFilter} onApply={setCreatorFilter} />
-                <button
-                  className="filter-clear-link"
-                  onClick={() => { setStatusFilter([]); setCreatorFilter([]); }}
-                >
-                  Clear filters
-                </button>
+                {(statusFilter.length > 0 || creatorFilter.length > 0) && (
+                  <button
+                    className="filter-clear-link"
+                    onClick={() => { setStatusFilter([]); setCreatorFilter([]); }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
 
               <div className="co-table-row">
@@ -320,7 +322,7 @@ export function SkillsPage() {
                             {sc.mastery && <SortableHeader col="mastery" label="Mastery Skills" className="col-used" sort={sort} toggle={toggleSort} />}
                             {sc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
                             {sc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {sc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />}
+                            {sc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                             {sc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                             {sc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
                             <th className="col-actions">
@@ -362,7 +364,7 @@ export function SkillsPage() {
                             {mc.skills && <SortableHeader col="skills" label="Skills" className="col-used" sort={sort} toggle={toggleSort} />}
                             {mc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
                             {mc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {mc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} />}
+                            {mc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                             {mc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                             {mc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
                             <th className="col-actions">
@@ -690,14 +692,22 @@ function RowActions({
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle,
+  col, label, className, sort, toggle, sortable = true,
 }: {
   col: string;
   label: string;
   className?: string;
   sort: { key: string; dir: SortDir };
   toggle: (k: string) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
@@ -116,6 +116,27 @@ function AdminApp() {
   const [view, setView] = useState<View>({ name: "tasks" });
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
+
+  // ⌘K / Ctrl+K focuses the current page's search bar (the inputs that show the
+  // ⌘K hint), ready to type. Picks the first visible matching input.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        const target = Array.from(
+          document.querySelectorAll<HTMLInputElement>(
+            ".usearch-input, .search-input, .qb-search-input",
+          ),
+        ).find((el) => el.offsetParent !== null);
+        if (target) {
+          e.preventDefault();
+          target.focus();
+          target.select();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const sidebarActive =
     view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers"

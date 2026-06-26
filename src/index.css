@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap");
 
 /*
  * Type system — only these 7 combinations are allowed.
@@ -479,16 +479,26 @@ a {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* Single scroll container (both axes) so a sticky right-hand column can pin to
+     the viewport edge. The header table sticks to the top; the body flows below. */
+  overflow: auto;
+  scrollbar-width: none; /* Firefox — hide scrollbars (scroll still works) */
+}
+.table-xscroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 .table-xscroll > .table-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #0d0d0d;
   min-width: var(--table-min, auto);
 }
 .table-xscroll > .tasks-scroll {
-  flex: 1;
+  /* No longer a scroll container — natural height; .table-xscroll does the
+     scrolling, so the body's sticky actions cell resolves to that viewport. */
+  flex: 0 0 auto;
+  overflow: visible;
   min-width: var(--table-min, auto);
 }
 
@@ -553,34 +563,75 @@ a {
   flex-shrink: 0;
 }
 
-/* In-header CTA sizes to content, not 100% (which is for the bottom-bar context) */
+/* In-header Primary CTA (Create Task / Certification / Company …) — Figma spec.
+   Sizes to content (not the 100% bottom-bar context) and is large + prominent. */
 .tasks-header .new-task,
 .tasks-header .cta-primary {
   width: auto;
+  height: 41px;
+  gap: 8px;
+  padding: 0 34px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
+  border: 0.5px solid rgba(240, 85, 35, 0.15);
+  box-shadow: none;
+}
+/* Figma omits the leading "+" glyph (the button's direct-child icon). */
+.tasks-header .new-task > svg,
+.tasks-header .cta-primary > svg {
+  display: none;
+}
+/* Shortcut keycap — 28px box with a monospace key (matches the search-bar keys). */
+.tasks-header .cta-kbd {
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  margin-left: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .tasks-title {
   font-family: var(--font-sans);
-  font-size: 28pt;
-  font-weight: 700;
-  margin: 0 0 2px 0;
-  letter-spacing: -0.01em;
+  font-size: 32px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px 0;
   line-height: 1.15;
-  text-transform: lowercase;
 }
 
 .tasks-title::first-letter {
   text-transform: uppercase;
 }
 
+/* Page subtext (Figma node 46:320): 14px Fira Sans Medium, #a8a8a8. Sits 8px
+   below the page header on every .tasks-title page. */
 .tasks-subtitle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--text-muted);
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* "* Required Fields" hint (Figma node 46:322): 12px Fira Sans Medium, accent
+   orange. Sits below the header block (12px gap) on forms with required fields. */
+.required-fields-note {
+  margin-top: 12px;
+  color: #f05523;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .tasks-subtitle-dot {
@@ -684,7 +735,7 @@ a {
 }
 
 .toolbar .search-wrap {
-  flex: 0 0 360px;
+  flex: 1 1 auto;
   min-width: 0;
   margin-bottom: 0;
 }
@@ -697,21 +748,21 @@ a {
 
 .search-input {
   width: 100%;
-  height: 52px;
-  padding: 0 56px 0 48px;
+  height: 40px;
+  padding: 0 56px 0 44px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 500;
 }
 
 .search-input::placeholder {
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 500;
 }
 
@@ -729,8 +780,8 @@ a {
 
 .search-wrap > .search-icon svg,
 .qb-search-wrap > .search-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 .search-kbd {
@@ -738,8 +789,9 @@ a {
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
-  height: 28px;
+  height: 24px;
   display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -753,8 +805,8 @@ a {
 .search-kbd .kbd-cmd,
 .search-kbd .kbd-letter {
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
@@ -768,7 +820,7 @@ a {
 .search-kbd .kbd-letter {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .kbd-cmd {
@@ -934,10 +986,10 @@ a {
 }
 
 .filter-clear-link {
-  color: #4ea1ff;
+  color: #7a7a7a;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   padding: 4px 8px;
   margin-left: 2px;
 }
@@ -1079,15 +1131,16 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 12px 9px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .dropdown-search-icon {
-  color: var(--text-faint);
+  color: #a8a8a8;
   display: inline-flex;
 }
+.dropdown-search-icon svg { width: 16px; height: 16px; }
 
 .dropdown-search input {
   flex: 1;
@@ -1101,44 +1154,34 @@ a {
 }
 
 .dropdown-search input::placeholder {
-  color: var(--text-faint);
+  color: #a8a8a8;
 }
 
 .dropdown-list {
-  padding: 6px;
+  padding: 10px 6px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
 
-.dropdown-section + .dropdown-section {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
+.dropdown-section + .dropdown-section,
+.dropdown-subsection + .dropdown-subsection {
+  margin-top: 8px;
 }
 
-/* Edit Columns menu — Fixed / Active / Available sections */
-.cols-menu .dropdown-section-label {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  padding: 6px 10px 6px;
-}
 
 .cols-menu .cols-fixed-row {
-  padding: 7px 10px;
+  padding: 6px 8px;
   font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  color: #a8a8a8;
 }
 
 .cols-menu .cols-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-right: 10px;
 }
 
 .cols-menu .cols-row-label {
@@ -1162,37 +1205,67 @@ a {
 }
 
 .dropdown-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  color: #7a7a7a;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  padding: 6px 8px 4px;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 0 8px 2px;
 }
 
 .dropdown-subsection-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  color: #7a7a7a;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 14px;
   font-weight: 400;
-  padding: 6px 8px 2px;
+  padding: 0 8px 2px;
 }
+/* ALL / NONE quick-select on a filter section header */
+.dropdown-allnone {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.dropdown-allnone button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #f05523;
+}
+.dropdown-allnone button:hover { color: #ff6a3c; }
 
 .dropdown-item {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-radius: 6px;
   font-family: var(--font-sans);
   font-size: 12pt;
   font-weight: 400;
   color: var(--text);
   text-align: left;
+}
+/* Filter / column option rows — muted, medium-weight labels (Figma). */
+.dropdown-list .dropdown-item {
+  font-size: 16px;
+  font-weight: 500;
+  color: #a8a8a8;
 }
 
 .dropdown-item:hover {
@@ -1217,8 +1290,18 @@ a {
   color: #fff;
 }
 
+/* Filter / column checkboxes — Figma orange-tint selected state. */
+.dropdown-list .checkbox {
+  border-color: #737373;
+}
+.dropdown-list .checkbox.checked {
+  background: rgba(240, 85, 35, 0.2);
+  border-color: rgba(240, 85, 35, 0.75);
+  color: #f05523;
+}
+
 .dropdown-footer {
-  padding: 10px 12px;
+  padding: 9px 12px 8px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
@@ -1229,15 +1312,14 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 16px;
+  padding: 8px 16px;
   border-radius: 8px;
-  background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.75) 29.09%, rgba(138, 49, 20, 0.75) 100%), rgba(13, 13, 13, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.9%), #0d0d0d;
+  border: 0.5px solid rgba(240, 85, 35, 0.28);
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 14px;
   font-weight: 700;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 8px 22px rgba(228, 69, 21, 0.28);
 }
 
 .btn-apply:hover {
@@ -1266,9 +1348,9 @@ a {
   text-align: left;
   font-family: var(--font-sans);
   font-weight: 600;
-  color: var(--text-muted);
-  font-size: 12pt;
-  padding: 10px 20px;
+  color: #fff;
+  font-size: 16px;
+  padding: 8px 20px;
   border-bottom: 2px solid var(--border-strong);
   white-space: nowrap;
   background: transparent;
@@ -1276,10 +1358,8 @@ a {
   user-select: none;
 }
 
-.table thead th:hover {
-  color: var(--text);
-}
-
+/* Columns without a sort handler render as a plain (non-interactive) header. */
+.table thead th.no-sort,
 .table thead th.row-actions {
   cursor: default;
 }
@@ -1292,21 +1372,20 @@ a {
 
 .sort-icon {
   display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  color: var(--text-muted);
 }
 
 .sort-icon svg {
   display: block;
-  color: var(--text-faint);
 }
 
-.sort-icon svg.on {
+.sort-icon--active {
+  color: #fff;
+}
+
+.table thead th:hover .sort-icon:not(.sort-icon--active) {
   color: var(--text);
-}
-
-.table thead th:hover .sort-icon svg:not(.on) {
-  color: var(--text-muted);
 }
 
 .table thead th .caret {
@@ -1349,9 +1428,11 @@ a {
 }
 
 .table .col-id {
-  color: var(--text-muted);
   width: 100px;
   white-space: nowrap;
+}
+.table td.col-id {
+  color: var(--text-muted);
 }
 
 .table .col-name {
@@ -1392,11 +1473,26 @@ a {
 }
 
 .col-actions {
+  --actions-bg: #0d0d0d;
   width: 48px;
-  padding: 0 12px 0 0 !important;
-  position: relative;
-  text-align: right;
+  padding: 0 !important;
+  /* Pin to the right edge so the three-dot menu floats over content when the
+     table is wider than the viewport. */
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  text-align: center;
   vertical-align: middle;
+  background: var(--actions-bg);
+}
+.table tbody tr:hover .col-actions { --actions-bg: var(--bg-row-hover); }
+.table tbody tr.selected .col-actions { --actions-bg: var(--bg-row-selected); }
+/* Header's actions cell (Edit Columns gear): opaque bg with enough specificity to
+   beat `.table thead th { background: transparent }`, and pinned above the body. */
+.table thead .col-actions {
+  z-index: 6;
+  background: var(--actions-bg);
+  text-align: center;
 }
 
 /* Hidden tasks: dim the row and badge the name. */
@@ -2092,11 +2188,9 @@ a {
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* Shared keyboard-shortcut chip — used by the CTA button (.cta-kbd) and the
-   search bar (.search-kbd). Width hugs content (single letter stays square via
-   min-width; multi-char like ⌘K grows naturally). */
-.cta-kbd,
-.search-kbd {
+/* Keyboard-shortcut chip for the CTA button (the "↵" enter hint). The search
+   bar's ⌘K keycaps are styled separately via .search-kbd (see above). */
+.cta-kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2246,7 +2340,7 @@ a {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .wizard-steps::before {
@@ -2257,113 +2351,68 @@ a {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 11px;
-  align-items: center;
-  padding: 8px 0;
+  gap: 12px;
+  align-items: stretch;
+  padding: 0;
   border-radius: 0;
   cursor: pointer;
-  transition: opacity 0.1s ease;
 }
 
-.wizard-step:not(.active):hover {
-  background: transparent;
-}
-
-.wizard-step:not(.active):hover .wizard-step-title {
-  color: var(--text);
-}
-
-.wizard-step.active {
-  background: transparent;
-}
-
+/* Rail column: a 16px status marker stacked over a 1px connector that runs down
+   to the next step's marker. */
 .wizard-step-rail {
-  width: auto;
+  width: 20px;
   flex-shrink: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
 }
 
-.wizard-step-num {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.wizard-step-marker {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-sans);
-  font-size: 0;
-  color: transparent;
-  font-weight: 600;
-  flex-shrink: 0;
-  background: var(--bg);
+  color: #7a7a7a; /* hollow-ring tint for upcoming steps */
 }
 
-/* The number / check glyphs inside the rail marker are hidden — the marker
-   reads as a status dot in the new design. */
-.wizard-step-num svg {
-  display: none;
+.wizard-step-marker svg {
+  display: block;
 }
 
-.wizard-step.upcoming .wizard-step-num {
-  background: var(--text-faint);
-  border: none;
-  color: transparent;
-}
-
-.wizard-step.active .wizard-step-num {
-  width: 8px;
-  height: 8px;
-  background: var(--accent);
-  color: transparent;
-  font-size: 0;
-  font-weight: 600;
-  border: none;
-}
-
-.wizard-step.done .wizard-step-num {
-  background: #2ea872;
-  color: transparent;
-  border: none;
+.wizard-step-connector {
+  width: 1px;
+  flex: 1 0 0;
+  min-height: 8px;
+  background: #7a7a7a;
 }
 
 .wizard-step-text {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding-top: 0;
+  gap: 2px;
+  padding-bottom: 20px;
   min-width: 0;
-}
-
-.wizard-step.active .wizard-step-text {
-  padding-top: 0;
-  gap: 0;
 }
 
 .wizard-step-title {
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--text-muted);
-  line-height: 1.3;
-  transition: color 0.1s ease;
-}
-
-.wizard-step.upcoming .wizard-step-title {
-  color: var(--text-faint);
-}
-
-.wizard-step.active .wizard-step-title {
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 600;
   color: #fff;
-  line-height: 1.3;
+  line-height: normal;
 }
 
 .wizard-step-sub {
-  display: none;
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  line-height: normal;
 }
 
 .wizard-content {
@@ -2373,23 +2422,37 @@ a {
   min-width: 0;
 }
 
+/* Wizard content header — mirrors the shared page header (.tasks-title): 32px
+   Fira Sans SemiBold white. */
 .wizard-title {
   font-family: var(--font-sans);
-  font-size: 21px;
+  font-size: 32px;
   font-weight: 600;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  color: #fff;
+  margin: 0 0 8px;
+  line-height: 1.15;
 }
 
+/* Wizard content subtext — mirrors the shared page subtext (.tasks-subtitle):
+   14px Fira Sans Medium, #a8a8a8. */
 .wizard-desc {
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin: 0 0 30px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+  margin: 0 0 28px;
   max-width: 640px;
   line-height: 1.55;
+}
+
+/* When a "* Required Fields" note follows the subtext, tighten the gap above it
+   (12px) and let the note own the space before the form (28px). */
+.wizard-desc:has(+ .required-fields-note) {
+  margin-bottom: 12px;
+}
+
+.wizard-desc + .required-fields-note {
+  margin: 0 0 28px;
 }
 
 /* ===== Wizard footer ===== */
@@ -2745,29 +2808,33 @@ a {
   max-width: 920px;
 }
 
+/* Field name label (Figma 49:367): 16px Fira Sans SemiBold white, accent-orange
+   required asterisk. 8px gap to the input below (Figma 49:356). */
 .form-label {
   display: block;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
+  color: #fff;
+  margin-bottom: 8px;
 }
 
 .form-label .req {
-  color: #ff6b6b;
-  margin-left: 4px;
+  color: #f05523;
+  margin-left: 2px;
 }
 
+/* Plain text input (Figma 49:343): #404040 border, 8px radius, 12px padding,
+   16px text. */
 .form-input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px;
   background: var(--bg-pill);
-  border: 1px solid var(--border);
+  border: 1px solid #404040;
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 400;
   outline: none;
 }
@@ -2781,25 +2848,26 @@ a {
 }
 
 .form-select {
-  padding: 12px 16px;
+  padding: 12px 14px;
   background: var(--bg-pill);
-  border: 1px solid var(--border);
+  border: 1px solid #404040;
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 400;
   outline: none;
   cursor: pointer;
   min-width: 130px;
 }
 
+/* Field supporting/subtext (Figma 49:370): 12px Fira Sans Regular, #a8a8a8. */
 .form-help {
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 12px;
   font-weight: 400;
-  color: var(--text-muted);
-  margin: 14px 0 0;
+  color: #a8a8a8;
+  margin: 8px 0 0;
 }
 
 .form-help.error {
@@ -2895,22 +2963,51 @@ a {
   letter-spacing: 0.1em;
 }
 
-/* ===== Unified language field (Image 3) ===== */
+/* Plain-text dual-language tag (Figma 49:348): IBM Plex Mono Bold, 10px,
+   uppercase, #a8a8a8. Scoped to .lang-field so the rich-text editor's tag is
+   untouched. */
+.lang-field .lang-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #a8a8a8;
+  letter-spacing: 0.04em;
+}
+
+/* ===== Dual-language input (Figma 49:348) =====
+   #404040 border, 8px radius, EN/es rows split by a divider. Each row carries a
+   monospace language tag on the left. */
 .lang-field {
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid #404040;
+  border-radius: 8px;
   background: var(--bg-pill);
   overflow: hidden;
   max-width: 920px;
 }
 
+/* Each language row: [tag] [input], 11px gap, 12px padding. */
+.lang-field-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 12px;
+}
+
+.lang-field-row .lang-tag {
+  flex-shrink: 0;
+}
+
 .lang-field-input {
+  flex: 1;
   width: 100%;
+  min-width: 0;
   border: none;
   background: transparent;
-  padding: 12px 16px;
+  padding: 12px 0;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 400;
   color: var(--text);
   outline: none;
@@ -2918,25 +3015,17 @@ a {
 
 .lang-field-divider {
   height: 1px;
-  background: var(--border);
+  background: #404040;
 }
 
-.lang-field-row {
-  position: relative;
-  display: flex;
-  align-items: center;
+/* Multiline rows: pin the language tag to the first text line instead of
+   centering it against the full textarea height. */
+.lang-field-row:has(.sp-multiline) {
+  align-items: flex-start;
 }
 
-.lang-field-row .lang-field-input {
-  padding-right: 90px;
-}
-
-.lang-field-row .lang-tag {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
+.lang-field-row:has(.sp-multiline) .lang-tag {
+  padding-top: 14px;
 }
 
 .time-row {
@@ -5904,12 +5993,12 @@ a {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 6px 8px;
   border-radius: 6px;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  color: #a8a8a8;
   text-align: left;
 }
 .dropdown-submenu-row:hover,
@@ -5925,8 +6014,8 @@ a {
   padding: 1px 8px;
 }
 .dropdown-submenu-chevron {
-  color: var(--text-muted);
-  font-size: 14pt;
+  color: #a8a8a8;
+  font-size: 16px;
   margin-left: 2px;
 }
 
@@ -6934,14 +7023,14 @@ a {
 
 .qb-search-input {
   width: 100%;
-  height: 52px;
-  padding: 0 56px 0 48px;
+  height: 40px;
+  padding: 0 56px 0 44px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 500;
 }
 
@@ -14395,14 +14484,14 @@ a {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  height: 40px;
+  padding: 0 16px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
 }
 .usearch-bar.open {
   border-color: var(--text-faint);
-  box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.12);
 }
 .usearch-icon {
   display: inline-flex;
@@ -14410,8 +14499,8 @@ a {
   flex-shrink: 0;
 }
 .usearch-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 .usearch-input {
   flex: 1;
@@ -14421,7 +14510,7 @@ a {
   outline: none;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 500;
 }
 .usearch-input::placeholder { color: #a8a8a8; }
@@ -14436,8 +14525,8 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
@@ -14446,45 +14535,35 @@ a {
 .usearch-kbd .kbd-letter {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 /* Applied company scope pill inside the bar — minimal/subtle, name in bold */
 .usearch-scope {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
-  padding: 2px 4px 2px 9px;
+  padding: 5px 9px;
   border-radius: 6px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border);
-  max-width: 280px;
+  background: transparent;
+  border: 1px solid #3d3d43;
+  max-width: 320px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
 }
 .usearch-scope-label {
-  font-size: 10pt;
-  color: var(--text-faint);
+  color: #a8a8a8;
+  flex-shrink: 0;
 }
 .usearch-scope-name {
-  font-size: 11pt;
-  font-weight: 700;
-  color: var(--text);
+  color: #a8a8a8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.usearch-scope-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  color: var(--text-faint);
-  font-size: 10pt;
-  flex-shrink: 0;
-}
-.usearch-scope-x:hover { background: var(--bg-pill); color: var(--text); }
 
 /* Dropdown panel */
 .usearch-panel {
@@ -14492,55 +14571,58 @@ a {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  background: #1e1e20;
+  border: 1px solid #3d3d43;
+  border-radius: 8px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
   padding: 6px;
-  max-height: 420px;
-  overflow-y: auto;
+  max-height: 460px;
+  overflow: hidden auto;
   z-index: 50;
 }
 .usearch-head {
-  padding: 10px 12px 6px;
+  padding: 6px 12px 8px;
   font-family: var(--font-sans);
-  font-size: 10pt;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
+  letter-spacing: 0.533px;
+  color: #fff;
   text-transform: uppercase;
 }
 .usearch-empty {
-  padding: 14px 12px;
-  color: var(--text-faint);
-  font-size: 11pt;
+  padding: 8px 12px 14px;
+  color: #7a7a7a;
+  font-size: 14px;
 }
 
 .usearch-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 4px 12px;
   border-radius: 8px;
   text-align: left;
   font-family: var(--font-sans);
 }
-.usearch-row.active { background: var(--bg-pill); }
+.usearch-row.active { background: #2c2c2f; }
 
 .usearch-chip {
   flex-shrink: 0;
-  border: 1px solid var(--border-strong);
+  border: 1px solid #3d3d43;
   border-radius: 6px;
-  padding: 2px 8px;
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  color: var(--text-muted);
-  background: var(--bg-pill-strong);
+  padding: 5px 9px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  color: #a8a8a8;
+  background: transparent;
 }
 .usearch-row-ex {
-  color: var(--text);
-  font-size: 11.5pt;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: #7a7a7a;
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14548,8 +14630,8 @@ a {
 .usearch-row-desc {
   margin-left: auto;
   flex-shrink: 0;
-  color: var(--text-faint);
-  font-size: 10.5pt;
+  color: #a8a8a8;
+  font-size: 16px;
   padding-left: 12px;
 }
 
@@ -14588,28 +14670,78 @@ a {
   text-overflow: ellipsis;
 }
 
+/* "Search for <query> in <scope>" action row — shown when text is entered */
+.usearch-searchfor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 11px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.usearch-searchfor.active { background: #2c2c2f; }
+.usearch-searchfor-icon {
+  display: inline-flex;
+  color: #a8a8a8;
+  flex-shrink: 0;
+}
+.usearch-searchfor-icon svg { width: 16px; height: 16px; }
+.usearch-searchfor-text {
+  font-weight: 600;
+  font-size: 16px;
+  color: #a8a8a8;
+}
+.usearch-searchfor-text .q { color: #f05523; }
+
+/* Keyboard hints footer — shown when the box is empty. Negative margin lets the
+   top border span the full panel width despite the panel's 6px padding. */
 .usearch-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 10.5pt;
+  gap: 16px;
+  margin: 6px -6px 0;
+  padding: 9px 18px 8px;
+  border-top: 1px solid #3d3d43;
 }
-.usearch-kbd-inline {
+.usearch-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.usearch-hint-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #7a7a7a;
+  text-transform: uppercase;
+}
+.usearch-keycap-group {
+  display: inline-flex;
+  gap: 4px;
+}
+.usearch-keycap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--border-strong);
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-  font-size: 10pt;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a8a8a8;
+}
+.usearch-keycap svg { display: block; }
+.usearch-keycap--text {
+  width: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
 }
 
 /* Task result row in the search dropdown (no avatar — leading ID badge) */
@@ -18420,33 +18552,6 @@ a {
 .attempts-back:hover { color: var(--text); }
 .attempts-back svg { width: 16px; height: 16px; }
 
-/* Toolbar search */
-.attempts-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  width: 340px;
-  max-width: 100%;
-  padding: 0 14px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-.attempts-search:focus-within { border-color: var(--border-strong); }
-.attempts-search-icon { display: inline-flex; color: var(--text-faint); }
-.attempts-search-icon svg { width: 16px; height: 16px; }
-.attempts-search-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-}
-.attempts-search-input::placeholder { color: var(--text-faint); }
 
 /* Single table with sticky head + horizontal scroll (many columns) */
 .attempts-scroll {

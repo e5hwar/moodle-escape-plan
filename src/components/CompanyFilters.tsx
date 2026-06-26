@@ -26,6 +26,13 @@ type Props = {
 };
 
 export function CompanyFilters({ filters, setFilters }: Props) {
+  const hasFilters =
+    filters.tiers.length +
+      filters.industries.length +
+      filters.partnerships.length +
+      filters.statuses.length >
+    0;
+
   function clearAll() {
     setFilters({ tiers: [], industries: [], partnerships: [], statuses: [] });
   }
@@ -48,9 +55,11 @@ export function CompanyFilters({ filters, setFilters }: Props) {
         value={filters.partnerships}
         onApply={(v) => setFilters({ ...filters, partnerships: v })}
       />
-      <button className="filter-clear-link" onClick={clearAll}>
-        Clear filters
-      </button>
+      {hasFilters && (
+        <button className="filter-clear-link" onClick={clearAll}>
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 }

@@ -127,6 +127,9 @@ const COLS: ColMeta[] = [
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
+// Columns where sorting is not meaningful (free-text, contact info, tags)
+const NON_SORTABLE_KEYS = new Set<QuizColumnKey>(["email", "phone", "company", "attribution", "zipCode"]);
+
 const FIXED_COLUMNS = [{ label: "Name" }];
 const OPTIONAL_COLUMNS = COLS.map((c) => ({ key: c.key as string, label: c.label }));
 
@@ -292,7 +295,7 @@ export function QuizPurchasersPage({
                     <tr>
                       <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                       {visibleCols.map((c) => (
-                        <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} />
+                        <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={!NON_SORTABLE_KEYS.has(c.key)} />
                       ))}
                       <th className="col-actions">
                         <UsersEditColumns
@@ -392,13 +395,22 @@ function SortableHeader({
   className,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: SortKey;
   label: string;
   className?: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>

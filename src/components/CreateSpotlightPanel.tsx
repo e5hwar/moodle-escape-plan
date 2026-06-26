@@ -67,6 +67,7 @@ export function CreateSpotlightPanel({
             Spotlights appear on the app's Home Screen. They must be approved
             before users see them.
           </p>
+          <div className="required-fields-note">* Required Fields</div>
         </div>
         <button
           className="sp-panel-close"
@@ -251,24 +252,28 @@ function LangPair({
 }) {
   return (
     <div className="lang-field">
-      {multiline ? (
-        <textarea
-          className="lang-field-input sp-multiline"
-          placeholder={placeholderEn}
-          value={en}
-          onChange={(e) => onEn(e.target.value)}
-          rows={3}
-        />
-      ) : (
-        <input
-          className="lang-field-input"
-          placeholder={placeholderEn}
-          value={en}
-          onChange={(e) => onEn(e.target.value)}
-        />
-      )}
+      <div className="lang-field-row">
+        <span className="lang-tag">EN</span>
+        {multiline ? (
+          <textarea
+            className="lang-field-input sp-multiline"
+            placeholder={placeholderEn}
+            value={en}
+            onChange={(e) => onEn(e.target.value)}
+            rows={3}
+          />
+        ) : (
+          <input
+            className="lang-field-input"
+            placeholder={placeholderEn}
+            value={en}
+            onChange={(e) => onEn(e.target.value)}
+          />
+        )}
+      </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
+        <span className="lang-tag">ES</span>
         {multiline ? (
           <textarea
             className="lang-field-input sp-multiline"
@@ -285,7 +290,6 @@ function LangPair({
             onChange={(e) => onEs(e.target.value)}
           />
         )}
-        <span className="lang-tag">ESPAÑOL</span>
       </div>
     </div>
   );

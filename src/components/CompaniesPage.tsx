@@ -192,7 +192,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                     <thead>
                       <tr>
                         <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
-                        <SortableHeader col="email" label="Email" className="col-email" sort={sort} toggle={toggleSort} />
+                        <SortableHeader col="email" label="Email" className="col-email" sort={sort} toggle={toggleSort} sortable={false} />
                         <SortableHeader col="tier" label="Tier" className="col-tier" sort={sort} toggle={toggleSort} />
                         <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
                         {columns.signUp && !panelOpen && <SortableHeader col="signUp" label="Sign-Up" className="col-signup" sort={sort} toggle={toggleSort} />}
@@ -319,10 +319,17 @@ function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: 
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle,
+  col, label, className, sort, toggle, sortable = true,
 }: {
-  col: SortKey; label: string; className?: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void;
+  col: SortKey; label: string; className?: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void; sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>
@@ -983,6 +990,7 @@ function CancelSubscriptionModal({
                 <strong>{company.name}</strong> keeps full access until the end of the current
                 billing cycle ({billing.nextBillingDate}), then the subscription cancels.
               </p>
+              <div className="required-fields-note">* Required Fields</div>
             </div>
 
             <div style={{ padding: "4px 24px 8px" }}>

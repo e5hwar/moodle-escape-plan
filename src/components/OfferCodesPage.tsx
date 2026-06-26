@@ -201,6 +201,7 @@ export function OfferCodesPage() {
                         label="Countries/Regions"
                         sort={sort}
                         toggle={toggleSort}
+                        sortable={false}
                       />
                       <SortableHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
                       <th className="col-actions" />
@@ -274,12 +275,23 @@ function SortableHeader({
   label,
   sort,
   toggle,
+  sortable = true,
+  className,
 }: {
   col: SortKey;
   label: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
+  className?: string;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th onClick={() => toggle(col)}>
@@ -396,6 +408,7 @@ function CreateOfferCodeModal({
           <p className="cl-modal-sub">
             Set up a subscription offer code. It will be created on Apple, Google, and Stripe.
           </p>
+          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="sch-modal-body">

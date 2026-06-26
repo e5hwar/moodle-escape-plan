@@ -179,14 +179,15 @@ export function AttemptsPage({
           <div className="tasks-row">
             <div className="tasks-content">
               <div className="toolbar">
-                <div className="attempts-search">
-                  <span className="attempts-search-icon"><SearchIcon /></span>
+                <div className="search-wrap">
+                  <span className="search-icon"><SearchIcon /></span>
                   <input
-                    className="attempts-search-input"
+                    className="search-input"
                     placeholder="Search by name, email, or phone…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
+                  <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
                 </div>
               </div>
 
@@ -216,7 +217,7 @@ export function AttemptsPage({
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear filters
+                    Clear Filters
                   </button>
                 )}
               </div>
@@ -239,8 +240,8 @@ export function AttemptsPage({
                   <thead>
                     <tr>
                       <SortableHeader col="name" label="Name" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="phone" label="Phone Number" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} sortable={false} />
+                      <SortableHeader col="phone" label="Phone Number" sort={sort} toggle={toggleSort} sortable={false} />
                       <SortableHeader col="attemptNumber" label="Attempt" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="startedAt" label="Started" sort={sort} toggle={toggleSort} />
@@ -598,12 +599,21 @@ function SortableHeader({
   label,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: SortKey;
   label: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`att-col-${col} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={`att-col-${col}`} onClick={() => toggle(col)}>

@@ -44,6 +44,14 @@ export function Filters({ filters, setFilters }: Props) {
   const moreCount =
     filters.types.length + filters.visibilities.length + filters.tags.length;
 
+  const hasFilters =
+    filters.creators.length +
+      filters.certifications.length +
+      filters.discoverable.length +
+      filters.finalExam.length +
+      moreCount >
+    0;
+
   function clearAll() {
     setFilters({
       creators: [],
@@ -88,9 +96,11 @@ export function Filters({ filters, setFilters }: Props) {
           })
         }
       />
-      <button className="filter-clear-link" onClick={clearAll}>
-        Clear filters
-      </button>
+      {hasFilters && (
+        <button className="filter-clear-link" onClick={clearAll}>
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 }
@@ -420,6 +430,14 @@ export function SectionedMultiSelect({
     );
   }
 
+  function selectAll(items: string[]) {
+    setDraft((d) => Array.from(new Set([...d, ...items])));
+  }
+
+  function selectNone(items: string[]) {
+    setDraft((d) => d.filter((x) => !items.includes(x)));
+  }
+
   return (
     <>
       {searchable && (
@@ -439,7 +457,13 @@ export function SectionedMultiSelect({
           <div key={s.label ?? i} className={subsectionStyle ? "dropdown-subsection" : "dropdown-section"}>
             {s.label && (
               <div className={subsectionStyle ? "dropdown-subsection-label" : "dropdown-section-label"}>
-                {s.label}
+                <span>{s.label}</span>
+                {s.items.length > 1 && (
+                  <span className="dropdown-allnone">
+                    <button type="button" onClick={() => selectAll(s.items)}>All</button>
+                    <button type="button" onClick={() => selectNone(s.items)}>None</button>
+                  </span>
+                )}
               </div>
             )}
             {s.items.map((item) => (
@@ -496,20 +520,17 @@ function MoreFiltersBody({
       <div className="cascading-root">
         <div className="dropdown-list">
           <SubmenuRow
-            label="Type"
-            count={draftTypes.length}
+            label="Task Type"
             active={hovered === "type"}
             onHover={(top) => { setHovered("type"); setHoveredTop(top); }}
           />
           <SubmenuRow
             label="Visibility"
-            count={draftVis.length}
             active={hovered === "visibility"}
             onHover={(top) => { setHovered("visibility"); setHoveredTop(top); }}
           />
           <SubmenuRow
-            label="Categories / Tags"
-            count={draftTags.length}
+            label="Content/Trade Tags"
             active={hovered === "tags"}
             onHover={(top) => { setHovered("tags"); setHoveredTop(top); }}
           />
@@ -577,12 +598,10 @@ function MoreFiltersBody({
 
 function SubmenuRow({
   label,
-  count,
   active,
   onHover,
 }: {
   label: string;
-  count: number;
   active: boolean;
   onHover: (top: number) => void;
 }) {
@@ -605,7 +624,6 @@ function SubmenuRow({
       onFocus={handle}
     >
       <span className="dropdown-submenu-label">{label}</span>
-      {count > 0 && <span className="dropdown-submenu-count">{count}</span>}
       <span className="dropdown-submenu-chevron">›</span>
     </button>
   );
@@ -620,6 +638,23 @@ function ColumnsBody({
 }) {
   const active = OPTIONAL_COLUMNS.filter((c) => value[c.key]);
   const available = OPTIONAL_COLUMNS.filter((c) => !value[c.key]);
+
+  function clearAll() {
+    const next = { ...value };
+    OPTIONAL_COLUMNS.forEach((c) => {
+      next[c.key] = false;
+    });
+    onApply(next);
+  }
+
+  function activateAll() {
+    const next = { ...value };
+    OPTIONAL_COLUMNS.forEach((c) => {
+      next[c.key] = true;
+    });
+    onApply(next);
+  }
+
   return (
     <div className="dropdown-list cols-menu">
       <div className="dropdown-section">
@@ -632,7 +667,14 @@ function ColumnsBody({
       </div>
 
       <div className="dropdown-section">
-        <div className="dropdown-section-label">Active columns</div>
+        <div className="dropdown-section-label">
+          <span>Active columns</span>
+          {active.length > 0 && (
+            <span className="dropdown-allnone">
+              <button type="button" onClick={clearAll}>None</button>
+            </span>
+          )}
+        </div>
         {active.length === 0 ? (
           <div className="cols-empty">No active columns</div>
         ) : (
@@ -649,7 +691,14 @@ function ColumnsBody({
       </div>
 
       <div className="dropdown-section">
-        <div className="dropdown-section-label">Available columns</div>
+        <div className="dropdown-section-label">
+          <span>Available columns</span>
+          {available.length > 0 && (
+            <span className="dropdown-allnone">
+              <button type="button" onClick={activateAll}>All</button>
+            </span>
+          )}
+        </div>
         {available.length === 0 ? (
           <div className="cols-empty">All columns are active</div>
         ) : (

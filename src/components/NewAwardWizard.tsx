@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckBoldIcon, SearchIcon, CheckIcon } from "./icons";
+import { WizardStepRail } from "./WizardStepRail";
 import { certifications } from "../data/certifications";
 import {
   MERIT_TIERS,
@@ -106,16 +107,10 @@ export function NewAwardWizard(props: Props) {
                   className={`wizard-step ${status}`}
                   onClick={() => (i === 0 || certValid ? setStep(i) : undefined)}
                 >
-                  <div className="wizard-step-rail">
-                    <span className="wizard-step-num">
-                      {status === "done" ? <CheckBoldIcon /> : i + 1}
-                    </span>
-                  </div>
+                  <WizardStepRail status={status} isLast={i === STEPS.length - 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">
-                      {status === "active" ? s.desc : s.sub}
-                    </div>
+                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -130,6 +125,7 @@ export function NewAwardWizard(props: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
+          <div className="required-fields-note">* Required Fields</div>
 
           {step === 0 && (
             <LinkStep

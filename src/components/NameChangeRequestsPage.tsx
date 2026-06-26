@@ -228,12 +228,23 @@ function SortableHeader({
   label,
   sort,
   toggle,
+  sortable = true,
+  className,
 }: {
   col: SortKey;
   label: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
+  className?: string;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th onClick={() => toggle(col)}>
@@ -296,6 +307,7 @@ function ApproveModal({
           <p className="cl-modal-sub">
             Verify the submitted ID, then confirm the name that will be saved to the user's account.
           </p>
+          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="ncr-modal-split">

@@ -18,6 +18,7 @@ import {
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon } from "./icons";
+import { WizardStepRail } from "./WizardStepRail";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { type Certification, certifications } from "../data/certifications";
 import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
@@ -495,16 +496,10 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
                   className={`wizard-step ${status}`}
                   onClick={() => setStep(i)}
                 >
-                  <div className="wizard-step-rail">
-                    <span className="wizard-step-num">
-                      {status === "done" ? <CheckBoldIcon /> : i + 1}
-                    </span>
-                  </div>
+                  <WizardStepRail status={status} isLast={i === STEPS.length - 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">
-                      {status === "active" ? s.desc : s.sub}
-                    </div>
+                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -519,6 +514,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
+          <div className="required-fields-note">* Required Fields</div>
 
           {step === 0 && <DetailsStep data={data} update={update} />}
           {step === 1 && <AdditionalInfoStep data={data} update={update} />}
@@ -2624,21 +2620,24 @@ function LangField({
 }) {
   return (
     <div className="lang-field">
-      <input
-        className="lang-field-input"
-        value={en}
-        placeholder={placeholderEn}
-        onChange={(e) => onChangeEn(e.target.value)}
-      />
+      <div className="lang-field-row">
+        <span className="lang-tag">EN</span>
+        <input
+          className="lang-field-input"
+          value={en}
+          placeholder={placeholderEn}
+          onChange={(e) => onChangeEn(e.target.value)}
+        />
+      </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
+        <span className="lang-tag">ES</span>
         <input
           className="lang-field-input"
           value={es}
           placeholder={placeholderEs}
           onChange={(e) => onChangeEs(e.target.value)}
         />
-        <span className="lang-tag">ESPAÑOL</span>
       </div>
     </div>
   );

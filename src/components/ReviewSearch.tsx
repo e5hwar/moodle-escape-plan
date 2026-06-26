@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TaskSubmission } from "../data/reviewSubmissions";
 import { SearchIcon } from "./icons";
+import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 
@@ -204,8 +205,8 @@ export function ReviewSearch({
   }
 
   const scopeChips = [
-    ...draftCompanies.map((c) => ({ kind: "Company", name: c, onClear: () => setDraftCompanies(draftCompanies.filter((x) => x !== c)) })),
-    ...draftTasks.map((t) => ({ kind: "Task", name: t, onClear: () => setDraftTasks(draftTasks.filter((x) => x !== t)) })),
+    ...draftCompanies.map((c) => ({ kind: "Company", name: c })),
+    ...draftTasks.map((t) => ({ kind: "Task", name: t })),
   ];
 
   const placeholder = scopeChips.length
@@ -220,11 +221,8 @@ export function ReviewSearch({
         </span>
         {scopeChips.map((chip, i) => (
           <span className="usearch-scope" key={`${chip.kind}-${chip.name}-${i}`}>
-            <span className="usearch-scope-label">{chip.kind}</span>
+            <span className="usearch-scope-label">{chip.kind}:</span>
             <span className="usearch-scope-name">{chip.name}</span>
-            <button className="usearch-scope-x" aria-label={`Clear ${chip.kind} filter`} onClick={chip.onClear}>
-              ✕
-            </button>
           </span>
         ))}
         <input
@@ -251,13 +249,13 @@ export function ReviewSearch({
             <>
               <div className="usearch-head">Suggested filters</div>
               <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "company-filter" })}>
-                <span className="usearch-chip">COMPANY:</span>
-                <span className="usearch-row-ex">COMPANY:Acme Inc.</span>
+                <span className="usearch-chip">Company:</span>
+                <span className="usearch-row-ex">Company: Acme Inc.</span>
                 <span className="usearch-row-desc">Filter submissions by company</span>
               </OptionRow>
               <OptionRow active={active === 1} onHover={() => setActive(1)} onClick={() => activate({ kind: "task-filter" })}>
-                <span className="usearch-chip">TASK:</span>
-                <span className="usearch-row-ex">TASK:HVAC Install</span>
+                <span className="usearch-chip">Task:</span>
+                <span className="usearch-row-ex">Task: HVAC Install</span>
                 <span className="usearch-row-desc">Filter submissions by task</span>
               </OptionRow>
 
@@ -290,7 +288,7 @@ export function ReviewSearch({
               ) : (
                 companyResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
-                    <span className="usearch-chip">COMPANY:</span>
+                    <span className="usearch-chip">Company:</span>
                     <span className="usearch-row-ex">{name}</span>
                     <span className="usearch-row-desc">{allCompanies.counts.get(name)} submissions</span>
                   </OptionRow>
@@ -309,7 +307,7 @@ export function ReviewSearch({
               ) : (
                 taskResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "task", name })}>
-                    <span className="usearch-chip">TASK:</span>
+                    <span className="usearch-chip">Task:</span>
                     <span className="usearch-row-ex">{name}</span>
                     <span className="usearch-row-desc">{allTasks.counts.get(name)} submissions</span>
                   </OptionRow>
@@ -318,14 +316,11 @@ export function ReviewSearch({
             </>
           )}
 
-          <div className="usearch-foot">
-            <span className="usearch-kbd-inline">↵</span>
-            {inCompanyMode
-              ? "Select a company to filter"
-              : inTaskMode
-              ? "Select a task to filter"
-              : "Show results in the table"}
-          </div>
+          {freeQuery.trim() ? (
+            <SearchForRow query={freeQuery.trim()} scope="Submissions" onClick={commit} />
+          ) : (
+            <SearchHints />
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "../data/users";
 import { SearchIcon } from "./icons";
+import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 const COMPANY_PREFIX = "COMPANY:";
@@ -110,12 +111,6 @@ export function UsersSearch({
     inputRef.current?.focus();
   }
 
-  // ✕ on the pending chip just discards the not-yet-applied selection.
-  function clearCompanies() {
-    setDraft([]);
-    inputRef.current?.focus();
-  }
-
   function activate(opt: Opt) {
     if (opt.kind === "company-filter") {
       setText(COMPANY_PREFIX);
@@ -176,11 +171,8 @@ export function UsersSearch({
         </span>
         {scoped && (
           <span className="usearch-scope">
-            <span className="usearch-scope-label">Company</span>
+            <span className="usearch-scope-label">Company:</span>
             <span className="usearch-scope-name">{scopeLabel}</span>
-            <button className="usearch-scope-x" aria-label="Clear company filter" onClick={clearCompanies}>
-              ✕
-            </button>
           </span>
         )}
         <input
@@ -207,8 +199,8 @@ export function UsersSearch({
             <>
               <div className="usearch-head">Suggested filters</div>
               <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "company-filter" })}>
-                <span className="usearch-chip">COMPANY:</span>
-                <span className="usearch-row-ex">COMPANY:Acme Inc.</span>
+                <span className="usearch-chip">Company:</span>
+                <span className="usearch-row-ex">Company: Acme Inc.</span>
                 <span className="usearch-row-desc">Filter users by company</span>
               </OptionRow>
 
@@ -244,7 +236,7 @@ export function UsersSearch({
               ) : (
                 companyResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
-                    <span className="usearch-chip">COMPANY:</span>
+                    <span className="usearch-chip">Company:</span>
                     <span className="usearch-row-ex">{name}</span>
                     <span className="usearch-row-desc">{allCompanies.counts.get(name)} users</span>
                   </OptionRow>
@@ -253,10 +245,11 @@ export function UsersSearch({
             </>
           )}
 
-          <div className="usearch-foot">
-            <span className="usearch-kbd-inline">↵</span>
-            {inCompanyMode ? "Select a company to filter" : "Show results in the table"}
-          </div>
+          {userQuery.trim() ? (
+            <SearchForRow query={userQuery.trim()} scope="Users" onClick={commit} />
+          ) : (
+            <SearchHints />
+          )}
         </div>
       )}
     </div>

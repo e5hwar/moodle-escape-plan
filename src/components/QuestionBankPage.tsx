@@ -578,7 +578,7 @@ export function QuestionBankPage({
                   <QbHeader col="type" label="Type" sort={sort} toggle={toggleSort} />
                   <QbHeader col="version" label="Version" sort={sort} toggle={toggleSort} />
                   <QbHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="usage" label="Quiz usage" sort={sort} toggle={toggleSort} />
+                  <QbHeader col="usage" label="Quiz usage" sort={sort} toggle={toggleSort} sortable={false} />
                   <th className="col-actions" />
                 </tr>
               </thead>
@@ -933,12 +933,21 @@ function QbHeader({
   label,
   sort,
   toggle,
+  sortable = true,
 }: {
   col: QSortKey;
   label: string;
   sort: { key: QSortKey; dir: SortDir };
   toggle: (k: QSortKey) => void;
+  sortable?: boolean;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`qb-col-${col} no-sort`}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th className={`qb-col-${col}`} onClick={() => toggle(col)}>

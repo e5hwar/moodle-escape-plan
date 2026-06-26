@@ -14,6 +14,7 @@ import {
   SearchIcon,
   UploadIcon,
 } from "./icons";
+import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";
 import {
   masteryUsing,
@@ -198,16 +199,10 @@ export function NewSkillWizard(props: Props) {
                   className={`wizard-step ${status}`}
                   onClick={() => (i === 0 || nameValid ? setStep(i) : undefined)}
                 >
-                  <div className="wizard-step-rail">
-                    <span className="wizard-step-num">
-                      {status === "done" ? <CheckBoldIcon /> : i + 1}
-                    </span>
-                  </div>
+                  <WizardStepRail status={status} isLast={i === STEPS.length - 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">
-                      {status === "active" ? s.desc : s.sub}
-                    </div>
+                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -222,6 +217,7 @@ export function NewSkillWizard(props: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
+          <div className="required-fields-note">* Required Fields</div>
 
           {step === 0 && (
             <DetailsStep
@@ -706,11 +702,14 @@ function LangField({
 }) {
   return (
     <div className="lang-field">
-      <input className="lang-field-input" value={en} onChange={(e) => onChangeEn(e.target.value)} />
+      <div className="lang-field-row">
+        <span className="lang-tag">EN</span>
+        <input className="lang-field-input" value={en} onChange={(e) => onChangeEn(e.target.value)} />
+      </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
+        <span className="lang-tag">ES</span>
         <input className="lang-field-input" value={es} onChange={(e) => onChangeEs(e.target.value)} />
-        <span className="lang-tag">ESPAÑOL</span>
       </div>
     </div>
   );

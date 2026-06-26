@@ -1045,7 +1045,7 @@ export function ContentOverridesPage() {
                       flex: "none",
                     }}
                   >
-                    Clear filters
+                    Clear Filters
                   </button>
                 )}
               </div>

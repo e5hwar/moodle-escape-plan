@@ -321,12 +321,23 @@ function SortableHeader({
   label,
   sort,
   toggle,
+  sortable = true,
+  className,
 }: {
   col: SortKey;
   label: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
+  sortable?: boolean;
+  className?: string;
 }) {
+  if (!sortable) {
+    return (
+      <th className={`${className ?? ""} no-sort`.trim()}>
+        <span className="th-content">{label}</span>
+      </th>
+    );
+  }
   const active = sort.key === col;
   return (
     <th onClick={() => toggle(col)}>
@@ -628,6 +639,7 @@ function AddScholarshipModal({
             Select a user and choose how long their scholarship lasts. The user
             gets full Pro access until the expiry date.
           </p>
+          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="sch-modal-body">

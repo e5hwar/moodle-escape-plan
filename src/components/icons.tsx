@@ -38,8 +38,19 @@ export const AddIcon = () => (
 );
 
 export const EditColumnsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-    <path d="M80,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H80a16,16,0,0,0,16-16V48A16,16,0,0,0,80,32Zm0,176H56V48H80ZM152,32H128a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h24a16,16,0,0,0,16-16V48A16,16,0,0,0,152,32Zm0,176H128V48h24Zm96-80a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V136H192a8,8,0,0,1,0-16h16V104a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,128Z" fill="currentColor"/>
+  <svg width="16" height="16" viewBox="0 0 14.5813 14.6667" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M5.56264 2.64L5.9573 0.666667H8.62397L9.01864 2.64C9.55864 2.83933 10.056 3.12867 10.49 3.49067L12.3973 2.84533L13.7306 5.15467L12.2186 6.48333C12.3157 7.04585 12.3157 7.62082 12.2186 8.18333L13.7306 9.512L12.3973 11.8213L10.49 11.176C10.0517 11.5414 9.55403 11.8292 9.01864 12.0267L8.62397 14H5.9573L5.56264 12.0267C5.02724 11.8292 4.52961 11.5414 4.0913 11.176L2.18397 11.8213L0.850636 9.512L2.36264 8.18333C2.26689 7.62071 2.26689 7.04596 2.36264 6.48333L0.850636 5.15467L2.18397 2.84533L4.0913 3.49067C4.52961 3.12522 5.02724 2.83751 5.56264 2.64Z"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
+    <path
+      d="M9.9573 7.33333C9.9573 8.04058 9.67635 8.71885 9.17625 9.21895C8.67616 9.71905 7.99788 10 7.29064 10C6.58339 10 5.90512 9.71905 5.40502 9.21895C4.90492 8.71885 4.62397 8.04058 4.62397 7.33333C4.62397 6.62609 4.90492 5.94781 5.40502 5.44772C5.90512 4.94762 6.58339 4.66667 7.29064 4.66667C7.99788 4.66667 8.67616 4.94762 9.17625 5.44772C9.67635 5.94781 9.9573 6.62609 9.9573 7.33333Z"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
   </svg>
 );
 
@@ -49,16 +60,32 @@ export const CheckIcon = () => (
   </svg>
 );
 
-export const SortIcon = ({ active, dir }: { active?: boolean; dir?: "asc" | "desc" }) => (
-  <span className="sort-icon">
-    <svg width="7" height="4" viewBox="0 0 7 4" className={active && dir === "asc" ? "on" : ""}>
-      <path d="M0 4L3.5 0L7 4Z" fill="currentColor" />
-    </svg>
-    <svg width="7" height="4" viewBox="0 0 7 4" className={active && dir === "desc" ? "on" : ""}>
-      <path d="M0 0L3.5 4L7 0Z" fill="currentColor" />
-    </svg>
-  </span>
-);
+export const SortIcon = ({ active, dir }: { active?: boolean; dir?: "asc" | "desc" }) => {
+  if (!active) {
+    // Sortable but not currently sorted — tdesign/material "unfold-more" double chevron.
+    return (
+      <span className="sort-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83Zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17Z" />
+        </svg>
+      </span>
+    );
+  }
+  // Active — a single arrow; descending points down, ascending is the same arrow flipped.
+  return (
+    <span className="sort-icon sort-icon--active">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style={dir === "asc" ? { transform: "rotate(180deg)" } : undefined}
+      >
+        <path d="M11 4v12.17l-5.59-5.59L4 12l8 8 8-8-1.41-1.42L13 16.17V4h-2Z" />
+      </svg>
+    </span>
+  );
+};
 
 const sw = "1.7";
 
