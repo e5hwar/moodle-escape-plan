@@ -430,14 +430,14 @@ export function TasksPage({
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    ‹ Prev
+                    ‹
                   </button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Next ›
+                    ›
                   </button>
                 </div>
               </div>
@@ -471,7 +471,7 @@ function ColGroup({ columns, compact }: { columns: ColumnState; compact?: boolea
   return (
     <colgroup>
       {columns.id && <col style={{ width: 100 }} />}
-      <col />
+      <col style={{ width: 240 }} />
       {columns.type && !compact && <col style={{ width: 160 }} />}
       {columns.paid && !compact && <col style={{ width: 110 }} />}
       {columns.usedIn && !compact && <col style={{ width: 180 }} />}

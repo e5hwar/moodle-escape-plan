@@ -14,9 +14,12 @@
  */
 
 const SELECTOR = ".tasks-scroll, .table-xscroll, .attempts-scroll";
-const THICKNESS = 10; // px — track/thumb size on the cross axis
+const THICKNESS = 6; // px — track/thumb size on the cross axis
 const INSET = 2; // px — gap from the container edge
 const MIN_THUMB = 28; // px — smallest thumb so it stays grabbable
+// Tables no longer show a vertical scrollbar — only the horizontal one is drawn.
+// (Vertical wheel/trackpad scrolling still works; just the indicator is hidden.)
+const SHOW_VERTICAL = false;
 
 type Axis = "h" | "v";
 
@@ -148,11 +151,17 @@ function layout(el: HTMLElement, bars: Bars) {
   const vOverflow = scrollableY && el.scrollHeight - el.clientHeight > 1;
 
   // Leave a corner when both bars show so they don't overlap.
-  const hLen = c.width - INSET * 2 - (vOverflow ? THICKNESS : 0);
+  // Reserve the sticky 48px actions column on the right so the H scrollbar ends at
+  // the data columns, not under the fixed 3-dot/gear column (Figma 79:443).
+  const actionsReserve = el.classList.contains("table-xscroll") ? 48 : 0;
+  const hLen = c.width - INSET * 2 - Math.max(actionsReserve, SHOW_VERTICAL && vOverflow ? THICKNESS : 0);
   const vLen = c.height - INSET * 2 - (hOverflow ? THICKNESS : 0);
 
   // Horizontal bar — along the bottom edge.
   const showH = visible && hOverflow && hLen > MIN_THUMB;
+  // Reserve a strip below the scrollport (transparent border-bottom via CSS) only
+  // while the bar is shown, so it never overlaps the last row.
+  el.classList.toggle("has-cbar-h", showH);
   setOn(bars.hTrack, showH);
   setOn(bars.hThumb, showH);
   if (showH) {
@@ -168,7 +177,7 @@ function layout(el: HTMLElement, bars: Bars) {
   }
 
   // Vertical bar — along the right edge.
-  const showV = visible && vOverflow && vLen > MIN_THUMB;
+  const showV = SHOW_VERTICAL && visible && vOverflow && vLen > MIN_THUMB;
   setOn(bars.vTrack, showV);
   setOn(bars.vThumb, showV);
   if (showV) {

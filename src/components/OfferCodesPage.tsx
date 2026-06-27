@@ -186,9 +186,9 @@ export function OfferCodesPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table" style={{ minWidth: 760 }}>
+                <table className="table sch-table" style={{ width: 768 }}>
                   <colgroup>
-                    <col style={{ width: "auto" }} />
+                    <col style={{ width: 280 }} />
                     <col style={{ width: 280 }} />
                     <col style={{ width: 160 }} />
                     <col style={{ width: 48 }} />
@@ -243,14 +243,14 @@ export function OfferCodesPage() {
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    ‹ Prev
+                    ‹
                   </button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Next ›
+                    ›
                   </button>
                 </div>
               </div>

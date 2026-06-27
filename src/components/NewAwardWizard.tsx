@@ -7,6 +7,7 @@ import {
   MERIT_HEX,
   MERIT_INTENT,
   certIdsWithAward,
+  certName,
   type Award,
   type AwardDesignTemplate,
   type AwardStatus,
@@ -92,9 +93,11 @@ export function NewAwardWizard(props: Props) {
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-eyebrow">
+              {isEditing ? "Editing" : "Creating"}
+            </span>
             <span className="wizard-brand-name">
-              {isEditing ? "Edit" : "New"} Award
+              {props.editingAward ? certName(props.editingAward) : "New Award"}
             </span>
           </div>
 
@@ -116,10 +119,6 @@ export function NewAwardWizard(props: Props) {
               );
             })}
           </ol>
-
-          <div className="wizard-progress">
-            Step {step + 1} of {STEPS.length}
-          </div>
         </aside>
 
         <div className="wizard-content">

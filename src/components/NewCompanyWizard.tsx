@@ -301,8 +301,12 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
-            <span className="wizard-brand-name">{isEdit ? "Edit" : "New"} Company</span>
+            <span className="wizard-brand-eyebrow">
+              {isEdit ? "Editing" : "Creating"}
+            </span>
+            <span className="wizard-brand-name">
+              {editCompany ? editCompany.name : "New Company"}
+            </span>
           </div>
 
           <ol className="wizard-steps">
@@ -325,7 +329,6 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
             })}
           </ol>
 
-          <div className="wizard-progress">Step {step + 1} of {STEPS.length}</div>
         </aside>
 
         <div className="wizard-content">
@@ -1068,7 +1071,6 @@ function Step2Plan({
     <>
       <h1 className="wizard-title">Plan selection</h1>
       <p className="wizard-desc">Choose the access plan. Subscription plans require billing configuration.</p>
-      <div className="required-fields-note">* Required Fields</div>
 
       <div className="form-group">
         <label className="form-label">Plan</label>

@@ -114,10 +114,10 @@ export function NameChangeRequestsPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table ncr-table" style={{ minWidth: 1020 }}>
+                <table className="table sch-table ncr-table" style={{ width: 1020 }}>
                   <colgroup>
-                    <col style={{ width: "auto" }} />
-                    <col style={{ width: "auto" }} />
+                    <col style={{ width: 220 }} />
+                    <col style={{ width: 220 }} />
                     <col style={{ width: 150 }} />
                     <col style={{ width: 110 }} />
                     <col style={{ width: 320 }} />
@@ -176,8 +176,8 @@ export function NameChangeRequestsPage() {
                   Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
                 </div>
               </div>
             </div>

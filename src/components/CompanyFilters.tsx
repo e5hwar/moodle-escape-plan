@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
 import { EditColumnsIcon } from "./icons";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
@@ -8,6 +9,7 @@ import {
   COMPANY_PARTNERSHIPS,
   COMPANY_OPTIONAL_COLUMNS,
   COMPANY_FIXED_COLUMNS,
+  SIGN_UP_CHANNELS,
   type CompanyColumn,
 } from "../data/companies";
 
@@ -16,6 +18,7 @@ export type CompanyFilterState = {
   industries: string[];
   partnerships: string[];
   statuses: string[];
+  signUps: string[];
 };
 
 export type CompanyColumnState = Record<CompanyColumn, boolean>;
@@ -30,11 +33,12 @@ export function CompanyFilters({ filters, setFilters }: Props) {
     filters.tiers.length +
       filters.industries.length +
       filters.partnerships.length +
-      filters.statuses.length >
+      filters.statuses.length +
+      filters.signUps.length >
     0;
 
   function clearAll() {
-    setFilters({ tiers: [], industries: [], partnerships: [], statuses: [] });
+    setFilters({ tiers: [], industries: [], partnerships: [], statuses: [], signUps: [] });
   }
 
   return (
@@ -54,6 +58,10 @@ export function CompanyFilters({ filters, setFilters }: Props) {
       <PartnershipPill
         value={filters.partnerships}
         onApply={(v) => setFilters({ ...filters, partnerships: v })}
+      />
+      <MoreFiltersPill
+        signUps={filters.signUps}
+        onApply={(v) => setFilters({ ...filters, signUps: v.signUps })}
       />
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
@@ -207,6 +215,134 @@ function PartnershipPill({
         />
       )}
     </Dropdown>
+  );
+}
+
+function MoreFiltersPill({
+  signUps,
+  onApply,
+}: {
+  signUps: string[];
+  onApply: (v: { signUps: string[] }) => void;
+}) {
+  const count = signUps.length;
+  const summary = count > 0 ? `${count} active` : null;
+
+  return (
+    <Dropdown
+      width={320}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="More filters"
+          value={summary}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply({ signUps: [] })}
+        />
+      )}
+    >
+      {({ close }) => (
+        <MoreFiltersBody
+          signUps={signUps}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+function MoreFiltersBody({
+  signUps,
+  onApply,
+}: {
+  signUps: string[];
+  onApply: (v: { signUps: string[] }) => void;
+}) {
+  const [draftSignUps, setDraftSignUps] = useState(signUps);
+  const [hovered, setHovered] = useState<"signUp" | null>(null);
+  const [hoveredTop, setHoveredTop] = useState(0);
+
+  useEffect(() => setDraftSignUps(signUps), [signUps]);
+
+  function toggle(item: string) {
+    setDraftSignUps((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
+  }
+
+  return (
+    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
+      <div className="cascading-root">
+        <div className="dropdown-list">
+          <SubmenuRow
+            label="Sign-Up"
+            active={hovered === "signUp"}
+            onHover={(top) => { setHovered("signUp"); setHoveredTop(top); }}
+          />
+        </div>
+        <div className="dropdown-footer">
+          <button className="btn-apply" onClick={() => onApply({ signUps: draftSignUps })}>
+            Apply
+          </button>
+        </div>
+      </div>
+
+      {hovered && (
+        <div
+          className="cascading-sub"
+          style={{ top: hoveredTop }}
+          onMouseEnter={() => setHovered(hovered)}
+        >
+          <div className="dropdown-list">
+            {hovered === "signUp" && (
+              <div className="dropdown-section">
+                {SIGN_UP_CHANNELS.map((s) => (
+                  <CheckRow
+                    key={s}
+                    label={s}
+                    checked={draftSignUps.includes(s)}
+                    onChange={() => toggle(s)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubmenuRow({
+  label,
+  active,
+  onHover,
+}: {
+  label: string;
+  active: boolean;
+  onHover: (top: number) => void;
+}) {
+  function handle(e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>) {
+    const btn = e.currentTarget;
+    const parent = btn.offsetParent as HTMLElement | null;
+    let top = btn.offsetTop;
+    let el: HTMLElement | null = btn.parentElement;
+    while (el && el !== parent) {
+      top += el.offsetTop;
+      el = el.parentElement;
+    }
+    onHover(top);
+  }
+  return (
+    <button
+      className={`dropdown-submenu-row ${active ? "active" : ""}`}
+      onMouseEnter={handle}
+      onFocus={handle}
+    >
+      <span className="dropdown-submenu-label">{label}</span>
+      <span className="dropdown-submenu-chevron">›</span>
+    </button>
   );
 }
 

@@ -184,9 +184,15 @@ export function NewSkillWizard(props: Props) {
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-eyebrow">
+              {isEditing ? "Editing" : "Creating"}
+            </span>
             <span className="wizard-brand-name">
-              {isEditing ? "Edit" : "New"} {isMastery ? "Mastery Skill" : "Skill"}
+              {isEditing
+                ? props.editingSkill?.name ?? props.editingMastery?.name
+                : isMastery
+                  ? "New Mastery Skill"
+                  : "New Skill"}
             </span>
           </div>
 
@@ -208,10 +214,6 @@ export function NewSkillWizard(props: Props) {
               );
             })}
           </ol>
-
-          <div className="wizard-progress">
-            Step {step + 1} of {STEPS.length}
-          </div>
         </aside>
 
         <div className="wizard-content">
@@ -295,6 +297,8 @@ function DetailsStep({
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
+          placeholderEn={`${noun} name`}
+          placeholderEs={isMastery ? "Nombre de la habilidad de maestría" : "Nombre de la habilidad"}
         />
         <p className="form-help">Shown to learners on their earned-{noun.toLowerCase()} badge. Required in English; Spanish is translated for Spanish-locale learners.</p>
       </div>
@@ -694,22 +698,26 @@ function LangField({
   es,
   onChangeEn,
   onChangeEs,
+  placeholderEn,
+  placeholderEs,
 }: {
   en: string;
   es: string;
   onChangeEn: (v: string) => void;
   onChangeEs: (v: string) => void;
+  placeholderEn?: string;
+  placeholderEs?: string;
 }) {
   return (
     <div className="lang-field">
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
-        <input className="lang-field-input" value={en} onChange={(e) => onChangeEn(e.target.value)} />
+        <input className="lang-field-input" value={en} placeholder={placeholderEn} onChange={(e) => onChangeEn(e.target.value)} />
       </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
         <span className="lang-tag">ES</span>
-        <input className="lang-field-input" value={es} onChange={(e) => onChangeEs(e.target.value)} />
+        <input className="lang-field-input" value={es} placeholder={placeholderEs} onChange={(e) => onChangeEs(e.target.value)} />
       </div>
     </div>
   );

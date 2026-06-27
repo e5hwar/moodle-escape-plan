@@ -537,6 +537,17 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
   return XAPI_STEPS;
 }
 
+// Whether a given step renders at least one required field, so the header only
+// shows the "* Required Fields" note where it applies. "basics"/"details" always
+// have a required Name (or Quiz name); "completion" requires a rule except for
+// Hands-On; the quiz "payments" step has a required external ID.
+function stepHasRequiredFields(type: TaskTypeKey, stepId: string): boolean {
+  if (stepId === "basics" || stepId === "details") return true;
+  if (stepId === "completion") return type !== "hands-on";
+  if (stepId === "payments") return true;
+  return false;
+}
+
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
 type Props = {
@@ -640,9 +651,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-eyebrow">
+              {isEditing ? "Editing" : "Creating"}
+            </span>
             <span className="wizard-brand-name">
-              {isEditing ? "Edit" : "New"} {TYPE_LABEL[taskType]}
+              {editingTask ? editingTask.name : "New Task"}
             </span>
           </div>
 
@@ -665,16 +678,14 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               );
             })}
           </ol>
-
-          <div className="wizard-progress">
-            Step {step + 1} of {steps.length}
-          </div>
         </aside>
 
         <div className="wizard-content">
           <h1 className="wizard-title">{steps[step].label}</h1>
           <p className="wizard-desc">{steps[step].desc}</p>
-          <div className="required-fields-note">* Required Fields</div>
+          {stepHasRequiredFields(taskType, steps[step].id) && (
+            <div className="required-fields-note">* Required Fields</div>
+          )}
 
           {(() => {
             const criteriaLocked = isEditing && !criteriaUnlocked;
@@ -1555,6 +1566,8 @@ function QuizBasicsStep({ data, update }: StepProps) {
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
+          placeholderEn="Quiz name"
+          placeholderEs="Nombre del cuestionario"
         />
       </div>
 
@@ -2646,6 +2659,8 @@ function NameAndDescription({ data, update }: StepProps) {
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
+          placeholderEn="Name"
+          placeholderEs="Nombre"
         />
       </div>
 

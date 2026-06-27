@@ -525,7 +525,7 @@ a {
   position: fixed;
   z-index: 50;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -534,7 +534,7 @@ a {
   position: fixed;
   z-index: 51;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.15);
   pointer-events: auto;
   opacity: 0;
   transition: opacity 0.12s ease, background 0.12s ease;
@@ -545,7 +545,15 @@ a {
 }
 .cbar-thumb:hover,
 .cbar-thumb.is-dragging {
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Reserve a strip below the scrollport so the horizontal bar never overlaps the
+   last row. The transparent border sits outside the scrollable padding box, so
+   content cannot enter it at any scroll position. Toggled by customScrollbars.ts
+   only when the H bar is shown. */
+.has-cbar-h {
+  border-bottom: 10px solid transparent;
 }
 
 .tasks-header {
@@ -570,9 +578,9 @@ a {
   width: auto;
   height: 32px;
   gap: 8px;
-  padding: 0 34px;
+  padding: 0 16px;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
   border: 0.5px solid rgba(240, 85, 35, 0.15);
@@ -585,8 +593,8 @@ a {
 }
 /* Shortcut keycap — 28px box with a monospace key (matches the search-bar keys). */
 .tasks-header .cta-kbd {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   min-width: 0;
   margin-left: 0;
   padding: 0;
@@ -596,7 +604,7 @@ a {
   color: #fff;
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .tasks-title {
@@ -1308,18 +1316,20 @@ a {
   flex-shrink: 0;
 }
 
+/* Apply button uses the Primary CTA style (Figma 73:482) — no keycap. */
 .btn-apply {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
+  height: 32px;
+  padding: 0 16px;
   border-radius: 8px;
-  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.9%), #0d0d0d;
-  border: 0.5px solid rgba(240, 85, 35, 0.28);
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
+  border: 0.5px solid rgba(240, 85, 35, 0.15);
   color: #fff;
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .btn-apply:hover {
@@ -1328,7 +1338,13 @@ a {
 
 /* ===== Table ===== */
 .table {
+  /* The table FILLS its container, but never shrinks below the column-width sum
+     (--table-min) — so wide viewports fill and narrow ones scroll horizontally.
+     A fixed-layout table needs a definite width; min-width provides that floor
+     and keeps the sticky-header and body tables column-aligned. Single-table
+     pages set a definite width inline instead. */
   width: 100%;
+  min-width: var(--table-min);
   border-collapse: collapse;
   font-family: var(--font-sans);
   font-size: 12pt;
@@ -1351,7 +1367,7 @@ a {
   color: #fff;
   font-size: 16px;
   padding: 8px 20px;
-  border-bottom: 2px solid var(--border-strong);
+  border-bottom: 2px solid rgba(122, 122, 122, 0.5);
   white-space: nowrap;
   background: transparent;
   cursor: pointer;
@@ -1367,7 +1383,7 @@ a {
 .th-content {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sort-icon {
@@ -1395,17 +1411,22 @@ a {
 }
 
 .table tbody tr {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(122, 122, 122, 0.5);
   cursor: pointer;
   transition: background 0.1s ease;
 }
 
+/* The last row has no separator — the table edge / scrollbar reserve sits below it. */
+.table tbody tr:last-child {
+  border-bottom: none;
+}
+
 .table tbody tr:hover {
-  background: var(--bg-row-hover);
+  background-color: var(--bg-row-hover);
 }
 
 .table tbody tr.selected {
-  background: var(--bg-row-selected);
+  background-color: var(--bg-row-selected);
 }
 
 .table tbody tr.draft td:not(.row-actions) {
@@ -1418,6 +1439,13 @@ a {
   font-family: var(--font-sans);
   font-size: 12pt;
   font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Non-Name data cells are muted #a8a8a8; only Name is emphasized (Figma 79:443).
+   High specificity beats the per-column color rules below. */
+.table tbody td:not(.col-name):not(.col-actions):not(.col-checkbox) {
+  color: #a8a8a8;
 }
 
 /* Keep rows at a fixed height — truncate long text instead of wrapping. */
@@ -1427,17 +1455,59 @@ a {
   text-overflow: ellipsis;
 }
 
+/* ── Plain-text columns ─────────────────────────────────────────────────────
+   Every data column renders as plain text. Pills, badges, chips and status
+   tags are stripped of their chrome (background, border, radius, padding) and
+   their decorative dots are hidden, so only the label shows on a single line.
+   Scoped to data cells, so filter pills, side panels and wizards are left
+   alone. Specific pills will be reintroduced deliberately later. */
+.table tbody td:not(.col-actions):not(.col-checkbox) span,
+.table tbody td:not(.col-actions):not(.col-checkbox) div,
+.table tbody td:not(.col-actions):not(.col-checkbox) a,
+.table tbody td:not(.col-actions):not(.col-checkbox) small,
+.table tbody td:not(.col-actions):not(.col-checkbox) strong,
+.table tbody td:not(.col-actions):not(.col-checkbox) b,
+.table tbody td:not(.col-actions):not(.col-checkbox) em,
+.table tbody td:not(.col-actions):not(.col-checkbox) i {
+  display: inline !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+/* Separate adjacent inline labels (e.g. a list of tags) with a small gap. */
+.table tbody td:not(.col-actions):not(.col-checkbox) span + span,
+.table tbody td:not(.col-actions):not(.col-checkbox) span + a,
+.table tbody td:not(.col-actions):not(.col-checkbox) a + a {
+  margin-left: 6px !important;
+}
+
+/* Hide decorative pill / status dots — plain text only. */
+.table tbody td:not(.col-actions):not(.col-checkbox) [class*="dot"],
+.table tbody td:not(.col-actions):not(.col-checkbox) [class*="Dot"] {
+  display: none !important;
+}
+
 .table .col-id {
   width: 100px;
   white-space: nowrap;
 }
 .table td.col-id {
-  color: var(--text-muted);
+  color: #a8a8a8;
 }
 
 .table .col-name {
-  color: var(--text);
-  font-weight: 600;
+  color: #e7e7e8;
+  font-weight: 500;
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1445,7 +1515,7 @@ a {
 }
 
 .table .col-type {
-  color: var(--text);
+  color: #a8a8a8;
   width: 160px;
   white-space: nowrap;
 }
@@ -1484,6 +1554,16 @@ a {
   text-align: center;
   vertical-align: middle;
   background: var(--actions-bg);
+}
+.col-actions::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 72px;
+  background: linear-gradient(to right, rgba(122, 122, 122, 0), rgba(122, 122, 122, 0.04));
+  pointer-events: none;
 }
 .table tbody tr:hover .col-actions { --actions-bg: var(--bg-row-hover); }
 .table tbody tr.selected .col-actions { --actions-bg: var(--bg-row-selected); }
@@ -1884,47 +1964,59 @@ a {
 }
 
 /* ===== Pagination ===== */
+/* Pagination (Figma 77:264): right-aligned, 2px #3d3d43 top border, "Showing X
+   of Y" (14px Regular #a8a8a8) + two chevron buttons, 20px gap / 16px between. */
 .pagination {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  color: var(--text-faint);
-  font-family: "IBM Plex Sans Condensed", var(--font-sans);
-  font-size: 10pt;
+  justify-content: flex-end;
+  gap: 20px;
+  padding: 14px 0 12px;
+  color: #a8a8a8;
+  font-family: var(--font-sans);
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.2;
-  text-transform: uppercase;
-  border-top: 2px solid var(--border-strong);
+  line-height: normal;
+  text-transform: none;
+  border-top: 2px solid rgba(122, 122, 122, 0.5);
   background: transparent;
   flex-shrink: 0;
 }
 
 .pagination-controls {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 16px;
 }
 
 .page-btn {
-  padding: 2px 8px;
-  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+  color: #a8a8a8;
   border-radius: 4px;
-  font-family: "IBM Plex Sans Condensed", var(--font-sans);
-  font-size: 10pt;
-  font-weight: 400;
-  line-height: 1.2;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.12s ease;
+}
+
+.page-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .page-btn:hover:not(:disabled) {
-  background: var(--bg-pill);
-  color: var(--text);
+  color: #fff;
 }
 
 .page-btn:disabled {
   color: var(--text-faint);
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 /* ===== Detail panel ===== */
@@ -2143,22 +2235,22 @@ a {
 .cta-primary,
 .new-task,
 .btn-primary,
+/* Primary CTA (Figma 73:473/73:520): flat orange gradient, 0.5px orange border. */
 .btn-publish {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 8px;
   height: 32px;
-  width: 100%;
-  padding: 5px 9px;
+  padding: 0 16px;
   border-radius: 8px;
-  background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.75) 29.09%, rgba(138, 49, 20, 0.75) 100%), rgba(13, 13, 13, 0.75);
-  background-blend-mode: normal, normal;
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 8px 22px rgba(228, 69, 21, 0.28);
+  border: 0.5px solid rgba(240, 85, 35, 0.15);
+  box-shadow: none;
   transition: filter 0.12s ease, transform 0.05s ease;
 }
 
@@ -2231,45 +2323,35 @@ a {
 }
 
 .wizard-nav {
-  width: 288px;
+  width: 360px;
   flex-shrink: 0;
-  padding: 46px 34px;
+  padding: 46px 40px;
   border-right: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
-/* New-design rail brand: a small mark + the wizard's name. */
+/* New-design rail header (Figma atomic 78:395): an orange "CREATING"/"EDITING"
+   eyebrow stacked above the wizard's name. */
 .wizard-brand {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 26px;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 32px;
 }
 
-.wizard-brand-mark {
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wizard-brand-mark::after {
-  content: "";
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  background: var(--accent);
+.wizard-brand-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #f05523;
+  text-transform: uppercase;
 }
 
 .wizard-brand-name {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 28px;
   font-weight: 600;
   color: #fff;
   letter-spacing: -0.01em;
@@ -2455,13 +2537,15 @@ a {
 }
 
 /* ===== Wizard footer ===== */
+/* Footer (Figma 73:515): top border rgba(122,122,122,0.5), 20px/40px padding,
+   Cancel (left) + secondary & primary buttons (right, gap 16). */
 .wizard-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 72px;
-  padding: 16px 40px;
-  border-top: 1px solid var(--border);
+  padding: 20px 40px;
+  border-top: 1px solid rgba(122, 122, 122, 0.5);
   background: var(--bg);
   flex-shrink: 0;
 }
@@ -2481,62 +2565,43 @@ a {
 
 .wizard-cancel {
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  color: #7a7a7a;
   padding: 4px 8px;
 }
 
 .wizard-cancel:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 .wizard-actions {
   display: flex;
-  gap: 10px;
+  gap: 16px;
 }
 
+/* Secondary button (Figma 73:495): grey fill, 0.5px grey border, 14px SemiBold. */
 .btn-save-draft {
-  padding: 9px 18px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 16px;
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
   border-radius: 8px;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .btn-save-draft:hover {
-  background: var(--bg-pill);
+  filter: brightness(1.12);
 }
 
-.btn-publish {
-  padding: 9px 18px;
-  background: #fff;
-  color: #111;
-  border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-}
-
-.btn-publish:hover {
-  background: #ebebeb;
-}
-
-/* Inside any wizard the primary action is the accent (new-design) — the
-   app-wide white .btn-publish is unchanged outside .wizard. */
-.wizard .btn-publish:not(:disabled) {
-  background: var(--accent);
-  color: #fff;
-}
-
-.wizard .btn-publish:not(:disabled):hover {
-  background: var(--accent-strong);
-}
-
-.wizard .btn-publish:disabled {
+/* (Primary .btn-publish is defined above as the flat orange CTA — Figma 73:473.) */
+.btn-publish:disabled {
   background: var(--bg-pill-strong);
   color: var(--text-faint);
   border-color: var(--border);
@@ -2823,12 +2888,12 @@ a {
   margin-left: 2px;
 }
 
-/* Plain text input (Figma 49:343): #404040 border, 8px radius, 12px padding,
-   16px text. */
+/* Plain text input (Figma 49:343): #1e1e20 fill, #404040 border, 8px radius,
+   12px padding, 16px text, #404040 placeholder. */
 .form-input {
   width: 100%;
   padding: 12px;
-  background: var(--bg-pill);
+  background: #1e1e20;
   border: 1px solid #404040;
   border-radius: 8px;
   color: var(--text);
@@ -2836,6 +2901,10 @@ a {
   font-size: 16px;
   font-weight: 400;
   outline: none;
+}
+
+.form-input::placeholder {
+  color: #404040;
 }
 
 .form-input:focus {
@@ -2848,7 +2917,7 @@ a {
 
 .form-select {
   padding: 12px 14px;
-  background: var(--bg-pill);
+  background: #1e1e20;
   border: 1px solid #404040;
   border-radius: 8px;
   color: var(--text);
@@ -2980,9 +3049,13 @@ a {
 .lang-field {
   border: 1px solid #404040;
   border-radius: 8px;
-  background: var(--bg-pill);
+  background: #1e1e20;
   overflow: hidden;
   max-width: 920px;
+}
+
+.lang-field-input::placeholder {
+  color: #404040;
 }
 
 /* Each language row: [tag] [input], 11px gap, 12px padding. */
@@ -7337,20 +7410,19 @@ a {
   width: 48px;
 }
 
-/* Question column — the only multi-line cell, clamped to 3 lines */
+/* Question column — single line, truncated like every other column. */
 .table tbody td.qb-col-question:not(.col-actions) {
   color: var(--text);
-  white-space: normal;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .qb-q-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  white-space: normal;
+  display: block;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.45;
 }
 
@@ -7463,10 +7535,9 @@ a {
   border-bottom: none !important;
 }
 
-/* Pagination override (slightly tighter than tasks page) */
+/* Question Bank pagination — same as the standard table pagination. */
 .qb-pagination {
-  font-size: 11pt;
-  padding: 12px 4px;
+  padding: 14px 0 12px;
 }
 
 /* =============================================================

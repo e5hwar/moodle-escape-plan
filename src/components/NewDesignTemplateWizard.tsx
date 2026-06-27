@@ -76,9 +76,11 @@ export function NewDesignTemplateWizard(props: Props) {
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-eyebrow">
+              {isEditing ? "Editing" : "Creating"}
+            </span>
             <span className="wizard-brand-name">
-              {isEditing ? "Edit" : "New"} Design Template
+              {props.editingTemplate ? props.editingTemplate.name : "New Design Template"}
             </span>
           </div>
 
@@ -100,16 +102,14 @@ export function NewDesignTemplateWizard(props: Props) {
               );
             })}
           </ol>
-
-          <div className="wizard-progress">
-            Step {step + 1} of {STEPS.length}
-          </div>
         </aside>
 
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
-          <div className="required-fields-note">* Required Fields</div>
+          {step === 0 && (
+            <div className="required-fields-note">* Required Fields</div>
+          )}
 
           {step === 0 && <DetailsStep data={data} update={update} />}
           {step === 1 && <PositioningStep />}

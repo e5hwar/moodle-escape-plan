@@ -481,9 +481,11 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
       <div className="wizard-body">
         <aside className="wizard-nav">
           <div className="wizard-brand">
-            <span className="wizard-brand-mark" />
+            <span className="wizard-brand-eyebrow">
+              {isEditing ? "Editing" : "Creating"}
+            </span>
             <span className="wizard-brand-name">
-              {isEditing ? "Edit" : "New"} Certification
+              {editingCert ? editingCert.name : "New Certification"}
             </span>
           </div>
 
@@ -505,16 +507,14 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
               );
             })}
           </ol>
-
-          <div className="wizard-progress">
-            Step {step + 1} of {STEPS.length}
-          </div>
         </aside>
 
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
-          <div className="required-fields-note">* Required Fields</div>
+          {["details", "tasks", "completion"].includes(STEPS[step].id) && (
+            <div className="required-fields-note">* Required Fields</div>
+          )}
 
           {step === 0 && <DetailsStep data={data} update={update} />}
           {step === 1 && <AdditionalInfoStep data={data} update={update} />}
@@ -586,6 +586,8 @@ function DetailsStep({
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
+          placeholderEn="Certification name"
+          placeholderEs="Nombre de la certificación"
         />
       </div>
 

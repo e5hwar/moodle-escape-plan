@@ -18,6 +18,7 @@ import {
   type CompanyFilterState,
   type CompanyColumnState,
 } from "./CompanyFilters";
+import { CompaniesSearch } from "./CompaniesSearch";
 
 const PAGE_SIZE = 50;
 
@@ -35,7 +36,7 @@ const MoreIcon = () => (
   </svg>
 );
 
-type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved";
+type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn";
 type SortDir = "asc" | "desc";
 
 const TIER_ORDER: Record<Tier, number> = {
@@ -58,6 +59,7 @@ function compare(a: Company, b: Company, key: SortKey): number {
     case "partnership": return a.partnership.localeCompare(b.partnership);
     case "seatsAdded": return getCompanyBilling(a).seatsAdded - getCompanyBilling(b).seatsAdded;
     case "seatsRemoved": return getCompanyBilling(a).seatsRemoved - getCompanyBilling(b).seatsRemoved;
+    case "createdOn": return (Date.parse(getCompanyBilling(a).createdOn) || 0) - (Date.parse(getCompanyBilling(b).createdOn) || 0);
   }
 }
 
@@ -76,7 +78,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
     tiers: [],
     industries: [],
     partnerships: [],
-    statuses: [],
+    statuses: ["Active"],
+    signUps: [],
   });
   const [columns, setColumns] = useState<CompanyColumnState>({
     signUp: true,
@@ -85,6 +88,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
     seatsRemoved: false,
     industry: true,
     partnership: true,
+    createdOn: false,
   });
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -109,6 +113,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       if (filters.industries.length && !filters.industries.includes(c.industry)) return false;
       if (filters.partnerships.length && !filters.partnerships.includes(c.partnership)) return false;
       if (filters.statuses.length && !filters.statuses.includes(getCompanyBilling(c).status)) return false;
+      if (filters.signUps.length && !filters.signUps.includes(getCompanyBilling(c).signUp)) return false;
       return true;
     });
   }, [companies, query, filters]);
@@ -148,7 +153,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         (columns.seatsAdded ? 72 : 0) +
         (columns.seatsRemoved ? 82 : 0) +
         (columns.industry ? 145 : 0) +
-        (columns.partnership ? 155 : 0)
+        (columns.partnership ? 155 : 0) +
+        (columns.createdOn ? 130 : 0)
       : 0);
 
   return (
@@ -157,8 +163,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         <div className="tasks">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Manage Companies</h1>
-              <div className="tasks-subtitle">{companies.length} Companies · all tiers</div>
+              <h1 className="tasks-title">Companies</h1>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={onNewCompany}>
@@ -171,15 +176,18 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
           <div className="tasks-row">
             <div className="tasks-content">
-              <div className="search-wrap">
-                <span className="search-icon"><SearchIcon /></span>
-                <input
-                  className="search-input"
-                  placeholder="Search Companies by name, email, industry, or tier…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+              <div className="toolbar">
+                <CompaniesSearch
+                  companies={companies}
+                  tiers={filters.tiers}
+                  onTiersChange={(v) => setFilters((prev) => ({ ...prev, tiers: v }))}
+                  statuses={filters.statuses}
+                  onStatusesChange={(v) => setFilters((prev) => ({ ...prev, statuses: v }))}
+                  industries={filters.industries}
+                  onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
+                  query={query}
+                  onCommit={setQuery}
                 />
-                <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
               </div>
 
               <CompanyFilters filters={filters} setFilters={setFilters} />
@@ -201,6 +209,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                         {columns.seatsRemoved && !panelOpen && <SortableHeader col="seatsRemoved" label="Removed" className="col-seats-removed" sort={sort} toggle={toggleSort} />}
                         {columns.industry && !panelOpen && <SortableHeader col="industry" label="Industry" className="col-industry" sort={sort} toggle={toggleSort} />}
                         {columns.partnership && !panelOpen && <SortableHeader col="partnership" label="Partnership" className="col-partnership" sort={sort} toggle={toggleSort} />}
+                        {columns.createdOn && !panelOpen && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} />}
                         <th className="col-actions">
                           <CompanyEditColumnsButton columns={columns} setColumns={setColumns} />
                         </th>
@@ -234,8 +243,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                       Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
                     </div>
                   </div>
                 </div>
@@ -303,7 +312,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: boolean }) {
   return (
     <colgroup>
-      <col />
+      <col style={{ width: 220 }} />
       <col style={{ width: compact ? 150 : 195 }} />
       <col style={{ width: 130 }} />
       <col style={{ width: 120 }} />
@@ -313,6 +322,7 @@ function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: 
       {columns.seatsRemoved && !compact && <col style={{ width: 82 }} />}
       {columns.industry && !compact && <col style={{ width: 145 }} />}
       {columns.partnership && !compact && <col style={{ width: 155 }} />}
+      {columns.createdOn && !compact && <col style={{ width: 130 }} />}
       <col style={{ width: 44 }} />
     </colgroup>
   );
@@ -378,6 +388,7 @@ function CompanyRow({
       {columns.seatsRemoved && !compact && <td className="col-seats-removed co-seats-removed">−{billing.seatsRemoved}</td>}
       {columns.industry && !compact && <td className="col-industry">{company.industry || "—"}</td>}
       {columns.partnership && !compact && <td className="col-partnership">{company.partnership || "—"}</td>}
+      {columns.createdOn && !compact && <td className="col-created">{billing.createdOn}</td>}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -596,6 +607,7 @@ function CompanyPanel({
         {tab === "details" && (
           <div className="co-detail-grid">
             {detail("Account holder", company.email)}
+            {detail("Created on", billing.createdOn)}
             {detail("Industry", company.industry || "—")}
             {detail("Partner affiliation", company.partnership || "—")}
             {detail("Sign-up channel", billing.signUp)}

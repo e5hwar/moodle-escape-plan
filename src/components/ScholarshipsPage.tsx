@@ -204,9 +204,9 @@ export function ScholarshipsPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table" style={{ minWidth: 820 }}>
+                <table className="table sch-table" style={{ width: 828 }}>
                   <colgroup>
-                    <col style={{ width: "auto" }} />
+                    <col style={{ width: 280 }} />
                     <col style={{ width: 140 }} />
                     <col style={{ width: 180 }} />
                     <col style={{ width: 180 }} />
@@ -279,14 +279,14 @@ export function ScholarshipsPage() {
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    ‹ Prev
+                    ‹
                   </button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Next ›
+                    ›
                   </button>
                 </div>
               </div>

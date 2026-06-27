@@ -72,6 +72,8 @@ export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Canceled",
 ];
 
+export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign-Up"];
+
 /* Columns shown in the Manage Companies table. Company / Email / Tier / Status
  * always render; the rest are toggleable via the Edit Columns button. */
 export type CompanyColumn =
@@ -80,7 +82,8 @@ export type CompanyColumn =
   | "seatsRemoved"
   | "industry"
   | "partnership"
-  | "signUp";
+  | "signUp"
+  | "createdOn";
 
 export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] = [
   { key: "signUp", label: "Sign-Up" },
@@ -89,6 +92,7 @@ export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] =
   { key: "seatsRemoved", label: "Removed" },
   { key: "industry", label: "Industry" },
   { key: "partnership", label: "Partnership" },
+  { key: "createdOn", label: "Created On" },
 ];
 
 export const COMPANY_FIXED_COLUMNS: { label: string }[] = [
@@ -405,6 +409,7 @@ export type CompanyBilling = {
   seatsAdded: number;
   seatsRemoved: number;
   nextBillingDate: string;
+  createdOn: string;
   monthlyTotal: number;
   regions: { name: string; seats: number }[];
 };
@@ -453,6 +458,12 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Canceled"
       : `${MONTHS[h % 12]} 1`;
 
+  // Deterministic creation date: spread across 2021–2025.
+  const createdYear = 2021 + (h % 5);
+  const createdMonth = (h >> 3) % 12;
+  const createdDay = 1 + ((h >> 7) % 28);
+  const createdOn = `${MONTHS[createdMonth]} ${createdDay}, ${createdYear}`;
+
   // Region split — distribute used seats across 1–3 regions deterministically.
   const regionCount = 1 + (h % 3);
   const regions: { name: string; seats: number }[] = [];
@@ -478,6 +489,7 @@ export function getCompanyBilling(c: Company): CompanyBilling {
     seatsAdded,
     seatsRemoved,
     nextBillingDate,
+    createdOn,
     monthlyTotal,
     regions,
   };

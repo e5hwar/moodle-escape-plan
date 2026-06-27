@@ -400,8 +400,8 @@ export function SkillsPage() {
                       Showing {rows.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
                     </div>
                   </div>
                 </div>
@@ -566,7 +566,7 @@ function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
   return (
     <colgroup>
       <col style={{ width: 52 }} />
-      <col />
+      <col style={{ width: 240 }} />
       {cols.id && <col style={{ width: 100 }} />}
       {cols.criteria && <col style={{ width: 150 }} />}
       {cols.mastery && <col style={{ width: 160 }} />}
@@ -620,7 +620,7 @@ function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
   return (
     <colgroup>
       <col style={{ width: 52 }} />
-      <col />
+      <col style={{ width: 240 }} />
       {cols.id && <col style={{ width: 100 }} />}
       {cols.skills && <col style={{ width: 150 }} />}
       {cols.status && <col style={{ width: 110 }} />}

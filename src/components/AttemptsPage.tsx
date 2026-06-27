@@ -223,7 +223,7 @@ export function AttemptsPage({
               </div>
 
               <div className="attempts-scroll">
-                <table className="table attempts-table">
+                <table className="table attempts-table" style={{ width: 1618 }}>
                   <colgroup>
                     <col style={{ width: 170 }} />
                     <col style={{ width: 210 }} />
@@ -279,8 +279,8 @@ export function AttemptsPage({
                   Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
                 </div>
               </div>
             </div>

@@ -618,14 +618,14 @@ export function QuestionBankPage({
                   disabled={visiblePage === 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  ‹ Prev
+                  ‹
                 </button>
                 <button
                   className="page-btn"
                   disabled={visiblePage === totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >
-                  Next ›
+                  ›
                 </button>
               </div>
             </div>
@@ -918,7 +918,7 @@ function CatDeleteConfirm({
 function QbColGroup() {
   return (
     <colgroup>
-      <col />
+      <col style={{ width: 300 }} />
       <col style={{ width: 96 }} />
       <col style={{ width: 92 }} />
       <col style={{ width: 120 }} />
