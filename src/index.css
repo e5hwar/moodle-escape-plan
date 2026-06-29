@@ -1544,7 +1544,7 @@ a {
 
 .col-actions {
   --actions-bg: #0d0d0d;
-  width: 48px;
+  width: 40px;
   padding: 0 !important;
   /* Pin to the right edge so the three-dot menu floats over content when the
      table is wider than the viewport. */
@@ -2792,6 +2792,175 @@ a {
 }
 .cw-impact-callout-desc { font-size: 11pt; line-height: 1.5; color: var(--text-muted); }
 
+/* ===== Subscription preview (Figma 107:1236) =====
+   Shown in the billing-impact rail when editing a running paid subscription:
+   a "What's Changing" diff card + a "Billing Impact" timeline. */
+.sub-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.sub-preview-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* The shared page break carries its own 28px margins for wizard steps; reset
+   them here since the section already spaces via gap. */
+.sub-preview .page-break {
+  margin: 0;
+}
+
+/* "Effective Today" pill on the What's-Changing header (Figma 107:1143). */
+.sub-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sub-pill--accent {
+  color: #f05527;
+  background: rgba(240, 85, 39, 0.1);
+  border: 1px solid #f05527;
+}
+.sub-pill--muted {
+  color: #a8a8a8;
+  background: transparent;
+  border: 1px solid rgba(122, 122, 122, 0.5);
+}
+
+/* What's-Changing diff card (Figma 107:1179): inset 8px, #1e1e20 fill, rows
+   split by #404040/50% hairlines. Old value grey, new value white. */
+.sub-changes-wrap {
+  padding: 0 8px;
+}
+.sub-changes {
+  background: #1e1e20;
+  border: 1px solid rgba(122, 122, 122, 0.5);
+  border-radius: 8px;
+  padding: 4px 12px;
+}
+.sub-change-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 0 9px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+.sub-change-row:last-child {
+  border-bottom: none;
+}
+.sub-change-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #a8a8a8;
+}
+.sub-change-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  text-align: right;
+}
+.sub-change-old {
+  color: #a8a8a8;
+  font-weight: 400;
+}
+.sub-change-arrow {
+  color: #a8a8a8;
+}
+.sub-change-new {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Billing Impact timeline (Figma 107:1233): a dotted rail + dated amounts. */
+.sub-timeline {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+}
+.sub-timeline-item {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+.sub-timeline-rail {
+  flex-shrink: 0;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 4px;
+}
+.sub-timeline-dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #404040;
+  background: transparent;
+}
+.sub-timeline-dot.is-now {
+  border-color: #f05527;
+  background: #f05527;
+}
+.sub-timeline-divider {
+  flex: 1 0 0;
+  min-height: 8px;
+  width: 2px;
+  background: rgba(64, 64, 64, 0.5);
+}
+.sub-timeline-body {
+  flex: 1 0 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 32px;
+}
+.sub-timeline-item:last-child .sub-timeline-body {
+  padding-bottom: 0;
+}
+.sub-timeline-date {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+.sub-timeline-item:last-child .sub-timeline-date {
+  color: #7a7a7a;
+}
+.sub-timeline-amount {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+.sub-timeline-amount.is-muted {
+  color: #a8a8a8;
+}
+.sub-timeline-desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #7a7a7a;
+}
+
 .cw-impact-nextinvoice {
   display: flex;
   align-items: center;
@@ -2888,15 +3057,16 @@ a {
   margin-left: 2px;
 }
 
-/* Plain text input (Figma 49:343): #1e1e20 fill, #404040 border, 8px radius,
-   12px padding, 16px text, #404040 placeholder. */
+/* Plain text input (Figma 49:343 Empty / 97:560 Filled): transparent fill,
+   #404040 border, 8px radius, 12px padding, 16px text. Empty placeholder
+   #404040; filled value white. */
 .form-input {
   width: 100%;
   padding: 12px;
-  background: #1e1e20;
+  background: transparent;
   border: 1px solid #404040;
   border-radius: 8px;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
@@ -2915,18 +3085,31 @@ a {
   width: 100px;
 }
 
+/* Dropdown input (Figma 101:272 No-selection / 101:281 Option-selected):
+   transparent fill, #404040 border, custom #a8a8a8 chevron (native arrow
+   hidden), placeholder #404040, selected value white. */
 .form-select {
-  padding: 12px 14px;
-  background: #1e1e20;
+  padding: 12px 36px 12px 14px;
+  background: transparent;
   border: 1px solid #404040;
   border-radius: 8px;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
   outline: none;
   cursor: pointer;
   min-width: 130px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23a8a8a8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+/* "No selection" state — placeholder-grey value text. */
+.form-select.is-placeholder {
+  color: #404040;
 }
 
 /* Field supporting/subtext (Figma 49:370): 12px Fira Sans Regular, #a8a8a8. */
@@ -2940,6 +3123,127 @@ a {
 
 .form-help.error {
   color: var(--danger, #e5484d);
+}
+
+/* ===== Composite address field (Figma 101:337) =====
+   One bordered box: Country dropdown / Line 1 / Line 2 / City|PIN split /
+   State dropdown, each row split by a #404040 divider. Transparent fill,
+   #404040 placeholders, white values. */
+.address-field {
+  width: 100%;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* Accent hyperlink inside helper text (e.g. Tax status → Stripe docs). */
+.form-help-link {
+  color: #f05523;
+  text-decoration: none;
+}
+.form-help-link:hover {
+  text-decoration: underline;
+}
+
+/* Create Company form: fields stretch the full content width (override the
+   shared 920px field cap). */
+.company-wizard .form-group,
+.company-wizard .form-row-2,
+.company-wizard .form-divider {
+  max-width: none;
+}
+.company-wizard .form-select {
+  width: 100%;
+}
+
+/* Inset the fields 8px on each side so they sit just inside the full-width
+   page-break dividers. */
+.company-wizard .wizard-content > .form-group,
+.company-wizard .wizard-content > .form-row-2 {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* Every row after the first is divided by a horizontal hairline. Selectors are
+   kept at two-class specificity so they beat the `.address-input` border reset
+   below; the first-child rule is ordered last to win for the top row. */
+.address-field > .address-row,
+.address-field > .address-input,
+.address-field > .address-split {
+  border-top: 1px solid #404040;
+}
+.address-field > :first-child {
+  border-top: none;
+}
+
+/* Dropdown row: [select] [chevron], 11px gap, 12px padding. */
+.address-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+}
+
+.address-input {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 12px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  outline: none;
+}
+
+.address-input::placeholder {
+  color: #404040;
+}
+
+.address-select {
+  flex: 1 0 0;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* "No selection" state — placeholder-grey, e.g. the State dropdown default. */
+.address-select.is-placeholder {
+  color: #404040;
+}
+
+.address-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #a8a8a8;
+  pointer-events: none;
+}
+
+/* City | PIN — two cells split by a vertical hairline. */
+.address-split {
+  display: flex;
+}
+.address-split > .address-cell {
+  flex: 1 0 0;
+  min-width: 0;
+}
+.address-split > .address-cell + .address-cell {
+  border-left: 1px solid #404040;
 }
 
 .deeplink-row {
@@ -2967,6 +3271,37 @@ a {
   border-top: 1px solid var(--border);
   margin: 28px 0;
   max-width: 920px;
+}
+
+/* Wizard section divider (Figma 104:376 "Page Break"): a short 4px lead line,
+   then an uppercase IBM Plex Mono Medium 14px #a8a8a8 label, then a #404040
+   hairline filling the rest. 4px gaps. */
+.page-break {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 28px 0;
+}
+.page-break-label {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.page-break-line {
+  flex: 1 0 0;
+  min-width: 0;
+  height: 1px;
+  background: #404040;
+}
+/* Short fixed segment to the left of the label. */
+.page-break-line-lead {
+  flex: 0 0 4px;
+  width: 4px;
+  min-width: 4px;
 }
 
 /* Danger-tinted callout — e.g. the permanent-archive warning */
@@ -3044,12 +3379,12 @@ a {
 }
 
 /* ===== Dual-language input (Figma 49:348) =====
-   #404040 border, 8px radius, EN/es rows split by a divider. Each row carries a
-   monospace language tag on the left. */
+   transparent fill, #404040 border, 8px radius, EN/es rows split by a divider.
+   Each row carries a monospace language tag on the left. */
 .lang-field {
   border: 1px solid #404040;
   border-radius: 8px;
-  background: #1e1e20;
+  background: transparent;
   overflow: hidden;
   max-width: 920px;
 }
@@ -3081,7 +3416,7 @@ a {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
-  color: var(--text);
+  color: #fff;
   outline: none;
 }
 
@@ -7407,7 +7742,7 @@ a {
 /* Table */
 /* Question Bank table — uses the shared .table design (Tasks / Users / Companies) */
 .qb-q-table .col-actions {
-  width: 48px;
+  width: 40px;
 }
 
 /* Question column — single line, truncated like every other column. */
@@ -15858,30 +16193,46 @@ a {
   color: var(--text);
 }
 
-/* status pills */
-.co-status {
+/* Status pills — Manage Companies status column (Figma 109:1237).
+   Bordered, tinted-fill pills with a coloured label, no dot. */
+.co-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 11px;
+  padding: 1px 9px;
+  border: 1px solid;
   border-radius: 999px;
-  font-size: 10.5pt;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
   white-space: nowrap;
 }
-.co-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
+.co-status-pill--green     { color: #14b867; border-color: #14b867; background: rgba(20, 184, 103, 0.1); }
+.co-status-pill--red       { color: #ff1f31; border-color: #ff1f31; background: rgba(255, 31, 49, 0.1); }
+.co-status-pill--yellow    { color: #ffc524; border-color: #ffc524; background: rgba(255, 197, 36, 0.1); }
+.co-status-pill--grey      { color: #737373; border-color: #737373; background: rgba(115, 115, 115, 0.1); }
+.co-status-pill--purple    { color: #6944ff; border-color: #6944ff; background: rgba(105, 68, 255, 0.1); }
+.co-status-pill--secondary { color: #a8a8a8; border-color: #a8a8a8; background: rgba(168, 168, 168, 0.1); }
+
+/* The plain-text-column rule strips chrome from spans inside data cells; this
+   re-enables the pill chrome for the status column specifically. The extra
+   :not() keeps specificity above that strip rule (both use !important). */
+.table tbody td.col-status:not(.col-actions) .co-status-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 1px 9px !important;
+  border: 1px solid !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
 }
-.co-status--active { background: rgba(34, 197, 94, 0.14); color: #6ee7a3; }
-.co-status--free-trial { background: rgba(59, 130, 246, 0.15); color: #7ab8ff; }
-.co-status--trial-expired { background: rgba(249, 115, 22, 0.16); color: #fbb072; }
-.co-status--paused { background: rgba(245, 211, 107, 0.16); color: var(--skill-yellow); }
-.co-status--complimentary { background: rgba(167, 139, 250, 0.15); color: #c4b5fd; }
-.co-status--canceled { background: rgba(255, 107, 107, 0.14); color: #ff8d8d; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--green     { color: #14b867 !important; border-color: #14b867 !important; background: rgba(20, 184, 103, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--red       { color: #ff1f31 !important; border-color: #ff1f31 !important; background: rgba(255, 31, 49, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--yellow    { color: #ffc524 !important; border-color: #ffc524 !important; background: rgba(255, 197, 36, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--grey      { color: #737373 !important; border-color: #737373 !important; background: rgba(115, 115, 115, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--purple    { color: #6944ff !important; border-color: #6944ff !important; background: rgba(105, 68, 255, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--secondary { color: #a8a8a8 !important; border-color: #a8a8a8 !important; background: rgba(168, 168, 168, 0.1) !important; }
 
 /* Sign-up channel pill (Self vs Internal) */
 .co-signup {
@@ -15948,6 +16299,136 @@ a {
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
+}
+
+/* Edit Company / Account Holder modals — scrollable body */
+.co-edit-body {
+  overflow-y: auto;
+}
+
+/* Account-holder mode picker (Change vs Remove & replace) */
+.co-holder-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.co-holder-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.co-holder-mode:hover { background: rgba(255, 255, 255, 0.04); }
+.co-holder-mode.is-active {
+  border-color: #f05523;
+  background: rgba(240, 85, 35, 0.08);
+}
+.co-holder-mode-dot {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  position: relative;
+}
+.co-holder-mode.is-active .co-holder-mode-dot {
+  border-color: #f05523;
+}
+.co-holder-mode.is-active .co-holder-mode-dot::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: #f05523;
+}
+.co-holder-mode-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.co-holder-mode-title { font-weight: 600; color: var(--text); font-size: 11.5pt; }
+.co-holder-mode-desc { font-size: 10.5pt; color: var(--text-muted); line-height: 1.4; }
+
+/* New-account-holder employee picker */
+.co-holder-picker { position: relative; }
+.co-holder-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.co-holder-select.is-open { border-color: #f05523; }
+.co-holder-select-val { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.co-holder-select-name { font-weight: 600; }
+.co-holder-select-email { font-size: 10pt; color: var(--text-muted); }
+.co-holder-select-placeholder { color: var(--text-faint); }
+.co-holder-select-caret { flex-shrink: 0; display: inline-flex; color: var(--text-muted); }
+
+.co-holder-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.co-holder-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.co-holder-opt:hover { background: var(--bg-pill); }
+.co-holder-opt.is-selected { background: rgba(240, 85, 35, 0.1); }
+.co-holder-opt-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.co-holder-opt-name { font-weight: 600; color: var(--text); }
+.co-holder-opt-email { font-size: 10pt; color: var(--text-muted); }
+
+/* Account-holder info note */
+.co-holder-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  color: var(--text-muted);
+  font-size: 10.5pt;
+  line-height: 1.45;
+}
+.co-holder-note-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  margin-top: 1px;
+  color: #60a5fa;
+}
+
+/* Manage Subscription single page — no step rail, content stays readable */
+.company-wizard--sub .wizard-content {
+  padding-top: 46px;
 }
 
 /* Add Billing Emails modal */

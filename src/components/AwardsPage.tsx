@@ -178,12 +178,12 @@ export function AwardsPage() {
   const ac = awardCols;
   const tc = templateCols;
   const awardTableMin =
-    240 /* name */ + 48 /* actions */ +
+    240 /* name */ + 40 /* actions */ +
     (ac.id ? 100 : 0) + (ac.tier ? 120 : 0) + (ac.appearances ? 160 : 0) +
     (ac.status ? 110 : 0) + (ac.holders ? 110 : 0) + (ac.createdBy ? 150 : 0) +
     (ac.dateCreated ? 130 : 0) + (ac.dateModified ? 130 : 0);
   const templateTableMin =
-    72 /* thumb */ + 240 + 48 +
+    72 /* thumb */ + 240 + 40 +
     (tc.id ? 100 : 0) + (tc.usage ? 130 : 0) + (tc.createdBy ? 150 : 0) +
     (tc.dateCreated ? 130 : 0) + (tc.dateModified ? 130 : 0);
 
@@ -516,7 +516,7 @@ function AwardColGroup({ cols }: { cols: Record<AwardColKey, boolean> }) {
       {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }
@@ -576,7 +576,7 @@ function TemplateColGroup({ cols }: { cols: Record<TemplateColKey, boolean> }) {
       {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

@@ -211,13 +211,13 @@ export function TrialExtensionPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table" style={{ width: 828 }}>
+                <table className="table sch-table" style={{ width: 820 }}>
                   <colgroup>
                     <col style={{ width: 280 }} />
                     <col style={{ width: 140 }} />
                     <col style={{ width: 180 }} />
                     <col style={{ width: 180 }} />
-                    <col style={{ width: 48 }} />
+                    <col style={{ width: 40 }} />
                   </colgroup>
                   <thead>
                     <tr>

@@ -227,7 +227,7 @@ export function CertPurchasersPage({
 
   const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
   const colSpan = visibleCols.length + 2; // name + cols + actions
-  const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 48;
+  const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -413,7 +413,7 @@ function ColGroup({ cols }: { cols: ColMeta[] }) {
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />
       ))}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

@@ -242,7 +242,7 @@ export function TasksPage({
   // hidden while the side panel is open (compact mode), so they don't count then.
   const tableMin =
     240 /* name */ +
-    48 /* actions */ +
+    40 /* actions */ +
     (columns.id ? 100 : 0) +
     (!panelOpen
       ? (columns.type ? 160 : 0) +
@@ -479,7 +479,7 @@ function ColGroup({ columns, compact }: { columns: ColumnState; compact?: boolea
       {columns.tags && !compact && <col style={{ width: 200 }} />}
       {columns.dateCreated && !compact && <col style={{ width: 130 }} />}
       {columns.dateModified && !compact && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

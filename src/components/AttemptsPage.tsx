@@ -223,7 +223,7 @@ export function AttemptsPage({
               </div>
 
               <div className="attempts-scroll">
-                <table className="table attempts-table" style={{ width: 1618 }}>
+                <table className="table attempts-table" style={{ width: 1610 }}>
                   <colgroup>
                     <col style={{ width: 170 }} />
                     <col style={{ width: 210 }} />
@@ -235,7 +235,7 @@ export function AttemptsPage({
                     <col style={{ width: 100 }} />
                     <col style={{ width: 150 }} />
                     <col style={{ width: 130 }} />
-                    <col style={{ width: 48 }} />
+                    <col style={{ width: 40 }} />
                   </colgroup>
                   <thead>
                     <tr>

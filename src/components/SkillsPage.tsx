@@ -207,12 +207,12 @@ export function SkillsPage() {
   const sc = skillCols;
   const mc = masteryCols;
   const skillTableMin =
-    52 /* badge */ + 240 /* name */ + 48 /* actions */ +
+    52 /* badge */ + 240 /* name */ + 40 /* actions */ +
     (sc.id ? 100 : 0) + (sc.criteria ? 150 : 0) + (sc.mastery ? 160 : 0) +
     (sc.status ? 110 : 0) + (sc.holders ? 110 : 0) + (sc.createdBy ? 150 : 0) +
     (sc.dateCreated ? 130 : 0) + (sc.dateModified ? 130 : 0);
   const masteryTableMin =
-    52 + 240 + 48 +
+    52 + 240 + 40 +
     (mc.id ? 100 : 0) + (mc.skills ? 150 : 0) + (mc.status ? 110 : 0) +
     (mc.holders ? 110 : 0) + (mc.createdBy ? 150 : 0) +
     (mc.dateCreated ? 130 : 0) + (mc.dateModified ? 130 : 0);
@@ -575,7 +575,7 @@ function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
       {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }
@@ -628,7 +628,7 @@ function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
       {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

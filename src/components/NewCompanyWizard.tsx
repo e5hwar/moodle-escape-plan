@@ -13,10 +13,28 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckBoldIcon, SmallXIcon } from "./icons";
+import { CheckBoldIcon, SmallXIcon, ChevronDownIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import { PageBreak } from "./PageBreak";
 
 /* ─────────────── Constants ─────────────── */
+
+// Address dropdown options (Figma 101:337 — Country & State selects).
+export const COUNTRY_OPTIONS = [
+  "United States", "Canada", "United Kingdom", "Australia", "India",
+  "Germany", "France", "Mexico", "Brazil", "Other",
+];
+export const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+  "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+  "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine",
+  "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+  "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia",
+  "Washington", "West Virginia", "Wisconsin", "Wyoming",
+];
 
 type Plan = "free-trial" | "subscription" | "complimentary";
 type PaidTier = "Essentials" | "Growth" | "Pro";
@@ -33,13 +51,13 @@ type CurrentSub = {
   nextBillingDate: string;
 };
 
-const INDUSTRY_OPTIONS = [
+export const INDUSTRY_OPTIONS = [
   "HVAC", "Electrical", "Plumbing", "Solar", "Roofing",
   "Refrigeration", "Fire Protection", "Construction",
   "Appliance Repair", "Utilities", "Other",
 ];
 
-const PARTNERSHIP_OPTIONS = [
+export const PARTNERSHIP_OPTIONS = [
   "Preferred Partner", "Elite Partner", "NGO Partner",
   "NexStar", "National Account", "Channel Partner",
 ];
@@ -97,6 +115,9 @@ type Props = {
   // company and saving calls onSave with the same id instead of creating a new one.
   editCompany?: Company;
   onSave?: (company: Company) => void;
+  // Renders only the Plan step as a single page (no step rail / Company-details
+  // step). Used by the "Manage Subscription" action on the Companies list.
+  subscriptionOnly?: boolean;
 };
 
 function planFor(c: Company): Plan {
@@ -105,7 +126,7 @@ function planFor(c: Company): Plan {
   return "subscription";
 }
 
-export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Props) {
+export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false }: Props) {
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
   // so the edit form starts populated either way.
@@ -120,7 +141,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
   // the new-company "what happens on save" summary.
   const currentSub: CurrentSub | null =
     isEdit && editCompany && editBilling &&
-    (editBilling.status === "Active" || editBilling.status === "Paused") &&
+    editBilling.status === "Active" &&
     (["Essentials", "Growth", "Pro"] as Tier[]).includes(editCompany.tier)
       ? {
           tier: editCompany.tier as PaidTier,
@@ -136,7 +157,13 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
   // Company details
   const [name, setName] = useState(editCompany?.name ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
-  const [address, setAddress] = useState(editCompany?.address ?? "");
+  // Structured address (Figma 101:337). Composed into a flat string on save.
+  const [country, setCountry] = useState(editCompany?.addressParts?.country ?? "United States");
+  const [addrLine1, setAddrLine1] = useState(editCompany?.addressParts?.line1 ?? "");
+  const [addrLine2, setAddrLine2] = useState(editCompany?.addressParts?.line2 ?? "");
+  const [addrCity, setAddrCity] = useState(editCompany?.addressParts?.city ?? "");
+  const [addrPin, setAddrPin] = useState(editCompany?.addressParts?.pin ?? "");
+  const [addrState, setAddrState] = useState(editCompany?.addressParts?.state ?? "");
   const [contactName, setContactName] = useState(editCompany?.contactName ?? "");
   const [email, setEmail] = useState(editCompany?.email ?? "");
   const [phone, setPhone] = useState(editCompany?.phone ?? "");
@@ -166,8 +193,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
 
   // Two-step split-view wizard (matches the Tasks wizard shell): 0 = Company
   // details, 1 = Plan. The billing-impact rail and the save action live on the
-  // Plan step; the footer drives navigation.
-  const [step, setStep] = useState(0);
+  // Plan step; the footer drives navigation. In subscription-only mode the
+  // wizard is locked to the Plan step and the step rail is hidden.
+  const [step, setStep] = useState(subscriptionOnly ? 1 : 0);
 
   // Success
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
@@ -192,7 +220,11 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
     if (isSubscription) setPriceStr(String(baseRate));
   }, [tier, billingCycle, currency, plan]);
 
-  const detailsValid = name.trim().length > 0 && contactName.trim().length > 0 && email.trim().length > 0;
+  // Company-details validation only gates the full wizard; in subscription-only
+  // mode those fields aren't shown, so identity is taken as already-valid.
+  const detailsValid =
+    subscriptionOnly ||
+    (name.trim().length > 0 && contactName.trim().length > 0 && email.trim().length > 0);
   // A subscription must have at least one paid seat before it can be saved.
   const seatsValid = !isSubscription || seatCount > 0;
   const canSave = detailsValid && seatsValid;
@@ -256,16 +288,24 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
       industry: industries.join(", "),
       partnership: partnerships.join(", "),
       taxStatus,
-      address: address.trim() || undefined,
+      address: [addrLine1, addrLine2, addrCity, addrState, addrPin, country]
+        .map((s) => s.trim()).filter(Boolean).join(", ") || undefined,
+      addressParts: [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
+        ? {
+            country: country.trim() || undefined,
+            line1: addrLine1.trim() || undefined,
+            line2: addrLine2.trim() || undefined,
+            city: addrCity.trim() || undefined,
+            pin: addrPin.trim() || undefined,
+            state: addrState.trim() || undefined,
+          }
+        : undefined,
       contactName: contactName.trim() || undefined,
       phone: phone.trim() || undefined,
-      // Preserve a Paused subscription on edit instead of silently reactivating it.
       status: plan === "free-trial"
         ? "Free Trial"
         : plan === "complimentary"
         ? "Complimentary"
-        : isEdit && editBilling?.status === "Paused"
-        ? "Paused"
         : "Active",
       ...(isSubscription
         ? {
@@ -297,8 +337,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
   }
 
   return (
-    <div className="wizard">
+    <div className={`wizard company-wizard${subscriptionOnly ? " company-wizard--sub" : ""}`}>
       <div className="wizard-body">
+        {!subscriptionOnly && (
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
@@ -330,13 +371,19 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
           </ol>
 
         </aside>
+        )}
 
         <div className="wizard-content">
           {step === 0 ? (
             <Step1Details
               name={name} setName={setName}
               taxStatus={taxStatus} setTaxStatus={setTaxStatus}
-              address={address} setAddress={setAddress}
+              country={country} setCountry={setCountry}
+              addrLine1={addrLine1} setAddrLine1={setAddrLine1}
+              addrLine2={addrLine2} setAddrLine2={setAddrLine2}
+              addrCity={addrCity} setAddrCity={setAddrCity}
+              addrPin={addrPin} setAddrPin={setAddrPin}
+              addrState={addrState} setAddrState={setAddrState}
               contactName={contactName} setContactName={setContactName}
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
@@ -385,7 +432,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave }: Pro
           {stepHint && <span className="wizard-saved">{stepHint}</span>}
         </div>
         <div className="wizard-actions">
-          {step > 0 && (
+          {step > 0 && !subscriptionOnly && (
             <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
           )}
           {step === 0 ? (
@@ -444,6 +491,23 @@ function totalDisplay(total: number, cycle: BillingCycle, sym: string): string {
   return `${money(cycleTotal(total, cycle), sym)} / ${shortCycle(cycle)}`;
 }
 
+// Full month names for the billing-impact timeline date labels (Figma 107:1236
+// shows e.g. "JULY 1, 2026"). nextBillingDate is stored as "<Mon> 1" with no
+// year, so years are derived relative to APP_TODAY.
+const FULL_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+function fmtFullDate(d: Date): string {
+  return `${FULL_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+// The first occurrence of the 1st of `monthIdx` strictly after APP_TODAY.
+function nextFirstOfMonth(monthIdx: number): Date {
+  const y = APP_TODAY.getFullYear();
+  const d = new Date(y, monthIdx, 1);
+  return d.getTime() > APP_TODAY.getTime() ? d : new Date(y + 1, monthIdx, 1);
+}
+
 // Days remaining in the current billing period, relative to APP_TODAY. Everyone
 // bills on the 1st: a monthly cycle's days-left is the distance to the next 1st;
 // an annual cycle's is the distance to the renewal month's 1st.
@@ -484,6 +548,8 @@ type Target = {
 };
 
 type ChangeRow = { label: string; oldStr: string; newStr: string };
+// One dot on the billing-impact timeline (Figma 107:1236 "Billing Impact").
+type TimelineEntry = { date: string; amount: string; desc: string; now?: boolean; muted?: boolean };
 type ChangePreview = {
   anyChange: boolean;
   label: string;
@@ -494,10 +560,11 @@ type ChangePreview = {
   chargeNow: number;
   chargeStr: string;
   chargeReason: string;
-  effectiveText: string;
-  nextInvoiceStr: string;
-  bullets: string[];
   applyLabel: string;
+  // Subscription-preview redesign (Figma 107:1236): an "Effective Today"-style
+  // pill on the What's-Changing header, and the Billing Impact timeline.
+  pill: { text: string; muted: boolean } | null;
+  timeline: TimelineEntry[];
 };
 
 function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
@@ -556,57 +623,26 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
     ? "proration_behavior = always_invoice"
     : "subscription schedule · proration_behavior = none";
 
-  // ── Charge + reason + bullets ──
+  // ── Charge + reason ──
   let chargeNow = 0;
   let chargeReason = "";
-  let bullets: string[] = [];
-  const effectiveText = immediate ? "Immediately" : `At cycle end · ${renew}`;
-  const nextInvoiceStr = `${totalDisplay(newTotal, tgt.cycle, newSym)} · ${renew}`;
 
   if (!billingChanged && paymentChanged) {
     chargeReason = "Only how invoices are collected changes. Nothing is prorated or charged now.";
-    bullets = [
-      `Collection method switches to ${tgt.payment === "Automatic" ? "automatic — Stripe charges the card / ACH each period" : "manual — Stripe issues an invoice each period"}.`,
-      "No change to tier, cycle, or price. No proration.",
-    ];
   } else if (immediate) {
     chargeNow = Math.max(0, newTotal - oldTotalInTgt) * frac;
     if (chargeNow > 0.005) {
       chargeReason = `+${money(newTotal - oldTotalInTgt, newSym)} / mo · prorated for the ${daysLeft} of ${cycleDays} days left in this cycle.`;
-      bullets = [
-        `Subscription items are updated to ${money(tgt.rate, newSym)} / seat immediately${dir !== 0 ? ` (${tgt.tier} tier)` : ""}.`,
-        `A prorated invoice for ${money(chargeNow, newSym)} is created and charged to the card on file now.`,
-        `The next renewal on ${renew} bills ${totalDisplay(newTotal, tgt.cycle, newSym)} at the new rate.`,
-      ];
     } else {
       // Applies now but there is nothing to prorate: equal total, currency
       // redenomination, or a cycle switch that does not raise the recurring total.
       chargeReason = currencyChanged
         ? `Billing currency changes to ${tgt.currency}. Amounts are redenominated, not increased — no proration is charged now.`
         : "No increase to the recurring total — no proration is charged now.";
-      bullets = [
-        `Subscription items are updated immediately${dir !== 0 ? ` (${tgt.tier} tier)` : ""}.`,
-        "No prorated charge is created now.",
-        `The next renewal on ${renew} bills ${totalDisplay(newTotal, tgt.cycle, newSym)}.`,
-      ];
-    }
-    if (cycleChanged) {
-      bullets.unshift(toAnnual ? "Billing switches to a yearly cycle." : "Billing switches to a monthly cycle.");
     }
   } else {
     // Scheduled for cycle end — no proration or refund now.
     chargeReason = "No prorations or refunds. The company stays on the current plan until the cycle ends, then moves to the new plan.";
-    bullets = [
-      "The change is scheduled for cycle end via a subscription schedule.",
-      "No prorations or refunds are applied now.",
-      `The next bill on ${renew} reflects the new plan (${totalDisplay(newTotal, tgt.cycle, newSym)}).`,
-    ];
-  }
-
-  if (paymentChanged && billingChanged) {
-    bullets = bullets.concat([
-      `Collection method switches to ${tgt.payment === "Automatic" ? "automatic billing" : "manual invoicing"}.`,
-    ]);
   }
 
   // ── Diff rows (only what changed) ──
@@ -630,10 +666,87 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
     ? `Apply · charge ${money(chargeNow, newSym)}`
     : "Apply change";
 
+  // ── What's-Changing pill + Billing Impact timeline (Figma 107:1236) ──
+  const pill: ChangePreview["pill"] = !anyChange
+    ? null
+    : immediate
+    ? { text: "Effective Today", muted: false }
+    : { text: "At Cycle End", muted: true };
+
+  // The next billing boundary (cycle end) for the CURRENT sub: monthly subs
+  // renew on the next 1st of the month; annual subs on the 1st of their renewal
+  // month. The new plan's first full charge lands there; "onward" is one
+  // new-cycle later. Amounts are the new recurring total in the target currency.
+  const renewDate = cur.cycle === "Annual"
+    ? nextFirstOfMonth(MONTH_IDX[renew.slice(0, 3)] ?? APP_TODAY.getMonth())
+    : new Date(APP_TODAY.getFullYear(), APP_TODAY.getMonth() + 1, 1);
+  const onwardDate = tgt.cycle === "Annual"
+    ? new Date(renewDate.getFullYear() + 1, renewDate.getMonth(), 1)
+    : new Date(renewDate.getFullYear(), renewDate.getMonth() + 1, 1);
+  const newCycleTotalStr = money(cycleTotal(newTotal, tgt.cycle), newSym);
+  const cycleAdj = tgt.cycle === "Annual" ? "yearly" : "monthly";
+  const remainderWord = cur.cycle === "Annual" ? "year" : "month";
+  // Collection-method-only edits (no tier/cycle/rate/seat change) must not be
+  // framed as a new tier charge in the timeline.
+  const collectionOnly = !billingChanged && paymentChanged;
+  const payMethodWord = tgt.payment === "Automatic" ? "automatic card / ACH charge" : "manual invoice";
+
+  let todayAmount: string;
+  let todayDesc: string;
+  if (!immediate) {
+    todayAmount = money(0, newSym);
+    todayDesc = `No charge today — the change is scheduled for cycle end on ${fmtFullDate(renewDate)}.`;
+  } else if (collectionOnly) {
+    todayAmount = money(0, newSym);
+    todayDesc = "Collection method updated — nothing prorated or charged today.";
+  } else if (chargeNow > 0.005) {
+    todayAmount = money(chargeNow, newSym);
+    // A mid-cycle upgrade that also switches to annual only prorates the current
+    // (monthly) cycle today; the full annual term begins at renewal.
+    todayDesc = cycleChanged && toAnnual
+      ? `Prorated tier difference for the remainder of the ${remainderWord}; the yearly term begins at renewal.`
+      : `Prorated difference charged now for the remainder of the ${remainderWord}.`;
+  } else {
+    todayAmount = money(0, newSym);
+    todayDesc = currencyChanged
+      ? "Redenominated to the new currency — no charge today."
+      : "Applies now — no proration is charged today.";
+  }
+
+  const timeline: TimelineEntry[] = anyChange
+    ? [
+        {
+          date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+          amount: todayAmount,
+          desc: todayDesc,
+          now: true,
+        },
+        {
+          date: fmtFullDate(renewDate).toUpperCase(),
+          amount: newCycleTotalStr,
+          desc: collectionOnly
+            ? `Next invoice collected via ${payMethodWord} — same amount.`
+            : immediate
+            ? `First full ${cycleAdj} charge for the ${tgt.tier} Tier.`
+            : `New plan starts — first ${cycleAdj} charge for the ${tgt.tier} Tier.`,
+        },
+        {
+          date: `${fmtFullDate(onwardDate).toUpperCase()} ONWARD`,
+          amount: newCycleTotalStr,
+          desc: collectionOnly
+            ? `Recurring ${cycleAdj} via ${payMethodWord}.`
+            : tgt.cycle === "Annual"
+            ? `Recurring yearly on the 1st of ${FULL_MONTHS[renewDate.getMonth()]}.`
+            : "Recurring monthly on the 1st of each month.",
+          muted: true,
+        },
+      ]
+    : [];
+
   return {
     anyChange, label, channel, immediate, prorationParam, rows,
     chargeNow, chargeStr: money(chargeNow, newSym), chargeReason,
-    effectiveText, nextInvoiceStr, bullets, applyLabel,
+    applyLabel, pill, timeline,
   };
 }
 
@@ -721,69 +834,65 @@ function BillingImpactRail({
   );
 }
 
+// Subscription preview shown when editing a running paid subscription
+// (Figma 107:1236): a "What's Changing" diff card + a "Billing Impact" timeline.
 function ChangeCard({ change }: { change: ChangePreview }) {
   if (!change.anyChange) {
     return (
-      <>
-        <div className="cw-impact-head">Billing impact</div>
-        <div className="cw-chg-empty">
-          <div className="cw-chg-empty-title">No billing changes</div>
-          <div className="cw-chg-empty-sub">Change the tier, cycle, rate, seats, or payment method to preview the impact.</div>
-        </div>
-      </>
+      <div className="cw-chg-empty">
+        <div className="cw-chg-empty-title">No billing changes</div>
+        <div className="cw-chg-empty-sub">Change the tier, cycle, rate, seats, or payment method to preview the impact.</div>
+      </div>
     );
   }
   return (
-    <>
-      <div className="cw-impact-head">Billing impact</div>
-
-      <div className={`cw-chg-badge cw-chg-badge--${change.immediate ? "immediate" : "scheduled"}`}>
-        <span className="cw-chg-badge-dot" />
-        {change.label}
-        <span className="cw-chg-channel">{change.channel}</span>
-      </div>
-
-      <div className="cw-chg-rows">
-        {change.rows.map((r) => (
-          <div className="cw-chg-row" key={r.label}>
-            <span className="cw-chg-row-label">{r.label}</span>
-            <span className="cw-chg-row-val">
-              <span className="cw-chg-old">{r.oldStr}</span>
-              <span className="cw-chg-arrow">→</span>
-              <span className="cw-chg-new">{r.newStr}</span>
-            </span>
+    <div className="sub-preview">
+      <section className="sub-preview-sec">
+        <PageBreak
+          label="What's Changing"
+          trailing={
+            change.pill && (
+              <span className={`sub-pill ${change.pill.muted ? "sub-pill--muted" : "sub-pill--accent"}`}>
+                {change.pill.text}
+              </span>
+            )
+          }
+        />
+        <div className="sub-changes-wrap">
+          <div className="sub-changes">
+            {change.rows.map((r) => (
+              <div className="sub-change-row" key={r.label}>
+                <span className="sub-change-label">{r.label}</span>
+                <span className="sub-change-val">
+                  <span className="sub-change-old">{r.oldStr}</span>
+                  <span className="sub-change-arrow">→</span>
+                  <span className="sub-change-new">{r.newStr}</span>
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {change.immediate ? (
-        <div className={`cw-impact-callout cw-impact-callout--${change.chargeNow > 0 ? "charge" : "scheduled"}`}>
-          <div className="cw-impact-callout-title">{change.chargeNow > 0 ? "Charged now — prorated" : "Applies now — no charge"}</div>
-          {change.chargeNow > 0 && <div className="cw-impact-callout-amt cw-chg-amount">{change.chargeStr}</div>}
-          <div className="cw-impact-callout-desc">{change.chargeReason}</div>
-          <div className="cw-chg-param">{change.prorationParam}</div>
         </div>
-      ) : (
-        <div className="cw-impact-callout cw-impact-callout--scheduled">
-          <div className="cw-impact-callout-title">Scheduled — no charge now</div>
-          <div className="cw-impact-callout-amt">{change.effectiveText}</div>
-          <div className="cw-impact-callout-desc">{change.chargeReason}</div>
-          <div className="cw-chg-param">{change.prorationParam}</div>
+      </section>
+
+      <section className="sub-preview-sec">
+        <PageBreak label="Billing Impact" />
+        <div className="sub-timeline">
+          {change.timeline.map((t, i) => (
+            <div className="sub-timeline-item" key={i}>
+              <div className="sub-timeline-rail">
+                <span className={`sub-timeline-dot ${t.now ? "is-now" : ""}`} />
+                {i < change.timeline.length - 1 && <span className="sub-timeline-divider" />}
+              </div>
+              <div className="sub-timeline-body">
+                <p className="sub-timeline-date">{t.date}</p>
+                <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+                <p className="sub-timeline-desc">{t.desc}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
-
-      <div className="cw-impact-nextinvoice">
-        <span>Next invoice</span>
-        <span className="cw-impact-nextinvoice-val">{change.nextInvoiceStr}</span>
-      </div>
-
-      <div className="cw-impact-bullets-label">What Stripe does</div>
-      <ul className="cw-impact-bullets">
-        {change.bullets.map((b, i) => (
-          <li key={i}>{b}</li>
-        ))}
-      </ul>
-    </>
+      </section>
+    </div>
   );
 }
 
@@ -909,7 +1018,12 @@ function OnSaveCard({
 function Step1Details({
   name, setName,
   taxStatus, setTaxStatus,
-  address, setAddress,
+  country, setCountry,
+  addrLine1, setAddrLine1,
+  addrLine2, setAddrLine2,
+  addrCity, setAddrCity,
+  addrPin, setAddrPin,
+  addrState, setAddrState,
   contactName, setContactName,
   email, setEmail,
   phone, setPhone,
@@ -918,7 +1032,12 @@ function Step1Details({
 }: {
   name: string; setName: (v: string) => void;
   taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
-  address: string; setAddress: (v: string) => void;
+  country: string; setCountry: (v: string) => void;
+  addrLine1: string; setAddrLine1: (v: string) => void;
+  addrLine2: string; setAddrLine2: (v: string) => void;
+  addrCity: string; setAddrCity: (v: string) => void;
+  addrPin: string; setAddrPin: (v: string) => void;
+  addrState: string; setAddrState: (v: string) => void;
   contactName: string; setContactName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
@@ -934,8 +1053,10 @@ function Step1Details({
       </p>
       <div className="required-fields-note">* Required Fields</div>
 
+      <PageBreak label="Company Details" />
+
       <div className="form-group">
-        <label className="form-label">Company name <span className="req">*</span></label>
+        <label className="form-label">Company Name <span className="req">*</span></label>
         <input
           autoFocus
           className="form-input"
@@ -946,35 +1067,89 @@ function Step1Details({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Tax status</label>
-        <div className="tab-switch">
-          {TAX_STATUSES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`tab-switch-tab ${taxStatus === t ? "active" : ""}`}
-              onClick={() => setTaxStatus(t)}
+        <label className="form-label" style={{ marginBottom: 0 }}>Address <span className="req">*</span></label>
+        <p className="form-help" style={{ margin: "0 0 8px" }}>Country and PIN are mandatory</p>
+        <div className="address-field">
+          <div className="address-row">
+            <select
+              className="address-select"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
             >
-              {t}
-            </button>
-          ))}
+              {COUNTRY_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <span className="address-chevron"><ChevronDownIcon /></span>
+          </div>
+          <input
+            className="address-input"
+            placeholder="Address Line 1 (Optional)"
+            value={addrLine1}
+            onChange={(e) => setAddrLine1(e.target.value)}
+          />
+          <input
+            className="address-input"
+            placeholder="Address Line 2 (Optional)"
+            value={addrLine2}
+            onChange={(e) => setAddrLine2(e.target.value)}
+          />
+          <div className="address-split">
+            <input
+              className="address-input address-cell"
+              placeholder="City (Optional)"
+              value={addrCity}
+              onChange={(e) => setAddrCity(e.target.value)}
+            />
+            <input
+              className="address-input address-cell"
+              placeholder="PIN*"
+              value={addrPin}
+              onChange={(e) => setAddrPin(e.target.value)}
+            />
+          </div>
+          <div className="address-row">
+            <select
+              className={`address-select ${addrState ? "" : "is-placeholder"}`}
+              value={addrState}
+              onChange={(e) => setAddrState(e.target.value)}
+            >
+              <option value="">State</option>
+              {US_STATES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <span className="address-chevron"><ChevronDownIcon /></span>
+          </div>
         </div>
-        <p className="form-help">
-          Controls how tax is applied on Stripe invoices for this company.
-        </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Address</label>
-        <input
-          className="form-input"
-          placeholder="123 Main St, City, State, ZIP"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-        />
+        <label className="form-label" style={{ marginBottom: 0 }}>Tax Status <span className="req">*</span></label>
+        <p className="form-help" style={{ margin: "0 0 8px" }}>
+          Refer to{" "}
+          <a
+            href="https://docs.stripe.com/tax/zero-tax"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="form-help-link"
+          >
+            Stripe's Documentation
+          </a>{" "}
+          for more details
+        </p>
+        <select
+          className="form-select"
+          value={taxStatus}
+          onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}
+        >
+          {TAX_STATUSES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
-      <div className="form-divider" />
+      <PageBreak label="Primary Contact" />
 
       <div className="form-row-2">
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1010,7 +1185,7 @@ function Step1Details({
         <p className="form-help">Becomes the Stripe billing email and the company's first Admin account.</p>
       </div>
 
-      <div className="form-divider" />
+      <PageBreak label="Segmentation" />
 
       <div className="form-row-2">
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1667,7 +1842,7 @@ function CreatePriceModal({
 
 /* ─────────────── Multi-select ─────────────── */
 
-function MultiSelect({
+export function MultiSelect({
   options, value, onChange, placeholder,
 }: {
   options: string[]; value: string[]; onChange: (v: string[]) => void; placeholder: string;

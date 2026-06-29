@@ -76,7 +76,7 @@ type View =
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
-  | { name: "edit-company"; company: Company }
+  | { name: "manage-subscription"; company: Company }
   | { name: "users" }
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
@@ -165,7 +165,7 @@ function AdminApp() {
       ? "feedback"
       : view.name === "industries"
       ? "industries"
-      : view.name === "companies" || view.name === "new-company" || view.name === "edit-company"
+      : view.name === "companies" || view.name === "new-company" || view.name === "manage-subscription"
       ? "manage-companies"
       : view.name === "users"
       ? "manage-users"
@@ -312,7 +312,7 @@ function AdminApp() {
           companies={companies}
           initialQuery={view.query}
           onNewCompany={() => setView({ name: "new-company" })}
-          onEditCompany={(company) => setView({ name: "edit-company", company })}
+          onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
           onUpdateCompany={updateCompany}
         />
       ) : view.name === "new-company" ? (
@@ -320,9 +320,10 @@ function AdminApp() {
           onClose={() => setView({ name: "companies" })}
           onCreate={addCompany}
         />
-      ) : view.name === "edit-company" ? (
+      ) : view.name === "manage-subscription" ? (
         <NewCompanyWizard
           editCompany={view.company}
+          subscriptionOnly
           onClose={() => setView({ name: "companies" })}
           onSave={updateCompany}
         />

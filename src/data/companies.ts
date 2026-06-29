@@ -12,9 +12,9 @@ export type PaymentCollection = "Automatic" | "Manual";
 export type TaxStatus = "Taxable" | "Tax Exempt" | "Reverse Charge";
 export type SubscriptionStatus =
   | "Active"
+  | "Past Due"
   | "Free Trial"
   | "Trial Expired"
-  | "Paused"
   | "Complimentary"
   | "Canceled";
 export type CompanyRole = "Account Holder" | "Admin" | "Member";
@@ -38,6 +38,16 @@ export type Company = {
   industry: string;
   partnership: string;
   address?: string;
+  /** Structured address captured by the Create Company form (Figma 101:337). The
+   *  flat `address` above is kept as a composed one-line string for display. */
+  addressParts?: {
+    country?: string;
+    line1?: string;
+    line2?: string;
+    city?: string;
+    pin?: string;
+    state?: string;
+  };
   contactName?: string;
   phone?: string;
   // Optional billing/subscription fields. When absent (seed data), they are
@@ -51,6 +61,10 @@ export type Company = {
   seatsUsed?: number;
   ratePerSeat?: number;
   taxStatus?: TaxStatus;
+  /** Date a scheduled cancellation takes effect (e.g. "Aug 27"). Set when a
+   *  subscription is cancelled through the UI; until that date the status pill
+   *  reads "Cancels on …", after it reads "Canceled". */
+  cancelsOn?: string;
 };
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
@@ -65,9 +79,9 @@ export const TIERS: Tier[] = [
 
 export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Active",
+  "Past Due",
   "Free Trial",
   "Trial Expired",
-  "Paused",
   "Complimentary",
   "Canceled",
 ];
@@ -341,6 +355,19 @@ export const companies: Company[] = [
     industry: "HVAC",
     partnership: "Preferred Partner",
   },
+  {
+    // Subscription scheduled to cancel at the end of the cycle — demonstrates
+    // the grey "Cancels on …" status pill (vs. an already-ended "Canceled").
+    id: "CO-026",
+    name: "Apex Mechanical Group",
+    email: "billing@apexmech.com",
+    tier: "Growth",
+    seats: 40,
+    industry: "HVAC",
+    partnership: "",
+    status: "Canceled",
+    cancelsOn: "Aug 27",
+  },
 ];
 
 // Distinct industry / partnership values present in the data, used to populate
@@ -412,6 +439,15 @@ export type CompanyBilling = {
   createdOn: string;
   monthlyTotal: number;
   regions: { name: string; seats: number }[];
+  /** Days the latest invoice is overdue (drives the red "X Days Past Due" pill). */
+  daysPastDue: number;
+  /** Date a free trial ends, e.g. "Aug 27" (drives the yellow "Trial Ends On …" pill). */
+  trialEndsOn: string;
+  /** Effective date of a scheduled cancellation, e.g. "Aug 27". */
+  cancelsOn: string;
+  /** True when a cancellation is scheduled but the effective date hasn't passed
+   *  ("Cancels on …"); false once it has taken effect ("Canceled"). */
+  cancelScheduled: boolean;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -425,10 +461,10 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Free Trial"
       : c.tier === "Complimentary Access"
       ? "Complimentary"
-      : h % 11 === 0
-      ? "Paused"
       : h % 17 === 0
       ? "Canceled"
+      : h % 7 === 0
+      ? "Past Due"
       : "Active");
 
   const billingCycle: BillingCycle = c.billingCycle ?? (h % 3 === 0 ? "Annual" : "Monthly");
@@ -477,6 +513,17 @@ export function getCompanyBilling(c: Company): CompanyBilling {
     if (remaining <= 0) break;
   }
 
+  // A short month-day date derived from the hash, reused by the status pills.
+  const pillDate = `${MONTHS[(h >> 4) % 12]} ${1 + ((h >> 9) % 27)}`;
+
+  // Past Due: invoices fall 1–89 days overdue.
+  const daysPastDue = 1 + (h % 89);
+  const trialEndsOn = pillDate;
+  // A scheduled cancellation set through the UI carries its own effective date;
+  // otherwise seed data alternates between scheduled ("Cancels on …") and ended.
+  const cancelsOn = c.cancelsOn ?? pillDate;
+  const cancelScheduled = c.cancelsOn ? true : (h >> 5) % 2 === 0;
+
   return {
     status,
     billingCycle,
@@ -492,7 +539,41 @@ export function getCompanyBilling(c: Company): CompanyBilling {
     createdOn,
     monthlyTotal,
     regions,
+    daysPastDue,
+    trialEndsOn,
+    cancelsOn,
+    cancelScheduled,
   };
+}
+
+/* Status pill shown in the Manage Companies table (Figma 109:1237). Maps a
+ * subscription status to a colour tone and the label text to print. Only the
+ * four statuses below are finalised; the rest fall back to a neutral grey pill
+ * until their designs are confirmed. */
+export type StatusPillTone = "green" | "red" | "yellow" | "grey" | "purple" | "secondary";
+
+export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; label: string } {
+  switch (billing.status) {
+    case "Active":
+      return { tone: "green", label: "Active" };
+    case "Past Due":
+      return {
+        tone: "red",
+        label: `${billing.daysPastDue} ${billing.daysPastDue === 1 ? "Day" : "Days"} Past Due`,
+      };
+    case "Free Trial":
+      return { tone: "yellow", label: `Trial Ends On ${billing.trialEndsOn}` };
+    case "Trial Expired":
+      return { tone: "purple", label: "Trial Ended" };
+    case "Complimentary":
+      return { tone: "secondary", label: "Complimentary Access" };
+    case "Canceled":
+      return billing.cancelScheduled
+        ? { tone: "grey", label: `Cancels on ${billing.cancelsOn}` }
+        : { tone: "grey", label: "Canceled" };
+    default:
+      return { tone: "grey", label: billing.status };
+  }
 }
 
 const FIRST = ["James", "Maria", "David", "Sarah", "Michael", "Jessica", "Robert", "Linda", "Carlos", "Emily", "Daniel", "Ashley", "Kevin", "Tonya", "Brian", "Nicole"];

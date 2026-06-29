@@ -128,7 +128,7 @@ export function ReviewHandsOnPage() {
   const colSpan = visibleCols.length + 1; // name + cols
   // Natural table width (name col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
-  const tableMin = 190 + visibleCols.reduce((s, c) => s + c.width, 0) + 48;
+  const tableMin = 190 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -302,7 +302,7 @@ function ColGroup({ cols }: { cols: ColMeta[] }) {
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />
       ))}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

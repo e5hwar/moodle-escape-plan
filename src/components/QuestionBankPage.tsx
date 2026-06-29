@@ -569,7 +569,7 @@ export function QuestionBankPage({
               </button>
             </div>
 
-            <div className="table-xscroll" style={{ "--table-min": "886px" } as React.CSSProperties}>
+            <div className="table-xscroll" style={{ "--table-min": "878px" } as React.CSSProperties}>
             <table className="table table-head qb-q-table">
               <QbColGroup />
               <thead>
@@ -923,7 +923,7 @@ function QbColGroup() {
       <col style={{ width: 92 }} />
       <col style={{ width: 120 }} />
       <col style={{ width: 230 }} />
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

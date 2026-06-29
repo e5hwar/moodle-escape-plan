@@ -233,7 +233,7 @@ export function CertificationsPage({
   // Natural table width so columns scroll horizontally instead of crushing.
   const tableMin =
     240 /* name */ +
-    48 /* actions */ +
+    40 /* actions */ +
     (columns.id ? 100 : 0) +
     (columns.industry ? 190 : 0) +
     (columns.careerStage ? 140 : 0) +
@@ -403,7 +403,7 @@ function CertColGroup({ columns }: { columns: CertColumnState }) {
       {columns.visibility && <col style={{ width: 120 }} />}
       {columns.dateCreated && <col style={{ width: 130 }} />}
       {columns.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }

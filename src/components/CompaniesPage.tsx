@@ -2,16 +2,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getCompanyBilling,
   getCompanyUsers,
+  getStatusPill,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
+  TAX_STATUSES,
   type Company,
+  type CompanyBilling,
   type CompanyUser,
   type Tier,
-  type SubscriptionStatus,
   type SignUpChannel,
+  type TaxStatus,
 } from "../data/companies";
-import { userBank, type ScholarshipUser } from "../data/scholarships";
-import { SearchIcon, SortIcon, AddIcon, EnterKeyIcon, SmallXIcon, CheckBoldIcon } from "./icons";
+import { SortIcon, AddIcon, EnterKeyIcon, SmallXIcon, CheckBoldIcon, ChevronDownIcon } from "./icons";
 import {
   CompanyFilters,
   CompanyEditColumnsButton,
@@ -19,6 +21,13 @@ import {
   type CompanyColumnState,
 } from "./CompanyFilters";
 import { CompaniesSearch } from "./CompaniesSearch";
+import {
+  MultiSelect,
+  INDUSTRY_OPTIONS,
+  PARTNERSHIP_OPTIONS,
+  COUNTRY_OPTIONS,
+  US_STATES,
+} from "./NewCompanyWizard";
 
 const PAGE_SIZE = 50;
 
@@ -33,6 +42,13 @@ const MoreIcon = () => (
     <circle cx="5" cy="12" r="1.9" />
     <circle cx="12" cy="12" r="1.9" />
     <circle cx="19" cy="12" r="1.9" />
+  </svg>
+);
+
+const CardIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="5" width="20" height="14" rx="2.5" />
+    <path d="M2 10h20" />
   </svg>
 );
 
@@ -67,11 +83,11 @@ type Props = {
   companies: Company[];
   initialQuery?: string;
   onNewCompany: () => void;
-  onEditCompany: (company: Company) => void;
+  onManageSubscription: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onUpdateCompany }: Props) {
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onManageSubscription, onUpdateCompany }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<CompanyFilterState>({
@@ -93,6 +109,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [menu, setMenu] = useState<{ company: Company; rect: DOMRect } | null>(null);
+  const [editModal, setEditModal] = useState<Company | null>(null);
   const [holderModal, setHolderModal] = useState<Company | null>(null);
   const [billingModal, setBillingModal] = useState<Company | null>(null);
   const [cancelModal, setCancelModal] = useState<Company | null>(null);
@@ -144,9 +161,9 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   // hidden while the side panel is open (compact mode), so they don't count then.
   const tableMin =
     220 /* name */ +
-    44 /* actions */ +
+    40 /* actions */ +
     (panelOpen ? 150 + 130 : 195 + 130) /* email + tier */ +
-    120 /* status */ +
+    190 /* status */ +
     (!panelOpen
       ? (columns.signUp ? 130 : 0) +
         (columns.seats ? 64 : 0) +
@@ -229,7 +246,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                             columns={columns}
                             compact={panelOpen}
                             onClick={() => setSelectedId(c.id === selectedId ? null : c.id)}
-                            onEdit={() => onEditCompany(c)}
+                            onEdit={() => setEditModal(c)}
+                            onManageSubscription={() => onManageSubscription(c)}
                             onOpenMenu={(rect) => setMenu({ company: c, rect })}
                           />
                         ))}
@@ -267,10 +285,22 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           company={menu.company}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEditCompany={() => onEditCompany(menu.company)}
+          onEditCompany={() => setEditModal(menu.company)}
+          onManageSubscription={() => onManageSubscription(menu.company)}
           onEditAccountHolder={() => setHolderModal(menu.company)}
           onAddBillingEmails={() => setBillingModal(menu.company)}
           onCancelSubscription={() => setCancelModal(menu.company)}
+        />
+      )}
+
+      {editModal && (
+        <EditCompanyModal
+          company={editModal}
+          onClose={() => setEditModal(null)}
+          onSave={(patch) => {
+            onUpdateCompany({ ...editModal, ...patch });
+            setEditModal(null);
+          }}
         />
       )}
 
@@ -297,7 +327,11 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           company={cancelModal}
           onClose={() => setCancelModal(null)}
           onConfirm={(reason) => {
-            onUpdateCompany({ ...cancelModal, status: "Canceled" });
+            onUpdateCompany({
+              ...cancelModal,
+              status: "Canceled",
+              cancelsOn: getCompanyBilling(cancelModal).nextBillingDate,
+            });
             setCancelModal(null);
             window.alert(
               `${cancelModal.name}'s subscription is scheduled to cancel at the end of the current billing cycle.\n\nReason: ${reason}`,
@@ -315,7 +349,7 @@ function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: 
       <col style={{ width: 220 }} />
       <col style={{ width: compact ? 150 : 195 }} />
       <col style={{ width: 130 }} />
-      <col style={{ width: 120 }} />
+      <col style={{ width: 190 }} />
       {columns.signUp && !compact && <col style={{ width: 130 }} />}
       {columns.seats && !compact && <col style={{ width: 64 }} />}
       {columns.seatsAdded && !compact && <col style={{ width: 72 }} />}
@@ -323,7 +357,7 @@ function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: 
       {columns.industry && !compact && <col style={{ width: 145 }} />}
       {columns.partnership && !compact && <col style={{ width: 155 }} />}
       {columns.createdOn && !compact && <col style={{ width: 130 }} />}
-      <col style={{ width: 44 }} />
+      <col style={{ width: 40 }} />
     </colgroup>
   );
 }
@@ -356,9 +390,9 @@ function TierPill({ tier }: { tier: Tier }) {
   return <span className={`co-tier co-tier--${slug}`}>{tier}</span>;
 }
 
-function StatusPill({ status }: { status: SubscriptionStatus }) {
-  const slug = status.toLowerCase().replace(/\s+/g, "-");
-  return <span className={`co-status co-status--${slug}`}>{status}</span>;
+function StatusPill({ billing }: { billing: CompanyBilling }) {
+  const { tone, label } = getStatusPill(billing);
+  return <span className={`co-status-pill co-status-pill--${tone}`}>{label}</span>;
 }
 
 function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
@@ -371,9 +405,9 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, selected, columns, compact, onClick, onEdit, onOpenMenu,
+  company, selected, columns, compact, onClick, onEdit, onManageSubscription, onOpenMenu,
 }: {
-  company: Company; selected: boolean; columns: CompanyColumnState; compact: boolean; onClick: () => void; onEdit: () => void; onOpenMenu: (rect: DOMRect) => void;
+  company: Company; selected: boolean; columns: CompanyColumnState; compact: boolean; onClick: () => void; onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
 }) {
   const billing = getCompanyBilling(company);
   return (
@@ -381,7 +415,7 @@ function CompanyRow({
       <td className="col-name">{company.name}</td>
       <td className="col-email">{company.email}</td>
       <td className="col-tier"><TierPill tier={company.tier} /></td>
-      <td className="col-status"><StatusPill status={billing.status} /></td>
+      <td className="col-status"><StatusPill billing={billing} /></td>
       {columns.signUp && !compact && <td className="col-signup"><SignUpPill signUp={billing.signUp} /></td>}
       {columns.seats && !compact && <td className="col-seats">{company.seats.toLocaleString()}</td>}
       {columns.seatsAdded && !compact && <td className="col-seats-added co-seats-added">+{billing.seatsAdded}</td>}
@@ -400,6 +434,9 @@ function CompanyRow({
         <div className="row-action-bar">
           <button className="row-action-btn" aria-label="Edit" title="Edit company" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
             <PencilIcon />
+          </button>
+          <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={(e) => { e.stopPropagation(); onManageSubscription(); }}>
+            <CardIcon />
           </button>
           <button
             className="row-action-btn"
@@ -436,6 +473,13 @@ const PencilMenuIcon = () => (
   </svg>
 );
 
+const CardMenuIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="5" width="20" height="14" rx="2.5" />
+    <path d="M2 10h20" />
+  </svg>
+);
+
 const CancelIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9" />
@@ -444,12 +488,13 @@ const CancelIcon = () => (
 );
 
 function CompanyActionsMenu({
-  company, rect, onClose, onEditCompany, onEditAccountHolder, onAddBillingEmails, onCancelSubscription,
+  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription,
 }: {
   company: Company;
   rect: DOMRect;
   onClose: () => void;
   onEditCompany: () => void;
+  onManageSubscription: () => void;
   onEditAccountHolder: () => void;
   onAddBillingEmails: () => void;
   onCancelSubscription: () => void;
@@ -457,7 +502,7 @@ function CompanyActionsMenu({
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   // Only paid, running subscriptions can be cancelled.
-  const canCancel = getCompanyBilling(company).status === "Active" || getCompanyBilling(company).status === "Paused";
+  const canCancel = getCompanyBilling(company).status === "Active";
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -515,7 +560,8 @@ function CompanyActionsMenu({
       </div>
       <div className="u-menu-divider" />
       {item(<PencilMenuIcon />, "Edit company details", onEditCompany)}
-      {item(<HolderIcon />, "Edit Account Holder", onEditAccountHolder)}
+      {item(<CardMenuIcon />, "Manage Subscription", onManageSubscription)}
+      {item(<HolderIcon />, "Account Holder", onEditAccountHolder)}
       {item(<MailIcon />, "Add Billing Emails", onAddBillingEmails)}
       {canCancel && (
         <>
@@ -553,8 +599,7 @@ function CompanyPanel({
   const sym = CURRENCY_SYMBOL[billing.currency];
 
   const isActive = billing.status === "Active";
-  const isPaused = billing.status === "Paused";
-  const compEligible = billing.status !== "Active" && billing.status !== "Paused";
+  const compEligible = billing.status !== "Active";
 
   const detail = (label: string, value: React.ReactNode) => (
     <div className="co-dt-item">
@@ -587,7 +632,7 @@ function CompanyPanel({
 
       <div className="co-panel-pills">
         <TierPill tier={company.tier} />
-        <StatusPill status={billing.status} />
+        <StatusPill billing={billing} />
         <span className="co-pill-muted">{billing.signUp}</span>
       </div>
 
@@ -686,14 +731,6 @@ function CompanyPanel({
             </div>
 
             <div className="co-action-lifecycle">
-              {(isActive || isPaused) && (
-                <button
-                  className="co-action co-action--wide"
-                  onClick={() => onUpdate({ ...company, status: isPaused ? "Active" : "Paused" })}
-                >
-                  {isPaused ? "Resume subscription" : "Pause subscription"}
-                </button>
-              )}
               {compEligible && (
                 <button
                   className="co-action co-action--wide co-action--good"
@@ -706,7 +743,7 @@ function CompanyPanel({
               {billing.status !== "Canceled" && (
                 <button
                   className="co-action co-action--wide co-action--danger"
-                  onClick={() => onUpdate({ ...company, status: "Canceled" })}
+                  onClick={() => onUpdate({ ...company, status: "Canceled", cancelsOn: billing.nextBillingDate })}
                 >
                   Cancel subscription
                 </button>
@@ -720,6 +757,140 @@ function CompanyPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+/* ─────────────── Edit Company modal ─────────────── */
+
+// Mid-size modal that edits only the company's identity & segmentation fields
+// (name, address, tax status, industry, partnership). Plan/billing changes live
+// in "Manage Subscription"; the account holder has its own modal.
+function EditCompanyModal({
+  company, onClose, onSave,
+}: {
+  company: Company;
+  onClose: () => void;
+  onSave: (patch: Partial<Company>) => void;
+}) {
+  const [name, setName] = useState(company.name);
+  const [taxStatus, setTaxStatus] = useState<TaxStatus>(company.taxStatus ?? "Taxable");
+  const [country, setCountry] = useState(company.addressParts?.country ?? "United States");
+  const [addrLine1, setAddrLine1] = useState(company.addressParts?.line1 ?? "");
+  const [addrLine2, setAddrLine2] = useState(company.addressParts?.line2 ?? "");
+  const [addrCity, setAddrCity] = useState(company.addressParts?.city ?? "");
+  const [addrPin, setAddrPin] = useState(company.addressParts?.pin ?? "");
+  const [addrState, setAddrState] = useState(company.addressParts?.state ?? "");
+  const [industries, setIndustries] = useState<string[]>(
+    company.industry ? company.industry.split(",").map((s) => s.trim()).filter(Boolean) : [],
+  );
+  const [partnerships, setPartnerships] = useState<string[]>(
+    company.partnership ? company.partnership.split(",").map((s) => s.trim()).filter(Boolean) : [],
+  );
+
+  const valid = name.trim().length > 0;
+
+  function save() {
+    if (!valid) return;
+    const address =
+      [addrLine1, addrLine2, addrCity, addrState, addrPin, country].map((s) => s.trim()).filter(Boolean).join(", ") || undefined;
+    const addressParts =
+      [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
+        ? {
+            country: country.trim() || undefined,
+            line1: addrLine1.trim() || undefined,
+            line2: addrLine2.trim() || undefined,
+            city: addrCity.trim() || undefined,
+            pin: addrPin.trim() || undefined,
+            state: addrState.trim() || undefined,
+          }
+        : undefined;
+    onSave({
+      name: name.trim(),
+      taxStatus,
+      industry: industries.join(", "),
+      partnership: partnerships.join(", "),
+      address,
+      addressParts,
+    });
+  }
+
+  return (
+    <div className="cl-modal-overlay" onClick={onClose}>
+      <div className="cl-modal sch-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cl-modal-head">
+          <h3 className="cl-modal-title">Edit Company</h3>
+          <p className="cl-modal-sub">
+            Update {company.name}'s details. Plan, billing, and seats are managed under Manage Subscription.
+          </p>
+        </div>
+
+        <div className="sch-modal-body co-edit-body">
+          <div className="form-group">
+            <label className="form-label">Company Name <span className="req">*</span></label>
+            <input
+              autoFocus
+              className="form-input"
+              placeholder="e.g. Apex HVAC Solutions"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Address</label>
+            <div className="address-field">
+              <div className="address-row">
+                <select className="address-select" value={country} onChange={(e) => setCountry(e.target.value)}>
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <span className="address-chevron"><ChevronDownIcon /></span>
+              </div>
+              <input className="address-input" placeholder="Address Line 1 (Optional)" value={addrLine1} onChange={(e) => setAddrLine1(e.target.value)} />
+              <input className="address-input" placeholder="Address Line 2 (Optional)" value={addrLine2} onChange={(e) => setAddrLine2(e.target.value)} />
+              <div className="address-split">
+                <input className="address-input address-cell" placeholder="City (Optional)" value={addrCity} onChange={(e) => setAddrCity(e.target.value)} />
+                <input className="address-input address-cell" placeholder="PIN" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} />
+              </div>
+              <div className="address-row">
+                <select className={`address-select ${addrState ? "" : "is-placeholder"}`} value={addrState} onChange={(e) => setAddrState(e.target.value)}>
+                  <option value="">State</option>
+                  {US_STATES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <span className="address-chevron"><ChevronDownIcon /></span>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tax Status</label>
+            <select className="form-select" value={taxStatus} onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}>
+              {TAX_STATUSES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Industry</label>
+            <MultiSelect options={INDUSTRY_OPTIONS} value={industries} onChange={setIndustries} placeholder="Select industries…" />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Partnership <span className="co-w-note">(optional)</span></label>
+            <MultiSelect options={PARTNERSHIP_OPTIONS} value={partnerships} onChange={setPartnerships} placeholder="Select partnerships…" />
+          </div>
+        </div>
+
+        <div className="cl-modal-foot sch-modal-foot">
+          <button className="btn-save-draft" onClick={onClose}>Cancel</button>
+          <button className="btn-publish sch-submit" disabled={!valid} onClick={save}>Save changes</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -750,6 +921,15 @@ function HolderCard({ holder, locked }: { holder: Holder; locked?: boolean }) {
   );
 }
 
+const InfoIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
+);
+
+type HolderMode = "change" | "replace";
+
 function EditAccountHolderModal({
   company, onClose, onSave,
 }: {
@@ -758,147 +938,145 @@ function EditAccountHolderModal({
   onSave: (patch: { contactName: string; email: string; phone?: string }) => void;
 }) {
   const original = useMemo(() => currentHolder(company), [company]);
-  const [holder, setHolder] = useState<Holder>(original);
-  const [mode, setMode] = useState<"view" | "search" | "create">("view");
-  const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState<Holder>({ name: "", email: "", phone: "" });
+  // The company's employees — the pool the new account holder is chosen from.
+  // A holder must already belong to the cohort (see the note below).
+  const employees = useMemo(() => getCompanyUsers(company), [company]);
+  // Candidates exclude whoever currently holds the account.
+  const candidates = useMemo(
+    () => employees.filter((u) => u.email !== original.email),
+    [employees, original.email],
+  );
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return userBank.slice(0, 8);
-    return userBank
-      .filter((u) =>
-        u.name.toLowerCase().includes(q) ||
-        (u.email ?? "").toLowerCase().includes(q) ||
-        (u.phone ?? "").toLowerCase().includes(q),
-      )
-      .slice(0, 8);
-  }, [query]);
+  const [mode, setMode] = useState<HolderMode>("change");
+  const [selectedEmail, setSelectedEmail] = useState<string>("");
+  const [open, setOpen] = useState(false);
+  const ddRef = useRef<HTMLDivElement | null>(null);
 
-  function pick(u: ScholarshipUser) {
-    setHolder({ name: u.name, email: u.email ?? "", phone: u.phone ?? "" });
-    setMode("view");
-    setQuery("");
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ddRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const selected = candidates.find((u) => u.email === selectedEmail) ?? null;
+
+  function save() {
+    if (!selected) return;
+    onSave({ contactName: selected.name, email: selected.email });
   }
-
-  const changed =
-    holder.name !== original.name || holder.email !== original.email || holder.phone !== original.phone;
-  const createValid = draft.name.trim() && draft.email.trim();
 
   return (
     <div className="cl-modal-overlay" onClick={onClose}>
       <div className="cl-modal sch-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Edit Account Holder</h3>
+          <h3 className="cl-modal-title">Account Holder</h3>
           <p className="cl-modal-sub">
-            The account holder owns {company.name}'s billing and admin access. Change it by finding an
-            existing user or creating a new account holder.
+            The account holder owns {company.name}'s billing and admin access. Reassign it to another
+            employee in the cohort.
           </p>
         </div>
 
-        <div className="sch-modal-body">
-          <div className="form-group" style={{ marginBottom: mode === "view" ? 0 : 20 }}>
-            <label className="form-label">Account Holder</label>
-            <HolderCard holder={holder} locked={mode === "view"} />
-            {mode === "view" && (
-              <button className="co-holder-change-btn" onClick={() => setMode("search")}>
-                Change Account Holder
-              </button>
-            )}
+        <div className="sch-modal-body co-edit-body">
+          <div className="form-group">
+            <label className="form-label">Current Account Holder</label>
+            <HolderCard holder={original} />
           </div>
 
-          {mode === "search" && (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Find a user</label>
-              <div className="search-wrap" style={{ marginBottom: 10 }}>
-                <span className="search-icon"><SearchIcon /></span>
-                <input
-                  autoFocus
-                  className="search-input"
-                  placeholder="Search by name, email, or phone…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              <div className="sch-user-dropdown co-holder-results">
-                {results.length === 0 ? (
-                  <div className="sch-user-empty">
-                    No users match “{query.trim()}”.
-                  </div>
-                ) : (
-                  results.map((u) => (
-                    <button key={u.id} className="sch-user-option" onClick={() => pick(u)}>
-                      <div className="user-cell">
-                        <div className="user-cell-text">
-                          <div className="user-cell-name">{u.name}</div>
-                          <div className="user-cell-contact">{u.email ?? u.phone ?? "—"}</div>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-              <div className="co-holder-create-prompt">
-                Can’t find them?
-                <button className="co-holder-create-link" onClick={() => { setDraft({ name: query.trim(), email: "", phone: "" }); setMode("create"); }}>
-                  Create a new account holder
-                </button>
-              </div>
+          <div className="form-group">
+            <label className="form-label">What would you like to do?</label>
+            <div className="co-holder-modes">
+              <button
+                type="button"
+                className={`co-holder-mode${mode === "change" ? " is-active" : ""}`}
+                onClick={() => setMode("change")}
+              >
+                <span className="co-holder-mode-dot" />
+                <span className="co-holder-mode-text">
+                  <span className="co-holder-mode-title">Change the Account Holder</span>
+                  <span className="co-holder-mode-desc">
+                    Hand ownership to another employee. {original.name} stays in the cohort as an Admin.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`co-holder-mode${mode === "replace" ? " is-active" : ""}`}
+                onClick={() => setMode("replace")}
+              >
+                <span className="co-holder-mode-dot" />
+                <span className="co-holder-mode-text">
+                  <span className="co-holder-mode-title">Remove from cohort &amp; replace</span>
+                  <span className="co-holder-mode-desc">
+                    Remove {original.name} from the cohort entirely and assign a new account holder.
+                  </span>
+                </span>
+              </button>
             </div>
-          )}
+          </div>
 
-          {mode === "create" && (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">New account holder</label>
-              <input
-                autoFocus
-                className="form-input"
-                placeholder="Full name"
-                value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                style={{ marginBottom: 10 }}
-              />
-              <input
-                className="form-input"
-                type="email"
-                placeholder="Email address"
-                value={draft.email}
-                onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                style={{ marginBottom: 10 }}
-              />
-              <input
-                className="form-input"
-                type="tel"
-                placeholder="Phone number (optional)"
-                value={draft.phone}
-                onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
-              />
-              <div className="co-holder-create-actions">
-                <button className="co-holder-change-btn" onClick={() => setMode("search")}>← Back to search</button>
-                <button
-                  className="btn-publish"
-                  disabled={!createValid}
-                  onClick={() => {
-                    setHolder({ name: draft.name.trim(), email: draft.email.trim(), phone: draft.phone.trim() });
-                    setMode("view");
-                  }}
-                >
-                  Use this account holder
-                </button>
-              </div>
-              <p className="form-help">A new account holder account is created and invited when you save.</p>
+          <div className="form-group" style={{ marginBottom: 14 }}>
+            <label className="form-label">New Account Holder</label>
+            <div className="co-holder-picker" ref={ddRef}>
+              <button
+                type="button"
+                className={`co-holder-select${open ? " is-open" : ""}`}
+                onClick={() => setOpen((o) => !o)}
+              >
+                {selected ? (
+                  <span className="co-holder-select-val">
+                    <span className="co-holder-select-name">{selected.name}</span>
+                    <span className="co-holder-select-email">{selected.email}</span>
+                  </span>
+                ) : (
+                  <span className="co-holder-select-placeholder">Choose an employee…</span>
+                )}
+                <span className="co-holder-select-caret"><ChevronDownIcon /></span>
+              </button>
+              {open && (
+                <div className="co-holder-dropdown">
+                  {candidates.length === 0 ? (
+                    <div className="sch-user-empty">No other employees in this cohort yet.</div>
+                  ) : (
+                    candidates.map((u) => (
+                      <button
+                        key={u.email}
+                        type="button"
+                        className={`co-holder-opt${u.email === selectedEmail ? " is-selected" : ""}`}
+                        onClick={() => { setSelectedEmail(u.email); setOpen(false); }}
+                      >
+                        <span className="co-userrow-avatar">{initials(u.name)}</span>
+                        <span className="co-holder-opt-text">
+                          <span className="co-holder-opt-name">{u.name}</span>
+                          <span className="co-holder-opt-email">{u.email}</span>
+                        </span>
+                        <span className={`co-role co-role--${ROLE_SLUG[u.role]}`}>{u.role}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="co-holder-note">
+            <span className="co-holder-note-icon"><InfoIcon /></span>
+            <span>
+              If the new Account Holder isn't in the cohort yet, they need to be added in before they
+              can be set as the Account Holder.
+            </span>
+          </div>
         </div>
 
         <div className="cl-modal-foot sch-modal-foot">
           <button className="btn-save-draft" onClick={onClose}>Cancel</button>
           <button
-            className="btn-publish sch-submit"
-            disabled={!changed}
-            onClick={() => onSave({ contactName: holder.name, email: holder.email, phone: holder.phone || undefined })}
+            className={`btn-publish sch-submit${mode === "replace" ? " co-cancel-danger" : ""}`}
+            disabled={!selected}
+            onClick={save}
           >
-            Save changes
+            {mode === "replace" ? "Remove & replace" : "Save changes"}
           </button>
         </div>
       </div>
