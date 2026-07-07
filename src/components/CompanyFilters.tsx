@@ -10,6 +10,8 @@ import {
   COMPANY_OPTIONAL_COLUMNS,
   COMPANY_FIXED_COLUMNS,
   SIGN_UP_CHANNELS,
+  BILLING_CYCLES,
+  PAYMENT_COLLECTIONS,
   type CompanyColumn,
 } from "../data/companies";
 
@@ -19,6 +21,8 @@ export type CompanyFilterState = {
   partnerships: string[];
   statuses: string[];
   signUps: string[];
+  billingCycles: string[];
+  paymentMethods: string[];
 };
 
 export type CompanyColumnState = Record<CompanyColumn, boolean>;
@@ -34,11 +38,21 @@ export function CompanyFilters({ filters, setFilters }: Props) {
       filters.industries.length +
       filters.partnerships.length +
       filters.statuses.length +
-      filters.signUps.length >
+      filters.signUps.length +
+      filters.billingCycles.length +
+      filters.paymentMethods.length >
     0;
 
   function clearAll() {
-    setFilters({ tiers: [], industries: [], partnerships: [], statuses: [], signUps: [] });
+    setFilters({
+      tiers: [],
+      industries: [],
+      partnerships: [],
+      statuses: [],
+      signUps: [],
+      billingCycles: [],
+      paymentMethods: [],
+    });
   }
 
   return (
@@ -61,7 +75,16 @@ export function CompanyFilters({ filters, setFilters }: Props) {
       />
       <MoreFiltersPill
         signUps={filters.signUps}
-        onApply={(v) => setFilters({ ...filters, signUps: v.signUps })}
+        billingCycles={filters.billingCycles}
+        paymentMethods={filters.paymentMethods}
+        onApply={(v) =>
+          setFilters({
+            ...filters,
+            signUps: v.signUps,
+            billingCycles: v.billingCycles,
+            paymentMethods: v.paymentMethods,
+          })
+        }
       />
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
@@ -220,12 +243,16 @@ function PartnershipPill({
 
 function MoreFiltersPill({
   signUps,
+  billingCycles,
+  paymentMethods,
   onApply,
 }: {
   signUps: string[];
-  onApply: (v: { signUps: string[] }) => void;
+  billingCycles: string[];
+  paymentMethods: string[];
+  onApply: (v: { signUps: string[]; billingCycles: string[]; paymentMethods: string[] }) => void;
 }) {
-  const count = signUps.length;
+  const count = signUps.length + billingCycles.length + paymentMethods.length;
   const summary = count > 0 ? `${count} active` : null;
 
   return (
@@ -237,13 +264,15 @@ function MoreFiltersPill({
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ signUps: [] })}
+          onClear={() => onApply({ signUps: [], billingCycles: [], paymentMethods: [] })}
         />
       )}
     >
       {({ close }) => (
         <MoreFiltersBody
           signUps={signUps}
+          billingCycles={billingCycles}
+          paymentMethods={paymentMethods}
           onApply={(v) => {
             onApply(v);
             close();
@@ -256,19 +285,33 @@ function MoreFiltersPill({
 
 function MoreFiltersBody({
   signUps,
+  billingCycles,
+  paymentMethods,
   onApply,
 }: {
   signUps: string[];
-  onApply: (v: { signUps: string[] }) => void;
+  billingCycles: string[];
+  paymentMethods: string[];
+  onApply: (v: { signUps: string[]; billingCycles: string[]; paymentMethods: string[] }) => void;
 }) {
   const [draftSignUps, setDraftSignUps] = useState(signUps);
-  const [hovered, setHovered] = useState<"signUp" | null>(null);
+  const [draftCycles, setDraftCycles] = useState(billingCycles);
+  const [draftPayments, setDraftPayments] = useState(paymentMethods);
+  const [hovered, setHovered] = useState<"signUp" | "billingCycle" | "paymentMethod" | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
 
   useEffect(() => setDraftSignUps(signUps), [signUps]);
+  useEffect(() => setDraftCycles(billingCycles), [billingCycles]);
+  useEffect(() => setDraftPayments(paymentMethods), [paymentMethods]);
 
-  function toggle(item: string) {
+  function toggleSignUp(item: string) {
     setDraftSignUps((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
+  }
+  function toggleCycle(item: string) {
+    setDraftCycles((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
+  }
+  function togglePayment(item: string) {
+    setDraftPayments((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
   }
 
   return (
@@ -280,9 +323,22 @@ function MoreFiltersBody({
             active={hovered === "signUp"}
             onHover={(top) => { setHovered("signUp"); setHoveredTop(top); }}
           />
+          <SubmenuRow
+            label="Billing Cycle"
+            active={hovered === "billingCycle"}
+            onHover={(top) => { setHovered("billingCycle"); setHoveredTop(top); }}
+          />
+          <SubmenuRow
+            label="Payment Method"
+            active={hovered === "paymentMethod"}
+            onHover={(top) => { setHovered("paymentMethod"); setHoveredTop(top); }}
+          />
         </div>
         <div className="dropdown-footer">
-          <button className="btn-apply" onClick={() => onApply({ signUps: draftSignUps })}>
+          <button
+            className="btn-apply"
+            onClick={() => onApply({ signUps: draftSignUps, billingCycles: draftCycles, paymentMethods: draftPayments })}
+          >
             Apply
           </button>
         </div>
@@ -302,7 +358,31 @@ function MoreFiltersBody({
                     key={s}
                     label={s}
                     checked={draftSignUps.includes(s)}
-                    onChange={() => toggle(s)}
+                    onChange={() => toggleSignUp(s)}
+                  />
+                ))}
+              </div>
+            )}
+            {hovered === "billingCycle" && (
+              <div className="dropdown-section">
+                {BILLING_CYCLES.map((cy) => (
+                  <CheckRow
+                    key={cy}
+                    label={cy}
+                    checked={draftCycles.includes(cy)}
+                    onChange={() => toggleCycle(cy)}
+                  />
+                ))}
+              </div>
+            )}
+            {hovered === "paymentMethod" && (
+              <div className="dropdown-section">
+                {PAYMENT_COLLECTIONS.map((p) => (
+                  <CheckRow
+                    key={p}
+                    label={p}
+                    checked={draftPayments.includes(p)}
+                    onChange={() => togglePayment(p)}
                   />
                 ))}
               </div>

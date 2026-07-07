@@ -537,17 +537,6 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
   return XAPI_STEPS;
 }
 
-// Whether a given step renders at least one required field, so the header only
-// shows the "* Required Fields" note where it applies. "basics"/"details" always
-// have a required Name (or Quiz name); "completion" requires a rule except for
-// Hands-On; the quiz "payments" step has a required external ID.
-function stepHasRequiredFields(type: TaskTypeKey, stepId: string): boolean {
-  if (stepId === "basics" || stepId === "details") return true;
-  if (stepId === "completion") return type !== "hands-on";
-  if (stepId === "payments") return true;
-  return false;
-}
-
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
 type Props = {
@@ -683,9 +672,6 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         <div className="wizard-content">
           <h1 className="wizard-title">{steps[step].label}</h1>
           <p className="wizard-desc">{steps[step].desc}</p>
-          {stepHasRequiredFields(taskType, steps[step].id) && (
-            <div className="required-fields-note">* Required Fields</div>
-          )}
 
           {(() => {
             const criteriaLocked = isEditing && !criteriaUnlocked;

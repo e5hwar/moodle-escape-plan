@@ -178,7 +178,6 @@ export function NewFeedbackFormModal({
 
         {mode === "scratch" && (
           <div className="fb-modal-body">
-            <div className="required-fields-note">* Required Fields</div>
             <section className="sp-section">
               <label className="form-label">
                 Form name <span className="req">*</span>
@@ -199,7 +198,6 @@ export function NewFeedbackFormModal({
 
         {mode === "duplicate" && (
           <div className="fb-modal-body">
-            <div className="required-fields-note">* Required Fields</div>
             <section className="sp-section">
               <label className="form-label">
                 Pick a form to duplicate <span className="req">*</span>

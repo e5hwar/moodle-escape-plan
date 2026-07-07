@@ -3,7 +3,7 @@ export type Tier =
   | "Essentials"
   | "Growth"
   | "Pro"
-  | "Complimentary Access";
+  | "Free Access";
 
 export type BillingCycle = "Monthly" | "Annual";
 export type Currency = "USD" | "CAD";
@@ -15,7 +15,8 @@ export type SubscriptionStatus =
   | "Past Due"
   | "Free Trial"
   | "Trial Expired"
-  | "Complimentary"
+  | "Free Access"
+  | "Free Access Ended"
   | "Canceled";
 export type CompanyRole = "Account Holder" | "Admin" | "Member";
 
@@ -65,6 +66,11 @@ export type Company = {
    *  subscription is cancelled through the UI; until that date the status pill
    *  reads "Cancels on …", after it reads "Canceled". */
   cancelsOn?: string;
+  /** End date for a Free Access grant (e.g. "Aug 27, 2026"). Required whenever
+   *  tier is "Free Access". */
+  freeAccessEndDate?: string;
+  /** Customer Success Manager assigned to this account. */
+  assignedCsm?: string;
 };
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
@@ -74,7 +80,7 @@ export const TIERS: Tier[] = [
   "Essentials",
   "Growth",
   "Pro",
-  "Complimentary Access",
+  "Free Access",
 ];
 
 export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
@@ -82,11 +88,14 @@ export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Past Due",
   "Free Trial",
   "Trial Expired",
-  "Complimentary",
+  "Free Access",
+  "Free Access Ended",
   "Canceled",
 ];
 
 export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign-Up"];
+
+export const PAYMENT_COLLECTIONS: PaymentCollection[] = ["Automatic", "Manual"];
 
 /* Columns shown in the Manage Companies table. Company / Email / Tier / Status
  * always render; the rest are toggleable via the Edit Columns button. */
@@ -97,16 +106,22 @@ export type CompanyColumn =
   | "industry"
   | "partnership"
   | "signUp"
-  | "createdOn";
+  | "billingCycle"
+  | "createdOn"
+  | "canceledOn"
+  | "trialEndDate";
 
 export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] = [
   { key: "signUp", label: "Sign-Up" },
+  { key: "billingCycle", label: "Billing Cycle" },
   { key: "seats", label: "Seats" },
   { key: "seatsAdded", label: "Added" },
   { key: "seatsRemoved", label: "Removed" },
   { key: "industry", label: "Industry" },
   { key: "partnership", label: "Partnership" },
   { key: "createdOn", label: "Created On" },
+  { key: "canceledOn", label: "Canceled On" },
+  { key: "trialEndDate", label: "Trial End Date" },
 ];
 
 export const COMPANY_FIXED_COLUMNS: { label: string }[] = [
@@ -232,7 +247,7 @@ export const companies: Company[] = [
     id: "CO-012",
     name: "LightPath Solar Co.",
     email: "admin@lightpathsolar.com",
-    tier: "Complimentary Access",
+    tier: "Free Access",
     seats: 10,
     industry: "Solar",
     partnership: "NGO Partner",
@@ -295,7 +310,7 @@ export const companies: Company[] = [
     id: "CO-019",
     name: "Sunridge Utilities",
     email: "ops@sunridgeutils.com",
-    tier: "Complimentary Access",
+    tier: "Free Access",
     seats: 15,
     industry: "Utilities",
     partnership: "NGO Partner",
@@ -368,6 +383,28 @@ export const companies: Company[] = [
     status: "Canceled",
     cancelsOn: "Aug 27",
   },
+  {
+    // Free Access grant that has run past its end date — demonstrates the
+    // grey "Free Access Ended" status pill.
+    id: "CO-027",
+    name: "Cascade Roofing Collective",
+    email: "admin@cascaderoofing.com",
+    tier: "Free Access",
+    seats: 8,
+    industry: "Roofing",
+    partnership: "NGO Partner",
+    freeAccessEndDate: "2026-03-01",
+  },
+  {
+    id: "CO-028",
+    name: "Ironclad Fire & Safety",
+    email: "training@ironcladfire.com",
+    tier: "Free Access",
+    seats: 12,
+    industry: "Fire Protection",
+    partnership: "Preferred Partner",
+    freeAccessEndDate: "2026-05-15",
+  },
 ];
 
 // Distinct industry / partnership values present in the data, used to populate
@@ -383,7 +420,7 @@ export const COMPANY_PARTNERSHIPS = Array.from(
 /* ───────────────── Pricing (Default Rates, per seat) ─────────────────
  * Section 21.3: set per Tier, per cycle, per currency. Annual rates are the
  * effective monthly per-seat cost when billed annually. Free Trial and
- * Complimentary Access are non-billed. */
+ * Free Access are non-billed. */
 export const PAID_TIERS: Tier[] = ["Essentials", "Growth", "Pro"];
 export const BILLING_CYCLES: BillingCycle[] = ["Monthly", "Annual"];
 export const CURRENCIES: Currency[] = ["USD", "CAD"];
@@ -452,20 +489,32 @@ export type CompanyBilling = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// The admin tool's notion of "today" (matches APP_TODAY in NewCompanyWizard),
+// used to tell whether a Free Access grant has run past its end date.
+const APP_TODAY = new Date(2026, 5, 24);
+
 export function getCompanyBilling(c: Company): CompanyBilling {
   const h = hash(c.id);
 
+  // A Free Access grant past its end date reads "Free Access Ended" even if the
+  // company record still carries the "Free Access" status — the date is the
+  // source of truth once it's set.
+  const freeAccessEnded =
+    c.tier === "Free Access" && !!c.freeAccessEndDate && new Date(c.freeAccessEndDate) < APP_TODAY;
+
   const status: SubscriptionStatus =
-    c.status ??
-    (c.tier === "Free Trial"
-      ? "Free Trial"
-      : c.tier === "Complimentary Access"
-      ? "Complimentary"
-      : h % 17 === 0
-      ? "Canceled"
-      : h % 7 === 0
-      ? "Past Due"
-      : "Active");
+    freeAccessEnded
+      ? "Free Access Ended"
+      : c.status ??
+        (c.tier === "Free Trial"
+          ? "Free Trial"
+          : c.tier === "Free Access"
+          ? "Free Access"
+          : h % 17 === 0
+          ? "Canceled"
+          : h % 7 === 0
+          ? "Past Due"
+          : "Active");
 
   const billingCycle: BillingCycle = c.billingCycle ?? (h % 3 === 0 ? "Annual" : "Monthly");
   const currency: Currency = c.currency ?? (h % 4 === 0 ? "CAD" : "USD");
@@ -488,8 +537,10 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Trial — no invoice"
       : status === "Trial Expired"
       ? "Trial ended — no access"
-      : status === "Complimentary"
-      ? "Complimentary — no invoice"
+      : status === "Free Access"
+      ? "Free Access — no invoice"
+      : status === "Free Access Ended"
+      ? "Free Access ended — no access"
       : status === "Canceled"
       ? "Canceled"
       : `${MONTHS[h % 12]} 1`;
@@ -565,8 +616,10 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
       return { tone: "yellow", label: `Trial Ends On ${billing.trialEndsOn}` };
     case "Trial Expired":
       return { tone: "purple", label: "Trial Ended" };
-    case "Complimentary":
-      return { tone: "secondary", label: "Complimentary Access" };
+    case "Free Access":
+      return { tone: "secondary", label: "Free Access" };
+    case "Free Access Ended":
+      return { tone: "grey", label: "Free Access Ended" };
     case "Canceled":
       return billing.cancelScheduled
         ? { tone: "grey", label: `Cancels on ${billing.cancelsOn}` }
@@ -576,7 +629,35 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
   }
 }
 
-const FIRST = ["James", "Maria", "David", "Sarah", "Michael", "Jessica", "Robert", "Linda", "Carlos", "Emily", "Daniel", "Ashley", "Kevin", "Tonya", "Brian", "Nicole"];
+/* "Canceled On" column (Manage Companies) — the date a subscription actually
+ * ended. Only set once cancellation has taken effect; a subscription that's
+ * merely scheduled to cancel ("Cancels on …") hasn't ended yet, so it reads
+ * "—" here until that date passes. */
+export function getCanceledOn(billing: CompanyBilling): string {
+  if (billing.status === "Canceled" && !billing.cancelScheduled) return billing.cancelsOn;
+  return "—";
+}
+
+/* "Trial End Date" column (Manage Companies) — only meaningful while a
+ * company is actually on a Free Trial; every other status reads "—". */
+export function getTrialEndDate(billing: CompanyBilling): string {
+  return billing.status === "Free Trial" ? billing.trialEndsOn : "—";
+}
+
+// Deterministic fake Stripe customer id, stable per company — stands in for
+// the real id Stripe would assign when a subscription is created.
+const CUS_ID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+export function getStripeCustomerId(company: Company): string {
+  let seed = hash(company.id);
+  let id = "";
+  for (let i = 0; i < 14; i++) {
+    id += CUS_ID_CHARS[seed % CUS_ID_CHARS.length];
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+  }
+  return `cus_${id}`;
+}
+
+const FIRST =["James", "Maria", "David", "Sarah", "Michael", "Jessica", "Robert", "Linda", "Carlos", "Emily", "Daniel", "Ashley", "Kevin", "Tonya", "Brian", "Nicole"];
 const LAST = ["Rodriguez", "Thompson", "Nguyen", "Patel", "Johnson", "Martinez", "Williams", "Brown", "Garcia", "Davis", "Miller", "Wilson", "Anderson", "Lee", "Walker", "Hall"];
 
 export function getCompanyUsers(c: Company): CompanyUser[] {

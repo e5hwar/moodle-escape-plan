@@ -23,7 +23,8 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewAwardWizard } from "./NewAwardWizard";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
-import { SearchIcon, SortIcon, EnterKeyIcon, AddIcon, EditColumnsIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
@@ -83,6 +84,10 @@ export function AwardsPage() {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
   const [menu, setMenu] = useState<{ rect: DOMRect; tab: Tab; id: string } | null>(null);
+  useCreateShortcut(
+    () => setMode(tab === "awards" ? { kind: "new-award" } : { kind: "new-template" }),
+    mode.kind === "list",
+  );
 
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<string[]>([]);
@@ -231,7 +236,7 @@ export function AwardsPage() {
               >
                 <AddIcon />
                 {tab === "awards" ? "Create Award" : "Create Design Template"}
-                <span className="cta-kbd"><EnterKeyIcon /></span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>

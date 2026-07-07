@@ -16,6 +16,7 @@ import { SkillsPage } from "./components/SkillsPage";
 import { AwardsPage } from "./components/AwardsPage";
 import { type Certification } from "./data/certifications";
 import { ContentLinksPage } from "./components/ContentLinksPage";
+import { nodeIdForName } from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
 import { type Question } from "./data/questionBank";
@@ -23,7 +24,6 @@ import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
-import { TrialExtensionPage } from "./components/TrialExtensionPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
 import { FeedbackFormVersions } from "./components/FeedbackFormVersions";
@@ -40,6 +40,7 @@ import { MergeAccountsPage } from "./components/MergeAccountsPage";
 import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
 import { PortfolioPage } from "./components/PortfolioPage";
+import { StripeInvoicesPage } from "./components/StripeInvoicesPage";
 import { users as allUsers } from "./data/users";
 import {
   feedbackForms as seedForms,
@@ -59,7 +60,7 @@ type View =
   | { name: "new-cert" }
   | { name: "edit-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
-  | { name: "content-links" }
+  | { name: "content-links"; cert?: Certification }
   | { name: "skills" }
   | { name: "awards" }
   | { name: "question-bank" }
@@ -69,7 +70,6 @@ type View =
   | { name: "proctoring" }
   | { name: "manage-ids" }
   | { name: "scholarship" }
-  | { name: "trial-extension" }
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string }
   | { name: "feedback-versions"; formId: string }
@@ -77,12 +77,12 @@ type View =
   | { name: "companies"; query?: string }
   | { name: "new-company" }
   | { name: "manage-subscription"; company: Company }
-  | { name: "users" }
+  | { name: "users"; companyFilter?: string }
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
   | { name: "name-change-requests" }
   | { name: "content-overrides" }
-  | { name: "product-config" }
+  | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" }
   | { name: "merge-accounts" }
   | { name: "transfer-subscription" };
 
@@ -92,6 +92,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const profileId = params.get("profile");
   const portfolioId = params.get("portfolio");
+  const stripeCustomerId = params.get("stripeInvoices");
   if (profileId) {
     const u = allUsers.find((x) => x.id === profileId);
     return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
@@ -99,6 +100,9 @@ export default function App() {
   if (portfolioId) {
     const u = allUsers.find((x) => x.id === portfolioId);
     return u ? <PortfolioPage user={u} /> : <StandaloneNotFound id={portfolioId} />;
+  }
+  if (stripeCustomerId) {
+    return <StripeInvoicesPage customerId={stripeCustomerId} />;
   }
 
   return <AdminApp />;
@@ -139,10 +143,8 @@ function AdminApp() {
   }, []);
 
   const sidebarActive =
-    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers"
+    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers" || view.name === "content-links"
       ? "certs"
-      : view.name === "content-links"
-      ? "content-links"
       : view.name === "skills"
       ? "skills"
       : view.name === "awards"
@@ -157,8 +159,6 @@ function AdminApp() {
       ? "proctoring-review"
       : view.name === "scholarship"
       ? "scholarship"
-      : view.name === "trial-extension"
-      ? "trial-extension"
       : view.name === "feedback" ||
         view.name === "feedback-detail" ||
         view.name === "feedback-versions"
@@ -188,14 +188,12 @@ function AdminApp() {
   function navigate(key: string) {
     if (key === "certs") setView({ name: "certs" });
     else if (key === "tasks") setView({ name: "tasks" });
-    else if (key === "content-links") setView({ name: "content-links" });
     else if (key === "skills") setView({ name: "skills" });
     else if (key === "awards") setView({ name: "awards" });
     else if (key === "question-bank") setView({ name: "question-bank" });
     else if (key === "spotlight") setView({ name: "spotlight" });
     else if (key === "proctoring-review") setView({ name: "proctoring" });
     else if (key === "scholarship") setView({ name: "scholarship" });
-    else if (key === "trial-extension") setView({ name: "trial-extension" });
     else if (key === "feedback") setView({ name: "feedback" });
     else if (key === "industries") setView({ name: "industries" });
     else if (key === "manage-companies") setView({ name: "companies" });
@@ -267,11 +265,16 @@ function AdminApp() {
           onNewCert={() => setView({ name: "new-cert-start" })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
+          onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
         />
       ) : view.name === "cert-purchasers" ? (
         <CertPurchasersPage cert={view.cert} onBack={() => setView({ name: "certs" })} />
       ) : view.name === "content-links" ? (
-        <ContentLinksPage />
+        <ContentLinksPage
+          initialFocusId={view.cert ? nodeIdForName(view.cert.name) : undefined}
+          onBack={view.cert ? () => setView({ name: "certs" }) : undefined}
+          backLabel="Certifications"
+        />
       ) : view.name === "skills" ? (
         <SkillsPage />
       ) : view.name === "awards" ? (
@@ -303,8 +306,6 @@ function AdminApp() {
         <ManageIdsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "scholarship" ? (
         <ScholarshipsPage />
-      ) : view.name === "trial-extension" ? (
-        <TrialExtensionPage />
       ) : view.name === "industries" ? (
         <IndustriesPage />
       ) : view.name === "companies" ? (
@@ -314,11 +315,13 @@ function AdminApp() {
           onNewCompany={() => setView({ name: "new-company" })}
           onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
           onUpdateCompany={updateCompany}
+          onViewEmployees={(company) => setView({ name: "users", companyFilter: company.name })}
         />
       ) : view.name === "new-company" ? (
         <NewCompanyWizard
           onClose={() => setView({ name: "companies" })}
           onCreate={addCompany}
+          onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
       ) : view.name === "manage-subscription" ? (
         <NewCompanyWizard
@@ -328,7 +331,10 @@ function AdminApp() {
           onSave={updateCompany}
         />
       ) : view.name === "users" ? (
-        <UsersPage onViewCompany={(name) => setView({ name: "companies", query: name })} />
+        <UsersPage
+          onViewCompany={(name) => setView({ name: "companies", query: name })}
+          initialCompanyFilter={view.companyFilter}
+        />
       ) : view.name === "offer-codes" ? (
         <OfferCodesPage />
       ) : view.name === "review-hands-on" ? (
@@ -338,7 +344,7 @@ function AdminApp() {
       ) : view.name === "content-overrides" ? (
         <ContentOverridesPage />
       ) : view.name === "product-config" ? (
-        <ProductConfigPage />
+        <ProductConfigPage initialTab={view.tab} />
       ) : view.name === "merge-accounts" ? (
         <MergeAccountsPage />
       ) : view.name === "transfer-subscription" ? (

@@ -5,7 +5,8 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, SmallXIcon, EnterKeyIcon, AddIcon } from "./icons";
+import { SearchIcon, SortIcon, SmallXIcon, AddIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
@@ -59,6 +60,7 @@ export function ScholarshipsPage() {
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [menu, setMenu] = useState<{ scholarship: Scholarship; rect: DOMRect } | null>(null);
+  useCreateShortcut(() => setAdding(true), !adding);
 
   const counts = useMemo(() => {
     let active = 0;
@@ -159,9 +161,7 @@ export function ScholarshipsPage() {
               <button className="new-task" onClick={() => setAdding(true)}>
                 <AddIcon />
                 Create Scholarship
-                <span className="cta-kbd">
-                  <EnterKeyIcon />
-                </span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
@@ -639,7 +639,6 @@ function AddScholarshipModal({
             Select a user and choose how long their scholarship lasts. The user
             gets full Pro access until the expiry date.
           </p>
-          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="sch-modal-body">

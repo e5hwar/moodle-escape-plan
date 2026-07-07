@@ -8,14 +8,15 @@ import {
   type BillingPlan,
   type Platform,
 } from "../data/offerCodes";
-import { SearchIcon, SortIcon, SmallXIcon, EnterKeyIcon, AddIcon, CheckIcon } from "./icons";
+import { SearchIcon, SortIcon, SmallXIcon, AddIcon, CheckIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-06-18");
 
 type OfferStatus = "active" | "expired";
 
-type SortKey = "code" | "regions" | "status";
+type SortKey = "code" | "regions" | "createdBy" | "status";
 type SortDir = "asc" | "desc";
 
 function statusOf(c: OfferCode): OfferStatus {
@@ -37,6 +38,8 @@ function compare(a: OfferCode, b: OfferCode, key: SortKey): number {
       const bl = b.regions.length === 0 ? Infinity : b.regions.length;
       return al - bl;
     }
+    case "createdBy":
+      return a.createdBy.localeCompare(b.createdBy);
     case "status":
       return statusOf(a).localeCompare(statusOf(b));
   }
@@ -52,6 +55,7 @@ export function OfferCodesPage() {
   });
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  useCreateShortcut(() => setCreating(true), !creating);
 
   const counts = useMemo(() => {
     let active = 0;
@@ -141,9 +145,7 @@ export function OfferCodesPage() {
               <button className="new-task" onClick={() => setCreating(true)}>
                 <AddIcon />
                 Create Offer Code
-                <span className="cta-kbd">
-                  <EnterKeyIcon />
-                </span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
@@ -186,10 +188,11 @@ export function OfferCodesPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table" style={{ width: 760 }}>
+                <table className="table sch-table" style={{ width: 940 }}>
                   <colgroup>
                     <col style={{ width: 280 }} />
                     <col style={{ width: 280 }} />
+                    <col style={{ width: 180 }} />
                     <col style={{ width: 160 }} />
                     <col style={{ width: 40 }} />
                   </colgroup>
@@ -199,6 +202,14 @@ export function OfferCodesPage() {
                       <SortableHeader
                         col="regions"
                         label="Countries/Regions"
+                        sort={sort}
+                        toggle={toggleSort}
+                        sortable={false}
+                      />
+                      <SortableHeader
+                        col="createdBy"
+                        label="Created By"
+                        className="col-creator"
                         sort={sort}
                         toggle={toggleSort}
                         sortable={false}
@@ -217,7 +228,7 @@ export function OfferCodesPage() {
                     ))}
                     {paged.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="sch-empty">
+                        <td colSpan={5} className="sch-empty">
                           {query.trim()
                             ? `No offer codes match "${query.trim()}".`
                             : statusFilter === "expired"
@@ -350,6 +361,7 @@ function OfferCodeRow({
           {regionsLabel(code.regions)}
         </span>
       </td>
+      <td className="col-creator">{code.createdBy}</td>
       <td>
         <StatusPill status={status} />
       </td>
@@ -408,7 +420,6 @@ function CreateOfferCodeModal({
           <p className="cl-modal-sub">
             Set up a subscription offer code. It will be created on Apple, Google, and Stripe.
           </p>
-          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="sch-modal-body">

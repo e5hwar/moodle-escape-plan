@@ -4,6 +4,8 @@ import {
   masterySkills as seedMastery,
   masteryUsing,
   criteriaSummary,
+  criteriaRule,
+  taskById,
   fmtHolders,
   SKILL_STATUSES,
   type Skill,
@@ -13,7 +15,8 @@ import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
-import { SearchIcon, SortIcon, EnterKeyIcon, AddIcon, EditColumnsIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
@@ -69,16 +72,16 @@ type Modal =
 
 const ALL_CREATORS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
 
-type SkillColKey = "id" | "criteria" | "mastery" | "status" | "holders" | "createdBy" | "dateCreated" | "dateModified";
-type MasteryColKey = "id" | "skills" | "status" | "holders" | "createdBy" | "dateCreated" | "dateModified";
+type SkillColKey = "id" | "tasks" | "criteria" | "mastery" | "status" | "holders" | "dateCreated" | "dateModified";
+type MasteryColKey = "id" | "skills" | "status" | "holders" | "dateCreated" | "dateModified";
 
 const SKILL_COLS: { key: SkillColKey; label: string }[] = [
   { key: "id", label: "ID" },
+  { key: "tasks", label: "Tasks" },
   { key: "criteria", label: "Criteria" },
   { key: "mastery", label: "Mastery Skills" },
   { key: "status", label: "Status" },
   { key: "holders", label: "Holders" },
-  { key: "createdBy", label: "Created By" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },
 ];
@@ -87,7 +90,6 @@ const MASTERY_COLS: { key: MasteryColKey; label: string }[] = [
   { key: "skills", label: "Skills" },
   { key: "status", label: "Status" },
   { key: "holders", label: "Holders" },
-  { key: "createdBy", label: "Created By" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },
 ];
@@ -98,6 +100,10 @@ export function SkillsPage() {
   const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
+  useCreateShortcut(
+    () => setMode(tab === "skills" ? { kind: "new-skill" } : { kind: "new-mastery" }),
+    mode.kind === "list",
+  );
   const [menu, setMenu] = useState<{ rect: DOMRect; tab: Tab; id: string } | null>(null);
 
   const [query, setQuery] = useState("");
@@ -108,10 +114,10 @@ export function SkillsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [skillCols, setSkillCols] = useState<Record<SkillColKey, boolean>>({
-    id: true, criteria: true, mastery: true, status: true, holders: true, createdBy: true, dateCreated: false, dateModified: false,
+    id: true, tasks: true, criteria: false, mastery: true, status: true, holders: true, dateCreated: false, dateModified: false,
   });
   const [masteryCols, setMasteryCols] = useState<Record<MasteryColKey, boolean>>({
-    id: true, skills: true, status: true, holders: true, createdBy: true, dateCreated: false, dateModified: false,
+    id: true, skills: true, status: true, holders: true, dateCreated: false, dateModified: false,
   });
 
   // Reset paging/sort context when switching tabs or filtering.
@@ -207,14 +213,14 @@ export function SkillsPage() {
   const sc = skillCols;
   const mc = masteryCols;
   const skillTableMin =
-    52 /* badge */ + 240 /* name */ + 40 /* actions */ +
-    (sc.id ? 100 : 0) + (sc.criteria ? 150 : 0) + (sc.mastery ? 160 : 0) +
-    (sc.status ? 110 : 0) + (sc.holders ? 110 : 0) + (sc.createdBy ? 150 : 0) +
+    240 /* name */ + 40 /* actions */ +
+    (sc.id ? 100 : 0) + (sc.tasks ? 200 : 0) + (sc.criteria ? 110 : 0) + (sc.mastery ? 160 : 0) +
+    (sc.status ? 110 : 0) + (sc.holders ? 110 : 0) +
     (sc.dateCreated ? 130 : 0) + (sc.dateModified ? 130 : 0);
   const masteryTableMin =
-    52 + 240 + 40 +
+    240 + 40 +
     (mc.id ? 100 : 0) + (mc.skills ? 150 : 0) + (mc.status ? 110 : 0) +
-    (mc.holders ? 110 : 0) + (mc.createdBy ? 150 : 0) +
+    (mc.holders ? 110 : 0) +
     (mc.dateCreated ? 130 : 0) + (mc.dateModified ? 130 : 0);
 
   /* ─── Wizard routing (after all hooks) ─── */
@@ -265,7 +271,7 @@ export function SkillsPage() {
               >
                 <AddIcon />
                 {tab === "skills" ? "Create Skill" : "Create Mastery Skill"}
-                <span className="cta-kbd"><EnterKeyIcon /></span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
@@ -315,14 +321,13 @@ export function SkillsPage() {
                         <SkillColGroup cols={sc} />
                         <thead>
                           <tr>
-                            <th className="sk-col-badge" />
                             <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                             {sc.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
+                            {sc.tasks && <SortableHeader col="tasks" label="Tasks" className="col-used" sort={sort} toggle={toggleSort} sortable={false} />}
                             {sc.criteria && <SortableHeader col="criteria" label="Criteria" className="col-type" sort={sort} toggle={toggleSort} />}
                             {sc.mastery && <SortableHeader col="mastery" label="Mastery Skills" className="col-used" sort={sort} toggle={toggleSort} />}
                             {sc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
                             {sc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {sc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                             {sc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                             {sc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
                             <th className="col-actions">
@@ -358,13 +363,11 @@ export function SkillsPage() {
                         <MasteryColGroup cols={mc} />
                         <thead>
                           <tr>
-                            <th className="sk-col-badge" />
                             <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                             {mc.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
                             {mc.skills && <SortableHeader col="skills" label="Skills" className="col-used" sort={sort} toggle={toggleSort} />}
                             {mc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
                             {mc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {mc.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                             {mc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                             {mc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
                             <th className="col-actions">
@@ -565,14 +568,13 @@ function compareMastery(a: MasterySkill, b: MasterySkill, key: string): number {
 function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
   return (
     <colgroup>
-      <col style={{ width: 52 }} />
       <col style={{ width: 240 }} />
       {cols.id && <col style={{ width: 100 }} />}
-      {cols.criteria && <col style={{ width: 150 }} />}
+      {cols.tasks && <col style={{ width: 200 }} />}
+      {cols.criteria && <col style={{ width: 110 }} />}
       {cols.mastery && <col style={{ width: 160 }} />}
       {cols.status && <col style={{ width: 110 }} />}
       {cols.holders && <col style={{ width: 110 }} />}
-      {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
       <col style={{ width: 40 }} />
@@ -582,6 +584,19 @@ function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
 
 function StatusBadge({ status }: { status: Skill["status"] }) {
   return <span className={`sk-status sk-status--${status.toLowerCase()}`}>{status}</span>;
+}
+
+/** Awarding Tasks: first Task name, plus a "+N" pill when the Skill has more. */
+function TasksCell({ skill }: { skill: Skill }) {
+  if (skill.taskIds.length === 0) return <>—</>;
+  const first = taskById(skill.taskIds[0]);
+  const extra = skill.taskIds.length - 1;
+  return (
+    <span className="sk-tasks-cell">
+      <span className="sk-tasks-name">{first?.name ?? skill.taskIds[0]}</span>
+      {extra > 0 && <span className="sk-tasks-more">+{extra}</span>}
+    </span>
+  );
 }
 
 function SkillRow({
@@ -598,17 +613,16 @@ function SkillRow({
   const archived = skill.status === "Archived";
   return (
     <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""}`} onClick={onClick}>
-      <td className="sk-col-badge"><SkillBadge emoji={skill.image} size={30} incomplete={archived} /></td>
       <td className="col-name">
         {skill.name}
         {archived && <span className="hidden-badge">Archived</span>}
       </td>
       {cols.id && <td className="col-id">{skill.id}</td>}
-      {cols.criteria && <td className="col-type">{criteriaSummary(skill)}</td>}
+      {cols.tasks && <td className="col-used"><TasksCell skill={skill} /></td>}
+      {cols.criteria && <td className="col-type">{criteriaRule(skill)}</td>}
       {cols.mastery && <td className="col-used">{masteryCount > 0 ? `${masteryCount} linked` : "—"}</td>}
       {cols.status && <td className="col-type"><StatusBadge status={skill.status} /></td>}
       {cols.holders && <td className="col-type">{fmtHolders(skill.holders)}</td>}
-      {cols.createdBy && <td className="col-creator">{skill.createdBy}</td>}
       {cols.dateCreated && <td className="col-date">{skill.dateCreated}</td>}
       {cols.dateModified && <td className="col-date">{skill.dateModified}</td>}
       <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Skill" />
@@ -619,13 +633,11 @@ function SkillRow({
 function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
   return (
     <colgroup>
-      <col style={{ width: 52 }} />
       <col style={{ width: 240 }} />
       {cols.id && <col style={{ width: 100 }} />}
       {cols.skills && <col style={{ width: 150 }} />}
       {cols.status && <col style={{ width: 110 }} />}
       {cols.holders && <col style={{ width: 110 }} />}
-      {cols.createdBy && <col style={{ width: 150 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
       {cols.dateModified && <col style={{ width: 130 }} />}
       <col style={{ width: 40 }} />
@@ -646,7 +658,6 @@ function MasteryRow({
   const archived = mastery.status === "Archived";
   return (
     <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""}`} onClick={onClick}>
-      <td className="sk-col-badge"><SkillBadge emoji={mastery.image} size={30} mastery incomplete={archived} /></td>
       <td className="col-name">
         {mastery.name}
         {archived && <span className="hidden-badge">Archived</span>}
@@ -655,7 +666,6 @@ function MasteryRow({
       {cols.skills && <td className="col-used">{mastery.skillIds.length} Skill{mastery.skillIds.length === 1 ? "" : "s"}</td>}
       {cols.status && <td className="col-type"><StatusBadge status={mastery.status} /></td>}
       {cols.holders && <td className="col-type">{fmtHolders(mastery.holders)}</td>}
-      {cols.createdBy && <td className="col-creator">{mastery.createdBy}</td>}
       {cols.dateCreated && <td className="col-date">{mastery.dateCreated}</td>}
       {cols.dateModified && <td className="col-date">{mastery.dateModified}</td>}
       <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Mastery Skill" />

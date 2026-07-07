@@ -5,7 +5,8 @@ import {
   type SpotlightStatus,
 } from "../data/spotlights";
 import { CreateSpotlightPanel } from "./CreateSpotlightPanel";
-import { SearchIcon, EnterKeyIcon, DragHandleIcon, SmallXIcon, AddIcon } from "./icons";
+import { SearchIcon, DragHandleIcon, SmallXIcon, AddIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type FilterKey = "all" | "approved" | "pending" | "rejected";
 
@@ -75,6 +76,8 @@ export function SpotlightsPage() {
     setFilter("all");
     setQuery("");
   }
+
+  useCreateShortcut(openCreate, !creating);
 
   function closeCreate() {
     setCreating(false);
@@ -186,9 +189,7 @@ export function SpotlightsPage() {
                 <button className="new-task" onClick={openCreate}>
                   <AddIcon />
                   Create Spotlight
-                  <span className="cta-kbd">
-                    <EnterKeyIcon />
-                  </span>
+                  <span className="cta-kbd">C</span>
                 </button>
               </div>
             )}

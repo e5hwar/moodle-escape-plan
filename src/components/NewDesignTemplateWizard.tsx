@@ -107,9 +107,6 @@ export function NewDesignTemplateWizard(props: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
-          {step === 0 && (
-            <div className="required-fields-note">* Required Fields</div>
-          )}
 
           {step === 0 && <DetailsStep data={data} update={update} />}
           {step === 1 && <PositioningStep />}

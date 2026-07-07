@@ -141,7 +141,6 @@ const items: NavItem[] = [
     icon: "layers",
     children: [
       { key: "industries", label: "Industries" },
-      { key: "content-links", label: "Content Links", navKey: "content-links" },
     ],
   },
   {
@@ -176,16 +175,7 @@ const items: NavItem[] = [
       { key: "offer-codes", label: "Offer Codes", navKey: "offer-codes" },
     ],
   },
-  {
-    kind: "group",
-    key: "companies",
-    label: "Companies",
-    icon: "companies",
-    children: [
-      { key: "manage-companies", label: "Manage Companies", navKey: "manage-companies" },
-      { key: "trial-extension", label: "Complimentary Access", navKey: "trial-extension" },
-    ],
-  },
+  { kind: "link", key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
 
   { kind: "section", label: "System" },
   { kind: "link", key: "spotlight", label: "Spotlight", icon: "spotlight" },
@@ -201,7 +191,6 @@ const ACTIVE_MAP: Record<string, string> = {
   spotlight: "spotlight",
   scholarship: "scholarship",
   "offer-codes": "offer-codes",
-  "trial-extension": "trial-extension",
   feedback: "feedback",
   industries: "industries",
 };

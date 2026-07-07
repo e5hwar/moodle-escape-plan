@@ -922,8 +922,8 @@ function PlaceholderSection({ title, desc }: { title: string; desc: string }) {
 }
 
 /* ─── Main page ─── */
-export function ProductConfigPage() {
-  const [tab, setTab] = useState<Tab>("general");
+export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   const [forceUpdates, setForceUpdates] = useState<ForceUpdate[]>(DEFAULT_FORCE_UPDATES);
   const [webcamFrequency, setWebcamFrequency] = useState("20");
   const [termsOfService, setTermsOfService] = useState({ en: "", es: "" });

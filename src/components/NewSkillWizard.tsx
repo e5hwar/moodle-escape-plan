@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CheckBoldIcon,
   BoldIcon,
@@ -17,7 +17,6 @@ import {
 import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";
 import {
-  masteryUsing,
   type AwardRule,
   type MasterySkill,
   type Skill,
@@ -25,8 +24,6 @@ import {
 } from "../data/skills";
 
 /* ─────────────── Shared badge (complete + auto-greyed states) ─────────────── */
-
-const BADGE_EMOJI = ["🔥", "♻️", "🌡️", "📊", "🫧", "📈", "⚡", "🔋", "🔬", "🔧", "🦺", "💨", "🏅", "🎖️", "⚙️", "🛠️", "🧰", "🔌", "🧪", "🪛"];
 
 export function SkillBadge({
   emoji,
@@ -51,20 +48,6 @@ export function SkillBadge({
 }
 
 /* ─────────────── Wizard ─────────────── */
-
-const TASK_KIND: Record<Task["type"], { letter: string; cls: string }> = {
-  xAPI: { letter: "X", cls: "xapi" },
-  Quiz: { letter: "Q", cls: "quiz" },
-  "Hands-On Task": { letter: "H", cls: "handson" },
-  "ID Upload": { letter: "ID", cls: "idup" },
-  File: { letter: "F", cls: "file" },
-  URL: { letter: "U", cls: "url" },
-};
-
-function TaskBadge({ type }: { type: Task["type"] }) {
-  const k = TASK_KIND[type];
-  return <span className={`task-kind-badge ${k.cls}`}>{k.letter}</span>;
-}
 
 type Kind = "skill" | "mastery";
 
@@ -219,16 +202,9 @@ export function NewSkillWizard(props: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
-          <div className="required-fields-note">* Required Fields</div>
 
           {step === 0 && (
-            <DetailsStep
-              data={data}
-              update={update}
-              isMastery={isMastery}
-              editingSkillId={props.editingSkill?.id}
-              allMastery={props.allMastery}
-            />
+            <DetailsStep data={data} update={update} isMastery={isMastery} />
           )}
           {step === 1 && !isMastery && <CriteriaStep data={data} update={update} />}
           {step === 1 && isMastery && (
@@ -239,9 +215,9 @@ export function NewSkillWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <span className="wizard-saved">
-            {isEditing ? "Last saved 2 minutes ago" : "Draft — not saved yet"}
-          </span>
+          {isEditing && (
+            <span className="wizard-saved">Last saved 2 minutes ago</span>
+          )}
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
@@ -269,22 +245,12 @@ function DetailsStep({
   data,
   update,
   isMastery,
-  editingSkillId,
-  allMastery,
 }: {
   data: Data;
   update: (p: Partial<Data>) => void;
   isMastery: boolean;
-  editingSkillId?: string;
-  allMastery: MasterySkill[];
 }) {
   const noun = isMastery ? "Mastery Skill" : "Skill";
-
-  // When archiving a Skill linked to Mastery Skills, warn which become
-  // unearnable for new users (spec §11.3.4).
-  const linkedMastery =
-    !isMastery && editingSkillId ? masteryUsing(editingSkillId, allMastery) : [];
-  const showArchiveWarning = data.status === "Archived" && linkedMastery.length > 0;
 
   return (
     <>
@@ -316,92 +282,43 @@ function DetailsStep({
 
       <div className="form-group">
         <label className="form-label">Image <span className="req">*</span></label>
-        <ImagePicker
-          emoji={data.image}
-          mastery={isMastery}
-          onPick={(e) => update({ image: e })}
-        />
+        <ImagePicker />
         <p className="form-help">
-          The badge artwork shown to learners. The greyed-out “not yet earned” state is generated automatically — preview both above.
+          The badge artwork shown to learners on their earned-{noun.toLowerCase()} badge.
         </p>
-      </div>
-
-      <div className="form-divider" />
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Status</label>
-        <div className="radio-card-group">
-          <RadioCard
-            selected={data.status === "Active"}
-            onSelect={() => update({ status: "Active" })}
-            title="Active"
-            desc={`Can be earned by users. New ${noun.toLowerCase()}s are awarded retroactively to everyone who already meets the criteria.`}
-          />
-          <RadioCard
-            selected={data.status === "Archived"}
-            onSelect={() => update({ status: "Archived" })}
-            title="Archived"
-            desc={`Cannot be earned by new users. Existing holders keep it. There is no Hidden status — delete and re-create if needed.`}
-          />
-        </div>
-
-        {showArchiveWarning && (
-          <div className="form-warning" style={{ marginTop: 14 }}>
-            <span className="form-warning-icon"><WarnIcon /></span>
-            <div>
-              <strong>Archiving this Skill makes {linkedMastery.length} Mastery Skill{linkedMastery.length === 1 ? "" : "s"} unearnable for new users.</strong>{" "}
-              One of their required Skills can no longer be earned. Existing holders are unaffected. Consider removing this Skill from their criteria first:
-              <div className="sk-warn-chips">
-                {linkedMastery.map((m) => (
-                  <span key={m.id} className="sk-chip">
-                    <SkillBadge emoji={m.image} size={18} mastery />
-                    {m.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
 }
 
-function ImagePicker({
-  emoji,
-  mastery,
-  onPick,
-}: {
-  emoji: string;
-  mastery: boolean;
-  onPick: (e: string) => void;
-}) {
+function ImagePicker() {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="sk-image-picker">
-      <div className="sk-image-preview">
-        <div className="sk-image-preview-tile">
-          <SkillBadge emoji={emoji} size={72} mastery={mastery} />
-          <span className="sk-image-preview-label">Earned</span>
-        </div>
-        <div className="sk-image-preview-tile">
-          <SkillBadge emoji={emoji} size={72} mastery={mastery} incomplete />
-          <span className="sk-image-preview-label">Not yet earned</span>
-        </div>
-      </div>
       <div className="sk-image-pick-side">
-        <button className="drop-slim"><UploadIcon /> Upload image</button>
-        <div className="sk-emoji-grid">
-          {BADGE_EMOJI.map((e) => (
-            <button
-              key={e}
-              className={`sk-emoji-opt ${e === emoji ? "is-active" : ""}`}
-              onClick={() => onPick(e)}
-              aria-label={`Use ${e}`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          className={`sk-image-dropzone ${dragging ? "is-dragging" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+          }}
+        >
+          <UploadIcon />
+          <span className="sk-image-dropzone-title">
+            Drag &amp; drop an image, or click to browse
+          </span>
+          <span className="sk-image-dropzone-hint">PNG, JPG or SVG · up to 2&nbsp;MB</span>
+          <input ref={inputRef} type="file" accept="image/*" hidden />
+        </button>
       </div>
     </div>
   );
@@ -472,64 +389,85 @@ function TaskPicker({
   onToggle: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    if (!q) return [];
     const pool = tasks.filter((t) => !t.draft);
-    if (!q) return pool;
     return pool.filter(
       (t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [q]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
 
   const selectedTasks = selected
     .map((id) => tasks.find((t) => t.id === id))
     .filter((t): t is Task => !!t);
 
+  const showList = open && !!q;
+
   return (
-    <div className="sk-picker">
+    <div className="sk-picker-wrap">
       {selectedTasks.length > 0 && (
-        <div className="sk-picker-chosen">
+        <div className="sk-picker-cards">
           {selectedTasks.map((t) => (
-            <span key={t.id} className="sk-chip sk-chip--removable">
-              <TaskBadge type={t.type} />
-              {t.name}
-              <button className="sk-chip-x" onClick={() => onToggle(t.id)} aria-label={`Remove ${t.name}`}>
+            <div key={t.id} className="sk-card">
+              <div className="sk-card-main">
+                <span className="sk-card-name">{t.name}</span>
+                <span className="sk-card-meta">{t.type} · {t.id}</span>
+              </div>
+              <button className="sk-card-x" onClick={() => onToggle(t.id)} aria-label={`Remove ${t.name}`}>
                 <SmallXIcon />
               </button>
-            </span>
+            </div>
           ))}
         </div>
       )}
-      <div className="sk-picker-search">
-        <span className="search-icon"><SearchIcon /></span>
-        <input
-          className="sk-picker-search-input"
-          placeholder="Search Tasks by name or ID…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-      <div className="sk-picker-list">
-        {filtered.length === 0 ? (
-          <div className="sk-picker-empty">No Tasks match “{query}”.</div>
-        ) : (
-          filtered.slice(0, 60).map((t) => {
-            const on = selected.includes(t.id);
-            return (
-              <button
-                key={t.id}
-                className={`sk-picker-row ${on ? "is-selected" : ""}`}
-                onClick={() => onToggle(t.id)}
-              >
-                <span className={`checkbox ${on ? "checked" : ""}`}>
-                  {on && <CheckBoldIcon />}
-                </span>
-                <TaskBadge type={t.type} />
-                <span className="sk-picker-row-name">{t.name}</span>
-                <span className="sk-picker-row-id">{t.id}</span>
-              </button>
-            );
-          })
+      <div className={`sk-picker ${showList ? "is-open" : ""}`} ref={pickerRef}>
+        <div className="sk-picker-search">
+          <span className="search-icon"><SearchIcon /></span>
+          <input
+            className="sk-picker-search-input"
+            placeholder="Search Tasks by name or ID…"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+          />
+        </div>
+        {showList && (
+          <div className="sk-picker-list">
+            {filtered.length === 0 ? (
+              <div className="sk-picker-empty">No Tasks match “{query}”.</div>
+            ) : (
+              filtered.slice(0, 60).map((t) => {
+                const on = selected.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    className={`sk-picker-row ${on ? "is-selected" : ""}`}
+                    onClick={() => onToggle(t.id)}
+                  >
+                    <span className={`checkbox ${on ? "checked" : ""}`}>
+                      {on && <CheckBoldIcon />}
+                    </span>
+                    <span className="sk-picker-row-name">{t.name}</span>
+                    <span className="sk-picker-row-type">· {t.type}</span>
+                    <span className="sk-picker-row-id">{t.id}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -548,6 +486,8 @@ function LinkedSkillsStep({
   allSkills: Skill[];
 }) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const selected = data.skillIds;
 
   function toggle(id: string) {
@@ -564,6 +504,15 @@ function LinkedSkillsStep({
     );
   }, [query, allSkills]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
   const chosen = selected
     .map((id) => allSkills.find((s) => s.id === id))
     .filter((s): s is Skill => !!s);
@@ -577,50 +526,63 @@ function LinkedSkillsStep({
         </label>
 
         {chosen.length > 0 && (
-          <div className="sk-picker-chosen">
+          <div className="sk-picker-cards">
             {chosen.map((s) => (
-              <span key={s.id} className="sk-chip sk-chip--removable">
-                <SkillBadge emoji={s.image} size={18} />
-                {s.name}
-                {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
-                <button className="sk-chip-x" onClick={() => toggle(s.id)} aria-label={`Remove ${s.name}`}>
+              <div key={s.id} className="sk-card">
+                <SkillBadge emoji={s.image} size={30} />
+                <div className="sk-card-main">
+                  <span className="sk-card-name">
+                    {s.name}
+                    {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
+                  </span>
+                  <span className="sk-card-meta">{s.id}</span>
+                </div>
+                <button className="sk-card-x" onClick={() => toggle(s.id)} aria-label={`Remove ${s.name}`}>
                   <SmallXIcon />
                 </button>
-              </span>
+              </div>
             ))}
           </div>
         )}
 
-        <div className="sk-picker">
+        <div className={`sk-picker ${open ? "is-open" : ""}`} ref={pickerRef}>
           <div className="sk-picker-search">
             <span className="search-icon"><SearchIcon /></span>
             <input
               className="sk-picker-search-input"
               placeholder="Search Skills by name or ID…"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
             />
           </div>
-          <div className="sk-picker-list">
-            {filtered.map((s) => {
-              const on = selected.includes(s.id);
-              return (
-                <button
-                  key={s.id}
-                  className={`sk-picker-row ${on ? "is-selected" : ""}`}
-                  onClick={() => toggle(s.id)}
-                >
-                  <span className={`checkbox ${on ? "checked" : ""}`}>
-                    {on && <CheckBoldIcon />}
-                  </span>
-                  <SkillBadge emoji={s.image} size={22} incomplete={s.status === "Archived"} />
-                  <span className="sk-picker-row-name">{s.name}</span>
-                  {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
-                  <span className="sk-picker-row-id">{s.id}</span>
-                </button>
-              );
-            })}
-          </div>
+          {open && (
+            <div className="sk-picker-list">
+              {filtered.length === 0 ? (
+                <div className="sk-picker-empty">No Skills match “{query}”.</div>
+              ) : (
+                filtered.map((s) => {
+                  const on = selected.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      className={`sk-picker-row ${on ? "is-selected" : ""}`}
+                      onClick={() => toggle(s.id)}
+                    >
+                      <span className={`checkbox ${on ? "checked" : ""}`}>
+                        {on && <CheckBoldIcon />}
+                      </span>
+                      <SkillBadge emoji={s.image} size={22} incomplete={s.status === "Archived"} />
+                      <span className="sk-picker-row-name">{s.name}</span>
+                      {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
+                      <span className="sk-picker-row-id">{s.id}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
         <p className="form-help">
           The Mastery Skill is awarded automatically the moment a user holds <strong>all</strong> linked Skills.
@@ -670,28 +632,6 @@ const InfoIcon = () => (
     <path d="M12 8.4v.01M11 12h1v4h1" />
   </svg>
 );
-
-function RadioCard({
-  selected,
-  onSelect,
-  title,
-  desc,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  title: React.ReactNode;
-  desc?: string;
-}) {
-  return (
-    <button type="button" className={`radio-card ${selected ? "selected" : ""}`} onClick={onSelect}>
-      <span className="radio-dot" />
-      <div className="radio-card-text">
-        <div className="radio-card-title">{title}</div>
-        {desc && <div className="radio-card-desc">{desc}</div>}
-      </div>
-    </button>
-  );
-}
 
 function LangField({
   en,

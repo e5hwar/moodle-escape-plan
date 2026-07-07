@@ -13,9 +13,10 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckBoldIcon, SmallXIcon, ChevronDownIcon } from "./icons";
+import { CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
 import { PageBreak } from "./PageBreak";
+import { DateField } from "./DateField";
 
 /* ─────────────── Constants ─────────────── */
 
@@ -61,6 +62,8 @@ export const PARTNERSHIP_OPTIONS = [
   "Preferred Partner", "Elite Partner", "NGO Partner",
   "NexStar", "National Account", "Channel Partner",
 ];
+
+export const CSM_OPTIONS = ["Leanna Olbinsky", "Corinne Hayes", "Simran Phulwani"];
 
 // A saved price holds a per-seat rate for one or more currencies, keyed by
 // currency code (USD/CAD are always billed; others can be defined for future use).
@@ -118,22 +121,25 @@ type Props = {
   // Renders only the Plan step as a single page (no step rail / Company-details
   // step). Used by the "Manage Subscription" action on the Companies list.
   subscriptionOnly?: boolean;
+  // Navigates to the B2B tab within Product Config, used by the Industry and
+  // Partnership subtext links on the Company details step.
+  onNavigateToProductConfig?: () => void;
 };
 
 function planFor(c: Company): Plan {
   if (c.tier === "Free Trial") return "free-trial";
-  if (c.tier === "Complimentary Access") return "complimentary";
+  if (c.tier === "Free Access") return "complimentary";
   return "subscription";
 }
 
-export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false }: Props) {
+export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false, onNavigateToProductConfig }: Props) {
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
   // so the edit form starts populated either way.
   const editBilling = editCompany ? getCompanyBilling(editCompany) : null;
 
   // A company whose free trial has expired cannot be put back onto a trial — it
-  // can only convert to a paid Subscription or be granted Complimentary Access.
+  // can only convert to a paid Subscription or be granted Free Access.
   const trialExpired = isEdit && editBilling?.status === "Trial Expired";
 
   // When editing a company that already has a running paid subscription, the
@@ -141,7 +147,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // the new-company "what happens on save" summary.
   const currentSub: CurrentSub | null =
     isEdit && editCompany && editBilling &&
-    editBilling.status === "Active" &&
+    (editBilling.status === "Active" || editBilling.status === "Past Due") &&
     (["Essentials", "Growth", "Pro"] as Tier[]).includes(editCompany.tier)
       ? {
           tier: editCompany.tier as PaidTier,
@@ -157,6 +163,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // Company details
   const [name, setName] = useState(editCompany?.name ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
+  const [assignedCsm, setAssignedCsm] = useState(editCompany?.assignedCsm ?? "");
   // Structured address (Figma 101:337). Composed into a flat string on save.
   const [country, setCountry] = useState(editCompany?.addressParts?.country ?? "United States");
   const [addrLine1, setAddrLine1] = useState(editCompany?.addressParts?.line1 ?? "");
@@ -176,26 +183,28 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
 
   // Step 2
   const [plan, setPlan] = useState<Plan>(
-    editCompany ? (trialExpired ? "subscription" : planFor(editCompany)) : "free-trial",
+    editCompany ? (trialExpired ? "subscription" : planFor(editCompany)) : "subscription",
   );
   const [tier, setTier] = useState<PaidTier>(
-    editCompany && planFor(editCompany) === "subscription" ? (editCompany.tier as PaidTier) : "Essentials",
+    editCompany && planFor(editCompany) === "subscription" ? (editCompany.tier as PaidTier) : "Growth",
   );
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(editBilling?.billingCycle ?? "Monthly");
   const [currency, setCurrency] = useState<Currency>(editBilling?.currency ?? "USD");
   const [priceStr, setPriceStr] = useState(
     editCompany && planFor(editCompany) === "subscription" && editBilling ? String(editBilling.ratePerSeat) : "",
   );
-  const [seats, setSeats] = useState(editCompany ? String(editCompany.seats) : "");
+  const [seats, setSeats] = useState(editCompany ? String(editCompany.seats) : "1");
   const [payment, setPayment] = useState<PaymentCollection>(editBilling?.payment ?? "Automatic");
+  const [freeAccessEndDate, setFreeAccessEndDate] = useState(editCompany?.freeAccessEndDate ?? "");
   const [savedPrices, setSavedPrices] = useState<SavedPrice[]>(buildDefaultSavedPrices);
   const [showNewPriceModal, setShowNewPriceModal] = useState(false);
 
-  // Two-step split-view wizard (matches the Tasks wizard shell): 0 = Company
-  // details, 1 = Plan. The billing-impact rail and the save action live on the
-  // Plan step; the footer drives navigation. In subscription-only mode the
-  // wizard is locked to the Plan step and the step rail is hidden.
-  const [step, setStep] = useState(subscriptionOnly ? 1 : 0);
+  // Three-step split-view wizard (matches the Tasks wizard shell): 0 = Company
+  // details, 1 = Admin account, 2 = Plan. The billing-impact rail and the save
+  // action live on the Plan step; the footer drives navigation. In
+  // subscription-only mode the wizard is locked to the Plan step and the step
+  // rail is hidden.
+  const [step, setStep] = useState(subscriptionOnly ? 2 : 0);
 
   // Success
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
@@ -220,19 +229,49 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     if (isSubscription) setPriceStr(String(baseRate));
   }, [tier, billingCycle, currency, plan]);
 
-  // Company-details validation only gates the full wizard; in subscription-only
-  // mode those fields aren't shown, so identity is taken as already-valid.
-  const detailsValid =
-    subscriptionOnly ||
-    (name.trim().length > 0 && contactName.trim().length > 0 && email.trim().length > 0);
+  // Per-step validation gates the full wizard; in subscription-only mode these
+  // fields aren't shown, so identity is taken as already-valid. Each list is
+  // ordered top-to-bottom to match the form layout, so the CTA tooltip always
+  // surfaces the first thing the admin needs to fix as they scan down the page.
+  const step0Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
+    { valid: name.trim().length > 0, message: "Add a company name to continue." },
+    { valid: addrPin.trim().length > 0, message: "Add a PIN to continue." },
+  ];
+  const step1Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
+    { valid: contactName.trim().length > 0, message: "Add an account holder name to continue." },
+    { valid: email.trim().length > 0, message: "Add an account email to continue." },
+  ];
+  // A per-seat rate that isn't a saved Stripe price can't be used to create a
+  // subscription — the admin must save it as a new price first.
+  const priceValid = !isSubscription || savedPrices.some((p) => (p.rates[currency] ?? 0) === effectiveRate);
   // A subscription must have at least one paid seat before it can be saved.
   const seatsValid = !isSubscription || seatCount > 0;
-  const canSave = detailsValid && seatsValid;
-  const saveHint = !detailsValid
-    ? "Add a company name, account holder, and email to continue."
-    : !seatsValid
-    ? "Enter at least one seat for a subscription."
-    : "";
+  // Free Access is open-ended unless an end date is set, so one is required.
+  const freeAccessValid = plan !== "complimentary" || freeAccessEndDate.trim().length > 0;
+  const step2Checks: { valid: boolean; message: string }[] = [
+    ...(isSubscription
+      ? [
+          { valid: priceValid, message: "Save the custom price before creating the subscription." },
+          { valid: seatsValid, message: "Enter at least one seat for a subscription." },
+        ]
+      : []),
+    ...(plan === "complimentary"
+      ? [{ valid: freeAccessValid, message: "Set an end date for Free Access." }]
+      : []),
+  ];
+
+  const companyValid = step0Checks.every((c) => c.valid);
+  const adminValid = step1Checks.every((c) => c.valid);
+  const detailsValid = companyValid && adminValid;
+  const canSave = detailsValid && step2Checks.every((c) => c.valid);
+
+  // First unmet requirement on the step currently in view, shown as a tooltip
+  // on the disabled CTA (hover, not static text).
+  const ctaTooltip = step === 0
+    ? step0Checks.find((c) => !c.valid)?.message ?? ""
+    : step === 1
+    ? step1Checks.find((c) => !c.valid)?.message ?? ""
+    : step2Checks.find((c) => !c.valid)?.message ?? "";
 
   // Editing a running paid subscription → the rail shows a change preview (diff +
   // proration); switching plan type away from subscription → a scheduled change.
@@ -246,7 +285,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const planTypeChange =
     currentSub && plan !== "subscription"
       ? {
-          target: plan === "free-trial" ? "Free Trial" : "Complimentary Access",
+          target: plan === "free-trial" ? "Free Trial" : "Free Access",
           renew: currentSub.nextBillingDate,
         }
       : null;
@@ -262,8 +301,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     {
       id: "details",
       label: "Company details",
-      sub: "Identity & contact",
-      desc: "Identify the company and its primary contact. Industry and partnership are used for segmentation and reporting.",
+      sub: "Identity & segmentation",
+      desc: "Identify the company. Industry and partnership are used for segmentation and reporting.",
+    },
+    {
+      id: "admin",
+      label: "Admin account",
+      sub: "Primary contact",
+      desc: "The primary contact and first Admin account for the company.",
     },
     {
       id: "plan",
@@ -273,21 +318,17 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     },
   ];
 
-  // The Continue gate on step 1 only checks identity; seat validation belongs to
-  // the Plan step so the hint matches what the admin is looking at.
-  const stepHint = step === 0
-    ? (detailsValid ? "" : "Add a company name, account holder, and email to continue.")
-    : (canSave ? "" : saveHint);
 
   function handleCreate() {
     const company: Omit<Company, "id"> = {
       name: name.trim(),
       email: email.trim(),
-      tier: plan === "subscription" ? tier : plan === "complimentary" ? "Complimentary Access" : "Free Trial",
+      tier: plan === "subscription" ? tier : plan === "complimentary" ? "Free Access" : "Free Trial",
       seats: seatCount,
       industry: industries.join(", "),
       partnership: partnerships.join(", "),
       taxStatus,
+      assignedCsm: assignedCsm || undefined,
       address: [addrLine1, addrLine2, addrCity, addrState, addrPin, country]
         .map((s) => s.trim()).filter(Boolean).join(", ") || undefined,
       addressParts: [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
@@ -302,10 +343,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         : undefined,
       contactName: contactName.trim() || undefined,
       phone: phone.trim() || undefined,
+      // Preserve a Past Due subscription on edit instead of silently clearing the
+      // overdue state; a plan change doesn't settle the outstanding invoice.
       status: plan === "free-trial"
         ? "Free Trial"
         : plan === "complimentary"
-        ? "Complimentary"
+        ? "Free Access"
+        : isEdit && editBilling?.status === "Past Due"
+        ? "Past Due"
         : "Active",
       ...(isSubscription
         ? {
@@ -314,6 +359,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
             payment,
             ratePerSeat: effectiveRate,
           }
+        : {}),
+      ...(plan === "complimentary"
+        ? { freeAccessEndDate: freeAccessEndDate.trim() || undefined }
         : {}),
     };
     if (isEdit && editCompany) {
@@ -378,17 +426,22 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
             <Step1Details
               name={name} setName={setName}
               taxStatus={taxStatus} setTaxStatus={setTaxStatus}
+              assignedCsm={assignedCsm} setAssignedCsm={setAssignedCsm}
               country={country} setCountry={setCountry}
               addrLine1={addrLine1} setAddrLine1={setAddrLine1}
               addrLine2={addrLine2} setAddrLine2={setAddrLine2}
               addrCity={addrCity} setAddrCity={setAddrCity}
               addrPin={addrPin} setAddrPin={setAddrPin}
               addrState={addrState} setAddrState={setAddrState}
+              industries={industries} setIndustries={setIndustries}
+              partnerships={partnerships} setPartnerships={setPartnerships}
+              onNavigateToProductConfig={onNavigateToProductConfig}
+            />
+          ) : step === 1 ? (
+            <StepAdminAccount
               contactName={contactName} setContactName={setContactName}
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
-              industries={industries} setIndustries={setIndustries}
-              partnerships={partnerships} setPartnerships={setPartnerships}
             />
           ) : (
             <Step2Plan
@@ -404,12 +457,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               savedPrices={savedPrices}
               onCreatePrice={() => setShowNewPriceModal(true)}
               trialExpired={trialExpired}
+              freeAccessEndDate={freeAccessEndDate} setFreeAccessEndDate={setFreeAccessEndDate}
+              seatsLocked={isEdit}
               hideSummary
             />
           )}
         </div>
 
-        {step === 1 && (
+        {step === 2 && (
           <BillingImpactRail
             change={change}
             planTypeChange={planTypeChange}
@@ -429,7 +484,6 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
-          {stepHint && <span className="wizard-saved">{stepHint}</span>}
         </div>
         <div className="wizard-actions">
           {step > 0 && !subscriptionOnly && (
@@ -437,14 +491,29 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           )}
           {step === 0 ? (
             <button
-              className="btn-publish"
-              disabled={!detailsValid}
+              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
+              disabled={!companyValid}
+              data-tooltip={ctaTooltip}
               onClick={() => setStep(1)}
             >
               Continue
             </button>
+          ) : step === 1 ? (
+            <button
+              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
+              disabled={!adminValid}
+              data-tooltip={ctaTooltip}
+              onClick={() => setStep(2)}
+            >
+              Continue
+            </button>
           ) : (
-            <button className="btn-publish" disabled={!canSave} onClick={handleCreate}>
+            <button
+              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
+              disabled={!canSave}
+              data-tooltip={ctaTooltip}
+              onClick={handleCreate}
+            >
               {saveCta}
             </button>
           )}
@@ -475,6 +544,8 @@ const MONTH_IDX: Record<string, number> = {
 };
 // The admin tool's notion of "today" (matches the session date used elsewhere).
 const APP_TODAY = new Date(2026, 5, 24);
+// Mirrors the default "Free Trial Length" configured in Product Config → B2B Management.
+const TRIAL_DAYS = 14;
 
 function money(n: number, sym: string): string {
   return `${sym}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -549,7 +620,7 @@ type Target = {
 
 type ChangeRow = { label: string; oldStr: string; newStr: string };
 // One dot on the billing-impact timeline (Figma 107:1236 "Billing Impact").
-type TimelineEntry = { date: string; amount: string; desc: string; now?: boolean; muted?: boolean };
+type TimelineEntry = { date: string; amount?: string; desc: string; now?: boolean; muted?: boolean };
 type ChangePreview = {
   anyChange: boolean;
   label: string;
@@ -769,79 +840,238 @@ function BillingImpactRail({
   monthlyTotal: number;
   sym: string;
 }) {
-  let cardBody: React.ReactNode;
-
-  if (change) {
-    cardBody = <ChangeCard change={change} />;
-  } else if (planTypeChange) {
-    cardBody = (
-      <>
-        <div className="cw-impact-head">Billing impact</div>
-        <div className="cw-chg-badge cw-chg-badge--scheduled">
-          <span className="cw-chg-badge-dot" />
-          Plan change
-          <span className="cw-chg-channel">CS</span>
-        </div>
-        <div className="cw-chg-rows">
-          <div className="cw-chg-row">
-            <span className="cw-chg-row-label">Plan</span>
-            <span className="cw-chg-row-val">
-              <span className="cw-chg-old">{currentSub!.tier} subscription</span>
-              <span className="cw-chg-arrow">→</span>
-              <span className="cw-chg-new">{planTypeChange.target}</span>
-            </span>
-          </div>
-        </div>
-        <div className="cw-impact-callout cw-impact-callout--scheduled">
-          <div className="cw-impact-callout-title">Scheduled — no charge now</div>
-          <div className="cw-impact-callout-amt">At cycle end · {planTypeChange.renew}</div>
-          <div className="cw-impact-callout-desc">
-            The current subscription stays active until the cycle ends, then converts. No proration or refund is applied now.
-          </div>
-          <div className="cw-chg-param">subscription schedule · proration_behavior = none</div>
-        </div>
-        <div className="cw-impact-bullets-label">What happens on save</div>
-        <ul className="cw-impact-bullets">
-          <li>The current subscription is scheduled to end at the cycle end.</li>
-          <li>
-            {plan === "free-trial"
-              ? "Switches to a free trial — no charge."
-              : "Switches to complimentary access — no charge."}
-          </li>
-          <li>No proration or refund is applied now.</li>
-        </ul>
-      </>
-    );
-  } else {
-    cardBody = (
-      <OnSaveCard
-        plan={plan}
-        tier={tier}
-        billingCycle={billingCycle}
-        payment={payment}
-        effectiveRate={effectiveRate}
-        seatCount={seatCount}
-        monthlyTotal={monthlyTotal}
-        sym={sym}
-      />
-    );
-  }
+  // Every case renders the same subscription-preview design (Figma 107:1236):
+  // a top diff/summary card + a Billing Impact timeline. The three inputs are
+  // normalised into one PreviewModel so there is a single render path.
+  const model: PreviewModel =
+    change
+      ? changeToModel(change)
+      : planTypeChange && currentSub
+      ? planTypeChangeToModel(planTypeChange, currentSub)
+      : createToModel({ plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym });
 
   return (
     <aside className="cw-impact">
-      <div className="cw-impact-card">{cardBody}</div>
+      <div className="cw-impact-card">
+        <SubPreview model={model} />
+      </div>
     </aside>
   );
 }
 
-// Subscription preview shown when editing a running paid subscription
-// (Figma 107:1236): a "What's Changing" diff card + a "Billing Impact" timeline.
-function ChangeCard({ change }: { change: ChangePreview }) {
+// Normalised model for the subscription preview. `rows` are either diffs
+// (old → new, when there is a prior subscription) or plain summary values
+// (new only, when creating). `empty` is the no-change-yet edit state.
+type PreviewRow = { label: string; oldStr?: string; newStr: string };
+type PreviewModel = {
+  empty?: boolean;
+  topLabel: string;
+  pill: { text: string; muted: boolean } | null;
+  rows: PreviewRow[];
+  timeline: TimelineEntry[];
+};
+
+// Editing a running paid subscription (plan stays "subscription").
+function changeToModel(change: ChangePreview): PreviewModel {
   if (!change.anyChange) {
+    return { empty: true, topLabel: "What's Changing", pill: null, rows: [], timeline: [] };
+  }
+  return {
+    topLabel: "What's Changing",
+    pill: change.pill,
+    rows: change.rows.map((r) => ({ label: r.label, oldStr: r.oldStr, newStr: r.newStr })),
+    timeline: change.timeline,
+  };
+}
+
+// Editing a running paid subscription, switching plan type away from
+// subscription (→ Free Trial / Free Access). Scheduled for cycle end; no charge.
+function planTypeChangeToModel(
+  ptc: { target: string; renew: string },
+  cur: CurrentSub,
+): PreviewModel {
+  const curSym = CURRENCY_SYMBOL[cur.currency];
+  const curTotal = cur.rate * cur.seats;
+  const isTrial = ptc.target === "Free Trial";
+  // The true cycle boundary, computed the same way as computeChange(): monthly
+  // subs end at the next 1st of the month; annual subs at their renewal month's
+  // 1st. (The stored nextBillingDate month is only meaningful for annual subs.)
+  const renewDate = cur.cycle === "Annual"
+    ? nextFirstOfMonth(MONTH_IDX[ptc.renew.slice(0, 3)] ?? APP_TODAY.getMonth())
+    : new Date(APP_TODAY.getFullYear(), APP_TODAY.getMonth() + 1, 1);
+  const renewStr = fmtFullDate(renewDate);
+  return {
+    topLabel: "What's Changing",
+    pill: { text: "At Cycle End", muted: true },
+    rows: [
+      { label: "Plan", oldStr: `${cur.tier} Subscription`, newStr: ptc.target },
+      { label: "Recurring", oldStr: totalDisplay(curTotal, cur.cycle, curSym), newStr: money(0, curSym) },
+    ],
+    timeline: [
+      {
+        date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+        amount: money(0, curSym),
+        desc: `No charge today — the change is scheduled for cycle end on ${renewStr}.`,
+        now: true,
+      },
+      {
+        date: renewStr.toUpperCase(),
+        amount: money(0, curSym),
+        desc: isTrial
+          ? "Subscription ends and the free trial begins — no charge."
+          : "Subscription ends and free access begins — no charge.",
+      },
+      {
+        date: "ONGOING",
+        amount: money(0, curSym),
+        desc: isTrial
+          ? "Converts to a paid subscription automatically when the trial ends."
+          : "Full access continues until it is manually revoked.",
+        muted: true,
+      },
+    ],
+  };
+}
+
+// Creating a new company, or editing one without a running paid subscription.
+// No prior state to diff against, so the top card is a plain plan summary.
+function createToModel({
+  plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
+}: {
+  plan: Plan;
+  tier: PaidTier;
+  billingCycle: BillingCycle;
+  payment: PaymentCollection;
+  effectiveRate: number;
+  seatCount: number;
+  monthlyTotal: number;
+  sym: string;
+}): PreviewModel {
+  const y = APP_TODAY.getFullYear();
+  const m = APP_TODAY.getMonth();
+  const todayLabel = `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`;
+
+  if (plan === "free-trial") {
+    const trialEnd = new Date(APP_TODAY.getTime() + TRIAL_DAYS * 86400000);
+    return {
+      topLabel: "Plan Summary",
+      pill: { text: "No Charge", muted: true },
+      rows: [{ label: "Plan", newStr: "Free Trial" }],
+      timeline: [
+        {
+          date: todayLabel,
+          amount: money(0, sym),
+          desc: "Free trial begins — no charge and no payment method required.",
+          now: true,
+        },
+        {
+          date: `TRIAL ENDS · ${fmtFullDate(trialEnd).toUpperCase()}`,
+          desc: `Trial length is set in Product Config (${TRIAL_DAYS} days).`,
+          muted: true,
+        },
+      ],
+    };
+  }
+
+  if (plan === "complimentary") {
+    return {
+      topLabel: "Plan Summary",
+      pill: { text: "No Charge", muted: true },
+      rows: [{ label: "Plan", newStr: "Free Access" }],
+      timeline: [
+        {
+          date: todayLabel,
+          amount: money(0, sym),
+          desc: "Free access granted — no Stripe subscription or invoice is created.",
+          now: true,
+        },
+        {
+          date: "ONGOING",
+          amount: money(0, sym),
+          desc: "Full access continues until it is manually revoked.",
+          muted: true,
+        },
+      ],
+    };
+  }
+
+  // New subscription — effective today. Everyone bills on the 1st, so a monthly
+  // sub is prorated for the remainder of the month today, then charged the full
+  // amount on the 1st; an annual sub is charged the full year upfront and renews
+  // a year out (no near-term second charge to prorate).
+  const automatic = payment === "Automatic";
+  const rows: PreviewRow[] = [
+    { label: "Plan", newStr: "Subscription" },
+    { label: "Tier", newStr: tier },
+    { label: "Cycle", newStr: cycleWord(billingCycle) },
+    { label: "Per seat", newStr: `${money(effectiveRate, sym)} / mo` },
+    { label: "Seats", newStr: seatCount.toLocaleString() },
+    { label: "Total", newStr: totalDisplay(monthlyTotal, billingCycle, sym) },
+  ];
+
+  let timeline: TimelineEntry[];
+  if (billingCycle === "Annual") {
+    const fullYear = money(cycleTotal(monthlyTotal, "Annual"), sym);
+    const renewDate = new Date(y + 1, m, 1);
+    const onwardDate = new Date(y + 2, m, 1);
+    timeline = [
+      {
+        date: todayLabel,
+        amount: fullYear,
+        desc: automatic
+          ? `First yearly charge for the ${tier} Tier — collected via the payment link.`
+          : `First yearly invoice for the ${tier} Tier — payable within the configured window.`,
+        now: true,
+      },
+      { date: fmtFullDate(renewDate).toUpperCase(), amount: fullYear, desc: `Renews — yearly charge for the ${tier} Tier.` },
+      {
+        date: `${fmtFullDate(onwardDate).toUpperCase()} ONWARD`,
+        amount: fullYear,
+        desc: `Recurring yearly on ${FULL_MONTHS[m]} 1.`,
+        muted: true,
+      },
+    ];
+  } else {
+    const fullMonth = money(monthlyTotal, sym);
+    const { daysLeft, cycleDays, frac } = daysLeftInCycle("", "Monthly");
+    const proratedNow = money(monthlyTotal * frac, sym);
+    const firstFullDate = new Date(y, m + 1, 1);
+    const onwardDate = new Date(y, m + 2, 1);
+    timeline = [
+      {
+        date: todayLabel,
+        amount: proratedNow,
+        desc: automatic
+          ? `Prorated first charge for the ${daysLeft} of ${cycleDays} days left this month — collected via the payment link.`
+          : `Prorated first invoice for the ${daysLeft} of ${cycleDays} days left this month.`,
+        now: true,
+      },
+      { date: fmtFullDate(firstFullDate).toUpperCase(), amount: fullMonth, desc: `First full monthly charge for the ${tier} Tier.` },
+      {
+        date: `${fmtFullDate(onwardDate).toUpperCase()} ONWARD`,
+        amount: fullMonth,
+        desc: "Recurring monthly on the 1st of each month.",
+        muted: true,
+      },
+    ];
+  }
+
+  return {
+    topLabel: "Plan Summary",
+    pill: { text: "Effective Today", muted: false },
+    rows,
+    timeline,
+  };
+}
+
+// Subscription preview (Figma 107:1236): a "What's Changing" / "Plan Summary"
+// card + a "Billing Impact" timeline. One render path for every wizard case.
+function SubPreview({ model }: { model: PreviewModel }) {
+  if (model.empty) {
     return (
-      <div className="cw-chg-empty">
-        <div className="cw-chg-empty-title">No billing changes</div>
-        <div className="cw-chg-empty-sub">Change the tier, cycle, rate, seats, or payment method to preview the impact.</div>
+      <div className="sub-preview-empty">
+        <div className="sub-preview-empty-title">No billing changes</div>
+        <div className="sub-preview-empty-sub">Change the tier, cycle, rate, seats, or payment method to preview the impact.</div>
       </div>
     );
   }
@@ -849,23 +1079,27 @@ function ChangeCard({ change }: { change: ChangePreview }) {
     <div className="sub-preview">
       <section className="sub-preview-sec">
         <PageBreak
-          label="What's Changing"
+          label={model.topLabel}
           trailing={
-            change.pill && (
-              <span className={`sub-pill ${change.pill.muted ? "sub-pill--muted" : "sub-pill--accent"}`}>
-                {change.pill.text}
+            model.pill && (
+              <span className={`sub-pill ${model.pill.muted ? "sub-pill--muted" : "sub-pill--accent"}`}>
+                {model.pill.text}
               </span>
             )
           }
         />
         <div className="sub-changes-wrap">
           <div className="sub-changes">
-            {change.rows.map((r) => (
+            {model.rows.map((r) => (
               <div className="sub-change-row" key={r.label}>
                 <span className="sub-change-label">{r.label}</span>
                 <span className="sub-change-val">
-                  <span className="sub-change-old">{r.oldStr}</span>
-                  <span className="sub-change-arrow">→</span>
+                  {r.oldStr != null && (
+                    <>
+                      <span className="sub-change-old">{r.oldStr}</span>
+                      <span className="sub-change-arrow">→</span>
+                    </>
+                  )}
                   <span className="sub-change-new">{r.newStr}</span>
                 </span>
               </div>
@@ -877,15 +1111,17 @@ function ChangeCard({ change }: { change: ChangePreview }) {
       <section className="sub-preview-sec">
         <PageBreak label="Billing Impact" />
         <div className="sub-timeline">
-          {change.timeline.map((t, i) => (
+          {model.timeline.map((t, i) => (
             <div className="sub-timeline-item" key={i}>
               <div className="sub-timeline-rail">
                 <span className={`sub-timeline-dot ${t.now ? "is-now" : ""}`} />
-                {i < change.timeline.length - 1 && <span className="sub-timeline-divider" />}
+                {i < model.timeline.length - 1 && <span className="sub-timeline-divider" />}
               </div>
               <div className="sub-timeline-body">
                 <p className="sub-timeline-date">{t.date}</p>
-                <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+                {t.amount != null && (
+                  <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+                )}
                 <p className="sub-timeline-desc">{t.desc}</p>
               </div>
             </div>
@@ -896,164 +1132,41 @@ function ChangeCard({ change }: { change: ChangePreview }) {
   );
 }
 
-function OnSaveCard({
-  plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
-}: {
-  plan: Plan;
-  tier: PaidTier;
-  billingCycle: BillingCycle;
-  payment: PaymentCollection;
-  effectiveRate: number;
-  seatCount: number;
-  monthlyTotal: number;
-  sym: string;
-}) {
-  const isSubscription = plan === "subscription";
-  const cycleLabel = billingCycle === "Annual" ? "Yearly" : "Monthly";
-  const planLabel =
-    plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Complimentary Access" : "Subscription";
-
-  let tone: "neutral" | "good" | "charge" = "neutral";
-  let calloutTitle = "";
-  let calloutAmount: string | null = null;
-  let calloutDesc = "";
-  let bullets: string[] = [];
-
-  if (plan === "free-trial") {
-    tone = "neutral";
-    calloutTitle = "No charge now";
-    calloutDesc = "No payment method required. Converts to a paid subscription at the end of the trial window.";
-    bullets = [
-      "No Stripe subscription is created yet.",
-      "Trial runs for the globally configured window.",
-      "Converts to paid automatically when the trial ends.",
-    ];
-  } else if (plan === "complimentary") {
-    tone = "good";
-    calloutTitle = "No charge";
-    calloutDesc = "Admin-granted free access. No Stripe subscription or invoice is created.";
-    bullets = [
-      "No Stripe subscription or invoice is created.",
-      "Full Pro access continues until it is manually revoked.",
-    ];
-  } else if (payment === "Automatic") {
-    tone = "charge";
-    calloutTitle = "Payment link generated";
-    calloutAmount = `${sym}${monthlyTotal.toLocaleString()} / mo`;
-    calloutDesc = "A Stripe subscription is created. Share the payment link to collect the card or ACH.";
-    bullets = [
-      `Creates a Stripe subscription for ${tier}.`,
-      "Generates a payment link for the account holder.",
-      "Card / ACH is charged on each billing date.",
-    ];
-  } else {
-    tone = "charge";
-    calloutTitle = "Invoice on save";
-    calloutAmount = `${sym}${monthlyTotal.toLocaleString()}`;
-    calloutDesc = "Stripe issues an invoice payable within the configured payment window.";
-    bullets = [
-      `Creates a Stripe subscription for ${tier}.`,
-      `Issues an invoice for ${sym}${monthlyTotal.toLocaleString()}.`,
-      "Marked paid when payment is received within the window.",
-    ];
-  }
-
-  const nextInvoice = billingCycle === "Annual"
-    ? `${sym}${(monthlyTotal * 12).toLocaleString()} / yr`
-    : `${sym}${monthlyTotal.toLocaleString()} / mo`;
-
-  const row = (label: string, value: React.ReactNode) => (
-    <div className="cw-impact-row">
-      <span className="cw-impact-row-label">{label}</span>
-      <span className="cw-impact-row-value">{value}</span>
-    </div>
-  );
-
-  return (
-    <>
-      <div className="cw-impact-head">Billing impact</div>
-
-      <div className="cw-impact-rows">
-        {row("Plan", planLabel)}
-        {isSubscription && row("Tier", tier)}
-        {isSubscription && row("Cycle", cycleLabel)}
-        {isSubscription && row("Per seat", `${sym}${effectiveRate} / mo`)}
-        {isSubscription && row("Seats", seatCount.toLocaleString())}
-      </div>
-
-      {isSubscription && (
-        <div className="cw-impact-total">
-          <span>Total</span>
-          <span className="cw-impact-total-val">
-            {sym}{monthlyTotal.toLocaleString()}<small> / mo</small>
-          </span>
-        </div>
-      )}
-
-      <div className={`cw-impact-callout cw-impact-callout--${tone}`}>
-        <div className="cw-impact-callout-title">{calloutTitle}</div>
-        {calloutAmount && <div className="cw-impact-callout-amt">{calloutAmount}</div>}
-        <div className="cw-impact-callout-desc">{calloutDesc}</div>
-      </div>
-
-      {isSubscription && (
-        <div className="cw-impact-nextinvoice">
-          <span>Next invoice</span>
-          <span className="cw-impact-nextinvoice-val">{nextInvoice}</span>
-        </div>
-      )}
-
-      <div className="cw-impact-bullets-label">What happens on save</div>
-      <ul className="cw-impact-bullets">
-        {bullets.map((b) => (
-          <li key={b}>{b}</li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
 /* ─────────────── Step 1 — Company details ─────────────── */
 
 function Step1Details({
   name, setName,
   taxStatus, setTaxStatus,
+  assignedCsm, setAssignedCsm,
   country, setCountry,
   addrLine1, setAddrLine1,
   addrLine2, setAddrLine2,
   addrCity, setAddrCity,
   addrPin, setAddrPin,
   addrState, setAddrState,
-  contactName, setContactName,
-  email, setEmail,
-  phone, setPhone,
   industries, setIndustries,
   partnerships, setPartnerships,
+  onNavigateToProductConfig,
 }: {
   name: string; setName: (v: string) => void;
   taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
+  assignedCsm: string; setAssignedCsm: (v: string) => void;
   country: string; setCountry: (v: string) => void;
   addrLine1: string; setAddrLine1: (v: string) => void;
   addrLine2: string; setAddrLine2: (v: string) => void;
   addrCity: string; setAddrCity: (v: string) => void;
   addrPin: string; setAddrPin: (v: string) => void;
   addrState: string; setAddrState: (v: string) => void;
-  contactName: string; setContactName: (v: string) => void;
-  email: string; setEmail: (v: string) => void;
-  phone: string; setPhone: (v: string) => void;
   industries: string[]; setIndustries: (v: string[]) => void;
   partnerships: string[]; setPartnerships: (v: string[]) => void;
+  onNavigateToProductConfig?: () => void;
 }) {
   return (
     <>
       <h1 className="wizard-title">Company details</h1>
       <p className="wizard-desc">
-        Identify the company and its primary contact. Industry and partnership are used for
-        segmentation and reporting.
+        Identify the company. Industry and partnership are used for segmentation and reporting.
       </p>
-      <div className="required-fields-note">* Required Fields</div>
-
-      <PageBreak label="Company Details" />
 
       <div className="form-group">
         <label className="form-label">Company Name <span className="req">*</span></label>
@@ -1084,20 +1197,20 @@ function Step1Details({
           </div>
           <input
             className="address-input"
-            placeholder="Address Line 1 (Optional)"
+            placeholder="Address Line 1"
             value={addrLine1}
             onChange={(e) => setAddrLine1(e.target.value)}
           />
           <input
             className="address-input"
-            placeholder="Address Line 2 (Optional)"
+            placeholder="Address Line 2"
             value={addrLine2}
             onChange={(e) => setAddrLine2(e.target.value)}
           />
           <div className="address-split">
             <input
               className="address-input address-cell"
-              placeholder="City (Optional)"
+              placeholder="City"
               value={addrCity}
               onChange={(e) => setAddrCity(e.target.value)}
             />
@@ -1149,47 +1262,36 @@ function Step1Details({
         </select>
       </div>
 
-      <PageBreak label="Primary Contact" />
+      <div className="form-group">
+        <label className="form-label">Assigned CSM</label>
+        <select
+          className={`form-select ${assignedCsm ? "" : "is-placeholder"}`}
+          value={assignedCsm}
+          onChange={(e) => setAssignedCsm(e.target.value)}
+        >
+          <option value="">Unassigned</option>
+          {CSM_OPTIONS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="form-row-2">
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Account Holder <span className="req">*</span></label>
-          <input
-            className="form-input"
-            placeholder="e.g. Jane Smith"
-            value={contactName}
-            onChange={(e) => setContactName(e.target.value)}
-          />
-        </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Phone number</label>
-          <input
-            className="form-input"
-            type="tel"
-            placeholder="+1 (555) 000-0000"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="form-group" style={{ marginTop: 24 }}>
-        <label className="form-label">Email <span className="req">*</span></label>
-        <input
-          className="form-input"
-          type="email"
-          placeholder="admin@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <p className="form-help">Becomes the Stripe billing email and the company's first Admin account.</p>
-      </div>
-
-      <PageBreak label="Segmentation" />
-
-      <div className="form-row-2">
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Industry</label>
+          <label className="form-label" style={{ marginBottom: 0 }}>Industry</label>
+          <p className="form-help co-w-manage-link" style={{ margin: "0 0 8px" }}>
+            Manage Industries on{" "}
+            <a
+              href="#"
+              className="co-w-manage-cta"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToProductConfig?.();
+              }}
+            >
+              Product Config <ArrowUpRightIcon />
+            </a>
+          </p>
           <MultiSelect
             options={INDUSTRY_OPTIONS}
             value={industries}
@@ -1198,7 +1300,20 @@ function Step1Details({
           />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Partnership <span className="co-w-note">(optional)</span></label>
+          <label className="form-label" style={{ marginBottom: 0 }}>Partnership</label>
+          <p className="form-help co-w-manage-link" style={{ margin: "0 0 8px" }}>
+            Manage Partnerships on{" "}
+            <a
+              href="#"
+              className="co-w-manage-cta"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToProductConfig?.();
+              }}
+            >
+              Product Config <ArrowUpRightIcon />
+            </a>
+          </p>
           <MultiSelect
             options={PARTNERSHIP_OPTIONS}
             value={partnerships}
@@ -1211,7 +1326,128 @@ function Step1Details({
   );
 }
 
-/* ─────────────── Step 2 — Plan selection ─────────────── */
+/* ─────────────── Step 2 — Admin account ─────────────── */
+
+// Country dial codes for the phone field. First entry is the default.
+const DIAL_CODES: { code: string; label: string }[] = [
+  { code: "+1",  label: "US/CA (+1)" },
+  { code: "+44", label: "UK (+44)" },
+  { code: "+61", label: "AU (+61)" },
+  { code: "+91", label: "IN (+91)" },
+  { code: "+49", label: "DE (+49)" },
+  { code: "+33", label: "FR (+33)" },
+  { code: "+52", label: "MX (+52)" },
+  { code: "+55", label: "BR (+55)" },
+];
+
+// Strip everything but digits, then group as XXX-XXX-XXXX… (3-3-rest). This is
+// what the phone input shows as the user types; non-digits are simply dropped.
+function formatPhoneNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+// Dial-code select + auto-formatting number field. The composed value stored in
+// `phone` is "<dial> <formatted>" (e.g. "+1 555-123-4567").
+function PhoneField({ phone, setPhone }: { phone: string; setPhone: (v: string) => void }) {
+  const [dialCode, setDialCode] = useState(() => {
+    const match = DIAL_CODES.find((d) => phone.startsWith(d.code));
+    return match ? match.code : DIAL_CODES[0].code;
+  });
+  const [national, setNational] = useState(() => {
+    const match = DIAL_CODES.find((d) => phone.startsWith(d.code));
+    return formatPhoneNumber(match ? phone.slice(match.code.length) : phone);
+  });
+
+  function emit(code: string, nat: string) {
+    setPhone(nat ? `${code} ${nat}` : "");
+  }
+
+  return (
+    <div className="phone-field">
+      <div className="address-row phone-field-code">
+        <select
+          className="address-select"
+          value={dialCode}
+          onChange={(e) => {
+            setDialCode(e.target.value);
+            emit(e.target.value, national);
+          }}
+        >
+          {DIAL_CODES.map((d) => (
+            <option key={d.code} value={d.code}>{d.label}</option>
+          ))}
+        </select>
+        <span className="address-chevron"><ChevronDownIcon /></span>
+      </div>
+      <input
+        className="form-input"
+        type="tel"
+        inputMode="numeric"
+        placeholder="555-000-0000"
+        value={national}
+        onChange={(e) => {
+          const next = formatPhoneNumber(e.target.value);
+          setNational(next);
+          emit(dialCode, next);
+        }}
+      />
+    </div>
+  );
+}
+
+function StepAdminAccount({
+  contactName, setContactName,
+  email, setEmail,
+  phone, setPhone,
+}: {
+  contactName: string; setContactName: (v: string) => void;
+  email: string; setEmail: (v: string) => void;
+  phone: string; setPhone: (v: string) => void;
+}) {
+  return (
+    <>
+      <h1 className="wizard-title">Admin account</h1>
+      <p className="wizard-desc">
+        The primary contact and first Admin account for the company.
+      </p>
+
+      <div className="form-group">
+        <label className="form-label">Account Holder <span className="req">*</span></label>
+        <input
+          autoFocus
+          className="form-input"
+          placeholder="e.g. Jane Smith"
+          value={contactName}
+          onChange={(e) => setContactName(e.target.value)}
+        />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label" style={{ marginBottom: 0 }}>Email <span className="req">*</span></label>
+        <p className="form-help" style={{ margin: "0 0 8px" }}>
+          Becomes the Stripe billing email and the company's first Admin account.
+        </p>
+        <input
+          className="form-input"
+          type="email"
+          placeholder="admin@company.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
+
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label className="form-label">Phone number</label>
+        <PhoneField phone={phone} setPhone={setPhone} />
+      </div>
+    </>
+  );
+}
+
+/* ─────────────── Step 3 — Plan selection ─────────────── */
 
 function Step2Plan({
   plan, setPlan,
@@ -1225,6 +1461,8 @@ function Step2Plan({
   savedPrices,
   onCreatePrice,
   trialExpired = false,
+  freeAccessEndDate, setFreeAccessEndDate,
+  seatsLocked = false,
   hideSummary = false,
 }: {
   plan: Plan; setPlan: (v: Plan) => void;
@@ -1238,6 +1476,8 @@ function Step2Plan({
   savedPrices: SavedPrice[];
   onCreatePrice: () => void;
   trialExpired?: boolean;
+  freeAccessEndDate: string; setFreeAccessEndDate: (v: string) => void;
+  seatsLocked?: boolean;
   hideSummary?: boolean;
 }) {
   const isSubscription = plan === "subscription";
@@ -1248,19 +1488,8 @@ function Step2Plan({
       <p className="wizard-desc">Choose the access plan. Subscription plans require billing configuration.</p>
 
       <div className="form-group">
-        <label className="form-label">Plan</label>
+        <label className="form-label">Plan <span className="req">*</span></label>
         <div className="radio-card-group">
-          <RadioCard
-            selected={plan === "free-trial"}
-            onSelect={() => setPlan("free-trial")}
-            disabled={trialExpired}
-            title="Free Trial"
-            desc={
-              trialExpired
-                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Complimentary Access."
-                : "No payment method required. Limited access for the configured trial window, then converts to paid."
-            }
-          />
           <RadioCard
             selected={plan === "subscription"}
             onSelect={() => setPlan("subscription")}
@@ -1268,9 +1497,20 @@ function Step2Plan({
             desc="Paid plan. Choose a tier, billing cycle, and rate. Stripe subscription is created on save."
           />
           <RadioCard
+            selected={plan === "free-trial"}
+            onSelect={() => setPlan("free-trial")}
+            disabled={trialExpired}
+            title="Free Trial"
+            desc={
+              trialExpired
+                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Free Access."
+                : "No payment method required. Limited access for the configured trial window, then converts to paid."
+            }
+          />
+          <RadioCard
             selected={plan === "complimentary"}
             onSelect={() => setPlan("complimentary")}
-            title="Complimentary Access"
+            title="Free Access"
             desc="Admin-granted free access. No Stripe subscription is created."
           />
         </div>
@@ -1281,7 +1521,7 @@ function Step2Plan({
           <div className="form-divider" />
 
           <div className="form-group">
-            <label className="form-label">Tier</label>
+            <label className="form-label">Tier <span className="req">*</span></label>
             <div className="radio-card-group">
               {(["Essentials", "Growth", "Pro"] as PaidTier[]).map((t) => (
                 <RadioCard
@@ -1298,7 +1538,7 @@ function Step2Plan({
           <div className="form-divider" />
 
           <div className="form-group">
-            <label className="form-label">Billing cycle</label>
+            <label className="form-label">Billing cycle <span className="req">*</span></label>
             <div className="tab-switch">
               {BILLING_CYCLES.map((c) => (
                 <button
@@ -1313,7 +1553,7 @@ function Step2Plan({
           </div>
 
           <div className="form-group" style={{ marginTop: 28 }}>
-            <label className="form-label">Per-seat price</label>
+            <label className="form-label">Per-seat price <span className="req">*</span></label>
             <PerSeatPriceField
               currency={currency}
               setCurrency={setCurrency}
@@ -1329,23 +1569,28 @@ function Step2Plan({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Seats</label>
+            <label className="form-label">Seats <span className="req">*</span></label>
             <input
               className="form-input"
               style={{ maxWidth: 160 }}
               type="number"
-              min={0}
-              placeholder="0"
+              min={1}
+              placeholder="1"
               value={seats}
+              disabled={seatsLocked}
               onChange={(e) => setSeats(e.target.value)}
             />
-            <p className="form-help">Every seat is paid, including empty seats. Seats can be reassigned at no charge.</p>
+            <p className="form-help">
+              {seatsLocked
+                ? "Seat count is set when the company is created and can't be changed here."
+                : "Every seat is paid, including empty seats. Seats can be reassigned at no charge. Minimum 1 seat."}
+            </p>
           </div>
 
           <div className="form-divider" />
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Payment method</label>
+            <label className="form-label">Payment method <span className="req">*</span></label>
             <div className="radio-card-group">
               <RadioCard
                 selected={payment === "Automatic"}
@@ -1390,10 +1635,16 @@ function Step2Plan({
       )}
 
       {plan === "complimentary" && (
-        <div className="co-plan-note" style={{ marginTop: 8 }}>
-          <strong>Free access granted.</strong> No subscription is created in Stripe. Eligible only
-          for companies without an active or paused subscription.
-        </div>
+        <>
+          <div className="co-plan-note" style={{ marginTop: 8 }}>
+            <strong>Free access granted.</strong> No subscription is created in Stripe. Eligible only
+            for companies without an active or paused subscription.
+          </div>
+          <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
+            <label className="form-label">Free Access End Date <span className="req">*</span></label>
+            <DateField value={freeAccessEndDate} onChange={setFreeAccessEndDate} />
+          </div>
+        </>
       )}
     </>
   );
@@ -1453,6 +1704,8 @@ function PerSeatPriceField({
 
   const exact = savedPrices.find((p) => rateOf(p) === entered) ?? null;
   const showCreate = hasEntered && !exact;
+  const unitWord = billingCycle === "Annual" ? "yr" : "mo";
+  const unitWordLong = billingCycle === "Annual" ? "year" : "month";
 
   function pick(p: SavedPrice) {
     setPriceStr(String(rateOf(p)));
@@ -1461,7 +1714,7 @@ function PerSeatPriceField({
 
   return (
     <div className="cw-price" ref={wrapRef}>
-      <div className={`cw-price-field${priceOpen || currencyOpen ? " is-open" : ""}`}>
+      <div className={`cw-price-field${priceOpen || currencyOpen ? " is-open" : ""}${hasEntered && !exact ? " has-error" : ""}`}>
         {/* Currency selector segment */}
         <button
           type="button"
@@ -1490,7 +1743,7 @@ function PerSeatPriceField({
           }}
         />
 
-        <span className="cw-price-unit">/ seat / mo</span>
+        <span className="cw-price-unit">/ seat / {unitWord}</span>
 
         <button
           type="button"
@@ -1562,16 +1815,21 @@ function PerSeatPriceField({
             <span className="cw-price-note-label">{exact.label || `${sym}${entered}`}</span>
           </div>
         ) : (
-          <div className="cw-price-note cw-price-note--custom">
-            <span className="cw-price-note-mark">✎</span>
+          <div className="cw-price-note cw-price-note--error">
+            <span className="cw-price-note-mark">!</span>
             <span className="cw-price-note-lead">Custom price — not saved on Stripe:</span>
-            <span className="cw-price-note-label">{sym}{entered} / seat / mo</span>
+            <span className="cw-price-note-label">{sym}{entered} / seat / {unitWord}</span>
           </div>
         )
       )}
+      {hasEntered && !exact && (
+        <p className="cw-price-error">
+          This price can't be used to create a subscription until it's saved. Save it as a new price to continue.
+        </p>
+      )}
 
       <p className="form-help" style={{ marginTop: 8 }}>
-        Default for {tier} {billingCycle === "Annual" ? "Yearly" : "Monthly"} is {sym}{baseRate} / seat / month.
+        Default for {tier} {billingCycle === "Annual" ? "Yearly" : "Monthly"} is {sym}{baseRate} / seat / {unitWordLong}.
       </p>
     </div>
   );
@@ -1637,8 +1895,10 @@ function SuccessScreen({
             {company.industry && detail("Industry", company.industry)}
             {company.partnership && detail("Partnership", company.partnership)}
             {company.taxStatus && detail("Tax status", company.taxStatus)}
+            {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
             <div className="success-divider" />
-            {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Complimentary Access" : "Subscription")}
+            {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
+            {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}
             {isSubscription && tier && detail("Tier", tier)}
             {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Yearly" : "Monthly")}
             {isSubscription && detail("Currency", company.currency ?? "USD")}

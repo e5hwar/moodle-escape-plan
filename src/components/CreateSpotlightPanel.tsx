@@ -67,7 +67,6 @@ export function CreateSpotlightPanel({
             Spotlights appear on the app's Home Screen. They must be approved
             before users see them.
           </p>
-          <div className="required-fields-note">* Required Fields</div>
         </div>
         <button
           className="sp-panel-close"

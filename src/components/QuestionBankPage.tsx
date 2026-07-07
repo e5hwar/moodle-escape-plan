@@ -2,8 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   categories as seedCategories,
   questions as allQuestions,
+  flattenCategories,
+  selectionLabel,
   shortQuestionType,
+  supportsGrading,
   type Category,
+  type CategorySelection,
   type Question,
   type QuestionStatus,
   type ShortQuestionType,
@@ -11,16 +15,29 @@ import {
 } from "../data/questionBank";
 import {
   CheckIcon,
-  ChevronDownIcon,
   SearchIcon,
   SmallXIcon,
   SortIcon,
   UploadIcon,
 } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger } from "./Filters";
+import { QuestionSearch } from "./QuestionSearch";
+import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
+import { QuestionHistoryModal } from "./QuestionHistoryModal";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 12;
 
-const TYPE_OPTIONS: (ShortQuestionType | "All")[] = ["All", "MCQ", "T/F", "Match"];
+const TYPE_OPTIONS: (ShortQuestionType | "All")[] = [
+  "All",
+  "MCQ",
+  "T/F",
+  "Match",
+  "Short",
+  "File",
+  "Scale",
+];
 
 const STATUS_OPTIONS: (QuestionStatus | "All")[] = [
   "All",
@@ -29,8 +46,20 @@ const STATUS_OPTIONS: (QuestionStatus | "All")[] = [
   "Draft",
 ];
 
-const USED_IN_OPTIONS = ["Any", "In a quiz", "Not in use"] as const;
+const GRADING_OPTIONS = ["Any", "Graded", "Ungraded"] as const;
+type GradingOption = (typeof GRADING_OPTIONS)[number];
+
+const USED_IN_OPTIONS = [
+  "Any",
+  "In a quiz",
+  "In a feedback form",
+  "Not in use",
+] as const;
 type UsedInOption = (typeof USED_IN_OPTIONS)[number];
+
+function isGraded(q: Question): boolean {
+  return q.gradingEnabled && supportsGrading(q.type);
+}
 
 type QSortKey = "question" | "type" | "version" | "status" | "usage";
 type SortDir = "asc" | "desc";
@@ -52,14 +81,11 @@ function compareQuestions(a: Question, b: Question, key: QSortKey): number {
     case "status":
       return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     case "usage":
-      return a.quizzes.length - b.quizzes.length;
+      return (
+        a.quizzes.length + a.forms.length - (b.quizzes.length + b.forms.length)
+      );
   }
 }
-
-type CategorySelection =
-  | { kind: "all" }
-  | { kind: "category"; categoryKey: string }
-  | { kind: "subcategory"; categoryKey: string; subKey: string };
 
 // 3-dot menu target — a category or a subcategory row.
 type CatTarget =
@@ -133,6 +159,9 @@ export function QuestionBankPage({
   const [categories, setCategories] = useState<Category[]>(seedCategories);
   const [questions, setQuestions] = useState<Question[]>(allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
+  // Row-click preview panel + version-history modal
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [historyQ, setHistoryQ] = useState<Question | null>(null);
   const [selection, setSelection] = useState<CategorySelection>({
     kind: "subcategory",
     categoryKey: "epa-608",
@@ -148,6 +177,7 @@ export function QuestionBankPage({
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<ShortQuestionType | "All">("All");
   const [statusFilter, setStatusFilter] = useState<QuestionStatus | "All">("Active");
+  const [gradingFilter, setGradingFilter] = useState<GradingOption>("Any");
   const [usedInFilter, setUsedInFilter] = useState<UsedInOption>("Any");
 
   const [page, setPage] = useState(1);
@@ -181,11 +211,15 @@ export function QuestionBankPage({
       }
       if (typeFilter !== "All" && shortQuestionType(row.type) !== typeFilter) return false;
       if (statusFilter !== "All" && row.status !== statusFilter) return false;
+      if (gradingFilter === "Graded" && !isGraded(row)) return false;
+      if (gradingFilter === "Ungraded" && isGraded(row)) return false;
       if (usedInFilter === "In a quiz" && row.quizzes.length === 0) return false;
-      if (usedInFilter === "Not in use" && row.quizzes.length > 0) return false;
+      if (usedInFilter === "In a feedback form" && row.forms.length === 0) return false;
+      if (usedInFilter === "Not in use" && row.quizzes.length + row.forms.length > 0)
+        return false;
       return true;
     });
-  }, [inCategory, query, typeFilter, statusFilter, usedInFilter]);
+  }, [inCategory, query, typeFilter, statusFilter, gradingFilter, usedInFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareQuestions(a, b, sort.key));
@@ -196,7 +230,7 @@ export function QuestionBankPage({
 
   useEffect(() => {
     setPage(1);
-  }, [selection, query, typeFilter, statusFilter, usedInFilter, sort]);
+  }, [selection, query, typeFilter, statusFilter, gradingFilter, usedInFilter, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -210,13 +244,47 @@ export function QuestionBankPage({
     );
   }
 
-  function showVersionHistory(q: Question) {
-    const lines: string[] = [];
-    for (let v = q.version; v >= 1; v--) {
-      lines.push(`v${v}${v === q.version ? "  — current" : ""}`);
+  // The question shown in the preview panel — read from state so archive
+  // toggles and restores update the open panel live.
+  const selected = selectedId
+    ? questions.find((q) => q.id === selectedId) ?? null
+    : null;
+
+  // Esc closes the preview panel (unless a modal or menu is handling it).
+  useEffect(() => {
+    if (!selectedId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (historyQ || rowMenu || catMenu) return;
+      setSelectedId(null);
     }
-    window.alert(`Version history — ${q.id}\n\n${lines.join("\n")}`);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedId, historyQ, rowMenu, catMenu]);
+
+  // Restoring an old version creates a NEW version with its content.
+  function restoreVersion(id: string) {
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, version: q.version + 1 } : q)),
+    );
   }
+
+  function startCreate() {
+    let path: string[] | undefined;
+    if (selection.kind !== "all") {
+      const cat = categories.find((c) => c.key === selection.categoryKey);
+      if (cat) {
+        path = [cat.label];
+        if (selection.kind === "subcategory") {
+          const sub = cat.subcategories?.find((s) => s.key === selection.subKey);
+          if (sub) path.push(sub.label);
+        }
+      }
+    }
+    onNewQuestion?.(path);
+  }
+
+  useCreateShortcut(startCreate);
 
   // Toggle a question between Active and Archived from the row menu.
   function toggleArchive(id: string) {
@@ -472,19 +540,12 @@ export function QuestionBankPage({
 
           {/* Right pane */}
           <section className="qb-content">
-            <div className="qb-search-wrap">
-              <span className="search-icon"><SearchIcon /></span>
-              <input
-                className="qb-search-input"
-                placeholder="Search questions by text or ID…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <span className="search-kbd">
-                <span className="kbd-cmd">⌘</span>
-                <span className="kbd-letter">K</span>
-              </span>
-            </div>
+            <QuestionSearch
+              categories={categories}
+              onSelectionChange={setSelection}
+              query={query}
+              onQueryChange={setQuery}
+            />
 
             <label
               className={`qb-dropzone ${dropzoneActive ? "is-active" : ""}`}
@@ -528,44 +589,44 @@ export function QuestionBankPage({
 
             <div className="qb-filters-row">
               <div className="qb-filters">
-                <SelectPill
+                <CategoryFilterPill
+                  categories={categories}
+                  selection={selection}
+                  onChange={setSelection}
+                />
+                <SingleSelectPill
                   label="Type"
                   value={typeFilter}
+                  neutral="All"
                   options={TYPE_OPTIONS}
                   onChange={(v) => setTypeFilter(v as ShortQuestionType | "All")}
                 />
-                <SelectPill
+                <SingleSelectPill
                   label="Status"
                   value={statusFilter}
+                  neutral="All"
                   options={STATUS_OPTIONS}
                   onChange={(v) => setStatusFilter(v as QuestionStatus | "All")}
                 />
-                <SelectPill
+                <SingleSelectPill
+                  label="Grading"
+                  value={gradingFilter}
+                  neutral="Any"
+                  options={[...GRADING_OPTIONS]}
+                  onChange={(v) => setGradingFilter(v as GradingOption)}
+                />
+                <SingleSelectPill
                   label="Used in"
                   value={usedInFilter}
+                  neutral="Any"
                   options={[...USED_IN_OPTIONS]}
                   onChange={(v) => setUsedInFilter(v as UsedInOption)}
                 />
                 <button className="qb-more-filters">+ More filters</button>
               </div>
-              <button
-                className="qb-add-question"
-                onClick={() => {
-                  let path: string[] | undefined;
-                  if (selection.kind !== "all") {
-                    const cat = categories.find((c) => c.key === selection.categoryKey);
-                    if (cat) {
-                      path = [cat.label];
-                      if (selection.kind === "subcategory") {
-                        const sub = cat.subcategories?.find((s) => s.key === selection.subKey);
-                        if (sub) path.push(sub.label);
-                      }
-                    }
-                  }
-                  onNewQuestion?.(path);
-                }}
-              >
-                + Add Question
+              <button className="cta-primary" onClick={startCreate}>
+                Create Question
+                <span className="cta-kbd">C</span>
               </button>
             </div>
 
@@ -578,7 +639,7 @@ export function QuestionBankPage({
                   <QbHeader col="type" label="Type" sort={sort} toggle={toggleSort} />
                   <QbHeader col="version" label="Version" sort={sort} toggle={toggleSort} />
                   <QbHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="usage" label="Quiz usage" sort={sort} toggle={toggleSort} sortable={false} />
+                  <QbHeader col="usage" label="Used in" sort={sort} toggle={toggleSort} sortable={false} />
                   <th className="col-actions" />
                 </tr>
               </thead>
@@ -592,6 +653,10 @@ export function QuestionBankPage({
                     <QuestionRow
                       key={q.id}
                       q={q}
+                      selected={q.id === selectedId}
+                      onSelect={() =>
+                        setSelectedId((cur) => (cur === q.id ? null : q.id))
+                      }
                       onEdit={() => onEditQuestion?.(q)}
                       onOpenMenu={(rect) => setRowMenu({ q, rect })}
                     />
@@ -630,6 +695,17 @@ export function QuestionBankPage({
               </div>
             </div>
           </section>
+
+          {/* ─── Row-click preview panel ─── */}
+          {selected && (
+            <QuestionPreviewPanel
+              q={selected}
+              onClose={() => setSelectedId(null)}
+              onEdit={() => onEditQuestion?.(selected)}
+              onHistory={() => setHistoryQ(selected)}
+              onToggleArchive={() => toggleArchive(selected.id)}
+            />
+          )}
         </div>
       </div>
 
@@ -641,12 +717,17 @@ export function QuestionBankPage({
           onClose={() => setRowMenu(null)}
           onEdit={() => onEditQuestion?.(rowMenu.q)}
           onArchive={() => toggleArchive(rowMenu.q.id)}
-          onPreview={() =>
-            window.alert(
-              `Preview — ${rowMenu.q.id} (${shortQuestionType(rowMenu.q.type)})\n\n${rowMenu.q.text}`,
-            )
-          }
-          onVersionHistory={() => showVersionHistory(rowMenu.q)}
+          onPreview={() => setSelectedId(rowMenu.q.id)}
+          onVersionHistory={() => setHistoryQ(rowMenu.q)}
+        />
+      )}
+
+      {/* ─── Version history modal ─── */}
+      {historyQ && (
+        <QuestionHistoryModal
+          question={historyQ}
+          onClose={() => setHistoryQ(null)}
+          onRestore={() => restoreVersion(historyQ.id)}
         />
       )}
 
@@ -961,16 +1042,28 @@ function QbHeader({
 
 function QuestionRow({
   q,
+  selected,
+  onSelect,
   onEdit,
   onOpenMenu,
 }: {
   q: Question;
+  selected: boolean;
+  onSelect: () => void;
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
 }) {
   const isArchived = q.status === "Archived";
+  const usageParts: string[] = [];
+  if (q.quizzes.length > 0)
+    usageParts.push(`${q.quizzes.length} quiz${q.quizzes.length === 1 ? "" : "zes"}`);
+  if (q.forms.length > 0)
+    usageParts.push(`${q.forms.length} form${q.forms.length === 1 ? "" : "s"}`);
   return (
-    <tr className={`qb-row ${isArchived ? "is-archived" : ""}`}>
+    <tr
+      className={`qb-row ${isArchived ? "is-archived" : ""} ${selected ? "is-selected" : ""}`}
+      onClick={onSelect}
+    >
       <td className="qb-col-question">
         <div className="qb-q-text">{q.text}</div>
       </td>
@@ -985,17 +1078,15 @@ function QuestionRow({
         </span>
       </td>
       <td className="qb-col-usage">
-        {q.quizzes.length === 0 ? (
+        {usageParts.length === 0 ? (
           <span className="qb-usage-empty">Not in use</span>
         ) : (
-          <>
-            <span className="qb-usage-main">
-              {q.quizzes.slice(0, 2).join(", ")}
-            </span>
-            {q.quizzes.length > 2 && (
-              <span className="qb-usage-extra"> +{q.quizzes.length - 2}</span>
-            )}
-          </>
+          <span
+            className="qb-usage-main"
+            title={[...q.quizzes, ...q.forms].join(", ")}
+          >
+            {usageParts.join(" · ")}
+          </span>
         )}
       </td>
       <td className="col-actions">
@@ -1149,61 +1240,160 @@ function QuestionActionsMenu({
   );
 }
 
-function SelectPill({
+/* Single-select filter pill. When the value equals `neutral`, the filter counts
+   as not applied and renders as the dashed "+ Label" pill (matching the app's
+   filter-chip convention). Selecting a real value shows the applied chip with a
+   clear button that resets back to `neutral`. */
+function SingleSelectPill({
   label,
   value,
+  neutral,
   options,
   onChange,
 }: {
   label: string;
   value: string;
+  neutral: string;
   options: string[];
   onChange: (v: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
+  const applied = value !== neutral;
   return (
-    <div className="qb-select-pill" ref={ref}>
-      <button
-        className={`qb-select-pill-btn ${open ? "is-open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="qb-select-pill-label">{label}:</span>
-        <span className="qb-select-pill-value">{value}</span>
-        <span className="qb-select-pill-caret">
-          <ChevronDownIcon />
-        </span>
-      </button>
-      {open && (
-        <div className="qb-select-menu">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              className={`qb-select-menu-item ${opt === value ? "is-active" : ""}`}
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-            >
-              {opt}
-              {opt === value && (
-                <span className="qb-select-menu-check"><CheckIcon /></span>
-              )}
-            </button>
-          ))}
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label={label}
+          value={applied ? value : null}
+          open={open}
+          toggle={toggle}
+          onClear={() => onChange(neutral)}
+        />
+      )}
+    >
+      {({ close }) => (
+        <div className="dropdown-list">
+          <div className="dropdown-section">
+            {options.map((opt) => (
+              <SingleSelectRow
+                key={opt}
+                label={opt}
+                active={opt === value}
+                onClick={() => {
+                  onChange(opt);
+                  close();
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
-    </div>
+    </Dropdown>
+  );
+}
+
+/* "Category" filter — lists every category and subcategory together
+   (e.g. "EPA 608 > Universal"). Drives the same selection as the left rail, so
+   "All Questions" counts as not applied. */
+function CategoryFilterPill({
+  categories,
+  selection,
+  onChange,
+}: {
+  categories: Category[];
+  selection: CategorySelection;
+  onChange: (sel: CategorySelection) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const applied = selection.kind !== "all";
+  const options = useMemo(() => flattenCategories(categories), [categories]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  const currentKey =
+    selection.kind === "category"
+      ? selection.categoryKey
+      : selection.kind === "subcategory"
+        ? `${selection.categoryKey}/${selection.subKey}`
+        : null;
+
+  return (
+    <Dropdown
+      width={300}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="Category"
+          value={applied ? selectionLabel(selection, categories) : null}
+          open={open}
+          toggle={toggle}
+          onClear={() => onChange({ kind: "all" })}
+        />
+      )}
+    >
+      {({ close }) => (
+        <>
+          <div className="dropdown-search">
+            <span className="dropdown-search-icon"><SearchIcon /></span>
+            <input
+              autoFocus
+              placeholder="Search categories…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="dropdown-list">
+            <div className="dropdown-section">
+              <SingleSelectRow
+                label="All Questions"
+                active={selection.kind === "all"}
+                onClick={() => {
+                  onChange({ kind: "all" });
+                  close();
+                }}
+              />
+              {filtered.map((opt) => (
+                <SingleSelectRow
+                  key={opt.key}
+                  label={opt.label}
+                  active={opt.key === currentKey}
+                  onClick={() => {
+                    onChange(opt.sel);
+                    close();
+                  }}
+                />
+              ))}
+              {filtered.length === 0 && (
+                <div className="cols-empty">No categories match.</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </Dropdown>
+  );
+}
+
+function SingleSelectRow({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`dropdown-item qb-single-row ${active ? "is-active" : ""}`}
+      onClick={onClick}
+    >
+      <span className="qb-single-row-label">{label}</span>
+      {active && (
+        <span className="qb-single-row-check"><CheckIcon /></span>
+      )}
+    </button>
   );
 }

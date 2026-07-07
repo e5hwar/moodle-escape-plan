@@ -188,6 +188,12 @@ export function criteriaSummary(skill: Skill): string {
   return `${n} Tasks · ${skill.rule === "all" ? "All" : "Any"}`;
 }
 
+/** All/Any rule for a Skill's awarding criteria — only meaningful with 2+ Tasks. */
+export function criteriaRule(skill: Skill): string {
+  if (skill.taskIds.length <= 1) return "—";
+  return skill.rule === "all" ? "All" : "Any";
+}
+
 /** Number rendered with thousands separators. */
 export function fmtHolders(n: number): string {
   return n.toLocaleString();

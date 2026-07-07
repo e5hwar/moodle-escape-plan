@@ -16,16 +16,11 @@ const KIND_PLURAL: Record<LinkKind, string> = {
   related: "Related",
 };
 
-const KIND_TAG: Record<LinkKind, string> = {
-  prerequisite: "PRE-REQUISITE",
-  recommended: "REC NEXT",
-  related: "RELATED",
-};
-
-const COLOR: Record<LinkKind, string> = {
-  prerequisite: "#e97237", // accent orange
-  recommended: "#4ea1ff", // blue
-  related: "#5fd0a3", // green/teal
+// One-line guidance shown under each column heading.
+const KIND_HELPER: Record<LinkKind, string> = {
+  prerequisite: "Advised before starting.",
+  recommended: "Vertical progression.",
+  related: "Two-way — reverse link automatic.",
 };
 
 function nodeById(id: string): ContentNode | undefined {
@@ -59,9 +54,19 @@ function partition(focusId: string, links: Link[]) {
   return { prereqs, recommended, related };
 }
 
-export function ContentLinksPage() {
-  const [focusId, setFocusId] = useState<Focus>(null);
+export function ContentLinksPage({
+  initialFocusId,
+  onBack,
+  backLabel,
+}: {
+  initialFocusId?: string;
+  onBack?: () => void;
+  backLabel?: string;
+} = {}) {
+  const [focusId, setFocusId] = useState<Focus>(initialFocusId ?? null);
   const [links, setLinks] = useState<Link[]>(seedLinks);
+  // Last-saved snapshot; the Save / Cancel bar diffs the working set against it.
+  const [baseline, setBaseline] = useState<Link[]>(seedLinks);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -76,9 +81,27 @@ export function ContentLinksPage() {
     [focusId, links]
   );
 
-  const totalLinkCount = groups
-    ? groups.prereqs.length + groups.recommended.length + groups.related.length
-    : 0;
+  // "Referenced by" = relationships authored on *other* certifications that point
+  // at this one. They're read-only here (edit them from the other cert's page):
+  //  - this cert is a prerequisite of another  → tagged PREREQ
+  //  - another cert recommends this one as next → tagged REC NEXT
+  const referencedBy = useMemo(() => {
+    if (!focusId) return [] as { id: string; name: string; tag: string }[];
+    const out: { id: string; name: string; tag: string }[] = [];
+    for (const e of links) {
+      if (e.kind === "prerequisite" && e.from === focusId) {
+        const n = nodeById(e.to);
+        if (n) out.push({ id: n.id, name: n.name, tag: "PREREQ" });
+      } else if (e.kind === "recommended" && e.to === focusId) {
+        const n = nodeById(e.from);
+        if (n) out.push({ id: n.id, name: n.name, tag: "REC NEXT" });
+      }
+    }
+    return out;
+  }, [focusId, links]);
+
+  // Reference identity: any add / remove / strength edit produces a new array.
+  const dirty = links !== baseline;
 
   function pickFocus(id: string) {
     setFocusId(id);
@@ -89,6 +112,14 @@ export function ContentLinksPage() {
   function clearFocus() {
     setFocusId(null);
     setQuery("");
+  }
+
+  function saveChanges() {
+    setBaseline(links);
+  }
+
+  function cancelChanges() {
+    setLinks(baseline);
   }
 
   function removeEdge(edge: Link) {
@@ -133,72 +164,91 @@ export function ContentLinksPage() {
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks cl-page">
-          <header className="tasks-header">
-            <div>
-              <h1 className="tasks-title">Content Links</h1>
-              <div className="tasks-subtitle">
-                {focused ? (
-                  <>
-                    Showing direct links from <strong style={{ color: "var(--text)", fontWeight: 600 }}>{focused.name}</strong>
-                    <span className="tasks-subtitle-dot" />
-                    {totalLinkCount} {totalLinkCount === 1 ? "link" : "links"}
-                    <span className="tasks-subtitle-dot" />
-                    click any node in the graph to focus on it
-                  </>
-                ) : (
-                  <>Connect courses, certifications, and tasks with prerequisites, recommended next steps, and related content.</>
-                )}
-              </div>
-            </div>
-            {focused && (
-              <button className="resources-btn" onClick={clearFocus}>
-                Clear focus
+        <div className="tasks cl-page cl2-page">
+          <header className="cl2-head">
+            {onBack && (
+              <button className="attempts-back" onClick={onBack}>
+                <ChevronLeftIcon />
+                {backLabel ?? "All certifications"}
               </button>
+            )}
+            <div className="cl2-eyebrow">CONTENT LINKS</div>
+
+            {/* Existing shared search bar — shows the focused certification and
+                lets you switch to another one. */}
+            <SearchField
+              value={focused ? focused.name : query}
+              placeholder="Search all Certifications…"
+              disabled={false}
+              isFocusedNode={!!focused}
+              onChange={(v) => {
+                setQuery(v);
+                setFocusId(null);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+              onClear={clearFocus}
+              open={searchOpen && !focused}
+              query={query}
+              onPick={pickFocus}
+            />
+
+            {focused && (
+              <div className="cl2-focus-sub">
+                {focused.industry} <span className="cl2-focus-dot" /> Advisory
+                only — links never block access.
+              </div>
             )}
           </header>
 
-          {/* Search bar — always rendered, dropdown reveals on focus */}
-          <SearchField
-            value={focused ? focused.name : query}
-            placeholder="Find a course, certification, or task to view its links…"
-            disabled={false}
-            isFocusedNode={!!focused}
-            onChange={(v) => {
-              setQuery(v);
-              setFocusId(null);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-            onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
-            onClear={clearFocus}
-            open={searchOpen && !focused}
-            query={query}
-            onPick={pickFocus}
-          />
-
           {focused && groups ? (
-            <div className="cl-body">
-              <GraphCard
-                focus={focused}
-                prereqs={groups.prereqs}
-                recommended={groups.recommended}
-                related={groups.related}
-                onPickNode={pickFocus}
-              />
-              <DetailPanel
-                focus={focused}
-                prereqs={groups.prereqs}
-                recommended={groups.recommended}
-                related={groups.related}
-                onRemove={removeEdge}
-                onStrength={updateStrength}
-                onAdd={(kind) => setPicker({ kind })}
-                onPickNode={pickFocus}
-              />
-            </div>
+            <>
+              <div className="cl2-grid">
+                <LinkColumn
+                  kind="prerequisite"
+                  items={groups.prereqs}
+                  onRemove={removeEdge}
+                  onStrength={updateStrength}
+                  onAdd={() => setPicker({ kind: "prerequisite" })}
+                  onPickNode={pickFocus}
+                />
+                <LinkColumn
+                  kind="recommended"
+                  items={groups.recommended}
+                  onRemove={removeEdge}
+                  onStrength={updateStrength}
+                  onAdd={() => setPicker({ kind: "recommended" })}
+                  onPickNode={pickFocus}
+                />
+                <LinkColumn
+                  kind="related"
+                  items={groups.related}
+                  onRemove={removeEdge}
+                  onStrength={updateStrength}
+                  onAdd={() => setPicker({ kind: "related" })}
+                  onPickNode={pickFocus}
+                />
+              </div>
+
+              <ReferencedBy items={referencedBy} onPickNode={pickFocus} />
+            </>
           ) : (
             <EmptyState onPick={pickFocus} />
+          )}
+
+          {focused && dirty && (
+            <div className="cl2-savebar">
+              <span className="cl2-savebar-dot" />
+              <span className="cl2-savebar-text">Unsaved changes</span>
+              <div className="cl2-savebar-spacer" />
+              <button className="cl2-cancel" onClick={cancelChanges}>
+                Cancel
+              </button>
+              <button className="cl2-save" onClick={saveChanges}>
+                Save changes
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -376,392 +426,17 @@ function EmptyGraph() {
   );
 }
 
-/* ----------------------------------- Graph ------------------------------------ */
+/* ----------------------------------- Columns ---------------------------------- */
 
 type GroupItem = { other: string; strength: number; edge: Link };
 
-const NODE_W = 200;
-const NODE_H = 36;
-const GRAPH_H_BASE = 480;
+const PlusIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
 
-function GraphCard({
-  focus,
-  prereqs,
-  recommended,
-  related,
-  onPickNode,
-}: {
-  focus: ContentNode;
-  prereqs: GroupItem[];
-  recommended: GroupItem[];
-  related: GroupItem[];
-  onPickNode: (id: string) => void;
-}) {
-  // Compute layout dynamically: 3 columns. Left column = prereqs. Center = focus.
-  // Right column is split into a top stack (recommended) and bottom stack (related).
-  const leftCount = prereqs.length;
-  const rightTopCount = recommended.length;
-  const rightBottomCount = related.length;
-  const maxRows = Math.max(leftCount, rightTopCount + rightBottomCount, 1);
-
-  const rowH = NODE_H + 28;
-  const innerH = Math.max(GRAPH_H_BASE, rowH * maxRows + 100);
-  const W = 880;
-
-  const leftX = 24;
-  const rightX = W - NODE_W - 24;
-  const centerX = (W - NODE_W) / 2;
-  const centerY = innerH / 2 - NODE_H / 2;
-
-  // y positions for left
-  const leftStartY = innerH / 2 - ((leftCount - 1) * rowH) / 2 - NODE_H / 2;
-  const leftYs = prereqs.map((_, i) => leftStartY + i * rowH);
-
-  // y positions for right top (recommended) above center
-  // We give each side its own slot block
-  const rightTopBlockH = rightTopCount * rowH;
-  const rightBottomBlockH = rightBottomCount * rowH;
-  const gapMid = 40;
-  const rightStackH = rightTopBlockH + gapMid + rightBottomBlockH;
-  const rightStartY = innerH / 2 - rightStackH / 2;
-  const recYs = recommended.map((_, i) => rightStartY + i * rowH);
-  const relYs = related.map(
-    (_, i) => rightStartY + rightTopBlockH + gapMid + i * rowH
-  );
-
-  type PlacedNode = {
-    id: string;
-    name: string;
-    x: number;
-    y: number;
-    kind: LinkKind | "focus";
-    strength?: number;
-    fromX: number;
-    fromY: number;
-    toX: number;
-    toY: number;
-  };
-
-  const placed: PlacedNode[] = [];
-
-  for (let i = 0; i < prereqs.length; i++) {
-    const n = nodeById(prereqs[i].other);
-    if (!n) continue;
-    const y = leftYs[i];
-    placed.push({
-      id: n.id,
-      name: n.name,
-      x: leftX,
-      y,
-      kind: "prerequisite",
-      strength: prereqs[i].strength,
-      fromX: leftX + NODE_W,
-      fromY: y + NODE_H / 2,
-      toX: centerX,
-      toY: centerY + NODE_H / 2,
-    });
-  }
-  for (let i = 0; i < recommended.length; i++) {
-    const n = nodeById(recommended[i].other);
-    if (!n) continue;
-    const y = recYs[i];
-    placed.push({
-      id: n.id,
-      name: n.name,
-      x: rightX,
-      y,
-      kind: "recommended",
-      strength: recommended[i].strength,
-      fromX: centerX + NODE_W,
-      fromY: centerY + NODE_H / 2,
-      toX: rightX,
-      toY: y + NODE_H / 2,
-    });
-  }
-  for (let i = 0; i < related.length; i++) {
-    const n = nodeById(related[i].other);
-    if (!n) continue;
-    const y = relYs[i];
-    placed.push({
-      id: n.id,
-      name: n.name,
-      x: rightX,
-      y,
-      kind: "related",
-      strength: related[i].strength,
-      fromX: centerX + NODE_W,
-      fromY: centerY + NODE_H / 2,
-      toX: rightX,
-      toY: y + NODE_H / 2,
-    });
-  }
-
-  return (
-    <div className="cl-graph-card">
-      <div className="cl-graph-scroll">
-        <div className="cl-graph" style={{ width: W, height: innerH }}>
-          {/* Header labels above each column */}
-          {prereqs.length > 0 && (
-            <div className="cl-col-label cl-col-label--prereq" style={{ left: leftX, top: 10, width: NODE_W }}>
-              Prerequisites
-            </div>
-          )}
-          {recommended.length > 0 && (
-            <div className="cl-col-label cl-col-label--rec" style={{ left: rightX, top: 10, width: NODE_W }}>
-              Recommended Next
-            </div>
-          )}
-          {related.length > 0 && (
-            <div
-              className="cl-col-label cl-col-label--rel"
-              style={{
-                left: rightX,
-                top: rightStartY + rightTopBlockH + (gapMid - 22) / 2,
-                width: NODE_W,
-              }}
-            >
-              Related
-            </div>
-          )}
-
-          {/* SVG edges */}
-          <svg
-            className="cl-edges"
-            width={W}
-            height={innerH}
-            viewBox={`0 0 ${W} ${innerH}`}
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <marker
-                id="arrow-prereq"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
-                orient="auto-start-reverse"
-              >
-                <path d="M0 0 L10 5 L0 10 z" fill={COLOR.prerequisite} />
-              </marker>
-              <marker
-                id="arrow-rec"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
-                orient="auto-start-reverse"
-              >
-                <path d="M0 0 L10 5 L0 10 z" fill={COLOR.recommended} />
-              </marker>
-            </defs>
-            {placed.map((p) => {
-              if (p.kind === "prerequisite") {
-                return (
-                  <Edge
-                    key={`e-${p.id}-pre`}
-                    x1={p.fromX}
-                    y1={p.fromY}
-                    x2={p.toX}
-                    y2={p.toY}
-                    color={COLOR.prerequisite}
-                    strokeWidth={1.6}
-                    strength={p.strength!}
-                    label={KIND_TAG.prerequisite}
-                    marker="url(#arrow-prereq)"
-                  />
-                );
-              }
-              if (p.kind === "recommended") {
-                return (
-                  <Edge
-                    key={`e-${p.id}-rec`}
-                    x1={p.fromX}
-                    y1={p.fromY}
-                    x2={p.toX}
-                    y2={p.toY}
-                    color={COLOR.recommended}
-                    strokeWidth={1.6}
-                    dash="5 4"
-                    strength={p.strength!}
-                    label={KIND_TAG.recommended}
-                    marker="url(#arrow-rec)"
-                  />
-                );
-              }
-              // related — bidirectional, no arrowhead, dotted
-              return (
-                <Edge
-                  key={`e-${p.id}-rel`}
-                  x1={p.fromX}
-                  y1={p.fromY}
-                  x2={p.toX}
-                  y2={p.toY}
-                  color={COLOR.related}
-                  strokeWidth={1.6}
-                  dash="1.5 4"
-                  strength={p.strength!}
-                  label={KIND_TAG.related}
-                />
-              );
-            })}
-          </svg>
-
-          {/* Nodes (positioned over the svg) */}
-          {placed.map((p) => (
-            <button
-              key={`n-${p.id}-${p.kind}`}
-              className={`cl-node cl-node--${p.kind}`}
-              style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
-              onClick={() => onPickNode(p.id)}
-              title="Focus on this node"
-            >
-              <span className="cl-node-name">{nodeById(p.id)?.name}</span>
-            </button>
-          ))}
-
-          {/* Center focus node */}
-          <div
-            className="cl-node cl-node--focus"
-            style={{ left: centerX, top: centerY, width: NODE_W, height: NODE_H }}
-          >
-            <span className="cl-node-name">{focus.name}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="cl-legend">
-        <span className="cl-legend-item">
-          <span className="cl-legend-line cl-legend-line--prereq" />
-          <span className="cl-legend-text">→ Prerequisite</span>
-        </span>
-        <span className="cl-legend-item">
-          <span className="cl-legend-line cl-legend-line--rec" />
-          <span className="cl-legend-text">⇢ Recommended Next</span>
-        </span>
-        <span className="cl-legend-item">
-          <span className="cl-legend-line cl-legend-line--rel" />
-          <span className="cl-legend-text">↔ Related (bidirectional)</span>
-        </span>
-        <span className="cl-legend-hint">Strength shown as suffix on each label</span>
-      </div>
-    </div>
-  );
-}
-
-function Edge({
-  x1,
-  y1,
-  x2,
-  y2,
-  color,
-  strokeWidth,
-  dash,
-  strength,
-  label,
-  marker,
-}: {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  color: string;
-  strokeWidth: number;
-  dash?: string;
-  strength: number;
-  label: string;
-  marker?: string;
-}) {
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-  return (
-    <g>
-      <line
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={dash}
-        markerEnd={marker}
-      />
-      <text
-        x={midX}
-        y={midY - 6}
-        fill={color}
-        textAnchor="middle"
-        fontFamily="Fira Sans, sans-serif"
-        fontSize="9"
-        fontWeight={700}
-        letterSpacing="0.06em"
-      >
-        {label} · {strength}
-      </text>
-    </g>
-  );
-}
-
-/* -------------------------------- Detail panel -------------------------------- */
-
-function DetailPanel({
-  focus,
-  prereqs,
-  recommended,
-  related,
-  onRemove,
-  onStrength,
-  onAdd,
-  onPickNode,
-}: {
-  focus: ContentNode;
-  prereqs: GroupItem[];
-  recommended: GroupItem[];
-  related: GroupItem[];
-  onRemove: (edge: Link) => void;
-  onStrength: (edge: Link, strength: number) => void;
-  onAdd: (kind: LinkKind) => void;
-  onPickNode: (id: string) => void;
-}) {
-  return (
-    <aside className="cl-panel">
-      <div className="cl-panel-eyebrow">UPDATE CONTENT LINKS</div>
-      <h2 className="cl-panel-title">{focus.name}</h2>
-      <div className="cl-panel-sub">
-        {focus.kind} · {focus.level} · {focus.tasksCount} tasks
-        {typeof focus.enrolled === "number" ? ` · ${focus.enrolled.toLocaleString()} enrolled` : ""}
-      </div>
-
-      <PanelSection
-        kind="prerequisite"
-        items={prereqs}
-        onRemove={onRemove}
-        onStrength={onStrength}
-        onAdd={() => onAdd("prerequisite")}
-        onPickNode={onPickNode}
-      />
-      <PanelSection
-        kind="recommended"
-        items={recommended}
-        onRemove={onRemove}
-        onStrength={onStrength}
-        onAdd={() => onAdd("recommended")}
-        onPickNode={onPickNode}
-      />
-      <PanelSection
-        kind="related"
-        items={related}
-        onRemove={onRemove}
-        onStrength={onStrength}
-        onAdd={() => onAdd("related")}
-        onPickNode={onPickNode}
-      />
-    </aside>
-  );
-}
-
-function PanelSection({
+function LinkColumn({
   kind,
   items,
   onRemove,
@@ -777,51 +452,114 @@ function PanelSection({
   onPickNode: (id: string) => void;
 }) {
   return (
-    <section className="cl-section">
-      <div className="cl-section-head">
-        <span className={`cl-section-bar cl-section-bar--${kind}`} />
-        <span className="cl-section-title">{KIND_PLURAL[kind]}</span>
-        <span className="cl-section-count">({items.length})</span>
+    <section className="cl2-col">
+      <div className="cl2-col-head">
+        <span className="cl2-col-title">
+          {KIND_PLURAL[kind]}
+          <span className="cl2-col-count"> · {items.length}</span>
+        </span>
+        <button className="cl2-add" onClick={onAdd}>
+          <PlusIcon />
+          Add
+        </button>
       </div>
-      <div className="cl-link-list">
+      <div className="cl2-col-helper">{KIND_HELPER[kind]}</div>
+      <div className="cl2-cards">
         {items.map(({ other, strength, edge }) => {
           const n = nodeById(other);
           if (!n) return null;
           return (
-            <div key={`${edge.from}-${edge.to}-${edge.kind}`} className="cl-link-row">
-              <button className="cl-link-main" onClick={() => onPickNode(other)} title="Focus on this node">
-                <div className="cl-link-name">{n.name}</div>
-                <div className="cl-link-meta">
-                  {n.level} · {n.tasksCount} tasks
-                </div>
-              </button>
-              <input
-                className="cl-link-strength"
-                type="number"
-                min={0}
-                max={100}
-                value={strength}
-                onChange={(e) => {
-                  const next = Math.max(0, Math.min(100, Number(e.target.value || 0)));
-                  onStrength(edge, next);
-                }}
-                aria-label="Strength"
-              />
-              <button
-                className="cl-link-remove"
-                aria-label="Remove link"
-                onClick={() => onRemove(edge)}
-              >
-                <SmallXIcon />
-              </button>
-            </div>
+            <LinkCard
+              key={`${edge.from}-${edge.to}-${edge.kind}`}
+              node={n}
+              strength={strength}
+              related={kind === "related"}
+              onStrength={(v) => onStrength(edge, v)}
+              onRemove={() => onRemove(edge)}
+              onPick={() => onPickNode(other)}
+            />
           );
         })}
-        <button className="cl-link-add" onClick={onAdd}>
-          + Add {kind === "prerequisite" ? "Prerequisite" : kind === "recommended" ? "Recommended Next" : "Related"}
-        </button>
+        {items.length === 0 && (
+          <div className="cl2-col-empty">Nothing linked yet.</div>
+        )}
       </div>
     </section>
+  );
+}
+
+function LinkCard({
+  node,
+  strength,
+  related,
+  onStrength,
+  onRemove,
+  onPick,
+}: {
+  node: ContentNode;
+  strength: number;
+  related: boolean;
+  onStrength: (strength: number) => void;
+  onRemove: () => void;
+  onPick: () => void;
+}) {
+  return (
+    <div className="cl2-card">
+      <button className="cl2-card-main" onClick={onPick} title="Focus on this node">
+        <span className="cl2-card-name">
+          {node.name}
+          {related && <span className="cl2-card-swap"> ⇄</span>}
+        </span>
+        <span className="cl2-card-meta">{node.industry ?? "—"}</span>
+      </button>
+      <input
+        className="cl2-card-strength"
+        type="number"
+        min={0}
+        max={100}
+        value={strength}
+        onChange={(e) => {
+          const next = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+          onStrength(next);
+        }}
+        aria-label="Strength"
+      />
+      <button className="cl2-card-remove" aria-label="Remove link" onClick={onRemove}>
+        <SmallXIcon />
+      </button>
+    </div>
+  );
+}
+
+/* -------------------------------- Referenced by ------------------------------- */
+
+function ReferencedBy({
+  items,
+  onPickNode,
+}: {
+  items: { id: string; name: string; tag: string }[];
+  onPickNode: (id: string) => void;
+}) {
+  if (items.length === 0) return null;
+  const shown = items.slice(0, 6);
+  const extra = items.length - shown.length;
+  return (
+    <div className="cl2-refby">
+      <span className="cl2-refby-title">Referenced by · {items.length}</span>
+      <span className="cl2-refby-note">read-only</span>
+      {shown.map((r, i) => (
+        <button
+          key={`${r.id}-${i}`}
+          className="cl2-refby-chip"
+          onClick={() => onPickNode(r.id)}
+          title="Focus on this certification"
+        >
+          <span className="cl2-refby-chip-name">{r.name}</span>
+          <span className="cl2-refby-chip-tag">{r.tag}</span>
+        </button>
+      ))}
+      {extra > 0 && <span className="cl2-refby-more">+ {extra} more</span>}
+    </div>
   );
 }
 

@@ -4,7 +4,8 @@ import {
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
-import { SearchIcon, EnterKeyIcon, AddIcon } from "./icons";
+import { SearchIcon, AddIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { NewFeedbackFormModal } from "./NewFeedbackFormModal";
 
 type FilterKey = "all" | FormStatus;
@@ -42,6 +43,7 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [creating, setCreating] = useState(false);
+  useCreateShortcut(() => setCreating(true), !creating);
 
   const counts = useMemo(() => {
     const c = { all: forms.length, active: 0, draft: 0, archived: 0 };
@@ -87,9 +89,7 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
               <button className="new-task" onClick={() => setCreating(true)}>
                 <AddIcon />
                 Create Form
-                <span className="cta-kbd">
-                  <EnterKeyIcon />
-                </span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>

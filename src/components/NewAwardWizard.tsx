@@ -124,7 +124,6 @@ export function NewAwardWizard(props: Props) {
         <div className="wizard-content">
           <h1 className="wizard-title">{STEPS[step].label}</h1>
           <p className="wizard-desc">{STEPS[step].desc}</p>
-          <div className="required-fields-note">* Required Fields</div>
 
           {step === 0 && (
             <LinkStep
@@ -189,20 +188,39 @@ function LinkStep({
   allAwards: Award[];
 }) {
   const [query, setQuery] = useState("");
-  // One Award per Certification — Certifications that already have one are locked.
+  // One Award per Certification — those that already have one aren't eligible.
   const taken = useMemo(
     () => certIdsWithAward(allAwards, editingAwardId),
     [allAwards, editingAwardId],
   );
 
+  // Only Certifications without an Award are linkable, so only those appear here.
+  // The one being edited stays eligible (it's excluded from `taken` above).
+  const eligible = useMemo(
+    () =>
+      certifications
+        .filter((c) => !c.draft && !taken.has(c.id))
+        .sort(
+          (a, b) =>
+            new Date(b.dateCreated ?? 0).getTime() -
+            new Date(a.dateCreated ?? 0).getTime(),
+        ),
+    [taken],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pool = certifications.filter((c) => !c.draft);
-    if (!q) return pool;
-    return pool.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q),
-    );
-  }, [query]);
+    if (q)
+      return eligible.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q),
+      );
+    // Empty search: the 3 most recently created eligible Certifications, plus the
+    // one currently linked (when editing) so it stays visible even if older.
+    const top = eligible.slice(0, 3);
+    const selected = eligible.find((c) => c.id === data.certificationId);
+    if (selected && !top.includes(selected)) top.push(selected);
+    return top;
+  }, [query, eligible, data.certificationId]);
 
   return (
     <>
@@ -211,8 +229,9 @@ function LinkStep({
           Linked Certification <span className="req">*</span>
         </label>
         <p className="form-help" style={{ marginTop: 0 }}>
-          Completing this Certification issues the Award. Users who already completed it receive
-          it retroactively on save. A Certification can have at most one Award.
+          Only Certifications without an Award are shown — a Certification can have at most one.
+          Completing it issues the Award; users who already completed it receive it retroactively
+          on save.
         </p>
 
         <div className="sk-picker">
@@ -225,25 +244,31 @@ function LinkStep({
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          {!query.trim() && filtered.length > 0 && (
+            <div className="sk-picker-note">
+              Showing the {filtered.length} most recently created — search to find others.
+            </div>
+          )}
           <div className="sk-picker-list">
             {filtered.length === 0 ? (
-              <div className="sk-picker-empty">No Certifications match “{query}”.</div>
+              <div className="sk-picker-empty">
+                {query.trim()
+                  ? `No Certifications without an Award match “${query}”.`
+                  : "Every Certification already has an Award."}
+              </div>
             ) : (
               filtered.map((c) => {
-                const locked = taken.has(c.id) && c.id !== data.certificationId;
                 const on = data.certificationId === c.id;
                 return (
                   <button
                     key={c.id}
                     className={`sk-picker-row ${on ? "is-selected" : ""}`}
-                    disabled={locked}
                     onClick={() => update({ certificationId: c.id })}
                   >
                     <span className={`aw-radio ${on ? "checked" : ""}`}>
                       {on && <CheckBoldIcon />}
                     </span>
                     <span className="sk-picker-row-name">{c.name}</span>
-                    {locked && <span className="sk-chip-tag">Has Award</span>}
                     <span className="aw-cert-industry">{c.industry}</span>
                     <span className="sk-picker-row-id">{c.id}</span>
                   </button>

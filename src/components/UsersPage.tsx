@@ -159,15 +159,22 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
   return String(va).localeCompare(String(vb));
 }
 
-export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: string) => void }) {
+export function UsersPage({
+  onViewCompany,
+  initialCompanyFilter,
+}: {
+  onViewCompany?: (companyName: string) => void;
+  initialCompanyFilter?: string;
+}) {
   const [list] = useState<User[]>(seedUsers);
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
   );
   const [columns, setColumns] = useState<UserColumnState>(DEFAULT_COLUMNS);
-  const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<UserFilterState>(
+    initialCompanyFilter ? { ...EMPTY_FILTERS, companies: [initialCompanyFilter] } : EMPTY_FILTERS,
+  );
   // Search bar: committedQuery only changes on Enter. The company filter is shared
   // with the Filters row (filters.companies) and applies immediately.
   const [committedQuery, setCommittedQuery] = useState("");
@@ -205,10 +212,18 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
     });
   }, [rows, committedQuery, filters]);
 
+  // Viewing a single company's roster reads best grouped by seniority
+  // (Admin, Manager, then Employee) — enforced regardless of the chosen
+  // column sort while a company filter is active.
+  const companyFilterActive = filters.companies.length > 0;
+  const effectiveSort: { key: SortKey; dir: SortDir } = companyFilterActive
+    ? { key: "role", dir: "desc" }
+    : sort;
+
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort]);
+    const arr = [...filtered].sort((a, b) => compareRows(a, b, effectiveSort.key));
+    return effectiveSort.dir === "desc" ? arr.reverse() : arr;
+  }, [filtered, effectiveSort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
@@ -227,6 +242,9 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
+    // Sort is locked to role (Admin, Manager, Employee) while a company
+    // filter is active — see effectiveSort above.
+    if (companyFilterActive) return;
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
@@ -269,9 +287,9 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
                 <ColGroup cols={visibleCols} />
                 <thead>
                   <tr>
-                    <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
+                    <SortableHeader col="name" label="Name" className="col-name" sort={effectiveSort} toggle={toggleSort} />
                     {visibleCols.map((c) => (
-                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
+                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={effectiveSort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
                     ))}
                     <th className="col-actions">
                       <UsersEditColumns columns={columns} setColumns={setColumns} />
@@ -289,8 +307,6 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
                         key={row.u.id}
                         row={row}
                         cols={visibleCols}
-                        selected={row.u.id === selectedId}
-                        onClick={() => setSelectedId(row.u.id)}
                         onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
                       />
                     ))}
@@ -332,6 +348,11 @@ export function UsersPage({ onViewCompany }: { onViewCompany?: (companyName: str
           onViewCompany={
             menu.user.userType === "B2B" && menu.user.companyName && onViewCompany
               ? () => onViewCompany(menu.user.companyName!)
+              : undefined
+          }
+          onViewAllEmployees={
+            menu.user.userType === "B2B" && menu.user.companyName
+              ? () => setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] }))
               : undefined
           }
         />
@@ -417,19 +438,15 @@ function VerifiedCell({ text, verified }: { text: string; verified: boolean }) {
 function UserRow({
   row,
   cols,
-  selected,
-  onClick,
   onOpenMenu,
 }: {
   row: Row;
   cols: ColMeta[];
-  selected: boolean;
-  onClick: () => void;
   onOpenMenu: (anchor: HTMLElement) => void;
 }) {
   const { u, f } = row;
   return (
-    <tr className={selected ? "selected" : ""} onClick={onClick}>
+    <tr>
       <td className="col-name">{u.name}</td>
       {cols.map((c) => (
         <td key={c.key} className={c.className}>
@@ -440,26 +457,26 @@ function UserRow({
         <button
           className="row-action-btn lone-dots"
           aria-label="Actions"
-          onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget); }}
+          onClick={(e) => onOpenMenu(e.currentTarget)}
         >
           <MoreIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit" onClick={(e) => e.stopPropagation()}>
+          <button className="row-action-btn" aria-label="Edit">
             <PencilIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="Open profile in new tab"
             title="Open full profile in a new tab"
-            onClick={(e) => { e.stopPropagation(); openProfile(u); }}
+            onClick={() => openProfile(u)}
           >
             <ExternalLinkIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More actions"
-            onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget); }}
+            onClick={(e) => onOpenMenu(e.currentTarget)}
           >
             <MoreIcon />
           </button>
@@ -478,6 +495,7 @@ function UserActionsMenu({
   onViewPortfolio,
   onOpenProfile,
   onViewCompany,
+  onViewAllEmployees,
 }: {
   user: User;
   rect: DOMRect;
@@ -485,6 +503,7 @@ function UserActionsMenu({
   onViewPortfolio: () => void;
   onOpenProfile: () => void;
   onViewCompany?: () => void;
+  onViewAllEmployees?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -561,6 +580,7 @@ function UserActionsMenu({
       {item(<PortfolioIcon />, "View Portfolio", onViewPortfolio)}
       {item(<ExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
       {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
+      {onViewAllEmployees && item(<PeopleIcon />, "View All Employees", onViewAllEmployees)}
       {item(<KeyIcon />, "Reset Password", () => {})}
       {item(<CardIcon />, "Manage Subscription", () => {})}
       <div className="u-menu-divider" />
@@ -591,6 +611,15 @@ function openPortfolio(user: User) {
 const CompanyIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 13v.01M9 17v.01" />
+  </svg>
+);
+
+const PeopleIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 

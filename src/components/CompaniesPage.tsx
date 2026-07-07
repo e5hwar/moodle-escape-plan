@@ -3,6 +3,9 @@ import {
   getCompanyBilling,
   getCompanyUsers,
   getStatusPill,
+  getCanceledOn,
+  getTrialEndDate,
+  getStripeCustomerId,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
   TAX_STATUSES,
@@ -13,7 +16,8 @@ import {
   type SignUpChannel,
   type TaxStatus,
 } from "../data/companies";
-import { SortIcon, AddIcon, EnterKeyIcon, SmallXIcon, CheckBoldIcon, ChevronDownIcon } from "./icons";
+import { SortIcon, AddIcon, ChevronDownIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
   CompanyEditColumnsButton,
@@ -25,6 +29,7 @@ import {
   MultiSelect,
   INDUSTRY_OPTIONS,
   PARTNERSHIP_OPTIONS,
+  CSM_OPTIONS,
   COUNTRY_OPTIONS,
   US_STATES,
 } from "./NewCompanyWizard";
@@ -52,7 +57,7 @@ const CardIcon = () => (
   </svg>
 );
 
-type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn";
+type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn" | "canceledOn" | "trialEndDate";
 type SortDir = "asc" | "desc";
 
 const TIER_ORDER: Record<Tier, number> = {
@@ -60,7 +65,7 @@ const TIER_ORDER: Record<Tier, number> = {
   Essentials: 1,
   Growth: 2,
   Pro: 3,
-  "Complimentary Access": 4,
+  "Free Access": 4,
 };
 
 function compare(a: Company, b: Company, key: SortKey): number {
@@ -70,12 +75,15 @@ function compare(a: Company, b: Company, key: SortKey): number {
     case "tier": return TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
     case "status": return getCompanyBilling(a).status.localeCompare(getCompanyBilling(b).status);
     case "signUp": return getCompanyBilling(a).signUp.localeCompare(getCompanyBilling(b).signUp);
+    case "billingCycle": return getCompanyBilling(a).billingCycle.localeCompare(getCompanyBilling(b).billingCycle);
     case "seats": return a.seats - b.seats;
     case "industry": return a.industry.localeCompare(b.industry);
     case "partnership": return a.partnership.localeCompare(b.partnership);
     case "seatsAdded": return getCompanyBilling(a).seatsAdded - getCompanyBilling(b).seatsAdded;
     case "seatsRemoved": return getCompanyBilling(a).seatsRemoved - getCompanyBilling(b).seatsRemoved;
     case "createdOn": return (Date.parse(getCompanyBilling(a).createdOn) || 0) - (Date.parse(getCompanyBilling(b).createdOn) || 0);
+    case "canceledOn": return (Date.parse(getCanceledOn(getCompanyBilling(a))) || 0) - (Date.parse(getCanceledOn(getCompanyBilling(b))) || 0);
+    case "trialEndDate": return (Date.parse(getTrialEndDate(getCompanyBilling(a))) || 0) - (Date.parse(getTrialEndDate(getCompanyBilling(b))) || 0);
   }
 }
 
@@ -85,10 +93,11 @@ type Props = {
   onNewCompany: () => void;
   onManageSubscription: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
+  onViewEmployees: (company: Company) => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onManageSubscription, onUpdateCompany }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onManageSubscription, onUpdateCompany, onViewEmployees }: Props) {
+  useCreateShortcut(onNewCompany);
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<CompanyFilterState>({
     tiers: [],
@@ -96,15 +105,20 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
     partnerships: [],
     statuses: ["Active"],
     signUps: [],
+    billingCycles: [],
+    paymentMethods: [],
   });
   const [columns, setColumns] = useState<CompanyColumnState>({
     signUp: true,
+    billingCycle: true,
     seats: true,
     seatsAdded: false,
     seatsRemoved: false,
     industry: true,
     partnership: true,
     createdOn: false,
+    canceledOn: false,
+    trialEndDate: false,
   });
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -112,6 +126,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
   const [editModal, setEditModal] = useState<Company | null>(null);
   const [holderModal, setHolderModal] = useState<Company | null>(null);
   const [billingModal, setBillingModal] = useState<Company | null>(null);
+  const [invoicesModal, setInvoicesModal] = useState<Company | null>(null);
   const [cancelModal, setCancelModal] = useState<Company | null>(null);
 
   useEffect(() => setQuery(initialQuery), [initialQuery]);
@@ -131,6 +146,24 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
       if (filters.partnerships.length && !filters.partnerships.includes(c.partnership)) return false;
       if (filters.statuses.length && !filters.statuses.includes(getCompanyBilling(c).status)) return false;
       if (filters.signUps.length && !filters.signUps.includes(getCompanyBilling(c).signUp)) return false;
+      if (filters.billingCycles.length) {
+        // Match on the displayed cycle; non-billed tiers (Free Trial / Free Access
+        // Access) read "—" in the column, so they never match Monthly/Annual.
+        const cycle =
+          c.tier === "Free Trial" || c.tier === "Free Access"
+            ? null
+            : getCompanyBilling(c).billingCycle;
+        if (!cycle || !filters.billingCycles.includes(cycle)) return false;
+      }
+      if (filters.paymentMethods.length) {
+        // Free Trial / Free Access companies never collect payment, so they never
+        // match an Automatic/Manual filter.
+        const payment =
+          c.tier === "Free Trial" || c.tier === "Free Access"
+            ? null
+            : getCompanyBilling(c).payment;
+        if (!payment || !filters.paymentMethods.includes(payment)) return false;
+      }
       return true;
     });
   }, [companies, query, filters]);
@@ -154,25 +187,23 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
     );
   }
 
-  const selected = selectedId ? companies.find((c) => c.id === selectedId) ?? null : null;
-  const panelOpen = selected !== null;
   // Natural table width so columns scroll horizontally instead of crushing on a
-  // narrow page. Mirrors the visible columns in <ColGroup>; optional columns are
-  // hidden while the side panel is open (compact mode), so they don't count then.
+  // narrow page. Mirrors the visible columns in <ColGroup>.
   const tableMin =
     220 /* name */ +
     40 /* actions */ +
-    (panelOpen ? 150 + 130 : 195 + 130) /* email + tier */ +
+    195 + 130 /* email + tier */ +
     190 /* status */ +
-    (!panelOpen
-      ? (columns.signUp ? 130 : 0) +
-        (columns.seats ? 64 : 0) +
-        (columns.seatsAdded ? 72 : 0) +
-        (columns.seatsRemoved ? 82 : 0) +
-        (columns.industry ? 145 : 0) +
-        (columns.partnership ? 155 : 0) +
-        (columns.createdOn ? 130 : 0)
-      : 0);
+    (columns.signUp ? 130 : 0) +
+    (columns.billingCycle ? 140 : 0) +
+    (columns.seats ? 64 : 0) +
+    (columns.seatsAdded ? 72 : 0) +
+    (columns.seatsRemoved ? 82 : 0) +
+    (columns.industry ? 145 : 0) +
+    (columns.partnership ? 155 : 0) +
+    (columns.createdOn ? 130 : 0) +
+    (columns.canceledOn ? 130 : 0) +
+    (columns.trialEndDate ? 140 : 0);
 
   return (
     <div className="main">
@@ -185,8 +216,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
             <div className="tasks-header-actions">
               <button className="new-task" onClick={onNewCompany}>
                 <AddIcon />
-                Add Company
-                <span className="cta-kbd"><EnterKeyIcon /></span>
+                Create Company
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
@@ -209,71 +240,59 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
 
               <CompanyFilters filters={filters} setFilters={setFilters} />
 
-              <div className="co-table-row">
-                <div className="co-table-col">
-                  <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-                  <table className="table table-head">
-                    <ColGroup columns={columns} compact={panelOpen} />
-                    <thead>
-                      <tr>
-                        <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
-                        <SortableHeader col="email" label="Email" className="col-email" sort={sort} toggle={toggleSort} sortable={false} />
-                        <SortableHeader col="tier" label="Tier" className="col-tier" sort={sort} toggle={toggleSort} />
-                        <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
-                        {columns.signUp && !panelOpen && <SortableHeader col="signUp" label="Sign-Up" className="col-signup" sort={sort} toggle={toggleSort} />}
-                        {columns.seats && !panelOpen && <SortableHeader col="seats" label="Seats" className="col-seats" sort={sort} toggle={toggleSort} />}
-                        {columns.seatsAdded && !panelOpen && <SortableHeader col="seatsAdded" label="Added" className="col-seats-added" sort={sort} toggle={toggleSort} />}
-                        {columns.seatsRemoved && !panelOpen && <SortableHeader col="seatsRemoved" label="Removed" className="col-seats-removed" sort={sort} toggle={toggleSort} />}
-                        {columns.industry && !panelOpen && <SortableHeader col="industry" label="Industry" className="col-industry" sort={sort} toggle={toggleSort} />}
-                        {columns.partnership && !panelOpen && <SortableHeader col="partnership" label="Partnership" className="col-partnership" sort={sort} toggle={toggleSort} />}
-                        {columns.createdOn && !panelOpen && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} />}
-                        <th className="col-actions">
-                          <CompanyEditColumnsButton columns={columns} setColumns={setColumns} />
-                        </th>
-                      </tr>
-                    </thead>
-                  </table>
+              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
+              <table className="table table-head">
+                <ColGroup columns={columns} />
+                <thead>
+                  <tr>
+                    <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
+                    <SortableHeader col="email" label="Email" className="col-email" sort={sort} toggle={toggleSort} sortable={false} />
+                    <SortableHeader col="tier" label="Tier" className="col-tier" sort={sort} toggle={toggleSort} />
+                    <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
+                    {columns.signUp && <SortableHeader col="signUp" label="Sign-Up" className="col-signup" sort={sort} toggle={toggleSort} />}
+                    {columns.billingCycle && <SortableHeader col="billingCycle" label="Billing Cycle" className="col-cycle" sort={sort} toggle={toggleSort} />}
+                    {columns.seats && <SortableHeader col="seats" label="Seats" className="col-seats" sort={sort} toggle={toggleSort} />}
+                    {columns.seatsAdded && <SortableHeader col="seatsAdded" label="Added" className="col-seats-added" sort={sort} toggle={toggleSort} />}
+                    {columns.seatsRemoved && <SortableHeader col="seatsRemoved" label="Removed" className="col-seats-removed" sort={sort} toggle={toggleSort} />}
+                    {columns.industry && <SortableHeader col="industry" label="Industry" className="col-industry" sort={sort} toggle={toggleSort} />}
+                    {columns.partnership && <SortableHeader col="partnership" label="Partnership" className="col-partnership" sort={sort} toggle={toggleSort} />}
+                    {columns.createdOn && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} />}
+                    {columns.canceledOn && <SortableHeader col="canceledOn" label="Canceled On" className="col-canceled" sort={sort} toggle={toggleSort} />}
+                    {columns.trialEndDate && <SortableHeader col="trialEndDate" label="Trial End Date" className="col-trial-end" sort={sort} toggle={toggleSort} />}
+                    <th className="col-actions">
+                      <CompanyEditColumnsButton columns={columns} setColumns={setColumns} />
+                    </th>
+                  </tr>
+                </thead>
+              </table>
 
-                  <div className="tasks-scroll">
-                    <table className="table table-body">
-                      <ColGroup columns={columns} compact={panelOpen} />
-                      <tbody>
-                        {paged.map((c) => (
-                          <CompanyRow
-                            key={c.id}
-                            company={c}
-                            selected={c.id === selectedId}
-                            columns={columns}
-                            compact={panelOpen}
-                            onClick={() => setSelectedId(c.id === selectedId ? null : c.id)}
-                            onEdit={() => setEditModal(c)}
-                            onManageSubscription={() => onManageSubscription(c)}
-                            onOpenMenu={(rect) => setMenu({ company: c, rect })}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  </div>
+              <div className="tasks-scroll">
+                <table className="table table-body">
+                  <ColGroup columns={columns} />
+                  <tbody>
+                    {paged.map((c) => (
+                      <CompanyRow
+                        key={c.id}
+                        company={c}
+                        columns={columns}
+                        onEdit={() => setEditModal(c)}
+                        onManageSubscription={() => onManageSubscription(c)}
+                        onOpenMenu={(rect) => setMenu({ company: c, rect })}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              </div>
 
-                  <div className="pagination">
-                    <span>
-                      Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                    </span>
-                    <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
-                    </div>
-                  </div>
+              <div className="pagination">
+                <span>
+                  Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                </span>
+                <div className="pagination-controls">
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
                 </div>
-
-                {selected && (
-                  <CompanyPanel
-                    company={selected}
-                    onClose={() => setSelectedId(null)}
-                    onUpdate={onUpdateCompany}
-                  />
-                )}
               </div>
             </div>
           </div>
@@ -290,6 +309,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
           onEditAccountHolder={() => setHolderModal(menu.company)}
           onAddBillingEmails={() => setBillingModal(menu.company)}
           onCancelSubscription={() => setCancelModal(menu.company)}
+          onViewEmployees={() => onViewEmployees(menu.company)}
+          onViewInvoices={() => setInvoicesModal(menu.company)}
         />
       )}
 
@@ -322,6 +343,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
         />
       )}
 
+      {invoicesModal && (
+        <ViewInvoicesModal
+          company={invoicesModal}
+          onClose={() => setInvoicesModal(null)}
+        />
+      )}
+
       {cancelModal && (
         <CancelSubscriptionModal
           company={cancelModal}
@@ -343,20 +371,23 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
   );
 }
 
-function ColGroup({ columns, compact }: { columns: CompanyColumnState; compact: boolean }) {
+function ColGroup({ columns }: { columns: CompanyColumnState }) {
   return (
     <colgroup>
       <col style={{ width: 220 }} />
-      <col style={{ width: compact ? 150 : 195 }} />
+      <col style={{ width: 195 }} />
       <col style={{ width: 130 }} />
       <col style={{ width: 190 }} />
-      {columns.signUp && !compact && <col style={{ width: 130 }} />}
-      {columns.seats && !compact && <col style={{ width: 64 }} />}
-      {columns.seatsAdded && !compact && <col style={{ width: 72 }} />}
-      {columns.seatsRemoved && !compact && <col style={{ width: 82 }} />}
-      {columns.industry && !compact && <col style={{ width: 145 }} />}
-      {columns.partnership && !compact && <col style={{ width: 155 }} />}
-      {columns.createdOn && !compact && <col style={{ width: 130 }} />}
+      {columns.signUp && <col style={{ width: 130 }} />}
+      {columns.billingCycle && <col style={{ width: 140 }} />}
+      {columns.seats && <col style={{ width: 64 }} />}
+      {columns.seatsAdded && <col style={{ width: 72 }} />}
+      {columns.seatsRemoved && <col style={{ width: 82 }} />}
+      {columns.industry && <col style={{ width: 145 }} />}
+      {columns.partnership && <col style={{ width: 155 }} />}
+      {columns.createdOn && <col style={{ width: 130 }} />}
+      {columns.canceledOn && <col style={{ width: 130 }} />}
+      {columns.trialEndDate && <col style={{ width: 140 }} />}
       <col style={{ width: 40 }} />
     </colgroup>
   );
@@ -395,6 +426,13 @@ function StatusPill({ billing }: { billing: CompanyBilling }) {
   return <span className={`co-status-pill co-status-pill--${tone}`}>{label}</span>;
 }
 
+// Billing cycle only applies to paid subscriptions; Free Trial and
+// Free Access tiers aren't billed, so they read "—".
+function billingCycleLabel(company: Company, billing: CompanyBilling): string {
+  if (company.tier === "Free Trial" || company.tier === "Free Access") return "—";
+  return billing.billingCycle;
+}
+
 function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
   const self = signUp === "Self Sign-Up";
   return (
@@ -405,43 +443,46 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, selected, columns, compact, onClick, onEdit, onManageSubscription, onOpenMenu,
+  company, columns, onEdit, onManageSubscription, onOpenMenu,
 }: {
-  company: Company; selected: boolean; columns: CompanyColumnState; compact: boolean; onClick: () => void; onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
+  company: Company; columns: CompanyColumnState; onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
 }) {
   const billing = getCompanyBilling(company);
   return (
-    <tr className={selected ? "selected" : ""} onClick={onClick}>
+    <tr>
       <td className="col-name">{company.name}</td>
       <td className="col-email">{company.email}</td>
       <td className="col-tier"><TierPill tier={company.tier} /></td>
       <td className="col-status"><StatusPill billing={billing} /></td>
-      {columns.signUp && !compact && <td className="col-signup"><SignUpPill signUp={billing.signUp} /></td>}
-      {columns.seats && !compact && <td className="col-seats">{company.seats.toLocaleString()}</td>}
-      {columns.seatsAdded && !compact && <td className="col-seats-added co-seats-added">+{billing.seatsAdded}</td>}
-      {columns.seatsRemoved && !compact && <td className="col-seats-removed co-seats-removed">−{billing.seatsRemoved}</td>}
-      {columns.industry && !compact && <td className="col-industry">{company.industry || "—"}</td>}
-      {columns.partnership && !compact && <td className="col-partnership">{company.partnership || "—"}</td>}
-      {columns.createdOn && !compact && <td className="col-created">{billing.createdOn}</td>}
+      {columns.signUp && <td className="col-signup"><SignUpPill signUp={billing.signUp} /></td>}
+      {columns.billingCycle && <td className="col-cycle">{billingCycleLabel(company, billing)}</td>}
+      {columns.seats && <td className="col-seats">{company.seats.toLocaleString()}</td>}
+      {columns.seatsAdded && <td className="col-seats-added co-seats-added">+{billing.seatsAdded}</td>}
+      {columns.seatsRemoved && <td className="col-seats-removed co-seats-removed">−{billing.seatsRemoved}</td>}
+      {columns.industry && <td className="col-industry">{company.industry || "—"}</td>}
+      {columns.partnership && <td className="col-partnership">{company.partnership || "—"}</td>}
+      {columns.createdOn && <td className="col-created">{billing.createdOn}</td>}
+      {columns.canceledOn && <td className="col-canceled">{getCanceledOn(billing)}</td>}
+      {columns.trialEndDate && <td className="col-trial-end">{getTrialEndDate(billing)}</td>}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
           aria-label="More"
-          onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
+          onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
         >
           <MoreIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit" title="Edit company" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+          <button className="row-action-btn" aria-label="Edit" title="Edit company" onClick={onEdit}>
             <PencilIcon />
           </button>
-          <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={(e) => { e.stopPropagation(); onManageSubscription(); }}>
+          <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={onManageSubscription}>
             <CardIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More"
-            onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
+            onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
           >
             <MoreIcon />
           </button>
@@ -460,10 +501,35 @@ const HolderIcon = () => (
   </svg>
 );
 
+const PeopleIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
 const MailIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="5" width="18" height="14" rx="2" />
     <path d="M3 7l9 6 9-6" />
+  </svg>
+);
+
+const InvoiceIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2h12a1 1 0 0 1 1 1v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21V3a1 1 0 0 1 1-1z" />
+    <path d="M9 8h6M9 12h6M9 16h4" />
+  </svg>
+);
+
+const DashboardIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="8" height="8" rx="1.5" />
+    <rect x="13" y="3" width="8" height="5" rx="1.5" />
+    <rect x="13" y="10" width="8" height="11" rx="1.5" />
+    <rect x="3" y="13" width="8" height="8" rx="1.5" />
   </svg>
 );
 
@@ -488,7 +554,7 @@ const CancelIcon = () => (
 );
 
 function CompanyActionsMenu({
-  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription,
+  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onViewInvoices,
 }: {
   company: Company;
   rect: DOMRect;
@@ -498,6 +564,8 @@ function CompanyActionsMenu({
   onEditAccountHolder: () => void;
   onAddBillingEmails: () => void;
   onCancelSubscription: () => void;
+  onViewEmployees: () => void;
+  onViewInvoices: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -563,6 +631,9 @@ function CompanyActionsMenu({
       {item(<CardMenuIcon />, "Manage Subscription", onManageSubscription)}
       {item(<HolderIcon />, "Account Holder", onEditAccountHolder)}
       {item(<MailIcon />, "Add Billing Emails", onAddBillingEmails)}
+      {item(<PeopleIcon />, "View Employees", onViewEmployees)}
+      {item(<InvoiceIcon />, "View Invoices", onViewInvoices)}
+      {item(<DashboardIcon />, "View Dashboard", () => viewDashboard(company))}
       {canCancel && (
         <>
           <div className="u-menu-divider" />
@@ -573,13 +644,39 @@ function CompanyActionsMenu({
   );
 }
 
-/* ─────────────── Company side panel ─────────────── */
-
-type PanelTab = "details" | "seats" | "users" | "actions";
-
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/[<>&'"]/g, (c) =>
+    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!),
+  );
+}
+
+// Opens the company's dashboard in a simulated impersonation session — same
+// "Login As" mechanism used for B2C users, but logged in as the company's
+// Account Holder and framed as the B2B dashboard rather than the learner app.
+function viewDashboard(company: Company) {
+  const holder = currentHolder(company);
+  const win = window.open("", "_blank", "noopener");
+  if (!win) return;
+  win.document.title = `Dashboard — ${company.name}`;
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
+<title>${escapeXml(company.name)} Dashboard</title>
+<style>:root{color-scheme:dark}body{margin:0;background:#0b0b0c;color:#e7e7e8;font-family:"Fira Sans",-apple-system,system-ui,sans-serif}
+.bar{background:#7a3a18;color:#ffd9c2;padding:10px 20px;font-size:14px;font-weight:600;display:flex;gap:10px;align-items:center}
+.wrap{max-width:640px;margin:0 auto;padding:60px 24px;text-align:center}
+.av{width:80px;height:80px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;background:radial-gradient(70% 70% at 50% 40%,#e97237,#8a3114)}
+h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}
+.tag{display:inline-block;margin-top:20px;padding:6px 14px;border-radius:999px;background:#1c1c1f;border:1px solid #2e2e31;font-size:12px;color:#a8a8a8}</style></head>
+<body><div class="bar">⚠ Admin impersonation session — you are viewing the B2B dashboard as this Account Holder. Your own session is unaffected.</div>
+<div class="wrap"><div class="av">${escapeXml(initials(holder.name))}</div>
+<h1>${escapeXml(holder.name)}</h1><p>${escapeXml(holder.email)} · Account Holder for ${escapeXml(company.name)}</p>
+<p style="margin-top:24px">The company dashboard will be displayed here.</p>
+<span class="tag">${escapeXml(company.name)} — B2B Dashboard placeholder</span></div></body></html>`);
+  win.document.close();
 }
 
 const ROLE_SLUG: Record<CompanyUser["role"], string> = {
@@ -587,178 +684,6 @@ const ROLE_SLUG: Record<CompanyUser["role"], string> = {
   Admin: "admin",
   Member: "member",
 };
-
-function CompanyPanel({
-  company, onClose, onUpdate,
-}: {
-  company: Company; onClose: () => void; onUpdate: (c: Company) => void;
-}) {
-  const [tab, setTab] = useState<PanelTab>("details");
-  const billing = getCompanyBilling(company);
-  const users = getCompanyUsers(company);
-  const sym = CURRENCY_SYMBOL[billing.currency];
-
-  const isActive = billing.status === "Active";
-  const compEligible = billing.status !== "Active";
-
-  const detail = (label: string, value: React.ReactNode) => (
-    <div className="co-dt-item">
-      <div className="co-dt-label">{label}</div>
-      <div className="co-dt-value">{value}</div>
-    </div>
-  );
-
-  const TABS: { key: PanelTab; label: string }[] = [
-    { key: "details", label: "Details" },
-    { key: "seats", label: "Seats" },
-    { key: "users", label: `Users (${users.length})` },
-    { key: "actions", label: "Actions" },
-  ];
-
-  return (
-    <aside className="co-panel">
-      <div className="co-panel-head">
-        <div className="co-drawer-title-row">
-          <div className="co-drawer-avatar">{initials(company.name)}</div>
-          <div className="co-drawer-titles">
-            <div className="co-drawer-name">{company.name}</div>
-            <div className="co-drawer-id">{company.id} · {company.email}</div>
-          </div>
-        </div>
-        <button className="co-drawer-close" aria-label="Close" onClick={onClose}>
-          <SmallXIcon />
-        </button>
-      </div>
-
-      <div className="co-panel-pills">
-        <TierPill tier={company.tier} />
-        <StatusPill billing={billing} />
-        <span className="co-pill-muted">{billing.signUp}</span>
-      </div>
-
-      <div className="co-panel-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`co-panel-tab${tab === t.key ? " is-active" : ""}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="co-panel-body">
-        {tab === "details" && (
-          <div className="co-detail-grid">
-            {detail("Account holder", company.email)}
-            {detail("Created on", billing.createdOn)}
-            {detail("Industry", company.industry || "—")}
-            {detail("Partner affiliation", company.partnership || "—")}
-            {detail("Sign-up channel", billing.signUp)}
-            {detail("Payment collection", billing.payment)}
-            {detail("Currency", billing.currency)}
-            {detail("Billing cycle", company.tier === "Free Trial" || company.tier === "Complimentary Access" ? "—" : billing.billingCycle)}
-            {detail("Per-seat rate", isActive ? `${sym}${billing.ratePerSeat} / mo` : "—")}
-            {detail("Next invoice", billing.nextBillingDate)}
-            {detail("Est. monthly", isActive ? `${sym}${billing.monthlyTotal.toLocaleString()}` : "—")}
-          </div>
-        )}
-
-        {tab === "seats" && (
-          <>
-            <div className="co-section-title" style={{ marginBottom: 14 }}>
-              Seats
-              <span className="co-section-meta">{billing.seatsUsed} of {billing.seatsTotal} assigned</span>
-            </div>
-            <div className="co-seat-bar">
-              <div
-                className="co-seat-bar-fill"
-                style={{ width: `${billing.seatsTotal ? (billing.seatsUsed / billing.seatsTotal) * 100 : 0}%` }}
-              />
-            </div>
-            <div className="co-seats-change-row">
-              <div className="co-seats-change co-seats-change--added">
-                <span className="co-seats-change-label">Added</span>
-                <span className="co-seats-change-val">+{billing.seatsAdded}</span>
-              </div>
-              <div className="co-seats-change co-seats-change--removed">
-                <span className="co-seats-change-label">Removed</span>
-                <span className="co-seats-change-val">−{billing.seatsRemoved}</span>
-              </div>
-            </div>
-            <div className="co-region-list" style={{ marginTop: 16 }}>
-              {billing.regions.map((r) => (
-                <div className="co-region-row" key={r.name}>
-                  <span className="co-region-name">{r.name}</span>
-                  <span className="co-region-seats">{r.seats} seats</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {tab === "users" && (
-          <div className="co-user-list">
-            {users.map((u) => (
-              <div className="co-userrow" key={u.email}>
-                <div className="co-userrow-avatar">{initials(u.name)}</div>
-                <div className="co-userrow-main">
-                  <div className="co-userrow-name">
-                    {u.name}
-                    {u.status !== "Active" && <span className="co-userrow-status">{u.status}</span>}
-                  </div>
-                  <div className="co-userrow-email">{u.email}</div>
-                </div>
-                <div className="co-userrow-meta">
-                  <span className={`co-role co-role--${ROLE_SLUG[u.role]}`}>{u.role}</span>
-                  <span className="co-userrow-region">{u.region}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "actions" && (
-          <>
-            <div className="co-action-grid">
-              <button className="co-action">Manage seats</button>
-              <button className="co-action">Change tier</button>
-              <button className="co-action">Change billing cycle</button>
-              <button className="co-action">Adjust per-seat rate</button>
-              <button className="co-action">Change payment method</button>
-              <button className="co-action">Change account holder</button>
-            </div>
-
-            <div className="co-action-lifecycle">
-              {compEligible && (
-                <button
-                  className="co-action co-action--wide co-action--good"
-                  onClick={() => onUpdate({ ...company, tier: "Complimentary Access", status: "Complimentary" })}
-                >
-                  <CheckBoldIcon />
-                  Grant complimentary access
-                </button>
-              )}
-              {billing.status !== "Canceled" && (
-                <button
-                  className="co-action co-action--wide co-action--danger"
-                  onClick={() => onUpdate({ ...company, status: "Canceled", cancelsOn: billing.nextBillingDate })}
-                >
-                  Cancel subscription
-                </button>
-              )}
-            </div>
-            <p className="co-action-note">
-              Cancellations take effect at the end of the current billing cycle. Finance operations
-              (refunds, credit notes, voiding invoices) are handled directly in Stripe.
-            </p>
-          </>
-        )}
-      </div>
-    </aside>
-  );
-}
 
 /* ─────────────── Edit Company modal ─────────────── */
 
@@ -774,6 +699,7 @@ function EditCompanyModal({
 }) {
   const [name, setName] = useState(company.name);
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(company.taxStatus ?? "Taxable");
+  const [assignedCsm, setAssignedCsm] = useState(company.assignedCsm ?? "");
   const [country, setCountry] = useState(company.addressParts?.country ?? "United States");
   const [addrLine1, setAddrLine1] = useState(company.addressParts?.line1 ?? "");
   const [addrLine2, setAddrLine2] = useState(company.addressParts?.line2 ?? "");
@@ -807,6 +733,7 @@ function EditCompanyModal({
     onSave({
       name: name.trim(),
       taxStatus,
+      assignedCsm: assignedCsm || undefined,
       industry: industries.join(", "),
       partnership: partnerships.join(", "),
       address,
@@ -870,6 +797,20 @@ function EditCompanyModal({
             <select className="form-select" value={taxStatus} onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}>
               {TAX_STATUSES.map((t) => (
                 <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Assigned CSM</label>
+            <select
+              className={`form-select ${assignedCsm ? "" : "is-placeholder"}`}
+              value={assignedCsm}
+              onChange={(e) => setAssignedCsm(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {CSM_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -1144,6 +1085,49 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
   );
 }
 
+/* ─────────────── View Invoices modal ─────────────── */
+
+function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const customerId = getStripeCustomerId(company);
+  // Placeholder for the real Stripe dashboard invoices view — carries the
+  // Stripe customer id as a URL parameter, same shape a real redirect would use.
+  const stripeUrl = `${window.location.origin}${window.location.pathname}?stripeInvoices=${encodeURIComponent(customerId)}`;
+
+  return (
+    <div className="cl-modal-overlay" onClick={onClose}>
+      <div className="cl-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+        <div className="cl-modal-head">
+          <h3 className="cl-modal-title">View Invoices</h3>
+          <p className="cl-modal-sub">
+            Invoices for <strong>{company.name}</strong> are managed in Stripe. This needs to be
+            opened on Stripe to view or download them.
+          </p>
+        </div>
+
+        <div style={{ padding: "4px 24px 8px" }}>
+          <div className="co-billing-step" style={{ alignItems: "center" }}>
+            <span className="co-billing-step-num">i</span>
+            <span>Opening this will redirect to Stripe with the customer's Stripe ID.</span>
+          </div>
+        </div>
+
+        <div className="cl-modal-foot">
+          <button className="btn-save-draft" onClick={onClose}>Close</button>
+          <a
+            className="btn-publish co-billing-cta"
+            href={stripeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open invoices in Stripe
+            <ExternalLinkIcon />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── Cancel Subscription modal ─────────────── */
 
 const WarningIcon = () => (
@@ -1180,7 +1164,6 @@ function CancelSubscriptionModal({
                 <strong>{company.name}</strong> keeps full access until the end of the current
                 billing cycle ({billing.nextBillingDate}), then the subscription cancels.
               </p>
-              <div className="required-fields-note">* Required Fields</div>
             </div>
 
             <div style={{ padding: "4px 24px 8px" }}>

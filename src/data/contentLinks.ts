@@ -38,6 +38,10 @@ export const nodes: ContentNode[] = [
   { id: "n-fork", name: "Forklift Operator", kind: "Certification", level: "Beginner", tasksCount: 3, enrolled: 1605, industry: "Warehouse" },
 ];
 
+export function nodeIdForName(name: string): string | undefined {
+  return nodes.find((n) => n.name === name)?.id;
+}
+
 export const links: Link[] = [
   // Domestic Refrigerators Basics
   { from: "n-tm", to: "n-drb", kind: "prerequisite", strength: 80 },

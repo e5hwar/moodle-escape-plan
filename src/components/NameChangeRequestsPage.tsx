@@ -307,7 +307,6 @@ function ApproveModal({
           <p className="cl-modal-sub">
             Verify the submitted ID, then confirm the name that will be saved to the user's account.
           </p>
-          <div className="required-fields-note">* Required Fields</div>
         </div>
 
         <div className="ncr-modal-split">

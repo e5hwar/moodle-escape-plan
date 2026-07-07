@@ -11,7 +11,8 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { SearchIcon, SortIcon, EnterKeyIcon, AddIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon } from "./icons";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
@@ -65,6 +66,12 @@ const TrashIcon = () => (
 const BackupIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+  </svg>
+);
+const LinkIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5" />
   </svg>
 );
 
@@ -148,11 +155,14 @@ export function CertificationsPage({
   onNewCert,
   onEditCert,
   onViewPayers,
+  onManageContentLinks,
 }: {
   onNewCert: () => void;
   onEditCert: (cert: Certification) => void;
   onViewPayers: (cert: Certification) => void;
+  onManageContentLinks: (cert: Certification) => void;
 }) {
+  useCreateShortcut(onNewCert);
   // Local working copy so visibility/archive/delete persist in-session.
   const [certList, setCertList] = useState<Certification[]>(allCerts);
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
@@ -282,7 +292,7 @@ export function CertificationsPage({
               <button className="new-task" onClick={onNewCert}>
                 <AddIcon />
                 Create Certification
-                <span className="cta-kbd"><EnterKeyIcon /></span>
+                <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
@@ -382,6 +392,7 @@ export function CertificationsPage({
           onDelete={() => deleteCert(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
           onBackup={() => backupCertification(menu.cert)}
+          onManageContentLinks={() => onManageContentLinks(menu.cert)}
         />
       )}
     </div>
@@ -507,6 +518,7 @@ function CertActionsMenu({
   onDelete,
   onViewPayers,
   onBackup,
+  onManageContentLinks,
 }: {
   cert: Certification;
   rect: DOMRect;
@@ -516,6 +528,7 @@ function CertActionsMenu({
   onDelete: () => void;
   onViewPayers: () => void;
   onBackup: () => void;
+  onManageContentLinks: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -596,6 +609,7 @@ function CertActionsMenu({
       {item(<PencilIcon />, "Edit", onEdit)}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<PayersIcon />, "View who paid", onViewPayers)}
+      {item(<LinkIcon />, "Manage Content Links", onManageContentLinks)}
       {item(<BackupIcon />, "Backup Certification", onBackup)}
       <div className="u-menu-divider" />
       {item(<TrashIcon />, "Delete", onDelete, true)}

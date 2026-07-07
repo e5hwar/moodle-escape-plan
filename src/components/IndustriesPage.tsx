@@ -25,12 +25,6 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
-const InfoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 8.4v.01M11 12h1v4h1" />
-  </svg>
-);
 const CaretRightIcon = () => (
   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 6l6 6-6 6" />
@@ -337,16 +331,6 @@ export function IndustriesPage() {
     return out;
   }
 
-  function alsoTaggedIn(certId: string): { industryName: string; subName?: string }[] {
-    return tagsForCert(certId).filter((t) => {
-      if (scope.kind === "industry") {
-        return !(t.industryName === currentIndustry.name && !t.subName);
-      }
-      const sub = currentSub;
-      return !(t.industryName === currentIndustry.name && t.subName === sub?.name);
-    });
-  }
-
   // ─── Menu ────────────────────────────────────────────────────────────────
   function openMenu(e: React.MouseEvent, menuScope: Scope) {
     e.stopPropagation();
@@ -375,6 +359,10 @@ export function IndustriesPage() {
   const currentHidden =
     scope.kind === "industry" ? !!currentIndustry.hidden : !!currentSub?.hidden;
 
+  const orderedCurrentSubs = [...currentIndustry.subIndustries].sort(
+    (a, b) => a.displayPosition - b.displayPosition,
+  );
+
   return (
     <div className="main">
       <div className="workspace">
@@ -382,10 +370,11 @@ export function IndustriesPage() {
           {/* ─── Left rail ─── */}
           <aside className="ind-rail">
             <div className="ind-rail-head">
-              <div className="ind-rail-eyebrow">CATEGORIZATION</div>
-              <h1 className="ind-rail-title">Industries</h1>
-              <div className="ind-rail-sub">
-                {industries.length} Industries · {totalSubIndustries} Sub-Industries
+              <div className="ind-rail-titleblock">
+                <h1 className="ind-rail-title">Industries</h1>
+                <div className="ind-rail-sub">
+                  {industries.length} Industries · {totalSubIndustries} Sub-Industries
+                </div>
               </div>
             </div>
 
@@ -426,125 +415,159 @@ export function IndustriesPage() {
                 + Add Industry
               </button>
             </div>
+
+            <div className="ind-rail-hint">
+              Drag ⠿ to reorder · select a row to manage its certifications
+            </div>
           </aside>
 
           {/* ─── Detail pane ─── */}
           <section className="ind-detail">
             <header className="ind-detail-head">
               <div className="ind-detail-titleblock">
-                <div className="ind-detail-eyebrow">
-                  {scope.kind === "industry" ? "INDUSTRY" : "SUB-INDUSTRY"}
+                <div className="ind-detail-toprow">
+                  <h2 className="ind-detail-title">
+                    {scope.kind === "industry"
+                      ? currentIndustry.name
+                      : currentSub?.name ?? "—"}
+                  </h2>
+                  <div className="ind-seg" role="group" aria-label="Visibility">
+                    <button
+                      className={`ind-seg-opt ${!currentHidden ? "is-active" : ""}`}
+                      onClick={() => {
+                        if (!currentHidden) return;
+                        if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
+                        else toggleSubHidden(scope.industryKey, scope.subKey);
+                      }}
+                    >
+                      {!currentHidden && <span className="ind-seg-dot" />}
+                      Visible
+                    </button>
+                    <button
+                      className={`ind-seg-opt ${currentHidden ? "is-active" : ""}`}
+                      onClick={() => {
+                        if (currentHidden) return;
+                        if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
+                        else toggleSubHidden(scope.industryKey, scope.subKey);
+                      }}
+                    >
+                      {currentHidden && <span className="ind-seg-dot ind-seg-dot--muted" />}
+                      Hidden
+                    </button>
+                  </div>
                 </div>
-                <h2 className="ind-detail-title">
-                  {scope.kind === "industry"
-                    ? currentIndustry.name
-                    : currentSub?.name ?? "—"}
-                  {currentHidden && <span className="ind-hidden-badge">Hidden</span>}
-                </h2>
                 <div className="ind-detail-sub">
                   {scope.kind === "industry" ? (
                     <>
-                      <span>
-                        <strong>{currentIndustry.subIndustries.length}</strong>{" "}
-                        Sub-Industries
-                      </span>
-                      <span className="ind-dot" />
-                      <span>
-                        <strong>{currentIndustryTotalCerts}</strong>{" "}
-                        Certifications total
-                      </span>
-                      <span className="ind-dot" />
-                      <span>
-                        Display position{" "}
-                        <strong>{currentIndustry.displayPosition}</strong>
-                      </span>
+                      Position <strong>{currentIndustry.displayPosition}</strong> in
+                      browse · <strong>{currentIndustryTotalCerts}</strong>{" "}
+                      certifications
+                      {currentIndustry.subIndustries.length > 0 ? (
+                        <>
+                          {" "}across industry level +{" "}
+                          <strong>{currentIndustry.subIndustries.length}</strong>{" "}
+                          sub-industr{currentIndustry.subIndustries.length === 1 ? "y" : "ies"}
+                        </>
+                      ) : (
+                        <> at industry level</>
+                      )}
                     </>
                   ) : (
                     <>
-                      <span>
-                        <strong>{currentSub?.certIds.length ?? 0}</strong>{" "}
-                        Certifications
-                      </span>
-                      <span className="ind-dot" />
-                      <span>
-                        Display position{" "}
-                        <strong>{currentSub?.displayPosition ?? 0}</strong>
-                      </span>
-                      <span className="ind-dot" />
-                      <span>
-                        in <strong>{currentIndustry.name}</strong>
-                      </span>
+                      Position <strong>{currentSub?.displayPosition ?? 0}</strong> in{" "}
+                      <strong>{currentIndustry.name}</strong> ·{" "}
+                      <strong>{currentSub?.certIds.length ?? 0}</strong>{" "}
+                      certification{(currentSub?.certIds.length ?? 0) === 1 ? "" : "s"}
                     </>
                   )}
                 </div>
               </div>
               <div className="ind-detail-actions">
                 <button
-                  className="ind-detail-btn"
-                  onClick={() =>
-                    setModal(
-                      scope.kind === "industry"
-                        ? { kind: "edit-industry", industryKey: scope.industryKey }
-                        : {
-                            kind: "edit-sub",
-                            industryKey: scope.industryKey,
-                            subKey: scope.subKey,
-                          },
-                    )
-                  }
+                  className="ind-icon-btn"
+                  aria-label="More options"
+                  onClick={(e) => openMenu(e, scope)}
                 >
-                  <PencilIcon /> Edit
+                  <MoreDotsIcon />
                 </button>
                 <button
-                  className="ind-detail-btn ind-detail-btn--danger"
-                  onClick={() => setModal({ kind: "delete-confirm", scope })}
+                  className="cta-primary"
+                  onClick={() => setModal({ kind: "add-certs", scope })}
                 >
-                  <TrashIcon /> Delete
+                  Add Certifications
                 </button>
               </div>
             </header>
 
-            {scope.kind === "industry" && currentIndustry.subIndustries.length > 0 && (
-              <div className="ind-banner">
-                <span className="ind-banner-icon"><InfoIcon /></span>
-                <div className="ind-banner-text">
-                  Certifications listed here are{" "}
-                  <strong>tagged at the Industry level only</strong> — they belong to{" "}
-                  {currentIndustry.name} but no specific Sub-Industry. Certs tagged with a
-                  Sub-Industry appear under that Sub-Industry in the left panel, not here.
-                  A Cert can be tagged with both (which makes it show up in both places).
+            <div className="ind-section">
+              <div className="ind-sec-head">
+                <span className="ind-sec-title">
+                  {scope.kind === "industry" ? "Industry level" : "Certifications"}
+                </span>
+                <span className="ind-sec-hint">
+                  {scope.kind === "industry"
+                    ? currentIndustry.subIndustries.length > 0
+                      ? "shown before sub-industries · drag rows to reorder"
+                      : `shown when users browse ${currentIndustry.name} · drag rows to reorder`
+                    : `shown when users browse ${currentIndustry.name} › ${currentSub?.name} · drag rows to reorder`}
+                </span>
+              </div>
+              <CertList
+                certIds={scopeCertIds}
+                onReorder={reorderCertsInScope}
+                onRemove={removeCertFromScope}
+              />
+            </div>
+
+            {scope.kind === "industry" && orderedCurrentSubs.length > 0 && (
+              <div className="ind-section">
+                <div className="ind-sec-head">
+                  <span className="ind-sec-title">In sub-industries</span>
+                  <span className="ind-sec-hint">select a card to manage its certs</span>
+                </div>
+                <div className="ind-subcards">
+                  {orderedCurrentSubs.map((sub) => {
+                    // Placeholder certs pad the seed data; fold them into "+ N more".
+                    const names = sub.certIds
+                      .map((id) => allCertsById[id]?.name)
+                      .filter((n): n is string => !!n && !n.startsWith("Placeholder Cert"));
+                    const shown = names.slice(0, 3);
+                    const more = sub.certIds.length - shown.length;
+                    return (
+                      <button
+                        key={sub.key}
+                        className="ind-subcard"
+                        onClick={() => {
+                          pickSub(currentIndustry.key, sub.key);
+                          setOpenIds((prev) => new Set([...prev, currentIndustry.key]));
+                        }}
+                      >
+                        <div className="ind-subcard-head">
+                          <span className="ind-subcard-name">{sub.name}</span>
+                          <span className="ind-subcard-count">
+                            {sub.certIds.length} cert{sub.certIds.length === 1 ? "" : "s"}
+                          </span>
+                          {sub.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
+                          <span className="ind-subcard-arrow">→</span>
+                        </div>
+                        <div className="ind-subcard-list">
+                          {shown.map((n) => (
+                            <div key={n}>{n}</div>
+                          ))}
+                          {more > 0 && <div className="ind-subcard-more">+ {more} more</div>}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            <div className="ind-list-head">
-              <div>
-                <div className="ind-list-title">
-                  {scope.kind === "industry"
-                    ? `Certifications at the ${currentIndustry.name} Industry level`
-                    : `Certifications in ${currentIndustry.name} › ${currentSub?.name}`}{" "}
-                  <span className="ind-list-count">· {scopeCertIds.length}</span>
-                </div>
-                <div className="ind-list-sub">
-                  {scope.kind === "industry"
-                    ? `Shown when users browse ${currentIndustry.name} at the top level. Drag rows to reorder.`
-                    : `Shown when users browse ${currentIndustry.name} › ${currentSub?.name}. Drag rows to reorder.`}
-                </div>
-              </div>
-              <button
-                className="ind-add-certs-btn"
-                onClick={() => setModal({ kind: "add-certs", scope })}
-              >
-                + Add Certifications
-              </button>
+            <div className="ind-detail-hint">
+              "Add Certifications" tags at{" "}
+              {scope.kind === "industry" ? "industry" : "sub-industry"} level ·
+              structure is managed in the tree
             </div>
-
-            <CertList
-              certIds={scopeCertIds}
-              alsoTaggedIn={alsoTaggedIn}
-              onReorder={reorderCertsInScope}
-              onRemove={removeCertFromScope}
-            />
           </section>
         </div>
       </div>
@@ -955,12 +978,10 @@ function SubRow({
 
 function CertList({
   certIds,
-  alsoTaggedIn,
   onReorder,
   onRemove,
 }: {
   certIds: string[];
-  alsoTaggedIn: (id: string) => { industryName: string; subName?: string }[];
   onReorder: (next: string[]) => void;
   onRemove: (id: string) => void;
 }) {
@@ -1000,17 +1021,16 @@ function CertList({
   }
 
   return (
-    <div className="ind-cert-list">
+    <div className="ind-certtable">
       {certIds.map((id, idx) => {
         const cert = allCertsById[id];
         if (!cert) return null;
-        const also = alsoTaggedIn(id);
         const isDragging = dragIdx === idx;
         const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
         return (
           <div
             key={id}
-            className={`ind-cert-row ${isDragging ? "is-dragging" : ""} ${isOver ? "is-over" : ""}`}
+            className={`ind-ct-row ${isDragging ? "is-dragging" : ""} ${isOver ? "is-over" : ""}`}
             draggable
             onDragStart={() => onDragStart(idx)}
             onDragOver={(e) => onDragOver(e, idx)}
@@ -1020,36 +1040,24 @@ function CertList({
               setOverIdx(null);
             }}
           >
-            <span className="ind-cert-drag" aria-hidden>
+            <span className="ind-ct-drag" title="Drag to reorder" aria-hidden>
               <DragHandleIcon />
             </span>
-            <span className="ind-cert-num">{idx + 1}</span>
-            <div className="ind-cert-meta">
-              <div className="ind-cert-name">{cert.name}</div>
-              <div className="ind-cert-sub">
-                {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
-              </div>
-              {also.length > 0 && (
-                <div className="ind-cert-also">
-                  <span className="ind-cert-also-label">Also tagged in:</span>
-                  {also.map((t, i) => (
-                    <span key={`${t.industryName}-${t.subName ?? ""}-${i}`} className="ind-cert-tag">
-                      {t.subName ? `${t.industryName} › ${t.subName}` : t.industryName}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            <span className="ind-ct-num">{idx + 1}</span>
+            <span className="ind-ct-id">{cert.id}</span>
+            <span
+              className="ind-ct-name"
+              title={`${cert.stage} · ${cert.hours} ${cert.hours === 1 ? "hour" : "hours"}`}
+            >
+              {cert.name}
+            </span>
             <button
-              className="ind-cert-action"
+              className="ind-ct-x"
               aria-label="Remove from this Industry"
               title="Remove from this Industry"
               onClick={() => onRemove(id)}
             >
               <SmallXIcon />
-            </button>
-            <button className="ind-cert-action" aria-label="More" onClick={(e) => e.preventDefault()}>
-              <MoreDotsIcon />
             </button>
           </div>
         );
