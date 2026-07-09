@@ -16,17 +16,16 @@ import { SkillsPage } from "./components/SkillsPage";
 import { AwardsPage } from "./components/AwardsPage";
 import { type Certification } from "./data/certifications";
 import { ContentLinksPage } from "./components/ContentLinksPage";
-import { nodeIdForName } from "./data/contentLinks";
+import { nodes as contentNodes, type ContentNode, type Level } from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
-import { type Question } from "./data/questionBank";
+import { questions as seedQuestions, type Question } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
-import { FeedbackFormVersions } from "./components/FeedbackFormVersions";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
 import { NewCompanyWizard } from "./components/NewCompanyWizard";
@@ -43,10 +42,36 @@ import { PortfolioPage } from "./components/PortfolioPage";
 import { StripeInvoicesPage } from "./components/StripeInvoicesPage";
 import { users as allUsers } from "./data/users";
 import {
+  activeLinks,
   feedbackForms as seedForms,
+  inactiveLinks,
   type FeedbackForm,
 } from "./data/feedbackForms";
 import { companies as seedCompanies, type Company } from "./data/companies";
+
+// Map a certification onto a content-graph focus node. If the certification
+// already exists in the mock graph (matched by name) we use that node — so its
+// seeded prerequisite / recommended / related links show up. Otherwise we
+// synthesize a node from the certification so the Content Links page still
+// opens focused on it, with empty columns ready to populate.
+function certToFocusNode(cert: Certification): ContentNode {
+  const match = contentNodes.find((n) => n.name === cert.name);
+  if (match) return match;
+  const level: Level =
+    cert.careerStage === "Master"
+      ? "Advanced"
+      : cert.careerStage === "Journeyman"
+      ? "Intermediate"
+      : "Beginner";
+  return {
+    id: cert.id,
+    name: cert.name,
+    kind: "Certification",
+    level,
+    tasksCount: cert.tasks,
+    industry: cert.industry,
+  };
+}
 
 type View =
   | { name: "tasks" }
@@ -64,7 +89,7 @@ type View =
   | { name: "skills" }
   | { name: "awards" }
   | { name: "question-bank" }
-  | { name: "new-question"; categoryPath?: string[] }
+  | { name: "new-question"; categoryPath?: string[]; forFormId?: string }
   | { name: "edit-question"; question: Question }
   | { name: "spotlight" }
   | { name: "proctoring" }
@@ -72,7 +97,6 @@ type View =
   | { name: "scholarship" }
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string }
-  | { name: "feedback-versions"; formId: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
@@ -119,7 +143,26 @@ function StandaloneNotFound({ id }: { id: string }) {
 function AdminApp() {
   const [view, setView] = useState<View>({ name: "tasks" });
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
+  // Question Bank + questions created from the Feedback Form flow.
+  const [bank, setBank] = useState<Question[]>(seedQuestions);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
+
+  // Each question's `forms` usage list is derived from live form state, so
+  // linking/unlinking/duplicating keeps the bank's "used in" view honest.
+  // Inactive links count — the question stays attached to the form.
+  useEffect(() => {
+    setBank((prev) =>
+      prev.map((q) => {
+        const names = forms
+          .filter((f) => f.questions.some((l) => l.questionId === q.id))
+          .map((f) => f.name);
+        const same =
+          names.length === q.forms.length &&
+          names.every((n, i) => q.forms[i] === n);
+        return same ? q : { ...q, forms: names };
+      }),
+    );
+  }, [forms]);
 
   // ⌘K / Ctrl+K focuses the current page's search bar (the inputs that show the
   // ⌘K hint), ready to type. Picks the first visible matching input.
@@ -149,6 +192,8 @@ function AdminApp() {
       ? "skills"
       : view.name === "awards"
       ? "awards"
+      : view.name === "new-question" && view.forFormId
+      ? "feedback"
       : view.name === "question-bank" ||
         view.name === "new-question" ||
         view.name === "edit-question"
@@ -159,9 +204,7 @@ function AdminApp() {
       ? "proctoring-review"
       : view.name === "scholarship"
       ? "scholarship"
-      : view.name === "feedback" ||
-        view.name === "feedback-detail" ||
-        view.name === "feedback-versions"
+      : view.name === "feedback" || view.name === "feedback-detail"
       ? "feedback"
       : view.name === "industries"
       ? "industries"
@@ -226,8 +269,32 @@ function AdminApp() {
     });
   }
 
+  // "New questions can be created in the Question Bank as part of this flow,
+  // then linked" — the wizard hands back the question; we add it to the bank
+  // and link it to the form that launched the flow.
+  function handleQuestionCreated(q: Question, forFormId?: string) {
+    const form = forFormId ? forms.find((f) => f.id === forFormId) : undefined;
+    // A question linked straight into a form goes in front of users
+    // immediately — it can't sit in the bank as a Draft.
+    setBank((prev) => [
+      { ...q, status: form ? "Active" : q.status, forms: form ? [form.name] : q.forms },
+      ...prev,
+    ]);
+    if (form) {
+      upsertForm({
+        ...form,
+        questions: [
+          ...activeLinks(form),
+          { questionId: q.id, mandatory: false, status: "active", linkedAt: "2026-07-09" },
+          ...inactiveLinks(form),
+        ],
+        updatedAt: "2026-07-09",
+      });
+    }
+  }
+
   const activeForm =
-    view.name === "feedback-detail" || view.name === "feedback-versions"
+    view.name === "feedback-detail"
       ? forms.find((f) => f.id === view.formId)
       : null;
 
@@ -271,7 +338,7 @@ function AdminApp() {
         <CertPurchasersPage cert={view.cert} onBack={() => setView({ name: "certs" })} />
       ) : view.name === "content-links" ? (
         <ContentLinksPage
-          initialFocusId={view.cert ? nodeIdForName(view.cert.name) : undefined}
+          initialFocus={view.cert ? certToFocusNode(view.cert) : undefined}
           onBack={view.cert ? () => setView({ name: "certs" }) : undefined}
           backLabel="Certifications"
         />
@@ -281,6 +348,8 @@ function AdminApp() {
         <AwardsPage />
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
+          key={bank.length}
+          initialQuestions={bank}
           onNewQuestion={(categoryPath) =>
             setView({ name: "new-question", categoryPath })
           }
@@ -291,7 +360,12 @@ function AdminApp() {
       ) : view.name === "new-question" ? (
         <NewQuestionWizard
           initialCategoryPath={view.categoryPath}
-          onClose={() => setView({ name: "question-bank" })}
+          onCreate={(q) => handleQuestionCreated(q, view.forFormId)}
+          onClose={() =>
+            view.forFormId
+              ? setView({ name: "feedback-detail", formId: view.forFormId })
+              : setView({ name: "question-bank" })
+          }
         />
       ) : view.name === "edit-question" ? (
         <NewQuestionWizard
@@ -358,17 +432,16 @@ function AdminApp() {
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormDetail
           form={activeForm}
+          allForms={forms}
+          bank={bank}
           onBack={() => setView({ name: "feedback" })}
           onUpdate={upsertForm}
-          onOpenVersions={() =>
-            setView({ name: "feedback-versions", formId: activeForm.id })
-          }
-        />
-      ) : view.name === "feedback-versions" && activeForm ? (
-        <FeedbackFormVersions
-          form={activeForm}
-          onBack={() =>
-            setView({ name: "feedback-detail", formId: activeForm.id })
+          onCreateQuestion={() =>
+            setView({
+              name: "new-question",
+              categoryPath: ["Learner Feedback"],
+              forFormId: activeForm.id,
+            })
           }
         />
       ) : view.name === "new-task" ? (

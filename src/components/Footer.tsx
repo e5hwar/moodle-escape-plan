@@ -3,10 +3,7 @@ import {
   PackageIcon,
   QuizIcon,
   HandsOnIcon,
-  IdCardIcon,
   FileIcon,
-  LinkIcon,
-  GlobeIcon,
   AddIcon,
 } from "./icons";
 
@@ -14,19 +11,13 @@ export type TaskTypeKey =
   | "xapi"
   | "quiz"
   | "hands-on"
-  | "id-upload"
-  | "file"
-  | "deep-link"
-  | "url";
+  | "file";
 
 export const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
   { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon },
   { key: "quiz", label: "Quiz", icon: QuizIcon },
   { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon },
-  { key: "id-upload", label: "ID Upload", icon: IdCardIcon },
-  { key: "file", label: "File", icon: FileIcon },
-  { key: "deep-link", label: "Deep Link", icon: LinkIcon },
-  { key: "url", label: "URL", icon: GlobeIcon },
+  { key: "file", label: "Resource", icon: FileIcon },
 ];
 
 type Props = { onNewTask: (type: TaskTypeKey) => void };

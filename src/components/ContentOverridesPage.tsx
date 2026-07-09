@@ -85,29 +85,11 @@ function TaskTypeIcon({
     case "Hands-On Task":
       body = <path d="M3 2.4 L3 12.2 L5.9 9.4 L8 13.4 L9.6 12.7 L7.6 8.8 L11.8 8.6 Z" />;
       break;
-    case "File":
+    case "Resource":
       body = (
         <>
           <path d="M4 1.8h5l3 3v9.4H4z" />
           <path d="M9 1.8v3h3" />
-        </>
-      );
-      break;
-    case "URL":
-      body = (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="M1.9 8h12.2" />
-          <path d="M8 1.8c2.4 2 2.4 10.4 0 12.4M8 1.8c-2.4 2-2.4 10.4 0 12.4" />
-        </>
-      );
-      break;
-    case "ID Upload":
-      body = (
-        <>
-          <path d="M8 10.5V3" />
-          <path d="M5.3 5.7 8 3l2.7 2.7" />
-          <path d="M3 11v2.2h10V11" />
         </>
       );
       break;
@@ -368,6 +350,13 @@ export function ContentOverridesPage() {
   const [cells, setCells] = useState<CellMap>(() => data.cells);
   const [certManual, setCertManual] = useState<CertManual>({});
 
+  /* Deferred save: `cells`/`certManual` are the working (live-preview) state;
+     the *saved* baseline is committed only when the admin clicks Save Changes.
+     Unchanged entries keep their exact object reference through the apply*
+     helpers, so a reference diff against the baseline is an exact dirty check. */
+  const [savedCells, setSavedCells] = useState<CellMap>(() => data.cells);
+  const [savedCerts, setSavedCerts] = useState<CertManual>({});
+
   const [who, setWho] = useState<Who>(null);
   const [what, setWhat] = useState<What>(null);
   const [whoQ, setWhoQ] = useState("");
@@ -460,6 +449,34 @@ export function ContentOverridesPage() {
   }
   const markCert = (uid: string, cid: string) => setCertManual((m) => applyMarkCert(m, uid, cid));
   const undoCert = (uid: string, cid: string) => setCertManual((m) => applyClearCert(m, uid, cid));
+
+  /* ───── unsaved-changes tracking (deferred save) ───── */
+  const pendingCount = useMemo(() => {
+    let n = 0;
+    const cellKeys = new Set([...Object.keys(cells), ...Object.keys(savedCells)]);
+    cellKeys.forEach((k) => {
+      if (cells[k] !== savedCells[k]) n++;
+    });
+    const certKeys = new Set([...Object.keys(certManual), ...Object.keys(savedCerts)]);
+    certKeys.forEach((k) => {
+      if (certManual[k] !== savedCerts[k]) n++;
+    });
+    return n;
+  }, [cells, certManual, savedCells, savedCerts]);
+  const dirty = pendingCount > 0;
+
+  const saveChanges = () => {
+    setSavedCells(cells);
+    setSavedCerts(certManual);
+    setGradePrompt(null);
+    setGradeInput("");
+  };
+  const discardChanges = () => {
+    setCells(savedCells);
+    setCertManual(savedCerts);
+    setGradePrompt(null);
+    setGradeInput("");
+  };
 
   /* ───── derived scope ───── */
   const whoUser = who?.kind === "employee" ? data.employeesById[who.id] : null;
@@ -1171,6 +1188,78 @@ export function ContentOverridesPage() {
           </>
         )}
       </main>
+
+      {/* ===== unsaved-changes footer (deferred save, like the wizards) ===== */}
+      {dirty && (
+        <footer
+          style={{
+            flex: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 18,
+            minHeight: 64,
+            padding: "12px 24px",
+            background: "#1a1b1e",
+            borderTop: "1px solid #2c2e33",
+            boxShadow: "0 -8px 24px rgba(0,0,0,.28)",
+            zIndex: 20,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
+            <span
+              style={{
+                flex: "none",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: AMBER,
+                boxShadow: `0 0 0 3px ${AMBER}22`,
+              }}
+            />
+            <span style={{ fontSize: 13, color: "#f1f1ec" }}>
+              <strong style={{ fontWeight: 700 }}>
+                {pendingCount} unsaved {pendingCount === 1 ? "change" : "changes"}
+              </strong>
+              <span style={{ color: "#9a9ca1" }}> — not applied yet</span>
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
+            <button
+              onClick={discardChanges}
+              style={{
+                padding: "9px 16px",
+                border: "1px solid #3b3e44",
+                borderRadius: 8,
+                background: "transparent",
+                color: "#bdbfc4",
+                fontSize: 12.5,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                cursor: "pointer",
+              }}
+            >
+              Discard
+            </button>
+            <button
+              onClick={saveChanges}
+              style={{
+                padding: "9px 20px",
+                border: "none",
+                borderRadius: 8,
+                background: ACCENT,
+                color: "#fff",
+                fontSize: 12.5,
+                fontWeight: 700,
+                fontFamily: "inherit",
+                cursor: "pointer",
+              }}
+            >
+              Save changes
+            </button>
+          </div>
+        </footer>
+      )}
 
       {/* grade prompt */}
       {gradePrompt && (

@@ -4,7 +4,7 @@ import { tasks as allTasks, discoverableLabel, finalExamLabel, isPaid, type Task
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, IdCardIcon, FileIcon, LinkIcon, GlobeIcon, AddIcon, SmallXIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
@@ -13,10 +13,7 @@ const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Elem
   { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon, shortcut: "X" },
   { key: "quiz", label: "Quiz", icon: QuizIcon, shortcut: "Q" },
   { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon, shortcut: "H" },
-  { key: "id-upload", label: "ID Upload", icon: IdCardIcon, shortcut: "I" },
-  { key: "file", label: "File", icon: FileIcon, shortcut: "F" },
-  { key: "deep-link", label: "Deep Link", icon: LinkIcon, shortcut: "D" },
-  { key: "url", label: "URL", icon: GlobeIcon, shortcut: "U" },
+  { key: "file", label: "Resource", icon: FileIcon, shortcut: "F" },
 ];
 
 const PAGE_SIZE = 50;
@@ -738,9 +735,7 @@ const TYPE_ICON: Record<TaskType, () => JSX.Element> = {
   xAPI: PackageIcon,
   Quiz: QuizIcon,
   "Hands-On Task": HandsOnIcon,
-  "ID Upload": IdCardIcon,
-  File: FileIcon,
-  URL: GlobeIcon,
+  Resource: FileIcon,
 };
 
 function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {

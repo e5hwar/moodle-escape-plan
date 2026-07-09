@@ -23,6 +23,7 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewAwardWizard } from "./NewAwardWizard";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
+import { AwardRecipientsPage } from "./AwardRecipientsPage";
 import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
@@ -49,6 +50,13 @@ const UnarchiveIcon = () => (
     <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 18v-6M9.5 14.5 12 12l2.5 2.5" />
   </svg>
 );
+const RecipientsIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20" />
+    <circle cx="10" cy="8" r="3.2" />
+    <path d="M20 20v-1.5a3.5 3.5 0 0 0-2.6-3.38M15.5 4.9a3.2 3.2 0 0 1 0 6.2" />
+  </svg>
+);
 const TrashIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
@@ -68,6 +76,7 @@ type Mode =
   | { kind: "list" }
   | { kind: "new-award" }
   | { kind: "edit-award"; award: Award }
+  | { kind: "award-recipients"; award: Award }
   | { kind: "new-template" }
   | { kind: "edit-template"; template: AwardDesignTemplate };
 
@@ -202,6 +211,14 @@ export function AwardsPage() {
         onClose={() => setMode({ kind: "list" })}
         onSave={(a) => upsertAward(a)}
         onCreateTemplate={() => setMode({ kind: "new-template" })}
+      />
+    );
+  }
+  if (mode.kind === "award-recipients") {
+    return (
+      <AwardRecipientsPage
+        award={mode.award}
+        onBack={() => setMode({ kind: "list" })}
       />
     );
   }
@@ -393,6 +410,7 @@ export function AwardsPage() {
               archived={a.status === "Archived"}
               archiveLabel="Award"
               onClose={() => setMenu(null)}
+              onViewRecipients={() => setMode({ kind: "award-recipients", award: a })}
               onEdit={() => setMode({ kind: "edit-award", award: a })}
               onArchive={() => setAwardStatus(a.id, a.status === "Archived" ? "Active" : "Archived")}
               onDelete={() => setModal({ kind: "delete-award", award: a })}
@@ -675,7 +693,7 @@ function SortableHeader({
 /* ─────────────── Actions menu (fixed-positioned) ─────────────── */
 
 function ActionsMenu({
-  rect, title, subtitle, archived, archiveLabel, onClose, onArchive, onEdit, onDelete,
+  rect, title, subtitle, archived, archiveLabel, onClose, onArchive, onEdit, onDelete, onViewRecipients,
 }: {
   rect: DOMRect;
   title: string;
@@ -686,6 +704,7 @@ function ActionsMenu({
   onArchive?: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onViewRecipients?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -743,6 +762,7 @@ function ActionsMenu({
         <div className="u-menu-head-id">{subtitle}</div>
       </div>
       <div className="u-menu-divider" />
+      {onViewRecipients && item(<RecipientsIcon />, "View recipients", onViewRecipients)}
       {onArchive &&
         (archived
           ? item(<UnarchiveIcon />, `Unarchive ${archiveLabel}`, onArchive)

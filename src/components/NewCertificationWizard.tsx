@@ -34,7 +34,7 @@ type AccessType = "open" | "non-consumable" | "consumable";
 type ConsumableProgress = "reset" | "preserve";
 type TimeUnit = "minutes" | "hours" | "days" | "weeks";
 
-type TaskKind = "xapi" | "quiz" | "hands-on" | "id-upload" | "file" | "url";
+type TaskKind = "xapi" | "quiz" | "hands-on" | "file";
 
 // Content Tags for Visibility — three tag types. Trade and Partnership draw
 // their values from the B2B Management fields under Product Config; User Type is
@@ -52,8 +52,7 @@ const USER_TYPE_VALUES = ["B2B Only"];
 // Access Restriction (spec V1) — a Task can be gated behind other Tasks within
 // the same Certification. The user must complete `all` or `any` one of the
 // selected prerequisite Tasks. Satisfying status is derived per Task type (see
-// satisfyingStatus): Completed for everything except ID-Upload, which also
-// satisfies at In-Review.
+// satisfyingStatus): Completed for every Task type.
 type AccessRestriction = {
   enabled: boolean;
   mode: "all" | "any";
@@ -69,8 +68,8 @@ type CertTask = {
 };
 
 // The status a prerequisite Task must reach to satisfy a restriction (V1).
-function satisfyingStatus(kind: TaskKind): string {
-  return kind === "id-upload" ? "In-Review or Completed" : "Completed";
+function satisfyingStatus(_kind: TaskKind): string {
+  return "Completed";
 }
 
 // Every Task in the Certification, flattened (direct Course tasks + Lesson
@@ -167,19 +166,15 @@ function libraryTaskToCertTask(t: Task): CertTask {
 const TASK_TYPE_TO_KIND: Record<TaskType, TaskKind> = {
   xAPI: "xapi",
   Quiz: "quiz",
-  "ID Upload": "id-upload",
   "Hands-On Task": "hands-on",
-  File: "file",
-  URL: "url",
+  Resource: "file",
 };
 
 const DURATION_BY_KIND: Record<TaskKind, string> = {
   xapi: "10 min",
   quiz: "15 min",
   "hands-on": "30 min",
-  "id-upload": "2 min",
   file: "5 min",
-  url: "5 min",
 };
 
 // Existing Certifications don't persist their structure, so when editing we
@@ -498,10 +493,9 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
                   className={`wizard-step ${status}`}
                   onClick={() => setStep(i)}
                 >
-                  <WizardStepRail status={status} isLast={i === STEPS.length - 1} />
+                  <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -861,9 +855,7 @@ const KIND_LABEL: Record<TaskKind, { letter: string; cls: string; label: string 
   xapi: { letter: "X", cls: "xapi", label: "xAPI" },
   quiz: { letter: "Q", cls: "quiz", label: "Quiz" },
   "hands-on": { letter: "H", cls: "handson", label: "Hands-On Task" },
-  "id-upload": { letter: "ID", cls: "idup", label: "ID Upload" },
-  file: { letter: "F", cls: "file", label: "File" },
-  url: { letter: "U", cls: "url", label: "URL" },
+  file: { letter: "R", cls: "file", label: "Resource" },
 };
 
 function TaskKindBadge({ kind }: { kind: TaskKind }) {
@@ -1542,8 +1534,7 @@ function AccessRestrictionEditor({
 
             <p className="cert-restrict-note">
               A prerequisite is satisfied when it reaches the status shown beside it —{" "}
-              <strong>Completed</strong> for every Task type, except <strong>ID-Upload</strong>, which is
-              also satisfied at <strong>In-Review</strong>.
+              <strong>Completed</strong> for every Task type.
             </p>
           </>
         ))}

@@ -188,10 +188,9 @@ export function NewSkillWizard(props: Props) {
                   className={`wizard-step ${status}`}
                   onClick={() => (i === 0 || nameValid ? setStep(i) : undefined)}
                 >
-                  <WizardStepRail status={status} isLast={i === STEPS.length - 1} />
+                  <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );

@@ -8,8 +8,12 @@ import type { Certification } from "./certifications";
  */
 export type CertPurchase = {
   userId: string;
-  /** ISO date (yyyy-mm-dd) the user purchased — or was granted — access. */
-  purchaseDate: string;
+  /**
+   * ISO date (yyyy-mm-dd) the user *paid* for access. null for admin grants —
+   * comped users have no purchase, so this cell is left blank and the grant is
+   * recorded on grantDate / grantedBy instead.
+   */
+  purchaseDate: string | null;
   /** Completion progress through the Certification, 0–100. */
   progress: number;
   /** True once the Certification is fully completed (progress === 100). */
@@ -20,9 +24,34 @@ export type CertPurchase = {
    * non-consumable Certifications.
    */
   accessEndedDate: string | null;
+  /**
+   * ISO date an admin revoked access, if ever. null while access is live. Drives
+   * the "Revoked" row indicator and greys out the Revoke Access menu action.
+   */
+  revokedDate: string | null;
   /** True when an admin comped access instead of the user paying. */
   granted: boolean;
+  /** ISO date the admin comped access. Set iff granted; null for paid users. */
+  grantDate: string | null;
+  /** Name of the SkillCat admin who comped access. Set iff granted. */
+  grantedBy: string | null;
 };
+
+/**
+ * SkillCat admins who can comp access. Seed grants pick one deterministically;
+ * live in-session grants are attributed to the signed-in admin (CURRENT_ADMIN).
+ */
+export const SKILLCAT_ADMINS = [
+  "Priya Nair",
+  "Marcus Webb",
+  "Elena Ortiz",
+  "Darnell King",
+  "Sofia Rossi",
+  "Andre Coleman",
+];
+
+/** The signed-in admin — recorded as the granter for live grants. */
+export const CURRENT_ADMIN = "You";
 
 /** FNV-1a — deterministic, seeded by Certification + user so rows are stable. */
 function phash(s: string): number {
@@ -48,6 +77,18 @@ export function todayIso(): string {
 
 export function isConsumableCert(cert: Pick<Certification, "payment">): boolean {
   return cert.payment === "Consumable";
+}
+
+/** Whether revoking a consumable Certification resets the user's progress. */
+export function consumableResetsProgress(
+  cert: Pick<Certification, "payment" | "resetsProgress">,
+): boolean {
+  return isConsumableCert(cert) && !!cert.resetsProgress;
+}
+
+/** Deterministically pick a granting admin from a stable hash. */
+export function grantingAdmin(hash: number): string {
+  return SKILLCAT_ADMINS[hash % SKILLCAT_ADMINS.length];
 }
 
 /**
@@ -80,14 +121,21 @@ export function buildCertPurchases(cert: Certification): CertPurchase[] {
       accessEndedDate = isoDaysAgo(endedDaysAgo);
     }
 
+    // A small deterministic slice were comped rather than paid. Comped users
+    // have no purchase date — the date lives on grantDate instead.
+    const granted = h % 17 === 0;
+    const dateIso = isoDaysAgo(purchasedDaysAgo);
+
     out.push({
       userId: u.id,
-      purchaseDate: isoDaysAgo(purchasedDaysAgo),
+      purchaseDate: granted ? null : dateIso,
       progress,
       completed,
       accessEndedDate,
-      // A small deterministic slice were comped rather than paid.
-      granted: h % 17 === 0,
+      revokedDate: null,
+      granted,
+      grantDate: granted ? dateIso : null,
+      grantedBy: granted ? grantingAdmin(h >>> 7) : null,
     });
   }
 

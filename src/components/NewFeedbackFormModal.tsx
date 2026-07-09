@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
+  activeLinks,
   type FeedbackForm,
-  type Question,
 } from "../data/feedbackForms";
 import { SmallXIcon, SearchIcon } from "./icons";
 
@@ -13,20 +13,13 @@ type Props = {
   onCreate: (form: FeedbackForm) => void;
 };
 
-function nextId(): string {
-  const n = Math.floor(Math.random() * 9000) + 1000;
-  return `FB-${String(n).padStart(4, "0")}`;
-}
-
-function cloneQuestions(qs: Question[]): Question[] {
-  return qs.map((q) => ({
-    ...q,
-    id: `q-${Math.random().toString(36).slice(2, 8)}`,
-    options: q.options?.map((o) => ({
-      ...o,
-      id: `o-${Math.random().toString(36).slice(2, 6)}`,
-    })),
-  }));
+function nextId(taken: FeedbackForm[]): string {
+  let id: string;
+  do {
+    const n = Math.floor(Math.random() * 9000) + 1000;
+    id = `FB-${String(n).padStart(4, "0")}`;
+  } while (taken.some((f) => f.id === id));
+  return id;
 }
 
 export function NewFeedbackFormModal({
@@ -43,17 +36,15 @@ export function NewFeedbackFormModal({
 
   function createFromScratch() {
     const form: FeedbackForm = {
-      id: nextId(),
+      id: nextId(existingForms),
       name: name.trim() || "Untitled Form",
       status: "draft",
-      version: 1,
       questions: [],
       triggers: [],
       createdBy: "You",
       createdAt: today,
       updatedAt: today,
       responseCount: 0,
-      history: [],
     };
     onCreate(form);
   }
@@ -62,17 +53,22 @@ export function NewFeedbackFormModal({
     const src = existingForms.find((f) => f.id === sourceId);
     if (!src) return;
     const form: FeedbackForm = {
-      id: nextId(),
+      id: nextId(existingForms),
       name: name.trim() || `${src.name} (copy)`,
       status: "draft",
-      version: 1,
-      questions: cloneQuestions(src.questions),
+      // Links the SAME Question Bank questions, same order, same mandatory
+      // flags. The two forms' lists are fully independent after this copy.
+      questions: activeLinks(src).map((l) => ({
+        questionId: l.questionId,
+        mandatory: l.mandatory,
+        status: "active" as const,
+        linkedAt: today,
+      })),
       triggers: [], // triggers do NOT carry over per spec
       createdBy: "You",
       createdAt: today,
       updatedAt: today,
       responseCount: 0,
-      history: [],
     };
     onCreate(form);
   }
@@ -106,8 +102,8 @@ export function NewFeedbackFormModal({
             <div className="sp-panel-eyebrow">NEW FEEDBACK FORM</div>
             <h2 className="sp-panel-title">Create a Feedback Form</h2>
             <p className="sp-panel-sub">
-              Pick a starting point. You'll add questions, set triggers, and
-              activate the form on the next screen.
+              Pick a starting point. You'll link questions, activate the form,
+              and then map triggers on the next screen.
             </p>
           </div>
           <button
@@ -168,8 +164,8 @@ export function NewFeedbackFormModal({
                 </div>
                 <div className="fb-mode-title">Duplicate an existing form</div>
                 <div className="fb-mode-desc">
-                  Copy all questions from another form. Triggers don't carry
-                  over.
+                  Links the same Question Bank questions, in the same order,
+                  with the same mandatory flags. Triggers don't carry over.
                 </div>
               </button>
             </div>
@@ -236,8 +232,8 @@ export function NewFeedbackFormModal({
                       <div className="fb-dup-meta">
                         <div className="fb-dup-name">{f.name}</div>
                         <div className="fb-dup-sub">
-                          {f.id} · {f.questions.length} question
-                          {f.questions.length === 1 ? "" : "s"} · v{f.version}
+                          {f.id} · {activeLinks(f).length} question
+                          {activeLinks(f).length === 1 ? "" : "s"}
                         </div>
                       </div>
                       <span className={`fb-status fb-status--${f.status}`}>
@@ -263,8 +259,9 @@ export function NewFeedbackFormModal({
                 onChange={(e) => setName(e.target.value)}
               />
               <p className="form-help">
-                The new form is independent of the source. Edits to one don't
-                affect the other.
+                The two forms' question lists, order, and mandatory flags are
+                independent. Editing a question in the Question Bank updates it
+                in both, since both link the same question.
               </p>
             </section>
           </div>

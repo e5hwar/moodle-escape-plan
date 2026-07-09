@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import {
   PlusCircleIcon,
@@ -67,9 +67,12 @@ const COMPANY_NAMES = companies.map((c) => c.name);
 export function UsersFilters({
   filters,
   setFilters,
+  extra,
 }: {
   filters: UserFilterState;
   setFilters: (next: UserFilterState) => void;
+  /** Extra page-specific filter pills rendered alongside the shared ones. */
+  extra?: ReactNode;
 }) {
   const moreCount =
     filters.roles.length + filters.goals.length + filters.industries.length;
@@ -129,6 +132,7 @@ export function UsersFilters({
           })
         }
       />
+      {extra}
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
           Clear Filters

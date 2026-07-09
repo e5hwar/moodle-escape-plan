@@ -1,6 +1,6 @@
 import { users } from "./users";
 import type { Task } from "./tasks";
-import { isoDaysAgo } from "./certPurchases";
+import { isoDaysAgo, grantingAdmin } from "./certPurchases";
 
 /** State of the purchased attempt. */
 export type AttemptStatus = "Not Started" | "In Progress" | "Completed";
@@ -17,15 +17,28 @@ export type QuizPurchase = {
   userId: string;
   /** The attempt number this purchase unlocked (free attempts come first). */
   attemptNumber: number;
-  /** ISO date (yyyy-mm-dd) the attempt was purchased. */
-  purchaseDate: string;
+  /**
+   * ISO date (yyyy-mm-dd) the attempt was *paid* for. null for admin grants —
+   * comped attempts have no purchase, so this cell is left blank and the grant
+   * is recorded on grantDate / grantedBy instead.
+   */
+  purchaseDate: string | null;
   status: AttemptStatus;
   /** Graded score 0–100, only once the attempt is Completed; null otherwise. */
   score: number | null;
   /** Pass/fail, only once Completed; null otherwise. */
   passed: boolean | null;
+  /**
+   * ISO date an admin revoked this attempt, if ever. Only a Not-Started attempt
+   * can be revoked. Drives the "Revoked" row indicator.
+   */
+  revokedDate: string | null;
   /** True when an admin comped this attempt instead of the user paying. */
   granted: boolean;
+  /** ISO date the admin comped the attempt. Set iff granted; null for paid. */
+  grantDate: string | null;
+  /** Name of the SkillCat admin who comped the attempt. Set iff granted. */
+  grantedBy: string | null;
 };
 
 /** FNV-1a — deterministic, seeded by Task + user so rows are stable. */
@@ -52,7 +65,7 @@ export function buildQuizPurchases(task: Task): QuizPurchase[] {
 
     // Free attempts come first, so purchased attempts start at #2.
     const attemptNumber = 2 + ((h >>> 3) % 3); // 2, 3, or 4
-    const purchaseDate = isoDaysAgo(8 + ((h >>> 2) % 300));
+    const dateIso = isoDaysAgo(8 + ((h >>> 2) % 300));
 
     // Independent slice of the hash — h % 100 is already constrained to <45 by
     // the purchaser filter above, so reusing it would never yield "Completed".
@@ -69,10 +82,22 @@ export function buildQuizPurchases(task: Task): QuizPurchase[] {
       passed = score >= PASS_THRESHOLD;
     }
 
-    // A small deterministic slice were comped rather than paid.
+    // A small deterministic slice were comped rather than paid. Comped attempts
+    // have no purchase date — the date lives on grantDate instead.
     const granted = h % 19 === 0;
 
-    out.push({ userId: u.id, attemptNumber, purchaseDate, status, score, passed, granted });
+    out.push({
+      userId: u.id,
+      attemptNumber,
+      purchaseDate: granted ? null : dateIso,
+      status,
+      score,
+      passed,
+      revokedDate: null,
+      granted,
+      grantDate: granted ? dateIso : null,
+      grantedBy: granted ? grantingAdmin(h >>> 7) : null,
+    });
   }
 
   return out;
@@ -92,15 +117,19 @@ export function nextAttemptNumber(purchases: QuizPurchase[], userId: string): nu
 export function buildGrantedAttempt(
   userId: string,
   attemptNumber: number,
-  purchaseDate: string,
+  grantDate: string,
+  grantedBy: string,
 ): QuizPurchase {
   return {
     userId,
     attemptNumber,
-    purchaseDate,
+    purchaseDate: null,
     status: "Not Started",
     score: null,
     passed: null,
+    revokedDate: null,
     granted: true,
+    grantDate,
+    grantedBy,
   };
 }

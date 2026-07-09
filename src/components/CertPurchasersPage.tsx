@@ -10,14 +10,17 @@ import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import {
   buildCertPurchases,
   isConsumableCert,
+  consumableResetsProgress,
   todayIso,
   usersWithoutAccess,
+  CURRENT_ADMIN,
   type CertPurchase,
 } from "../data/certPurchases";
 import type { Certification } from "../data/certifications";
 import {
   UsersFilters,
   UsersEditColumns,
+  MultiPill,
   type UserColumnKey,
   type UserFilterState,
 } from "./UsersFilters";
@@ -29,10 +32,15 @@ const PAGE_SIZE = 50;
 /* ─── columns: every Users column plus the four purchase columns ─── */
 type PurchaserColumnKey =
   | UserColumnKey
+  | "access"
   | "purchaseDate"
+  | "grantDate"
   | "progress"
   | "completion"
   | "accessEnded";
+
+/** Access-type filter options for paid vs. admin-comped access. */
+const ACCESS_OPTIONS = ["Free", "Paid"];
 
 type PurchaserColumnState = Record<PurchaserColumnKey, boolean>;
 
@@ -41,7 +49,9 @@ type PurchaserColumnState = Record<PurchaserColumnKey, boolean>;
 const DEFAULT_COLUMNS: PurchaserColumnState = {
   email: true,
   phone: true,
+  access: true,
   purchaseDate: true,
+  grantDate: true,
   progress: true,
   completion: true,
   accessEnded: true,
@@ -120,7 +130,9 @@ type ColMeta = {
 const COLS: ColMeta[] = [
   { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: ({ u }) => u.email.toLowerCase() },
   { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: ({ u }) => u.phone },
-  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate },
+  { key: "access", label: "Access", className: "col-cp-access", width: 110, render: ({ p }) => <AccessCell purchase={p} />, sortValue: ({ p }) => (p.granted ? 0 : 1) },
+  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
+  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 140, render: ({ p }) => <GrantDateCell purchase={p} />, sortValue: ({ p }) => p.grantDate ?? "" },
   { key: "progress", label: "Progress", className: "col-cp-progress", width: 150, render: ({ p }) => <ProgressCell value={p.progress} />, sortValue: ({ p }) => p.progress },
   { key: "completion", label: "Completion", className: "col-cp-completion", width: 130, render: ({ p }) => <CompletionCell completed={p.completed} />, sortValue: ({ p }) => (p.completed ? 1 : 0) },
   { key: "accessEnded", label: "Access Ended", className: "col-u-date", width: 140, render: ({ p }) => <AccessEndedCell purchase={p} />, sortValue: ({ p }) => p.accessEndedDate ?? "" },
@@ -169,6 +181,7 @@ export function CertPurchasersPage({
   const [purchases, setPurchases] = useState<CertPurchase[]>(() => buildCertPurchases(cert));
   const [columns, setColumns] = useState<PurchaserColumnState>(DEFAULT_COLUMNS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
+  const [accessTypes, setAccessTypes] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
@@ -194,7 +207,8 @@ export function CertPurchasersPage({
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
-    return rows.filter(({ u, f }) => {
+    return rows.filter(({ u, f, p }) => {
+      if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
       if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
@@ -208,7 +222,7 @@ export function CertPurchasersPage({
         u.phone.toLowerCase().includes(q)
       );
     });
-  }, [rows, committedQuery, filters]);
+  }, [rows, committedQuery, filters, accessTypes]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
@@ -219,7 +233,7 @@ export function CertPurchasersPage({
 
   useEffect(() => {
     setPage(1);
-  }, [committedQuery, filters, sort]);
+  }, [committedQuery, filters, accessTypes, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -236,16 +250,33 @@ export function CertPurchasersPage({
   }
 
   function revokeAccess(row: Row) {
-    const ok = window.confirm(
-      `Revoke ${row.u.name}'s access to “${cert.name}”?\n\n` +
-        `Their access window ends immediately. They keep their completion record but ` +
-        `must repurchase to continue. This can't be undone.`,
-    );
+    const consumable = isConsumableCert(cert);
+    const resets = consumableResetsProgress(cert);
+
+    const lines = [`Revoke ${row.u.name}'s access to “${cert.name}”?`, "", "Their access ends immediately."];
+    if (consumable) {
+      if (resets) lines.push("Their progress on this Certification will be reset.");
+      lines.push("They can purchase the Certification again to regain access.");
+    } else {
+      lines.push("They keep their completion record. This can't be undone.");
+    }
+
+    const ok = window.confirm(lines.join("\n"));
     if (!ok) return;
+
+    const today = todayIso();
     setPurchases((prev) =>
-      prev.map((p) =>
-        p.userId === row.u.id ? { ...p, accessEndedDate: todayIso() } : p,
-      ),
+      prev.map((p) => {
+        if (p.userId !== row.u.id) return p;
+        const next: CertPurchase = { ...p, revokedDate: today };
+        // Consumables end their access window on revoke; some also reset progress.
+        if (consumable) next.accessEndedDate = today;
+        if (resets) {
+          next.progress = 0;
+          next.completed = false;
+        }
+        return next;
+      }),
     );
   }
 
@@ -255,11 +286,14 @@ export function CertPurchasersPage({
       return [
         {
           userId: user.id,
-          purchaseDate: todayIso(),
+          purchaseDate: null,
           progress: 0,
           completed: false,
           accessEndedDate: null,
+          revokedDate: null,
           granted: true,
+          grantDate: todayIso(),
+          grantedBy: CURRENT_ADMIN,
         },
         ...prev,
       ];
@@ -311,7 +345,18 @@ export function CertPurchasersPage({
                 />
               </div>
 
-              <UsersFilters filters={filters} setFilters={setFilters} />
+              <UsersFilters
+                filters={filters}
+                setFilters={setFilters}
+                extra={
+                  <MultiPill
+                    label="Access"
+                    all={ACCESS_OPTIONS}
+                    value={accessTypes}
+                    onApply={setAccessTypes}
+                  />
+                }
+              />
 
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
                 <table className="table table-head">
@@ -396,7 +441,6 @@ export function CertPurchasersPage({
       {menu && (
         <PurchaserActionsMenu
           row={menu.row}
-          cert={cert}
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onRevoke={() => revokeAccess(menu.row)}
@@ -499,6 +543,32 @@ function CompletionCell({ completed }: { completed: boolean }) {
   );
 }
 
+function AccessCell({ purchase }: { purchase: CertPurchase }) {
+  if (purchase.granted) {
+    return (
+      <span
+        className="cp-access cp-access--free"
+        title={purchase.grantedBy ? `Free access granted by ${purchase.grantedBy}` : "Free access granted by an admin"}
+      >
+        Free
+      </span>
+    );
+  }
+  return <span className="cp-access cp-access--paid">Paid</span>;
+}
+
+function GrantDateCell({ purchase }: { purchase: CertPurchase }) {
+  if (!purchase.grantDate) return <span className="u-muted">—</span>;
+  return (
+    <span
+      className="cp-grant-date"
+      title={purchase.grantedBy ? `Granted by ${purchase.grantedBy}` : undefined}
+    >
+      {formatDate(purchase.grantDate)}
+    </span>
+  );
+}
+
 function AccessEndedCell({ purchase }: { purchase: CertPurchase }) {
   if (!purchase.accessEndedDate) return <span className="u-muted">—</span>;
   return <span className="cp-ended">{formatDate(purchase.accessEndedDate)}</span>;
@@ -519,11 +589,14 @@ function PurchaserRow({
 }) {
   const { u, p } = row;
   return (
-    <tr className={selected ? "selected" : ""} onClick={onClick}>
+    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""}`.trim()} onClick={onClick}>
       <td className="col-name">
         <span className="cp-name-wrap">
           <span className="cp-name">{u.name}</span>
           {p.granted && <span className="cp-granted-badge" title="Access granted by an admin">Granted</span>}
+          {p.revokedDate && (
+            <span className="cp-revoked-badge" title={`Access revoked ${formatDate(p.revokedDate)}`}>Revoked</span>
+          )}
         </span>
       </td>
       {cols.map((c) => (
@@ -564,13 +637,11 @@ function PurchaserRow({
 
 function PurchaserActionsMenu({
   row,
-  cert,
   rect,
   onClose,
   onRevoke,
 }: {
   row: Row;
-  cert: Certification;
   rect: DOMRect;
   onClose: () => void;
   onRevoke: () => void;
@@ -611,18 +682,23 @@ function PurchaserActionsMenu({
     };
   }, [onClose]);
 
-  const canRevoke = isConsumableCert(cert) && !row.p.accessEndedDate;
+  // Revoke Access is always shown for Certifications; it greys out once access
+  // has already been revoked.
+  const alreadyRevoked = !!row.p.revokedDate;
 
   const item = (
     icon: JSX.Element,
     label: string,
     onPick: () => void,
     danger = false,
+    disabled = false,
   ) => (
     <button
       className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
+        if (disabled) return;
         onPick();
         onClose();
       }}
@@ -648,11 +724,8 @@ function PurchaserActionsMenu({
         <div className="u-menu-head-id">{row.u.email}</div>
       </div>
       <div className="u-menu-divider" />
-      {canRevoke ? (
-        item(<RevokeIcon />, "Revoke access", onRevoke, true)
-      ) : (
-        <div className="u-menu-empty">No actions available</div>
-      )}
+      {item(<RevokeIcon />, "Revoke access", onRevoke, true, alreadyRevoked)}
+      {alreadyRevoked && <div className="u-menu-note">Access already revoked.</div>}
     </div>
   );
 }

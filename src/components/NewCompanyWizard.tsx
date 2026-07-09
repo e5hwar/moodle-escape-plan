@@ -401,17 +401,15 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
               const status = i === step ? "active" : i < step ? "done" : "upcoming";
-              const isLast = i === STEPS.length - 1;
               return (
                 <li
                   key={s.id}
                   className={`wizard-step ${status}`}
                   onClick={() => setStep(i)}
                 >
-                  <WizardStepRail status={status} isLast={isLast} />
+                  <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );

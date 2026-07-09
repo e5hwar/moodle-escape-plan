@@ -1,12 +1,13 @@
 import { useState } from "react";
 import {
+  activeLinks,
+  formResponses,
   type FeedbackForm,
+  type FormQuestionLink,
   type FormStatus,
   type FormTrigger,
-  type Question,
-  type FormVersionSnapshot,
-  formResponses,
 } from "../data/feedbackForms";
+import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
 import { FeedbackFormResponses } from "./FeedbackFormResponses";
@@ -16,9 +17,11 @@ type Tab = "editor" | "triggers" | "responses";
 
 type Props = {
   form: FeedbackForm;
+  allForms: FeedbackForm[];
+  bank: Question[];
   onBack: () => void;
   onUpdate: (form: FeedbackForm) => void;
-  onOpenVersions: () => void;
+  onCreateQuestion: () => void;
 };
 
 const STATUS_LABEL: Record<FormStatus, string> = {
@@ -27,58 +30,33 @@ const STATUS_LABEL: Record<FormStatus, string> = {
   archived: "Archived",
 };
 
+const TODAY = "2026-07-09";
+
 export function FeedbackFormDetail({
   form,
+  allForms,
+  bank,
   onBack,
   onUpdate,
-  onOpenVersions,
+  onCreateQuestion,
 }: Props) {
   const [tab, setTab] = useState<Tab>("editor");
 
-  function saveQuestions(questions: Question[]) {
-    const isNewVersion =
-      form.status === "active" &&
-      JSON.stringify(questions) !== JSON.stringify(form.questions);
-    let updated: FeedbackForm = {
-      ...form,
-      questions,
-      updatedAt: new Date().toISOString().slice(0, 10),
-    };
-    if (isNewVersion) {
-      const snapshot: FormVersionSnapshot = {
-        version: form.version,
-        questions: form.questions,
-        editedBy: form.createdBy,
-        editedAt: form.updatedAt,
-        changeSummary: "Edits to questions",
-        responseCount: form.responseCount,
-      };
-      updated = {
-        ...updated,
-        version: form.version + 1,
-        history: [snapshot, ...form.history],
-      };
-    }
-    onUpdate(updated);
+  // Question edits apply immediately to future prompts — no form versioning.
+  function saveLinks(questions: FormQuestionLink[]) {
+    onUpdate({ ...form, questions, updatedAt: TODAY });
   }
 
   function saveTriggers(triggers: FormTrigger[]) {
-    onUpdate({
-      ...form,
-      triggers,
-      updatedAt: new Date().toISOString().slice(0, 10),
-    });
+    onUpdate({ ...form, triggers, updatedAt: TODAY });
   }
 
   function setStatus(status: FormStatus) {
-    onUpdate({
-      ...form,
-      status,
-      updatedAt: new Date().toISOString().slice(0, 10),
-    });
+    onUpdate({ ...form, status, updatedAt: TODAY });
   }
 
   const responses = formResponses[form.id] ?? [];
+  const actives = activeLinks(form);
 
   return (
     <div className="main">
@@ -91,14 +69,16 @@ export function FeedbackFormDetail({
             </button>
             <div className="fb-detail-title-row">
               <div className="fb-detail-title-left">
-                <div className="fb-row-id">{form.id} · v{form.version}</div>
+                <div className="fb-row-id">{form.id}</div>
                 <h1 className="tasks-title">{form.name}</h1>
                 <div className="tasks-subtitle">
                   <span className={`fb-status fb-status--${form.status}`}>
                     {STATUS_LABEL[form.status]}
                   </span>
                   <span className="tasks-subtitle-dot" />
-                  <span>{form.questions.length} questions</span>
+                  <span>
+                    {actives.length} active question{actives.length === 1 ? "" : "s"}
+                  </span>
                   <span className="tasks-subtitle-dot" />
                   <span>{form.triggers.length} triggers</span>
                   <span className="tasks-subtitle-dot" />
@@ -106,18 +86,15 @@ export function FeedbackFormDetail({
                 </div>
               </div>
               <div className="fb-detail-actions">
-                <button className="btn-save-draft" onClick={onOpenVersions}>
-                  Version history ({form.history.length + 1})
-                </button>
                 {form.status === "draft" && (
                   <button
                     className="btn-publish"
-                    disabled={form.questions.length === 0}
+                    disabled={actives.length === 0}
                     onClick={() => setStatus("active")}
                     title={
-                      form.questions.length === 0
-                        ? "Add at least one question before activating"
-                        : "Activate this form"
+                      actives.length === 0
+                        ? "Link at least one question before activating"
+                        : "Activate this form — triggers can be added once Active"
                     }
                   >
                     Activate form
@@ -127,6 +104,7 @@ export function FeedbackFormDetail({
                   <button
                     className="btn-save-draft fb-archive-btn"
                     onClick={() => setStatus("archived")}
+                    title="Stops showing the form to users. Trigger mappings are preserved but inactive; responses are kept indefinitely."
                   >
                     Archive
                   </button>
@@ -135,6 +113,7 @@ export function FeedbackFormDetail({
                   <button
                     className="btn-publish"
                     onClick={() => setStatus("active")}
+                    title="Reactivates the form and its trigger mappings"
                   >
                     Reactivate
                   </button>
@@ -146,7 +125,8 @@ export function FeedbackFormDetail({
                 className={`fb-tab ${tab === "editor" ? "is-active" : ""}`}
                 onClick={() => setTab("editor")}
               >
-                Editor
+                Questions
+                <span className="fb-tab-count">{actives.length}</span>
               </button>
               <button
                 className={`fb-tab ${tab === "triggers" ? "is-active" : ""}`}
@@ -177,18 +157,22 @@ export function FeedbackFormDetail({
             {tab === "editor" && (
               <FeedbackFormEditor
                 form={form}
-                onSave={saveQuestions}
+                bank={bank}
+                onUpdate={saveLinks}
+                onCreateQuestion={onCreateQuestion}
               />
             )}
             {tab === "triggers" && (
               <FeedbackFormTriggers
                 form={form}
+                allForms={allForms}
                 onSave={saveTriggers}
               />
             )}
             {tab === "responses" && (
               <FeedbackFormResponses
                 form={form}
+                bank={bank}
                 responses={responses}
               />
             )}

@@ -28,10 +28,7 @@ const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
   quiz: "Quiz",
   "hands-on": "Hands-On Task",
-  "id-upload": "ID Upload",
-  file: "File",
-  "deep-link": "Deep Link",
-  url: "URL",
+  file: "Resource",
 };
 
 /** Map a stored Task's display type to the wizard's TaskTypeKey. */
@@ -40,9 +37,7 @@ export function taskTypeKey(type: TaskType): TaskTypeKey {
     case "xAPI": return "xapi";
     case "Quiz": return "quiz";
     case "Hands-On Task": return "hands-on";
-    case "ID Upload": return "id-upload";
-    case "File": return "file";
-    case "URL": return "url";
+    case "Resource": return "file";
   }
 }
 
@@ -55,6 +50,7 @@ type ContentTag = { id: string; type: ContentTagType; value: string };
 type TimeUnit = "minutes" | "hours" | "days" | "weeks";
 type OpenIn = "external" | "in-app";
 type FileOpenIn = "in-app-viewer" | "external-app";
+type ResourceType = "file" | "link";
 type HoCompletion = "reviewer_grade" | "submission_made";
 type MediaTypes = { images: boolean; videos: boolean; audio: boolean };
 type Orientation = "portrait" | "landscape";
@@ -154,17 +150,20 @@ type WizardData = {
   scoreCaptureMode: ScoreCaptureMode;
   scoreDisplayMode: ScoreCaptureMode;
 
-  // URL
+  // Resource — Link
   url: string;
   urlEs: string;
   openIn: OpenIn;
   allowRotation: boolean;
   lockedOrientation: Orientation;
 
-  // File
+  // Resource — File
   fileEn: UploadedFile[];
   fileEs: UploadedFile[];
   fileOpenIn: FileOpenIn;
+
+  // Resource — which form of content this Resource is
+  resourceType: ResourceType;
 
   // Hands-On
   hoFilesEn: UploadedFile[];
@@ -421,6 +420,8 @@ const INITIAL_DATA: WizardData = {
   fileEs: [],
   fileOpenIn: DEFAULT_FILE_OPEN_IN,
 
+  resourceType: "file",
+
   hoFilesEn: [],
   hoFilesEs: [],
   hoInstrEn: "",
@@ -500,22 +501,9 @@ const QUIZ_STEPS: StepDef[] = [
   { id: "payments", label: "Payments & Integrations", sub: "Paywall and NATE", desc: "Per-attempt pricing and NATE exam integration." },
 ];
 
-const URL_STEPS: StepDef[] = [
-  { id: "basics", label: "Basic Info", sub: "Name, URL, time", desc: "Name the Task, point it at a destination URL, and estimate how long it takes to complete." },
-  { id: "launch", label: "Launch Behaviour", sub: "How the URL opens", desc: "Choose how the URL opens on the learner's device. The rotation controls only apply to the In-App Browser on mobile." },
-  { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Decide what marks this Task as complete for a learner." },
-  { id: "visibility", label: "Visibility", sub: "Visibility", desc: "Whether learners can find and start this Task." },
-];
-
-const FILE_STEPS: StepDef[] = [
-  { id: "basics", label: "Basic Info", sub: "Name, file, time", desc: "Name the Task, upload the file learners open per language, and estimate how long it takes to complete." },
-  { id: "launch", label: "Launch Behaviour", sub: "How the file opens", desc: "Choose how the file opens on the learner's device." },
-  { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Decide what marks this Task as complete for a learner." },
-  { id: "visibility", label: "Visibility", sub: "Visibility", desc: "Whether learners can find and start this Task." },
-];
-
-const DEEPLINK_STEPS: StepDef[] = [
-  { id: "basics", label: "Basic Info", sub: "Name, deep link, time", desc: "Name the Task, point it at a deep link, and estimate how long it takes to complete." },
+const RESOURCE_STEPS: StepDef[] = [
+  { id: "basics", label: "Basic Info", sub: "Type, content, time", desc: "Name the Task, choose whether it points at a file or a link, add the content, and estimate how long it takes to complete." },
+  { id: "launch", label: "Launch Behaviour", sub: "How it opens", desc: "Choose how the Resource opens on the learner's device." },
   { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Decide what marks this Task as complete for a learner." },
   { id: "visibility", label: "Visibility", sub: "Visibility", desc: "Whether learners can find and start this Task." },
 ];
@@ -530,9 +518,7 @@ const HANDSON_STEPS: StepDef[] = [
 
 function stepsForType(type: TaskTypeKey): StepDef[] {
   if (type === "quiz") return QUIZ_STEPS;
-  if (type === "url") return URL_STEPS;
-  if (type === "file") return FILE_STEPS;
-  if (type === "deep-link") return DEEPLINK_STEPS;
+  if (type === "file") return RESOURCE_STEPS;
   if (type === "hands-on") return HANDSON_STEPS;
   return XAPI_STEPS;
 }
@@ -566,9 +552,9 @@ function parseTimeToComplete(value: string | undefined): { timeValue: string; ti
 /** Build the wizard's starting state, prefilling from an existing Task in edit mode. */
 function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData {
   let base: WizardData;
-  // URL, File and Deep Link Tasks have no default completion mode in the
-  // spec — the admin picks one.
-  if (taskType === "url" || taskType === "file" || taskType === "deep-link")
+  // Resource Tasks have no default completion mode in the spec — the admin
+  // picks one.
+  if (taskType === "file")
     base = { ...INITIAL_DATA, completion: null };
   // xAPI Tasks default to rotation off, locked to landscape.
   else if (taskType === "xapi")
@@ -629,9 +615,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
   const isXapi = taskType === "xapi";
   const isQuiz = taskType === "quiz";
-  const isUrl = taskType === "url";
   const isFile = taskType === "file";
-  const isDeepLink = taskType === "deep-link";
   const isHandsOn = taskType === "hands-on";
   const steps = stepsForType(taskType);
 
@@ -658,10 +642,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
                   className={`wizard-step ${status}`}
                   onClick={() => setStep(i)}
                 >
-                  <WizardStepRail status={status} isLast={i === steps.length - 1} />
+                  <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{s.label}</div>
-                    <div className="wizard-step-sub">{s.sub}</div>
                   </div>
                 </li>
               );
@@ -692,19 +675,10 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             step === 5 ? <QuizIntegrityStep data={data} update={update} /> :
             step === 6 ? <QuizReviewStep data={data} update={update} /> :
             <QuizPaymentsStep data={data} update={update} />
-          ) : isUrl ? (
-            step === 0 ? <UrlBasicInfoStep data={data} update={update} /> :
-            step === 1 ? <UrlLaunchStep data={data} update={update} /> :
-            step === 2 ? <UrlCompletionStep data={data} update={update} {...gateProps} /> :
-            <UrlVisibilityStep data={data} update={update} />
           ) : isFile ? (
-            step === 0 ? <FileBasicInfoStep data={data} update={update} /> :
-            step === 1 ? <FileLaunchStep data={data} update={update} /> :
+            step === 0 ? <ResourceBasicInfoStep data={data} update={update} /> :
+            step === 1 ? <ResourceLaunchStep data={data} update={update} /> :
             step === 2 ? <UrlCompletionStep data={data} update={update} {...gateProps} /> :
-            <UrlVisibilityStep data={data} update={update} />
-          ) : isDeepLink ? (
-            step === 0 ? <DeepLinkBasicInfoStep data={data} update={update} /> :
-            step === 1 ? <UrlCompletionStep data={data} update={update} {...gateProps} /> :
             <UrlVisibilityStep data={data} update={update} />
           ) : isHandsOn ? (
             step === 0 ? <HandsOnBasicStep data={data} update={update} /> :
@@ -895,79 +869,6 @@ function XapiVisibilityStep({ data, update }: StepProps) {
   return <VisibilitySection data={data} update={update} heading={false} />;
 }
 
-/* ─────────────────  URL step components  ───────────────── */
-
-function UrlBasicInfoStep({ data, update }: StepProps) {
-  return (
-    <>
-      <NameAndDescription data={data} update={update} />
-
-      <div className="form-group">
-        <label className="form-label">
-          URL <span className="req">*</span>
-        </label>
-        <LangField
-          en={data.url}
-          es={data.urlEs}
-          onChangeEn={(v) => update({ url: v })}
-          onChangeEs={(v) => update({ urlEs: v })}
-          placeholderEn="https://example.com/resource"
-          placeholderEs="https://example.com/es/recurso"
-        />
-        <p className="form-help">
-          The page learners open for this Task. Enter the full address, including
-          https://. If no Spanish URL is added, Spanish learners open the English
-          URL.
-        </p>
-      </div>
-
-      <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
-    </>
-  );
-}
-
-function UrlLaunchStep({ data, update }: StepProps) {
-  const inApp = data.openIn === "in-app";
-
-  return (
-    <>
-      <Section
-        title="Open in"
-        desc="Where the URL opens when a learner starts the Task. External Browser is the default."
-      >
-        <div className="radio-card-group">
-          <RadioCard
-            selected={data.openIn === "external"}
-            onSelect={() => update({ openIn: "external" })}
-            title="External Browser"
-            desc="Opens in the device's default browser, or a new tab on Web. The app hands the URL off and can't track activity afterward."
-          />
-          <RadioCard
-            selected={inApp}
-            onSelect={() => update({ openIn: "in-app" })}
-            title="In-App Browser"
-            desc="Opens in a webview inside the SkillCat app, or an iframe on Web. Keeps learners in the app and unlocks the rotation controls below."
-          />
-        </div>
-      </Section>
-
-      {inApp && (
-        <>
-          <div className="form-divider" />
-
-          <Section
-            title="Rotation & orientation"
-            desc="Mobile phones only. On iPad and tablets orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there."
-          >
-            <RotationOrientationFields data={data} update={update} />
-          </Section>
-        </>
-      )}
-    </>
-  );
-}
-
 function RotationOrientationFields({ data, update }: StepProps) {
   return (
     <>
@@ -1011,7 +912,7 @@ function RotationOrientationFields({ data, update }: StepProps) {
 function UrlCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: StepProps) {
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No completion tracking", desc: "Reference content only — the Task is never marked complete." },
-    { key: "on-view", title: "Completion upon viewing", desc: "Marks complete as soon as the learner opens the URL. With the External Browser the Task completes on launch, since the app can't observe the page once it opens elsewhere." },
+    { key: "on-view", title: "Completion upon viewing", desc: "Marks complete as soon as the learner opens the Resource. When it opens outside the app (External Browser or External Application) the Task completes on launch, since the app can't observe it once it opens elsewhere." },
     { key: "manual", title: "User manually marks completion", desc: "The learner taps \"Mark complete\" from the UI after they finish." },
   ];
 
@@ -1041,134 +942,141 @@ function UrlVisibilityStep({ data, update }: StepProps) {
   return <VisibilitySection data={data} update={update} heading={false} />;
 }
 
-/* ─────────────────  File step components  ───────────────── */
+/* ─────────────────  Resource step components  ───────────────── */
 
-function FileBasicInfoStep({ data, update }: StepProps) {
+function ResourceBasicInfoStep({ data, update }: StepProps) {
+  const isFileType = data.resourceType === "file";
   return (
     <>
       <NameAndDescription data={data} update={update} />
 
-      <div className="form-group">
-        <label className="form-label">
-          File <span className="req">*</span>
-        </label>
-        <PackageField
-          enFiles={data.fileEn}
-          esFiles={data.fileEs}
-          setEnFiles={(files) => update({ fileEn: files })}
-          setEsFiles={(files) => update({ fileEs: files })}
-          hint="PDF, DOCX, PPTX, images · 250 MB MAX"
-        />
-        <p className="form-help">
-          The file learners open for this Task. If no Spanish file is added,
-          Spanish learners open the English file.
-        </p>
-      </div>
+      <Section
+        title="Resource type"
+        desc="Choose whether this Resource is a file learners open, or a link to an external site or somewhere within the app."
+      >
+        <div className="radio-card-group">
+          <RadioCard
+            selected={isFileType}
+            onSelect={() => update({ resourceType: "file" })}
+            title="File"
+            desc="Upload a file (PDF, DOCX, PPTX, images, etc.). SkillCat hosts it and serves it to learners."
+          />
+          <RadioCard
+            selected={!isFileType}
+            onSelect={() => update({ resourceType: "link" })}
+            title="Link"
+            desc="Point at an external URL, or a SkillCat Deep Link to a page within the app."
+          />
+        </div>
+      </Section>
 
-      <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
-    </>
-  );
-}
-
-function FileLaunchStep({ data, update }: StepProps) {
-  return (
-    <Section
-      title="Open in"
-      desc="Where the file opens when a learner starts the Task. In-App Viewer is the default."
-    >
-      <div className="radio-card-group">
-        <RadioCard
-          selected={data.fileOpenIn === "in-app-viewer"}
-          onSelect={() => update({ fileOpenIn: "in-app-viewer" })}
-          title="In-App Viewer"
-          desc="Opens in the SkillCat app's built-in file viewer. Keeps learners in the app."
-        />
-        <RadioCard
-          selected={data.fileOpenIn === "external-app"}
-          onSelect={() => update({ fileOpenIn: "external-app" })}
-          title="External Application"
-          desc="Hands the file to the device's default app for that file type (e.g. a PDF reader). The app can't track activity once the file opens elsewhere."
-        />
-      </div>
-    </Section>
-  );
-}
-
-/* ─────────────────  Deep Link step components  ───────────────── */
-
-function isValidUrl(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  try {
-    // Accepts standard web URLs as well as custom deep-link schemes
-    // (e.g. skillcat://course/123) — both parse via the URL constructor.
-    new URL(trimmed);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function DeepLinkBasicInfoStep({ data, update }: StepProps) {
-  const [error, setError] = useState<string | null>(null);
-  const valid = isValidUrl(data.url);
-
-  const handlePreview = () => {
-    if (!valid) {
-      setError(
-        "That doesn't look like a valid URL. Include the scheme, e.g. https:// or skillcat://.",
-      );
-      return;
-    }
-    setError(null);
-    window.open(data.url.trim(), "_blank", "noopener,noreferrer");
-  };
-
-  return (
-    <>
-      <NameAndDescription data={data} update={update} />
-
-      <div className="form-group">
-        <label className="form-label">
-          Deep Link URL <span className="req">*</span>
-        </label>
-        <div className="deeplink-row">
+      {isFileType ? (
+        <div className="form-group">
+          <label className="form-label">
+            File <span className="req">*</span>
+          </label>
+          <PackageField
+            enFiles={data.fileEn}
+            esFiles={data.fileEs}
+            setEnFiles={(files) => update({ fileEn: files })}
+            setEsFiles={(files) => update({ fileEs: files })}
+            hint="PDF, DOCX, PPTX, images · 250 MB MAX"
+          />
+          <p className="form-help">
+            The file learners open for this Task. If no Spanish file is added,
+            Spanish learners open the English file.
+          </p>
+        </div>
+      ) : (
+        <div className="form-group">
+          <label className="form-label">
+            Link <span className="req">*</span>
+          </label>
           <input
             className="form-input"
             type="url"
             inputMode="url"
-            placeholder="https://example.com/path or skillcat://course/123"
+            placeholder="https://example.com/resource or skillcat://course/123"
             value={data.url}
-            onChange={(e) => {
-              update({ url: e.target.value });
-              if (error) setError(null);
-            }}
+            onChange={(e) => update({ url: e.target.value })}
           />
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handlePreview}
-            disabled={!data.url.trim()}
-          >
-            Preview
-          </button>
-        </div>
-        {error ? (
-          <p className="form-help error">{error}</p>
-        ) : (
           <p className="form-help">
-            Only one URL is allowed. Preview verifies the link is valid, then
-            opens the deep link in a new tab.
+            An external web address (including https://) or a SkillCat Deep Link
+            to a Certification, Task, or app page.
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       <TimeToCompleteField data={data} update={update} />
       <FinalExamField data={data} update={update} />
     </>
   );
 }
+
+function ResourceLaunchStep({ data, update }: StepProps) {
+  if (data.resourceType === "file") {
+    return (
+      <Section
+        title="Open in"
+        desc="Where the file opens when a learner starts the Task. In-App Viewer is the default. If a file type only supports one of these, only that option is shown."
+      >
+        <div className="radio-card-group">
+          <RadioCard
+            selected={data.fileOpenIn === "in-app-viewer"}
+            onSelect={() => update({ fileOpenIn: "in-app-viewer" })}
+            title="In-App Viewer"
+            desc="Opens in the SkillCat app's built-in file viewer. Keeps learners in the app."
+          />
+          <RadioCard
+            selected={data.fileOpenIn === "external-app"}
+            onSelect={() => update({ fileOpenIn: "external-app" })}
+            title="External Application"
+            desc="Hands the file to the device's default app for that file type (e.g. a PDF reader). The app can't track activity once the file opens elsewhere."
+          />
+        </div>
+      </Section>
+    );
+  }
+
+  const inApp = data.openIn === "in-app";
+  return (
+    <>
+      <Section
+        title="Open in"
+        desc="Where the link opens when a learner starts the Task. External Browser is the default. A SkillCat Deep Link always opens the respective page within the app."
+      >
+        <div className="radio-card-group">
+          <RadioCard
+            selected={data.openIn === "external"}
+            onSelect={() => update({ openIn: "external" })}
+            title="External Browser"
+            desc="Opens in the device's default browser, or a new tab on Web. The app hands the link off and can't track activity afterward."
+          />
+          <RadioCard
+            selected={inApp}
+            onSelect={() => update({ openIn: "in-app" })}
+            title="In-App Browser"
+            desc="Opens in a webview inside the SkillCat app, or an iframe on Web. Keeps learners in the app and unlocks the rotation controls below."
+          />
+        </div>
+      </Section>
+
+      {inApp && (
+        <>
+          <div className="form-divider" />
+
+          <Section
+            title="Rotation & orientation"
+            desc="Mobile phones only. On iPad and tablets orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there."
+          >
+            <RotationOrientationFields data={data} update={update} />
+          </Section>
+        </>
+      )}
+    </>
+  );
+}
+
 
 /* ─────────────────  Hands-On step components  ───────────────── */
 

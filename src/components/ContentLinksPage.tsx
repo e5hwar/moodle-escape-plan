@@ -55,15 +55,15 @@ function partition(focusId: string, links: Link[]) {
 }
 
 export function ContentLinksPage({
-  initialFocusId,
+  initialFocus,
   onBack,
   backLabel,
 }: {
-  initialFocusId?: string;
+  initialFocus?: ContentNode;
   onBack?: () => void;
   backLabel?: string;
 } = {}) {
-  const [focusId, setFocusId] = useState<Focus>(initialFocusId ?? null);
+  const [focusId, setFocusId] = useState<Focus>(initialFocus?.id ?? null);
   const [links, setLinks] = useState<Link[]>(seedLinks);
   // Last-saved snapshot; the Save / Cancel bar diffs the working set against it.
   const [baseline, setBaseline] = useState<Link[]>(seedLinks);
@@ -74,7 +74,14 @@ export function ContentLinksPage({
   const [picker, setPicker] = useState<{ kind: LinkKind } | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
 
-  const focused = focusId ? nodeById(focusId) : null;
+  // Resolve the focused node. A certification opened from the 3-dot menu may not
+  // exist in the mock content graph — fall back to the injected initialFocus so
+  // the page always shows that certification's (possibly empty) link columns
+  // instead of dropping back to the search/empty state.
+  const focused = focusId
+    ? nodeById(focusId) ??
+      (initialFocus && initialFocus.id === focusId ? initialFocus : null)
+    : null;
 
   const groups = useMemo(
     () => (focusId ? partition(focusId, links) : null),

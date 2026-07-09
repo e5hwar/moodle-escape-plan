@@ -6,31 +6,22 @@ const KIND_LETTER: Record<TaskKind, { letter: string; cls: string; full: string 
   xapi: { letter: "X", cls: "xapi", full: "xAPI" },
   quiz: { letter: "Q", cls: "quiz", full: "Quiz" },
   "hands-on": { letter: "H", cls: "handson", full: "Hands-On" },
-  "id-upload": { letter: "ID", cls: "idup", full: "ID Upload" },
-  file: { letter: "F", cls: "file", full: "File" },
-  url: { letter: "U", cls: "url", full: "URL" },
+  file: { letter: "R", cls: "file", full: "Resource" },
 };
 
-// The cert tree's CertTask.kind is a TaskKind; Footer's TaskTypeKey additionally
-// has "deep-link", which is represented as a URL Task within the cert structure.
+// The cert tree's CertTask.kind is a TaskKind, keyed off Footer's TaskTypeKey.
 const TYPE_KEY_TO_KIND: Record<TaskTypeKey, TaskKind> = {
   xapi: "xapi",
   quiz: "quiz",
   "hands-on": "hands-on",
-  "id-upload": "id-upload",
   file: "file",
-  "deep-link": "url",
-  url: "url",
 };
 
 const TYPE_KEY_DURATION: Record<TaskTypeKey, string> = {
   xapi: "10 min",
   quiz: "15 min",
   "hands-on": "30 min",
-  "id-upload": "2 min",
   file: "5 min",
-  "deep-link": "5 min",
-  url: "5 min",
 };
 
 type Props = {

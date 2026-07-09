@@ -1,4 +1,4 @@
-export type TaskType = "xAPI" | "Quiz" | "ID Upload" | "Hands-On Task" | "File" | "URL";
+export type TaskType = "xAPI" | "Quiz" | "Hands-On Task" | "Resource";
 
 /** A graded Section of a sectioned Quiz Task. Present only on Quiz Tasks that
  * use the sectioned structure with section-level grading (EPA/NATE-style exams).
@@ -61,11 +61,11 @@ const T = (
 
 export const tasks: Task[] = [
   T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026", { draft: true }),
-  T("T-1876", "EPA Certification Lookup", "URL", ["EPA 608 Type I"], "SkillCat", ["All-User"], "Feb 21, 2024", "Apr 03, 2026"),
+  T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", ["All-User"], "Feb 21, 2024", "Apr 03, 2026"),
   T("T-1654", "HVAC Field Tools Walkthrough", "xAPI",
     ["HVAC Field Skills", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
     "SkillCat", ["B2B-Only", "HVACR"], "Jan 28, 2024", "Apr 19, 2026"),
-  T("T-1543", "Refrigerant Pressure Chart", "File", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC"], "Dec 02, 2023", "Mar 14, 2026"),
+  T("T-1543", "Refrigerant Pressure Chart", "Resource", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC"], "Dec 02, 2023", "Mar 14, 2026"),
   T("T-1432", "Field Visit – Brazing Joints", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat",
     ["HVAC", "Field", "Brazing"], "Apr 09, 2024", "Apr 28, 2026", {
       description: "Practical brazing skill assessment. Technicians document at least one brazed joint completed in the field, with photos and reflection on quality control measures.",
@@ -93,7 +93,7 @@ export const tasks: Task[] = [
     ["EPA 608 Type I", "EPA 608 Type II", "EPA 608 Type III", "EPA 608 Universal"],
     "SkillCat", ["All-User", "Residential HVAC"], "Jan 14, 2024", "Apr 22, 2026"),
   T("T-0987", "OSHA 10 Safety Course", "xAPI", ["Safety Bundle", "OSHA 10", "OSHA 30"], "SkillCat", ["All-User", "NexStar"], "Nov 18, 2023", "Apr 12, 2026"),
-  T("T-0234", "Government ID Upload", "ID Upload",
+  T("T-0234", "Government ID Upload", "Hands-On Task",
     ["EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "OSHA 10", "OSHA 30", "Safety Bundle"],
     "SkillCat", ["All-User"], "Sep 11, 2023", "Mar 30, 2026"),
 
@@ -101,7 +101,7 @@ export const tasks: Task[] = [
   T("T-2350", "Refrigerant Charging Procedure", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Universal"], "SkillCat", ["All-User", "Residential HVAC"], "Feb 11, 2025", "Apr 15, 2026"),
   T("T-2287", "Heat Pump Troubleshooting", "xAPI", ["HVAC Field Skills"], "ARS", ["B2B-Only", "Residential HVAC"], "Mar 02, 2025", "Apr 18, 2026"),
   T("T-2244", "Gas Furnace Safety Check", "Hands-On Task", ["EPA 608 Type II", "Safety Bundle"], "NexTech", ["B2B-Only", "Residential HVAC"], "Mar 12, 2025", "Apr 09, 2026"),
-  T("T-2199", "Ductwork Installation Guide", "File", ["HVAC Field Skills"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Mar 18, 2025", "Apr 06, 2026"),
+  T("T-2199", "Ductwork Installation Guide", "Resource", ["HVAC Field Skills"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Mar 18, 2025", "Apr 06, 2026"),
   T("T-2165", "Thermostat Wiring Lab", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type I"], "SkillCat", ["All-User", "Residential HVAC"], "Mar 22, 2025", "Apr 11, 2026"),
   T("T-2132", "Capacitor Replacement Walkthrough", "xAPI", ["EPA 608 Type II"], "HVACR", ["B2B-Only", "Residential HVAC"], "Apr 01, 2025", "Apr 21, 2026"),
   T("T-2098", "Coil Cleaning Procedure", "Hands-On Task", ["HVAC Field Skills"], "ARS", ["B2B-Only", "Commercial HVAC"], "Apr 04, 2025", "Apr 14, 2026"),
@@ -110,7 +110,7 @@ export const tasks: Task[] = [
 
   T("T-1989", "Indoor Air Quality Test", "xAPI", ["HVAC Field Skills"], "SkillCat", ["All-User", "Residential HVAC"], "May 02, 2025", "Apr 07, 2026"),
   T("T-1955", "Combustion Analysis", "Quiz", ["EPA 608 Type II"], "HVACR", ["B2B-Only", "Commercial HVAC"], "May 14, 2025", "Apr 02, 2026"),
-  T("T-1922", "Boiler Inspection Checklist", "File", ["EPA 608 Universal"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Jun 03, 2025", "Mar 28, 2026"),
+  T("T-1922", "Boiler Inspection Checklist", "Resource", ["EPA 608 Universal"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Jun 03, 2025", "Mar 28, 2026"),
   T("T-1888", "Mini-Split Install Guide", "xAPI", ["HVAC Field Skills"], "ARS", ["B2B-Only", "Residential HVAC"], "Jun 12, 2025", "Apr 17, 2026"),
   T("T-1855", "Recovery Machine Setup", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Universal"], "SkillCat", ["All-User"], "Jun 25, 2025", "Apr 19, 2026"),
   T("T-1821", "Vacuum Pump Operation", "Hands-On Task", ["EPA 608 Type I"], "HVACR", ["B2B-Only", "Residential HVAC"], "Jul 02, 2025", "Apr 03, 2026"),
@@ -120,13 +120,13 @@ export const tasks: Task[] = [
   T("T-1689", "Superheat Reading Lab", "Hands-On Task", ["EPA 608 Type I"], "ARS", ["B2B-Only", "Residential HVAC"], "Aug 12, 2025", "Apr 18, 2026"),
 
   T("T-1655", "VRF System Overview", "xAPI", ["HVAC Field Skills"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Aug 25, 2025", "Apr 22, 2026"),
-  T("T-1621", "Chiller Maintenance Module", "File", ["HVAC Field Skills"], "HVACR", ["B2B-Only", "Commercial HVAC"], "Sep 01, 2025", "Apr 09, 2026"),
+  T("T-1621", "Chiller Maintenance Module", "Resource", ["HVAC Field Skills"], "HVACR", ["B2B-Only", "Commercial HVAC"], "Sep 01, 2025", "Apr 09, 2026"),
   T("T-1588", "Cooling Tower Basics", "xAPI", ["HVAC Field Skills"], "Premium HVAC Services", ["B2B-Only", "Commercial HVAC"], "Sep 11, 2025", "Apr 06, 2026"),
   T("T-1555", "PVC Pipe Joining Lab", "Hands-On Task", [], "SkillCat", ["All-User", "Residential Plumbing"], "Sep 22, 2025", "Apr 11, 2026"),
   T("T-1521", "PEX Tubing Install Walkthrough", "xAPI", [], "ARS", ["B2B-Only", "Residential Plumbing"], "Oct 02, 2025", "Apr 13, 2026"),
   T("T-1488", "Sweat Soldering Lab", "Hands-On Task", [], "SkillCat", ["All-User", "Residential Plumbing"], "Oct 12, 2025", "Apr 17, 2026"),
   T("T-1455", "Waste Line Layout Quiz", "Quiz", [], "NexTech", ["B2B-Only", "Commercial Plumbing"], "Oct 22, 2025", "Apr 21, 2026", { paywall: true }),
-  T("T-1421", "Vent Stack Sizing", "File", [], "HVACR", ["B2B-Only", "Commercial Plumbing"], "Nov 01, 2025", "Apr 04, 2026"),
+  T("T-1421", "Vent Stack Sizing", "Resource", [], "HVACR", ["B2B-Only", "Commercial Plumbing"], "Nov 01, 2025", "Apr 04, 2026"),
   T("T-1388", "Backflow Preventer Setup", "Hands-On Task", [], "Premium HVAC Services", ["B2B-Only", "Commercial Plumbing"], "Nov 12, 2025", "Apr 08, 2026"),
   T("T-1355", "Water Heater Service", "xAPI", [], "ARS", ["B2B-Only", "Residential Plumbing"], "Nov 22, 2025", "Apr 12, 2026"),
 
@@ -141,7 +141,7 @@ export const tasks: Task[] = [
   T("T-1055", "Igniter Replacement Module", "Hands-On Task", ["HVAC Field Skills"], "NexTech", ["B2B-Only", "Residential HVAC"], "Feb 18, 2026", "Apr 25, 2026"),
   T("T-1021", "Hotel Maintenance Walkthrough", "xAPI", [], "Premium HVAC Services", ["B2B-Only", "Hotel Maintenance"], "Feb 26, 2026", "Apr 27, 2026"),
   T("T-0988", "MultiFamily Service Visit", "Hands-On Task", [], "ARS", ["B2B-Only", "MultiFamily Maintenance"], "Mar 06, 2026", "Apr 29, 2026"),
-  T("T-0955", "NexStar Onboarding", "URL", [], "SkillCat", ["B2B-Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
+  T("T-0955", "NexStar Onboarding", "Resource", [], "SkillCat", ["B2B-Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
 ];
 
 // Tasks default to discoverable. Drafts are never discoverable, plus a handful

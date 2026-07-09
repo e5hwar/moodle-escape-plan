@@ -230,14 +230,19 @@ function buildInitial(initialCategoryPath?: string[], editing?: Question): Quest
     scaleMin: editing.scale?.min ?? 1,
     scaleMax: editing.scale?.max ?? 10,
     scaleMinLabel: editing.scale?.minLabel ?? "",
+    scaleMinLabelEs: es && editing.scale?.minLabel ? `[ES] ${editing.scale.minLabel}` : "",
     scaleMaxLabel: editing.scale?.maxLabel ?? "",
+    scaleMaxLabelEs: es && editing.scale?.maxLabel ? `[ES] ${editing.scale.maxLabel}` : "",
     maxFiles: editing.fileRules ? String(editing.fileRules.maxFiles) : "default",
     maxSizeMb: editing.fileRules ? String(editing.fileRules.maxSizeMb) : "default",
     grading: editing.gradingEnabled && supportsGrading(editing.type),
     randomise: editing.randomise,
     fbCorrect: editing.feedback?.correct ?? "",
+    fbCorrectEs: es && editing.feedback?.correct ? `[ES] ${editing.feedback.correct}` : "",
     fbPartial: editing.feedback?.partial ?? "",
+    fbPartialEs: es && editing.feedback?.partial ? `[ES] ${editing.feedback.partial}` : "",
     fbIncorrect: editing.feedback?.incorrect ?? "",
+    fbIncorrectEs: es && editing.feedback?.incorrect ? `[ES] ${editing.feedback.incorrect}` : "",
   };
 }
 
@@ -280,11 +285,84 @@ function translationEntries(d: QuestionDraft): TransEntry[] {
 
 type Props = {
   onClose: () => void;
+  // Called with the built question when "Create question" is clicked
+  // (creation only — edits still just close, as before).
+  onCreate?: (q: Question) => void;
   initialCategoryPath?: string[];
   editingQuestion?: Question;
 };
 
-export function NewQuestionWizard({ onClose, initialCategoryPath, editingQuestion }: Props) {
+let createdSeq = 0;
+
+function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
+  const type: QuestionType =
+    d.type === "mcq"
+      ? d.mcqMode === "multiple"
+        ? "Multiple select"
+        : "Multiple choice"
+      : d.type === "true-false"
+        ? "True/False"
+        : d.type === "match"
+          ? "Match the following"
+          : d.type === "short"
+            ? "Short answer"
+            : d.type === "file"
+              ? "File upload"
+              : "Linear scale";
+  const catOption = flattenCategories(seedCategories).find((o) => o.key === d.catKey);
+  const grading = d.grading && typeSupportsGrading(d.type);
+  const q: Question = {
+    id: `Q-${10480 + createdSeq++}`,
+    type,
+    text: d.text.trim() || "Untitled question",
+    status: d.status,
+    categoryPath: catOption ? catOption.label.split(" > ") : [],
+    quizzes: [],
+    forms: [],
+    version: 1,
+    gradingEnabled: grading,
+    randomise: d.randomise && (d.type === "mcq" || d.type === "match"),
+    hasSpanish,
+  };
+  if (d.type === "mcq") {
+    q.options = d.choices
+      .filter((c) => c.text.trim() !== "")
+      .map((c) => ({ text: c.text, grade: grading ? c.grade : 0 }));
+    if (!grading && d.otherOption) q.otherOption = true;
+  }
+  if (d.type === "true-false") q.tfAnswer = d.tfAnswer;
+  if (d.type === "match") {
+    q.pairs = d.pairs
+      .filter((p) => p.left.trim() !== "" || p.right.trim() !== "")
+      .map((p) => ({ left: p.left, right: p.right }));
+    q.matchGrading = d.matchGrading;
+  }
+  if (d.type === "scale") {
+    q.scale = {
+      min: d.scaleMin,
+      max: d.scaleMax,
+      minLabel: d.scaleMinLabel || undefined,
+      maxLabel: d.scaleMaxLabel || undefined,
+    };
+  }
+  if (d.type === "file" && (d.maxFiles !== "default" || d.maxSizeMb !== "default")) {
+    // "default" keeps the system-wide limit (5 files / 50 MB)
+    q.fileRules = {
+      maxFiles: d.maxFiles === "default" ? 5 : Number(d.maxFiles) || 5,
+      maxSizeMb: d.maxSizeMb === "default" ? 50 : Number(d.maxSizeMb) || 50,
+    };
+  }
+  if (grading && (d.fbCorrect || d.fbPartial || d.fbIncorrect)) {
+    q.feedback = {
+      correct: d.fbCorrect || undefined,
+      partial: d.fbPartial || undefined,
+      incorrect: d.fbIncorrect || undefined,
+    };
+  }
+  return q;
+}
+
+export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, editingQuestion }: Props) {
   const isEditing = !!editingQuestion;
   const [data, setData] = useState<QuestionDraft>(() =>
     buildInitial(initialCategoryPath, editingQuestion),
@@ -341,7 +419,15 @@ export function NewQuestionWizard({ onClose, initialCategoryPath, editingQuestio
         </div>
         <div className="qed-topbar-actions">
           <button className="btn-save-draft" onClick={onClose}>Cancel</button>
-          <button className="btn-publish" onClick={onClose}>
+          <button
+            className="btn-publish"
+            onClick={() => {
+              if (!isEditing && onCreate) {
+                onCreate(questionFromDraft(data, esState === "complete" && filled.length > 0));
+              }
+              onClose();
+            }}
+          >
             {isEditing ? "Save changes" : "Create question"}
           </button>
         </div>

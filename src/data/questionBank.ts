@@ -208,6 +208,7 @@ export const categories: Category[] = [
   { key: "osha-safety", label: "OSHA & Safety", count: 96 },
   { key: "plumbing-code", label: "Plumbing Code", count: 138 },
   { key: "electrical-code", label: "Electrical Code", count: 112 },
+  { key: "learner-feedback", label: "Learner Feedback", count: 16 },
 ];
 
 const EPA_UNI = ["EPA 608", "Universal"];
@@ -267,6 +268,7 @@ export const questions: Question[] = [
       version: 2,
       hasSpanish: true,
       tfAnswer: true,
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
       feedback: {
         correct: "Right — cylinders are evacuated before first use.",
         incorrect: "False is incorrect — check the cylinder prep rules.",
@@ -362,7 +364,7 @@ export const questions: Question[] = [
     "Active", [], {
       gradingEnabled: false,
       otherOption: true,
-      forms: ["Post-Quiz Survey", "Course Feedback — HVAC"],
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
       hasSpanish: true,
       options: [
         { text: "Refrigerant classes", grade: 0 },
@@ -374,15 +376,13 @@ export const questions: Question[] = [
   Q("Q-10440", "Linear scale",
     "How confident are you in refrigerant recovery procedures after this course?",
     "Active", [], {
-      forms: ["Course Feedback — HVAC"],
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
       version: 2,
       scale: { min: 1, max: 10, minLabel: "Not confident at all", maxLabel: "Extremely confident" },
     }),
   Q("Q-10441", "Short answer",
     "In your own words, describe when a system must be repaired rather than retrofitted.",
-    "Active", [], {
-      forms: ["Post-Quiz Survey"],
-    }),
+    "Active", [], {}),
   Q("Q-10442", "File upload",
     "Upload a photo of your manifold gauge setup on the practice rig.",
     "Draft", [], {
@@ -416,6 +416,7 @@ export const questions: Question[] = [
     "Active", ["EPA Universal Exam"], {
       version: 5,
       hasSpanish: true,
+      forms: ["Plumbing Pilot — Beta Tester Feedback"],
       pairs: [
         { left: "Section 608", right: "Stationary refrigeration" },
         { left: "Section 609", right: "Motor vehicle A/C" },
@@ -446,4 +447,141 @@ export const questions: Question[] = [
         { text: "Ultrasonic detector", grade: -25 },
       ],
     }),
+  // Learner Feedback — ungraded survey questions linked by Feedback Forms
+  FQ("Q-10450", "Linear scale",
+    "How satisfied are you with this certification course?", {
+      version: 2,
+      hasSpanish: true,
+      forms: ["EPA 608 — Post-Cert Satisfaction", "Old EPA Survey (Q1)"],
+      scale: { min: 1, max: 10, minLabel: "Extremely disappointed", maxLabel: "Extremely satisfied" },
+    }),
+  FQ("Q-10451", "Multiple select",
+    "Which parts of the course were most useful?", {
+      hasSpanish: true,
+      otherOption: true,
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
+      options: [
+        { text: "Video lessons", grade: 0 },
+        { text: "Practice quizzes", grade: 0 },
+        { text: "Hands-on tasks", grade: 0 },
+        { text: "Reference materials", grade: 0 },
+        { text: "Proctored exam", grade: 0 },
+      ],
+    }),
+  FQ("Q-10452", "Linear scale",
+    "How likely are you to recommend SkillCat to a friend or colleague?", {
+      version: 3,
+      hasSpanish: true,
+      forms: ["EPA 608 — Post-Cert Satisfaction", "OSHA Safety — Course Quality"],
+      scale: { min: 0, max: 10, minLabel: "Not at all likely", maxLabel: "Extremely likely" },
+    }),
+  FQ("Q-10453", "Multiple choice",
+    "Did you face any issues during the exam?", {
+      otherOption: true,
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
+      options: [
+        { text: "No issues", grade: 0 },
+        { text: "Technical issues (audio, video, app)", grade: 0 },
+        { text: "Content was unclear", grade: 0 },
+        { text: "Proctoring felt too strict", grade: 0 },
+      ],
+    }),
+  FQ("Q-10454", "Short answer",
+    "Anything else you'd like us to know?", {
+      forms: ["EPA 608 — Post-Cert Satisfaction"],
+    }),
+  FQ("Q-10455", "Linear scale",
+    "Rate the quality of this walkthrough content.", {
+      forms: ["HVAC Field Tools — Quick Pulse"],
+      scale: { min: 1, max: 5, minLabel: "Poor", maxLabel: "Excellent" },
+    }),
+  FQ("Q-10456", "Short answer",
+    "What would you improve about this Task?", {
+      forms: ["HVAC Field Tools — Quick Pulse"],
+    }),
+  FQ("Q-10457", "File upload",
+    "Upload a photo of your tool kit (optional).", {
+      forms: ["HVAC Field Tools — Quick Pulse"],
+      fileRules: { maxFiles: 3, maxSizeMb: 10 },
+    }),
+  FQ("Q-10458", "Multiple choice",
+    "Was the assignment clear and easy to follow?", {
+      forms: ["Hands-On Task — Field Reflection"],
+      options: [
+        { text: "Yes, very clear", grade: 0 },
+        { text: "Mostly clear", grade: 0 },
+        { text: "Somewhat confusing", grade: 0 },
+        { text: "Very confusing", grade: 0 },
+      ],
+    }),
+  FQ("Q-10459", "Multiple choice",
+    "How long did it take you to complete?", {
+      forms: ["Hands-On Task — Field Reflection"],
+      options: [
+        { text: "Under 30 minutes", grade: 0 },
+        { text: "30–60 minutes", grade: 0 },
+        { text: "1–2 hours", grade: 0 },
+        { text: "Over 2 hours", grade: 0 },
+      ],
+    }),
+  FQ("Q-10460", "Short answer",
+    "Any feedback for the instructor?", {
+      forms: ["Hands-On Task — Field Reflection"],
+    }),
+  FQ("Q-10461", "Linear scale",
+    "How would you rate the difficulty of this exam?", {
+      forms: ["NATE Ready To Work — Exam Feedback"],
+      scale: { min: 1, max: 5, minLabel: "Very easy", maxLabel: "Very difficult" },
+    }),
+  FQ("Q-10462", "Multiple choice",
+    "Did the OSHA course meet your expectations?", {
+      forms: ["OSHA Safety — Course Quality"],
+      options: [
+        { text: "Exceeded expectations", grade: 0 },
+        { text: "Met expectations", grade: 0 },
+        { text: "Below expectations", grade: 0 },
+      ],
+    }),
+  FQ("Q-10463", "Short answer",
+    "What would you change about the course?", {
+      forms: ["OSHA Safety — Course Quality"],
+    }),
+  FQ("Q-10464", "Linear scale",
+    "Overall, how was the pilot experience?", {
+      forms: ["Plumbing Pilot — Beta Tester Feedback"],
+      scale: { min: 1, max: 10, minLabel: "Terrible", maxLabel: "Loved it" },
+    }),
+  FQ("Q-10465", "Multiple select",
+    "Which modules need the most work?", {
+      otherOption: true,
+      forms: ["Plumbing Pilot — Beta Tester Feedback"],
+      options: [
+        { text: "Tools & Materials", grade: 0 },
+        { text: "Code Compliance", grade: 0 },
+        { text: "Pipe Fitting Basics", grade: 0 },
+        { text: "Drainage Systems", grade: 0 },
+      ],
+    }),
 ];
+
+// Ungraded Learner Feedback question — the shape Feedback Forms link most often.
+function FQ(id: string, type: QuestionType, text: string, extra?: Partial<Question>): Question {
+  return {
+    id,
+    type,
+    text,
+    status: "Active",
+    categoryPath: ["Learner Feedback"],
+    quizzes: [],
+    forms: [],
+    version: 1,
+    gradingEnabled: false,
+    randomise: false,
+    hasSpanish: false,
+    ...extra,
+  };
+}
+
+export function questionById(id: string): Question | undefined {
+  return questions.find((q) => q.id === id);
+}

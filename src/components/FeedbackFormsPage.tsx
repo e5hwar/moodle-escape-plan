@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  activeLinks,
   feedbackForms as seedForms,
   type FeedbackForm,
   type FormStatus,
@@ -133,7 +134,7 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
               <div className="fb-list-head">
                 <div className="fb-col-name">NAME</div>
                 <div className="fb-col-status">STATUS</div>
-                <div className="fb-col-version">VERSION</div>
+                <div className="fb-col-questions">QUESTIONS</div>
                 <div className="fb-col-triggers">TRIGGERS</div>
                 <div className="fb-col-responses">RESPONSES</div>
                 <div className="fb-col-updated">LAST UPDATED</div>
@@ -159,8 +160,13 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
                         {STATUS_LABEL[f.status]}
                       </span>
                     </div>
-                    <div className="fb-col-version">
-                      <span className="fb-version-pill">v{f.version}</span>
+                    <div className="fb-col-questions">
+                      {activeLinks(f).length}
+                      {f.questions.length > activeLinks(f).length && (
+                        <span className="fb-faint">
+                          {" "}· {f.questions.length - activeLinks(f).length} inactive
+                        </span>
+                      )}
                     </div>
                     <div className="fb-col-triggers">
                       {f.triggers.length === 0 ? (

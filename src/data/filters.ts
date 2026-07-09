@@ -23,10 +23,7 @@ export const TASK_TYPES = [
   "xAPI",
   "Quiz",
   "Hands-On Task",
-  "ID-Upload",
-  "File",
-  "Deep Link",
-  "URL",
+  "Resource",
 ];
 
 export const VISIBILITIES = ["Hidden", "Visible"];

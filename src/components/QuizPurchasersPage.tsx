@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
   type User,
@@ -13,11 +13,12 @@ import {
   nextAttemptNumber,
   type QuizPurchase,
 } from "../data/quizPurchases";
-import { todayIso } from "../data/certPurchases";
+import { todayIso, CURRENT_ADMIN } from "../data/certPurchases";
 import type { Task } from "../data/tasks";
 import {
   UsersFilters,
   UsersEditColumns,
+  MultiPill,
   type UserColumnKey,
   type UserFilterState,
 } from "./UsersFilters";
@@ -30,10 +31,15 @@ const PAGE_SIZE = 50;
 type QuizColumnKey =
   | UserColumnKey
   | "attemptNumber"
+  | "access"
   | "purchaseDate"
+  | "grantDate"
   | "attemptStatus"
   | "score"
   | "result";
+
+/** Access-type filter options for paid vs. admin-comped attempts. */
+const ACCESS_OPTIONS = ["Free", "Paid"];
 
 type QuizColumnState = Record<QuizColumnKey, boolean>;
 
@@ -43,7 +49,9 @@ const DEFAULT_COLUMNS: QuizColumnState = {
   email: true,
   phone: true,
   attemptNumber: true,
+  access: true,
   purchaseDate: true,
+  grantDate: true,
   attemptStatus: true,
   score: true,
   result: true,
@@ -84,6 +92,21 @@ const VerifiedIcon = () => (
   </svg>
 );
 
+const MoreIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="5" cy="12" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="19" cy="12" r="1.9" />
+  </svg>
+);
+
+const RevokeIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M5.6 5.6l12.8 12.8" />
+  </svg>
+);
+
 type SortKey = "name" | QuizColumnKey;
 type SortDir = "asc" | "desc";
 
@@ -109,7 +132,9 @@ const COLS: ColMeta[] = [
   { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: ({ u }) => u.email.toLowerCase() },
   { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: ({ u }) => u.phone },
   { key: "attemptNumber", label: "Attempt Purchased", className: "col-qp-attempt", width: 150, render: ({ p }) => <span className="qp-attempt">#{p.attemptNumber}</span>, sortValue: ({ p }) => p.attemptNumber },
-  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate },
+  { key: "access", label: "Access", className: "col-cp-access", width: 110, render: ({ p }) => <AccessCell purchase={p} />, sortValue: ({ p }) => (p.granted ? 0 : 1) },
+  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
+  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 140, render: ({ p }) => <GrantDateCell purchase={p} />, sortValue: ({ p }) => p.grantDate ?? "" },
   { key: "attemptStatus", label: "Attempt Status", className: "col-qp-status", width: 140, render: ({ p }) => <StatusCell status={p.status} />, sortValue: ({ p }) => STATUS_ORDER[p.status] },
   { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => <ScoreCell purchase={p} />, sortValue: ({ p }) => (p.score ?? -1) },
   { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => <ResultCell purchase={p} />, sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
@@ -158,11 +183,13 @@ export function QuizPurchasersPage({
   const [purchases, setPurchases] = useState<QuizPurchase[]>(() => buildQuizPurchases(task));
   const [columns, setColumns] = useState<QuizColumnState>(DEFAULT_COLUMNS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
+  const [accessTypes, setAccessTypes] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
+  const [menu, setMenu] = useState<{ row: Row; rect: DOMRect } | null>(null);
 
   const rows = useMemo<Row[]>(
     () =>
@@ -189,7 +216,8 @@ export function QuizPurchasersPage({
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
-    return rows.filter(({ u, f }) => {
+    return rows.filter(({ u, f, p }) => {
+      if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
       if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
@@ -203,7 +231,7 @@ export function QuizPurchasersPage({
         u.phone.toLowerCase().includes(q)
       );
     });
-  }, [rows, committedQuery, filters]);
+  }, [rows, committedQuery, filters, accessTypes]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
@@ -214,7 +242,7 @@ export function QuizPurchasersPage({
 
   useEffect(() => {
     setPage(1);
-  }, [committedQuery, filters, sort]);
+  }, [committedQuery, filters, accessTypes, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -236,12 +264,29 @@ export function QuizPurchasersPage({
       let next = nextAttemptNumber(prev, user.id);
       const additions: QuizPurchase[] = [];
       for (let i = 0; i < count; i++) {
-        additions.push(buildGrantedAttempt(user.id, next, today));
+        additions.push(buildGrantedAttempt(user.id, next, today, CURRENT_ADMIN));
         next += 1;
       }
       return [...additions, ...prev];
     });
     setGranting(false);
+  }
+
+  // A purchased/comped attempt can be revoked only before it's started.
+  function revokeAttempt(row: Row) {
+    const kind = row.p.granted ? "free" : "purchased";
+    const ok = window.confirm(
+      `Revoke ${row.u.name}'s ${kind} attempt #${row.p.attemptNumber} on “${task.name}”?\n\n` +
+        `The attempt is removed immediately. They can purchase the attempt again.`,
+    );
+    if (!ok) return;
+    setPurchases((prev) =>
+      prev.map((p) =>
+        p.userId === row.u.id && p.attemptNumber === row.p.attemptNumber
+          ? { ...p, revokedDate: todayIso() }
+          : p,
+      ),
+    );
   }
 
   return (
@@ -286,7 +331,18 @@ export function QuizPurchasersPage({
                 />
               </div>
 
-              <UsersFilters filters={filters} setFilters={setFilters} />
+              <UsersFilters
+                filters={filters}
+                setFilters={setFilters}
+                extra={
+                  <MultiPill
+                    label="Access"
+                    all={ACCESS_OPTIONS}
+                    value={accessTypes}
+                    onApply={setAccessTypes}
+                  />
+                }
+              />
 
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
                 <table className="table table-head">
@@ -314,28 +370,14 @@ export function QuizPurchasersPage({
                     <ColGroup cols={visibleCols} />
                     <tbody>
                       {paged.map((row) => (
-                        <tr
+                        <PurchaserRow
                           key={`${row.u.id}-${row.p.attemptNumber}`}
-                          className={row.u.id === selectedId ? "selected" : ""}
+                          row={row}
+                          cols={visibleCols}
+                          selected={row.u.id === selectedId}
                           onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
-                        >
-                          <td className="col-name">
-                            <span className="cp-name-wrap">
-                              <span className="cp-name">{row.u.name}</span>
-                              {row.p.granted && (
-                                <span className="cp-granted-badge" title="Free attempt granted by an admin">
-                                  Granted
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          {visibleCols.map((c) => (
-                            <td key={c.key} className={c.className}>
-                              {c.render(row)}
-                            </td>
-                          ))}
-                          <td className="col-actions" />
-                        </tr>
+                          onOpenMenu={(rect) => setMenu({ row, rect })}
+                        />
                       ))}
                       {paged.length === 0 && (
                         <tr>
@@ -372,6 +414,168 @@ export function QuizPurchasersPage({
           onGrant={grantAttempts}
           onClose={() => setGranting(false)}
         />
+      )}
+
+      {menu && (
+        <AttemptActionsMenu
+          row={menu.row}
+          rect={menu.rect}
+          onClose={() => setMenu(null)}
+          onRevoke={() => revokeAttempt(menu.row)}
+        />
+      )}
+    </div>
+  );
+}
+
+function PurchaserRow({
+  row,
+  cols,
+  selected,
+  onClick,
+  onOpenMenu,
+}: {
+  row: Row;
+  cols: ColMeta[];
+  selected: boolean;
+  onClick: () => void;
+  onOpenMenu: (rect: DOMRect) => void;
+}) {
+  const { u, p } = row;
+  return (
+    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""}`.trim()} onClick={onClick}>
+      <td className="col-name">
+        <span className="cp-name-wrap">
+          <span className="cp-name">{u.name}</span>
+          {p.granted && (
+            <span className="cp-granted-badge" title="Free attempt granted by an admin">Granted</span>
+          )}
+          {p.revokedDate && (
+            <span className="cp-revoked-badge" title={`Attempt revoked ${formatDate(p.revokedDate)}`}>Revoked</span>
+          )}
+        </span>
+      </td>
+      {cols.map((c) => (
+        <td key={c.key} className={c.className}>
+          {c.render(row)}
+        </td>
+      ))}
+      <td className="col-actions">
+        <button
+          className="row-action-btn lone-dots"
+          aria-label="More"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMenu(e.currentTarget.getBoundingClientRect());
+          }}
+        >
+          <MoreIcon />
+        </button>
+        <div className="row-action-bar">
+          <button
+            className="row-action-btn"
+            aria-label="More"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMenu(e.currentTarget.getBoundingClientRect());
+            }}
+          >
+            <MoreIcon />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* ─────────────── Three-dot row actions menu ─────────────── */
+/* Fixed-positioned so it escapes the table's scroll container. Revoke is only
+   enabled while the attempt has not been started (or already revoked). */
+
+function AttemptActionsMenu({
+  row,
+  rect,
+  onClose,
+  onRevoke,
+}: {
+  row: Row;
+  rect: DOMRect;
+  onClose: () => void;
+  onRevoke: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let left = rect.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
+    setPos({ top, left });
+  }, [rect]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    }
+    function onScroll() {
+      onClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const alreadyRevoked = !!row.p.revokedDate;
+  const notStarted = row.p.status === "Not Started";
+  const canRevoke = notStarted && !alreadyRevoked;
+
+  return (
+    <div
+      ref={ref}
+      className="u-menu"
+      style={{
+        top: pos ? pos.top : rect.bottom + 6,
+        left: pos ? pos.left : rect.right - 210,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="u-menu-head">
+        <div className="u-menu-head-name">{row.u.name}</div>
+        <div className="u-menu-head-id">{row.u.email}</div>
+      </div>
+      <div className="u-menu-divider" />
+      <button
+        className="u-menu-item u-menu-item--danger"
+        disabled={!canRevoke}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!canRevoke) return;
+          onRevoke();
+          onClose();
+        }}
+      >
+        <span className="u-menu-item-icon"><RevokeIcon /></span>
+        Revoke access
+      </button>
+      {alreadyRevoked ? (
+        <div className="u-menu-note">Attempt already revoked.</div>
+      ) : (
+        !notStarted && <div className="u-menu-note">Only a not-started attempt can be revoked.</div>
       )}
     </div>
   );
@@ -447,6 +651,32 @@ function VerifiedCell({ text, verified }: { text: string; verified: boolean }) {
           <VerifiedIcon />
         </span>
       )}
+    </span>
+  );
+}
+
+function AccessCell({ purchase }: { purchase: QuizPurchase }) {
+  if (purchase.granted) {
+    return (
+      <span
+        className="cp-access cp-access--free"
+        title={purchase.grantedBy ? `Free attempt granted by ${purchase.grantedBy}` : "Free attempt granted by an admin"}
+      >
+        Free
+      </span>
+    );
+  }
+  return <span className="cp-access cp-access--paid">Paid</span>;
+}
+
+function GrantDateCell({ purchase }: { purchase: QuizPurchase }) {
+  if (!purchase.grantDate) return <span className="u-muted">—</span>;
+  return (
+    <span
+      className="cp-grant-date"
+      title={purchase.grantedBy ? `Granted by ${purchase.grantedBy}` : undefined}
+    >
+      {formatDate(purchase.grantDate)}
     </span>
   );
 }

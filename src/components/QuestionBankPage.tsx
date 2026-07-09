@@ -6,15 +6,18 @@ import {
   selectionLabel,
   shortQuestionType,
   supportsGrading,
+  versionHistory,
   type Category,
   type CategorySelection,
   type Question,
   type QuestionStatus,
+  type QuestionVersion,
   type ShortQuestionType,
   type Subcategory,
 } from "../data/questionBank";
 import {
   CheckIcon,
+  ChevronLeftIcon,
   SearchIcon,
   SmallXIcon,
   SortIcon,
@@ -24,7 +27,6 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
-import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 12;
@@ -152,12 +154,14 @@ const PencilIcon = () => (
 export function QuestionBankPage({
   onNewQuestion,
   onEditQuestion,
+  initialQuestions,
 }: {
   onNewQuestion?: (categoryPath?: string[]) => void;
   onEditQuestion?: (question: Question) => void;
+  initialQuestions?: Question[];
 } = {}) {
   const [categories, setCategories] = useState<Category[]>(seedCategories);
-  const [questions, setQuestions] = useState<Question[]>(allQuestions);
+  const [questions, setQuestions] = useState<Question[]>(initialQuestions ?? allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
   // Row-click preview panel + version-history modal
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -400,6 +404,20 @@ export function QuestionBankPage({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dropzoneActive, setDropzoneActive] = useState(false);
 
+  // Version history opens as its own full page (replacing the list), not a modal.
+  if (historyQ) {
+    return (
+      <QuestionHistoryPage
+        question={historyQ}
+        onBack={() => setHistoryQ(null)}
+        onRestore={() => {
+          restoreVersion(historyQ.id);
+          setHistoryQ(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="main">
       <div className="workspace">
@@ -630,7 +648,7 @@ export function QuestionBankPage({
               </button>
             </div>
 
-            <div className="table-xscroll" style={{ "--table-min": "878px" } as React.CSSProperties}>
+            <div className="table-xscroll" style={{ "--table-min": "976px" } as React.CSSProperties}>
             <table className="table table-head qb-q-table">
               <QbColGroup />
               <thead>
@@ -639,7 +657,12 @@ export function QuestionBankPage({
                   <QbHeader col="type" label="Type" sort={sort} toggle={toggleSort} />
                   <QbHeader col="version" label="Version" sort={sort} toggle={toggleSort} />
                   <QbHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="usage" label="Used in" sort={sort} toggle={toggleSort} sortable={false} />
+                  <th className="qb-col-quizzes no-sort">
+                    <span className="th-content">Quizzes</span>
+                  </th>
+                  <th className="qb-col-forms no-sort">
+                    <span className="th-content">Feedback Forms</span>
+                  </th>
                   <th className="col-actions" />
                 </tr>
               </thead>
@@ -663,7 +686,7 @@ export function QuestionBankPage({
                   ))}
                   {paged.length === 0 && (
                     <tr className="qb-empty-row">
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <div className="qb-empty">No questions match the current filters.</div>
                       </td>
                     </tr>
@@ -719,15 +742,6 @@ export function QuestionBankPage({
           onArchive={() => toggleArchive(rowMenu.q.id)}
           onPreview={() => setSelectedId(rowMenu.q.id)}
           onVersionHistory={() => setHistoryQ(rowMenu.q)}
-        />
-      )}
-
-      {/* ─── Version history modal ─── */}
-      {historyQ && (
-        <QuestionHistoryModal
-          question={historyQ}
-          onClose={() => setHistoryQ(null)}
-          onRestore={() => restoreVersion(historyQ.id)}
         />
       )}
 
@@ -999,11 +1013,12 @@ function CatDeleteConfirm({
 function QbColGroup() {
   return (
     <colgroup>
-      <col style={{ width: 300 }} />
-      <col style={{ width: 96 }} />
-      <col style={{ width: 92 }} />
-      <col style={{ width: 120 }} />
-      <col style={{ width: 230 }} />
+      <col style={{ width: 280 }} />
+      <col style={{ width: 84 }} />
+      <col style={{ width: 84 }} />
+      <col style={{ width: 108 }} />
+      <col style={{ width: 190 }} />
+      <col style={{ width: 190 }} />
       <col style={{ width: 40 }} />
     </colgroup>
   );
@@ -1040,6 +1055,166 @@ function QbHeader({
   );
 }
 
+/* Version history for a question — a full page (not a modal) with a table of
+   every version. Restoring an old version creates a NEW version with its
+   content; versions with no pinned attempts can be deleted. */
+function QuestionHistoryPage({
+  question,
+  onBack,
+  onRestore,
+}: {
+  question: Question;
+  onBack: () => void;
+  onRestore: (fromVersion: number) => void;
+}) {
+  const [versions, setVersions] = useState<QuestionVersion[]>(() =>
+    versionHistory(question),
+  );
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onBack();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onBack]);
+
+  return (
+    <div className="main">
+      <div className="workspace">
+        <div className="tasks qh-page">
+          <header className="qh-page-header">
+            <button className="fb-back-btn" onClick={onBack}>
+              <ChevronLeftIcon />
+              <span>Question Bank</span>
+            </button>
+            <div className="qh-page-titleblock">
+              <div className="fb-row-id">
+                {question.id} · {shortQuestionType(question.type)} · v
+                {question.version}
+              </div>
+              <h1 className="tasks-title">Version history</h1>
+              <div className="qh-page-sub">{question.text}</div>
+            </div>
+          </header>
+
+          <div className="qh-page-body">
+            {versions.length === 0 ? (
+              <div className="qh-empty">
+                No versions yet — this question hasn't been saved.
+              </div>
+            ) : (
+              <table className="qh-table">
+                <colgroup>
+                  <col style={{ width: 128 }} />
+                  <col />
+                  <col style={{ width: 150 }} />
+                  <col style={{ width: 150 }} />
+                  <col style={{ width: 280 }} />
+                  <col style={{ width: 170 }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Change</th>
+                    <th>Date</th>
+                    <th>Author</th>
+                    <th>Usage</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {versions.map((v) => {
+                    const isCurrent = v.version === question.version;
+                    const deletable = !isCurrent && v.attempts === 0;
+                    return (
+                      <tr
+                        key={v.version}
+                        className={`qh-trow ${isCurrent ? "is-current" : ""}`}
+                      >
+                        <td className="qh-td-version">
+                          <span className="qh-vtag">v{v.version}</span>
+                          {isCurrent && (
+                            <span className="qh-current-pill">Current</span>
+                          )}
+                        </td>
+                        <td className="qh-td-note">{v.note}</td>
+                        <td className="qh-td-date">{v.date}</td>
+                        <td className="qh-td-author">{v.author}</td>
+                        <td className="qh-td-usage">
+                          <span
+                            className={`qh-usage ${
+                              v.attempts === 0 ? "is-unused" : ""
+                            }`}
+                          >
+                            {v.attempts === 0
+                              ? isCurrent
+                                ? "No attempts yet"
+                                : "Never answered — can be deleted"
+                              : `Pinned to ${v.attempts.toLocaleString()} past attempt${
+                                  v.attempts === 1 ? "" : "s"
+                                }/response${v.attempts === 1 ? "" : "s"}`}
+                          </span>
+                        </td>
+                        <td className="qh-td-actions">
+                          {!isCurrent && (
+                            <button
+                              className="qh-action-btn"
+                              title={`Create a new version with v${v.version}'s content`}
+                              onClick={() => onRestore(v.version)}
+                            >
+                              Restore
+                            </button>
+                          )}
+                          {deletable && (
+                            <button
+                              className="qh-action-btn qh-action-btn--danger"
+                              onClick={() =>
+                                setVersions((prev) =>
+                                  prev.filter((x) => x.version !== v.version),
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            <div className="qh-foot-note">
+              Past quiz attempts and form responses permanently reference the
+              version they answered. Versions that were never answered can be
+              deleted; used versions are retained.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One "Used in" cell — lists the quiz or form names the question is used in,
+// truncated to the first name with a "+N more" tail (full list in the tooltip).
+function UsageNames({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <span className="qb-usage-empty">—</span>;
+  }
+  const [first, ...rest] = items;
+  return (
+    <span className="qb-usage-main" title={items.join(", ")}>
+      {first}
+      {rest.length > 0 && (
+        <span className="qb-usage-extra"> +{rest.length} more</span>
+      )}
+    </span>
+  );
+}
+
 function QuestionRow({
   q,
   selected,
@@ -1054,11 +1229,6 @@ function QuestionRow({
   onOpenMenu: (rect: DOMRect) => void;
 }) {
   const isArchived = q.status === "Archived";
-  const usageParts: string[] = [];
-  if (q.quizzes.length > 0)
-    usageParts.push(`${q.quizzes.length} quiz${q.quizzes.length === 1 ? "" : "zes"}`);
-  if (q.forms.length > 0)
-    usageParts.push(`${q.forms.length} form${q.forms.length === 1 ? "" : "s"}`);
   return (
     <tr
       className={`qb-row ${isArchived ? "is-archived" : ""} ${selected ? "is-selected" : ""}`}
@@ -1077,17 +1247,11 @@ function QuestionRow({
           {q.status}
         </span>
       </td>
-      <td className="qb-col-usage">
-        {usageParts.length === 0 ? (
-          <span className="qb-usage-empty">Not in use</span>
-        ) : (
-          <span
-            className="qb-usage-main"
-            title={[...q.quizzes, ...q.forms].join(", ")}
-          >
-            {usageParts.join(" · ")}
-          </span>
-        )}
+      <td className="qb-col-quizzes">
+        <UsageNames items={q.quizzes} />
+      </td>
+      <td className="qb-col-forms">
+        <UsageNames items={q.forms} />
       </td>
       <td className="col-actions">
         <button
