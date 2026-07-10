@@ -112,6 +112,81 @@ type View =
   | { name: "transfer-subscription" }
   | { name: "permissions" };
 
+// --- URL routing for top-level nav pages -----------------------------------
+// The app is a single-state view switcher; we give each left-nav destination
+// its own URL (e.g. /moodle-escape-plan/spotlight) by syncing the History API
+// with the `view` state. Only the nav landing pages are routed — wizards and
+// detail sub-views keep their parent page's URL.
+const BASE = import.meta.env.BASE_URL; // "/moodle-escape-plan/"
+
+// view.name  ->  URL slug
+const VIEW_SLUGS: Record<string, string> = {
+  tasks: "tasks",
+  "question-bank": "question-bank",
+  certs: "certifications",
+  industries: "industries",
+  skills: "skills",
+  awards: "awards",
+  feedback: "feedback",
+  "content-overrides": "certification-lookup",
+  "review-hands-on": "review-hands-on",
+  proctoring: "proctoring-review",
+  "name-change-requests": "name-change-requests",
+  "merge-accounts": "merge-accounts",
+  "transfer-subscription": "transfer-subscription",
+  users: "users",
+  scholarship: "scholarship",
+  "offer-codes": "offer-codes",
+  companies: "companies",
+  spotlight: "spotlight",
+  "product-config": "product-config",
+  permissions: "permissions",
+};
+
+// URL slug -> view
+const SLUG_TO_VIEW: Record<string, View> = Object.fromEntries(
+  Object.entries(VIEW_SLUGS).map(([name, slug]) => [slug, { name } as View]),
+);
+
+// Sidebar navKey -> view (mirrors the sidebar item navKeys)
+const NAV_KEY_TO_VIEW: Record<string, View> = {
+  certs: { name: "certs" },
+  tasks: { name: "tasks" },
+  skills: { name: "skills" },
+  awards: { name: "awards" },
+  "question-bank": { name: "question-bank" },
+  spotlight: { name: "spotlight" },
+  "proctoring-review": { name: "proctoring" },
+  scholarship: { name: "scholarship" },
+  feedback: { name: "feedback" },
+  industries: { name: "industries" },
+  "manage-companies": { name: "companies" },
+  "manage-users": { name: "users" },
+  "offer-codes": { name: "offer-codes" },
+  "review-hands-on": { name: "review-hands-on" },
+  "name-change-requests": { name: "name-change-requests" },
+  "content-overrides": { name: "content-overrides" },
+  "product-config": { name: "product-config" },
+  "merge-accounts": { name: "merge-accounts" },
+  "transfer-subscription": { name: "transfer-subscription" },
+  permissions: { name: "permissions" },
+};
+
+function currentSlug(): string {
+  let p = window.location.pathname;
+  if (p.startsWith(BASE)) p = p.slice(BASE.length);
+  return p.replace(/^\/+|\/+$/g, "");
+}
+
+function viewFromUrl(): View {
+  return SLUG_TO_VIEW[currentSlug()] ?? { name: "tasks" };
+}
+
+function urlForView(view: View): string {
+  const slug = VIEW_SLUGS[view.name];
+  return slug ? BASE + slug : BASE;
+}
+
 export default function App() {
   // Standalone, full-tab pages opened from the Users table ("open in new tab").
   // These render without the admin shell (no sidebar).
@@ -143,7 +218,7 @@ function StandaloneNotFound({ id }: { id: string }) {
 }
 
 function AdminApp() {
-  const [view, setView] = useState<View>({ name: "tasks" });
+  const [view, setView] = useState<View>(viewFromUrl);
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
@@ -165,6 +240,20 @@ function AdminApp() {
       }),
     );
   }, [forms]);
+
+  // Keep the address bar in sync with the initial view, and follow the
+  // browser's back/forward buttons by re-reading the URL into view state.
+  useEffect(() => {
+    const canonical = urlForView(viewFromUrl());
+    if (window.location.pathname !== canonical) {
+      window.history.replaceState({}, "", canonical);
+    }
+    function onPopState() {
+      setView(viewFromUrl());
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // ⌘K / Ctrl+K focuses the current page's search bar (the inputs that show the
   // ⌘K hint), ready to type. Picks the first visible matching input.
@@ -233,26 +322,10 @@ function AdminApp() {
       : "tasks";
 
   function navigate(key: string) {
-    if (key === "certs") setView({ name: "certs" });
-    else if (key === "tasks") setView({ name: "tasks" });
-    else if (key === "skills") setView({ name: "skills" });
-    else if (key === "awards") setView({ name: "awards" });
-    else if (key === "question-bank") setView({ name: "question-bank" });
-    else if (key === "spotlight") setView({ name: "spotlight" });
-    else if (key === "proctoring-review") setView({ name: "proctoring" });
-    else if (key === "scholarship") setView({ name: "scholarship" });
-    else if (key === "feedback") setView({ name: "feedback" });
-    else if (key === "industries") setView({ name: "industries" });
-    else if (key === "manage-companies") setView({ name: "companies" });
-    else if (key === "manage-users") setView({ name: "users" });
-    else if (key === "offer-codes") setView({ name: "offer-codes" });
-    else if (key === "review-hands-on") setView({ name: "review-hands-on" });
-    else if (key === "name-change-requests") setView({ name: "name-change-requests" });
-    else if (key === "content-overrides") setView({ name: "content-overrides" });
-    else if (key === "product-config") setView({ name: "product-config" });
-    else if (key === "merge-accounts") setView({ name: "merge-accounts" });
-    else if (key === "transfer-subscription") setView({ name: "transfer-subscription" });
-    else if (key === "permissions") setView({ name: "permissions" });
+    const next = NAV_KEY_TO_VIEW[key];
+    if (!next) return;
+    setView(next);
+    window.history.pushState({}, "", urlForView(next));
   }
 
   function addCompany(company: Omit<Company, "id">) {
