@@ -118,4 +118,32 @@ export const spotlights: Spotlight[] = [
     submittedAt: "2026-05-14",
     status: "pending",
   },
+  {
+    id: "SP-0007",
+    headingEn: "Spring Skills Challenge — win a tool kit",
+    headingEs: "Desafío de Habilidades de Primavera — gana un kit",
+    descriptionEn:
+      "Complete 5 hands-on tasks in April for a chance to win a pro-grade tool kit. Winners announced May 1.",
+    ctaTextEn: "See Winners",
+    ctaUrl: "https://events.skillcat.com/spring-challenge",
+    imageHint: "spring-toolkit.jpg",
+    endDate: "2026-04-30",
+    submittedBy: "Priya Iyer",
+    submittedAt: "2026-04-01",
+    approvedBy: "Akash Patel",
+    status: "approved",
+  },
+  {
+    id: "SP-0006",
+    headingEn: "Beta: In-app Study Groups",
+    descriptionEn:
+      "We tested peer study groups with a small cohort. Pulled from the queue while we rework the feature.",
+    ctaTextEn: "Learn More",
+    ctaUrl: "skillcat://feature/study-groups",
+    endDate: "2026-07-20",
+    submittedBy: "Diego Ramos",
+    submittedAt: "2026-04-22",
+    approvedBy: "Akash Patel",
+    status: "deactivated",
+  },
 ];
