@@ -25,7 +25,7 @@ import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
-import { FeedbackFormDetail } from "./components/FeedbackFormDetail";
+import { FeedbackFormWizard } from "./components/FeedbackFormWizard";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
 import { NewCompanyWizard } from "./components/NewCompanyWizard";
@@ -35,6 +35,7 @@ import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
 import { OfferCodesPage } from "./components/OfferCodesPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
 import { ProductConfigPage } from "./components/ProductConfigPage";
+import { PermissionsPage } from "./components/PermissionsPage";
 import { MergeAccountsPage } from "./components/MergeAccountsPage";
 import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
@@ -108,7 +109,8 @@ type View =
   | { name: "content-overrides" }
   | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" }
   | { name: "merge-accounts" }
-  | { name: "transfer-subscription" };
+  | { name: "transfer-subscription" }
+  | { name: "permissions" };
 
 export default function App() {
   // Standalone, full-tab pages opened from the Users table ("open in new tab").
@@ -226,6 +228,8 @@ function AdminApp() {
       ? "merge-accounts"
       : view.name === "transfer-subscription"
       ? "transfer-subscription"
+      : view.name === "permissions"
+      ? "permissions"
       : "tasks";
 
   function navigate(key: string) {
@@ -248,6 +252,7 @@ function AdminApp() {
     else if (key === "product-config") setView({ name: "product-config" });
     else if (key === "merge-accounts") setView({ name: "merge-accounts" });
     else if (key === "transfer-subscription") setView({ name: "transfer-subscription" });
+    else if (key === "permissions") setView({ name: "permissions" });
   }
 
   function addCompany(company: Omit<Company, "id">) {
@@ -423,6 +428,8 @@ function AdminApp() {
         <MergeAccountsPage />
       ) : view.name === "transfer-subscription" ? (
         <TransferSubscriptionPage />
+      ) : view.name === "permissions" ? (
+        <PermissionsPage />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
@@ -430,7 +437,7 @@ function AdminApp() {
           onCreate={(form) => upsertForm(form)}
         />
       ) : view.name === "feedback-detail" && activeForm ? (
-        <FeedbackFormDetail
+        <FeedbackFormWizard
           form={activeForm}
           allForms={forms}
           bank={bank}

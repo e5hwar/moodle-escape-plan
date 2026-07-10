@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { SmallXIcon, ImageIcon } from "./icons";
+import type { Spotlight } from "../data/spotlights";
+import { QueuePositionPicker } from "./QueuePositionPicker";
 
 type Draft = {
   headingEn: string;
@@ -15,9 +17,8 @@ type Draft = {
 
 type Props = {
   onClose: () => void;
-  onSubmit: (draft: Draft) => void;
-  placeholderPosition: number;
-  totalAfter: number;
+  onSubmit: (draft: Draft, insertIndex: number) => void;
+  spotlights: Spotlight[];
 };
 
 const TODAY = "2026-05-15";
@@ -26,8 +27,7 @@ const MAX_END = "2026-11-15"; // 6 months from today
 export function CreateSpotlightPanel({
   onClose,
   onSubmit,
-  placeholderPosition,
-  totalAfter,
+  spotlights,
 }: Props) {
   const [draft, setDraft] = useState<Draft>({
     headingEn: "",
@@ -41,6 +41,8 @@ export function CreateSpotlightPanel({
     imageHint: undefined,
   });
   const [imageName, setImageName] = useState<string | null>(null);
+  // Where the new Spotlight is inserted in the queue. Defaults to the end.
+  const [insertIndex, setInsertIndex] = useState(spotlights.length);
 
   function update<K extends keyof Draft>(k: K, v: Draft[K]) {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -54,7 +56,7 @@ export function CreateSpotlightPanel({
 
   function handleSubmit() {
     if (!valid) return;
-    onSubmit({ ...draft, imageHint: imageName ?? undefined });
+    onSubmit({ ...draft, imageHint: imageName ?? undefined }, insertIndex);
   }
 
   return (
@@ -194,25 +196,20 @@ export function CreateSpotlightPanel({
         </section>
 
         <section className="sp-section sp-section--position">
-          <label className="form-label">Queue position</label>
-          <div className="sp-position-card">
-            <div className="sp-position-pos">
-              <div className="sp-position-pos-num">{placeholderPosition}</div>
-              <div className="sp-position-pos-sub">
-                of {totalAfter} after approval
-              </div>
-            </div>
-            <div className="sp-position-text">
-              <div className="sp-position-title">
-                Drag the dashed card on the left to reposition.
-              </div>
-              <div className="sp-position-desc">
-                The Spotlight in position 1 is shown to users first. Approvers
-                can adjust this before approving. Positions are relative —
-                they're maintained if neighbouring Spotlights are removed.
-              </div>
-            </div>
+          <div className="sp-qpicker-head">
+            <label className="form-label">Queue position</label>
           </div>
+          <p className="form-help sp-qpicker-help">
+            Position 1 shows to users first. Pick a slot below to place your new
+            Spotlight — it defaults to the end of the queue. Approvers can
+            reorder before approving.
+          </p>
+          <QueuePositionPicker
+            items={spotlights}
+            index={insertIndex}
+            onChange={setInsertIndex}
+            movingLabel={draft.headingEn.trim() || "Your new Spotlight"}
+          />
         </section>
       </div>
 

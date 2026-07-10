@@ -11,6 +11,8 @@ import {
   IndentLeftIcon,
   LinkSmallIcon,
   UploadIcon,
+  GlobeIcon,
+  LockIcon,
 } from "./icons";
 
 /* ─── Icons ─── */
@@ -37,6 +39,11 @@ const CheckIcon = () => (
 const CloseIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 6L6 18M6 6l12 12" />
+  </svg>
+);
+const RedirectIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
   </svg>
 );
 
@@ -906,6 +913,57 @@ function SupportSection({
   );
 }
 
+/* ─── App Deep Links (read-only) ─── */
+type DeepLink = { id: string; label: string; url: string; requiresLogin: boolean };
+
+const APP_DEEP_LINKS: DeepLink[] = [
+  { id: "dl-cert-list", label: "Certification List", url: "skillcat.app/browse", requiresLogin: false },
+  { id: "dl-id-reupload", label: "ID Reupload", url: "skillcat.app/reupload-id", requiresLogin: true },
+  { id: "dl-verify-cert", label: "Verify Certificate", url: "skillcat.app/verify-certificate", requiresLogin: false },
+];
+
+function DeepLinksSection({ links }: { links: DeepLink[] }) {
+  return (
+    <div className="pc-section">
+      <div className="pc-section-head">
+        <h2 className="pc-section-title">App Deep Links</h2>
+        <p className="pc-section-desc">
+          Read-only reference of the app’s deep links and whether each destination requires the
+          user to be logged in.
+        </p>
+      </div>
+      <div className="pc-ds-support-list">
+        {links.map((link) => {
+          const href = `https://${link.url}`;
+          return (
+            <div key={link.id} className="pc-ds-support-row pc-dl-row">
+              <span className="pc-ds-support-label">{link.label}</span>
+              <code className="pc-dl-url">{link.url}</code>
+              <span
+                className={`pc-dl-access${link.requiresLogin ? " needs-login" : " public"}`}
+                title={link.requiresLogin ? "Requires login" : "Can be opened without login"}
+              >
+                {link.requiresLogin ? <LockIcon /> : <GlobeIcon />}
+                {link.requiresLogin ? "Login required" : "No login"}
+              </span>
+              <a
+                className="pc-dl-redirect"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in a new tab"
+                aria-label={`Open ${link.label} in a new tab`}
+              >
+                <RedirectIcon />
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Placeholder sections ─── */
 function PlaceholderSection({ title, desc }: { title: string; desc: string }) {
   return (
@@ -996,6 +1054,8 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
                   placeholder="20"
                   unit="seconds"
                 />
+                <div className="pc-section-divider" />
+                <DeepLinksSection links={APP_DEEP_LINKS} />
               </>
             )}
 

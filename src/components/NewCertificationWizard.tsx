@@ -13,7 +13,6 @@ import {
   VideoIcon,
   AudioIcon,
   SmallXIcon,
-  DragHandleIcon,
 } from "./icons";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { Dropdown } from "./Dropdown";
@@ -142,6 +141,43 @@ const LayersIcon = () => (
     <path d="M2 12l10 5 10-5" />
   </svg>
 );
+
+// Pencil — opens a node's inline name/description editor.
+const PencilIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  </svg>
+);
+// Trash — removes a Course, Lesson, or Task from the tree.
+const TrashIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+  </svg>
+);
+// Book — Lesson marker in the tree.
+const BookIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+);
+// Right chevron — rotates 90° when a Course is expanded (see .cert-course.expanded).
+const CaretIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 6 15 12 9 18" />
+  </svg>
+);
+const PlusMiniIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+// Draggable dot-grid handle. Decorative — signals reorderability (matches the
+// Task tree's drag affordance without wiring live drag-and-drop).
+const DragDots = () => <span className="cert-dots" title="Drag to reorder" aria-hidden="true" />;
 
 // Tree-node IDs created during a session. The counter guards against collisions
 // when several nodes are created within the same millisecond.
@@ -321,7 +357,6 @@ type WizardData = {
   keywordsEn: string;
   keywordsEs: string;
 
-  forceOrder: boolean;
   courses: CertCourse[];
 
   // Certifications merged into this one via "Create as Learning Plan", in the
@@ -364,7 +399,6 @@ const BLANK_DATA: WizardData = {
   keywordsEn: "",
   keywordsEs: "",
 
-  forceOrder: false,
   courses: [],
 
   importedCerts: [],
@@ -863,6 +897,15 @@ function TaskKindBadge({ kind }: { kind: TaskKind }) {
   return <span className={`task-kind-badge ${k.cls}`}>{k.letter}</span>;
 }
 
+// The "warmed gutter" that labels each Task row by type. The label sits in a
+// mono, type-coloured left rail — the type is legible without a coloured chip.
+const KIND_GUTTER: Record<TaskKind, { label: string; color: string }> = {
+  xapi: { label: "xAPI", color: "#7fa9ff" },
+  quiz: { label: "QUIZ", color: "#f0a76a" },
+  "hands-on": { label: "HANDS-ON", color: "#c79be6" },
+  file: { label: "RESOURCE", color: "#9aa6b2" },
+};
+
 function courseStats(course: CertCourse): { tasks: number; lessons: number; minutes: number } {
   let tasks = 0;
   let lessons = 0;
@@ -900,6 +943,10 @@ function TasksStep({
   onAddExisting: (courseId: string, lessonId: string | undefined, task: Task) => void;
 }) {
   const [importing, setImporting] = useState(false);
+  // Which Course/Lesson node currently has its name/description editor open.
+  // Adding a Course or Lesson opens its editor immediately; only one is open at
+  // a time, matching the prototype's focused inline-editing model.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Reconcile the Learning Plan with the Certifications chosen in the importer.
   // Imported Courses come first (in the chosen order), then any Courses the admin
@@ -954,7 +1001,17 @@ function TasksStep({
   function removeCourse(id: string) {
     // At least one Course is mandatory — never remove the last one.
     if (data.courses.length <= 1) return;
+    if (editingId === id) setEditingId(null);
     update({ courses: data.courses.filter((c) => c.id !== id) });
+  }
+
+  // Closing a Course editor. A freshly-added Course left completely empty is
+  // dropped on cancel (unless it's the only Course); otherwise the editor closes.
+  function cancelCourseEditor(course: CertCourse) {
+    setEditingId(null);
+    if (data.courses.length > 1 && isEmptyCourse(course)) {
+      update({ courses: data.courses.filter((c) => c.id !== course.id) });
+    }
   }
 
   // Apply a transform to one Lesson nested inside a Course.
@@ -998,18 +1055,50 @@ function TasksStep({
     });
   }
 
+  // Closing a Lesson editor. A freshly-added Lesson left empty (no name, no
+  // tasks) is dropped on cancel; otherwise the editor just closes.
+  function cancelLessonEditor(courseId: string, lesson: CertLesson) {
+    setEditingId(null);
+    if (!lesson.nameEn.trim() && !lesson.nameEs.trim() && lesson.tasks.length === 0) {
+      removeLesson(courseId, lesson.id);
+    }
+  }
+
   function addLesson(courseId: string) {
+    const lesson = newLesson();
     update({
       courses: data.courses.map((c) =>
         c.id === courseId
-          ? { ...c, expanded: true, children: [...c.children, { kind: "lesson", lesson: newLesson() }] }
+          ? { ...c, expanded: true, children: [...c.children, { kind: "lesson", lesson }] }
           : c,
       ),
     });
+    setEditingId(lesson.id);
   }
 
   function addCourse() {
-    update({ courses: [...data.courses, newCourse()] });
+    const course = newCourse();
+    update({ courses: [...data.courses, course] });
+    setEditingId(course.id);
+  }
+
+  // Remove a Task wherever it lives — directly under a Course or inside a Lesson.
+  function removeTaskById(taskId: string) {
+    update({
+      courses: data.courses.map((co) => ({
+        ...co,
+        children: co.children
+          .filter((ch) => !(ch.kind === "task" && ch.task.id === taskId))
+          .map((ch) =>
+            ch.kind === "lesson"
+              ? {
+                  kind: "lesson" as const,
+                  lesson: { ...ch.lesson, tasks: ch.lesson.tasks.filter((t) => t.id !== taskId) },
+                }
+              : ch,
+          ),
+      })),
+    });
   }
 
   // Patch a single Task wherever it lives in the tree (directly under a Course
@@ -1038,6 +1127,26 @@ function TasksStep({
 
   const allTasks = flattenTasks(data.courses);
   const plan = data.importedCerts;
+
+  // Header summary — total Courses, Tasks, and run time across the whole tree.
+  const totals = data.courses.reduce(
+    (acc, c) => {
+      const s = courseStats(c);
+      acc.courses += 1;
+      acc.tasks += s.tasks;
+      acc.lessons += s.lessons;
+      acc.minutes += s.minutes;
+      return acc;
+    },
+    { courses: 0, tasks: 0, lessons: 0, minutes: 0 },
+  );
+  const summary = [
+    `${totals.courses} Course${totals.courses === 1 ? "" : "s"}`,
+    `${totals.tasks} Task${totals.tasks === 1 ? "" : "s"}`,
+    totals.minutes > 0 ? formatDuration(totals.minutes) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <>
@@ -1085,23 +1194,11 @@ function TasksStep({
         </div>
       )}
 
-      <div className="cert-force-order">
-        <div className="cert-force-order-text">
-          <div className="cert-force-order-title">
-            <span className="cert-force-order-icon"><DragHandleIcon /></span>
-            Force Order
-          </div>
-          <div className="cert-force-order-desc">
-            Learners must complete Tasks in the order they appear. Each Task unlocks only after the previous one is complete, across all Courses and Lessons.
-          </div>
-        </div>
-        <button
-          className={`toggle ${data.forceOrder ? "on" : ""}`}
-          onClick={() => update({ forceOrder: !data.forceOrder })}
-          aria-pressed={data.forceOrder}
-        >
-          <span className="toggle-knob" />
-        </button>
+      <div className="cert-tasks-topline">
+        <span className="cert-tasks-topline-hint">
+          Courses hold Tasks — group with Lessons where it helps.
+        </span>
+        <span className="cert-tasks-topline-sum">{summary}</span>
       </div>
 
       <div className="cert-courses">
@@ -1111,11 +1208,17 @@ function TasksStep({
             course={course}
             index={idx + 1}
             required={data.courses.length <= 1}
+            editing={editingId === course.id}
+            editingId={editingId}
             allTasks={allTasks}
             onUpdateTask={updateTaskById}
+            onRemoveTask={removeTaskById}
             onToggle={() => toggleCourse(course.id)}
             onUpdate={(patch) => updateCourse(course.id, patch)}
             onToggleHidden={() => updateCourse(course.id, { hidden: !course.hidden })}
+            onOpenEditor={() => setEditingId(course.id)}
+            onCancelEditor={() => cancelCourseEditor(course)}
+            onSaveEditor={() => setEditingId(null)}
             onRemove={() => removeCourse(course.id)}
             onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
             onAddExistingTask={(task) => onAddExisting(course.id, undefined, task)}
@@ -1127,11 +1230,16 @@ function TasksStep({
             onToggleLessonHidden={(lessonId) =>
               mapLesson(course.id, lessonId, (l) => ({ ...l, hidden: !l.hidden }))
             }
+            onOpenLessonEditor={(lessonId) => setEditingId(lessonId)}
+            onCancelLessonEditor={(lesson) => cancelLessonEditor(course.id, lesson)}
+            onSaveLessonEditor={() => setEditingId(null)}
             onRemoveLesson={(lessonId) => removeLesson(course.id, lessonId)}
           />
         ))}
 
-        <button className="cert-add-course" onClick={addCourse}>+ Add Course</button>
+        <button className="cert-add-course" onClick={addCourse}>
+          <PlusMiniIcon /> Add course
+        </button>
       </div>
 
       {importing && (
@@ -1145,15 +1253,141 @@ function TasksStep({
   );
 }
 
+// Shared inline name + description editor for a Course or Lesson. Opened by the
+// pencil (or on creating a node); bilingual EN/ES, name required to save.
+function NodeEditor({
+  title,
+  hint,
+  nameEn,
+  nameEs,
+  descEn,
+  descEs,
+  namePlaceholder,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  title: string;
+  hint: string;
+  nameEn: string;
+  nameEs: string;
+  descEn: string;
+  descEs: string;
+  namePlaceholder: string;
+  onChange: (patch: { nameEn?: string; nameEs?: string; descEn?: string; descEs?: string }) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const canSave = nameEn.trim().length > 0;
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+      e.preventDefault();
+      if (canSave) onSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+  return (
+    <div className="cert-editor" onClick={(e) => e.stopPropagation()}>
+      <div className="cert-editor-head">
+        <span className="cert-editor-eyebrow">{title}</span>
+        <span className="cert-editor-hint">{hint}</span>
+      </div>
+      <div className="cert-editor-grid">
+        <div className="cert-editor-col">
+          <span className="cert-editor-lang">ENGLISH</span>
+          <input
+            className="cert-editor-input"
+            autoFocus
+            value={nameEn}
+            placeholder={namePlaceholder}
+            onChange={(e) => onChange({ nameEn: e.target.value })}
+            onKeyDown={onKey}
+          />
+          <textarea
+            className="cert-editor-text"
+            rows={3}
+            value={descEn}
+            placeholder="Description — rich text"
+            onChange={(e) => onChange({ descEn: e.target.value })}
+            onKeyDown={onKey}
+          />
+        </div>
+        <div className="cert-editor-col">
+          <span className="cert-editor-lang">ESPAÑOL</span>
+          <input
+            className="cert-editor-input"
+            value={nameEs}
+            placeholder="Nombre"
+            onChange={(e) => onChange({ nameEs: e.target.value })}
+            onKeyDown={onKey}
+          />
+          <textarea
+            className="cert-editor-text"
+            rows={3}
+            value={descEs}
+            placeholder="Descripción"
+            onChange={(e) => onChange({ descEs: e.target.value })}
+            onKeyDown={onKey}
+          />
+        </div>
+      </div>
+      <div className="cert-editor-foot">
+        <span className="cert-editor-kbd">↵ saves · esc cancels</span>
+        <span className="cert-editor-spacer" />
+        <button className="cert-editor-cancel" onClick={onCancel}>Cancel</button>
+        <button className="cert-editor-save" disabled={!canSave} onClick={onSave}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+// Small icon-button used for edit / hide / remove on Course and Lesson headers.
+function NodeAction({
+  variant,
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  variant?: "danger";
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      className={`cert-node-act ${variant === "danger" ? "danger" : ""}`}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onClick();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function CourseCard({
   course,
   index,
   required,
+  editing,
+  editingId,
   allTasks,
   onUpdateTask,
+  onRemoveTask,
   onToggle,
   onUpdate,
   onToggleHidden,
+  onOpenEditor,
+  onCancelEditor,
+  onSaveEditor,
   onRemove,
   onCreateTask,
   onAddExistingTask,
@@ -1163,16 +1397,25 @@ function CourseCard({
   onUpdateLesson,
   onToggleLesson,
   onToggleLessonHidden,
+  onOpenLessonEditor,
+  onCancelLessonEditor,
+  onSaveLessonEditor,
   onRemoveLesson,
 }: {
   course: CertCourse;
   index: number;
   required: boolean;
+  editing: boolean;
+  editingId: string | null;
   allTasks: CertTask[];
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
+  onRemoveTask: (taskId: string) => void;
   onToggle: () => void;
   onUpdate: (patch: Partial<CertCourse>) => void;
   onToggleHidden: () => void;
+  onOpenEditor: () => void;
+  onCancelEditor: () => void;
+  onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
   onAddExistingTask: (task: Task) => void;
@@ -1182,90 +1425,76 @@ function CourseCard({
   onUpdateLesson: (lessonId: string, patch: Partial<CertLesson>) => void;
   onToggleLesson: (lessonId: string) => void;
   onToggleLessonHidden: (lessonId: string) => void;
+  onOpenLessonEditor: (lessonId: string) => void;
+  onCancelLessonEditor: (lesson: CertLesson) => void;
+  onSaveLessonEditor: () => void;
   onRemoveLesson: (lessonId: string) => void;
 }) {
   const stats = courseStats(course);
+  const meta = [
+    `${stats.tasks} Task${stats.tasks === 1 ? "" : "s"}`,
+    stats.lessons > 0 ? `${stats.lessons} Lesson${stats.lessons > 1 ? "s" : ""}` : null,
+    stats.minutes > 0 ? formatDuration(stats.minutes) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const esMiss = !course.nameEs.trim();
   return (
     <div className={`cert-course ${course.expanded ? "expanded" : ""} ${course.hidden ? "hidden" : ""}`}>
       <div className="cert-course-header" onClick={onToggle}>
-        <span className="cert-course-drag"><DragHandleIcon /></span>
-        <span className="cert-course-caret">{course.expanded ? "▾" : "▸"}</span>
+        <DragDots />
+        <span className="cert-course-caret"><CaretIcon /></span>
         <span className="cert-course-num">{index}</span>
         <div className="cert-course-titles">
-          <div className="cert-course-name">
-            {course.nameEn || "Untitled Course"}
+          <div className="cert-course-name-row">
+            <span className="cert-course-name">{course.nameEn || "Untitled Course"}</span>
+            {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
             {course.sourceCertName && (
-              <span className="cert-source-pill">
-                <LayersIcon />
-                Imported
-              </span>
+              <span className="cert-source-pill"><LayersIcon />Imported</span>
             )}
             {required && <span className="cert-required-pill">Required</span>}
             {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
+            <span className="cert-course-spacer" />
+            <span className="cert-course-meta">{meta}</span>
           </div>
-          <div className="cert-course-meta">
-            {stats.tasks} Tasks
-            {stats.lessons > 0 && ` · ${stats.lessons} Lesson${stats.lessons > 1 ? "s" : ""}`}
-            {stats.minutes > 0 && ` · ${formatDuration(stats.minutes)}`}
-          </div>
+          {course.descEn && <div className="cert-course-desc">{course.descEn}</div>}
         </div>
-        <button
-          className={`cert-course-eye ${course.hidden ? "is-hidden" : ""}`}
-          aria-label={course.hidden ? "Show Course" : "Hide Course"}
-          aria-pressed={course.hidden}
-          onClick={(e) => { e.stopPropagation(); onToggleHidden(); }}
-        >
-          {course.hidden ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
-        <div className="cert-node-menu" onClick={(e) => e.stopPropagation()}>
-          <Dropdown
-            width={210}
-            align="right"
-            trigger={({ toggle }) => (
-              <button className="cert-course-menu" aria-label="More" onClick={toggle}>⋯</button>
-            )}
+        <div className="cert-node-acts" onClick={(e) => e.stopPropagation()}>
+          <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
+          <NodeAction label={course.hidden ? "Show Course" : "Hide Course"} onClick={onToggleHidden}>
+            {course.hidden ? <EyeOffIcon /> : <EyeIcon />}
+          </NodeAction>
+          <NodeAction
+            variant="danger"
+            label={required ? "At least one Course is required" : "Remove Course"}
+            disabled={required}
+            onClick={onRemove}
           >
-            {({ close }) => (
-              <div className="menu">
-                <button
-                  className="menu-item danger"
-                  disabled={required}
-                  onClick={() => { onRemove(); close(); }}
-                >
-                  Remove Course
-                </button>
-                {required && (
-                  <div className="menu-note">At least one Course is required.</div>
-                )}
-              </div>
-            )}
-          </Dropdown>
+            <TrashIcon />
+          </NodeAction>
         </div>
       </div>
 
+      {editing && (
+        <NodeEditor
+          title={course.nameEn.trim() ? "Edit course" : "New course"}
+          hint="every certification needs at least one course · name + description, EN/ES"
+          nameEn={course.nameEn}
+          nameEs={course.nameEs}
+          descEn={course.descEn}
+          descEs={course.descEs}
+          namePlaceholder="Course name (required)"
+          onChange={onUpdate}
+          onCancel={onCancelEditor}
+          onSave={onSaveEditor}
+        />
+      )}
+
       {course.expanded && (
         <div className="cert-course-body">
-          <div className="cert-node-edit">
-            <label className="cert-edit-label">Course name <span className="req">*</span></label>
-            <LangField
-              en={course.nameEn}
-              es={course.nameEs}
-              placeholderEn="Course name"
-              placeholderEs="Nombre del curso"
-              onChangeEn={(v) => onUpdate({ nameEn: v })}
-              onChangeEs={(v) => onUpdate({ nameEs: v })}
-            />
-            <label className="cert-edit-label">Course description</label>
-            <RichTextField
-              compact
-              en={course.descEn}
-              es={course.descEs}
-              placeholderEn="Describe this Course"
-              placeholderEs="Describe este curso"
-              onChangeEn={(v) => onUpdate({ descEn: v })}
-              onChangeEs={(v) => onUpdate({ descEs: v })}
-            />
-          </div>
+          {course.children.length === 0 && !editing && (
+            <div className="cert-course-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
+          )}
 
           {course.children.map((c) =>
             c.kind === "task" ? (
@@ -1274,16 +1503,22 @@ function CourseCard({
                 task={c.task}
                 allTasks={allTasks}
                 onUpdate={(patch) => onUpdateTask(c.task.id, patch)}
+                onRemove={() => onRemoveTask(c.task.id)}
               />
             ) : (
               <LessonCard
                 key={c.lesson.id}
                 lesson={c.lesson}
+                editing={editingId === c.lesson.id}
                 allTasks={allTasks}
                 onUpdateTask={onUpdateTask}
+                onRemoveTask={onRemoveTask}
                 onToggle={() => onToggleLesson(c.lesson.id)}
                 onUpdate={(patch) => onUpdateLesson(c.lesson.id, patch)}
                 onToggleHidden={() => onToggleLessonHidden(c.lesson.id)}
+                onOpenEditor={() => onOpenLessonEditor(c.lesson.id)}
+                onCancelEditor={() => onCancelLessonEditor(c.lesson)}
+                onSaveEditor={onSaveLessonEditor}
                 onRemove={() => onRemoveLesson(c.lesson.id)}
                 onCreateTask={(taskType) => onCreateTaskInLesson(c.lesson.id, taskType)}
                 onAddExistingTask={(task) => onAddExistingTaskInLesson(c.lesson.id, task)}
@@ -1291,10 +1526,16 @@ function CourseCard({
             ),
           )}
 
-          <div className="cert-course-add-row">
-            <AddTaskMenu label="+ Add Task" onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
-            <span className="cert-add-sep">|</span>
-            <button className="cert-add-link" onClick={onAddLesson}>+ Add Lesson</button>
+          <div className="cert-course-actions">
+            <AddTaskMenu
+              variant="button"
+              label="Add task"
+              onCreateNew={onCreateTask}
+              onAddExisting={onAddExistingTask}
+            />
+            <button className="cert-add-lesson" onClick={onAddLesson}>
+              <BookIcon /> Add lesson
+            </button>
           </div>
         </div>
       )}
@@ -1304,88 +1545,75 @@ function CourseCard({
 
 function LessonCard({
   lesson,
+  editing,
   allTasks,
   onUpdateTask,
+  onRemoveTask,
   onToggle,
   onUpdate,
   onToggleHidden,
+  onOpenEditor,
+  onCancelEditor,
+  onSaveEditor,
   onRemove,
   onCreateTask,
   onAddExistingTask,
 }: {
   lesson: CertLesson;
+  editing: boolean;
   allTasks: CertTask[];
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
+  onRemoveTask: (taskId: string) => void;
   onToggle: () => void;
   onUpdate: (patch: Partial<CertLesson>) => void;
   onToggleHidden: () => void;
+  onOpenEditor: () => void;
+  onCancelEditor: () => void;
+  onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
   onAddExistingTask: (task: Task) => void;
 }) {
+  const esMiss = !lesson.nameEs.trim();
   return (
     <div className={`cert-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
       <div className="cert-lesson-header" onClick={onToggle}>
-        <span className="cert-row-drag"><DragHandleIcon /></span>
-        <span className="cert-lesson-caret">{lesson.expanded ? "▾" : "▸"}</span>
-        <div className="cert-lesson-titles">
-          <div className="cert-lesson-eyebrow">
-            LESSON · {(lesson.nameEn || "Untitled Lesson").toUpperCase()}
-            {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
-          </div>
-          <div className="cert-lesson-meta">{lesson.tasks.length} Tasks</div>
-        </div>
-        <button
-          className={`cert-course-eye ${lesson.hidden ? "is-hidden" : ""}`}
-          aria-label={lesson.hidden ? "Show Lesson" : "Hide Lesson"}
-          aria-pressed={lesson.hidden}
-          onClick={(e) => { e.stopPropagation(); onToggleHidden(); }}
-        >
-          {lesson.hidden ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
-        <div className="cert-node-menu" onClick={(e) => e.stopPropagation()}>
-          <Dropdown
-            width={190}
-            align="right"
-            trigger={({ toggle }) => (
-              <button className="cert-course-menu" aria-label="More" onClick={toggle}>⋯</button>
-            )}
-          >
-            {({ close }) => (
-              <div className="menu">
-                <button className="menu-item danger" onClick={() => { onRemove(); close(); }}>
-                  Remove Lesson
-                </button>
-              </div>
-            )}
-          </Dropdown>
+        <DragDots />
+        <span className="cert-lesson-caret"><CaretIcon /></span>
+        <span className="cert-lesson-icon"><BookIcon /></span>
+        <span className="cert-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
+        {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
+        {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+        <span className="cert-lesson-rule" />
+        <span className="cert-lesson-meta">
+          {lesson.tasks.length} Task{lesson.tasks.length === 1 ? "" : "s"}
+        </span>
+        <div className="cert-node-acts" onClick={(e) => e.stopPropagation()}>
+          <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
+          <NodeAction label={lesson.hidden ? "Show Lesson" : "Hide Lesson"} onClick={onToggleHidden}>
+            {lesson.hidden ? <EyeOffIcon /> : <EyeIcon />}
+          </NodeAction>
+          <NodeAction variant="danger" label="Remove Lesson" onClick={onRemove}><TrashIcon /></NodeAction>
         </div>
       </div>
 
-      {lesson.expanded && (
-        <>
-          <div className="cert-node-edit in-lesson">
-            <label className="cert-edit-label">Lesson name <span className="req">*</span></label>
-            <LangField
-              en={lesson.nameEn}
-              es={lesson.nameEs}
-              placeholderEn="Lesson name"
-              placeholderEs="Nombre de la lección"
-              onChangeEn={(v) => onUpdate({ nameEn: v })}
-              onChangeEs={(v) => onUpdate({ nameEs: v })}
-            />
-            <label className="cert-edit-label">Lesson description</label>
-            <RichTextField
-              compact
-              en={lesson.descEn}
-              es={lesson.descEs}
-              placeholderEn="Describe this Lesson"
-              placeholderEs="Describe esta lección"
-              onChangeEn={(v) => onUpdate({ descEn: v })}
-              onChangeEs={(v) => onUpdate({ descEs: v })}
-            />
-          </div>
+      {editing && (
+        <NodeEditor
+          title={lesson.nameEn.trim() ? "Edit lesson" : "New lesson"}
+          hint="groups the tasks that follow · name + description, EN/ES"
+          nameEn={lesson.nameEn}
+          nameEs={lesson.nameEs}
+          descEn={lesson.descEn}
+          descEs={lesson.descEs}
+          namePlaceholder="Lesson name (required)"
+          onChange={onUpdate}
+          onCancel={onCancelEditor}
+          onSave={onSaveEditor}
+        />
+      )}
 
+      {lesson.expanded && (
+        <div className="cert-lesson-tasks">
           {lesson.tasks.map((t) => (
             <TaskRow
               key={t.id}
@@ -1393,47 +1621,60 @@ function LessonCard({
               allTasks={allTasks}
               inLesson
               onUpdate={(patch) => onUpdateTask(t.id, patch)}
+              onRemove={() => onRemoveTask(t.id)}
             />
           ))}
           <div className="cert-lesson-add">
-            <AddTaskMenu label="+ Add Task to Lesson" onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
+            <AddTaskMenu
+              variant="link"
+              label="Add task to this lesson"
+              onCreateNew={onCreateTask}
+              onAddExisting={onAddExistingTask}
+            />
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-// A Task row in the cert tree. Shows the Task plus an Access Restriction control
-// that expands an inline editor.
+// A Task row in the cert tree. A type-coloured "gutter" labels the Task; the lock
+// toggles an inline Access Restriction editor, and the trash removes the Task.
 function TaskRow({
   task,
   allTasks,
   inLesson,
   onUpdate,
+  onRemove,
 }: {
   task: CertTask;
   allTasks: CertTask[];
   inLesson?: boolean;
   onUpdate: (patch: Partial<CertTask>) => void;
+  onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const restricted = !!task.restriction?.enabled;
+  const g = KIND_GUTTER[task.kind];
   return (
     <>
-      <div className={`cert-row task ${inLesson ? "in-lesson" : ""}`}>
-        <span className="cert-row-drag"><DragHandleIcon /></span>
-        <TaskKindBadge kind={task.kind} />
-        <span className="cert-row-name">{task.name}</span>
-        <span className="cert-row-meta">· {KIND_LABEL[task.kind].label} · {task.duration}</span>
+      <div className={`cert-task-row ${inLesson ? "in-lesson" : ""}`}>
+        <DragDots />
+        <span className="cert-task-gutter" style={{ color: g.color }}>{g.label}</span>
+        <span className="cert-task-name">{task.name}</span>
         {restricted && <span className="cert-restricted-pill">Restricted</span>}
+        <span className="cert-task-spacer" />
+        <span className="cert-task-dur">{task.duration}</span>
         <button
-          className={`cert-row-restrict ${restricted ? "active" : ""} ${open ? "open" : ""}`}
+          className={`cert-task-lock ${restricted ? "active" : ""} ${open ? "open" : ""}`}
           aria-label="Access restrictions"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
           <LockIcon />
+        </button>
+        <button className="cert-task-remove" aria-label="Remove Task" title="Remove from this course" onClick={onRemove}>
+          <TrashIcon />
         </button>
       </div>
       {open && (
@@ -1549,18 +1790,28 @@ function AddTaskMenu({
   label,
   onCreateNew,
   onAddExisting,
+  variant = "link",
 }: {
   label: string;
   onCreateNew: (t: TaskTypeKey) => void;
   onAddExisting: (task: Task) => void;
+  variant?: "button" | "link";
 }) {
   return (
     <Dropdown
       width={300}
       direction="up"
-      trigger={({ toggle }) => (
-        <button className="cert-add-link" onClick={toggle}>{label}</button>
-      )}
+      trigger={({ toggle }) =>
+        variant === "button" ? (
+          <button className="cert-add-task-btn" onClick={toggle}>
+            <PlusMiniIcon /> {label}
+          </button>
+        ) : (
+          <button className="cert-add-task-link" onClick={toggle}>
+            <PlusMiniIcon /> {label}
+          </button>
+        )
+      }
     >
       {({ close }) => (
         <AddTaskMenuContent

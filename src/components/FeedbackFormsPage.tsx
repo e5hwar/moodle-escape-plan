@@ -153,7 +153,9 @@ export function FeedbackFormsPage({ forms, onOpen, onCreate }: Props) {
                   >
                     <div className="fb-col-name">
                       <div className="fb-row-id">{f.id}</div>
-                      <div className="fb-row-name">{f.name}</div>
+                      <div className={`fb-row-name ${f.name ? "" : "fb-faint"}`}>
+                        {f.name || "Untitled form"}
+                      </div>
                     </div>
                     <div className="fb-col-status">
                       <span className={`fb-status fb-status--${f.status}`}>

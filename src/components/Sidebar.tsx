@@ -180,6 +180,7 @@ const items: NavItem[] = [
   { kind: "section", label: "System" },
   { kind: "link", key: "spotlight", label: "Spotlight", icon: "spotlight" },
   { kind: "link", key: "product-config", label: "Product Config", icon: "edit", navKey: "product-config" },
+  { kind: "link", key: "permissions", label: "Permissions", icon: "shield", navKey: "permissions" },
 ];
 
 // Map external app keys ("tasks", "certs") to sidebar sub-item keys.

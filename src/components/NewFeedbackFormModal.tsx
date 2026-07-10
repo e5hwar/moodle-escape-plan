@@ -5,7 +5,9 @@ import {
 } from "../data/feedbackForms";
 import { SmallXIcon, SearchIcon } from "./icons";
 
-type Mode = "choose" | "scratch" | "duplicate";
+// Naming happens in the wizard's Details step — the modal only chooses a
+// starting point (blank vs. a copy of an existing form).
+type Mode = "choose" | "duplicate";
 
 type Props = {
   existingForms: FeedbackForm[];
@@ -28,7 +30,6 @@ export function NewFeedbackFormModal({
   onCreate,
 }: Props) {
   const [mode, setMode] = useState<Mode>("choose");
-  const [name, setName] = useState("");
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
@@ -37,7 +38,8 @@ export function NewFeedbackFormModal({
   function createFromScratch() {
     const form: FeedbackForm = {
       id: nextId(existingForms),
-      name: name.trim() || "Untitled Form",
+      // Left blank on purpose — the wizard's Details step is where it's named.
+      name: "",
       status: "draft",
       questions: [],
       triggers: [],
@@ -54,7 +56,7 @@ export function NewFeedbackFormModal({
     if (!src) return;
     const form: FeedbackForm = {
       id: nextId(existingForms),
-      name: name.trim() || `${src.name} (copy)`,
+      name: `${src.name} (copy)`,
       status: "draft",
       // Links the SAME Question Bank questions, same order, same mandatory
       // flags. The two forms' lists are fully independent after this copy.
@@ -82,13 +84,6 @@ export function NewFeedbackFormModal({
     );
   });
 
-  const canSubmit =
-    mode === "scratch"
-      ? name.trim().length > 0
-      : mode === "duplicate"
-      ? sourceId !== null && name.trim().length > 0
-      : false;
-
   return (
     <div className="fb-modal-scrim" onClick={onClose}>
       <div
@@ -102,8 +97,8 @@ export function NewFeedbackFormModal({
             <div className="sp-panel-eyebrow">NEW FEEDBACK FORM</div>
             <h2 className="sp-panel-title">Create a Feedback Form</h2>
             <p className="sp-panel-sub">
-              Pick a starting point. You'll link questions, activate the form,
-              and then map triggers on the next screen.
+              Pick a starting point. You'll name the form, link questions, and
+              map triggers in the next steps.
             </p>
           </div>
           <button
@@ -118,10 +113,7 @@ export function NewFeedbackFormModal({
         {mode === "choose" && (
           <div className="fb-modal-body">
             <div className="fb-mode-grid">
-              <button
-                className="fb-mode-card"
-                onClick={() => setMode("scratch")}
-              >
+              <button className="fb-mode-card" onClick={createFromScratch}>
                 <div className="fb-mode-icon">
                   <svg
                     width="22"
@@ -172,26 +164,6 @@ export function NewFeedbackFormModal({
           </div>
         )}
 
-        {mode === "scratch" && (
-          <div className="fb-modal-body">
-            <section className="sp-section">
-              <label className="form-label">
-                Form name <span className="req">*</span>
-              </label>
-              <input
-                className="form-input"
-                placeholder="e.g. EPA 608 — Post-Cert Satisfaction"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
-              <p className="form-help">
-                Internal name. Not shown to users. You can change this later.
-              </p>
-            </section>
-          </div>
-        )}
-
         {mode === "duplicate" && (
           <div className="fb-modal-body">
             <section className="sp-section">
@@ -219,10 +191,7 @@ export function NewFeedbackFormModal({
                       className={`fb-dup-item ${
                         sourceId === f.id ? "is-selected" : ""
                       }`}
-                      onClick={() => {
-                        setSourceId(f.id);
-                        if (!name.trim()) setName(`${f.name} (copy)`);
-                      }}
+                      onClick={() => setSourceId(f.id)}
                     >
                       <div className="fb-dup-radio">
                         {sourceId === f.id && (
@@ -247,21 +216,12 @@ export function NewFeedbackFormModal({
                   ))
                 )}
               </div>
-            </section>
-            <section className="sp-section">
-              <label className="form-label">
-                New form name <span className="req">*</span>
-              </label>
-              <input
-                className="form-input"
-                placeholder="e.g. EPA 608 — Post-Cert Satisfaction (v2)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
               <p className="form-help">
-                The two forms' question lists, order, and mandatory flags are
-                independent. Editing a question in the Question Bank updates it
-                in both, since both link the same question.
+                Creates an independent copy named “{
+                  existingForms.find((f) => f.id === sourceId)?.name ?? "…"
+                } (copy)”. Rename it in the next step. The two forms' question
+                lists are independent, but both link the same Question Bank
+                questions.
               </p>
             </section>
           </div>
@@ -277,15 +237,13 @@ export function NewFeedbackFormModal({
             <button className="btn-save-draft" onClick={onClose}>
               Cancel
             </button>
-            {mode !== "choose" && (
+            {mode === "duplicate" && (
               <button
                 className="btn-publish"
-                disabled={!canSubmit}
-                onClick={
-                  mode === "scratch" ? createFromScratch : createFromDuplicate
-                }
+                disabled={sourceId === null}
+                onClick={createFromDuplicate}
               >
-                Create Form
+                Duplicate & edit
               </button>
             )}
           </div>
