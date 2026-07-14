@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
 import type { TaskTypeKey } from "./Footer";
-import type { Task, TaskType } from "../data/tasks";
+import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
 import {
@@ -21,8 +21,18 @@ import {
   DragHandleIcon,
   GearIcon,
   LockIcon,
+  SearchIcon,
+  CheckIcon,
 } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import {
+  questions as QUESTION_BANK,
+  categories as QB_CATEGORIES,
+  flattenCategories,
+  shortQuestionType,
+  type CategoryOption,
+  type Question,
+} from "../data/questionBank";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -61,8 +71,7 @@ type QuestionOrder = "fixed" | "shuffled";
 type ShuffleScope = "within_section" | "all";
 type CompletionCriterion = "none" | "passing_grade";
 type MaxAttemptsMode = "limited" | "unlimited";
-type CooldownMode = "uniform" | "variable";
-type QuizResourceType = "image" | "video" | "pdf" | "webview" | "custom";
+type CooldownMode = "none" | "uniform" | "variable";
 
 type UploadedFile = {
   id: string;
@@ -74,16 +83,33 @@ type UploadedFile = {
 type StaticQuestion = {
   id: string;
   text: string;
-  type: "Multiple choice" | "True/False";
+  type: string;
   weight: string;
 };
 
 type RandomPool = {
   id: string;
   name: string;
-  poolSize: number;
+  questionIds: string[];
   draw: string;
+  /** Per-question weightage, shared by every question in the pool. */
+  weight: string;
 };
+
+// Only Active, graded Bank questions are eligible for Quizzes — both as
+// hand-picked statics and as random-pool members.
+const GRADED_BANK = QUESTION_BANK.filter(
+  (q) => q.status === "Active" && q.gradingEnabled,
+);
+
+// Category options for the picker's Category/Sub-Category filter, limited to
+// branches that actually hold graded questions.
+const matchesCategory = (q: Question, opt: CategoryOption) =>
+  opt.label.split(" > ").every((part, i) => q.categoryPath[i] === part);
+
+const QUIZ_PICKER_CATS = flattenCategories(QB_CATEGORIES).filter((opt) =>
+  GRADED_BANK.some((q) => matchesCategory(q, opt)),
+);
 
 type QuizSection = {
   id: string;
@@ -115,10 +141,15 @@ type AttemptPrice = {
   priceIds: PriceIds;
 };
 
+// An in-quiz resource is either a file the admin uploads here, or an existing
+// Resource picked from the app's catalog (PT charts).
 type QuizResource = {
   id: string;
-  type: QuizResourceType;
+  kind: "upload" | "existing";
   name: string;
+  /** Upload-only display metadata. */
+  size?: number;
+  ext?: string;
 };
 
 type ReviewOptions = {
@@ -349,42 +380,6 @@ function VisibilityHelpPanel() {
   );
 }
 
-const SAMPLE_BLOCK_STATIC: StaticQuestion[] = [
-  { id: "q1", text: "What is the boiling point of R-134a at standard atmospheric pressure?", type: "Multiple choice", weight: "1" },
-  { id: "q2", text: "R-22 is being phased out under EPA Section 608 regulations.", type: "True/False", weight: "1" },
-  { id: "q3", text: "Which of the following is classified as a hydrofluoroolefin (HFO) refrigerant?", type: "Multiple choice", weight: "1" },
-  { id: "q4", text: "R-410A is a blend of which two component refrigerants?", type: "Multiple choice", weight: "1" },
-  { id: "q5", text: "ASHRAE classifies refrigerants by safety based on toxicity and flammability.", type: "True/False", weight: "1" },
-];
-
-const SAMPLE_QUIZ_SECTIONS: QuizSection[] = [
-  {
-    id: "s1",
-    name: "Core",
-    nameEs: "Núcleo",
-    passingPct: "70",
-    requiredToPass: true,
-    staticQuestions: [
-      { id: "c1", text: "Section 608 of the Clean Air Act prohibits which of the following actions?", type: "Multiple choice", weight: "1" },
-      { id: "c2", text: "Technicians servicing regulated refrigerants must be EPA-certified.", type: "True/False", weight: "1" },
-      { id: "c3", text: "What is the maximum allowable leak rate for commercial refrigeration equipment?", type: "Multiple choice", weight: "1" },
-    ],
-    randomPools: [],
-  },
-  {
-    id: "s2",
-    name: "Type I",
-    nameEs: "Tipo I",
-    passingPct: "70",
-    requiredToPass: false,
-    staticQuestions: [
-      { id: "t1", text: "What must be done before disconnecting refrigerant lines from a small appliance?", type: "Multiple choice", weight: "1" },
-      { id: "t2", text: "Recovery cylinders must be evacuated before initial use.", type: "True/False", weight: "1" },
-    ],
-    randomPools: [{ id: "p1", name: "Type I recovery bank", poolSize: 24, draw: "8" }],
-  },
-];
-
 // Per-attempt pricing starts with just the first attempt; "all subsequent
 // attempts" is tracked separately (subsequentPrice) and always sits at the
 // bottom. Admins add Attempt 2, 3, … in between as needed.
@@ -437,9 +432,11 @@ const INITIAL_DATA: WizardData = {
   discoverable: true,
   contentTags: [],
 
+  // A new Quiz starts empty — no prefilled Sections, questions, or pools;
+  // everything is authored by the admin.
   structure: "single_block",
-  sections: SAMPLE_QUIZ_SECTIONS,
-  blockStatic: SAMPLE_BLOCK_STATIC,
+  sections: [],
+  blockStatic: [],
   blockPools: [],
   questionOrder: "fixed",
   shuffleScope: "within_section",
@@ -450,7 +447,7 @@ const INITIAL_DATA: WizardData = {
 
   maxAttemptsMode: "limited",
   maxAttempts: "3",
-  cooldownMode: "uniform",
+  cooldownMode: "none",
   cooldownMinutes: "",
   variableCooldowns: [],
   autoAttempts: false,
@@ -559,6 +556,12 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   // xAPI Tasks default to rotation off, locked to landscape.
   else if (taskType === "xapi")
     base = { ...INITIAL_DATA, allowRotation: false, lockedOrientation: "landscape" };
+  // Quizzes default to unlimited attempts.
+  else if (taskType === "quiz")
+    base = { ...INITIAL_DATA, maxAttemptsMode: "unlimited" };
+  // Hands-On Tasks default to unlimited attempts and are not discoverable.
+  else if (taskType === "hands-on")
+    base = { ...INITIAL_DATA, maxAttemptsMode: "unlimited", discoverable: false };
   else base = INITIAL_DATA;
 
   if (!editingTask) return base;
@@ -591,8 +594,9 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
               {
                 id: `pool${i + 1}`,
                 name: `${s.name} question bank`,
-                poolSize: s.questionCount * 2,
-                draw: String(s.questionCount),
+                questionIds: GRADED_BANK.map((q) => q.id),
+                draw: String(Math.min(s.questionCount, GRADED_BANK.length)),
+                weight: "1",
               },
             ],
           })),
@@ -785,23 +789,25 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: 
   ];
 
   return (
-    <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-      <div className="form-group">
-        <label className="form-label">
-          How completion is determined <span className="req">*</span>
-        </label>
-        <div className="radio-card-group">
-          {options.map((o) => (
-            <RadioCard
-              key={o.key}
-              selected={data.completion === o.key}
-              onSelect={() => update({ completion: o.key })}
-              title={o.title}
-              desc={o.desc}
-            />
-          ))}
+    <>
+      <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+        <div className="form-group">
+          <label className="form-label">
+            How completion is determined <span className="req">*</span>
+          </label>
+          <div className="radio-card-group">
+            {options.map((o) => (
+              <RadioCard
+                key={o.key}
+                selected={data.completion === o.key}
+                onSelect={() => update({ completion: o.key })}
+                title={o.title}
+                desc={o.desc}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      </CompletionCriteriaGate>
 
       <div className="form-divider" />
 
@@ -815,26 +821,6 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: 
           label="Capture a score from the package"
           sub="When on, SkillCat stores the score the xAPI/SCORM content sends. Off by default — only completion is tracked."
         />
-
-        {data.scoreCapture && (
-          <div className="form-sub-group" style={{ marginTop: 16 }}>
-            <label className="form-sub-label">Which score to keep</label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={data.scoreCaptureMode === "highest"}
-                onSelect={() => update({ scoreCaptureMode: "highest" })}
-                title="Highest grade"
-                desc="Keep the learner's best score across all attempts."
-              />
-              <RadioCard
-                selected={data.scoreCaptureMode === "recent"}
-                onSelect={() => update({ scoreCaptureMode: "recent" })}
-                title="Most recent"
-                desc="Keep the score from the learner's latest attempt, even if it's lower."
-              />
-            </div>
-          </div>
-        )}
 
         <div className="form-sub-group" style={{ marginTop: 16 }}>
           <label className="form-sub-label">Score displayed</label>
@@ -861,7 +847,7 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: 
           )}
         </div>
       </Section>
-    </CompletionCriteriaGate>
+    </>
   );
 }
 
@@ -1709,11 +1695,22 @@ function QuestionGroupEditor({
 }) {
   const drawn = pools.reduce((n, p) => n + (parseInt(p.draw, 10) || 0), 0);
 
-  const addStatic = () =>
+  // Which picker is open: adding statics, building a new pool, or editing an
+  // existing pool's member questions.
+  const [picker, setPicker] = useState<
+    null | { mode: "static" } | { mode: "pool"; poolId?: string }
+  >(null);
+
+  // Selected Bank questions arrive in selection order and are appended to the
+  // Quiz in that order.
+  const addStaticFromBank = (ids: string[]) =>
     onChange({
       staticQuestions: [
         ...staticQuestions,
-        { id: `q${Date.now()}`, text: "New question (pick from Question Bank)", type: "Multiple choice", weight: "1" },
+        ...ids
+          .map((id) => GRADED_BANK.find((q) => q.id === id))
+          .filter((q): q is Question => !!q)
+          .map((q) => ({ id: q.id, text: q.text, type: q.type, weight: "1" })),
       ],
     });
   const setWeight = (id: string, weight: string) =>
@@ -1723,15 +1720,30 @@ function QuestionGroupEditor({
   const removeStatic = (id: string) =>
     onChange({ staticQuestions: staticQuestions.filter((q) => q.id !== id) });
 
-  const addPool = () =>
-    onChange({
-      randomPools: [
-        ...pools,
-        { id: `p${Date.now()}`, name: "New random pool", poolSize: 20, draw: "5" },
-      ],
-    });
+  const savePool = (ids: string[], poolId?: string) => {
+    if (poolId) {
+      onChange({
+        randomPools: pools.map((p) => (p.id === poolId ? { ...p, questionIds: ids } : p)),
+      });
+    } else {
+      onChange({
+        randomPools: [
+          ...pools,
+          {
+            id: `p${Date.now()}`,
+            name: `Random pool ${pools.length + 1}`,
+            questionIds: ids,
+            draw: String(Math.min(5, ids.length)),
+            weight: "1",
+          },
+        ],
+      });
+    }
+  };
   const setDraw = (id: string, draw: string) =>
     onChange({ randomPools: pools.map((p) => (p.id === id ? { ...p, draw } : p)) });
+  const setPoolWeight = (id: string, weight: string) =>
+    onChange({ randomPools: pools.map((p) => (p.id === id ? { ...p, weight } : p)) });
   const removePool = (id: string) =>
     onChange({ randomPools: pools.filter((p) => p.id !== id) });
 
@@ -1749,6 +1761,11 @@ function QuestionGroupEditor({
       </div>
 
       <div className="qsub-head">STATIC QUESTIONS</div>
+      {staticQuestions.length === 0 && (
+        <div className="qbag-empty">
+          No static questions yet — add graded questions from the Question Bank.
+        </div>
+      )}
       {staticQuestions.map((q) => (
         <div key={q.id} className="q-row">
           <button className="qbag-drag" aria-label="Drag">
@@ -1761,6 +1778,7 @@ function QuestionGroupEditor({
             {q.text}
             <span className="qbag-q-type"> · {q.type}</span>
           </div>
+          <span className="form-suffix">weight</span>
           <input
             className="q-weight"
             value={q.weight}
@@ -1775,19 +1793,28 @@ function QuestionGroupEditor({
           </button>
         </div>
       ))}
-      <button className="resource-add" onClick={addStatic}>
+      <button className="resource-add" onClick={() => setPicker({ mode: "static" })}>
         + Add questions from Bank
       </button>
 
       <div className="qsub-head">RANDOM POOLS</div>
       {pools.map((p) => {
         const drawNum = parseInt(p.draw, 10) || 0;
-        const over = drawNum > p.poolSize;
+        const size = p.questionIds.length;
+        const over = drawNum > size;
         return (
           <div key={p.id} className="pool-row">
             <div className="pool-name">
               <div className="qbag-q-text">{p.name}</div>
-              <div className="qbag-q-type">Pool of {p.poolSize} from the Question Bank</div>
+              <div className="qbag-q-type">
+                Pool of {size} from the Question Bank ·{" "}
+                <button
+                  className="qbag-pool-edit"
+                  onClick={() => setPicker({ mode: "pool", poolId: p.id })}
+                >
+                  Edit pool
+                </button>
+              </div>
             </div>
             <div className="pool-draw">
               <span className="form-suffix">draw</span>
@@ -1800,20 +1827,269 @@ function QuestionGroupEditor({
                   if (v === "" || /^\d+$/.test(v)) setDraw(p.id, v);
                 }}
               />
-              <span className="form-suffix">/ {p.poolSize}</span>
+              <span className="form-suffix">/ {size}</span>
+            </div>
+            <div className="pool-draw">
+              <span className="form-suffix">weight</span>
+              <input
+                className="q-weight"
+                value={p.weight}
+                aria-label="Weightage applied to every question in the pool"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setPoolWeight(p.id, v);
+                }}
+              />
+              <span className="form-suffix">each</span>
             </div>
             <button className="q-remove" aria-label="Remove pool" onClick={() => removePool(p.id)}>
               <SmallXIcon />
             </button>
             {over && (
-              <div className="pool-warn">Draw can't exceed the pool size ({p.poolSize}).</div>
+              <div className="pool-warn">Draw can't exceed the pool size ({size}).</div>
             )}
           </div>
         );
       })}
-      <button className="resource-add" onClick={addPool}>
+      <button className="resource-add" onClick={() => setPicker({ mode: "pool" })}>
         + Add random pool
       </button>
+
+      {picker && (
+        <QuizQuestionPickerModal
+          mode={picker.mode}
+          editingPool={picker.mode === "pool" && !!picker.poolId}
+          excludeIds={picker.mode === "static" ? staticQuestions.map((q) => q.id) : []}
+          initialSelected={
+            picker.mode === "pool" && picker.poolId
+              ? pools.find((p) => p.id === picker.poolId)?.questionIds ?? []
+              : []
+          }
+          onConfirm={(ids) => {
+            if (picker.mode === "static") addStaticFromBank(ids);
+            else savePool(ids, picker.poolId);
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ----- Question Bank picker (Create Quiz → Questions) ----- */
+
+type QuizPickerTypeFilter = "all" | Question["type"];
+
+const QUIZ_PICKER_TYPES: { key: QuizPickerTypeFilter; label: string }[] = [
+  { key: "all", label: "All types" },
+  { key: "Multiple choice", label: "Multiple choice" },
+  { key: "Multiple select", label: "Multiple select" },
+  { key: "True/False", label: "True/False" },
+  { key: "Match the following", label: "Match the following" },
+];
+
+/** Multi-select picker over the Question Bank, limited to Active questions
+ * with grading enabled. In `static` mode the selection order is tracked and
+ * questions join the Quiz in that order; in `pool` mode order is irrelevant —
+ * the pool is just a set the Quiz draws from at random. */
+function QuizQuestionPickerModal({
+  mode,
+  editingPool,
+  excludeIds,
+  initialSelected,
+  onConfirm,
+  onClose,
+}: {
+  mode: "static" | "pool";
+  editingPool: boolean;
+  excludeIds: string[];
+  initialSelected: string[];
+  onConfirm: (ids: string[]) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<QuizPickerTypeFilter>("all");
+  const [catFilter, setCatFilter] = useState<string>("all");
+  const [selected, setSelected] = useState<string[]>(initialSelected);
+
+  const excluded = new Set(excludeIds);
+  const q = query.trim().toLowerCase();
+  const isPool = mode === "pool";
+  const catOption = QUIZ_PICKER_CATS.find((o) => o.key === catFilter);
+
+  const candidates = GRADED_BANK.filter((question) => {
+    if (typeFilter !== "all" && question.type !== typeFilter) return false;
+    if (catOption && !matchesCategory(question, catOption)) return false;
+    if (
+      q &&
+      !(
+        question.text.toLowerCase().includes(q) ||
+        question.id.toLowerCase().includes(q) ||
+        question.categoryPath.join(" > ").toLowerCase().includes(q)
+      )
+    )
+      return false;
+    return true;
+  });
+
+  const toggle = (id: string) =>
+    setSelected((sel) =>
+      sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id],
+    );
+
+  return (
+    <div className="fb-modal-scrim" onClick={onClose}>
+      <div
+        className="fb-modal fb-modal--picker"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="fb-modal-head">
+          <div>
+            <div className="sp-panel-eyebrow">QUESTION BANK</div>
+            <h2 className="sp-panel-title">
+              {isPool
+                ? editingPool
+                  ? "Edit random pool"
+                  : "Build a random pool"
+                : "Add questions"}
+            </h2>
+            <p className="sp-panel-sub">
+              {isPool
+                ? "Pick the questions this pool draws from. Each attempt draws a random subset, so selection order doesn't matter."
+                : "Only Active questions with grading enabled can be added to a Quiz. Select multiple — they're added in the order you pick them."}
+            </p>
+          </div>
+          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
+            <SmallXIcon />
+          </button>
+        </div>
+
+        <div className="fb-picker-controls">
+          <div className="search-wrap fb-picker-search">
+            <span className="search-icon">
+              <SearchIcon />
+            </span>
+            <input
+              className="search-input"
+              placeholder="Search by text, ID, or category…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <select
+            className="fb-q-scale-select"
+            value={catFilter}
+            onChange={(e) => setCatFilter(e.target.value)}
+            aria-label="Filter by Category or Sub-Category"
+          >
+            <option value="all">All categories</option>
+            {QUIZ_PICKER_CATS.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="fb-q-scale-select"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as QuizPickerTypeFilter)}
+          >
+            {QUIZ_PICKER_TYPES.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="fb-picker-list">
+          {candidates.length === 0 ? (
+            <div className="fb-empty">No matching graded questions.</div>
+          ) : (
+            candidates.map((question) => {
+              const inQuiz = excluded.has(question.id);
+              const order = selected.indexOf(question.id);
+              const isSelected = order !== -1;
+              return (
+                <button
+                  key={question.id}
+                  className={`fb-picker-row ${isSelected ? "is-selected" : ""} ${inQuiz ? "is-linked" : ""}`}
+                  disabled={inQuiz}
+                  onClick={() => toggle(question.id)}
+                >
+                  <div className="fb-link-main">
+                    <div className="fb-link-text">{question.text}</div>
+                    <div className="fb-link-meta">
+                      <span className="fb-link-id">{question.id}</span>
+                      <span className="fb-link-chip">
+                        {shortQuestionType(question.type)}
+                      </span>
+                      <span className="fb-link-chip">
+                        {question.categoryPath.join(" > ")}
+                      </span>
+                      {question.quizzes.length > 0 && (
+                        <span
+                          className="fb-link-id"
+                          title={question.quizzes.join(", ")}
+                        >
+                          used in {question.quizzes.length}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="fb-trigger-pick-cta">
+                    {inQuiz ? (
+                      <>
+                        <CheckIcon /> In quiz
+                      </>
+                    ) : isSelected ? (
+                      isPool ? (
+                        <>
+                          <CheckIcon /> Selected
+                        </>
+                      ) : (
+                        <span className="qpick-order">{order + 1}</span>
+                      )
+                    ) : (
+                      "+ Select"
+                    )}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="fb-modal-footer">
+          <div className="qpick-hint">
+            {isPool
+              ? `${selected.length} in pool`
+              : selected.length === 0
+                ? "Nothing selected yet."
+                : `${selected.length} selected — added in this order.`}
+          </div>
+          <div className="fb-modal-footer-right">
+            <button className="btn-save-draft" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn-publish"
+              disabled={selected.length === 0}
+              onClick={() => onConfirm(selected)}
+            >
+              {isPool
+                ? editingPool
+                  ? `Update pool (${selected.length})`
+                  : `Create pool (${selected.length})`
+                : `Add ${selected.length} question${selected.length === 1 ? "" : "s"}`}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2073,6 +2349,12 @@ function QuizAttemptsStep({ data, update }: StepProps) {
       >
         <div className="radio-card-group">
           <RadioCard
+            selected={data.cooldownMode === "none"}
+            onSelect={() => update({ cooldownMode: "none" })}
+            title="No cooldown"
+            desc="Learners can start the next attempt immediately."
+          />
+          <RadioCard
             selected={data.cooldownMode === "uniform"}
             onSelect={() => update({ cooldownMode: "uniform" })}
             title="Same cooldown between all attempts"
@@ -2085,7 +2367,7 @@ function QuizAttemptsStep({ data, update }: StepProps) {
           />
         </div>
 
-        {data.cooldownMode === "uniform" ? (
+        {data.cooldownMode === "uniform" && (
           <div className="form-sub-group" style={{ marginTop: 16 }}>
             <div className="time-row">
               <input
@@ -2097,10 +2379,11 @@ function QuizAttemptsStep({ data, update }: StepProps) {
                   if (v === "" || /^\d+$/.test(v)) update({ cooldownMinutes: v });
                 }}
               />
-              <span className="form-suffix">minutes (leave blank for no cooldown)</span>
+              <span className="form-suffix">minutes</span>
             </div>
           </div>
-        ) : (
+        )}
+        {data.cooldownMode === "variable" && (
           <VariableCooldownEditor data={data} update={update} />
         )}
       </Section>
@@ -2221,27 +2504,158 @@ function VariableCooldownEditor({ data, update }: StepProps) {
 
 function TriggerTaskEditor({ data, update }: StepProps) {
   const rows = data.autoAttemptTriggers;
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const add = () =>
-    update({
-      autoAttemptTriggers: [...rows, { id: `tt${Date.now()}`, name: "Select a Task…" }],
-    });
   const remove = (id: string) =>
     update({ autoAttemptTriggers: rows.filter((t) => t.id !== id) });
 
   return (
     <div className="trigger-list">
+      {rows.length === 0 && (
+        <div className="qbag-empty">No trigger Tasks yet — add the Tasks that unlock the extra attempts.</div>
+      )}
       {rows.map((t) => (
         <div key={t.id} className="trigger-row">
           <span className="trigger-name">{t.name}</span>
+          <span className="trigger-id">{t.id}</span>
           <button className="section-remove" aria-label="Remove trigger" onClick={() => remove(t.id)}>
             <SmallXIcon />
           </button>
         </div>
       ))}
-      <button className="resource-add" onClick={add}>
-        + Add trigger Task
+      <button className="resource-add" onClick={() => setPickerOpen(true)}>
+        + Add trigger Tasks
       </button>
+
+      {pickerOpen && (
+        <TriggerTaskPickerModal
+          selected={rows}
+          onConfirm={(sel) => {
+            update({ autoAttemptTriggers: sel });
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Simple table picker over the Tasks list for auto-unlock triggers. Selection
+ * is applied on confirm, so the modal handles both adding and removing. */
+function TriggerTaskPickerModal({
+  selected,
+  onConfirm,
+  onClose,
+}: {
+  selected: TriggerTask[];
+  onConfirm: (sel: TriggerTask[]) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [sel, setSel] = useState<TriggerTask[]>(selected);
+
+  const q = query.trim().toLowerCase();
+  const candidates = ALL_TASKS.filter(
+    (t) =>
+      !t.draft &&
+      (!q || t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)),
+  );
+
+  const isSelected = (id: string) => sel.some((t) => t.id === id);
+  const toggle = (t: Task) =>
+    setSel((s) =>
+      isSelected(t.id) ? s.filter((x) => x.id !== t.id) : [...s, { id: t.id, name: t.name }],
+    );
+
+  return (
+    <div className="fb-modal-scrim" onClick={onClose}>
+      <div
+        className="fb-modal fb-modal--picker"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="fb-modal-head">
+          <div>
+            <div className="sp-panel-eyebrow">TASKS</div>
+            <h2 className="sp-panel-title">Select trigger Tasks</h2>
+            <p className="sp-panel-sub">
+              The learner must complete every selected Task to unlock the additional attempts.
+            </p>
+          </div>
+          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
+            <SmallXIcon />
+          </button>
+        </div>
+
+        <div className="fb-picker-controls">
+          <div className="search-wrap fb-picker-search">
+            <span className="search-icon">
+              <SearchIcon />
+            </span>
+            <input
+              className="search-input"
+              placeholder="Search Tasks by name or ID…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="fb-picker-list">
+          {candidates.length === 0 ? (
+            <div className="fb-empty">No matching Tasks.</div>
+          ) : (
+            <table className="tt-table">
+              <thead>
+                <tr>
+                  <th />
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((t) => {
+                  const on = isSelected(t.id);
+                  return (
+                    <tr
+                      key={t.id}
+                      className={on ? "is-selected" : ""}
+                      onClick={() => toggle(t)}
+                    >
+                      <td>
+                        <span className={`checkbox ${on ? "checked" : ""}`}>
+                          {on && <CheckIcon />}
+                        </span>
+                      </td>
+                      <td className="tt-id">{t.id}</td>
+                      <td>{t.name}</td>
+                      <td className="tt-type">{t.type}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="fb-modal-footer">
+          <div className="qpick-hint">
+            {sel.length === 0 ? "No Tasks selected." : `${sel.length} Task${sel.length === 1 ? "" : "s"} selected.`}
+          </div>
+          <div className="fb-modal-footer-right">
+            <button className="btn-save-draft" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn-publish" onClick={() => onConfirm(sel)}>
+              Save selection
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2273,53 +2687,94 @@ function QuizIntegrityStep({ data, update }: StepProps) {
   );
 }
 
-const RESOURCE_TYPE_LABELS: Record<QuizResourceType, string> = {
-  image: "Image",
-  video: "Video",
-  pdf: "PDF",
-  webview: "Webview URL",
-  custom: "Custom UI",
-};
+// Existing Resources learners can open in-quiz, selectable alongside uploads.
+const EXISTING_QUIZ_RESOURCES = ["PT Chart (Old)", "PT Chart (New)"];
 
 function ResourceEditor({ data, update }: StepProps) {
   const rows = data.inQuizResources;
+  const uploads = rows.filter((r) => r.kind === "upload");
 
-  const add = () =>
-    update({ inQuizResources: [...rows, { id: `r${Date.now()}`, type: "pdf", name: "" }] });
-  const setRow = (id: string, patch: Partial<QuizResource>) =>
-    update({ inQuizResources: rows.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
+  const addUploads = (files: UploadedFile[]) =>
+    update({
+      inQuizResources: [
+        ...rows,
+        ...files.map((f) => ({
+          id: `r-${f.id}`,
+          kind: "upload" as const,
+          name: f.name,
+          size: f.size,
+          ext: f.ext,
+        })),
+      ],
+    });
   const remove = (id: string) =>
     update({ inQuizResources: rows.filter((r) => r.id !== id) });
 
+  const hasExisting = (name: string) =>
+    rows.some((r) => r.kind === "existing" && r.name === name);
+  const toggleExisting = (name: string) =>
+    update({
+      inQuizResources: hasExisting(name)
+        ? rows.filter((r) => !(r.kind === "existing" && r.name === name))
+        : [...rows, { id: `r-${name}`, kind: "existing" as const, name }],
+    });
+
   return (
     <div className="resource-edit-list">
-      {rows.map((r) => (
-        <div key={r.id} className="resource-edit-row">
-          <select
-            className="form-select"
-            value={r.type}
-            onChange={(e) => setRow(r.id, { type: e.target.value as QuizResourceType })}
-          >
-            {Object.entries(RESOURCE_TYPE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-          <input
-            className="form-input"
-            placeholder={r.type === "webview" ? "https://…" : "File name or label"}
-            value={r.name}
-            onChange={(e) => setRow(r.id, { name: e.target.value })}
-          />
-          <button className="section-remove" aria-label="Remove resource" onClick={() => remove(r.id)}>
-            <SmallXIcon />
-          </button>
+      <label className="form-sub-label">Upload files</label>
+      {uploads.length > 0 && (
+        <div className="file-list">
+          {uploads.map((r) => (
+            <div key={r.id} className="file-row">
+              <span className="file-icon">
+                <DocumentIcon />
+              </span>
+              <div className="file-meta">
+                <div className="file-name">{r.name}</div>
+                {r.size != null && (
+                  <div className="file-sub">
+                    {formatSize(r.size)} · {r.ext}
+                  </div>
+                )}
+              </div>
+              <button
+                className="file-remove"
+                aria-label="Remove file"
+                onClick={() => remove(r.id)}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
-      <button className="resource-add" onClick={add}>
-        + Add resource
-      </button>
+      )}
+      <FilePicker onPick={addUploads}>
+        {(open) => (
+          <button className="resource-add" onClick={open} type="button">
+            + Upload a file
+          </button>
+        )}
+      </FilePicker>
+
+      <label className="form-sub-label" style={{ marginTop: 18 }}>
+        Existing Resources
+      </label>
+      {EXISTING_QUIZ_RESOURCES.map((name) => {
+        const on = hasExisting(name);
+        return (
+          <button
+            key={name}
+            type="button"
+            className={`qres-existing ${on ? "is-on" : ""}`}
+            onClick={() => toggleExisting(name)}
+          >
+            <span className={`checkbox ${on ? "checked" : ""}`}>
+              {on && <CheckIcon />}
+            </span>
+            {name}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2340,46 +2795,63 @@ function QuizReviewStep({ data, update }: StepProps) {
           checked={r.attempt}
           onChange={(v) => setR({ attempt: v })}
           label="Attempt"
-          sub="The questions in the attempt and the learner's own answers."
+          sub="The questions in the attempt and the learner's own answers. Everything else builds on this."
         />
         <Toggle
-          checked={quizLevel && r.quizResult}
+          checked={r.attempt && quizLevel && r.quizResult}
           onChange={(v) => setR({ quizResult: v })}
-          disabled={!quizLevel}
+          disabled={!r.attempt || !quizLevel}
           label="Quiz Result"
           sub={
-            quizLevel
-              ? "Overall pass/fail for the Quiz."
-              : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead."
+            !r.attempt
+              ? "Requires Attempt review."
+              : quizLevel
+                ? "Overall pass/fail for the Quiz."
+                : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead."
           }
         />
         <Toggle
-          checked={r.quizScore}
+          checked={r.attempt && r.quizScore}
           onChange={(v) => setR({ quizScore: v })}
+          disabled={!r.attempt}
           label="Quiz Score"
-          sub="The overall score achieved."
+          sub={!r.attempt ? "Requires Attempt review." : "The overall score achieved."}
         />
         <Toggle
-          checked={r.whetherCorrect}
+          checked={r.attempt && r.whetherCorrect}
           onChange={(v) => setR({ whetherCorrect: v })}
+          disabled={!r.attempt}
           label="Whether Correct"
-          sub="Per question: correct, incorrect, or partially correct."
+          sub={
+            !r.attempt
+              ? "Requires Attempt review."
+              : "Per question: correct, incorrect, or partially correct."
+          }
         />
         <Toggle
-          checked={r.perQuestionFeedback}
+          checked={r.attempt && r.whetherCorrect && r.perQuestionFeedback}
           onChange={(v) => setR({ perQuestionFeedback: v })}
+          disabled={!r.attempt || !r.whetherCorrect}
           label="Per-Question Feedback"
-          sub="The feedback authored on each question."
+          sub={
+            !r.attempt
+              ? "Requires Attempt review."
+              : !r.whetherCorrect
+                ? "Only available when Whether Correct is on — feedback is shown against each judged question."
+                : "The feedback authored on each question."
+          }
         />
         <Toggle
-          checked={sectioned && r.perSectionResults}
+          checked={r.attempt && sectioned && r.perSectionResults}
           onChange={(v) => setR({ perSectionResults: v })}
-          disabled={!sectioned}
+          disabled={!r.attempt || !sectioned}
           label="Per-Section Results"
           sub={
-            sectioned
-              ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
-              : "Only available when the Quiz is sectioned."
+            !r.attempt
+              ? "Requires Attempt review."
+              : sectioned
+                ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
+                : "Only available when the Quiz is sectioned."
           }
         />
       </div>

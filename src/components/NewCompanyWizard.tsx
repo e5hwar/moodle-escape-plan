@@ -64,6 +64,9 @@ export const PARTNERSHIP_OPTIONS = [
 ];
 
 export const CSM_OPTIONS = ["Leanna Olbinsky", "Corinne Hayes", "Simran Phulwani"];
+export const SALES_REP_OPTIONS = ["Ruchir Shah", "Brendan Arsenault", "Elliot Ling"];
+/** The sales rep filling out the form — used as the default for new companies. */
+export const CURRENT_SALES_REP = SALES_REP_OPTIONS[0];
 
 // A saved price holds a per-seat rate for one or more currencies, keyed by
 // currency code (USD/CAD are always billed; others can be defined for future use).
@@ -164,6 +167,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const [name, setName] = useState(editCompany?.name ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
   const [assignedCsm, setAssignedCsm] = useState(editCompany?.assignedCsm ?? "");
+  const [assignedSalesRep, setAssignedSalesRep] = useState(
+    editCompany?.assignedSalesRep ?? CURRENT_SALES_REP,
+  );
   // Structured address (Figma 101:337). Composed into a flat string on save.
   const [country, setCountry] = useState(editCompany?.addressParts?.country ?? "United States");
   const [addrLine1, setAddrLine1] = useState(editCompany?.addressParts?.line1 ?? "");
@@ -329,6 +335,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       partnership: partnerships.join(", "),
       taxStatus,
       assignedCsm: assignedCsm || undefined,
+      assignedSalesRep: assignedSalesRep || undefined,
       address: [addrLine1, addrLine2, addrCity, addrState, addrPin, country]
         .map((s) => s.trim()).filter(Boolean).join(", ") || undefined,
       addressParts: [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
@@ -425,6 +432,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               name={name} setName={setName}
               taxStatus={taxStatus} setTaxStatus={setTaxStatus}
               assignedCsm={assignedCsm} setAssignedCsm={setAssignedCsm}
+              assignedSalesRep={assignedSalesRep} setAssignedSalesRep={setAssignedSalesRep}
               country={country} setCountry={setCountry}
               addrLine1={addrLine1} setAddrLine1={setAddrLine1}
               addrLine2={addrLine2} setAddrLine2={setAddrLine2}
@@ -1136,6 +1144,7 @@ function Step1Details({
   name, setName,
   taxStatus, setTaxStatus,
   assignedCsm, setAssignedCsm,
+  assignedSalesRep, setAssignedSalesRep,
   country, setCountry,
   addrLine1, setAddrLine1,
   addrLine2, setAddrLine2,
@@ -1149,6 +1158,7 @@ function Step1Details({
   name: string; setName: (v: string) => void;
   taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
   assignedCsm: string; setAssignedCsm: (v: string) => void;
+  assignedSalesRep: string; setAssignedSalesRep: (v: string) => void;
   country: string; setCountry: (v: string) => void;
   addrLine1: string; setAddrLine1: (v: string) => void;
   addrLine2: string; setAddrLine2: (v: string) => void;
@@ -1270,6 +1280,20 @@ function Step1Details({
           <option value="">Unassigned</option>
           {CSM_OPTIONS.map((c) => (
             <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Assigned Sales Rep</label>
+        <select
+          className={`form-select ${assignedSalesRep ? "" : "is-placeholder"}`}
+          value={assignedSalesRep}
+          onChange={(e) => setAssignedSalesRep(e.target.value)}
+        >
+          <option value="">Unassigned</option>
+          {SALES_REP_OPTIONS.map((r) => (
+            <option key={r} value={r}>{r}</option>
           ))}
         </select>
       </div>
@@ -1894,6 +1918,7 @@ function SuccessScreen({
             {company.partnership && detail("Partnership", company.partnership)}
             {company.taxStatus && detail("Tax status", company.taxStatus)}
             {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
+            {company.assignedSalesRep && detail("Assigned Sales Rep", company.assignedSalesRep)}
             <div className="success-divider" />
             {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
             {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}

@@ -12,6 +12,7 @@ import {
   type CertColumnState,
 } from "./CertFilters";
 import { SearchIcon, SortIcon, AddIcon } from "./icons";
+import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
@@ -39,16 +40,6 @@ const MoreIcon = () => (
     <circle cx="5" cy="12" r="1.9" />
     <circle cx="12" cy="12" r="1.9" />
     <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-const ArchiveIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M9 12h6" />
-  </svg>
-);
-const UnarchiveIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 18v-6M9.5 14.5 12 12l2.5 2.5" />
   </svg>
 );
 const PayersIcon = () => (
@@ -109,6 +100,9 @@ type SortKey =
   | "tasks"
   | "ceus"
   | "createdBy"
+  | "tradeTag"
+  | "partnershipTag"
+  | "userTypeTag"
   | "visibility"
   | "dateCreated"
   | "dateModified";
@@ -136,6 +130,9 @@ function compare(a: Certification, b: Certification, key: SortKey): number {
     case "ceus": return parseFloat(a.ceus) - parseFloat(b.ceus);
     case "tasks": return a.tasks - b.tasks;
     case "createdBy": return a.createdBy.localeCompare(b.createdBy);
+    case "tradeTag": return (pickTag(a.tags, TRADE_TAGS) ?? "").localeCompare(pickTag(b.tags, TRADE_TAGS) ?? "");
+    case "partnershipTag": return (pickTag(a.tags, PARTNERSHIP_TAGS) ?? "").localeCompare(pickTag(b.tags, PARTNERSHIP_TAGS) ?? "");
+    case "userTypeTag": return (pickTag(a.tags, USER_TYPE_TAGS) ?? "").localeCompare(pickTag(b.tags, USER_TYPE_TAGS) ?? "");
     case "visibility": return (a.visibility ?? "").localeCompare(b.visibility ?? "");
     case "dateCreated": return (Date.parse(a.dateCreated ?? "") || 0) - (Date.parse(b.dateCreated ?? "") || 0);
     case "dateModified": return (Date.parse(a.dateModified ?? "") || 0) - (Date.parse(b.dateModified ?? "") || 0);
@@ -154,11 +151,13 @@ function matchesIndustry(cert: Certification, selected: string[]): boolean {
 export function CertificationsPage({
   onNewCert,
   onEditCert,
+  onOpenCompanyDashboard,
   onViewPayers,
   onManageContentLinks,
 }: {
   onNewCert: () => void;
   onEditCert: (cert: Certification) => void;
+  onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
   onManageContentLinks: (cert: Certification) => void;
 }) {
@@ -168,6 +167,9 @@ export function CertificationsPage({
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // Set when someone tries to edit a Certification owned by a company — company
+  // certifications are managed from the B2B Dashboard, not here.
+  const [blockedEdit, setBlockedEdit] = useState<Certification | null>(null);
   // Created by SkillCat is applied on launch.
   const [filters, setFilters] = useState<CertFilterState>({
     industries: [],
@@ -187,6 +189,9 @@ export function CertificationsPage({
     tasks: true,
     ceus: false,
     createdBy: true,
+    tradeTag: false,
+    partnershipTag: false,
+    userTypeTag: false,
     visibility: false,
     dateCreated: false,
     dateModified: false,
@@ -252,6 +257,9 @@ export function CertificationsPage({
     (columns.tasks ? 90 : 0) +
     (columns.ceus ? 90 : 0) +
     (columns.createdBy ? 180 : 0) +
+    (columns.tradeTag ? 210 : 0) +
+    (columns.partnershipTag ? 160 : 0) +
+    (columns.userTypeTag ? 150 : 0) +
     (columns.visibility ? 120 : 0) +
     (columns.dateCreated ? 130 : 0) +
     (columns.dateModified ? 130 : 0);
@@ -272,6 +280,16 @@ export function CertificationsPage({
     setVisibility(cert, (cert.visibility ?? "Visible") === "Visible" ? "Hidden" : "Visible");
   }
 
+  function editCert(cert: Certification) {
+    // Certifications created by a company are owned by that company's B2B account
+    // and can only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
+    if (cert.createdBy !== "SkillCat") {
+      setBlockedEdit(cert);
+      return;
+    }
+    onEditCert(cert);
+  }
+
   function deleteCert(cert: Certification) {
     const ok = window.confirm(`Delete “${cert.name}” (${cert.id})? This can’t be undone.`);
     if (!ok) return;
@@ -286,7 +304,6 @@ export function CertificationsPage({
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Certifications</h1>
-              <div className="tasks-subtitle">{certList.length} Certifications · all industries</div>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={onNewCert}>
@@ -330,6 +347,9 @@ export function CertificationsPage({
                           {columns.tasks && <SortableHeader col="tasks" label="Tasks" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.ceus && <SortableHeader col="ceus" label="CEUs" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
+                          {columns.tradeTag && <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                          {columns.partnershipTag && <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                          {columns.userTypeTag && <SortableHeader col="userTypeTag" label="User Type Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
                           {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                           {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
@@ -351,7 +371,7 @@ export function CertificationsPage({
                               selected={cert.id === selectedId}
                               columns={columns}
                               onClick={() => setSelectedId(cert.id === selectedId ? null : cert.id)}
-                              onEdit={() => onEditCert(cert)}
+                              onEdit={() => editCert(cert)}
                               onToggleVisibility={() => toggleHidden(cert)}
                               onOpenMenu={(rect) => setMenu({ cert, rect })}
                             />
@@ -382,20 +402,43 @@ export function CertificationsPage({
           cert={menu.cert}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onArchive={() =>
-            setVisibility(
-              menu.cert,
-              (menu.cert.visibility ?? "Visible") === "Archived" ? "Visible" : "Archived",
-            )
-          }
-          onEdit={() => onEditCert(menu.cert)}
+          onEdit={() => editCert(menu.cert)}
           onDelete={() => deleteCert(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
           onBackup={() => backupCertification(menu.cert)}
           onManageContentLinks={() => onManageContentLinks(menu.cert)}
         />
       )}
+
+      {blockedEdit && (
+        <CompanyEditBlockedModal
+          companyName={blockedEdit.createdBy}
+          onClose={() => setBlockedEdit(null)}
+          onOpenDashboard={() => {
+            onOpenCompanyDashboard(blockedEdit.createdBy);
+            setBlockedEdit(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Renders a category's tags like the "Used in" column — first value plus a
+ * "+N" overflow badge. Trade and Partnership categories allow more than one;
+ * hovering the cell shows the full list via a native tooltip. */
+function TagCell({ tags }: { tags: string[] }) {
+  return (
+    <td className="col-tags" data-tip={tags.length ? tags.join("\n") : undefined}>
+      {tags.length === 0 ? (
+        "—"
+      ) : (
+        <>
+          {tags[0]}
+          {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
+        </>
+      )}
+    </td>
   );
 }
 
@@ -411,6 +454,9 @@ function CertColGroup({ columns }: { columns: CertColumnState }) {
       {columns.tasks && <col style={{ width: 90 }} />}
       {columns.ceus && <col style={{ width: 90 }} />}
       {columns.createdBy && <col style={{ width: 180 }} />}
+      {columns.tradeTag && <col style={{ width: 210 }} />}
+      {columns.partnershipTag && <col style={{ width: 160 }} />}
+      {columns.userTypeTag && <col style={{ width: 150 }} />}
       {columns.visibility && <col style={{ width: 120 }} />}
       {columns.dateCreated && <col style={{ width: 130 }} />}
       {columns.dateModified && <col style={{ width: 130 }} />}
@@ -444,11 +490,11 @@ function CertRow({
       onClick={onClick}
     >
       {columns.id && <td className="col-id">{cert.id}</td>}
-      <td className="col-name">
+      <td className="col-name" data-tip={cert.name}>
         {cert.name}
         {vis !== "Visible" && <span className="hidden-badge">{vis}</span>}
       </td>
-      {columns.industry && <td className="col-used">{cert.industry}</td>}
+      {columns.industry && <td className="col-used" data-tip={cert.industry}>{cert.industry}</td>}
       {columns.careerStage && <td className="col-type">{cert.careerStage ?? "—"}</td>}
       {columns.type && <td className="col-type">{cert.type ?? "—"}</td>}
       {columns.payment && (
@@ -464,7 +510,10 @@ function CertRow({
       )}
       {columns.tasks && <td className="col-type">{cert.tasks}</td>}
       {columns.ceus && <td className="col-type">{cert.ceus}</td>}
-      {columns.createdBy && <td className="col-creator">{cert.createdBy}</td>}
+      {columns.createdBy && <td className="col-creator" data-tip={cert.createdBy}>{cert.createdBy}</td>}
+      {columns.tradeTag && <TagCell tags={pickTags(cert.tags, TRADE_TAGS)} />}
+      {columns.partnershipTag && <TagCell tags={pickTags(cert.tags, PARTNERSHIP_TAGS)} />}
+      {columns.userTypeTag && <td className="col-tags">{pickTag(cert.tags, USER_TYPE_TAGS) ?? "—"}</td>}
       {columns.visibility && <td className="col-type">{vis}</td>}
       {columns.dateCreated && <td className="col-date">{cert.dateCreated ?? "—"}</td>}
       {columns.dateModified && <td className="col-date">{cert.dateModified ?? "—"}</td>}
@@ -513,7 +562,6 @@ function CertActionsMenu({
   cert,
   rect,
   onClose,
-  onArchive,
   onEdit,
   onDelete,
   onViewPayers,
@@ -523,7 +571,6 @@ function CertActionsMenu({
   cert: Certification;
   rect: DOMRect;
   onClose: () => void;
-  onArchive: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onViewPayers: () => void;
@@ -566,8 +613,6 @@ function CertActionsMenu({
     };
   }, [onClose]);
 
-  const archived = (cert.visibility ?? "Visible") === "Archived";
-
   const item = (
     icon: JSX.Element,
     label: string,
@@ -603,9 +648,6 @@ function CertActionsMenu({
         <div className="u-menu-head-id">{cert.id}{cert.type ? ` · ${cert.type}` : ""}</div>
       </div>
       <div className="u-menu-divider" />
-      {archived
-        ? item(<UnarchiveIcon />, "Unarchive Certification", onArchive)
-        : item(<ArchiveIcon />, "Archive Certification", onArchive)}
       {item(<PencilIcon />, "Edit", onEdit)}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<PayersIcon />, "View who paid", onViewPayers)}
@@ -642,5 +684,37 @@ function SortableHeader({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
+  );
+}
+
+function CompanyEditBlockedModal({
+  companyName,
+  onClose,
+  onOpenDashboard,
+}: {
+  companyName: string;
+  onClose: () => void;
+  onOpenDashboard: () => void;
+}) {
+  return (
+    <div className="cl-modal-overlay" onClick={onClose}>
+      <div className="cl-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cl-modal-head">
+          <h3 className="cl-modal-title">Can't edit this certification here</h3>
+          <p className="cl-modal-sub">
+            Certifications created by a company can only be edited from the B2B
+            Dashboard. Login as <strong>{companyName}</strong> to make changes.
+          </p>
+        </div>
+        <div className="cl-modal-foot">
+          <button className="btn-save-draft" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-publish" onClick={onOpenDashboard}>
+            Open Company Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

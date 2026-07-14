@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   activeLinks,
-  formResponses,
   inactiveLinks,
   type FeedbackForm,
   type FormQuestionLink,
@@ -11,7 +10,6 @@ import {
 import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
-import { FeedbackFormResponses } from "./FeedbackFormResponses";
 import { WizardStepRail } from "./WizardStepRail";
 
 type Props = {
@@ -46,11 +44,6 @@ const STEPS = [
     id: "triggers",
     label: "Triggers",
     desc: "Map this form to the Tasks and Certifications whose completion should show it. A form must be Active before triggers can be added.",
-  },
-  {
-    id: "responses",
-    label: "Responses",
-    desc: "Review the feedback collected against this form. Only SkillCat Admins can see responses.",
   },
 ] as const;
 
@@ -89,7 +82,6 @@ export function FeedbackFormWizard({
     onUpdate({ ...form, name, updatedAt: TODAY });
   }
 
-  const responses = formResponses[form.id] ?? [];
   const actives = activeLinks(form);
   const isCreating = form.status === "draft";
   // Triggers require Active status (spec §13.3.6) — gate the step until then.
@@ -164,9 +156,6 @@ export function FeedbackFormWizard({
               allForms={allForms}
               onSave={saveTriggers}
             />
-          )}
-          {step === 3 && (
-            <FeedbackFormResponses form={form} bank={bank} responses={responses} />
           )}
         </div>
       </div>

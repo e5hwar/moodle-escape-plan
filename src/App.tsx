@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
+import { HoverTooltip } from "./components/HoverTooltip";
 import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
@@ -26,6 +27,7 @@ import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormWizard } from "./components/FeedbackFormWizard";
+import { FeedbackFormResponsesPage } from "./components/FeedbackFormResponsesPage";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
 import { NewCompanyWizard } from "./components/NewCompanyWizard";
@@ -98,6 +100,7 @@ type View =
   | { name: "scholarship" }
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string }
+  | { name: "feedback-responses"; formId: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
@@ -194,6 +197,7 @@ export default function App() {
   const profileId = params.get("profile");
   const portfolioId = params.get("portfolio");
   const stripeCustomerId = params.get("stripeInvoices");
+  const loginAsCompany = params.get("loginAs");
   if (profileId) {
     const u = allUsers.find((x) => x.id === profileId);
     return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
@@ -205,8 +209,50 @@ export default function App() {
   if (stripeCustomerId) {
     return <StripeInvoicesPage customerId={stripeCustomerId} />;
   }
+  if (loginAsCompany) {
+    return <LoginAsLibraryPage company={loginAsCompany} />;
+  }
 
   return <AdminApp />;
+}
+
+/* Placeholder shown when an admin clicks "Open Company Dashboard" on a
+ * company-owned Task/Certification. Opened in a new tab via ?loginAs=. */
+function LoginAsLibraryPage({ company }: { company: string }) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        padding: 48,
+        textAlign: "center",
+        fontFamily: "var(--font-sans)",
+        color: "#e7e7e8",
+        background: "#151517",
+      }}
+    >
+      <div style={{ fontSize: 13, letterSpacing: 1, textTransform: "uppercase", color: "#8a8a90" }}>
+        Login As
+      </div>
+      <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0 }}>{company}</h1>
+      <p style={{ fontSize: 15, color: "#a8a8a8", maxWidth: 460, margin: 0 }}>
+        This is the Login As view for the <strong>Library</strong> page of {company}.
+      </p>
+    </div>
+  );
+}
+
+/** Opens the "Login As" Library placeholder for a company in a new tab. */
+function openLoginAsLibrary(company: string) {
+  window.open(
+    `${window.location.origin}${window.location.pathname}?loginAs=${encodeURIComponent(company)}`,
+    "_blank",
+    "noopener",
+  );
 }
 
 function StandaloneNotFound({ id }: { id: string }) {
@@ -295,7 +341,7 @@ function AdminApp() {
       ? "proctoring-review"
       : view.name === "scholarship"
       ? "scholarship"
-      : view.name === "feedback" || view.name === "feedback-detail"
+      : view.name === "feedback" || view.name === "feedback-detail" || view.name === "feedback-responses"
       ? "feedback"
       : view.name === "industries"
       ? "industries"
@@ -372,12 +418,13 @@ function AdminApp() {
   }
 
   const activeForm =
-    view.name === "feedback-detail"
+    view.name === "feedback-detail" || view.name === "feedback-responses"
       ? forms.find((f) => f.id === view.formId)
       : null;
 
   return (
     <div className="app">
+      <HoverTooltip />
       <Sidebar active={sidebarActive} onNavigate={navigate} />
       {view.name === "tasks" ? (
         <div className="main">
@@ -385,6 +432,7 @@ function AdminApp() {
             <TasksPage
               onNewTask={(t) => setView({ name: "new-task", taskType: t })}
               onEditTask={(task) => setView({ name: "edit-task", task })}
+              onOpenCompanyDashboard={openLoginAsLibrary}
               onViewAttempts={(task) => setView({ name: "attempts", quizName: task.name })}
               onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
             />
@@ -409,6 +457,7 @@ function AdminApp() {
         <CertificationsPage
           onNewCert={() => setView({ name: "new-cert-start" })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
+          onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
           onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
         />
@@ -507,7 +556,14 @@ function AdminApp() {
         <FeedbackFormsPage
           forms={forms}
           onOpen={(id) => setView({ name: "feedback-detail", formId: id })}
+          onViewResponses={(id) => setView({ name: "feedback-responses", formId: id })}
           onCreate={(form) => upsertForm(form)}
+        />
+      ) : view.name === "feedback-responses" && activeForm ? (
+        <FeedbackFormResponsesPage
+          form={activeForm}
+          bank={bank}
+          onBack={() => setView({ name: "feedback" })}
         />
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormWizard

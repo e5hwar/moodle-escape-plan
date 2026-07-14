@@ -1,4 +1,5 @@
 import { users, type User } from "./users";
+import { CREATED_BY_B2B } from "./filters";
 
 export type SubmissionMedia =
   | { kind: "video"; seed: string; duration: string }
@@ -75,7 +76,10 @@ function uhash(s: string): number {
   return h >>> 0;
 }
 
-const TODAY = new Date("2026-06-18");
+/** Fixed "today" the demo dataset is generated against — exported so views can
+ * compute waiting-time labels consistent with the seeded dates. */
+export const REVIEW_TODAY = new Date("2026-06-18");
+const TODAY = REVIEW_TODAY;
 function isoDaysAgo(n: number): string {
   const d = new Date(TODAY);
   d.setDate(d.getDate() - n);
@@ -128,7 +132,13 @@ function buildSubmissions(): TaskSubmission[] {
       companyName: u.companyName,
       taskName,
       submittedOn: isoDaysAgo(submittedDaysAgo),
-      createdBy: u.userType === "B2B" && u.companyName ? u.companyName : "SkillCat",
+      // Who created the Task — SkillCat for B2C content, or a B2B customer for
+      // company-owned Tasks. Uses the same shorthand creator list as the
+      // Tasks/Certifications pages so the "Created By" filter options match.
+      createdBy:
+        u.userType === "B2B"
+          ? CREATED_BY_B2B[k % CREATED_BY_B2B.length]
+          : "SkillCat",
       durationLabel: "Hands-on Task · 2 Hours",
       status,
       progress: 100,

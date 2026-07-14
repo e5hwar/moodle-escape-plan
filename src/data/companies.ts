@@ -71,6 +71,8 @@ export type Company = {
   freeAccessEndDate?: string;
   /** Customer Success Manager assigned to this account. */
   assignedCsm?: string;
+  /** Sales representative assigned to this account. */
+  assignedSalesRep?: string;
 };
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];

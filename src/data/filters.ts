@@ -32,21 +32,42 @@ export const DISCOVERABLE_OPTIONS = ["Discoverable", "Not discoverable"];
 
 export const FINAL_EXAM_OPTIONS = ["Final Exam", "Not Final Exam"];
 
-export const TAG_GROUPS: { label: string; tags: string[] }[] = [
-  { label: "USER TYPE", tags: ["All-User", "B2B-Only"] },
-  { label: "PARTNERSHIP", tags: ["NexStar", "HVACR"] },
-  {
-    label: "TRADE",
-    tags: [
-      "Residential HVAC",
-      "Commercial HVAC",
-      "Residential Plumbing",
-      "Commercial Plumbing",
-      "MultiFamily Maintenance",
-      "Hotel Maintenance",
-    ],
-  },
+// Tags are split into three independent categories. A record carries at most one
+// tag per category. "All-User" is no longer a tag — it's the default (blank) user
+// type, so User Type tags are only "B2B-Only".
+export const USER_TYPE_TAGS = ["B2B-Only"];
+export const PARTNERSHIP_TAGS = ["NexStar", "HVACR"];
+export const TRADE_TAGS = [
+  "Residential HVAC",
+  "Commercial HVAC",
+  "Residential Plumbing",
+  "Commercial Plumbing",
+  "MultiFamily Maintenance",
+  "Hotel Maintenance",
 ];
+
+export const TAG_GROUPS: { label: string; tags: string[] }[] = [
+  { label: "USER TYPE", tags: USER_TYPE_TAGS },
+  { label: "PARTNERSHIP", tags: PARTNERSHIP_TAGS },
+  { label: "TRADE", tags: TRADE_TAGS },
+];
+
+/** The tag a record carries within a category, or undefined if none. */
+export function pickTag(
+  tags: string[] | undefined,
+  category: readonly string[],
+): string | undefined {
+  return (tags ?? []).find((t) => category.includes(t));
+}
+
+/** All tags a record carries within a category (Trade and Partnership allow more
+ * than one; preserves the category's own ordering). */
+export function pickTags(
+  tags: string[] | undefined,
+  category: readonly string[],
+): string[] {
+  return category.filter((t) => (tags ?? []).includes(t));
+}
 
 export type OptionalColumn =
   | "id"
@@ -54,7 +75,9 @@ export type OptionalColumn =
   | "paid"
   | "usedIn"
   | "createdBy"
-  | "tags"
+  | "tradeTag"
+  | "partnershipTag"
+  | "userTypeTag"
   | "dateCreated"
   | "dateModified";
 
@@ -64,7 +87,9 @@ export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
   { key: "paid", label: "Paid" },
   { key: "usedIn", label: "Used in" },
   { key: "createdBy", label: "Created By" },
-  { key: "tags", label: "Tags" },
+  { key: "tradeTag", label: "Trade Tag" },
+  { key: "partnershipTag", label: "Partnership Tag" },
+  { key: "userTypeTag", label: "User Type Tag" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },
 ];

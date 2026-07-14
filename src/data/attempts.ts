@@ -1,4 +1,11 @@
-export type AttemptStatus = "In Progress" | "Completed";
+// "In Review" and "Rejected" only occur on proctored exams: a passing attempt
+// enters In Review until the Proctoring Team approves the footage, and is
+// Rejected (with a reason) if the footage fails review.
+export type AttemptStatus =
+  | "In Progress"
+  | "Completed"
+  | "In Review"
+  | "Rejected";
 
 export type Attempt = {
   id: string;
@@ -15,6 +22,12 @@ export type Attempt = {
   completedAt: string | null;
   /** Whole-number percentage out of 100, or null while In Progress. */
   grade: number | null;
+  /** True when this attempt belongs to a proctored exam — the only place the
+   *  In Review / Rejected statuses can appear. */
+  proctored?: boolean;
+  /** Why the proctoring review rejected the attempt. Set only when the status
+   *  is "Rejected". */
+  rejectionReason?: string;
 };
 
 /* Tasks that surface a "View Attempts" entry. Attempts are generated against
@@ -30,6 +43,20 @@ const QUIZ_NAMES = [
   "Field Visit – Brazing Joints",
   "HVAC Field Tools Walkthrough",
   "OSHA 10 Safety Course",
+];
+
+/** A proctored certification exam. Its attempts carry the extra In Review /
+ *  Rejected statuses that only proctored exams can reach. */
+const PROCTORED_EXAM = "EPA 608 Universal Final Exam";
+
+/** Reasons the Proctoring Team gives when rejecting an attempt's footage. */
+const REJECTION_REASONS = [
+  "A second person was visible in frame during the session.",
+  "The candidate left the camera view for an extended period.",
+  "Unauthorized reference material was visible on the desk.",
+  "Tab-switching away from the exam window was detected mid-attempt.",
+  "The webcam was covered before the attempt was submitted.",
+  "ID verification photo did not match the candidate on camera.",
 ];
 
 const FIRST = [
@@ -150,7 +177,87 @@ function buildAttempts(): Attempt[] {
   return out;
 }
 
-export const attempts: Attempt[] = buildAttempts();
+/** Attempts for the proctored EPA 608 Universal Final Exam. Every proctoring
+ *  status is represented, and each attempt is graded on submission; the status
+ *  reflects where the footage review stands rather than the score alone. */
+function buildProctoredAttempts(): Attempt[] {
+  // Status mix, in row order: two approved (Completed), two awaiting the
+  // Proctoring Team (In Review), two Rejected with a reason, one still running.
+  const plan: { status: AttemptStatus; reasonIdx?: number }[] = [
+    { status: "Completed" },
+    { status: "In Review" },
+    { status: "Rejected", reasonIdx: 0 },
+    { status: "In Review" },
+    { status: "Completed" },
+    { status: "Rejected", reasonIdx: 3 },
+    { status: "Rejected", reasonIdx: 5 },
+    { status: "In Progress" },
+  ];
+
+  const out: Attempt[] = [];
+  const attemptCounts = new Map<string, number>();
+
+  plan.forEach((p, i) => {
+    // Offset the name/phone seeds away from buildAttempts() so the roster reads
+    // as different people.
+    const seed = i + 100;
+    const first = pick(FIRST, seed * 3 + 2);
+    const last = pick(LAST, seed * 5 + 1);
+    const name = `${first} ${last}`;
+    const email = `${first.toLowerCase()}.${last.toLowerCase()}@${
+      ["gmail.com", "outlook.com", "yahoo.com", "fieldpro.io", "acmehvac.com"][i % 5]
+    }`;
+    const area = pick(AREA, seed * 7);
+    const phone = `(${area}) ${pad(200 + ((seed * 37) % 700))}-${pad(1000 + ((seed * 53) % 9000)).slice(-4)}`;
+
+    const key = `${name}::${PROCTORED_EXAM}`;
+    const attemptNumber = (attemptCounts.get(key) ?? 0) + 1;
+    attemptCounts.set(key, attemptNumber);
+
+    const dayOffset = Math.floor(rng(seed + 3) * 50);
+    const startMinute = Math.floor(rng(seed + 5) * 600);
+    const startedAt = stamp(dayOffset, startMinute);
+
+    const base = {
+      id: `A-${5100 + i}`,
+      name,
+      email,
+      phone,
+      quizName: PROCTORED_EXAM,
+      attemptNumber,
+      startedAt,
+      proctored: true,
+    };
+
+    if (p.status === "In Progress") {
+      out.push({ ...base, status: "In Progress", completedAt: null, grade: null });
+      return;
+    }
+
+    const durMinutes = 42 + Math.floor(rng(seed + 9) * 70); // 42–111 min
+    const completedAt = stamp(dayOffset, startMinute + durMinutes);
+    // Rejected/In Review attempts still passed the quiz — the hold is on the
+    // footage, not the score — so grades skew high.
+    const grade = Math.min(100, 72 + Math.floor(rng(seed + 13) * 26));
+
+    if (p.status === "Rejected") {
+      out.push({
+        ...base,
+        status: "Rejected",
+        completedAt,
+        grade,
+        rejectionReason: REJECTION_REASONS[p.reasonIdx ?? 0],
+      });
+      return;
+    }
+
+    out.push({ ...base, status: p.status, completedAt, grade });
+  });
+
+  return out;
+}
+
+export const attempts: Attempt[] = [...buildAttempts(), ...buildProctoredAttempts()];
 
 /** Minutes elapsed for an attempt, derived from its start/complete stamps.
  *  Stored alongside so the table can show Duration without re-parsing labels. */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   mediaUrl,
   pastReviewOf,
@@ -6,7 +6,21 @@ import {
   type PastReview,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import { CheckBoldIcon, ChevronLeftIcon, LockIcon } from "./icons";
+import {
+  AudioIcon,
+  BoldIcon,
+  BulletListIcon,
+  ChevronLeftIcon,
+  ImageIcon,
+  IndentLeftIcon,
+  IndentRightIcon,
+  ItalicIcon,
+  LinkSmallIcon,
+  LockIcon,
+  NumberListIcon,
+  UnderlineIcon,
+  VideoIcon,
+} from "./icons";
 
 function formatDate(iso: string): string {
   if (!iso || iso === "—") return "—";
@@ -35,11 +49,11 @@ export function ReviewSubmissionDetail({
 }: {
   submission: TaskSubmission;
   onBack: () => void;
-  onSubmit: (result: { score: number; feedback: string; criteria: string[] }) => void;
+  onSubmit: (result: { score: number; feedback: string; checklist: string }) => void;
 }) {
   const [activeVersion, setActiveVersion] = useState(0);
   const [activeMedia, setActiveMedia] = useState(0);
-  const [checked, setChecked] = useState<string[]>([]);
+  const [checklist, setChecklist] = useState("");
   const [score, setScore] = useState<number | null>(null);
   const [feedback, setFeedback] = useState("");
 
@@ -55,10 +69,6 @@ export function ReviewSubmissionDetail({
   const media = view.media[activeMedia] ?? view.media[0];
   const isReject = score !== null && score <= 4;
   const isPass = score !== null && score >= 5;
-
-  function toggleCriterion(id: string) {
-    setChecked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
 
   function selectVersion(idx: number) {
     if (idx === activeVersion) return;
@@ -212,26 +222,10 @@ export function ReviewSubmissionDetail({
                     <p className="rh-review-sub">Score the submission and leave feedback for the learner.</p>
                   </div>
 
-                  {/* Evaluation criteria */}
+                  {/* Reviewer's checklist */}
                   <div className="rh-field">
-                    <div className="rh-field-label">Evaluation Criteria</div>
-                    <div className="rh-criteria">
-                      {submission.criteria.map((c) => {
-                        const on = checked.includes(c.id);
-                        return (
-                          <button
-                            key={c.id}
-                            className={`rh-criterion ${on ? "is-checked" : ""}`}
-                            onClick={() => toggleCriterion(c.id)}
-                          >
-                            <span className={`rh-criterion-box ${on ? "is-checked" : ""}`}>
-                              {on && <CheckBoldIcon />}
-                            </span>
-                            <span className="rh-criterion-label">{c.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <div className="rh-field-label">Reviewer's Checklist</div>
+                    <ReviewerChecklistField value={checklist} onChange={setChecklist} />
                   </div>
 
                   {/* Score */}
@@ -277,7 +271,7 @@ export function ReviewSubmissionDetail({
                     <button
                       className="btn-publish rh-submit"
                       disabled={score === null}
-                      onClick={() => score !== null && onSubmit({ score, feedback, criteria: checked })}
+                      onClick={() => score !== null && onSubmit({ score, feedback, checklist })}
                     >
                       {isReject ? "Reject Submission" : isPass ? "Pass Submission" : "Submit Review"}
                     </button>
@@ -319,19 +313,15 @@ function PastReviewCard({
       </div>
 
       <div className="rh-field">
-        <div className="rh-field-label">Evaluation Criteria</div>
-        <div className="rh-criteria">
-          {submission.criteria.map((c) => {
-            const passed = review.passedCriteria.includes(c.id);
-            return (
-              <div key={c.id} className={`rh-criterion is-readonly ${passed ? "is-checked" : ""}`}>
-                <span className={`rh-criterion-box ${passed ? "is-checked" : ""}`}>
-                  {passed && <CheckBoldIcon />}
-                </span>
-                <span className="rh-criterion-label">{c.label}</span>
-              </div>
-            );
-          })}
+        <div className="rh-field-label">Reviewer's Checklist</div>
+        <div className="rh-checklist-readonly">
+          <ul className="rh-checklist-list">
+            {submission.criteria
+              .filter((c) => review.passedCriteria.includes(c.id))
+              .map((c) => (
+                <li key={c.id}>{c.label}</li>
+              ))}
+          </ul>
         </div>
       </div>
 
@@ -353,6 +343,55 @@ function PastReviewCard({
           Back to latest version
         </button>
       </div>
+    </div>
+  );
+}
+
+function ReviewerChecklistField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    ref.current.style.height = "auto";
+    ref.current.style.height = ref.current.scrollHeight + "px";
+  }, [value]);
+
+  return (
+    <div className={`rte-field ${focused ? "is-focused" : ""}`}>
+      {focused && (
+        <div className="rte-toolbar">
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><BoldIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><ItalicIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><UnderlineIcon /></button>
+          <span className="rte-sep" />
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><BulletListIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><NumberListIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><IndentRightIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><IndentLeftIcon /></button>
+          <span className="rte-sep" />
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><LinkSmallIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><ImageIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><VideoIcon /></button>
+          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><AudioIcon /></button>
+        </div>
+      )}
+      <textarea
+        ref={ref}
+        className="rte-area"
+        value={value}
+        rows={1}
+        placeholder="Note what you checked while reviewing this submission…"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }

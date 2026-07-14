@@ -30,6 +30,8 @@ import {
   INDUSTRY_OPTIONS,
   PARTNERSHIP_OPTIONS,
   CSM_OPTIONS,
+  SALES_REP_OPTIONS,
+  CURRENT_SALES_REP,
   COUNTRY_OPTIONS,
   US_STATES,
 } from "./NewCompanyWizard";
@@ -700,6 +702,9 @@ function EditCompanyModal({
   const [name, setName] = useState(company.name);
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(company.taxStatus ?? "Taxable");
   const [assignedCsm, setAssignedCsm] = useState(company.assignedCsm ?? "");
+  const [assignedSalesRep, setAssignedSalesRep] = useState(
+    company.assignedSalesRep ?? CURRENT_SALES_REP,
+  );
   const [country, setCountry] = useState(company.addressParts?.country ?? "United States");
   const [addrLine1, setAddrLine1] = useState(company.addressParts?.line1 ?? "");
   const [addrLine2, setAddrLine2] = useState(company.addressParts?.line2 ?? "");
@@ -734,6 +739,7 @@ function EditCompanyModal({
       name: name.trim(),
       taxStatus,
       assignedCsm: assignedCsm || undefined,
+      assignedSalesRep: assignedSalesRep || undefined,
       industry: industries.join(", "),
       partnership: partnerships.join(", "),
       address,
@@ -811,6 +817,20 @@ function EditCompanyModal({
               <option value="">Unassigned</option>
               {CSM_OPTIONS.map((c) => (
                 <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Assigned Sales Rep</label>
+            <select
+              className={`form-select ${assignedSalesRep ? "" : "is-placeholder"}`}
+              value={assignedSalesRep}
+              onChange={(e) => setAssignedSalesRep(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {SALES_REP_OPTIONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
               ))}
             </select>
           </div>

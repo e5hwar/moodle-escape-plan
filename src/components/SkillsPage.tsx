@@ -6,6 +6,7 @@ import {
   criteriaSummary,
   criteriaRule,
   taskById,
+  skillById,
   fmtHolders,
   SKILL_STATUSES,
   type Skill,
@@ -214,12 +215,12 @@ export function SkillsPage() {
   const mc = masteryCols;
   const skillTableMin =
     240 /* name */ + 40 /* actions */ +
-    (sc.id ? 100 : 0) + (sc.tasks ? 200 : 0) + (sc.criteria ? 110 : 0) + (sc.mastery ? 160 : 0) +
+    (sc.id ? 100 : 0) + (sc.tasks ? 200 : 0) + (sc.criteria ? 110 : 0) + (sc.mastery ? 200 : 0) +
     (sc.status ? 110 : 0) + (sc.holders ? 110 : 0) +
     (sc.dateCreated ? 130 : 0) + (sc.dateModified ? 130 : 0);
   const masteryTableMin =
     240 + 40 +
-    (mc.id ? 100 : 0) + (mc.skills ? 150 : 0) + (mc.status ? 110 : 0) +
+    (mc.id ? 100 : 0) + (mc.skills ? 200 : 0) + (mc.status ? 110 : 0) +
     (mc.holders ? 110 : 0) +
     (mc.dateCreated ? 130 : 0) + (mc.dateModified ? 130 : 0);
 
@@ -346,7 +347,7 @@ export function SkillsPage() {
                                 key={s.id}
                                 skill={s}
                                 cols={sc}
-                                masteryCount={masteryUsing(s.id, mastery).length}
+                                masteryLinked={masteryUsing(s.id, mastery)}
                                 selected={s.id === selectedId}
                                 onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
                                 onEdit={() => setMode({ kind: "edit-skill", skill: s })}
@@ -572,7 +573,7 @@ function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
       {cols.id && <col style={{ width: 100 }} />}
       {cols.tasks && <col style={{ width: 200 }} />}
       {cols.criteria && <col style={{ width: 110 }} />}
-      {cols.mastery && <col style={{ width: 160 }} />}
+      {cols.mastery && <col style={{ width: 200 }} />}
       {cols.status && <col style={{ width: 110 }} />}
       {cols.holders && <col style={{ width: 110 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
@@ -586,25 +587,30 @@ function StatusBadge({ status }: { status: Skill["status"] }) {
   return <span className={`sk-status sk-status--${status.toLowerCase()}`}>{status}</span>;
 }
 
-/** Awarding Tasks: first Task name, plus a "+N" pill when the Skill has more. */
-function TasksCell({ skill }: { skill: Skill }) {
-  if (skill.taskIds.length === 0) return <>—</>;
-  const first = taskById(skill.taskIds[0]);
-  const extra = skill.taskIds.length - 1;
+/** First name in a list, plus a "+N" pill when there are more. */
+function NamesCell({ names }: { names: string[] }) {
+  if (names.length === 0) return <>—</>;
+  const extra = names.length - 1;
   return (
     <span className="sk-tasks-cell">
-      <span className="sk-tasks-name">{first?.name ?? skill.taskIds[0]}</span>
+      <span className="sk-tasks-name">{names[0]}</span>
       {extra > 0 && <span className="sk-tasks-more">+{extra}</span>}
     </span>
   );
 }
 
+/** Awarding Tasks: first Task name, plus a "+N" pill when the Skill has more. */
+function TasksCell({ skill }: { skill: Skill }) {
+  const names = skill.taskIds.map((id) => taskById(id)?.name ?? id);
+  return <NamesCell names={names} />;
+}
+
 function SkillRow({
-  skill, cols, masteryCount, selected, onClick, onEdit, onMenu,
+  skill, cols, masteryLinked, selected, onClick, onEdit, onMenu,
 }: {
   skill: Skill;
   cols: Record<SkillColKey, boolean>;
-  masteryCount: number;
+  masteryLinked: MasterySkill[];
   selected: boolean;
   onClick: () => void;
   onEdit: () => void;
@@ -620,7 +626,7 @@ function SkillRow({
       {cols.id && <td className="col-id">{skill.id}</td>}
       {cols.tasks && <td className="col-used"><TasksCell skill={skill} /></td>}
       {cols.criteria && <td className="col-type">{criteriaRule(skill)}</td>}
-      {cols.mastery && <td className="col-used">{masteryCount > 0 ? `${masteryCount} linked` : "—"}</td>}
+      {cols.mastery && <td className="col-used"><NamesCell names={masteryLinked.map((m) => m.name)} /></td>}
       {cols.status && <td className="col-type"><StatusBadge status={skill.status} /></td>}
       {cols.holders && <td className="col-type">{fmtHolders(skill.holders)}</td>}
       {cols.dateCreated && <td className="col-date">{skill.dateCreated}</td>}
@@ -635,7 +641,7 @@ function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
     <colgroup>
       <col style={{ width: 240 }} />
       {cols.id && <col style={{ width: 100 }} />}
-      {cols.skills && <col style={{ width: 150 }} />}
+      {cols.skills && <col style={{ width: 200 }} />}
       {cols.status && <col style={{ width: 110 }} />}
       {cols.holders && <col style={{ width: 110 }} />}
       {cols.dateCreated && <col style={{ width: 130 }} />}
@@ -663,7 +669,7 @@ function MasteryRow({
         {archived && <span className="hidden-badge">Archived</span>}
       </td>
       {cols.id && <td className="col-id">{mastery.id}</td>}
-      {cols.skills && <td className="col-used">{mastery.skillIds.length} Skill{mastery.skillIds.length === 1 ? "" : "s"}</td>}
+      {cols.skills && <td className="col-used"><NamesCell names={mastery.skillIds.map((id) => skillById(id)?.name ?? id)} /></td>}
       {cols.status && <td className="col-type"><StatusBadge status={mastery.status} /></td>}
       {cols.holders && <td className="col-type">{fmtHolders(mastery.holders)}</td>}
       {cols.dateCreated && <td className="col-date">{mastery.dateCreated}</td>}

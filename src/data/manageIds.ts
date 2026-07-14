@@ -1,4 +1,4 @@
-export type IdStatus = "approved" | "in-review";
+export type IdStatus = "approved" | "in-review" | "reupload-requested";
 
 export type IdRecord = {
   id: string;
@@ -72,7 +72,7 @@ export const idRecords: IdRecord[] = [
     email: "dokafor@skillcatapp.com",
     phone: "+1 (713) 555-0156",
     idType: "US Driver's License",
-    status: "in-review",
+    status: "reupload-requested",
     uploadedAt: "Oct 30th, 2025, 4:20 PM",
   },
 ];

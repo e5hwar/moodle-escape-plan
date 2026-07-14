@@ -4,6 +4,7 @@ import { tasks as allTasks, discoverableLabel, finalExamLabel, isPaid, type Task
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
+import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { TasksSearch } from "./TasksSearch";
@@ -86,7 +87,9 @@ type SortKey =
   | "paid"
   | "usedIn"
   | "createdBy"
-  | "tags"
+  | "tradeTag"
+  | "partnershipTag"
+  | "userTypeTag"
   | "dateCreated"
   | "dateModified";
 type SortDir = "asc" | "desc";
@@ -106,8 +109,12 @@ function compare(a: Task, b: Task, key: SortKey): number {
       return (a.usedIn[0] ?? "").localeCompare(b.usedIn[0] ?? "");
     case "createdBy":
       return a.createdBy.localeCompare(b.createdBy);
-    case "tags":
-      return (a.tags?.[0] ?? "").localeCompare(b.tags?.[0] ?? "");
+    case "tradeTag":
+      return (pickTag(a.tags, TRADE_TAGS) ?? "").localeCompare(pickTag(b.tags, TRADE_TAGS) ?? "");
+    case "partnershipTag":
+      return (pickTag(a.tags, PARTNERSHIP_TAGS) ?? "").localeCompare(pickTag(b.tags, PARTNERSHIP_TAGS) ?? "");
+    case "userTypeTag":
+      return (pickTag(a.tags, USER_TYPE_TAGS) ?? "").localeCompare(pickTag(b.tags, USER_TYPE_TAGS) ?? "");
     case "dateCreated":
       return (Date.parse(a.dateCreated ?? "") || 0) - (Date.parse(b.dateCreated ?? "") || 0);
     case "dateModified":
@@ -118,11 +125,13 @@ function compare(a: Task, b: Task, key: SortKey): number {
 export function TasksPage({
   onNewTask,
   onEditTask,
+  onOpenCompanyDashboard,
   onViewAttempts,
   onViewPayers,
 }: {
   onNewTask: (t: TaskTypeKey) => void;
   onEditTask: (task: Task) => void;
+  onOpenCompanyDashboard: (companyName: string) => void;
   onViewAttempts: (task: Task) => void;
   onViewPayers: (task: Task) => void;
 }) {
@@ -131,6 +140,9 @@ export function TasksPage({
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Set when someone tries to edit a Task owned by a company — company Tasks are
+  // managed from the B2B Dashboard, not here.
+  const [blockedEdit, setBlockedEdit] = useState<Task | null>(null);
   // Search bar: committedQuery only changes on Enter. The certification filter is
   // shared with the Filters row (filters.certifications) and applies on Enter.
   const [committedQuery, setCommittedQuery] = useState("");
@@ -149,7 +161,9 @@ export function TasksPage({
     paid: true,
     usedIn: true,
     createdBy: true,
-    tags: false,
+    tradeTag: false,
+    partnershipTag: false,
+    userTypeTag: false,
     dateCreated: false,
     dateModified: false,
   });
@@ -246,7 +260,9 @@ export function TasksPage({
         (columns.paid ? 110 : 0) +
         (columns.usedIn ? 180 : 0) +
         (columns.createdBy ? 200 : 0) +
-        (columns.tags ? 200 : 0) +
+        (columns.tradeTag ? 210 : 0) +
+        (columns.partnershipTag ? 160 : 0) +
+        (columns.userTypeTag ? 150 : 0) +
         (columns.dateCreated ? 130 : 0) +
         (columns.dateModified ? 130 : 0)
       : 0);
@@ -284,6 +300,16 @@ export function TasksPage({
     );
   }
 
+  function editTask(task: Task) {
+    // Tasks created by a company are owned by that company's B2B account and can
+    // only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
+    if (task.createdBy !== "SkillCat") {
+      setBlockedEdit(task);
+      return;
+    }
+    onEditTask(task);
+  }
+
   function deleteTask(task: Task) {
     const ok = window.confirm(
       `Delete “${task.name}” (${task.id})? This can’t be undone.`,
@@ -298,9 +324,6 @@ export function TasksPage({
       <header className="tasks-header">
         <div>
           <h1 className="tasks-title">Tasks</h1>
-          <div className="tasks-subtitle">
-            {taskList.length} tasks · standalone &amp; certification content
-          </div>
         </div>
         <div className="tasks-header-actions">
           <Dropdown
@@ -379,8 +402,14 @@ export function TasksPage({
                     {columns.createdBy && !panelOpen && (
                       <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />
                     )}
-                    {columns.tags && !panelOpen && (
-                      <SortableHeader col="tags" label="Tags" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
+                    {columns.tradeTag && !panelOpen && (
+                      <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
+                    )}
+                    {columns.partnershipTag && !panelOpen && (
+                      <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
+                    )}
+                    {columns.userTypeTag && !panelOpen && (
+                      <SortableHeader col="userTypeTag" label="User Type Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
                     )}
                     {columns.dateCreated && !panelOpen && (
                       <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />
@@ -407,7 +436,7 @@ export function TasksPage({
                         columns={columns}
                         compact={panelOpen}
                         onClick={() => setSelectedId(task.id === selectedId ? null : task.id)}
-                        onEdit={() => onEditTask(task)}
+                        onEdit={() => editTask(task)}
                         onToggleVisibility={() => toggleVisibility(task)}
                         onOpenMenu={(rect) => setMenu({ task, rect })}
                       />
@@ -460,7 +489,68 @@ export function TasksPage({
           onDelete={() => deleteTask(menu.task)}
         />
       )}
+
+      {blockedEdit && (
+        <CompanyEditBlockedModal
+          task={blockedEdit}
+          onClose={() => setBlockedEdit(null)}
+          onOpenDashboard={() => {
+            onOpenCompanyDashboard(blockedEdit.createdBy);
+            setBlockedEdit(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function CompanyEditBlockedModal({
+  task,
+  onClose,
+  onOpenDashboard,
+}: {
+  task: Task;
+  onClose: () => void;
+  onOpenDashboard: () => void;
+}) {
+  return (
+    <div className="cl-modal-overlay" onClick={onClose}>
+      <div className="cl-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cl-modal-head">
+          <h3 className="cl-modal-title">Can't edit this task here</h3>
+          <p className="cl-modal-sub">
+            Tasks created by a company can only be edited from the B2B Dashboard.
+            Login as <strong>{task.createdBy}</strong> to make changes.
+          </p>
+        </div>
+        <div className="cl-modal-foot">
+          <button className="btn-save-draft" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-publish" onClick={onOpenDashboard}>
+            Open Company Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Renders a category's tags like the "Used in" column — first value plus a
+ * "+N" overflow badge. Trade and Partnership categories allow more than one;
+ * hovering the cell shows the full list via a native tooltip. */
+function TagCell({ tags }: { tags: string[] }) {
+  return (
+    <td className="col-tags" data-tip={tags.length ? tags.join("\n") : undefined}>
+      {tags.length === 0 ? (
+        "—"
+      ) : (
+        <>
+          {tags[0]}
+          {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
+        </>
+      )}
+    </td>
   );
 }
 
@@ -473,7 +563,9 @@ function ColGroup({ columns, compact }: { columns: ColumnState; compact?: boolea
       {columns.paid && !compact && <col style={{ width: 110 }} />}
       {columns.usedIn && !compact && <col style={{ width: 180 }} />}
       {columns.createdBy && !compact && <col style={{ width: 200 }} />}
-      {columns.tags && !compact && <col style={{ width: 200 }} />}
+      {columns.tradeTag && !compact && <col style={{ width: 210 }} />}
+      {columns.partnershipTag && !compact && <col style={{ width: 160 }} />}
+      {columns.userTypeTag && !compact && <col style={{ width: 150 }} />}
       {columns.dateCreated && !compact && <col style={{ width: 130 }} />}
       {columns.dateModified && !compact && <col style={{ width: 130 }} />}
       <col style={{ width: 40 }} />
@@ -539,7 +631,7 @@ function TableRow({
       onClick={onClick}
     >
       {columns.id && <td className="col-id">{task.id}</td>}
-      <td className="col-name">
+      <td className="col-name" data-tip={task.name}>
         {task.name}
         {task.hidden && <span className="hidden-badge">Hidden</span>}
       </td>
@@ -554,7 +646,7 @@ function TableRow({
         </td>
       )}
       {columns.usedIn && !compact && (
-        <td className="col-used">
+        <td className="col-used" data-tip={task.usedIn.length ? task.usedIn.join("\n") : undefined}>
           {task.usedIn.length === 0 ? (
             "—"
           ) : (
@@ -567,24 +659,11 @@ function TableRow({
           )}
         </td>
       )}
-      {columns.createdBy && !compact && <td className="col-creator">{task.createdBy}</td>}
-      {columns.tags && !compact && (
-        <td className="col-tags">
-          {task.tags && task.tags.length > 0 ? (
-            <span className="tag-row">
-              {task.tags.slice(0, 2).map((t) => (
-                <span key={t} className="tag">
-                  {t}
-                </span>
-              ))}
-              {task.tags.length > 2 && (
-                <span className="used-extra">+{task.tags.length - 2}</span>
-              )}
-            </span>
-          ) : (
-            "—"
-          )}
-        </td>
+      {columns.createdBy && !compact && <td className="col-creator" data-tip={task.createdBy}>{task.createdBy}</td>}
+      {columns.tradeTag && !compact && <TagCell tags={pickTags(task.tags, TRADE_TAGS)} />}
+      {columns.partnershipTag && !compact && <TagCell tags={pickTags(task.tags, PARTNERSHIP_TAGS)} />}
+      {columns.userTypeTag && !compact && (
+        <td className="col-tags">{pickTag(task.tags, USER_TYPE_TAGS) ?? "—"}</td>
       )}
       {columns.dateCreated && !compact && <td className="col-date">{task.dateCreated ?? "—"}</td>}
       {columns.dateModified && !compact && <td className="col-date">{task.dateModified ?? "—"}</td>}

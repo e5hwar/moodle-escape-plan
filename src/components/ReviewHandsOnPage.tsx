@@ -4,29 +4,38 @@ import {
   type TaskSubmission,
 } from "../data/reviewSubmissions";
 import { ReviewSearch } from "./ReviewSearch";
-import { ReviewSubmissionDetail } from "./ReviewSubmissionDetail";
+import { ReviewConsole } from "./ReviewConsole";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
-import { SortIcon, XCircleIcon, ChevronDownIcon } from "./icons";
+import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
+import { SortIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
 const STATUS_OPTIONS: TaskSubmission["status"][] = ["Rejected", "Review Pending", "Completed"];
 
+// Same creator options as the Tasks/Certifications pages: SkillCat (in-house)
+// plus the B2B customers.
+const CREATOR_OPTIONS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
+
 /* ── Columns: Name is fixed; the rest are toggleable. Task + Status +
    Submitted On are shown by default; Due Date / Email / Phone / Created By
    are the "additional" columns. ── */
-type ColKey = "task" | "status" | "submittedOn" | "dueDate" | "email" | "phone" | "createdBy";
+type ColKey = "task" | "attempt" | "status" | "submittedOn" | "dueDate" | "email" | "phone" | "createdBy";
 type ColState = Record<ColKey, boolean>;
 
 const DEFAULT_COLUMNS: ColState = {
   task: true,
+  attempt: true,
   status: true,
   submittedOn: true,
   dueDate: false,
   email: false,
   phone: false,
-  createdBy: false,
+  createdBy: true,
 };
+
+/** The learner's current attempt number = how many submissions they've made. */
+const attemptNumber = (s: TaskSubmission) => s.versions.length;
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -47,6 +56,7 @@ type ColMeta = {
 
 const COLS: ColMeta[] = [
   { key: "task", label: "Task", className: "col-rh-task", width: 280, render: (s) => s.taskName, sortValue: (s) => s.taskName.toLowerCase() },
+  { key: "attempt", label: "Attempt #", className: "col-rh-attempt", width: 110, render: (s) => attemptNumber(s), sortValue: (s) => attemptNumber(s) },
   { key: "status", label: "Status", className: "col-rh-status", width: 150, render: (s) => <StatusPill status={s.status} />, sortValue: (s) => s.status },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
   { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
@@ -60,6 +70,7 @@ const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 // drive this page's column set. Only the keys present here are shown.
 const EDIT_COLUMN_DEFS = [
   { key: "task", label: "Task" },
+  { key: "attempt", label: "Attempt #" },
   { key: "status", label: "Status" },
   { key: "submittedOn", label: "Submitted On" },
   { key: "dueDate", label: "Due Date" },
@@ -78,6 +89,8 @@ export function ReviewHandsOnPage() {
   const [types, setTypes] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
   const [tasks, setTasks] = useState<string[]>([]);
+  // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
+  const [creators, setCreators] = useState<string[]>(["SkillCat"]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "desc" });
   const [page, setPage] = useState(1);
@@ -89,11 +102,18 @@ export function ReviewHandsOnPage() {
     return [...set].sort();
   }, [list]);
 
+  const taskNames = useMemo(() => {
+    const set = new Set<string>();
+    list.forEach((s) => set.add(s.taskName));
+    return [...set].sort();
+  }, [list]);
+
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return list.filter((s) => {
       if (statuses.length && !statuses.includes(s.status)) return false;
       if (types.length && !types.includes(s.userType)) return false;
+      if (creators.length && !creators.includes(s.createdBy)) return false;
       if (companies.length && !(s.companyName && companies.includes(s.companyName))) return false;
       if (tasks.length && !tasks.includes(s.taskName)) return false;
       if (!q) return true;
@@ -104,7 +124,7 @@ export function ReviewHandsOnPage() {
         s.taskName.toLowerCase().includes(q)
       );
     });
-  }, [list, committedQuery, statuses, types, companies, tasks]);
+  }, [list, committedQuery, statuses, types, creators, companies, tasks]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => {
@@ -119,7 +139,7 @@ export function ReviewHandsOnPage() {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, statuses, types, companies, tasks, sort]);
+  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -139,25 +159,41 @@ export function ReviewHandsOnPage() {
   function clearFilters() {
     setStatuses([]);
     setTypes([]);
+    setCreators([]);
     setCompanies([]);
     setTasks([]);
   }
 
-  const open = openId ? list.find((s) => s.id === openId) : null;
+  // The table's active pill filters, flattened so the review console can echo
+  // them as read-only "applied" chips in its queue bar.
+  const activeFilters = [
+    ...statuses.map((v) => ({ label: "Status", value: v })),
+    ...types.map((v) => ({ label: "User Type", value: v })),
+    ...creators.map((v) => ({ label: "Created By", value: v })),
+    ...tasks.map((v) => ({ label: "Task", value: v })),
+    ...companies.map((v) => ({ label: "Company", value: v })),
+  ];
+
+  // Clicking a row opens the review console with the table's current
+  // filtered+sorted list as the queue. Reviews submitted in the console come
+  // back on exit, and reviewed submissions leave the pending list.
+  const open = openId ? sorted.find((s) => s.id === openId) : null;
   if (open) {
     return (
-      <ReviewSubmissionDetail
-        submission={open}
-        onBack={() => setOpenId(null)}
-        onSubmit={() => {
-          setList((prev) => prev.filter((s) => s.id !== open.id));
+      <ReviewConsole
+        queue={sorted}
+        initialId={open.id}
+        activeFilters={activeFilters}
+        onExit={(reviewed) => {
+          const ids = Object.keys(reviewed);
+          if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));
           setOpenId(null);
         }}
       />
     );
   }
 
-  const hasFilters = statuses.length + types.length + companies.length + tasks.length > 0;
+  const hasFilters = statuses.length + types.length + creators.length + companies.length + tasks.length > 0;
 
   return (
     <div className="main">
@@ -193,6 +229,24 @@ export function ReviewHandsOnPage() {
                 <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />
                 <MultiPill label="User Type" all={["B2C", "B2B"]} value={types} onApply={setTypes} />
                 <MultiPill
+                  label="Created By"
+                  all={CREATOR_OPTIONS}
+                  value={creators}
+                  onApply={setCreators}
+                  searchable
+                  searchPlaceholder="Search creators…"
+                  width={300}
+                />
+                <MultiPill
+                  label="Task"
+                  all={taskNames}
+                  value={tasks}
+                  onApply={setTasks}
+                  searchable
+                  searchPlaceholder="Search tasks…"
+                  width={300}
+                />
+                <MultiPill
                   label="Company"
                   all={companyNames}
                   value={companies}
@@ -201,25 +255,6 @@ export function ReviewHandsOnPage() {
                   searchPlaceholder="Search companies…"
                   width={300}
                 />
-                {tasks.map((t) => (
-                  <span className="filter-applied" key={t}>
-                    <button
-                      className="filter-applied-clear"
-                      aria-label={`Clear ${t}`}
-                      onClick={() => setTasks((prev) => prev.filter((x) => x !== t))}
-                    >
-                      <XCircleIcon />
-                    </button>
-                    <button className="filter-applied-main">
-                      <span className="label">Task</span>
-                      <span className="sep" />
-                      <span className="value">{t}</span>
-                      <span className="caret">
-                        <ChevronDownIcon />
-                      </span>
-                    </button>
-                  </span>
-                ))}
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
                     Clear Filters

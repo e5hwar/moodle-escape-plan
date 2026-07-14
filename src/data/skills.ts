@@ -172,6 +172,14 @@ export function taskById(id: string): Task | undefined {
   return tasksById[id];
 }
 
+const skillsById: Record<string, Skill> = Object.fromEntries(
+  skills.map((s) => [s.id, s]),
+);
+
+export function skillById(id: string): Skill | undefined {
+  return skillsById[id];
+}
+
 /** Mastery Skills that include the given Skill in their criteria. */
 export function masteryUsing(
   skillId: string,

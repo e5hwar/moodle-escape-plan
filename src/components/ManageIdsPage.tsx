@@ -5,6 +5,16 @@ import {
   type IdStatus,
 } from "../data/manageIds";
 import { SearchIcon, ChevronLeftIcon, SmallXIcon, CheckIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, summarize, SectionedMultiSelect } from "./Filters";
+
+/** Filter labels shown in the Status pill, mapped to underlying IdStatus values. */
+const STATUS_OPTIONS: { label: string; value: IdStatus }[] = [
+  { label: "Approved", value: "approved" },
+  { label: "In Review", value: "in-review" },
+  { label: "Reupload Requested", value: "reupload-requested" },
+];
+const STATUS_LABELS = STATUS_OPTIONS.map((o) => o.label);
 
 const EyeIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -35,19 +45,25 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
   const [records, setRecords] = useState<IdRecord[]>(seedRecords);
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [viewing, setViewing] = useState<IdRecord | null>(null);
   const [replacing, setReplacing] = useState<IdRecord | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return records;
-    return records.filter(
-      (r) =>
+    const statuses = STATUS_OPTIONS.filter((o) =>
+      statusFilter.includes(o.label),
+    ).map((o) => o.value);
+    return records.filter((r) => {
+      if (statuses.length > 0 && !statuses.includes(r.status)) return false;
+      if (!q) return true;
+      return (
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
-        r.phone.toLowerCase().includes(q),
-    );
-  }, [records, query]);
+        r.phone.toLowerCase().includes(q)
+      );
+    });
+  }, [records, query, statusFilter]);
 
   function applyReplace(record: IdRecord, status: IdStatus) {
     setRecords((prev) =>
@@ -96,6 +112,19 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Filters — same styling as other admin pages */}
+          <div className="filters">
+            <StatusPill value={statusFilter} onApply={setStatusFilter} />
+            {statusFilter.length > 0 && (
+              <button
+                className="filter-clear-link"
+                onClick={() => setStatusFilter([])}
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
 
           {/* Table */}
@@ -160,16 +189,58 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
           onClose={() => setReplacing(null)}
           onApprove={() => applyReplace(replacing, "approved")}
           onInReview={() => applyReplace(replacing, "in-review")}
+          onRequestReupload={() => applyReplace(replacing, "reupload-requested")}
         />
       )}
     </div>
   );
 }
 
+function StatusPill({
+  value,
+  onApply,
+}: {
+  value: string[];
+  onApply: (v: string[]) => void;
+}) {
+  const summary = summarize(value, STATUS_LABELS);
+  return (
+    <Dropdown
+      width={200}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="ID Status"
+          value={summary}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: STATUS_LABELS }]}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+const STATUS_LABEL: Record<IdStatus, string> = {
+  approved: "Approved",
+  "in-review": "In Review",
+  "reupload-requested": "Reupload Requested",
+};
+
 function StatusBadge({ status }: { status: IdStatus }) {
   return (
     <span className={`mid-badge mid-badge--${status}`}>
-      {status === "approved" ? "Approved" : "In Review"}
+      {STATUS_LABEL[status]}
     </span>
   );
 }
@@ -221,11 +292,13 @@ function ReplaceIdModal({
   onClose,
   onApprove,
   onInReview,
+  onRequestReupload,
 }: {
   record: IdRecord;
   onClose: () => void;
   onApprove: () => void;
   onInReview: () => void;
+  onRequestReupload: () => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -302,6 +375,13 @@ function ReplaceIdModal({
                 Leave as In-Review
               </button>
             </div>
+            <button
+              className="mid-decide-reupload"
+              onClick={onRequestReupload}
+            >
+              <ReplaceIcon />
+              Request new upload from candidate
+            </button>
           </div>
         </div>
       </div>

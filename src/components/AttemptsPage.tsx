@@ -300,6 +300,13 @@ export function AttemptsPage({
   );
 }
 
+const STATUS_CLASS: Record<Attempt["status"], string> = {
+  "Completed": "att-status--done",
+  "In Progress": "att-status--progress",
+  "In Review": "att-status--review",
+  "Rejected": "att-status--rejected",
+};
+
 function AttemptRow({
   attempt: a,
   onView,
@@ -309,7 +316,6 @@ function AttemptRow({
   onView: () => void;
   onOpenMenu: (rect: DOMRect) => void;
 }) {
-  const completed = a.status === "Completed";
   return (
     <tr>
       <td className="att-col-name">{a.name}</td>
@@ -317,10 +323,15 @@ function AttemptRow({
       <td className="att-col-phone">{a.phone}</td>
       <td className="att-col-attempt">#{a.attemptNumber}</td>
       <td className="att-col-status">
-        <span className={`att-status ${completed ? "att-status--done" : "att-status--progress"}`}>
+        <span className={`att-status ${STATUS_CLASS[a.status]}`}>
           <span className="att-status-dot" />
           {a.status}
         </span>
+        {a.rejectionReason && (
+          <div className="att-reject-reason" title={a.rejectionReason}>
+            {a.rejectionReason}
+          </div>
+        )}
       </td>
       <td className="att-col-date">{a.startedAt}</td>
       <td className="att-col-date">{a.completedAt ?? "—"}</td>

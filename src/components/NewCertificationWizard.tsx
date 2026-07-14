@@ -64,6 +64,9 @@ type CertTask = {
   kind: TaskKind;
   duration: string;
   restriction?: AccessRestriction;
+  // Marks this Task as a Final Exam within the Certification. Surfaced as a flag
+  // on the Add Tasks tree; a Cert can have more than one flagged Task.
+  finalExam?: boolean;
 };
 
 // The status a prerequisite Task must reach to satisfy a restriction (V1).
@@ -84,6 +87,37 @@ function flattenTasks(courses: CertCourse[]): CertTask[] {
   }
   return out;
 }
+
+// Reorder a sibling list by moving the item with `fromId` to sit where `toId`
+// currently is. `toIdx` is captured from the ORIGINAL list: dragging down lands
+// the item just after the target, dragging up lands it just before — and, unlike
+// an after-removal index, dropping onto the adjacent row is never a silent no-op.
+function reorderList<T>(list: T[], fromId: string, toId: string, idOf: (t: T) => string): T[] {
+  if (fromId === toId) return list;
+  const fromIdx = list.findIndex((t) => idOf(t) === fromId);
+  const toIdx = list.findIndex((t) => idOf(t) === toId);
+  if (fromIdx < 0 || toIdx < 0) return list;
+  const next = [...list];
+  const [moved] = next.splice(fromIdx, 1);
+  next.splice(toIdx, 0, moved);
+  return next;
+}
+
+// Stable key for a Course child, whichever kind it is.
+const childKey = (ch: CourseChild): string =>
+  ch.kind === "task" ? ch.task.id : ch.lesson.id;
+
+// Drag context: which sibling list ("scope") the in-flight item belongs to, and
+// its id. Drops are only honoured within the same scope.
+type DragCtx = { scope: string; id: string };
+
+// Props for a draggable handle + its droppable row, wired to a shared drag state.
+// `handle` goes on the DragDots grip; `target` goes on the row that can receive a
+// drop. Only same-scope drags are accepted.
+type DndProps = {
+  handle: React.HTMLAttributes<HTMLElement> & { draggable: boolean };
+  target: React.HTMLAttributes<HTMLElement>;
+};
 
 // Courses and Lessons carry their name and description in both English and
 // Spanish — the same bilingual pattern the Certification itself uses.
@@ -170,14 +204,24 @@ const CaretIcon = () => (
     <polyline points="9 6 15 12 9 18" />
   </svg>
 );
+// Flag — toggles a Task's Final Exam marker on the Add Tasks tree.
+const FlagIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+    <line x1="4" y1="22" x2="4" y2="15" />
+  </svg>
+);
 const PlusMiniIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
-// Draggable dot-grid handle. Decorative — signals reorderability (matches the
-// Task tree's drag affordance without wiring live drag-and-drop).
-const DragDots = () => <span className="cert-dots" title="Drag to reorder" aria-hidden="true" />;
+// Draggable dot-grid handle. Grab it to reorder siblings within the same list
+// (Courses among Courses, a Course's Tasks/Lessons among themselves, a Lesson's
+// Tasks among themselves). Handle props are supplied by the owning list.
+function DragDots(props: React.HTMLAttributes<HTMLSpanElement> & { draggable?: boolean }) {
+  return <span className="cert-dots" title="Drag to reorder" {...props} />;
+}
 
 // Tree-node IDs created during a session. The counter guards against collisions
 // when several nodes are created within the same millisecond.
@@ -195,7 +239,7 @@ function newLesson(): CertLesson {
 // Convert a Task from the library into the lightweight CertTask the tree stores.
 function libraryTaskToCertTask(t: Task): CertTask {
   const kind = TASK_TYPE_TO_KIND[t.type];
-  return { id: nodeId("t"), name: t.name, kind, duration: DURATION_BY_KIND[kind] };
+  return { id: nodeId("t"), name: t.name, kind, duration: DURATION_BY_KIND[kind], finalExam: t.finalExam };
 }
 
 // Maps a stored Task's display type onto the wizard's TaskKind (used for badges).
@@ -357,6 +401,12 @@ type WizardData = {
   keywordsEn: string;
   keywordsEs: string;
 
+  // Deep Link (spec §19). Every Certification has exactly one Deep Link, keyed by
+  // a URL slug. `slugCustom` tracks whether the Admin overrode the auto-generated
+  // slug; while false the slug follows the Certification name.
+  slug: string;
+  slugCustom: boolean;
+
   courses: CertCourse[];
 
   // Certifications merged into this one via "Create as Learning Plan", in the
@@ -381,6 +431,66 @@ type WizardData = {
 
 // Everything starts blank when creating a new Certification. Type defaults to
 // "unit"; career stage starts unset (a Cert may have no career stage).
+/* ─────────────────  Deep Link slugs (spec §19)  ───────────────── */
+
+// The host every Deep Link resolves to (spec §19.1). Shown as a read-only prefix.
+const DEEP_LINK_BASE = "skillcat.app/";
+
+// Reserved paths that can't be used as a Certification slug — App Page Deep Links
+// (§19.3.4) plus platform keywords (§19.3.5). Matched case-insensitively.
+const RESERVED_SLUGS = new Set(
+  [
+    "reupload-id",
+    "login",
+    "home",
+    "portfolio",
+    "signup",
+    "register",
+    "settings",
+    "admin",
+    "dashboard",
+    "certifications",
+    "certification",
+    "path",
+    "profile",
+    "logout",
+  ].map((s) => s.toLowerCase()),
+);
+
+// Auto-generate a URL-safe slug from a Certification name (§19.3.5) — keep
+// alphanumeric runs, drop everything else, and CamelCase-join the words
+// (e.g. "Heat Pump Specialist (2026)" → "HeatPumpSpecialist2026").
+function slugify(name: string): string {
+  return name
+    .trim()
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .join("");
+}
+
+// Slugs already taken by other Certifications (case-insensitive), excluding the
+// one being edited so re-saving its own slug isn't flagged as a duplicate.
+function takenSlugs(excludeName?: string): Set<string> {
+  const taken = new Set<string>();
+  for (const c of certifications) {
+    if (excludeName && c.name === excludeName) continue;
+    taken.add(slugify(c.name).toLowerCase());
+  }
+  return taken;
+}
+
+// Validate a slug (§19.3.5). Returns an error message, or null when valid.
+function validateSlug(slug: string, excludeName?: string): string | null {
+  if (!slug.trim()) return "Enter a slug or leave it to auto-generate.";
+  if (!/^[A-Za-z0-9_-]+$/.test(slug))
+    return "Only letters, numbers, dashes, and underscores are allowed.";
+  if (RESERVED_SLUGS.has(slug.toLowerCase()))
+    return `"${slug}" is a reserved keyword and can't be used.`;
+  if (takenSlugs(excludeName).has(slug.toLowerCase()))
+    return "Another Certification already uses this slug.";
+  return null;
+}
+
 const BLANK_DATA: WizardData = {
   nameEn: "",
   nameEs: "",
@@ -398,6 +508,9 @@ const BLANK_DATA: WizardData = {
   announceEs: "",
   keywordsEn: "",
   keywordsEs: "",
+
+  slug: "",
+  slugCustom: false,
 
   courses: [],
 
@@ -438,6 +551,9 @@ function buildInitialData(editing?: Certification): WizardData {
       : "",
     type: editing.type ? (editing.type.toLowerCase() as CertType) : "unit",
     keywordsEn: (editing.keywords ?? []).join(", "),
+    // An existing Certification already has a live, persisted Deep Link slug.
+    slug: slugify(editing.name),
+    slugCustom: true,
     // An archived Cert isn't publicly visible, so it maps to "hidden" on the
     // Visibility step — its retired state is reflected by the archived toggle.
     visibility: vis === "Visible" ? "visible" : "hidden",
@@ -458,6 +574,9 @@ type Props = { onClose: () => void; editingCert?: Certification };
 
 export function NewCertificationWizard({ onClose, editingCert }: Props) {
   const isEditing = !!editingCert;
+  // Archiving retires an existing Certification and reroutes learners — it only
+  // makes sense once the Cert exists, so the step is hidden while creating.
+  const steps = isEditing ? STEPS : STEPS.filter((s) => s.id !== "archiving");
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(editingCert));
   const [splitTask, setSplitTask] = useState<{ courseId: string; lessonId?: string; taskType: TaskTypeKey } | null>(null);
@@ -519,7 +638,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
           </div>
 
           <ol className="wizard-steps">
-            {STEPS.map((s, i) => {
+            {steps.map((s, i) => {
               const status = i === step ? "active" : i < step ? "done" : "upcoming";
               return (
                 <li
@@ -538,11 +657,18 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
         </aside>
 
         <div className="wizard-content">
-          <h1 className="wizard-title">{STEPS[step].label}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+          <h1 className="wizard-title">{steps[step].label}</h1>
+          <p className="wizard-desc">{steps[step].desc}</p>
 
           {step === 0 && <DetailsStep data={data} update={update} />}
-          {step === 1 && <AdditionalInfoStep data={data} update={update} />}
+          {step === 1 && (
+            <AdditionalInfoStep
+              data={data}
+              update={update}
+              isEditing={isEditing}
+              editingName={editingCert?.name}
+            />
+          )}
           {step === 2 && (
             <TasksStep
               data={data}
@@ -744,9 +870,13 @@ function DetailsStep({
 function AdditionalInfoStep({
   data,
   update,
+  isEditing,
+  editingName,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
+  isEditing: boolean;
+  editingName?: string;
 }) {
   return (
     <>
@@ -796,7 +926,112 @@ function AdditionalInfoStep({
           onChangeEs={(v) => update({ keywordsEs: v })}
         />
       </section>
+
+      <div className="form-divider" />
+
+      <section className="form-section">
+        <h2 className="form-section-title">Deep Link</h2>
+        <p className="form-section-desc">
+          A shareable link that opens this Certification's preview — in the SkillCat app if
+          installed, otherwise on the web. Every Certification has exactly one.
+        </p>
+        <DeepLinkField
+          data={data}
+          update={update}
+          isEditing={isEditing}
+          editingName={editingName}
+        />
+      </section>
     </>
+  );
+}
+
+// Deep Link editor (spec §19). The effective slug follows the Certification name
+// until the Admin customises it; validation covers URL-safety, reserved
+// keywords, and global uniqueness across Certifications.
+function DeepLinkField({
+  data,
+  update,
+  isEditing,
+  editingName,
+}: {
+  data: WizardData;
+  update: (p: Partial<WizardData>) => void;
+  isEditing: boolean;
+  editingName?: string;
+}) {
+  const autoSlug = slugify(data.nameEn);
+  const effectiveSlug = data.slugCustom ? data.slug : autoSlug;
+  const error = effectiveSlug ? validateSlug(effectiveSlug, editingName) : null;
+  const [copied, setCopied] = useState(false);
+
+  const fullUrl = `https://${DEEP_LINK_BASE}${effectiveSlug}`;
+
+  const copy = () => {
+    navigator.clipboard?.writeText(fullUrl).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => {},
+    );
+  };
+
+  return (
+    <div className="deeplink">
+      <div className={`deeplink-input ${error ? "invalid" : ""}`}>
+        <span className="deeplink-base">{DEEP_LINK_BASE}</span>
+        <input
+          className="deeplink-slug"
+          value={effectiveSlug}
+          placeholder={autoSlug || "your-slug"}
+          spellCheck={false}
+          autoCapitalize="none"
+          onChange={(e) => update({ slug: e.target.value, slugCustom: true })}
+        />
+        <button
+          type="button"
+          className="deeplink-copy"
+          disabled={!effectiveSlug || !!error}
+          onClick={copy}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+
+      <div className="deeplink-foot">
+        {error ? (
+          <span className="deeplink-error">{error}</span>
+        ) : (
+          <span className="deeplink-ok">
+            {data.slugCustom ? "Custom slug" : "Auto-generated from the name"} ·{" "}
+            <span className="deeplink-url">{fullUrl}</span>
+          </span>
+        )}
+        {data.slugCustom && (
+          <button
+            type="button"
+            className="deeplink-reset"
+            onClick={() => update({ slug: "", slugCustom: false })}
+          >
+            Reset to auto
+          </button>
+        )}
+      </div>
+
+      <p className="form-help">
+        URL-safe characters only (letters, numbers, dashes, underscores). Must be unique across
+        all Certifications.
+      </p>
+
+      {isEditing && data.slugCustom && (
+        <div className="deeplink-warn">
+          <span className="deeplink-warn-icon"><WarnIcon /></span>
+          Changing the slug immediately breaks the old link — anything already shared (marketing,
+          partner pages) will stop resolving. There's no redirect from past slugs.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -947,6 +1182,82 @@ function TasksStep({
   // Adding a Course or Lesson opens its editor immediately; only one is open at
   // a time, matching the prototype's focused inline-editing model.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The item currently being dragged for reorder, or null. Held in a ref so the
+  // drop handler reads the live value regardless of when its closure was created
+  // (dragstart's state update wouldn't reach a same-tick drop otherwise).
+  const dragRef = useRef<DragCtx | null>(null);
+
+  // Move an item within its sibling list. `scope` identifies the list:
+  //   "courses"           — the top-level Course order
+  //   "course:<courseId>" — that Course's Tasks + Lessons
+  //   "lesson:<lessonId>" — that Lesson's Tasks
+  function handleReorder(scope: string, fromId: string, toId: string) {
+    if (scope === "courses") {
+      update({ courses: reorderList(data.courses, fromId, toId, (c) => c.id) });
+    } else if (scope.startsWith("course:")) {
+      const courseId = scope.slice("course:".length);
+      update({
+        courses: data.courses.map((co) =>
+          co.id === courseId
+            ? { ...co, children: reorderList(co.children, fromId, toId, childKey) }
+            : co,
+        ),
+      });
+    } else if (scope.startsWith("lesson:")) {
+      const lessonId = scope.slice("lesson:".length);
+      update({
+        courses: data.courses.map((co) => ({
+          ...co,
+          children: co.children.map((ch) =>
+            ch.kind === "lesson" && ch.lesson.id === lessonId
+              ? {
+                  kind: "lesson" as const,
+                  lesson: {
+                    ...ch.lesson,
+                    tasks: reorderList(ch.lesson.tasks, fromId, toId, (t) => t.id),
+                  },
+                }
+              : ch,
+          ),
+        })),
+      });
+    }
+  }
+
+  // Build the handle + drop-target prop pairs for one row in a sibling list.
+  const dnd = (scope: string, id: string): DndProps => ({
+    handle: {
+      draggable: true,
+      onDragStart: (e) => {
+        e.stopPropagation();
+        dragRef.current = { scope, id };
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox requires data to be set for a drag to begin.
+        e.dataTransfer.setData("text/plain", id);
+      },
+      onDragEnd: () => {
+        dragRef.current = null;
+      },
+    },
+    target: {
+      onDragOver: (e) => {
+        const d = dragRef.current;
+        if (d && d.scope === scope && d.id !== id) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }
+      },
+      onDrop: (e) => {
+        const d = dragRef.current;
+        if (d && d.scope === scope) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleReorder(scope, d.id, id);
+        }
+        dragRef.current = null;
+      },
+    },
+  });
 
   // Reconcile the Learning Plan with the Certifications chosen in the importer.
   // Imported Courses come first (in the chosen order), then any Courses the admin
@@ -1211,6 +1522,7 @@ function TasksStep({
             editing={editingId === course.id}
             editingId={editingId}
             allTasks={allTasks}
+            dnd={dnd}
             onUpdateTask={updateTaskById}
             onRemoveTask={removeTaskById}
             onToggle={() => toggleCourse(course.id)}
@@ -1380,6 +1692,7 @@ function CourseCard({
   editing,
   editingId,
   allTasks,
+  dnd,
   onUpdateTask,
   onRemoveTask,
   onToggle,
@@ -1408,6 +1721,7 @@ function CourseCard({
   editing: boolean;
   editingId: string | null;
   allTasks: CertTask[];
+  dnd: (scope: string, id: string) => DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
   onToggle: () => void;
@@ -1439,10 +1753,12 @@ function CourseCard({
     .filter(Boolean)
     .join(" · ");
   const esMiss = !course.nameEs.trim();
+  const selfDnd = dnd("courses", course.id);
+  const childScope = `course:${course.id}`;
   return (
     <div className={`cert-course ${course.expanded ? "expanded" : ""} ${course.hidden ? "hidden" : ""}`}>
-      <div className="cert-course-header" onClick={onToggle}>
-        <DragDots />
+      <div className="cert-course-header" onClick={onToggle} {...selfDnd.target}>
+        <DragDots {...selfDnd.handle} />
         <span className="cert-course-caret"><CaretIcon /></span>
         <span className="cert-course-num">{index}</span>
         <div className="cert-course-titles">
@@ -1502,6 +1818,7 @@ function CourseCard({
                 key={c.task.id}
                 task={c.task}
                 allTasks={allTasks}
+                dndRow={dnd(childScope, c.task.id)}
                 onUpdate={(patch) => onUpdateTask(c.task.id, patch)}
                 onRemove={() => onRemoveTask(c.task.id)}
               />
@@ -1511,6 +1828,8 @@ function CourseCard({
                 lesson={c.lesson}
                 editing={editingId === c.lesson.id}
                 allTasks={allTasks}
+                dnd={dnd}
+                dndRow={dnd(childScope, c.lesson.id)}
                 onUpdateTask={onUpdateTask}
                 onRemoveTask={onRemoveTask}
                 onToggle={() => onToggleLesson(c.lesson.id)}
@@ -1547,6 +1866,8 @@ function LessonCard({
   lesson,
   editing,
   allTasks,
+  dnd,
+  dndRow,
   onUpdateTask,
   onRemoveTask,
   onToggle,
@@ -1562,6 +1883,8 @@ function LessonCard({
   lesson: CertLesson;
   editing: boolean;
   allTasks: CertTask[];
+  dnd: (scope: string, id: string) => DndProps;
+  dndRow: DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
   onToggle: () => void;
@@ -1575,10 +1898,11 @@ function LessonCard({
   onAddExistingTask: (task: Task) => void;
 }) {
   const esMiss = !lesson.nameEs.trim();
+  const taskScope = `lesson:${lesson.id}`;
   return (
     <div className={`cert-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
-      <div className="cert-lesson-header" onClick={onToggle}>
-        <DragDots />
+      <div className="cert-lesson-header" onClick={onToggle} {...dndRow.target}>
+        <DragDots {...dndRow.handle} />
         <span className="cert-lesson-caret"><CaretIcon /></span>
         <span className="cert-lesson-icon"><BookIcon /></span>
         <span className="cert-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
@@ -1620,6 +1944,7 @@ function LessonCard({
               task={t}
               allTasks={allTasks}
               inLesson
+              dndRow={dnd(taskScope, t.id)}
               onUpdate={(patch) => onUpdateTask(t.id, patch)}
               onRemove={() => onRemoveTask(t.id)}
             />
@@ -1644,27 +1969,40 @@ function TaskRow({
   task,
   allTasks,
   inLesson,
+  dndRow,
   onUpdate,
   onRemove,
 }: {
   task: CertTask;
   allTasks: CertTask[];
   inLesson?: boolean;
+  dndRow: DndProps;
   onUpdate: (patch: Partial<CertTask>) => void;
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const restricted = !!task.restriction?.enabled;
+  const finalExam = !!task.finalExam;
   const g = KIND_GUTTER[task.kind];
   return (
     <>
-      <div className={`cert-task-row ${inLesson ? "in-lesson" : ""}`}>
-        <DragDots />
+      <div className={`cert-task-row ${inLesson ? "in-lesson" : ""}`} {...dndRow.target}>
+        <DragDots {...dndRow.handle} />
         <span className="cert-task-gutter" style={{ color: g.color }}>{g.label}</span>
         <span className="cert-task-name">{task.name}</span>
+        {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
         {restricted && <span className="cert-restricted-pill">Restricted</span>}
         <span className="cert-task-spacer" />
         <span className="cert-task-dur">{task.duration}</span>
+        <button
+          className={`cert-task-flag ${finalExam ? "active" : ""}`}
+          aria-label={finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
+          aria-pressed={finalExam}
+          title={finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
+          onClick={() => onUpdate({ finalExam: !finalExam })}
+        >
+          <FlagIcon />
+        </button>
         <button
           className={`cert-task-lock ${restricted ? "active" : ""} ${open ? "open" : ""}`}
           aria-label="Access restrictions"
@@ -2794,7 +3132,27 @@ function ArchivingStep({
                 </button>
               </div>
             ))}
-            <button className="cond-add">+ Add replacement Certification</button>
+            <Dropdown
+              width={340}
+              trigger={({ toggle }) => (
+                <button className="cond-add" onClick={toggle}>+ Add replacement Certification</button>
+              )}
+            >
+              {({ close }) => (
+                <ReplacementCertPicker
+                  exclude={data.replacementCerts.map((c) => c.id)}
+                  onPick={(cert) => {
+                    update({
+                      replacementCerts: [
+                        ...data.replacementCerts,
+                        { id: cert.id, name: cert.name },
+                      ],
+                    });
+                    close();
+                  }}
+                />
+              )}
+            </Dropdown>
           </div>
           <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
         </div>
@@ -2813,6 +3171,60 @@ function ArchivingStep({
         </div>
       </section>
     </>
+  );
+}
+
+// Searchable Certification picker for the Archiving step's replacement list.
+// Certifications already chosen as replacements are filtered out.
+function ReplacementCertPicker({
+  exclude,
+  onPick,
+}: {
+  exclude: string[];
+  onPick: (cert: Certification) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const excluded = new Set(exclude);
+  const results = useMemo(
+    () =>
+      certifications.filter(
+        (c) =>
+          !excluded.has(c.id) &&
+          (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)),
+      ),
+    [q, exclude],
+  );
+
+  return (
+    <div className="cond-picker">
+      <div className="dropdown-search">
+        <span className="dropdown-search-icon"><SearchIcon /></span>
+        <input
+          autoFocus
+          placeholder="Search Certifications…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="dropdown-list cond-picker-list">
+        {results.length === 0 ? (
+          <div className="cond-picker-empty">
+            {exclude.length > 0 && !q
+              ? "Every Certification is already a replacement."
+              : "No Certifications match your search."}
+          </div>
+        ) : (
+          results.map((c) => (
+            <button key={c.id} className="cond-picker-item" onClick={() => onPick(c)}>
+              <span className="task-kind-badge cert">C</span>
+              <span className="cond-picker-item-name">{c.name}</span>
+              <span className="cond-picker-item-meta">{c.id}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
