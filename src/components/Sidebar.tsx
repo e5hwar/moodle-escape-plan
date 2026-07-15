@@ -156,7 +156,7 @@ const items: NavItem[] = [
   { kind: "link", key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
 
   { kind: "section", label: "Operations" },
-  { kind: "link", key: "content-overrides", label: "Certification Lookup", icon: "edit", navKey: "content-overrides" },
+  { kind: "link", key: "content-overrides", label: "Manage Completions", icon: "edit", navKey: "content-overrides" },
   { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
   { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
   { kind: "link", key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },

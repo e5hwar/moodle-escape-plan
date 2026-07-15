@@ -15,16 +15,16 @@
    ──────────────────────────────────────────────────────────────────────── */
 
 export const PALETTE = {
-  pass: "#7fae93",
-  fail: "#c98b8b",
-  amber: "#c2a878",
+  pass: "#5fd0a3",
+  fail: "#e98a76",
+  amber: "#e6a03c",
   nullified: "#9f93c2",
-  accent: "#7d93c2",
-  dim: "#5c6473",
-  muted: "#8a91a0",
+  accent: "#e97237",
+  dim: "#5a5a5e",
+  muted: "#8b8b8f",
 };
 
-export const MONO = "'JetBrains Mono', monospace";
+export const MONO = "'IBM Plex Mono', monospace";
 
 export type AttemptUser = { name: string; email: string; initials: string };
 
@@ -731,10 +731,10 @@ export function statusColor(s: AttemptStatus): string {
 /** Background + foreground swatch for a question-index cell. */
 export function cellColors(cat: QuestionVM["cat"]): [string, string] {
   const pal: Record<string, [string, string]> = {
-    pass: ["rgba(127,174,147,.14)", "#7fae93"],
-    partial: ["rgba(194,168,120,.14)", "#c2a878"],
-    wrong: ["rgba(201,139,139,.14)", "#c98b8b"],
-    blank: ["rgba(255,255,255,.035)", "#5c6473"],
+    pass: ["rgba(95,208,163,.14)", "#5fd0a3"],
+    partial: ["rgba(230,160,60,.14)", "#e6a03c"],
+    wrong: ["rgba(233,138,118,.14)", "#e98a76"],
+    blank: ["rgba(255,255,255,.035)", "#5a5a5e"],
   };
   return pal[cat] || pal.blank;
 }

@@ -76,18 +76,6 @@ const PortfolioIcon = () => (
     <path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
   </svg>
 );
-const KeyIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="8" cy="15" r="4" />
-    <path d="M10.85 12.15L19 4M18 5l2 2M15 8l2 2" />
-  </svg>
-);
-const CardIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="5" width="20" height="14" rx="2" />
-    <path d="M2 10h20" />
-  </svg>
-);
 const TrashIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
@@ -581,8 +569,6 @@ function UserActionsMenu({
       {item(<ExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
       {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
       {onViewAllEmployees && item(<PeopleIcon />, "View All Employees", onViewAllEmployees)}
-      {item(<KeyIcon />, "Reset Password", () => {})}
-      {item(<CardIcon />, "Manage Subscription", () => {})}
       <div className="u-menu-divider" />
       {item(<TrashIcon />, "Remove User", () => {}, true)}
     </div>

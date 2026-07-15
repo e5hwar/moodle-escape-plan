@@ -159,7 +159,7 @@ function SectionedSummary({ model }: { model: SectionedModel }) {
       {model.secMeta.map((s) => (
         <span key={s.id} style={page.chip}>
           <span style={{ color: C.muted }}>{s.name}</span>
-          <span style={{ fontFamily: MONO, color: "#c7ccd6" }}>{fmtPct(model.highest[s.id])}</span>
+          <span style={{ fontFamily: MONO, color: "#c9c9cc" }}>{fmtPct(model.highest[s.id])}</span>
         </span>
       ))}
     </div>
@@ -185,12 +185,12 @@ function FlatSummary({ model }: { model: FlatModel }) {
       <span style={page.vrule} />
       <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
         <span style={{ fontSize: 12, color: C.dim }}>Passing grade</span>
-        <span style={{ fontFamily: MONO, fontSize: 14, color: "#aab1c2" }}>{model.pass}%</span>
+        <span style={{ fontFamily: MONO, fontSize: 14, color: "#b3b3b7" }}>{model.pass}%</span>
       </div>
       <span style={page.vrule} />
       <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
         <span style={{ fontSize: 12, color: C.dim }}>Scoring</span>
-        <span style={{ fontSize: 13, color: "#aab1c2" }}>Highest grade across attempts</span>
+        <span style={{ fontSize: 13, color: "#b3b3b7" }}>Highest grade across attempts</span>
       </div>
     </div>
   );
@@ -224,7 +224,7 @@ function AttemptsTable({
           const v = model.built[a.id];
           const selected = a.id === sel;
           const isSect = model.kind === "sectioned";
-          const scoreColor = isSect ? "#aab1c2" : statusColor(v.status);
+          const scoreColor = isSect ? "#b3b3b7" : statusColor(v.status);
           return (
             <button
               key={a.id}
@@ -239,16 +239,16 @@ function AttemptsTable({
                 fontSize: 12.5,
                 padding: "12px 18px",
                 border: "none",
-                borderTop: "1px solid #1c2029",
+                borderTop: "1px solid #212124",
                 background: selected
                   ? isSect
-                    ? "rgba(121,166,255,.05)"
-                    : "rgba(125,147,194,.06)"
+                    ? "rgba(233,114,55,.07)"
+                    : "rgba(233,114,55,.07)"
                   : "transparent",
                 boxShadow: selected ? `inset 2px 0 0 ${C.accent}` : "none",
               }}
             >
-              <span style={{ fontWeight: 600, color: "#dfe3ec" }}>{a.label}</span>
+              <span style={{ fontWeight: 600, color: "#e7e7e8" }}>{a.label}</span>
               <span style={{ color: C.muted }}>{a.date}, 26</span>
               <span style={{ color: C.muted }}>
                 {a.duration}
@@ -266,7 +266,7 @@ function AttemptsTable({
               <span
                 style={{
                   textAlign: "center",
-                  color: selected ? C.accent : "#333a47",
+                  color: selected ? C.accent : "#3d3d43",
                   transform: selected ? "rotate(90deg)" : "none",
                   transition: "transform .15s",
                   fontSize: 16,
@@ -302,16 +302,16 @@ function Banner({ color, text }: { color: string; text: string }) {
 
 function QuestionIndexHeader({ totalQ }: { totalQ: number }) {
   const legend: [string, string][] = [
-    ["Correct", "rgba(127,174,147,.45)"],
-    ["Partial", "rgba(194,168,120,.45)"],
-    ["Wrong", "rgba(201,139,139,.45)"],
+    ["Correct", "rgba(95,208,163,.45)"],
+    ["Partial", "rgba(230,160,60,.45)"],
+    ["Wrong", "rgba(233,138,118,.45)"],
     ["Blank", "rgba(255,255,255,.06)"],
   ];
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <span style={page.kicker}>Question index</span>
-        <span style={{ fontSize: 11, color: "#454b57", fontFamily: MONO }}>{totalQ} questions</span>
+        <span style={{ fontSize: 11, color: "#5a5a5e", fontFamily: MONO }}>{totalQ} questions</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16, fontSize: 10.5, color: C.dim }}>
         {legend.map(([label, bg]) => (
@@ -365,16 +365,16 @@ function OptionRow({ opt }: { opt: OptionVM }) {
     fontWeight: 700,
   };
   const marker: CSSProperties = opt.selected
-    ? { ...mk, background: "#2c333f", color: "#dfe3ec", border: "1px solid #3a4254" }
+    ? { ...mk, background: "#2a2a2e", color: "#e7e7e8", border: "1px solid #3d3d43" }
     : {
         ...mk,
-        border: `1px solid ${opt.correct ? "rgba(127,174,147,.5)" : "#2a313d"}`,
+        border: `1px solid ${opt.correct ? "rgba(95,208,163,.5)" : "#2e2e33"}`,
         color: "transparent",
       };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 0" }}>
       <div style={marker}>{opt.selected ? "✓" : ""}</div>
-      <span style={{ flex: 1, fontSize: 13, color: "#c7ccd6", minWidth: 0 }}>{opt.text}</span>
+      <span style={{ flex: 1, fontSize: 13, color: "#c9c9cc", minWidth: 0 }}>{opt.text}</span>
       {opt.tag && (
         <span style={{ fontSize: 11, fontWeight: 500, color: opt.tagColor!, whiteSpace: "nowrap" }}>
           {opt.tag}
@@ -408,7 +408,7 @@ function QuestionBlock({
             {q.awardText}
           </span>
         </div>
-        <div style={{ fontSize: 13.5, color: "#dfe3ec", lineHeight: 1.5, marginBottom: 11 }}>{q.text}</div>
+        <div style={{ fontSize: 13.5, color: "#e7e7e8", lineHeight: 1.5, marginBottom: 11 }}>{q.text}</div>
 
         {q.kind === "choice" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -420,12 +420,12 @@ function QuestionBlock({
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {q.matchRows.map((row, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0" }}>
-                <span style={{ fontSize: 13, color: "#c7ccd6", fontWeight: 500 }}>{row.prompt}</span>
-                <span style={{ color: "#4a5160" }}>→</span>
+                <span style={{ fontSize: 13, color: "#c9c9cc", fontWeight: 500 }}>{row.prompt}</span>
+                <span style={{ color: "#5a5a5e" }}>→</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: row.color }}>{row.userAnswer}</span>
                 {row.showCorrect && (
                   <span style={{ fontSize: 12, color: C.dim }}>
-                    correct: <span style={{ color: "#5ec99a" }}>{row.correctAnswer}</span>
+                    correct: <span style={{ color: C.pass }}>{row.correctAnswer}</span>
                   </span>
                 )}
                 <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: row.color }}>
@@ -584,7 +584,7 @@ function SectionedDetail({
       </div>
 
       {/* Per-section score cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1, background: "#1c2029", borderTop: "1px solid #1c2029" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1, background: "#212124", borderTop: "1px solid #212124" }}>
         {v.sections.map((s) => {
           const st = sectionStatus(s, v.qualifying);
           const recCol = !s.passed ? C.fail : v.qualifying ? C.pass : C.nullified;
@@ -594,10 +594,10 @@ function SectionedDetail({
               key={s.id}
               className="av-secjump"
               onClick={() => onScrollTo(s.anchorId)}
-              style={{ textAlign: "left", cursor: "pointer", border: "none", fontFamily: "inherit", background: "#0f1115", padding: "13px 15px" }}
+              style={{ textAlign: "left", cursor: "pointer", border: "none", fontFamily: "inherit", background: "#0f0f10", padding: "13px 15px" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 9 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#dfe3ec" }}>{s.name}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#e7e7e8" }}>{s.name}</span>
                 {s.required && (
                   <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: C.accent, fontWeight: 700 }}>
                     req
@@ -605,10 +605,10 @@ function SectionedDetail({
                 )}
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 9 }}>
-                <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 600, color: "#dfe3ec" }}>{fmtPct(s.pct)}</span>
-                <span style={{ color: "#454b57", fontSize: 11 }}>/ pass {s.pass}%</span>
+                <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 600, color: "#e7e7e8" }}>{fmtPct(s.pct)}</span>
+                <span style={{ color: "#5a5a5e", fontSize: 11 }}>/ pass {s.pass}%</span>
               </div>
-              <div style={{ height: 4, borderRadius: 2, background: "#1c2029", position: "relative", marginBottom: 9 }}>
+              <div style={{ height: 4, borderRadius: 2, background: "#212124", position: "relative", marginBottom: 9 }}>
                 <div
                   style={{
                     position: "absolute",
@@ -643,7 +643,7 @@ function SectionedDetail({
                   style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: "0 0 9px" }}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#cfd4dd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#d2d2d5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {s.name}
                     </span>
                     {s.required && (
@@ -668,13 +668,13 @@ function SectionedDetail({
             return (
               <div key={s.id} id={s.anchorId} style={{ scrollMarginTop: 8 }}>
                 <div style={page.groupHeader}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#dfe3ec" }}>{s.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#e7e7e8" }}>{s.name}</span>
                   {s.required && (
                     <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".04em", color: C.accent, fontWeight: 700 }}>
                       required to pass
                     </span>
                   )}
-                  <span style={{ flex: 1, height: 1, background: "#1c2029", minWidth: 20 }} />
+                  <span style={{ flex: 1, height: 1, background: "#212124", minWidth: 20 }} />
                   <span style={{ fontFamily: MONO, fontSize: 12, color: C.muted }}>
                     {fmtPct(s.pct)} · {s.answered}/{s.total} answered
                   </span>
@@ -708,9 +708,9 @@ function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: (
         fontFamily: "inherit",
         fontSize: 12,
         fontWeight: 500,
-        color: on ? "#dfe3ec" : C.muted,
-        background: on ? "rgba(125,147,194,.12)" : "transparent",
-        border: `1px solid ${on ? "rgba(125,147,194,.4)" : "#1c2029"}`,
+        color: on ? "#e7e7e8" : C.muted,
+        background: on ? "rgba(233,114,55,.12)" : "transparent",
+        border: `1px solid ${on ? "rgba(233,114,55,.4)" : "#212124"}`,
       }}
     >
       <span
@@ -718,7 +718,7 @@ function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: (
           width: 7,
           height: 7,
           borderRadius: "50%",
-          background: on ? C.accent : "#333a47",
+          background: on ? C.accent : "#3d3d43",
         }}
       />
       {label}
@@ -736,9 +736,9 @@ const page: Record<string, CSSProperties> = {
     flex: 1,
     height: "100vh",
     overflowY: "auto",
-    background: "#0c0e12",
-    color: "#dfe3ec",
-    fontFamily: "'Public Sans', system-ui, sans-serif",
+    background: "#0b0b0c",
+    color: "#e7e7e8",
+    fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     fontSize: 14,
     lineHeight: 1.5,
     WebkitFontSmoothing: "antialiased",
@@ -752,9 +752,9 @@ const page: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 16,
     padding: "12px 26px",
-    background: "rgba(12,14,18,.86)",
+    background: "rgba(11,11,12,.86)",
     backdropFilter: "blur(8px)",
-    borderBottom: "1px solid #1c2029",
+    borderBottom: "1px solid #212124",
   },
   back: {
     display: "inline-flex",
@@ -762,9 +762,9 @@ const page: Record<string, CSSProperties> = {
     gap: 4,
     padding: "6px 10px 6px 6px",
     borderRadius: 8,
-    border: "1px solid #1c2029",
+    border: "1px solid #212124",
     background: "transparent",
-    color: "#aab1c2",
+    color: "#b3b3b7",
     fontFamily: "inherit",
     fontSize: 13,
     fontWeight: 500,
@@ -789,15 +789,15 @@ const page: Record<string, CSSProperties> = {
     justifyContent: "center",
     fontWeight: 600,
     fontSize: 14,
-    color: "#aab1c2",
-    background: "#1b1f29",
-    border: "1px solid #262b37",
+    color: "#b3b3b7",
+    background: "#161618",
+    border: "1px solid #2e2e33",
   },
   kicker: {
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: ".07em",
-    color: "#454b57",
+    color: "#5a5a5e",
     fontWeight: 600,
   },
   chipsRow: {
@@ -813,8 +813,8 @@ const page: Record<string, CSSProperties> = {
     gap: 7,
     padding: "4px 10px",
     borderRadius: 8,
-    background: "#13161d",
-    border: "1px solid #1c2029",
+    background: "#161618",
+    border: "1px solid #212124",
     fontSize: 12,
   },
   flatStrip: {
@@ -824,12 +824,12 @@ const page: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     margin: "16px 0 26px",
     padding: "13px 16px",
-    background: "#0f1115",
-    border: "1px solid #1c2029",
+    background: "#0f0f10",
+    border: "1px solid #212124",
     borderRadius: 12,
   },
-  vrule: { width: 1, height: 24, background: "#1c2029" },
-  tableWrap: { border: "1px solid #1c2029", borderRadius: 13, overflow: "hidden", background: "#0f1115" },
+  vrule: { width: 1, height: 24, background: "#212124" },
+  tableWrap: { border: "1px solid #212124", borderRadius: 13, overflow: "hidden", background: "#0f0f10" },
   attGrid: {
     display: "grid",
     gridTemplateColumns: "84px 88px 116px 1fr 70px 96px 18px",
@@ -841,25 +841,27 @@ const page: Record<string, CSSProperties> = {
     fontSize: 10.5,
     textTransform: "uppercase",
     letterSpacing: ".06em",
-    color: "#454b57",
+    color: "#5a5a5e",
     fontWeight: 600,
-    borderBottom: "1px solid #1c2029",
+    borderBottom: "1px solid #212124",
   },
   detailCard: {
     marginTop: 26,
-    border: "1px solid #1c2029",
+    border: "1px solid #212124",
     borderRadius: 15,
-    background: "#0f1115",
-    overflow: "hidden",
+    background: "#0f0f10",
+    // "clip" (not "hidden") — hidden would make this card the containing
+    // scrollport for the sticky question-index aside, so it would never stick.
+    overflow: "clip",
   },
-  splitGrid: { display: "grid", gridTemplateColumns: "224px 1fr", borderTop: "1px solid #1c2029" },
+  splitGrid: { display: "grid", gridTemplateColumns: "224px 1fr", borderTop: "1px solid #212124" },
   aside: {
     position: "sticky",
     top: TOPBAR_H,
     alignSelf: "start",
     maxHeight: `calc(100vh - ${TOPBAR_H}px)`,
     overflowY: "auto",
-    borderRight: "1px solid #1c2029",
+    borderRight: "1px solid #212124",
     padding: "16px 14px 24px",
   },
   cellGrid: {
@@ -876,6 +878,6 @@ const page: Record<string, CSSProperties> = {
     gap: 10,
     flexWrap: "wrap",
     padding: "16px 0 8px",
-    background: "#0f1115",
+    background: "#0f0f10",
   },
 };

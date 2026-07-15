@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildUserProfile,
   ZIP_LOCATIONS,
   type AwardRecord,
   type MeritTier,
+  type NateDetail,
   type Purchase,
   type PurchaseKind,
 } from "../data/userProfile";
@@ -100,8 +101,44 @@ h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}</style></head>
   win.document.close();
 }
 
-export function UserProfilePage({ user }: { user: User }) {
-  const p = buildUserProfile(user);
+type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | null;
+
+export function UserProfilePage({ user: seedUser }: { user: User }) {
+  const base = useMemo(() => buildUserProfile(seedUser), [seedUser]);
+
+  // Admin edits are session-local overrides on top of the seeded record.
+  const [identity, setIdentity] = useState({
+    name: seedUser.name,
+    email: seedUser.email,
+    phone: seedUser.phone,
+    emailVerified: seedUser.emailVerified,
+    phoneVerified: seedUser.phoneVerified,
+  });
+  const [nate, setNate] = useState<NateDetail | undefined>(base.nate);
+  const [subCanceled, setSubCanceled] = useState(false);
+  const [modal, setModal] = useState<ModalKind>(null);
+
+  const user: User = { ...seedUser, ...identity };
+  const p = { ...base, nate };
+
+  // Cancellation applies only to subscriptions we bill directly (Stripe) or
+  // that expose a cancel API (Google); Apple subs are managed by Apple.
+  const canCancelSub =
+    !subCanceled &&
+    user.subscriptionStatus === "Subscriber" &&
+    (p.subscription.platform === "Stripe" || p.subscription.platform === "Google");
+
+  function saveIdentity(v: { name: string; email: string; phone: string }) {
+    setIdentity((prev) => ({
+      name: v.name,
+      email: v.email,
+      phone: v.phone,
+      // Changing a contact field invalidates its verified status.
+      emailVerified: prev.emailVerified && v.email === prev.email,
+      phoneVerified: prev.phoneVerified && v.phone === prev.phone,
+    }));
+    setModal(null);
+  }
 
   function openPortfolio() {
     window.open(
@@ -127,7 +164,12 @@ export function UserProfilePage({ user }: { user: User }) {
         <section className="prof-hero">
           <div className="prof-avatar">{initialsOf(user.name)}</div>
           <div className="prof-hero-text">
-            <h1 className="prof-name">{user.name}</h1>
+            <div className="prof-name-row">
+              <h1 className="prof-name">{user.name}</h1>
+              <button className="prof-btn prof-btn--sm" onClick={() => setModal("edit-user")}>
+                <PencilIcon /> Edit
+              </button>
+            </div>
             <div className="prof-hero-meta">
               <span className={`u-pill u-type--${user.userType.toLowerCase()}`}>{user.userType}</span>
               <span className="prof-contact">
@@ -245,12 +287,36 @@ export function UserProfilePage({ user }: { user: User }) {
         </Card>
 
         {/* Subscription */}
-        <Card title="Subscription">
+        <Card
+          title="Subscription"
+          action={
+            canCancelSub && (
+              <button
+                className="prof-btn prof-btn--sm prof-btn--danger"
+                onClick={() => setModal("cancel-sub")}
+              >
+                Cancel Subscription
+              </button>
+            )
+          }
+        >
           <div className="prof-fields">
-            <Field label="Status" value={p.subscription.status} />
+            <Field
+              label="Status"
+              value={
+                subCanceled ? (
+                  <span className="prof-status prof-status--bad">Canceled</span>
+                ) : (
+                  p.subscription.status
+                )
+              }
+            />
             <Field label="Platform" value={p.subscription.platform ?? "—"} />
             <Field label="Started" value={formatDate(p.subscription.startedOn)} />
-            <Field label="Renews" value={formatDate(p.subscription.renewsOn)} />
+            <Field
+              label={subCanceled ? "Access Until" : "Renews"}
+              value={formatDate(p.subscription.renewsOn)}
+            />
             <Field label="Offer Code" value={p.subscription.offerCode ?? "None"} />
           </div>
         </Card>
@@ -288,7 +354,14 @@ export function UserProfilePage({ user }: { user: User }) {
         </Card>
 
         {/* NATE details */}
-        <Card title="NATE Details">
+        <Card
+          title="NATE Details"
+          action={
+            <button className="prof-btn prof-btn--sm" onClick={() => setModal("edit-nate")}>
+              <PencilIcon /> {p.nate ? "Edit" : "Add"}
+            </button>
+          }
+        >
           {p.nate ? (
             <div className="prof-fields">
               <Field label="First Name" value={p.nate.firstName} />
@@ -303,19 +376,325 @@ export function UserProfilePage({ user }: { user: User }) {
 
         <div className="prof-foot">SkillCat Admin · Full Profile · {user.id}</div>
       </div>
+
+      {modal === "edit-user" && (
+        <EditUserModal
+          initial={{ name: user.name, email: user.email, phone: user.phone }}
+          onClose={() => setModal(null)}
+          onSave={saveIdentity}
+        />
+      )}
+      {modal === "edit-nate" && (
+        <EditNateModal
+          initial={p.nate}
+          onClose={() => setModal(null)}
+          onSave={(v) => {
+            setNate(v);
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "cancel-sub" && (
+        <CancelSubscriptionModal
+          user={user}
+          platform={p.subscription.platform!}
+          renewsOn={p.subscription.renewsOn}
+          onClose={() => setModal(null)}
+          onConfirm={() => {
+            setSubCanceled(true);
+            setModal(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Card({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+function Card({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count?: number;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="prof-card">
       <div className="prof-card-head">
         <h2 className="prof-card-title">{title}</h2>
         {count !== undefined && <span className="prof-card-count">{count}</span>}
+        {action && <span className="prof-card-action">{action}</span>}
       </div>
       {children}
     </section>
+  );
+}
+
+/* ── Edit modals — session-local admin edits over the seeded record ── */
+
+function Modal({
+  title,
+  sub,
+  onClose,
+  footer,
+  children,
+}: {
+  title: string;
+  sub?: string;
+  onClose: () => void;
+  footer: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="pm-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="pm-modal" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="pm-head">
+          <h2 className="pm-title">{title}</h2>
+          {sub && <div className="pm-sub">{sub}</div>}
+        </div>
+        <div className="pm-body">{children}</div>
+        <div className="pm-foot">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+function ModalField({
+  label,
+  value,
+  onChange,
+  error,
+  placeholder,
+  autoFocus,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="pm-field">
+      <label className="form-label">{label}</label>
+      <input
+        className="form-input"
+        value={value}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && <div className="pm-error">{error}</div>}
+    </div>
+  );
+}
+
+const EMAIL_RE = /^\S+@\S+\.\S+$/;
+
+function EditUserModal({
+  initial,
+  onClose,
+  onSave,
+}: {
+  initial: { name: string; email: string; phone: string };
+  onClose: () => void;
+  onSave: (v: { name: string; email: string; phone: string }) => void;
+}) {
+  const [form, setForm] = useState(initial);
+  const [submitted, setSubmitted] = useState(false);
+
+  const errors = {
+    name: form.name.trim() ? "" : "Name is required.",
+    email: !form.email.trim()
+      ? "Email is required."
+      : EMAIL_RE.test(form.email.trim())
+      ? ""
+      : "Enter a valid email address.",
+    phone: form.phone.trim() ? "" : "Phone is required.",
+  };
+  const invalid = Boolean(errors.name || errors.email || errors.phone);
+
+  function submit() {
+    setSubmitted(true);
+    if (invalid) return;
+    onSave({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() });
+  }
+
+  return (
+    <Modal
+      title="Edit User"
+      sub="Changing the email or phone resets its verified status."
+      onClose={onClose}
+      footer={
+        <>
+          <button className="prof-btn" onClick={onClose}>Cancel</button>
+          <button className="prof-btn prof-btn--primary" onClick={submit}>Save Changes</button>
+        </>
+      }
+    >
+      <ModalField
+        label="Name"
+        value={form.name}
+        autoFocus
+        onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+        error={submitted ? errors.name : undefined}
+      />
+      <ModalField
+        label="Email"
+        value={form.email}
+        onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+        error={submitted ? errors.email : undefined}
+      />
+      <ModalField
+        label="Phone"
+        value={form.phone}
+        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+        error={submitted ? errors.phone : undefined}
+      />
+    </Modal>
+  );
+}
+
+function EditNateModal({
+  initial,
+  onClose,
+  onSave,
+}: {
+  initial?: NateDetail;
+  onClose: () => void;
+  onSave: (v: NateDetail) => void;
+}) {
+  const [form, setForm] = useState<NateDetail>(
+    initial ?? { connectId: "", firstName: "", lastName: "", email: "" },
+  );
+  const [submitted, setSubmitted] = useState(false);
+
+  const errors = {
+    firstName: form.firstName.trim() ? "" : "First name is required.",
+    lastName: form.lastName.trim() ? "" : "Last name is required.",
+    email: !form.email.trim()
+      ? "Email is required."
+      : EMAIL_RE.test(form.email.trim())
+      ? ""
+      : "Enter a valid email address.",
+    connectId: !form.connectId.trim()
+      ? "NATE Connect ID is required."
+      : /^\d+$/.test(form.connectId.trim())
+      ? ""
+      : "Connect ID must be numeric.",
+  };
+  const invalid = Boolean(errors.firstName || errors.lastName || errors.email || errors.connectId);
+
+  function submit() {
+    setSubmitted(true);
+    if (invalid) return;
+    onSave({
+      connectId: form.connectId.trim(),
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      email: form.email.trim(),
+    });
+  }
+
+  return (
+    <Modal
+      title={initial ? "Edit NATE Details" : "Add NATE Details"}
+      sub="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
+      onClose={onClose}
+      footer={
+        <>
+          <button className="prof-btn" onClick={onClose}>Cancel</button>
+          <button className="prof-btn prof-btn--primary" onClick={submit}>
+            {initial ? "Save Changes" : "Add Details"}
+          </button>
+        </>
+      }
+    >
+      <div className="pm-row2">
+        <ModalField
+          label="First Name"
+          value={form.firstName}
+          autoFocus
+          onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
+          error={submitted ? errors.firstName : undefined}
+        />
+        <ModalField
+          label="Last Name"
+          value={form.lastName}
+          onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
+          error={submitted ? errors.lastName : undefined}
+        />
+      </div>
+      <ModalField
+        label="Email"
+        value={form.email}
+        onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+        error={submitted ? errors.email : undefined}
+      />
+      <ModalField
+        label="NATE Connect ID"
+        value={form.connectId}
+        placeholder="e.g. 483920"
+        onChange={(v) => setForm((f) => ({ ...f, connectId: v }))}
+        error={submitted ? errors.connectId : undefined}
+      />
+    </Modal>
+  );
+}
+
+function CancelSubscriptionModal({
+  user,
+  platform,
+  renewsOn,
+  onClose,
+  onConfirm,
+}: {
+  user: User;
+  platform: string;
+  renewsOn?: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      title="Cancel Subscription?"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="prof-btn" onClick={onClose}>Keep Subscription</button>
+          <button className="prof-btn prof-btn--danger" onClick={onConfirm}>
+            Cancel Subscription
+          </button>
+        </>
+      }
+    >
+      <p className="pm-text">
+        This cancels <strong>{user.name}</strong>&rsquo;s {platform} subscription at the end of the
+        current billing period. No further charges will be made.
+      </p>
+      {renewsOn && (
+        <p className="pm-text">
+          They keep full access until <strong>{formatDate(renewsOn)}</strong>. No refund is issued
+          for the current period.
+        </p>
+      )}
+    </Modal>
   );
 }
 
@@ -486,6 +865,11 @@ function Field({ label, value, wide }: { label: string; value: React.ReactNode; 
 }
 
 /* ── icons ── */
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
+  </svg>
+);
 const PowerIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3v9M6.4 7a8 8 0 1011.2 0" />

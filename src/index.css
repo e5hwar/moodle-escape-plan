@@ -2552,11 +2552,140 @@ a {
   color: #fff;
 }
 
+/* Error / "needs input" step: a required field is missing. Quiet rail — only the
+   glyph carries colour; the title stays neutral (never red/bold). Matches the
+   "Quiz Wizard Quiet Rail" reference. */
+.wizard-step.error .wizard-step-rail {
+  color: #ff1f31;
+}
+
+.wizard-step.error .wizard-step-title {
+  color: #b6b6ba;
+  font-weight: 400;
+}
+
+/* Missing required text field inside a wizard step. */
+.lang-field.has-error {
+  border-color: #ff1f31;
+}
+
+.form-error-text {
+  margin: 7px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #ff1f31;
+}
+
+/* ===== Edge Line Gate (Wizard 6) ===== */
+/* Scroll-past-the-edge step navigation. `.wizard-main` hosts the content
+   scroller plus the gate overlays: a 2px orange line that scales out from the
+   centre of the edge being pushed against, and a mono caption naming the
+   adjacent step. Charge (0–1) is painted inline from NewTaskWizard. */
+.wizard-main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wizard-gate-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #f05523;
+  transform: scaleX(0);
+  transform-origin: 50% 50%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.wizard-gate-line.is-top {
+  top: 0;
+}
+
+.wizard-gate-line.is-bottom {
+  bottom: 0;
+}
+
+.wizard-gate-cap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #c9c9cc;
+  z-index: 3;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.wizard-gate-cap.is-top {
+  top: 10px;
+}
+
+.wizard-gate-cap.is-bottom {
+  bottom: 10px;
+}
+
+/* The pane pair: `.wizard-paneout` takes the live charge nudge (translateY,
+   painted inline); `.wizard-pane` is keyed per step so the drop-in transition
+   replays on every step change. */
+.wizard-paneout {
+  will-change: transform;
+}
+
+.wizard-pane {
+  animation: wizard-pane-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wizard-pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Footer Back/Next during a charge: a white fill sweeps the button
+   left-to-right, tracking the charge (width painted inline). */
+.wizard-gate-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.wizard-gate-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.09);
+  pointer-events: none;
+}
+
+.btn-publish .wizard-gate-fill {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.wizard-gate-btn-inner {
+  position: relative;
+}
+
 .wizard-content {
   flex: 1;
   overflow-y: auto;
   padding: 54px 64px 40px;
   min-width: 0;
+  min-height: 0;
 }
 
 /* Wizard content header — mirrors the shared page header (.tasks-title): 28px
@@ -15617,6 +15746,88 @@ a {
 .prof-status--warn { color: #e9b949; }
 .prof-status--bad { color: #e8675f; }
 .prof-status--muted { color: var(--text-muted); }
+
+/* Identity hero — name + inline Edit button */
+.prof-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.prof-name-row .prof-name { margin: 0; }
+.prof-name-row .prof-btn { margin-bottom: 4px; }
+
+/* Card head action (right-aligned button) */
+.prof-card-action { margin-left: auto; }
+
+/* Button variants for the edit modals */
+.prof-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.prof-btn--primary:hover { background: var(--accent); filter: brightness(1.1); }
+.prof-btn--danger {
+  border-color: rgba(232, 103, 95, 0.45);
+  color: #e8675f;
+  background: rgba(232, 103, 95, 0.08);
+}
+.prof-btn--danger:hover { background: rgba(232, 103, 95, 0.16); }
+
+/* ── Profile edit modals (Edit User / NATE Details / Cancel Subscription) ── */
+.pm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 40px 24px;
+}
+.pm-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+.pm-head { padding: 20px 22px 0; }
+.pm-title { font-size: 15pt; font-weight: 700; margin: 0; }
+.pm-sub {
+  font-size: 10.5pt;
+  color: var(--text-muted);
+  margin-top: 5px;
+  line-height: 1.45;
+}
+.pm-body {
+  padding: 16px 22px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pm-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pm-field .form-label { font-size: 11pt; margin-bottom: 6px; }
+.pm-field .form-input { padding: 10px 12px; font-size: 12pt; }
+.pm-error { font-size: 10pt; color: #e8675f; margin-top: 5px; }
+.pm-text {
+  font-size: 11.5pt;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+.pm-text strong { color: var(--text); font-weight: 600; }
+.pm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 22px 20px;
+}
 
 /* EPA status pills */
 .epa-status {

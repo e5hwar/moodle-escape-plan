@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
 import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
@@ -520,6 +520,36 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
   return XAPI_STEPS;
 }
 
+/* ─────────────────  Edge Line Gate (Wizard 6)  ─────────────────
+ * Wheel-past-the-edge step navigation. Scrolling beyond the top/bottom of a
+ * step "charges" a gate: an orange edge line scales out from the centre, a
+ * caption names the adjacent step, the pane nudges in the scroll direction,
+ * and the matching footer button fills left-to-right. At full charge the
+ * wizard changes step; releasing the wheel lets the charge decay. */
+
+/** Wheel distance (px) that fully charges a step change. */
+const GATE_DISTANCE = 420;
+/** Wheel events are swallowed for this long after a gated step change, so
+ * scroll momentum doesn't immediately scroll (or re-gate) the new step. */
+const GATE_COOLDOWN_MS = 750;
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+type GateLand = "top" | "bottom";
+
+type GateState = {
+  charge: number;
+  /** 1 = charging towards the next step, -1 = towards the previous, 0 = idle. */
+  dir: 1 | -1 | 0;
+  lastWheel: number;
+  coolUntil: number;
+  raf: number;
+  /** Where the next rendered step should land its scroll position. Gating
+   * backwards lands at the bottom — you re-enter the previous page where you
+   * left it, at its end. */
+  land: GateLand;
+};
+
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
 type Props = {
@@ -622,6 +652,168 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const isFile = taskType === "file";
   const isHandsOn = taskType === "hands-on";
   const steps = stepsForType(taskType);
+  const lastStep = steps.length - 1;
+
+  /* ── Edge Line Gate wiring ── */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const paneOutRef = useRef<HTMLDivElement>(null);
+  const prevLineRef = useRef<HTMLSpanElement>(null);
+  const prevCapRef = useRef<HTMLSpanElement>(null);
+  const nextLineRef = useRef<HTMLSpanElement>(null);
+  const nextCapRef = useRef<HTMLSpanElement>(null);
+  const backFillRef = useRef<HTMLSpanElement>(null);
+  const nextFillRef = useRef<HTMLSpanElement>(null);
+  const gate = useRef<GateState>({ charge: 0, dir: 0, lastWheel: 0, coolUntil: 0, raf: 0, land: "top" });
+
+  // Charge is painted straight onto the DOM every wheel tick — routing it
+  // through state would re-render the whole step per tick.
+  const paintCharge = useCallback(() => {
+    const g = gate.current;
+    const f = g.dir === 1 ? g.charge : 0;
+    const b = g.dir === -1 ? g.charge : 0;
+    if (nextLineRef.current) nextLineRef.current.style.transform = `scaleX(${f.toFixed(3)})`;
+    if (nextCapRef.current) nextCapRef.current.style.opacity = Math.min(1, f * 1.8).toFixed(3);
+    if (prevLineRef.current) prevLineRef.current.style.transform = `scaleX(${b.toFixed(3)})`;
+    if (prevCapRef.current) prevCapRef.current.style.opacity = Math.min(1, b * 1.8).toFixed(3);
+    if (nextFillRef.current) nextFillRef.current.style.width = `${(f * 100).toFixed(1)}%`;
+    if (backFillRef.current) backFillRef.current.style.width = `${(b * 100).toFixed(1)}%`;
+    const pane = paneOutRef.current;
+    if (pane) {
+      pane.style.transition = g.charge > 0 ? "transform 0.09s linear" : "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)";
+      pane.style.transform = g.charge > 0 ? `translateY(${(-g.dir * g.charge * 10).toFixed(1)}px)` : "";
+    }
+  }, []);
+
+  const goStep = useCallback(
+    (i: number, land: GateLand = "top") => {
+      const j = Math.min(lastStep, Math.max(0, i));
+      setStep((cur) => {
+        if (j === cur) return cur;
+        const g = gate.current;
+        g.charge = 0;
+        g.dir = 0;
+        g.land = land;
+        paintCharge();
+        return j;
+      });
+    },
+    [lastStep, paintCharge],
+  );
+
+  // Land the freshly rendered step before paint — at the top when moving
+  // forward, at the bottom when the back-gate pulled us up a step.
+  useLayoutEffect(() => {
+    const sc = scrollRef.current;
+    if (sc) sc.scrollTop = gate.current.land === "bottom" ? sc.scrollHeight : 0;
+    gate.current.land = "top";
+  }, [step]);
+
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const g = gate.current;
+
+    const startDecay = () => {
+      if (g.raf) return;
+      const tick = () => {
+        g.raf = 0;
+        if (g.charge <= 0) {
+          g.dir = 0;
+          paintCharge();
+          return;
+        }
+        if (performance.now() - g.lastWheel > 420) {
+          g.charge = Math.max(0, g.charge - 0.05);
+          paintCharge();
+        }
+        g.raf = requestAnimationFrame(tick);
+      };
+      g.raf = requestAnimationFrame(tick);
+    };
+
+    const addCharge = (dir: 1 | -1, amt: number, now: number) => {
+      if (g.dir !== dir) {
+        g.charge = 0;
+        g.dir = dir;
+      }
+      g.lastWheel = now;
+      g.charge = Math.min(1, g.charge + amt / GATE_DISTANCE);
+      if (g.charge >= 1) {
+        g.charge = 0;
+        g.dir = 0;
+        paintCharge();
+        g.coolUntil = now + GATE_COOLDOWN_MS;
+        goStep(stepRef.current + dir, dir === 1 ? "top" : "bottom");
+      } else {
+        paintCharge();
+        startDecay();
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      const now = performance.now();
+      if (now < g.coolUntil) {
+        e.preventDefault();
+        return;
+      }
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1);
+      // A nested scroller (question picker, dropdown list) that can still
+      // consume the wheel owns it — never charge the gate over its content.
+      for (let el = e.target as HTMLElement | null; el && el !== sc; el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 1) {
+          const oy = getComputedStyle(el).overflowY;
+          if (
+            (oy === "auto" || oy === "scroll") &&
+            (dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0)
+          )
+            return;
+        }
+      }
+      const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;
+      const atTop = sc.scrollTop <= 1;
+      if (dy > 0 && atBottom && stepRef.current < lastStep) {
+        e.preventDefault();
+        addCharge(1, dy, now);
+      } else if (dy < 0 && atTop && stepRef.current > 0) {
+        e.preventDefault();
+        addCharge(-1, -dy, now);
+      } else if (g.charge > 0) {
+        g.charge = 0;
+        g.dir = 0;
+        paintCharge();
+      }
+    };
+
+    sc.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      sc.removeEventListener("wheel", onWheel);
+      if (g.raf) cancelAnimationFrame(g.raf);
+      g.raf = 0;
+    };
+  }, [goStep, lastStep, paintCharge]);
+
+  // Name is required to publish (drafts may be nameless). Step 01 is the "basics"
+  // step that holds the name for every Task type. Quiet-rail behaviour: step 01
+  // flags "needs input" once you've moved past it with an empty name, or after a
+  // publish attempt — never while you're still filling it in for the first time.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const nameMissing = !data.nameEn.trim();
+  const showNameError = nameMissing && (step > 0 || attemptedSubmit);
+
+  function handlePublish() {
+    if (nameMissing) {
+      setAttemptedSubmit(true);
+      goStep(0);
+      return;
+    }
+    onPrimary ? onPrimary(data.nameEn) : onClose();
+  }
+
+  const isLast = step === lastStep;
+  const publishLabel = primaryLabel ?? (isEditing ? "Save changes" : "Publish");
 
   return (
     <div className="wizard">
@@ -639,12 +831,18 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           <ol className="wizard-steps">
             {steps.map((s, i) => {
               const status =
-                i === step ? "active" : i < step ? "done" : "upcoming";
+                showNameError && i === 0
+                  ? "error"
+                  : i === step
+                  ? "active"
+                  : i < step
+                  ? "done"
+                  : "upcoming";
               return (
                 <li
                   key={s.id}
                   className={`wizard-step ${status}`}
-                  onClick={() => setStep(i)}
+                  onClick={() => goStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -656,7 +854,26 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           </ol>
         </aside>
 
-        <div className="wizard-content">
+        <div className="wizard-main">
+          {step > 0 && (
+            <>
+              <span className="wizard-gate-line is-top" ref={prevLineRef} />
+              <span className="wizard-gate-cap is-top" ref={prevCapRef}>
+                ↑ BACK TO STEP {pad2(step)} · {steps[step - 1].label.toUpperCase()}
+              </span>
+            </>
+          )}
+          {step < lastStep && (
+            <>
+              <span className="wizard-gate-line is-bottom" ref={nextLineRef} />
+              <span className="wizard-gate-cap is-bottom" ref={nextCapRef}>
+                ↓ NEXT · STEP {pad2(step + 2)} · {steps[step + 1].label.toUpperCase()}
+              </span>
+            </>
+          )}
+          <div className="wizard-content" ref={scrollRef}>
+            <div className="wizard-paneout" ref={paneOutRef}>
+              <div className="wizard-pane" key={step}>
           <h1 className="wizard-title">{steps[step].label}</h1>
           <p className="wizard-desc">{steps[step].desc}</p>
 
@@ -666,12 +883,12 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             const gateProps = { criteriaLocked, onUnlockCriteria };
             return (
           isXapi ? (
-            step === 0 ? <XapiDetailsStep data={data} update={update} /> :
+            step === 0 ? <XapiDetailsStep data={data} update={update} nameError={showNameError} /> :
             step === 1 ? <XapiLaunchStep data={data} update={update} /> :
             step === 2 ? <XapiCompletionStep data={data} update={update} {...gateProps} /> :
             <XapiVisibilityStep data={data} update={update} />
           ) : isQuiz ? (
-            step === 0 ? <QuizBasicsStep data={data} update={update} /> :
+            step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} /> :
             step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} /> :
             step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
             step === 3 ? <QuizGradingStep data={data} update={update} locked={isEditing} {...gateProps} /> :
@@ -680,12 +897,12 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             step === 6 ? <QuizReviewStep data={data} update={update} /> :
             <QuizPaymentsStep data={data} update={update} />
           ) : isFile ? (
-            step === 0 ? <ResourceBasicInfoStep data={data} update={update} /> :
+            step === 0 ? <ResourceBasicInfoStep data={data} update={update} nameError={showNameError} /> :
             step === 1 ? <ResourceLaunchStep data={data} update={update} /> :
             step === 2 ? <UrlCompletionStep data={data} update={update} {...gateProps} /> :
             <UrlVisibilityStep data={data} update={update} />
           ) : isHandsOn ? (
-            step === 0 ? <HandsOnBasicStep data={data} update={update} /> :
+            step === 0 ? <HandsOnBasicStep data={data} update={update} nameError={showNameError} /> :
             step === 1 ? <HandsOnReferenceStep data={data} update={update} /> :
             step === 2 ? <HandsOnSubmissionStep data={data} update={update} /> :
             step === 3 ? <HandsOnCompletionStep data={data} update={update} {...gateProps} /> :
@@ -694,6 +911,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             <PlaceholderStep type={TYPE_LABEL[taskType]} />
           ));
           })()}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -705,14 +925,21 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           </button>
         </div>
         <div className="wizard-actions">
+          {step > 0 && (
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
+          )}
           <button className="btn-save-draft" onClick={onClose}>
             Save as draft
           </button>
           <button
-            className="btn-publish"
-            onClick={() => (onPrimary ? onPrimary(data.nameEn || `New ${TYPE_LABEL[taskType]}`) : onClose())}
+            className="btn-publish wizard-gate-btn"
+            onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
-            {primaryLabel ?? (isEditing ? "Save changes" : "Publish")}
+            <span className="wizard-gate-fill" ref={nextFillRef} />
+            <span className="wizard-gate-btn-inner">{isLast ? publishLabel : `Next: ${steps[step + 1].label}`}</span>
           </button>
         </div>
       </footer>
@@ -744,12 +971,15 @@ type StepProps = {
   criteriaLocked?: boolean;
   /** Acknowledge the warning and unlock completion criteria for editing. */
   onUnlockCriteria?: () => void;
+  /** True after a publish attempt with an empty required Name — surfaces the
+   * missing-field state on the name input. */
+  nameError?: boolean;
 };
 
-function XapiDetailsStep({ data, update }: StepProps) {
+function XapiDetailsStep({ data, update, nameError }: StepProps) {
   return (
     <>
-      <NameAndDescription data={data} update={update} />
+      <NameAndDescription data={data} update={update} nameError={nameError} />
 
       <div className="form-group">
         <label className="form-label">
@@ -930,11 +1160,11 @@ function UrlVisibilityStep({ data, update }: StepProps) {
 
 /* ─────────────────  Resource step components  ───────────────── */
 
-function ResourceBasicInfoStep({ data, update }: StepProps) {
+function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
   const isFileType = data.resourceType === "file";
   return (
     <>
-      <NameAndDescription data={data} update={update} />
+      <NameAndDescription data={data} update={update} nameError={nameError} />
 
       <Section
         title="Resource type"
@@ -1066,10 +1296,10 @@ function ResourceLaunchStep({ data, update }: StepProps) {
 
 /* ─────────────────  Hands-On step components  ───────────────── */
 
-function HandsOnBasicStep({ data, update }: StepProps) {
+function HandsOnBasicStep({ data, update, nameError }: StepProps) {
   return (
     <>
-      <NameAndDescription data={data} update={update} />
+      <NameAndDescription data={data} update={update} nameError={nameError} />
       <TimeToCompleteField data={data} update={update} />
       <FinalExamField data={data} update={update} />
     </>
@@ -1434,7 +1664,7 @@ function ContentTagsSection({ data, update }: StepProps) {
 
 /* ─────────────────  Quiz step components  ───────────────── */
 
-function QuizBasicsStep({ data, update }: StepProps) {
+function QuizBasicsStep({ data, update, nameError }: StepProps) {
   return (
     <>
       <div className="form-group">
@@ -1448,6 +1678,8 @@ function QuizBasicsStep({ data, update }: StepProps) {
           onChangeEs={(v) => update({ nameEs: v })}
           placeholderEn="Quiz name"
           placeholderEs="Nombre del cuestionario"
+          error={nameError}
+          errorMessage="Enter a Quiz name to publish."
         />
       </div>
 
@@ -3013,7 +3245,7 @@ function PerAttemptPrices({ data, update }: StepProps) {
 
 /* ─────────────────  Shared sub-blocks  ───────────────── */
 
-function NameAndDescription({ data, update }: StepProps) {
+function NameAndDescription({ data, update, nameError }: StepProps) {
   return (
     <>
       <div className="form-group">
@@ -3027,6 +3259,8 @@ function NameAndDescription({ data, update }: StepProps) {
           onChangeEs={(v) => update({ nameEs: v })}
           placeholderEn="Name"
           placeholderEs="Nombre"
+          error={nameError}
+          errorMessage="Enter a name to publish."
         />
       </div>
 
@@ -3356,6 +3590,8 @@ function LangField({
   onChangeEs,
   placeholderEn,
   placeholderEs,
+  error = false,
+  errorMessage,
 }: {
   en: string;
   es: string;
@@ -3363,9 +3599,12 @@ function LangField({
   onChangeEs: (v: string) => void;
   placeholderEn?: string;
   placeholderEs?: string;
+  error?: boolean;
+  errorMessage?: string;
 }) {
   return (
-    <div className="lang-field">
+    <>
+    <div className={`lang-field ${error ? "has-error" : ""}`}>
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
         <input
@@ -3373,6 +3612,7 @@ function LangField({
           value={en}
           onChange={(e) => onChangeEn(e.target.value)}
           placeholder={placeholderEn}
+          aria-invalid={error || undefined}
         />
       </div>
       <div className="lang-field-divider" />
@@ -3386,6 +3626,8 @@ function LangField({
         />
       </div>
     </div>
+    {error && errorMessage && <p className="form-error-text">{errorMessage}</p>}
+    </>
   );
 }
 
