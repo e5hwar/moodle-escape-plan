@@ -68,15 +68,22 @@ export function AttemptsPage({
   quizName,
   onBack,
   onViewAttempt,
+  initialNameFilter,
+  extraAttempts,
 }: {
   /** The Task selected on the Tasks page — pre-fills the Quiz filter. */
   quizName: string;
-  onBack: () => void;
+  /** Omit when opened as a standalone tab (e.g. from Manage Completions) — hides the back link. */
+  onBack?: () => void;
   onViewAttempt: (attempt: Attempt) => void;
+  /** Pre-fills the Name filter — used to land on a single employee's attempts. */
+  initialNameFilter?: string;
+  /** Real attempt rows for the pre-filled employee/quiz — shown ahead of the mock seed data. */
+  extraAttempts?: Attempt[];
 }) {
-  const [list, setList] = useState<Attempt[]>(seed);
+  const [list, setList] = useState<Attempt[]>(() => [...(extraAttempts ?? []), ...seed]);
   const [filters, setFilters] = useState<Filters>({
-    name: "",
+    name: initialNameFilter ?? "",
     email: "",
     phone: "",
     quiz: quizName,
@@ -159,10 +166,12 @@ export function AttemptsPage({
         <div className="tasks">
           <header className="tasks-header">
             <div>
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                Tasks
-              </button>
+              {onBack && (
+                <button className="attempts-back" onClick={onBack}>
+                  <ChevronLeftIcon />
+                  Tasks
+                </button>
+              )}
               <h1 className="tasks-title">Attempts</h1>
               <div className="tasks-subtitle">
                 <span>{filtered.length} attempt{filtered.length === 1 ? "" : "s"}</span>

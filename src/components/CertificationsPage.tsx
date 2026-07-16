@@ -14,6 +14,7 @@ import {
 import { SearchIcon, SortIcon, AddIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { CertPreviewPanel } from "./CertPreviewPanel";
 
 const PAGE_SIZE = 50;
 
@@ -245,7 +246,10 @@ export function CertificationsPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  // Natural table width so columns scroll horizontally instead of crushing.
+  const selected = selectedId ? certList.find((c) => c.id === selectedId) ?? null : null;
+
+  // Natural table width so columns scroll horizontally instead of crushing —
+  // including while the preview panel is open (all columns stay, table scrolls).
   const tableMin =
     240 /* name */ +
     40 /* actions */ +
@@ -391,6 +395,10 @@ export function CertificationsPage({
                     </div>
                   </div>
                 </div>
+
+                {selected && (
+                  <CertPreviewPanel cert={selected} onClose={() => setSelectedId(null)} />
+                )}
               </div>
             </div>
           </div>

@@ -18,6 +18,7 @@
 import { users, type User } from "./users";
 import { certifications as appCerts } from "./certifications";
 import { tasks as appTasks, type Task, type TaskType } from "./tasks";
+import type { Attempt } from "./attempts";
 
 /* ───────────────────────── deterministic RNG ───────────────────────── */
 
@@ -452,6 +453,65 @@ export function attemptInfo(t: CertTask, c: Cell): AttemptInfo {
   const totalAllowed = hasLimit ? attemptLimit! + grantedTotal : null;
   const remaining = hasLimit ? Math.max(0, (totalAllowed ?? 0) - attemptsUsed) : null;
   return { isQuiz, hasLimit, attemptLimit, grantedTotal, attemptsUsed, totalAllowed, remaining, grants };
+}
+
+/* ───────────────────── attempt history (for the Attempts page) ──────────────────── */
+
+const PHONE_AREA = ["415", "510", "408", "650", "213", "312", "713", "305", "602", "206"];
+
+function synthPhone(uid: string): string {
+  const h = hash(uid + "|phone");
+  const area = PHONE_AREA[h % PHONE_AREA.length];
+  const mid = 200 + (h % 700);
+  const last4 = 1000 + (Math.floor(h / 7) % 9000);
+  return `(${area}) ${mid}-${String(last4).slice(-4)}`;
+}
+
+/** Reconstruct a plausible per-attempt history from a Cell's aggregate
+ *  attempt count, so "View attempts" (opened from Manage Completions) always
+ *  has real rows to show whenever the employee has actually attempted the
+ *  quiz — instead of relying on an unrelated mock dataset. Deterministic, so
+ *  it's identical whether generated inline or independently in a new tab. */
+export function attemptsForTask(
+  uid: string,
+  employeeName: string,
+  employeeEmail: string,
+  task: CertTask,
+  cell: Cell,
+): Attempt[] {
+  const n = cell.attempts;
+  if (!n) return [];
+  const rng = mulberry32(hash(uid + "|" + task.id + "|hist"));
+  const phone = synthPhone(uid);
+  const startBase = cell.startedAt ?? cell.assignedAt;
+  const endBase = cell.completedAt ?? cell.submittedAt ?? startBase + DAY;
+  const span = Math.max(endBase - startBase, DAY);
+
+  const out: Attempt[] = [];
+  for (let i = 1; i <= n; i++) {
+    const isLast = i === n;
+    const slot = startBase + Math.floor(((i - 1) / n) * span);
+    const durMin = 8 + Math.floor(rng() * 90);
+    const startedAtTs = slot + Math.floor(rng() * 3) * 3600000;
+    const completedAtTs = startedAtTs + durMin * 60000;
+    const grade =
+      isLast && cell.grade != null
+        ? cell.grade
+        : Math.max(35, Math.min(100, Math.round(30 + rng() * 55)));
+    out.push({
+      id: uid + "_" + task.id + "_" + i,
+      name: employeeName,
+      email: employeeEmail,
+      phone,
+      quizName: task.name,
+      attemptNumber: i,
+      status: "Completed",
+      startedAt: fmtDT(startedAtTs),
+      completedAt: fmtDT(completedAtTs),
+      grade,
+    });
+  }
+  return out;
 }
 
 /* ──────────────────────────── formatting ───────────────────────────── */

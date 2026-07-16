@@ -275,9 +275,11 @@ function MetricsGrid({ d }: { d: ReturnType<typeof buildDetail> }) {
 function QuizAttemptBox({
   d,
   onGrant,
+  onViewAttempts,
 }: {
   d: ReturnType<typeof buildDetail>;
   onGrant: () => void;
+  onViewAttempts: () => void;
 }) {
   return (
     <div
@@ -289,7 +291,7 @@ function QuizAttemptBox({
         marginBottom: 14,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <div
             style={{
@@ -305,24 +307,44 @@ function QuizAttemptBox({
           </div>
           <div style={{ fontSize: 12, color: "#bdbfc4" }}>{d.attemptsRemainingStr}</div>
         </div>
-        <HoverButton
-          onClick={onGrant}
-          style={{
-            flex: "none",
-            padding: "10px 14px",
-            border: `1.5px solid ${ACCENT}`,
-            borderRadius: 9,
-            background: "#1a1b1e",
-            color: AMBER,
-            fontSize: 12.5,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            cursor: "pointer",
-          }}
-          hoverStyle={{ background: "#2f2516" }}
-        >
-          + Grant another attempt
-        </HoverButton>
+        <div style={{ display: "flex", gap: 8, flex: "none" }}>
+          <HoverButton
+            onClick={onViewAttempts}
+            style={{
+              flex: "none",
+              padding: "10px 14px",
+              border: "1.5px solid #3b3e44",
+              borderRadius: 9,
+              background: "#1a1b1e",
+              color: "#bdbfc4",
+              fontSize: 12.5,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+            }}
+            hoverStyle={{ background: "#26282d" }}
+          >
+            View attempts ↗
+          </HoverButton>
+          <HoverButton
+            onClick={onGrant}
+            style={{
+              flex: "none",
+              padding: "10px 14px",
+              border: `1.5px solid ${ACCENT}`,
+              borderRadius: 9,
+              background: "#1a1b1e",
+              color: AMBER,
+              fontSize: 12.5,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+            }}
+            hoverStyle={{ background: "#2f2516" }}
+          >
+            + Grant another attempt
+          </HoverButton>
+        </div>
       </div>
       {d.hasGrants && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -344,7 +366,12 @@ type Who = { kind: "employee" | "cohort"; id: string } | null;
 type What = { kind: "cert" | "task"; id: string } | null;
 type GradePrompt = { uid: string; tid: string; taskName: string; type: string } | null;
 
-export function ContentOverridesPage() {
+export function ContentOverridesPage({
+  onViewAttempts,
+}: {
+  /** Opens the Attempts page for this employee + task, in a new tab. */
+  onViewAttempts: (uid: string, tid: string) => void;
+}) {
   const data = useMemo(() => buildData(), []);
 
   const [cells, setCells] = useState<CellMap>(() => data.cells);
@@ -1097,6 +1124,7 @@ export function ContentOverridesPage() {
                   onOpen={focusName}
                   onGrant={doGrant}
                   onMark={requestMark}
+                  onViewAttempts={onViewAttempts}
                 />
               )}
 
@@ -1161,6 +1189,7 @@ export function ContentOverridesPage() {
                         onGrant={doGrant}
                         onMarkCert={markCert}
                         onUndoCert={undoCert}
+                        onViewAttempts={onViewAttempts}
                       />
                     </div>
                   </div>
@@ -1179,6 +1208,7 @@ export function ContentOverridesPage() {
                         cells={cells}
                         onGrant={doGrant}
                         onMark={requestMark}
+                        onViewAttempts={onViewAttempts}
                       />
                     </div>
                   </div>
@@ -1894,6 +1924,7 @@ function Roster({
   onOpen,
   onGrant,
   onMark,
+  onViewAttempts,
 }: {
   members: Employee[];
   task: CertTask;
@@ -1903,6 +1934,7 @@ function Roster({
   onOpen: (uid: string) => void;
   onGrant: (uid: string, tid: string) => void;
   onMark: (uid: string, tid: string) => void;
+  onViewAttempts: (uid: string, tid: string) => void;
 }) {
   return (
     <div style={{ flex: 1, minWidth: 0, overflow: "auto", minHeight: 0, padding: "18px 22px" }}>
@@ -1923,7 +1955,7 @@ function Roster({
         >
           <span style={{ flex: 1 }}>Employee · {members.length}</span>
           <span style={compact ? { flex: "none" } : { width: 150, flex: "none" }}>Task status</span>
-          {!compact && <span style={{ width: 287, flex: "none", textAlign: "right" }}>Attempts left · Action</span>}
+          {!compact && <span style={{ width: 317, flex: "none", textAlign: "right" }}>Attempts left · Action</span>}
         </div>
         {members.map((u) => {
           const cl = cells[u.id + "_" + task.id];
@@ -1999,6 +2031,33 @@ function Roster({
                   >
                     {ai.hasLimit ? `${ai.remaining} of ${ai.totalAllowed} left` : ""}
                   </span>
+                  <div style={{ width: 30, flex: "none", display: "flex", justifyContent: "flex-start" }}>
+                    {ai.hasLimit && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewAttempts(u.id, task.id);
+                        }}
+                        title="View attempts"
+                        style={{
+                          width: 30,
+                          height: 30,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "1px solid #3b3e44",
+                          borderRadius: 8,
+                          background: "#1a1b1e",
+                          color: "#bdbfc4",
+                          fontSize: 13,
+                          fontFamily: "inherit",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ↗
+                      </button>
+                    )}
+                  </div>
                   <div style={{ width: 90, flex: "none", display: "flex", justifyContent: "flex-start" }}>
                     {ai.hasLimit && (
                       <button
@@ -2076,6 +2135,7 @@ function CertDetail({
   onGrant,
   onMarkCert,
   onUndoCert,
+  onViewAttempts,
 }: {
   uid: string;
   certId: string;
@@ -2089,6 +2149,7 @@ function CertDetail({
   onGrant: (uid: string, tid: string) => void;
   onMarkCert: (uid: string, cid: string) => void;
   onUndoCert: (uid: string, cid: string) => void;
+  onViewAttempts: (uid: string, tid: string) => void;
 }) {
   const ps = progress(cells, certManual, uid, allTasks, certId);
   const remain = ps.rv + ps.inc;
@@ -2200,6 +2261,7 @@ function CertDetail({
             onToggle={() => onToggle(t.id)}
             onMark={() => onMark(uid, t.id)}
             onGrant={() => onGrant(uid, t.id)}
+            onViewAttempts={() => onViewAttempts(uid, t.id)}
           />
         ))}
       </div>
@@ -2215,6 +2277,7 @@ function AccordionCard({
   onToggle,
   onMark,
   onGrant,
+  onViewAttempts,
 }: {
   uid: string;
   task: CertTask;
@@ -2223,6 +2286,7 @@ function AccordionCard({
   onToggle: () => void;
   onMark: () => void;
   onGrant: () => void;
+  onViewAttempts: () => void;
 }) {
   const cl = cells[uid + "_" + task.id];
   const manual = cl.status === "complete" && cl.manual;
@@ -2273,7 +2337,9 @@ function AccordionCard({
       {expanded && detail && (
         <div style={{ borderTop: "1px solid #24262b", padding: 15, animation: "clAcc .16s ease" }}>
           <MetricsGrid d={detail} />
-          {detail.isQuizLimited && <QuizAttemptBox d={detail} onGrant={onGrant} />}
+          {detail.isQuizLimited && (
+            <QuizAttemptBox d={detail} onGrant={onGrant} onViewAttempts={onViewAttempts} />
+          )}
           <div
             style={{
               fontSize: 9,
@@ -2323,12 +2389,14 @@ function TaskDetail({
   cells,
   onGrant,
   onMark,
+  onViewAttempts,
 }: {
   uid: string;
   task: CertTask;
   cells: CellMap;
   onGrant: (uid: string, tid: string) => void;
   onMark: (uid: string, tid: string) => void;
+  onViewAttempts: (uid: string, tid: string) => void;
 }) {
   const cl = cells[uid + "_" + task.id];
   const manual = cl.status === "complete" && cl.manual;
@@ -2367,7 +2435,13 @@ function TaskDetail({
       </div>
       <div style={{ padding: "18px 20px" }}>
         <MetricsGrid d={detail} />
-        {detail.isQuizLimited && <QuizAttemptBox d={detail} onGrant={() => onGrant(uid, task.id)} />}
+        {detail.isQuizLimited && (
+          <QuizAttemptBox
+            d={detail}
+            onGrant={() => onGrant(uid, task.id)}
+            onViewAttempts={() => onViewAttempts(uid, task.id)}
+          />
+        )}
         <div
           style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", color: "#9a9ca1", marginBottom: 13 }}
         >

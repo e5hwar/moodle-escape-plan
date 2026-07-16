@@ -23,6 +23,8 @@ export type Submission = {
   status: ProctoringStatus;
   idConfidence: number; // 0-100
   idType: string;
+  /** Name as detected on the uploaded ID. Omitted/equal to candidateName when there's no mismatch. */
+  idDetectedName?: string;
   webcamFlaggedCount: number;
   webcamTotal: number;
   frames: WebcamFrame[];
@@ -50,7 +52,7 @@ function makeFrames(totalCount: number, flagged: Array<{ at: number; reason: Fla
 export const submissions: Submission[] = [
   {
     id: "PR-1042",
-    candidateName: "Jessica Tan",
+    candidateName: "Jessica R Tan",
     candidateEmail: "jtan@skillcatapp.com",
     exam: "EPA 608 Type 2 Certificate",
     examShort: "EPA 608 Type 2",
@@ -60,6 +62,7 @@ export const submissions: Submission[] = [
     status: "pending",
     idConfidence: 96,
     idType: "US Driver's License",
+    idDetectedName: "Jessica Tan",
     webcamFlaggedCount: 1,
     webcamTotal: 180,
     frames: makeFrames(24, [{ at: 12, reason: "Looking Away" }]),

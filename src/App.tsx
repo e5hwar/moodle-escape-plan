@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
 import { TasksPage } from "./components/TasksPage";
@@ -36,6 +36,7 @@ import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
 import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
 import { OfferCodesPage } from "./components/OfferCodesPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
+import { buildData, attemptsForTask } from "./data/certLookup";
 import { ProductConfigPage } from "./components/ProductConfigPage";
 import { PermissionsPage } from "./components/PermissionsPage";
 import { MergeAccountsPage } from "./components/MergeAccountsPage";
@@ -198,6 +199,11 @@ export default function App() {
   const portfolioId = params.get("portfolio");
   const stripeCustomerId = params.get("stripeInvoices");
   const loginAsCompany = params.get("loginAs");
+  const attemptsUid = params.get("attemptsUid");
+  const attemptsTaskId = params.get("attemptsTaskId");
+  if (attemptsUid && attemptsTaskId) {
+    return <StandaloneAttemptsPage uid={attemptsUid} taskId={attemptsTaskId} />;
+  }
   if (profileId) {
     const u = allUsers.find((x) => x.id === profileId);
     return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
@@ -214,6 +220,47 @@ export default function App() {
   }
 
   return <AdminApp />;
+}
+
+/* Standalone Attempts page, opened in a new tab from Manage Completions
+ * (Certification Lookup) via ?attemptsUid=&attemptsTaskId=. Rebuilds the same
+ * deterministic Certification Lookup data set (buildData() is a pure, seeded
+ * function of fixed inputs, so it's identical to what the originating tab
+ * saw) and synthesizes that employee's real attempt history for the task, so
+ * the page always has rows to show whenever they've actually attempted it —
+ * instead of relying on the unrelated Attempts mock dataset. Keeps its own
+ * tiny attempts ⇄ attempt-viewer state since there's no Tasks page to return
+ * to in this tab. */
+function StandaloneAttemptsPage({ uid, taskId }: { uid: string; taskId: string }) {
+  const [viewer, setViewer] = useState<Attempt | null>(null);
+
+  const data = useMemo(() => buildData(), []);
+  const employee = data.employeesById[uid];
+  const task = data.tasksById[taskId];
+  if (!employee || !task) return <StandaloneNotFound id={uid} />;
+  const cell = data.cells[uid + "_" + taskId];
+  const history = attemptsForTask(uid, employee.name, employee.contact, task, cell);
+
+  if (viewer) {
+    return <AttemptViewerPage attempt={viewer} onBack={() => setViewer(null)} />;
+  }
+  return (
+    <AttemptsPage
+      quizName={task.name}
+      initialNameFilter={employee.name}
+      extraAttempts={history}
+      onViewAttempt={setViewer}
+    />
+  );
+}
+
+/** Opens the Attempts page for one employee's task attempts in a new tab. */
+function openAttemptsForUser(uid: string, taskId: string) {
+  window.open(
+    `${window.location.origin}${window.location.pathname}?attemptsUid=${encodeURIComponent(uid)}&attemptsTaskId=${encodeURIComponent(taskId)}`,
+    "_blank",
+    "noopener",
+  );
 }
 
 /* Placeholder shown when an admin clicks "Open Company Dashboard" on a
@@ -543,7 +590,7 @@ function AdminApp() {
       ) : view.name === "name-change-requests" ? (
         <NameChangeRequestsPage />
       ) : view.name === "content-overrides" ? (
-        <ContentOverridesPage />
+        <ContentOverridesPage onViewAttempts={openAttemptsForUser} />
       ) : view.name === "product-config" ? (
         <ProductConfigPage initialTab={view.tab} />
       ) : view.name === "merge-accounts" ? (

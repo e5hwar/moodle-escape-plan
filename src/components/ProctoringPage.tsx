@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import {
   submissions as seedSubmissions,
   ALL_EXAMS,
+  type ProctoringStatus,
   type Submission,
 } from "../data/proctoring";
 import { ProctoringDetailModal } from "./ProctoringDetailModal";
@@ -30,7 +31,7 @@ const FILTER_TITLE: Record<FilterKey, string> = {
 };
 
 export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
-  const [list] = useState<Submission[]>(seedSubmissions);
+  const [list, setList] = useState<Submission[]>(seedSubmissions);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
   const [selectedExams, setSelectedExams] = useState<Set<string>>(new Set());
@@ -48,19 +49,30 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [examOpen]);
 
+  // Once a submission is accepted/rejected it's off the review queue entirely. A
+  // requested reupload doesn't count toward the stat tiles — only true "pending"
+  // items do — and it only surfaces under the ID Re-uploads tab, never under "All".
+  const pending = useMemo(() => list.filter((s) => s.status === "pending"), [list]);
+
   const counts = useMemo(() => {
     return {
-      all: list.length,
-      proctoring: list.filter((s) => s.kind === "proctoring").length,
-      "id-review": list.filter((s) => s.kind === "id-review").length,
-      "id-reupload": list.filter((s) => s.kind === "id-reupload").length,
+      all: pending.length,
+      proctoring: pending.filter((s) => s.kind === "proctoring").length,
+      "id-review": pending.filter((s) => s.kind === "id-review").length,
+      "id-reupload": pending.filter((s) => s.kind === "id-reupload").length,
     };
-  }, [list]);
+  }, [pending]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list.filter((s) => {
-      if (filter !== "all" && s.kind !== filter) return false;
+      if (s.status === "pending") {
+        if (filter !== "all" && s.kind !== filter) return false;
+      } else if (s.status === "id-requested") {
+        if (filter !== "id-reupload") return false;
+      } else {
+        return false;
+      }
       if (selectedExams.size > 0 && !selectedExams.has(s.exam)) return false;
       if (q) {
         if (
@@ -103,6 +115,37 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   function gotoIndex(idx: number) {
     if (idx < 0 || idx >= filtered.length) return;
     setActiveId(filtered[idx].id);
+  }
+
+  // Decide a submission (accept/reject): it leaves the review queue entirely and
+  // whichever submission was next in line (or previous, if this was the last one) opens.
+  function decide(id: string, status: ProctoringStatus) {
+    const idx = filtered.findIndex((s) => s.id === id);
+    const next = idx >= 0 ? filtered[idx + 1] ?? filtered[idx - 1] ?? null : null;
+    setList((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+    setActiveId(next ? next.id : null);
+  }
+
+  // Requesting a reupload moves the submission into the ID Re-uploads tab in a
+  // pending/secondary state — it no longer counts toward the stat tiles, but stays
+  // visible in the table until it's accepted or rejected.
+  function requestReupload(id: string) {
+    const idx = filtered.findIndex((s) => s.id === id);
+    const next = idx >= 0 ? filtered[idx + 1] ?? filtered[idx - 1] ?? null : null;
+    setList((prev) =>
+      prev.map((s) =>
+        s.id === id ? { ...s, status: "id-requested", kind: "id-reupload" } : s,
+      ),
+    );
+    setActiveId(next ? next.id : null);
+  }
+
+  function updateCandidateName(id: string, name: string) {
+    setList((prev) =>
+      prev.map((s) =>
+        s.id === id ? { ...s, candidateName: name, idDetectedName: name } : s,
+      ),
+    );
   }
 
   const examLabel =
@@ -230,15 +273,24 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                     No submissions match your filters.
                   </div>
                 ) : (
-                  filtered.map((s) => (
+                  filtered.map((s) => {
+                    const isRequested = s.status === "id-requested";
+                    return (
                     <div
                       key={s.id}
-                      className="pr-row"
+                      className={`pr-row ${isRequested ? "pr-row--secondary" : ""}`}
                       onClick={() => openSubmission(s.id)}
                     >
                       <div className="pr-col-candidate">
-                        <div className="pr-candidate-name">
-                          {s.candidateName}
+                        <div className="pr-candidate-name-row">
+                          <span className="pr-candidate-name">
+                            {s.candidateName}
+                          </span>
+                          {isRequested && (
+                            <span className="pr-status-pill pr-status-pill--requested">
+                              Reupload Requested
+                            </span>
+                          )}
                         </div>
                         <div className="pr-candidate-email">
                           {s.candidateEmail}
@@ -262,7 +314,8 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                         </button>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -278,6 +331,10 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
           onNext={() => gotoIndex(activeIndex + 1)}
           hasPrev={activeIndex > 0}
           hasNext={activeIndex < filtered.length - 1}
+          onAccept={() => decide(active.id, "accepted")}
+          onReject={() => decide(active.id, "rejected")}
+          onRequestId={() => requestReupload(active.id)}
+          onUpdateName={(name) => updateCandidateName(active.id, name)}
         />
       )}
     </div>

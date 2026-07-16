@@ -4,7 +4,7 @@ import {
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
 import { ZoomableIdCard } from "./IdCard";
-import { SearchIcon, SortIcon, CheckBoldIcon, SmallXIcon } from "./icons";
+import { SearchIcon, SortIcon, CheckBoldIcon } from "./icons";
 
 const PAGE_SIZE = 25;
 
@@ -43,10 +43,7 @@ export function NameChangeRequestsPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "desc" });
   const [page, setPage] = useState(1);
 
-  const [viewId, setViewId] = useState<NameChangeRequest | null>(null);
-  const [approving, setApproving] = useState<NameChangeRequest | null>(null);
-  const [proofing, setProofing] = useState<NameChangeRequest | null>(null);
-  const [rejecting, setRejecting] = useState<NameChangeRequest | null>(null);
+  const [reviewing, setReviewing] = useState<NameChangeRequest | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -76,8 +73,12 @@ export function NameChangeRequestsPage() {
     );
   }
 
-  function resolve(id: string) {
+  /** Removes the resolved request and immediately advances review to the next one in view order. */
+  function advanceReview(id: string) {
+    const currentIndex = sorted.findIndex((r) => r.id === id);
+    const remaining = sorted.filter((r) => r.id !== id);
     setList((prev) => prev.filter((r) => r.id !== id));
+    setReviewing(remaining[currentIndex] ?? remaining[0] ?? null);
   }
 
   return (
@@ -116,10 +117,9 @@ export function NameChangeRequestsPage() {
               <div className="tasks-scroll">
                 <table className="table sch-table ncr-table" style={{ width: 1020 }}>
                   <colgroup>
-                    <col style={{ width: 220 }} />
-                    <col style={{ width: 220 }} />
-                    <col style={{ width: 150 }} />
-                    <col style={{ width: 110 }} />
+                    <col style={{ width: 260 }} />
+                    <col style={{ width: 260 }} />
+                    <col style={{ width: 180 }} />
                     <col style={{ width: 320 }} />
                   </colgroup>
                   <thead>
@@ -127,7 +127,6 @@ export function NameChangeRequestsPage() {
                       <SortableHeader col="currentName" label="Current Name" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="requestedName" label="Requested Name" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="submittedOn" label="Submitted On" sort={sort} toggle={toggleSort} />
-                      <th>View ID</th>
                       <th className="ncr-actions-head">Actions</th>
                     </tr>
                   </thead>
@@ -138,21 +137,10 @@ export function NameChangeRequestsPage() {
                         <td className="ncr-requested">{r.requestedName}</td>
                         <td>{formatDate(r.submittedOn)}</td>
                         <td>
-                          <button className="ncr-view-id" onClick={() => setViewId(r)}>
-                            <IdIcon />
-                            View ID
-                          </button>
-                        </td>
-                        <td>
                           <div className="ncr-actions">
-                            <button className="ncr-btn ncr-btn--approve" onClick={() => setApproving(r)}>
-                              Approve
-                            </button>
-                            <button className="ncr-btn ncr-btn--proof" onClick={() => setProofing(r)}>
-                              Request Proof
-                            </button>
-                            <button className="ncr-btn ncr-btn--reject" onClick={() => setRejecting(r)}>
-                              Reject
+                            <button className="ncr-btn ncr-btn--review" onClick={() => setReviewing(r)}>
+                              <IdIcon />
+                              Review
                             </button>
                           </div>
                         </td>
@@ -160,7 +148,7 @@ export function NameChangeRequestsPage() {
                     ))}
                     {paged.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="sch-empty">
+                        <td colSpan={4} className="sch-empty">
                           {query.trim()
                             ? `No requests match "${query.trim()}".`
                             : "No pending name change requests."}
@@ -185,38 +173,11 @@ export function NameChangeRequestsPage() {
         </div>
       </div>
 
-      {viewId && <IdFullscreen request={viewId} onClose={() => setViewId(null)} />}
-
-      {approving && (
-        <ApproveModal
-          request={approving}
-          onClose={() => setApproving(null)}
-          onConfirm={() => {
-            resolve(approving.id);
-            setApproving(null);
-          }}
-        />
-      )}
-
-      {proofing && (
-        <RequestProofModal
-          request={proofing}
-          onClose={() => setProofing(null)}
-          onConfirm={() => {
-            resolve(proofing.id);
-            setProofing(null);
-          }}
-        />
-      )}
-
-      {rejecting && (
-        <RejectModal
-          request={rejecting}
-          onClose={() => setRejecting(null)}
-          onConfirm={() => {
-            resolve(rejecting.id);
-            setRejecting(null);
-          }}
+      {reviewing && (
+        <ReviewModal
+          request={reviewing}
+          onClose={() => setReviewing(null)}
+          onResolved={(id) => advanceReview(id)}
         />
       )}
     </div>
@@ -256,57 +217,58 @@ function SortableHeader({
   );
 }
 
-/* ───────────────── View ID — fullscreen overlay ───────────────── */
+/* ───────────────── Review — single popup housing all actions ───────────────── */
 
-function IdFullscreen({ request, onClose }: { request: NameChangeRequest; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+type ReviewMode = "main" | "proof" | "reject";
 
-  return (
-    <div className="ncr-fs-overlay" onClick={onClose}>
-      <div className="ncr-fs-bar">
-        <div className="ncr-fs-title">
-          {request.idType} · {request.currentName}
-        </div>
-        <button className="ncr-fs-close" onClick={onClose} aria-label="Close">
-          <SmallXIcon />
-        </button>
-      </div>
-      <div className="ncr-fs-stage" onClick={(e) => e.stopPropagation()}>
-        <ZoomableIdCard request={request} />
-      </div>
-      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
-    </div>
-  );
-}
-
-/* ───────────────── Approve — split confirmation modal ───────────────── */
-
-function ApproveModal({
+function ReviewModal({
   request,
   onClose,
-  onConfirm,
+  onResolved,
 }: {
   request: NameChangeRequest;
   onClose: () => void;
-  onConfirm: (finalName: string) => void;
+  onResolved: (id: string) => void;
 }) {
+  const [mode, setMode] = useState<ReviewMode>("main");
   const [requestedName, setRequestedName] = useState(request.requestedName);
+  const [proofMessage, setProofMessage] = useState(
+    "We couldn't verify your request from the submitted ID. Please upload a clearer photo of a government-issued ID showing your name.",
+  );
+  const [reason, setReason] = useState("");
   const valid = requestedName.trim().length > 1;
+
+  // Reset per-request state when the review target changes (e.g. after cycling to the next one).
+  useEffect(() => {
+    setMode("main");
+    setRequestedName(request.requestedName);
+    setProofMessage(
+      "We couldn't verify your request from the submitted ID. Please upload a clearer photo of a government-issued ID showing your name.",
+    );
+    setReason("");
+  }, [request.id, request.requestedName]);
+
+  const titles: Record<ReviewMode, { title: string; sub: string }> = {
+    main: {
+      title: "Review Name Change",
+      sub: "Verify the submitted ID, then approve, request more proof, or reject this request.",
+    },
+    proof: {
+      title: "Request Additional Proof",
+      sub: `Ask ${request.currentName} for more documentation before deciding on this request.`,
+    },
+    reject: {
+      title: "Reject Name Change",
+      sub: `Reject the request to change "${request.currentName}" to "${request.requestedName}".`,
+    },
+  };
 
   return (
     <div className="cl-modal-overlay" onClick={onClose}>
       <div className="cl-modal ncr-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Approve Name Change</h3>
-          <p className="cl-modal-sub">
-            Verify the submitted ID, then confirm the name that will be saved to the user's account.
-          </p>
+          <h3 className="cl-modal-title">{titles[mode].title}</h3>
+          <p className="cl-modal-sub">{titles[mode].sub}</p>
         </div>
 
         <div className="ncr-modal-split">
@@ -316,130 +278,94 @@ function ApproveModal({
             <ZoomableIdCard request={request} />
           </div>
 
-          {/* Right — name fields */}
+          {/* Right — mode-specific content */}
           <div className="ncr-form-pane">
-            <div className="form-group" style={{ marginBottom: 22, maxWidth: "none" }}>
-              <label className="form-label">Current name</label>
-              <input className="form-input ncr-readonly" value={request.currentName} readOnly tabIndex={-1} />
-              <p className="form-help">The name currently on the account. This can't be edited.</p>
-            </div>
+            {mode === "main" && (
+              <>
+                <div className="form-group" style={{ marginBottom: 22, maxWidth: "none" }}>
+                  <label className="form-label">Current name</label>
+                  <input className="form-input ncr-readonly" value={request.currentName} readOnly tabIndex={-1} />
+                  <p className="form-help">The name currently on the account. This can't be edited.</p>
+                </div>
 
-            <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
-              <label className="form-label">
-                Requested name <span className="req">*</span>
-              </label>
-              <input
-                autoFocus
-                className="form-input"
-                value={requestedName}
-                onChange={(e) => setRequestedName(e.target.value)}
-              />
-              <p className="form-help">Edit if the ID spelling differs from the request before approving.</p>
-            </div>
+                <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
+                  <label className="form-label">
+                    Requested name <span className="req">*</span>
+                  </label>
+                  <input
+                    autoFocus
+                    className="form-input"
+                    value={requestedName}
+                    onChange={(e) => setRequestedName(e.target.value)}
+                  />
+                  <p className="form-help">Edit if the ID spelling differs from the request before approving.</p>
+                </div>
+              </>
+            )}
+
+            {mode === "proof" && (
+              <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
+                <label className="form-label">Message to user</label>
+                <textarea
+                  autoFocus
+                  className="rh-feedback"
+                  rows={6}
+                  value={proofMessage}
+                  onChange={(e) => setProofMessage(e.target.value)}
+                />
+              </div>
+            )}
+
+            {mode === "reject" && (
+              <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
+                <label className="form-label">Reason (optional)</label>
+                <textarea
+                  autoFocus
+                  className="rh-feedback"
+                  rows={6}
+                  placeholder="Add an optional note explaining the rejection…"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
         <div className="cl-modal-foot ncr-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-publish ncr-approve-btn"
-            disabled={!valid}
-            onClick={() => valid && onConfirm(requestedName.trim())}
-          >
-            <CheckBoldIcon />
-            Approve &amp; Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ───────────────── Request Proof — compact modal ───────────────── */
-
-function RequestProofModal({
-  request,
-  onClose,
-  onConfirm,
-}: {
-  request: NameChangeRequest;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const [message, setMessage] = useState(
-    "We couldn't verify your request from the submitted ID. Please upload a clearer photo of a government-issued ID showing your name.",
-  );
-  return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal ncr-small-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Request Additional Proof</h3>
-          <p className="cl-modal-sub">
-            Ask {request.currentName} for more documentation before deciding on this request.
-          </p>
-        </div>
-        <div className="ncr-small-body">
-          <label className="form-label">Message to user</label>
-          <textarea
-            className="rh-feedback"
-            rows={4}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-        </div>
-        <div className="cl-modal-foot ncr-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-publish" onClick={onConfirm}>
-            Send Request
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ───────────────── Reject — compact confirm modal ───────────────── */
-
-function RejectModal({
-  request,
-  onClose,
-  onConfirm,
-}: {
-  request: NameChangeRequest;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const [reason, setReason] = useState("");
-  return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal ncr-small-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Reject Name Change</h3>
-          <p className="cl-modal-sub">
-            Reject the request to change “{request.currentName}” to “{request.requestedName}”.
-          </p>
-        </div>
-        <div className="ncr-small-body">
-          <label className="form-label">Reason (optional)</label>
-          <textarea
-            className="rh-feedback"
-            rows={3}
-            placeholder="Add an optional note explaining the rejection…"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
-        <div className="cl-modal-foot ncr-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-publish ncr-reject-btn" onClick={onConfirm}>
-            Reject Request
-          </button>
+          {mode === "main" ? (
+            <>
+              <button className="btn-save-draft" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="ncr-btn ncr-btn--reject" onClick={() => setMode("reject")}>
+                Reject
+              </button>
+              <button className="ncr-btn ncr-btn--proof" onClick={() => setMode("proof")}>
+                Request Proof
+              </button>
+              <button
+                className="btn-publish ncr-approve-btn"
+                disabled={!valid}
+                onClick={() => valid && onResolved(request.id)}
+              >
+                <CheckBoldIcon />
+                Approve &amp; Save
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-save-draft" onClick={() => setMode("main")}>
+                Back
+              </button>
+              <button
+                className={mode === "reject" ? "btn-publish ncr-reject-btn" : "btn-publish"}
+                onClick={() => onResolved(request.id)}
+              >
+                {mode === "reject" ? "Reject Request" : "Send Request"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -78,6 +78,20 @@ export function TransferSubscriptionPage() {
     return transferUsers.filter(
       (u) =>
         u.id !== excludeId &&
+        !u.company &&
+        (u.name.toLowerCase().includes(needle) ||
+          u.email.toLowerCase().includes(needle) ||
+          u.id.toLowerCase().includes(needle))
+    );
+  }
+
+  function matchesOnlyB2B(q: string, excludeId: string | null) {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return false;
+    return transferUsers.some(
+      (u) =>
+        u.id !== excludeId &&
+        !!u.company &&
         (u.name.toLowerCase().includes(needle) ||
           u.email.toLowerCase().includes(needle) ||
           u.id.toLowerCase().includes(needle))
@@ -86,6 +100,8 @@ export function TransferSubscriptionPage() {
 
   const resSrc = filter(qSrc, dstId);
   const resDst = filter(qDst, srcId);
+  const srcOnlyB2B = resSrc.length === 0 && matchesOnlyB2B(qSrc, dstId);
+  const dstOnlyB2B = resDst.length === 0 && matchesOnlyB2B(qDst, srcId);
 
   function canContinue() {
     if (step === 1) return both && !noSubToMove;
@@ -287,7 +303,11 @@ export function TransferSubscriptionPage() {
                               </div>
                             )}
                             {qSrc.trim() && resSrc.length === 0 && (
-                              <div className="mg-noresults">No accounts match "{qSrc}"</div>
+                              <div className="mg-noresults">
+                                {srcOnlyB2B
+                                  ? `"${qSrc}" is a B2B account — B2B accounts aren't eligible for subscription transfer`
+                                  : `No accounts match "${qSrc}"`}
+                              </div>
                             )}
                           </>
                         ) : (
@@ -342,7 +362,11 @@ export function TransferSubscriptionPage() {
                               </div>
                             )}
                             {qDst.trim() && resDst.length === 0 && (
-                              <div className="mg-noresults">No accounts match "{qDst}"</div>
+                              <div className="mg-noresults">
+                                {dstOnlyB2B
+                                  ? `"${qDst}" is a B2B account — B2B accounts aren't eligible for subscription transfer`
+                                  : `No accounts match "${qDst}"`}
+                              </div>
                             )}
                           </>
                         ) : (
