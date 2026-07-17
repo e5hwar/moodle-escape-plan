@@ -55,15 +55,16 @@ const DeactivateIcon = () => (
   </svg>
 );
 
+/* 14px square-cap check / cross (Figma 192:385 / 192:388). */
 const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 12.5l5 5L20 6.5" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.17" strokeLinecap="square">
+    <path d="M11.42 4.3 6.05 9.67 3.17 6.78" />
   </svg>
 );
 
 const CrossIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 6l12 12M18 6L6 18" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.17" strokeLinecap="square">
+    <path d="M9.89 4.11 4.11 9.89M9.89 9.89 4.11 4.11" />
   </svg>
 );
 
@@ -129,6 +130,18 @@ export function SpotlightsPage() {
     const c = { approved: 0, pending: 0, rejected: 0, deactivated: 0 };
     list.forEach((s) => (c[s.status] += 1));
     return c;
+  }, [list]);
+
+  // Only rows still in the Home-Screen queue (active / pending) get a position
+  // number; rejected, ended, and deactivated rows are out of the queue.
+  const positions = useMemo(() => {
+    const m = new Map<string, number>();
+    let p = 0;
+    list.forEach((s) => {
+      const ds = deriveStatus(s);
+      if (ds === "active" || ds === "pending") m.set(s.id, ++p);
+    });
+    return m;
   }, [list]);
 
   const filtered = useMemo(() => {
@@ -324,7 +337,7 @@ export function SpotlightsPage() {
                 <col style={{ width: 140 }} />
                 <col style={{ width: 170 }} />
                 <col style={{ width: 150 }} />
-                <col style={{ width: 52 }} />
+                <col style={{ width: 128 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -351,7 +364,7 @@ export function SpotlightsPage() {
                       <SpotlightRow
                         key={s.id}
                         spotlight={s}
-                        position={idx + 1}
+                        position={positions.get(s.id) ?? null}
                         canReorder={canReorder}
                         isDragging={dragIndex === idx}
                         isOver={overIndex === idx && dragIndex !== idx}
@@ -504,7 +517,8 @@ function SpotlightRow({
   onDragEndRow,
 }: {
   spotlight: Spotlight;
-  position: number;
+  /** Queue position — null for rows out of the queue (rejected/ended/deactivated). */
+  position: number | null;
   canReorder: boolean;
   isDragging: boolean;
   isOver: boolean;
@@ -522,26 +536,29 @@ function SpotlightRow({
   const isExpired = days < 0;
   const ds = deriveStatus(s);
   const isPending = s.status === "pending";
+  // Out-of-queue rows (no position) can't be dragged, but still accept drops so
+  // queue rows can be moved past them.
+  const canDrag = canReorder && position !== null;
 
   return (
     <tr
       className={`sp-tr sp-tr--${s.status} ${isDragging ? "is-dragging" : ""} ${
         isOver ? "is-drop-target" : ""
       }`}
-      draggable={canReorder}
-      onDragStart={canReorder ? onDragStart : undefined}
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
       onDragEnter={canReorder ? onDragEnterRow : undefined}
       onDragOver={canReorder ? (e) => e.preventDefault() : undefined}
       onDrop={canReorder ? onDropRow : undefined}
-      onDragEnd={canReorder ? onDragEndRow : undefined}
+      onDragEnd={canDrag ? onDragEndRow : undefined}
     >
       <td className="sp-td-pos">
-        {canReorder && (
+        {canDrag && (
           <span className="sp-drag-handle" aria-hidden title="Drag to reorder">
             <GripIcon />
           </span>
         )}
-        <span className="sp-pos-num">{position}</span>
+        {position !== null && <span className="sp-pos-num">{position}</span>}
       </td>
       <td>
         <SpotlightPreview spotlight={s} />
@@ -576,20 +593,10 @@ function SpotlightRow({
         {isExpired ? <span className="sp-enddate-sub">expired</span> : null}
       </td>
       <td className="sp-td-actions">
-        <button
-          className="sp-kebab sp-kebab--lone"
-          aria-label="More actions"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenMenu(e.currentTarget.getBoundingClientRect());
-          }}
-        >
-          <MoreIcon />
-        </button>
-        {isPending && (
-          <div className="sp-action-bar">
+        {isPending ? (
+          <div className="sp-decide">
             <button
-              className="sp-action-btn sp-action-btn--approve"
+              className="sp-decide-btn sp-decide-btn--approve"
               onClick={(e) => {
                 e.stopPropagation();
                 onApprove();
@@ -599,26 +606,27 @@ function SpotlightRow({
               Approve
             </button>
             <button
-              className="sp-action-btn sp-action-btn--decline"
+              className="sp-decide-btn sp-decide-btn--reject"
               onClick={(e) => {
                 e.stopPropagation();
                 onDecline();
               }}
             >
               <CrossIcon />
-              Decline
-            </button>
-            <button
-              className="sp-action-btn sp-action-btn--more"
-              aria-label="More actions"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenMenu(e.currentTarget.getBoundingClientRect());
-              }}
-            >
-              <MoreIcon />
+              Reject
             </button>
           </div>
+        ) : (
+          <button
+            className="sp-kebab sp-kebab--lone"
+            aria-label="More actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMenu(e.currentTarget.getBoundingClientRect());
+            }}
+          >
+            <MoreIcon />
+          </button>
         )}
       </td>
     </tr>

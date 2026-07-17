@@ -6,14 +6,7 @@ import {
   type Submission,
 } from "../data/proctoring";
 import { ProctoringDetailModal } from "./ProctoringDetailModal";
-import { SearchIcon, ChevronDownIcon, CheckIcon } from "./icons";
-
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-    <circle cx="12" cy="12" r="2.6" />
-  </svg>
-);
+import { SearchIcon, ChevronDownIcon, CheckIcon, RowArrowIcon } from "./icons";
 
 const FilterIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -261,11 +254,11 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
           <div className="tasks-scroll pr-scroll">
             <div className="pr-table">
               <div className="pr-thead">
-                <div className="pr-th pr-col-candidate">CANDIDATE</div>
-                <div className="pr-th pr-col-exam">EXAM</div>
-                <div className="pr-th pr-col-grade">GRADE</div>
-                <div className="pr-th pr-col-date">SUBMITTED ON</div>
-                <div className="pr-th pr-col-review">REVIEW</div>
+                <div className="pr-th pr-col-candidate">Candidate</div>
+                <div className="pr-th pr-col-exam">Exam</div>
+                <div className="pr-th pr-col-grade">Grade</div>
+                <div className="pr-th pr-col-date">Submitted On</div>
+                <div className="pr-th pr-col-review" aria-hidden />
               </div>
               <div className="pr-tbody">
                 {filtered.length === 0 ? (
@@ -303,14 +296,14 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                       </div>
                       <div className="pr-col-review">
                         <button
-                          className="pr-view-btn"
+                          className="row-arrow"
+                          aria-label="Review submission"
                           onClick={(e) => {
                             e.stopPropagation();
                             openSubmission(s.id);
                           }}
                         >
-                          <EyeIcon />
-                          <span>View</span>
+                          <RowArrowIcon />
                         </button>
                       </div>
                     </div>

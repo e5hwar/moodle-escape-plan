@@ -152,6 +152,13 @@ export const ChevronRightIcon = () => (
   </svg>
 );
 
+/* Row-end arrow (Figma 190:327) — the open-row affordance on large-table rows. */
+export const RowArrowIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.67" strokeLinecap="square">
+    <path d="M7.92 14.58 12.5 10 7.92 5.42" />
+  </svg>
+);
+
 export const CalendarIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="5" width="18" height="16" rx="2.5" />

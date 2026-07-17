@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   buildUserProfile,
+  PROFILE_TODAY,
   ZIP_LOCATIONS,
   type AwardRecord,
+  type EpaCardOrder,
   type MeritTier,
   type NateDetail,
   type Purchase,
@@ -101,7 +103,17 @@ h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}</style></head>
   win.document.close();
 }
 
-type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | null;
+type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | "cancel-epa" | null;
+
+// A physical-card order can be canceled while it's recent (within 30 days of
+// ordering) and hasn't shipped yet; canceled/refunded orders are already final.
+const EPA_CANCEL_WINDOW_DAYS = 30;
+function isEpaOrderCancelable(order: EpaCardOrder): boolean {
+  if (["Shipped", "Delivered", "Canceled", "Refunded"].includes(order.status)) return false;
+  const ageDays =
+    (PROFILE_TODAY.getTime() - new Date(`${order.orderedOn}T00:00:00`).getTime()) / 86400000;
+  return ageDays <= EPA_CANCEL_WINDOW_DAYS;
+}
 
 export function UserProfilePage({ user: seedUser }: { user: User }) {
   const base = useMemo(() => buildUserProfile(seedUser), [seedUser]);
@@ -116,10 +128,16 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   });
   const [nate, setNate] = useState<NateDetail | undefined>(base.nate);
   const [subCanceled, setSubCanceled] = useState(false);
+  const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
 
   const user: User = { ...seedUser, ...identity };
-  const p = { ...base, nate };
+  const epaCard: EpaCardOrder | undefined =
+    epaCanceled && base.epaCard ? { ...base.epaCard, status: "Canceled" } : base.epaCard;
+  const p = { ...base, nate, epaCard };
+
+  const canCancelEpa = !epaCanceled && !!base.epaCard && isEpaOrderCancelable(base.epaCard);
+  const epaPurchase = base.purchases.find((pu) => pu.kind === "EPA Card");
 
   // Cancellation applies only to subscriptions we bill directly (Stripe) or
   // that expose a cancel API (Google); Apple subs are managed by Apple.
@@ -322,10 +340,27 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
         </Card>
 
         {/* Purchases / bills */}
-        <PurchasesCard purchases={p.purchases} />
+        <PurchasesCard
+          purchases={p.purchases}
+          epaCancelable={canCancelEpa}
+          epaCanceled={epaCanceled}
+          onCancelEpa={() => setModal("cancel-epa")}
+        />
 
         {/* EPA Card */}
-        <Card title="EPA Card Order">
+        <Card
+          title="EPA Card Order"
+          action={
+            canCancelEpa && (
+              <button
+                className="prof-btn prof-btn--sm prof-btn--danger"
+                onClick={() => setModal("cancel-epa")}
+              >
+                Cancel Order
+              </button>
+            )
+          }
+        >
           {p.epaCard ? (
             <div className="prof-fields">
               <Field label="Card" value={p.epaCard.certification} />
@@ -390,6 +425,17 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onClose={() => setModal(null)}
           onSave={(v) => {
             setNate(v);
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "cancel-epa" && base.epaCard && (
+        <CancelEpaOrderModal
+          order={base.epaCard}
+          purchase={epaPurchase}
+          onClose={() => setModal(null)}
+          onConfirm={() => {
+            setEpaCanceled(true);
             setModal(null);
           }}
         />
@@ -658,6 +704,44 @@ function EditNateModal({
   );
 }
 
+function CancelEpaOrderModal({
+  order,
+  purchase,
+  onClose,
+  onConfirm,
+}: {
+  order: EpaCardOrder;
+  purchase?: Purchase;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      title="Cancel EPA Card Order?"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="prof-btn" onClick={onClose}>Keep Order</button>
+          <button className="prof-btn prof-btn--danger" onClick={onConfirm}>
+            Cancel Order
+          </button>
+        </>
+      }
+    >
+      <p className="pm-text">
+        This cancels the <strong>{order.certification} Physical Card</strong> ordered on{" "}
+        <strong>{formatDate(order.orderedOn)}</strong>. The card will not be produced or shipped.
+      </p>
+      {purchase && (
+        <p className="pm-text">
+          The <strong>{money(purchase.amount)}</strong> charge ({purchase.receiptId}) is refunded to
+          the original {purchase.platform} payment method.
+        </p>
+      )}
+    </Modal>
+  );
+}
+
 function CancelSubscriptionModal({
   user,
   platform,
@@ -717,7 +801,17 @@ function isRefundable(pu: Purchase): boolean {
   );
 }
 
-function PurchasesCard({ purchases }: { purchases: Purchase[] }) {
+function PurchasesCard({
+  purchases,
+  epaCancelable,
+  epaCanceled,
+  onCancelEpa,
+}: {
+  purchases: Purchase[];
+  epaCancelable: boolean;
+  epaCanceled: boolean;
+  onCancelEpa: () => void;
+}) {
   const [active, setActive] = useState<PurchaseKind>("Subscription");
   // Track refunds applied in this session. Keyed by the purchase's index in the
   // original array — receiptIds aren't unique across purchases, so they can't key this.
@@ -775,7 +869,7 @@ function PurchasesCard({ purchases }: { purchases: Purchase[] }) {
               <th>Platform</th>
               <th>Receipt</th>
               <th className="prof-table-num">Amount</th>
-              {(active === "Certification" || active === "Quiz Attempt") && (
+              {(active === "Certification" || active === "Quiz Attempt" || active === "EPA Card") && (
                 <th className="prof-table-actions">Actions</th>
               )}
             </tr>
@@ -817,6 +911,26 @@ function PurchasesCard({ purchases }: { purchases: Purchase[] }) {
                         onClick={() => refund(pu)}
                       >
                         Refund
+                      </button>
+                    )}
+                  </td>
+                )}
+                {active === "EPA Card" && (
+                  <td className="prof-table-actions">
+                    {epaCanceled ? (
+                      <span className="prof-status prof-status--muted">Canceled · Refunded</span>
+                    ) : (
+                      <button
+                        className="prof-btn prof-btn--sm"
+                        disabled={!epaCancelable}
+                        title={
+                          epaCancelable
+                            ? "Cancel this order and refund the charge"
+                            : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`
+                        }
+                        onClick={onCancelEpa}
+                      >
+                        Cancel Order
                       </button>
                     )}
                   </td>

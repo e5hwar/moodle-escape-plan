@@ -131,11 +131,11 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
           <div className="tasks-scroll pr-scroll">
             <div className="mid-table">
               <div className="mid-thead">
-                <div className="mid-th mid-col-user">USER</div>
-                <div className="mid-th mid-col-phone">PHONE</div>
+                <div className="mid-th mid-col-user">User</div>
+                <div className="mid-th mid-col-phone">Phone</div>
                 <div className="mid-th mid-col-id">ID</div>
-                <div className="mid-th mid-col-status">STATUS</div>
-                <div className="mid-th mid-col-actions">ACTIONS</div>
+                <div className="mid-th mid-col-status">Status</div>
+                <div className="mid-th mid-col-actions" aria-hidden />
               </div>
               <div className="mid-tbody">
                 {filtered.length === 0 ? (

@@ -114,6 +114,8 @@ function hash(s: string): number {
 const pick = <T,>(arr: T[], n: number): T => arr[n % arr.length];
 
 const TODAY = new Date("2026-06-17");
+/** Reference "today" for the generated data — recency checks must use this, not the wall clock. */
+export const PROFILE_TODAY = TODAY;
 function daysAgo(n: number): string {
   const d = new Date(TODAY);
   d.setDate(d.getDate() - n);
