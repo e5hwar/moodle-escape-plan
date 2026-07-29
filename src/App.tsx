@@ -8,7 +8,7 @@ import { AttemptsPage } from "./components/AttemptsPage";
 import { AttemptViewerPage } from "./components/AttemptViewerPage";
 import { type Attempt } from "./data/attempts";
 import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
-import { type Task } from "./data/tasks";
+import { tasks, type Task } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard } from "./components/NewCertificationWizard";
@@ -201,8 +201,22 @@ export default function App() {
   const loginAsCompany = params.get("loginAs");
   const attemptsUid = params.get("attemptsUid");
   const attemptsTaskId = params.get("attemptsTaskId");
+  const editTaskId = params.get("editTask");
   if (attemptsUid && attemptsTaskId) {
     return <StandaloneAttemptsPage uid={attemptsUid} taskId={attemptsTaskId} />;
+  }
+  // Task editor in its own tab — opened from the Hands-On review screen.
+  if (editTaskId) {
+    const t = tasks.find((x) => x.id === editTaskId);
+    return t ? (
+      <NewTaskWizard
+        taskType={taskTypeKey(t.type)}
+        editingTask={t}
+        onClose={() => window.close()}
+      />
+    ) : (
+      <StandaloneNotFound id={editTaskId} />
+    );
   }
   if (profileId) {
     const u = allUsers.find((x) => x.id === profileId);

@@ -213,23 +213,19 @@ export const ArrowDownIcon = () => (
   </svg>
 );
 
+/* edit-off — marks a read-only review rail (Figma 298:1886). */
+export const EditOffIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 5.8l3.2 3.2M4.5 19.5H8l9.6-9.6-3.2-3.2-9.9 9.9z" />
+    <path d="M3 3l18 18" />
+  </svg>
+);
+
 /* ⌘ — the command keycap on the primary CTA (Figma 267:2013). Drawn rather
    than typed so it doesn't depend on the font carrying U+2318. */
 export const CommandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
-  </svg>
-);
-
-export const ArrowLeftIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M11 6l-6 6 6 6" />
-  </svg>
-);
-
-export const ArrowRightIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 );
 

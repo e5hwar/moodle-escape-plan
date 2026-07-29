@@ -187,12 +187,15 @@ export function ReviewHandsOnPage() {
   // Clicking a row opens the review console with the table's current
   // filtered+sorted list as the queue. Reviews submitted in the console come
   // back on exit, and reviewed submissions leave the pending list.
-  const open = openId ? sorted.find((s) => s.id === openId) : null;
-  if (open) {
+  // The console stays mounted for as long as a row is open — even when a filter
+  // edited from its queue popover drops that submission out of `sorted`. It keeps
+  // showing what's being reviewed and moves the queue highlight instead of
+  // bouncing the reviewer back to the table.
+  if (openId) {
     return (
       <ReviewConsole
         queue={sorted}
-        initialId={open.id}
+        initialId={openId}
         queueFilters={queueFilters}
         sort={sort}
         onSort={(key) => toggleSort(key as SortKey)}

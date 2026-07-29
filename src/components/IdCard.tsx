@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { idPhotoUrl, type NameChangeRequest } from "../data/nameChangeRequests";
 
 function formatDate(iso: string): string {
@@ -122,64 +122,209 @@ function FieldValue({
   );
 }
 
-const ZoomInIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3M11 8v6M8 11h6" />
-  </svg>
-);
-const ZoomOutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3M8 11h6" />
-  </svg>
-);
-const ResetIcon = () => (
+const RotateIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-    <path d="M3 3v5h5" />
+    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+    <path d="M21 3v5h-5" />
   </svg>
 );
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
-const STEP = 0.25;
+const CloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
 
-/** ID card with +/- zoom controls. Scrolls to pan when zoomed in. */
+/** Magnifier strength and the size of the panel the magnified region is drawn into. */
+const ZOOM = 2.5;
+const PANEL_W = 400;
+const PANEL_H = 300;
+const LENS_W = PANEL_W / ZOOM;
+const LENS_H = PANEL_H / ZOOM;
+
+/** Rotating a landscape card to portrait needs it scaled down to stay inside the
+ *  stage box — the box keeps its unrotated size because transforms don't reflow. */
+function fitScale(rotation: number, box: { w: number; h: number }): number {
+  if (rotation % 180 === 0 || box.w === 0) return 1;
+  return box.h / box.w;
+}
+
+/**
+ * ID card with hover-to-magnify: a lens tracks the pointer and a panel beside the
+ * card renders that region enlarged. Click (or the caption button) opens full view.
+ */
 export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
-  const [zoom, setZoom] = useState(1);
-  const clamp = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+  const [rotation, setRotation] = useState(0);
+  const [fullView, setFullView] = useState(false);
+  const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // The stage keeps its natural (unrotated) size, so one measurement covers both
+  // the lens clamp and the rotate fit.
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBox({ w: r.width, h: r.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    // Keep the lens fully inside the card — the panel never shows dead space.
+    const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), Math.max(0, max));
+    setLens({
+      x: clamp(e.clientX - r.left - LENS_W / 2, r.width - LENS_W),
+      y: clamp(e.clientY - r.top - LENS_H / 2, r.height - LENS_H),
+    });
+  }
+
+  const scale = fitScale(rotation, box);
+  const cardStyle = { transform: `rotate(${rotation}deg) scale(${scale})` };
 
   return (
-    <div className="idzoom">
-      {/* Width-based zoom (not transform) so the viewport can scroll to pan. */}
-      <div className="idzoom-viewport">
-        <div className="idzoom-scale" style={{ width: `${zoom * 100}%` }}>
-          <IdCard request={request} />
+    <div className="idhz">
+      <div className="idhz-frame">
+        <div
+          ref={stageRef}
+          className="idhz-stage"
+          onMouseMove={onMove}
+          onMouseLeave={() => setLens(null)}
+          onClick={() => setFullView(true)}
+          role="button"
+          tabIndex={0}
+          aria-label="Open ID in full view"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFullView(true);
+            }
+          }}
+        >
+          <div className="idhz-card" style={cardStyle}>
+            <IdCard request={request} />
+          </div>
+          {lens && (
+            <span
+              className="idhz-lens"
+              style={{ left: lens.x, top: lens.y, width: LENS_W, height: LENS_H }}
+            />
+          )}
+        </div>
+
+        {lens && (
+          <div className="idhz-panel" style={{ width: PANEL_W, height: PANEL_H }}>
+            <div
+              className="idhz-panel-inner"
+              style={{
+                width: box.w,
+                height: box.h,
+                transform: `scale(${ZOOM}) translate(${-lens.x}px, ${-lens.y}px)`,
+              }}
+            >
+              <div className="idhz-card" style={cardStyle}>
+                <IdCard request={request} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="idhz-tools">
+        <button className="idhz-full" onClick={() => setFullView(true)}>
+          Click to see full view
+        </button>
+        <button
+          className="idhz-tool"
+          onClick={() => setRotation((r) => (r + 90) % 360)}
+          aria-label="Rotate ID"
+        >
+          <RotateIcon />
+          Rotate
+        </button>
+      </div>
+
+      {fullView && (
+        <IdFullView request={request} rotation={rotation} onClose={() => setFullView(false)} />
+      )}
+    </div>
+  );
+}
+
+/** Full-view overlay — reuses the shared .ncr-fs-* shell used by Proctoring. */
+function IdFullView({
+  request,
+  rotation: initial,
+  onClose,
+}: {
+  request: NameChangeRequest;
+  rotation: number;
+  onClose: () => void;
+}) {
+  const [rotation, setRotation] = useState(initial);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBox({ w: r.width, h: r.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div className="ncr-fs-overlay" onClick={onClose}>
+      <div className="ncr-fs-bar">
+        <div className="ncr-fs-title">
+          {request.idType} — {request.currentName}
+        </div>
+        <div className="ncr-fs-actions">
+          <button
+            className="idhz-tool"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRotation((r) => (r + 90) % 360);
+            }}
+            aria-label="Rotate ID"
+          >
+            <RotateIcon />
+            Rotate
+          </button>
+          <button className="ncr-fs-close" onClick={onClose} aria-label="Close">
+            <CloseIcon />
+          </button>
         </div>
       </div>
-      <div className="idzoom-controls">
-        <button
-          className="idzoom-btn"
-          onClick={() => setZoom((z) => clamp(z - STEP))}
-          disabled={zoom <= MIN_ZOOM}
-          aria-label="Zoom out"
-        >
-          <ZoomOutIcon />
-        </button>
-        <span className="idzoom-level">{Math.round(zoom * 100)}%</span>
-        <button
-          className="idzoom-btn"
-          onClick={() => setZoom((z) => clamp(z + STEP))}
-          disabled={zoom >= MAX_ZOOM}
-          aria-label="Zoom in"
-        >
-          <ZoomInIcon />
-        </button>
-        <button className="idzoom-btn idzoom-btn--reset" onClick={() => setZoom(1)} disabled={zoom === 1} aria-label="Reset zoom">
-          <ResetIcon />
-        </button>
+      <div className="ncr-fs-stage" onClick={(e) => e.stopPropagation()}>
+        {/* Measured on the untransformed box — reading the rect off the rotated
+            card itself would feed the fit calculation its own output. */}
+        <div ref={stageRef} className="idhz-fs-box">
+          <div className="idhz-card" style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box)})` }}>
+            <IdCard request={request} />
+          </div>
+        </div>
       </div>
+      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
     </div>
   );
 }

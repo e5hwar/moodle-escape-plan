@@ -7,18 +7,16 @@ import {
 } from "../data/reviewSubmissions";
 import {
   ArrowDownIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
   ArrowUpIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CommandIcon,
   DownloadIcon,
+  EditOffIcon,
   EnterKeyIcon,
-  LockIcon,
   SortIcon,
 } from "./icons";
-import { PageBreak } from "./PageBreak";
+import { tasks } from "../data/tasks";
 import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
 
 /* ── Review console ─────────────────────────────────────────────────────────
@@ -38,13 +36,6 @@ type Draft = { score: number | null; feedback: string };
 type Reviewed = { score: number; feedback: string };
 
 const EMPTY_DRAFT: Draft = { score: null, feedback: "" };
-
-function formatDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 /** "22nd July 2025" — the queue table's submitted-on format (Figma 263:1926). */
 function longDate(iso: string): string {
@@ -75,13 +66,34 @@ const QUEUE_COLS: { cls: string; label: string; sortKey?: string }[] = [
   { cls: "date", label: "Submitted", sortKey: "submittedOn" },
 ];
 
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+const BASE = import.meta.env.BASE_URL;
+
+/** Standalone pages open in their own tab, matching the Users table's pattern. */
+function openInNewTab(query: string) {
+  window.open(`${BASE}?${query}`, "_blank", "noopener");
+}
+
+/** Save the media the reviewer is looking at. Fetching to a blob keeps the
+ *  filename we choose; if the host blocks that, fall back to opening it. */
+async function downloadMedia(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(String(res.status));
+    const href = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  } catch {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 const PlayGlyph = () => (
@@ -113,6 +125,9 @@ export function ReviewConsole({
 }) {
   const [currentId, setCurrentId] = useState(initialId);
   const [queueOpen, setQueueOpen] = useState(false);
+  /* The queue popover highlights a row before committing to it — arrows move the
+     highlight, Q/⏎ switches the submission being reviewed (Esc discards). */
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const queueWrapRef = useRef<HTMLDivElement>(null);
   const [viewAttempt, setViewAttempt] = useState<number | null>(null); // 0-based chip; null = current
   const [mediaIndex, setMediaIndex] = useState(0);
@@ -154,9 +169,21 @@ export function ReviewConsole({
    * without leaving a grade behind. */
   const toggleScore = (n: number) => setDraft({ score: draft.score === n ? null : n });
 
+  /* The task behind this submission, so its name can open the task editor. */
+  const taskRecord = tasks.find((t) => t.name === sub.taskName);
+
   const ownedByCompany = sub.createdBy !== "SkillCat";
   const isDone = !!submitted[sub.id];
   const reviewable = !isPast && !ownedByCompany && !isDone;
+
+  /* Which rail to show. A graded attempt (an older version, or one just
+     submitted) and company-created tasks are all read-only, per Figma
+     298:1049 / 298:1924 / 298:1973. */
+  const gradedReview = isPast ? pastReview : isDone ? submitted[sub.id] : null;
+  const railReadOnly = !reviewable;
+  const shownScore = railReadOnly ? gradedReview?.score ?? null : draft.score;
+  const shownFeedback = railReadOnly ? gradedReview?.feedback ?? "" : draft.feedback;
+  const shownPassed = shownScore != null && shownScore >= PASS_MIN;
 
   function showToast(msg: string) {
     clearTimeout(toastTimer.current);
@@ -182,18 +209,27 @@ export function ReviewConsole({
     return null;
   }
 
-  /* ── queue popover navigation (only while the panel is open) ── */
+  /* ── queue popover navigation ──
+     Arrows only move the highlight; the submission on screen changes when the
+     selection is committed with Q or ⏎ (Esc closes and discards it). */
   function moveQueue(d: number) {
     if (!queue.length) return;
-    const i = Math.max(0, queue.findIndex((x) => x.id === sub.id));
+    const from = highlightId ?? sub.id;
+    const i = Math.max(0, queue.findIndex((x) => x.id === from));
     const next = Math.min(queue.length - 1, Math.max(0, i + d));
-    if (next !== i) goto(queue[next].id);
+    setHighlightId(queue[next].id);
   }
 
+  function commitQueue() {
+    if (highlightId && highlightId !== sub.id) goto(highlightId);
+    setQueueOpen(false);
+  }
+
+  /* Clamped, not wrapping — the stage's nav buttons hide at each end. */
   function stepMedia(d: number) {
     const len = media.length;
     if (len < 2) return;
-    setMediaIndex(((mi + d) % len + len) % len);
+    setMediaIndex(Math.min(len - 1, Math.max(0, mi + d)));
   }
 
   function doSubmit() {
@@ -240,10 +276,8 @@ export function ReviewConsole({
        legend (Figma 263:1607): ↑↓ navigate, ⏎ selects, Esc closes, Q saves and
        closes. The score keys stay inert until it's dismissed. */
     if (queueOpen) {
-      if (e.key === "Escape" || e.key === "Enter" || e.key === "q" || e.key === "Q") {
-        setQueueOpen(false);
-        return;
-      }
+      if (e.key === "Escape") { setQueueOpen(false); return; }
+      if (e.key === "Enter" || e.key === "q" || e.key === "Q") { commitQueue(); return; }
       if (e.key === "ArrowDown") { e.preventDefault(); moveQueue(1); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); moveQueue(-1); return; }
       if (e.key >= "0" && e.key <= "9") return;
@@ -266,6 +300,24 @@ export function ReviewConsole({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  /* Opening the popover highlights whatever is on screen. */
+  useEffect(() => {
+    setHighlightId(queueOpen ? sub.id : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueOpen]);
+
+  /* Changing a filter (or sort) keeps the reviewer on this submission but moves
+     the highlight to the first row matching the new criteria — confirming is
+     what actually switches. */
+  const queueKey = queue.map((q) => q.id).join(",");
+  const seenQueueKey = useRef(queueKey);
+  useEffect(() => {
+    if (seenQueueKey.current === queueKey) return;
+    seenQueueKey.current = queueKey;
+    if (queueOpen) setHighlightId(queue[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueKey]);
+
   /* Click outside the queue popover closes it. */
   useEffect(() => {
     if (!queueOpen) return;
@@ -279,219 +331,123 @@ export function ReviewConsole({
   /* ── derived display bits ── */
   const submittedCount = Object.keys(submitted).length;
   const pendingCount = queue.length - submittedCount;
-  const nextId = nextUnsubmitted(submitted);
-  const nextSub = nextId ? queue.find((x) => x.id === nextId) : null;
-
-  const pastScores = Array.from({ length: attemptCount - 1 }, (_, i) => pastReviewOf(sub, attemptCount - 1 - i).score);
-  const attemptSummary = pastScores.length
-    ? `${pastScores.length} prior · best ${Math.max(...pastScores)}/10`
-    : "";
-
   const hasScore = draft.score != null;
-  const passed = hasScore && draft.score! >= PASS_MIN;
 
   return (
     <div className="main">
       <div className="workspace">
         <div className="rvc-root">
-          {/* ── header ── */}
+          {/* ── header (Figma 293:849) — breadcrumb over the task + submitter,
+                 with the attempt switcher on the right ── */}
           <div className="rvc-header">
-            <button className="rvc-back" onClick={() => onExit(submitted)} aria-label="Back to the table">
-              <ChevronLeftIcon />
-            </button>
-            <div>
-              <div className="wizard-brand-eyebrow">Reviewing</div>
-              <div className="rvc-title-row">
-                <span className="wizard-brand-name">Hands-On Task Submissions</span>
-                <span className="co-status-pill co-status-pill--accent">{pendingCount} pending</span>
-              </div>
-            </div>
-
-            <div className="rvc-flex" />
-
-            {/* ── queue: a collapsed popover docked to the header's right edge
-                   (trigger Figma 263:1579, panel 263:1587) ── */}
-            <div className="rvc-queue-wrap" ref={queueWrapRef}>
-              <button
-                className={`rvc-queue-btn ${queueOpen ? "is-open" : ""}`}
-                onClick={() => setQueueOpen((v) => !v)}
-                aria-expanded={queueOpen}
-              >
-                <span className="rvc-queue-btn-text">
-                  <span className="rvc-queue-btn-eyebrow">
-                    Next · {pendingCount} waiting
-                  </span>
-                  <span className="rvc-queue-btn-name">
-                    {nextSub ? nextSub.userName : "Nothing pending"}
-                  </span>
-                </span>
-                <span className="kbd-letter">Q</span>
-              </button>
-
-              {queueOpen && (
-                <div className="rvc-qpanel" role="dialog" aria-label="Review queue">
-                  <div className="rvc-qpanel-head">
-                    <span className="rvc-qcount">{pendingCount} Pending</span>
-                    <div className="rvc-qpanel-filters">
-                      <QueueFilters filters={queueFilters} />
-                    </div>
-                  </div>
-
-                  <div className="rvc-qhead">
-                    {QUEUE_COLS.map((c) => {
-                      const active = !!c.sortKey && sort?.key === c.sortKey;
-                      if (!c.sortKey || !onSort) {
-                        return <span key={c.cls} className={`rvc-qc rvc-qc--${c.cls}`}>{c.label}</span>;
-                      }
-                      return (
-                        <button
-                          key={c.cls}
-                          className={`rvc-qc rvc-qc--${c.cls} rvc-qc--sortable`}
-                          onClick={() => onSort(c.sortKey!)}
-                        >
-                          {c.label}
-                          <SortIcon active={active} dir={active ? sort?.dir : undefined} />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="rvc-qlist">
-                    {queue.map((q, i) => {
-                      const sel = q.id === sub.id;
-                      const done = !!submitted[q.id];
-                      return (
-                        <button
-                          key={q.id}
-                          className={`rvc-qrow ${sel ? "is-selected" : ""} ${done ? "is-done" : ""}`}
-                          onClick={() => goto(q.id)}
-                        >
-                          <span className="rvc-qc rvc-qc--idx">{i + 1}</span>
-                          <span className="rvc-qc rvc-qc--user">{q.userName}</span>
-                          <span className="rvc-qc rvc-qc--task">{q.taskName}</span>
-                          <span className="rvc-qc rvc-qc--att">{q.versions.length}</span>
-                          <span className="rvc-qc rvc-qc--date">
-                            {done ? `Reviewed · ${submitted[q.id].score}/10` : longDate(q.submittedOn)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {queue.length === 0 && (
-                      <div className="rvc-qempty">No submissions match these filters.</div>
-                    )}
-                  </div>
-
-                  <div className="rvc-qpanel-foot">
-                    <div className="rvc-qhints">
-                      <span className="rvc-qhint">
-                        <span className="rvc-qkeypair">
-                          <span className="rvc-qkey"><ArrowUpIcon /></span>
-                          <span className="rvc-qkey"><ArrowDownIcon /></span>
-                        </span>
-                        To navigate
-                      </span>
-                      <span className="rvc-qhint">
-                        <span className="rvc-qkey"><EnterKeyIcon /></span>
-                        To select
-                      </span>
-                      <span className="rvc-qhint">
-                        <span className="rvc-qkey rvc-qkey--text">Esc</span>
-                        To close
-                      </span>
-                    </div>
-                    <span className="rvc-qhint">
-                      <span className="rvc-qkey rvc-qkey--text">Q</span>
-                      Save &amp; update queue
-                    </span>
-                  </div>
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Home</span>
+                <ChevronRightIcon />
+                <span className="rvc-crumb">Operations</span>
+                <ChevronRightIcon />
+                <button
+                  className="rvc-crumb rvc-crumb--current"
+                  onClick={() => onExit(submitted)}
+                  title="Back to the submissions table"
+                >
+                  Review Hands-On Tasks
+                </button>
+              </nav>
+              <div className="rvc-pagehead-id">
+                <h1 className="tasks-title">
+                  Task:{" "}
+                  {taskRecord ? (
+                    <button
+                      className="rvc-headlink"
+                      onClick={() => openInNewTab(`editTask=${taskRecord.id}`)}
+                      title="Open this task's editor in a new tab"
+                    >
+                      {sub.taskName}
+                    </button>
+                  ) : (
+                    sub.taskName
+                  )}
+                </h1>
+                <div className="tasks-subtitle">
+                  <button
+                    className="rvc-headlink"
+                    onClick={() => openInNewTab(`profile=${sub.userId}`)}
+                    title="Open this user's profile in a new tab"
+                  >
+                    {sub.userName}
+                  </button>
+                  {" · "}
+                  {longDate(sub.submittedOn)}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── submission header ── */}
-          <div className="rvc-subheader">
-            <div className="rvc-subheader-id">
-              <div className="rvc-subtask">{sub.taskName}</div>
-              <div className="rvc-subwho">
-                <span className="rvc-avatar">{initialsOf(sub.userName)}</span>
-                <span className="rvc-subname">{sub.userName}</span>
-                <span className="rvc-subdot">·</span>
-                <span className="rvc-subago">submitted {sub.lastActivity.toLowerCase()}</span>
               </div>
             </div>
             <div className="rvc-flex" />
             {attemptCount > 1 && (
-              <div className="rvc-attempts">
-                <span className="page-break-label">Attempts</span>
-                {Array.from({ length: attemptCount }, (_, i) => {
-                  const isCur = i === attemptCount - 1;
-                  const active = i === attemptIdx;
-                  const score = isCur ? null : pastScores[i];
-                  const band = isCur ? "cur" : score != null && score >= PASS_MIN ? "pass" : "fail";
-                  return (
-                    <button
-                      key={i}
-                      className={`rvc-attempt rvc-attempt--${band} ${active ? "is-active" : ""}`}
-                      onClick={() => {
-                        setViewAttempt(isCur ? null : i);
-                        setMediaIndex(0);
-                      }}
-                    >
-                      {i + 1}
-                    </button>
-                  );
-                })}
-                <span className="rvc-attempts-sum">{attemptSummary}</span>
+              <div className="rvc-versions">
+                <span className="rvc-versions-label">Past submissions:</span>
+                <div className="rvc-version-chips">
+                  {/* `versions` is newest-first, and so is this row (V5 … V1).
+                      Chip v is v submissions back from the current one. */}
+                  {sub.versions.map((label, v) => {
+                    const active = attemptCount - 1 - v === attemptIdx;
+                    return (
+                      <button
+                        key={label}
+                        className={`rvc-version ${active ? "is-active" : ""}`}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setViewAttempt(v === 0 ? null : attemptCount - 1 - v);
+                          setMediaIndex(0);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* ── past attempt banner ── */}
-          {isPast && pastReview && (
-            <div className="rvc-past-banner">
-              <span className="rvc-past-banner-title">Viewing a past attempt</span>
-              <span className="rvc-past-banner-sub">
-                Attempt {attemptIdx + 1} of {attemptCount} — reviewed {formatDate(pastReview.reviewedOn)} by {pastReview.reviewer}
-              </span>
-              <div className="rvc-flex" />
-              <button className="btn-save-draft" onClick={() => { setViewAttempt(null); setMediaIndex(0); }}>
-                Back to current
-              </button>
-            </div>
-          )}
+          {/* Past attempts announce themselves through the version switcher and
+             the locked review card — no banner strip. */}
 
           {/* ── body ── */}
           <div className="rvc-body">
             {/* left — submission. 4:3 stage with the other media stacked to its
                 right (Figma-driven layout update). */}
             <div className="rvc-stagecol">
-              <div>
-                <PageBreak label="Project Description" />
-                <div className="rvc-desc">{view.description}</div>
-              </div>
+              <p className="rvc-desc">{view.description}</p>
 
-              <div className="rvc-media">
+              <div className={`rvc-media ${media.length > 1 ? "has-thumbs" : ""}`}>
               <div className="rvc-stage">
-                <img src={mediaUrl(main.seed, 1000, 640)} alt="" />
+                <img src={mediaUrl(main.seed, 1000, 750)} alt="" />
                 {main.kind === "video" && (
                   <>
                     <span className="rvc-stage-play"><PlayGlyph /></span>
-                    <span className="rvc-stage-dur">{main.duration}</span>
+                    <span className="rvc-stage-chip rvc-stage-dur">{main.duration}</span>
                   </>
                 )}
-                {media.length > 1 && (
-                  <>
-                    <button className="rvc-stage-nav rvc-stage-nav--prev" onClick={() => stepMedia(-1)} aria-label="Previous media">
-                      <ChevronLeftIcon />
-                    </button>
-                    <button className="rvc-stage-nav rvc-stage-nav--next" onClick={() => stepMedia(1)} aria-label="Next media">
-                      <ChevronRightIcon />
-                    </button>
-                  </>
+                {mi > 0 && (
+                  <button className="rvc-stage-nav rvc-stage-nav--prev" onClick={() => stepMedia(-1)} aria-label="Previous media">
+                    <ChevronLeftIcon />
+                  </button>
                 )}
-                <span className="rvc-stage-counter">{mi + 1} / {media.length}</span>
-                <button className="btn-save-draft rvc-stage-download">
+                {mi < media.length - 1 && (
+                  <button className="rvc-stage-nav rvc-stage-nav--next" onClick={() => stepMedia(1)} aria-label="Next media">
+                    <ChevronRightIcon />
+                  </button>
+                )}
+                <button
+                  className="rvc-stage-chip rvc-stage-download"
+                  onClick={() =>
+                    downloadMedia(
+                      mediaUrl(main.seed, 1600, 1200),
+                      `${slug(sub.userName)}-${slug(sub.taskName)}-${mi + 1}.jpg`,
+                    )
+                  }
+                >
                   <DownloadIcon /> Download
                 </button>
               </div>
@@ -504,7 +460,7 @@ export function ReviewConsole({
                         className={`rvc-thumb ${i === mi ? "is-active" : ""}`}
                         onClick={() => setMediaIndex(i)}
                       >
-                        <img src={mediaUrl(m.seed, 320, 240)} alt="" />
+                        <img src={mediaUrl(m.seed, 400, 300)} alt="" />
                         {m.kind === "video" && <span className="rvc-thumb-play"><PlayGlyph /></span>}
                       </button>
                     ))}
@@ -513,75 +469,59 @@ export function ReviewConsole({
               </div>
             </div>
 
-            {/* right — review rail */}
+            {/* right — review rail. Gradable attempts get the editable card;
+                everything else is read-only (Figma 298:1049 previously graded,
+                298:1924 company-created ungraded, 298:1973 company graded). */}
             <div className="rvc-rail">
-              {isPast && pastReview ? (
-                <>
-                  <div className="rvc-rail-past">
-                    <PageBreak
-                      label={`Review — Attempt ${attemptIdx + 1} of ${attemptCount}`}
-                      trailing={<span className="co-status-pill co-status-pill--grey">Locked</span>}
-                    />
-                    <div className="rvc-rail-past-score">
-                      <span className="rvc-rail-past-num">{pastReview.score}/10</span>
-                      <span
-                        className={`co-status-pill ${
-                          pastReview.score >= PASS_MIN ? "co-status-pill--green" : "co-status-pill--red"
-                        }`}
-                      >
-                        {pastReview.score >= PASS_MIN ? "PASS" : "BELOW PASS"}
-                      </span>
-                    </div>
-                    <blockquote className="rvc-rail-past-quote">
-                      <div className="rvc-rail-past-fb">“{pastReview.feedback}”</div>
-                      <div className="rvc-rail-past-by">— {pastReview.reviewer}, SkillCat Admin · {formatDate(pastReview.reviewedOn)}</div>
-                    </blockquote>
-                    <p className="form-help">
-                      Scores and feedback are locked once submitted. The learner saw this feedback with their result.
-                    </p>
-                  </div>
-                  <button className="btn-save-draft rvc-back-current" onClick={() => { setViewAttempt(null); setMediaIndex(0); }}>
-                    Back to current attempt
-                  </button>
-                </>
-              ) : ownedByCompany ? (
-                <div className="rvc-owner-note" role="note">
-                  <span className="rvc-owner-note-icon"><LockIcon /></span>
-                  <span>
-                    Reviewed by <strong>{sub.createdBy}</strong>. SkillCat does not review
-                    submissions for company-created tasks.
+              {railReadOnly && (
+                <div className="rvc-notice" role="note">
+                  <span className="rvc-notice-icon"><EditOffIcon /></span>
+                  <span className="rvc-notice-text">
+                    <span className="rvc-notice-title">Read-Only</span>
+                    <span className="rvc-notice-sub">
+                      {ownedByCompany
+                        ? `Grading done by ${sub.createdBy} for company-created Hands-On Tasks`
+                        : "Grades and feedback once submitted, cannot be edited"}
+                    </span>
                   </span>
                 </div>
-              ) : (
-                <>
-                  {/* Reviewer's checklist — Figma 263:1045 */}
-                  <div className="rvc-field">
-                    <div className="rvc-field-head">
-                      <span className="form-label">Reviewer’s Checklist</span>
-                      <p className="form-help">
-                        Hidden from the user. Only for the grader’s reference
-                      </p>
-                    </div>
-                    <div className="rvc-checklist">
-                      <ul>
-                        {sub.criteria.map((c) => (
-                          <li key={c.id}>{c.label}</li>
-                        ))}
-                      </ul>
-                      {sub.failCriteria.length > 0 && (
-                        <>
-                          <p className="rvc-checklist-fail">Fail if:</p>
-                          <ul>
-                            {sub.failCriteria.map((c) => (
-                              <li key={c.id}>{c.label}</li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-                    </div>
-                  </div>
+              )}
 
-                  {/* Score — Figma 263:1015 (ungraded) / 263:985 (passed) / 263:910 (rejected) */}
+              {/* Reviewer's checklist — grader-only, so it drops out once the
+                  attempt is read-only (Figma 263:1045) */}
+              {!railReadOnly && (
+                <div className="rvc-field">
+                  <div className="rvc-field-head">
+                    <span className="form-label">Reviewer’s Checklist</span>
+                    <p className="form-help">
+                      Hidden from the user. Only for the grader’s reference
+                    </p>
+                  </div>
+                  <div className="rvc-checklist">
+                    <ul>
+                      {sub.criteria.map((c) => (
+                        <li key={c.id}>{c.label}</li>
+                      ))}
+                    </ul>
+                    {sub.failCriteria.length > 0 && (
+                      <>
+                        <p className="rvc-checklist-fail">Fail if:</p>
+                        <ul>
+                          {sub.failCriteria.map((c) => (
+                            <li key={c.id}>{c.label}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Score + Feedback. A company task with no grade yet shows the
+                  notice on its own (298:1924). */}
+              {(!railReadOnly || gradedReview) && (
+                <>
+                  {/* Score — Figma 263:1015 / 263:985 / 263:910; read-only 298:1899 */}
                   <div className="rvc-field">
                     <div className="rvc-field-head">
                       <span className="form-label">
@@ -596,9 +536,10 @@ export function ReviewConsole({
                         <button
                           key={n}
                           className={`rvc-score ${
-                            draft.score === n ? (n >= PASS_MIN ? "is-pass" : "is-fail") : ""
+                            shownScore === n ? (n >= PASS_MIN ? "is-pass" : "is-fail") : ""
                           }`}
-                          aria-pressed={draft.score === n}
+                          aria-pressed={shownScore === n}
+                          disabled={railReadOnly}
                           onClick={() => toggleScore(n)}
                         >
                           {n}
@@ -606,16 +547,20 @@ export function ReviewConsole({
                       ))}
                     </div>
                     <div className="rvc-scale-legend">
-                      <span className={`rvc-legend-fail ${hasScore && !passed ? "is-on" : ""}`}>
+                      <span
+                        className={`rvc-legend-fail ${
+                          shownScore != null && !shownPassed ? "is-on" : ""
+                        }`}
+                      >
                         1-{PASS_MIN - 1}: Rejected
                       </span>
-                      <span className={`rvc-legend-pass ${hasScore && passed ? "is-on" : ""}`}>
+                      <span className={`rvc-legend-pass ${shownPassed ? "is-on" : ""}`}>
                         {PASS_MIN}-10: Pass
                       </span>
                     </div>
                   </div>
 
-                  {/* Feedback — Figma 263:865 */}
+                  {/* Feedback — Figma 263:865; read-only 298:1092 */}
                   <div className="rvc-field rvc-field--fb">
                     <div className="rvc-field-head">
                       <label className="form-label" htmlFor="rvc-feedback">Feedback</label>
@@ -626,8 +571,13 @@ export function ReviewConsole({
                     <textarea
                       id="rvc-feedback"
                       className="form-input rvc-feedback"
-                      placeholder="Provide clear feedback on the submission, including what was done well, what needs improvement, and any safety or technical corrections."
-                      value={draft.feedback}
+                      placeholder={
+                        railReadOnly
+                          ? undefined
+                          : "Provide clear feedback on the submission, including what was done well, what needs improvement, and any safety or technical corrections."
+                      }
+                      readOnly={railReadOnly}
+                      value={shownFeedback}
                       onChange={(e) => setDraft({ feedback: e.target.value })}
                     />
                   </div>
@@ -640,35 +590,111 @@ export function ReviewConsole({
           <div className="wizard-footer rvc-footer">
             <button className="wizard-cancel" onClick={doSkip}>Skip</button>
             <div className="rvc-flex" />
-            <div className="rvc-footer-hints">
-              {reviewable && (
-                <span className="rvc-qhint">
-                  <span className="rvc-qkeypair rvc-qkeypair--tight">
-                    <span className="rvc-qkey rvc-qkey--text">1</span>
-                    <span className="rvc-qkey rvc-qkey--text">2</span>
-                    <span className="rvc-qkey-ellipsis">…</span>
-                    <span className="rvc-qkey rvc-qkey--text">0</span>
-                  </span>
-                  Score
+            {/* View Queue — the queue popover now hangs off the footer
+                (button Figma 293:759, panel 263:1587) */}
+            <div className="rvc-queue-wrap" ref={queueWrapRef}>
+              <button
+                className="btn-save-draft rvc-viewqueue"
+                onClick={() => setQueueOpen((v) => !v)}
+                aria-expanded={queueOpen}
+              >
+                <span className="rvc-viewqueue-text">
+                  View Queue
+                  <span className="rvc-viewqueue-count"> · {pendingCount} waiting</span>
                 </span>
-              )}
-              {media.length > 1 && (
-                <span className="rvc-qhint">
-                  <span className="rvc-qkeypair">
-                    <span className="rvc-qkey"><ArrowLeftIcon /></span>
-                    <span className="rvc-qkey"><ArrowRightIcon /></span>
-                  </span>
-                  Media
-                </span>
+                <span className="kbd-letter">Q</span>
+              </button>
+
+              {queueOpen && (
+                  <div className="rvc-qpanel" role="dialog" aria-label="Review queue">
+                    <div className="rvc-qpanel-head">
+                      <span className="rvc-qcount">{pendingCount} Pending</span>
+                      <div className="rvc-qpanel-filters">
+                        <QueueFilters filters={queueFilters} />
+                      </div>
+                    </div>
+
+                    <div className="rvc-qhead">
+                      {QUEUE_COLS.map((c) => {
+                        const active = !!c.sortKey && sort?.key === c.sortKey;
+                        if (!c.sortKey || !onSort) {
+                          return <span key={c.cls} className={`rvc-qc rvc-qc--${c.cls}`}>{c.label}</span>;
+                        }
+                        return (
+                          <button
+                            key={c.cls}
+                            className={`rvc-qc rvc-qc--${c.cls} rvc-qc--sortable`}
+                            onClick={() => onSort(c.sortKey!)}
+                          >
+                            {c.label}
+                            <SortIcon active={active} dir={active ? sort?.dir : undefined} />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="rvc-qlist">
+                      {queue.map((q, i) => {
+                        const sel = q.id === (highlightId ?? sub.id);
+                        const done = !!submitted[q.id];
+                        return (
+                          <button
+                            key={q.id}
+                            className={`rvc-qrow ${sel ? "is-selected" : ""} ${done ? "is-done" : ""}`}
+                            onClick={() => {
+                              if (q.id !== sub.id) goto(q.id);
+                              setQueueOpen(false);
+                            }}
+                          >
+                            <span className="rvc-qc rvc-qc--idx">{i + 1}</span>
+                            <span className="rvc-qc rvc-qc--user">{q.userName}</span>
+                            <span className="rvc-qc rvc-qc--task">{q.taskName}</span>
+                            <span className="rvc-qc rvc-qc--att">{q.versions.length}</span>
+                            <span className="rvc-qc rvc-qc--date">
+                              {done ? `Reviewed · ${submitted[q.id].score}/10` : longDate(q.submittedOn)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {queue.length === 0 && (
+                        <div className="rvc-qempty">No submissions match these filters.</div>
+                      )}
+                    </div>
+
+                    <div className="rvc-qpanel-foot">
+                      <div className="rvc-qhints">
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkeypair">
+                            <span className="rvc-qkey"><ArrowUpIcon /></span>
+                            <span className="rvc-qkey"><ArrowDownIcon /></span>
+                          </span>
+                          To navigate
+                        </span>
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkey"><EnterKeyIcon /></span>
+                          To select
+                        </span>
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkey rvc-qkey--text">Esc</span>
+                          To close
+                        </span>
+                      </div>
+                      <span className="rvc-qhint">
+                        <span className="rvc-qkey rvc-qkey--text">Q</span>
+                        Save &amp; update queue
+                      </span>
+                    </div>
+                  </div>
               )}
             </div>
             {isPast ? (
-              <>
-                <span className="rvc-footer-note">Viewing a past attempt — read-only</span>
-                <button className="btn-save-draft" onClick={() => { setViewAttempt(null); setMediaIndex(0); }}>
-                  Back to current attempt
-                </button>
-              </>
+              <button
+                className="btn-save-draft rvc-back-current"
+                onClick={() => { setViewAttempt(null); setMediaIndex(0); }}
+              >
+                Back To Current Attempt
+                <span className="kbd-letter">Esc</span>
+              </button>
             ) : reviewable ? (
               <button className={`btn-publish ${hasScore ? "" : "rvc-dim"}`} onClick={doSubmit}>
                 Submit &amp; Next

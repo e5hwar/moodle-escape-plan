@@ -12632,23 +12632,28 @@ a {
 /* =============================================================
  * Name Change Requests
  * ============================================================= */
-.ncr-current {
-  color: var(--text);
-  font-weight: 600;
-}
-.ncr-requested {
-  color: var(--accent-strong);
-  font-weight: 600;
-}
-.ncr-actions-head {
-  text-align: left;
+/* Rows open the review modal — the trailing chevron just signals it. */
+.ncr-table tbody tr {
+  cursor: pointer;
 }
 
-/* Row action buttons */
-.ncr-actions {
-  display: inline-flex;
-  gap: 8px;
+.ncr-table .ncr-col-open {
+  padding-right: 20px;
 }
+
+.ncr-table td.ncr-col-open {
+  text-align: right;
+}
+
+.ncr-table td.ncr-col-open .row-arrow {
+  vertical-align: middle;
+}
+
+.ncr-table th.no-sort {
+  cursor: default;
+}
+
+/* Modal action buttons */
 .ncr-btn {
   padding: 6px 12px;
   border-radius: 7px;
@@ -12683,18 +12688,6 @@ a {
 .ncr-btn--reject:hover {
   background: rgba(224, 72, 72, 0.2);
 }
-.ncr-btn--review {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent-strong);
-  border-color: var(--accent-strong);
-  background: var(--bg-pill);
-}
-.ncr-btn--review:hover {
-  background: var(--bg-pill-strong);
-}
-
 /* ── Zoomable ID card ── */
 .idcard-svg {
   display: block;
@@ -12759,6 +12752,94 @@ a {
   color: var(--text-muted);
 }
 
+/* ── Hover-to-magnify ID (no card chrome — the ID sits on the pane) ── */
+.idhz {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.idhz-frame {
+  position: relative;
+}
+.idhz-stage {
+  position: relative;
+  cursor: zoom-in;
+  /* The card is transformed, not reflowed, so the stage keeps a stable box. */
+  overflow: visible;
+}
+.idhz-stage:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+.idhz-card {
+  transform-origin: center center;
+  transition: transform 0.18s ease;
+}
+
+/* The lens tracks the pointer and marks the region drawn into the panel. */
+.idhz-lens {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid var(--accent-strong);
+  background: rgba(240, 133, 79, 0.16);
+  border-radius: 4px;
+}
+
+/* Magnified region — overlays the form pane, like the reference. */
+.idhz-panel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 26px);
+  z-index: 30;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.idhz-panel-inner {
+  transform-origin: 0 0;
+}
+
+.idhz-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.idhz-full {
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  font-weight: 500;
+  color: var(--accent-strong);
+  padding: 0;
+  text-align: left;
+}
+.idhz-full:hover {
+  text-decoration: underline;
+}
+.idhz-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-pill);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 10.5pt;
+  font-weight: 600;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.idhz-tool:hover {
+  background: var(--bg-pill-strong);
+  border-color: var(--text-faint);
+  color: var(--accent-strong);
+}
+
 /* ── View ID fullscreen overlay ── */
 .ncr-fs-overlay {
   position: fixed;
@@ -12814,6 +12895,15 @@ a {
 .ncr-fs-stage .idzoom-viewport {
   max-height: 70vh;
 }
+.ncr-fs-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.idhz-fs-box {
+  width: 100%;
+  max-width: 900px;
+}
 .ncr-fs-hint {
   margin-top: 12px;
   font-family: var(--font-sans);
@@ -12823,7 +12913,7 @@ a {
 
 /* ── Approve split modal ── */
 .ncr-modal {
-  max-width: 880px;
+  max-width: 1120px;
   width: 94vw;
 }
 .ncr-modal-split {
@@ -12831,27 +12921,21 @@ a {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   min-height: 0;
-  overflow-y: auto;
+  /* Visible so the hover-zoom panel can spill out of the ID pane and sit over
+     the form pane; the two short fields never need their own scroll. */
+  overflow: visible;
 }
 .ncr-id-pane {
-  padding: 22px;
+  position: relative;
+  padding: 26px;
   border-right: 1px solid var(--border);
   background: var(--bg);
 }
-.ncr-pane-label,
 .ncr-form-pane .form-label {
   font-family: var(--font-sans);
 }
-.ncr-pane-label {
-  font-size: 11pt;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
 .ncr-form-pane {
-  padding: 22px 24px;
+  padding: 26px 28px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -12861,9 +12945,17 @@ a {
   background: var(--bg-pill-strong);
   cursor: default;
 }
+/* Cancel/Back sits left, decisions right — same split as .wizard-footer. */
 .ncr-modal-foot {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ncr-modal-foot-left,
+.ncr-modal-foot-right {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 .ncr-approve-btn {
@@ -12904,10 +12996,25 @@ a {
 @media (max-width: 820px) {
   .ncr-modal-split {
     grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
   }
   .ncr-id-pane {
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+  /* Stacked: there's no pane to the right to magnify into — full view covers it. */
+  .idhz-panel {
+    display: none;
+  }
+  .idhz-stage {
+    cursor: pointer;
+  }
+}
+
+/* Hover magnification is pointer-driven; touch users get the full view instead. */
+@media (hover: none) {
+  .idhz-panel {
+    display: none;
   }
 }
 
@@ -24044,68 +24151,55 @@ a {
   font-size: 12px;
 }
 
-/* ── header (page header 46:314 + eyebrow 78:395) ── */
+/* ── header (Figma 293:849) ──
+   Breadcrumb over the DS page header (title + subtitle), no bottom rule. The
+   task and submitter now live here, which is why there's no separate submission
+   bar; the attempt switcher rides on the right of the same row. */
 .rvc-header {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 24px 40px 18px;
-  border-bottom: 1px solid var(--rvc-divider);
+  padding: 24px 40px;
   flex: none;
 }
-.rvc-back {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--rvc-ctl);
-  background: transparent;
+.rvc-pagehead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rvc-crumbs { display: flex; align-items: center; gap: 4px; }
+.rvc-crumb {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
   color: #a8a8a8;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  flex: none;
+  white-space: nowrap;
+  padding: 0;
 }
-.rvc-back:hover { color: #fff; border-color: #7a7a7a; }
-.rvc-back svg { width: 16px; height: 16px; }
-/* Eyebrow → title gap, per the header atomic 78:395. */
-.rvc-title-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.rvc-crumb--current { color: #fff; cursor: pointer; }
+.rvc-crumb--current:hover { text-decoration: underline; }
+.rvc-crumbs svg { width: 12px; height: 12px; color: #a8a8a8; flex: none; }
+/* .tasks-title already carries the 2px gap down to .tasks-subtitle. */
+.rvc-pagehead-id { min-width: 0; }
+/* Task name and submitter open their own tab — styled as plain text until
+   hovered so the header still reads as a heading. */
+.rvc-headlink {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.rvc-headlink:hover { color: #f05523; text-decoration: underline; }
 
 /* ── review queue ──
-   Trigger (Figma 263:1579): a 48px control docked flush to the header's right
-   edge — hence the left-only radius — carrying "NEXT · n WAITING", the next
-   reviewer's name and the "Q" keycap.
+   Trigger (Figma 293:759): a Secondary Button in the page footer — "View Queue
+   · n WAITING" plus a white "Q" keycap.
    Panel (Figma 263:1587): the shared dropdown shell (#0f0f10 on #3d3d43, 10px)
-   holding a filter row, the queue as a compact table, and a keycap legend. */
-.rvc-queue-wrap {
-  position: relative;
-  flex: none;
-  margin-right: -40px; /* cancel the header gutter so the trigger docks flush */
-}
-.rvc-queue-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 16px;
-  border-radius: 8px 0 0 8px;
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  user-select: none;
-}
-.rvc-queue-btn:hover,
-.rvc-queue-btn.is-open { filter: brightness(1.15); }
-/* 200px column, eyebrow (14px line) flush above the name (17px line) = 31px. */
-.rvc-queue-btn-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  width: 200px;
-  min-width: 0;
-}
-.rvc-queue-btn-eyebrow {
+   holding a filter row, the queue as a compact table, and a keycap legend. It
+   opens UPWARD from the footer button. */
+.rvc-queue-wrap { position: relative; flex: none; }
+/* "View Queue · n WAITING" — the shared Secondary Button with a 14px/500 label,
+   a 12px uppercase count and a white mono keycap. */
+.rvc-viewqueue { gap: 8px; font-weight: 500; overflow: hidden; }
+.rvc-viewqueue-text { display: inline-flex; align-items: center; line-height: 17px; }
+.rvc-viewqueue-count {
   font-size: 12px;
   line-height: 14px;
   font-weight: 400;
@@ -24113,24 +24207,13 @@ a {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.rvc-queue-btn-name {
-  max-width: 100%;
-  font-size: 14px;
-  line-height: 17px;
-  font-weight: 500;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* "Q" keycap — 20px keycap spec (263:1582). */
-.rvc-queue-btn .kbd-letter {
+.rvc-viewqueue .kbd-letter {
   justify-content: center;
   width: 20px;
   height: 20px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
-  color: #a8a8a8;
+  color: #fff;
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 12px;
@@ -24138,8 +24221,8 @@ a {
 
 .rvc-qpanel {
   position: absolute;
-  top: calc(100% + 10px);
-  right: 40px; /* back inside the page gutter — the trigger alone docks flush */
+  bottom: calc(100% + 10px);
+  right: 0;
   z-index: 100;
   width: 811px;
   max-width: calc(100vw - 80px);
@@ -24175,6 +24258,10 @@ a {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+/* The panel lives at the bottom of the screen, so its filter dropdowns open
+   UPWARD and are capped to fit above the pill row — opening downward ran them
+   off the bottom of the viewport. */
+.rvc-qpanel-filters .dropdown { max-height: min(320px, 40vh); }
 
 /* Queue table — header row 263:1904, rows 263:1921. Fixed column widths with
    the leftover space distributed between them, matching the Figma row. */
@@ -24298,53 +24385,27 @@ a {
   text-transform: uppercase;
 }
 
-/* ── submission header ── */
-.rvc-subheader {
+/* ── version switcher (Figma 295:882, rides on the right of the header) ──
+   "PAST SUBMISSIONS:" over the version chips, newest first. The selected chip
+   takes the accent treatment; the rest are the Secondary Button. */
+.rvc-versions {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 40px;
-  border-bottom: 1px solid var(--rvc-divider);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   flex: none;
 }
-.rvc-subheader-id { min-width: 0; }
-.rvc-subtask {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rvc-subwho { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-/* Avatar — no design system component yet (see handoff note). */
-.rvc-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(240, 85, 39, 0.1);
-  border: 1px solid rgba(240, 85, 39, 0.4);
-  color: #f05527;
-  display: grid;
-  place-items: center;
+.rvc-versions-label {
   font-family: var(--font-sans);
   font-size: 12px;
-  font-weight: 500;
-  flex: none;
+  font-weight: 400;
+  color: #a8a8a8;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
 }
-.rvc-subname { font-size: 14px; font-weight: 500; color: #a8a8a8; white-space: nowrap; }
-.rvc-subdot { color: #7a7a7a; }
-.rvc-subago { font-size: 14px; font-weight: 400; color: #7a7a7a; white-space: nowrap; }
-.rvc-attempts {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-/* Attempt switcher — square 32px controls tinted with the Table Pill palette. */
-.rvc-attempt {
+.rvc-version-chips { display: flex; align-items: flex-start; gap: 8px; }
+.rvc-version {
   width: 32px;
   height: 32px;
   padding: 0;
@@ -24353,34 +24414,19 @@ a {
   place-items: center;
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  color: #fff;
   cursor: pointer;
-  border: 1px solid var(--rvc-ctl);
-  background: transparent;
-  color: #a8a8a8;
   user-select: none;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
 }
-.rvc-attempt--cur { border-color: #f05527; color: #f05527; background: rgba(240, 85, 39, 0.1); }
-.rvc-attempt--pass { border-color: #14b867; color: #14b867; background: rgba(20, 184, 103, 0.1); }
-.rvc-attempt--fail { border-color: #ff1f31; color: #ff1f31; background: rgba(255, 31, 49, 0.1); }
-/* Selected attempt keeps its pass/fail tone and picks up the app's accent
-   selection ring. */
-.rvc-attempt.is-active { box-shadow: 0 0 0 2px rgba(240, 85, 35, 0.55); }
-.rvc-attempt:hover { filter: brightness(1.3); }
-.rvc-attempts-sum { font-size: 12px; font-weight: 400; color: #7a7a7a; margin-left: 4px; }
-
-/* ── past attempt banner (Table Pill yellow palette) ── */
-.rvc-past-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 40px;
-  background: rgba(255, 197, 36, 0.1);
-  border-bottom: 1px solid rgba(255, 197, 36, 0.5);
-  flex: none;
+.rvc-version:hover { filter: brightness(1.15); }
+.rvc-version.is-active {
+  border-color: rgba(240, 85, 35, 0.75);
+  background: linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)), rgba(13, 13, 13, 0.75);
+  font-weight: 700;
 }
-.rvc-past-banner-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: #ffc524; }
-.rvc-past-banner-sub { font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: #a8a8a8; }
 
 /* ── body ── */
 .rvc-body {
@@ -24393,20 +24439,23 @@ a {
 .rvc-stagecol {
   flex: 1;
   min-width: 0;
-  padding: 24px 40px;
+  padding: 0 40px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   overflow-y: auto;
 }
 /* Media — a 4:3 main stage with the remaining media stacked down its right
    side. No design system component yet (see handoff note). */
+/* The stage governs the row height (it's the 4:3 element); the media rail is
+   pinned alongside it so a long rail scrolls instead of stretching the row —
+   the design fixes the stage height and gives the rail `h-full` + overflow. */
 .rvc-media {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
   flex: none;
 }
+.rvc-media.has-thumbs { padding-right: 172px; /* 160 rail + 12 gap */ }
 .rvc-stage {
   position: relative;
   flex: 1;
@@ -24423,72 +24472,81 @@ a {
   object-fit: cover;
   display: block;
 }
-.rvc-stage-play {
+/* Stage overlay controls are all the Secondary Button (Figma 295:1014-1020):
+   the same grey-over-#0d0d0d fill and 0.5px hairline, 16px from the edges. */
+.rvc-stage-play,
+.rvc-stage-nav,
+.rvc-stage-chip {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: rgba(13, 13, 13, 0.65);
-  border: 0.5px solid rgba(122, 122, 122, 0.5);
-  display: grid;
-  place-items: center;
-  color: #fff;
-  padding-left: 4px;
-}
-.rvc-stage-dur,
-.rvc-stage-counter {
-  position: absolute;
-  padding: 4px 9px;
-  border-radius: 8px;
-  background: rgba(13, 13, 13, 0.75);
-  border: 0.5px solid rgba(122, 122, 122, 0.5);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
-}
-.rvc-stage-dur { right: 16px; top: 16px; }
-.rvc-stage-counter { left: 16px; bottom: 16px; }
-.rvc-stage-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 0.5px solid rgba(122, 122, 122, 0.5);
-  background: rgba(13, 13, 13, 0.65);
-  display: grid;
-  place-items: center;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
   color: #fff;
   cursor: pointer;
   user-select: none;
 }
-.rvc-stage-nav:hover { background: rgba(13, 13, 13, 0.9); }
+.rvc-stage-play:hover,
+.rvc-stage-nav:hover,
+.rvc-stage-chip:hover { filter: brightness(1.15); }
+/* 40px play button, centred (295:1014). */
+.rvc-stage-play {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 48px;
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+.rvc-stage-play svg { width: 24px; height: 24px; }
+/* 32px nav button (295:1018) — only rendered when there's somewhere to go. */
+.rvc-stage-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 48px;
+  display: grid;
+  place-items: center;
+}
 .rvc-stage-nav svg { width: 16px; height: 16px; }
 .rvc-stage-nav--prev { left: 16px; }
 .rvc-stage-nav--next { right: 16px; }
-.rvc-stage-download { position: absolute; right: 16px; bottom: 16px; gap: 6px; }
-/* Project description leads the column, so the page break sits flush at the
-   top (same rhythm as the rail's). */
-.rvc-stagecol .page-break { margin: 0 0 12px; }
+/* 24px chips — duration (295:1016) and download (295:1020). */
+.rvc-stage-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rvc-stage-chip svg { width: 12px; height: 12px; flex: none; }
+.rvc-stage-dur { top: 16px; right: 16px; cursor: default; }
+.rvc-stage-download { bottom: 16px; right: 16px; }
+
 /* Additional media — a column to the right of the stage, scrolling with it. */
 .rvc-thumbs {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 160px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: none;
-  align-self: stretch;
   overflow-y: auto;
   scrollbar-width: none;
 }
 .rvc-thumbs::-webkit-scrollbar { display: none; }
 .rvc-thumb {
   position: relative;
-  width: 148px;
+  width: 160px;
   aspect-ratio: 4 / 3;
   flex: none;
   cursor: pointer;
@@ -24510,22 +24568,28 @@ a {
   background: rgba(13, 13, 13, 0.35);
 }
 .rvc-thumb-play svg { width: 20px; height: 20px; }
+/* The submission's own write-up leads the column, unlabelled (Figma 295:1010). */
 .rvc-desc {
+  margin: 0;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
-  line-height: 1.6;
-  color: #a8a8a8;
-  max-width: 760px;
+  line-height: normal;
+  color: #fff;
 }
 
 /* ── right rail ── */
-/* Rail content width is the Figma right column (452px) + 24px padding. */
+/* Rail = the "Atomic Component - Reviewing" CARD (Figma 293:768): 492px wide,
+   20px padding (so the content column is the design's 452px), 12px radius and a
+   10% grey wash over #0d0d0d. It replaces the old two-column divider line, so
+   it floats on the page gutter instead of butting against the media column. */
 .rvc-rail {
-  width: 500px;
+  width: 492px;
   flex: none;
-  border-left: 1px solid var(--rvc-divider);
-  padding: 24px;
+  margin: 0 40px 24px 0;
+  padding: 20px;
+  border-radius: 12px;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -24535,7 +24599,13 @@ a {
 /* Field group — label + subtext, then 8px to the control (Figma 263:1015,
    263:865, 263:1045). Label and subtext sit flush against each other. */
 .rvc-field { display: flex; flex-direction: column; gap: 8px; }
-.rvc-field + .rvc-field { margin-top: 32px; }
+/* Each following group sits 20px below the previous one behind a hairline, then
+   16px of padding before its label (Figma 293:803). */
+.rvc-field + .rvc-field {
+  margin-top: 20px;
+  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
+  padding-top: 16px;
+}
 .rvc-field-head .form-label { margin-bottom: 0; }
 .rvc-field-head .form-help { margin: 0; }
 .rvc-field--fb { flex: 1; min-height: 0; }
@@ -24551,7 +24621,7 @@ a {
 }
 .rvc-checklist ul {
   margin: 0;
-  padding-left: 24px;
+  padding-left: 21px;
   list-style: disc;
 }
 .rvc-checklist-fail { margin: 19px 0 0; }
@@ -24611,58 +24681,58 @@ a {
   resize: vertical;
 }
 
-/* past review (locked) in the rail */
-.rvc-rail-past { display: flex; flex-direction: column; gap: 16px; }
-.rvc-rail-past-score { display: flex; align-items: center; gap: 12px; }
-.rvc-rail-past-num {
-  font-family: var(--font-sans);
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: #fff;
-}
-.rvc-rail-past-quote {
-  border-left: 2px solid var(--rvc-ctl);
-  padding: 2px 0 2px 12px;
-  margin: 0;
-}
-.rvc-rail-past-fb { font-family: var(--font-sans); font-size: 16px; line-height: 1.6; color: #a8a8a8; }
-.rvc-rail-past-by { font-family: var(--font-sans); font-size: 12px; color: #7a7a7a; margin-top: 6px; }
-.rvc-back-current { width: 100%; margin-top: 16px; }
-
-/* company-owned lock note — no design system callout component yet. */
-.rvc-owner-note {
+/* Read-only notice (Figma 298:1874) — the Secondary Button shell as a banner,
+   heading the rail whenever the attempt can't be graded. */
+.rvc-notice {
   display: flex;
+  align-items: center;
   gap: 12px;
-  align-items: flex-start;
+  width: 100%;
   padding: 16px;
+  margin-bottom: 20px;
   border-radius: 8px;
-  border: 1px solid var(--rvc-ctl);
-  background: #0d0d0d;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.55;
-  color: #a8a8a8;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  color: #d9d9d9;
+  flex: none;
 }
-.rvc-owner-note strong { color: #fff; font-weight: 600; }
-.rvc-owner-note-icon { flex: none; color: #7a7a7a; margin-top: 2px; }
+.rvc-notice-icon { display: inline-flex; flex: none; }
+.rvc-notice-text { display: flex; flex-direction: column; min-width: 0; }
+.rvc-notice-title { font-family: var(--font-sans); font-size: 16px; font-weight: 500; }
+.rvc-notice-sub { font-family: var(--font-sans); font-size: 12px; font-weight: 400; }
+
+/* Read-only scale — unpicked cells dim out, the graded one keeps its verdict
+   colour (Figma 298:1899). */
+.rvc-score:disabled { cursor: default; opacity: 0.5; }
+.rvc-score:disabled:hover { border-color: var(--rvc-ctl); color: #a8a8a8; }
+.rvc-score:disabled.is-pass,
+.rvc-score:disabled.is-fail { opacity: 1; }
+.rvc-score:disabled.is-pass:hover { border-color: #00572b; color: #fff; }
+.rvc-score:disabled.is-fail:hover { border-color: #700009; color: #fff; }
+/* Submitted feedback reads as content, not a disabled field. */
+.rvc-feedback[readonly] { color: #fff; }
 
 /* ── footer (shared .wizard-footer + Figma 267:1985) ──
    Same 20px/40px box as the wizard footer, but with a 2px top rule, a bolder
-   "Skip", and keycap hints reusing the queue popover's legend atoms. */
+   "Skip", then the View Queue button and the primary CTA 16px apart. */
 .rvc-footer { gap: 16px; border-top-width: 2px; }
 .rvc-footer .wizard-cancel { font-weight: 600; color: #a8a8a8; padding: 0; }
 .rvc-footer .wizard-cancel:hover { color: #fff; }
-.rvc-footer-hints { display: flex; align-items: center; gap: 16px; }
-.rvc-qkey-ellipsis {
-  font-family: var(--font-sans);
+/* "Back To Current Attempt" (Figma 297:1040) — Secondary Button + ESC keycap. */
+.rvc-back-current { gap: 8px; font-weight: 500; }
+.rvc-back-current .kbd-letter {
+  justify-content: center;
+  height: 20px;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 500;
   font-size: 12px;
-  color: #7a7a7a;
-  padding: 0 1px;
+  text-transform: uppercase;
 }
-.rvc-qkeypair--tight { gap: 2px; }
 /* Keycap pair inside the primary CTA (267:2036) — ⌘ at 14px, ↵ at 12px, both
    white against the orange fill. */
 .rvc-submit-keys { display: inline-flex; align-items: center; gap: 3px; }

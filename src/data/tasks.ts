@@ -142,6 +142,19 @@ export const tasks: Task[] = [
   T("T-1021", "Hotel Maintenance Walkthrough", "xAPI", [], "Premium HVAC Services", [], "Feb 26, 2026", "Apr 27, 2026"),
   T("T-0988", "MultiFamily Service Visit", "Hands-On Task", [], "ARS", [], "Mar 06, 2026", "Apr 29, 2026"),
   T("T-0955", "NexStar Onboarding", "Resource", [], "SkillCat", ["B2B-Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
+
+  /* The Hands-On Tasks that the review queue draws submissions from — every
+     task name in data/reviewSubmissions.ts resolves to one of these, so the
+     review screen can open a submission's task in its editor. */
+  T("T-2299", "HVAC Install", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Jan 14, 2026", "Apr 22, 2026"),
+  T("T-2240", "Condenser Coil Cleaning", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Maintenance"], "Jan 22, 2026", "Apr 18, 2026"),
+  T("T-2210", "Ductwork Sealing", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Jan 29, 2026", "Apr 16, 2026"),
+  T("T-2088", "Brazing Copper Lines", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat", ["HVAC", "Brazing"], "Feb 05, 2026", "Apr 20, 2026"),
+  T("T-2020", "Electrical Panel Labeling", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["Electrical", "Safety"], "Feb 11, 2026", "Apr 14, 2026"),
+  T("T-1930", "Compressor Replacement", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Feb 19, 2026", "Apr 21, 2026"),
+  T("T-1810", "Vacuum & Evacuation", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["HVAC", "Refrigerant"], "Feb 27, 2026", "Apr 11, 2026"),
+  T("T-1690", "Leak Detection Test", "Hands-On Task", ["EPA 608 Type II"], "SkillCat", ["HVAC", "Refrigerant"], "Mar 04, 2026", "Apr 09, 2026"),
+  T("T-1610", "Furnace Ignition Check", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Heating"], "Mar 12, 2026", "Apr 07, 2026"),
 ];
 
 // Only Hands-On Tasks can be discoverable (surfaced in search/browse); every

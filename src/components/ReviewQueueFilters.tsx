@@ -39,6 +39,7 @@ function QueuePill({ filter: f }: { filter: QueueFilter }) {
     <Dropdown
       width={f.searchable ? 300 : 260}
       align="right"
+      direction="up"
       trigger={({ open, toggle }) => (
         <PillTrigger
           label={f.label}
@@ -79,6 +80,7 @@ function MoreFiltersPill({ filters }: { filters: QueueFilter[] }) {
     <Dropdown
       width={300}
       align="right"
+      direction="up"
       trigger={({ open, toggle }) => (
         <PillTrigger
           label="More Filters"

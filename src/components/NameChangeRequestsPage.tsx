@@ -3,13 +3,25 @@ import {
   nameChangeRequests as seed,
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
+import { users } from "../data/users";
 import { ZoomableIdCard } from "./IdCard";
-import { SearchIcon, SortIcon, CheckBoldIcon } from "./icons";
+import { SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon } from "./icons";
 
 const PAGE_SIZE = 25;
 
-type SortKey = "currentName" | "requestedName" | "submittedOn";
+type SortKey = "currentName" | "requestedName" | "email" | "phone" | "submittedOn";
 type SortDir = "asc" | "desc";
+
+/** Contact details live on the user record — requests carry only the userId. */
+type Contact = { email: string; phone: string };
+
+const CONTACTS = new Map<string, Contact>(
+  users.map((u) => [u.id, { email: u.email, phone: u.phone }]),
+);
+
+function contactOf(r: NameChangeRequest): Contact | undefined {
+  return CONTACTS.get(r.userId);
+}
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -24,18 +36,14 @@ function compare(a: NameChangeRequest, b: NameChangeRequest, key: SortKey): numb
       return a.currentName.localeCompare(b.currentName);
     case "requestedName":
       return a.requestedName.localeCompare(b.requestedName);
+    case "email":
+      return (contactOf(a)?.email ?? "").localeCompare(contactOf(b)?.email ?? "");
+    case "phone":
+      return (contactOf(a)?.phone ?? "").localeCompare(contactOf(b)?.phone ?? "");
     case "submittedOn":
       return new Date(a.submittedOn).getTime() - new Date(b.submittedOn).getTime();
   }
 }
-
-const IdIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <circle cx="8.5" cy="11" r="2" />
-    <path d="M13 9h5M13 13h5M5.5 15.5a3 3 0 016 0" />
-  </svg>
-);
 
 export function NameChangeRequestsPage() {
   const [list, setList] = useState<NameChangeRequest[]>(seed);
@@ -48,12 +56,16 @@ export function NameChangeRequestsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return list;
-    return list.filter(
-      (r) =>
+    return list.filter((r) => {
+      const c = contactOf(r);
+      return (
         r.currentName.toLowerCase().includes(q) ||
         r.requestedName.toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q),
-    );
+        r.id.toLowerCase().includes(q) ||
+        (c?.email.toLowerCase().includes(q) ?? false) ||
+        (c?.phone.toLowerCase().includes(q) ?? false)
+      );
+    });
   }, [list, query]);
 
   const sorted = useMemo(() => {
@@ -89,9 +101,10 @@ export function NameChangeRequestsPage() {
             <div>
               <h1 className="tasks-title">Name Change Requests</h1>
               <div className="tasks-subtitle">
-                <span>{list.length} pending</span>
-                <span className="tasks-subtitle-dot" />
-                <span>Review the submitted ID before approving a legal name change</span>
+                <span>
+                  Requested submitted by users whose IDs have been reviewed previously and cannot
+                  change their name on their own. Option available on Profile Page.
+                </span>
               </div>
             </div>
           </header>
@@ -104,7 +117,7 @@ export function NameChangeRequestsPage() {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search by current or requested name…"
+                  placeholder="Search by name, email, or phone…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -115,40 +128,59 @@ export function NameChangeRequestsPage() {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table ncr-table" style={{ width: 1020 }}>
+                <table className="table sch-table ncr-table">
                   <colgroup>
-                    <col style={{ width: 260 }} />
-                    <col style={{ width: 260 }} />
-                    <col style={{ width: 180 }} />
-                    <col style={{ width: 320 }} />
+                    <col style={{ width: 240 }} />
+                    <col style={{ width: 240 }} />
+                    {/* Email is the flexible column — it absorbs the leftover width
+                        so the names stay narrow and addresses stop truncating. */}
+                    <col />
+                    <col style={{ width: 165 }} />
+                    <col style={{ width: 150 }} />
+                    <col style={{ width: 72 }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <SortableHeader col="currentName" label="Current Name" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="requestedName" label="Requested Name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} sortable={false} />
+                      <SortableHeader col="phone" label="Phone" sort={sort} toggle={toggleSort} sortable={false} />
                       <SortableHeader col="submittedOn" label="Submitted On" sort={sort} toggle={toggleSort} />
-                      <th className="ncr-actions-head">Actions</th>
+                      <th className="ncr-col-open no-sort" aria-label="Review" />
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((r) => (
-                      <tr key={r.id}>
-                        <td className="ncr-current">{r.currentName}</td>
-                        <td className="ncr-requested">{r.requestedName}</td>
+                    {paged.map((r) => {
+                      const c = contactOf(r);
+                      return (
+                      <tr key={r.id} onClick={() => setReviewing(r)}>
+                        <td className="col-name" data-tip={r.currentName}>
+                          {r.currentName}
+                        </td>
+                        <td className="col-name" data-tip={r.requestedName}>
+                          {r.requestedName}
+                        </td>
+                        <td className="col-u-email">{c?.email ?? "—"}</td>
+                        <td className="col-u-phone">{c?.phone ?? "—"}</td>
                         <td>{formatDate(r.submittedOn)}</td>
-                        <td>
-                          <div className="ncr-actions">
-                            <button className="ncr-btn ncr-btn--review" onClick={() => setReviewing(r)}>
-                              <IdIcon />
-                              Review
-                            </button>
-                          </div>
+                        <td className="ncr-col-open">
+                          <button
+                            className="row-arrow"
+                            aria-label={`Review name change for ${r.currentName}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReviewing(r);
+                            }}
+                          >
+                            <RowArrowIcon />
+                          </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {paged.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="sch-empty">
+                        <td colSpan={6} className="sch-empty">
                           {query.trim()
                             ? `No requests match "${query.trim()}".`
                             : "No pending name change requests."}
@@ -248,10 +280,11 @@ function ReviewModal({
     setReason("");
   }, [request.id, request.requestedName]);
 
-  const titles: Record<ReviewMode, { title: string; sub: string }> = {
+  // The main step needs no subtext — the ID and the two name fields say it. The
+  // follow-up steps keep theirs, since they name the person being actioned.
+  const titles: Record<ReviewMode, { title: string; sub?: string }> = {
     main: {
       title: "Review Name Change",
-      sub: "Verify the submitted ID, then approve, request more proof, or reject this request.",
     },
     proof: {
       title: "Request Additional Proof",
@@ -268,13 +301,12 @@ function ReviewModal({
       <div className="cl-modal ncr-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cl-modal-head">
           <h3 className="cl-modal-title">{titles[mode].title}</h3>
-          <p className="cl-modal-sub">{titles[mode].sub}</p>
+          {titles[mode].sub && <p className="cl-modal-sub">{titles[mode].sub}</p>}
         </div>
 
         <div className="ncr-modal-split">
-          {/* Left — ID for reference (zoomable) */}
+          {/* Left — ID for reference (hover to magnify, click for full view) */}
           <div className="ncr-id-pane">
-            <div className="ncr-pane-label">Submitted ID</div>
             <ZoomableIdCard request={request} />
           </div>
 
@@ -335,35 +367,44 @@ function ReviewModal({
         <div className="cl-modal-foot ncr-modal-foot">
           {mode === "main" ? (
             <>
-              <button className="btn-save-draft" onClick={onClose}>
-                Cancel
-              </button>
-              <button className="ncr-btn ncr-btn--reject" onClick={() => setMode("reject")}>
-                Reject
-              </button>
-              <button className="ncr-btn ncr-btn--proof" onClick={() => setMode("proof")}>
-                Request Proof
-              </button>
-              <button
-                className="btn-publish ncr-approve-btn"
-                disabled={!valid}
-                onClick={() => valid && onResolved(request.id)}
-              >
-                <CheckBoldIcon />
-                Approve &amp; Save
-              </button>
+              <div className="ncr-modal-foot-left">
+                <button className="btn-save-draft" onClick={onClose}>
+                  Cancel
+                </button>
+              </div>
+              {/* Right-to-left: Approve, Reject, Request ID Proof. */}
+              <div className="ncr-modal-foot-right">
+                <button className="ncr-btn ncr-btn--proof" onClick={() => setMode("proof")}>
+                  Request ID Proof
+                </button>
+                <button className="ncr-btn ncr-btn--reject" onClick={() => setMode("reject")}>
+                  Reject
+                </button>
+                <button
+                  className="btn-publish ncr-approve-btn"
+                  disabled={!valid}
+                  onClick={() => valid && onResolved(request.id)}
+                >
+                  <CheckBoldIcon />
+                  Approve &amp; Save
+                </button>
+              </div>
             </>
           ) : (
             <>
-              <button className="btn-save-draft" onClick={() => setMode("main")}>
-                Back
-              </button>
-              <button
-                className={mode === "reject" ? "btn-publish ncr-reject-btn" : "btn-publish"}
-                onClick={() => onResolved(request.id)}
-              >
-                {mode === "reject" ? "Reject Request" : "Send Request"}
-              </button>
+              <div className="ncr-modal-foot-left">
+                <button className="btn-save-draft" onClick={() => setMode("main")}>
+                  Back
+                </button>
+              </div>
+              <div className="ncr-modal-foot-right">
+                <button
+                  className={mode === "reject" ? "btn-publish ncr-reject-btn" : "btn-publish"}
+                  onClick={() => onResolved(request.id)}
+                >
+                  {mode === "reject" ? "Reject Request" : "Send Request"}
+                </button>
+              </div>
             </>
           )}
         </div>
