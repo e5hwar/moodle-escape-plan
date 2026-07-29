@@ -368,9 +368,12 @@ type GradePrompt = { uid: string; tid: string; taskName: string; type: string } 
 
 export function ContentOverridesPage({
   onViewAttempts,
+  initialUserId,
 }: {
   /** Opens the Attempts page for this employee + task, in a new tab. */
   onViewAttempts: (uid: string, tid: string) => void;
+  /** Pre-selects this employee (e.g. arriving via "Manage Completions" from a user's row menu). */
+  initialUserId?: string;
 }) {
   const data = useMemo(() => buildData(), []);
 
@@ -384,7 +387,9 @@ export function ContentOverridesPage({
   const [savedCells, setSavedCells] = useState<CellMap>(() => data.cells);
   const [savedCerts, setSavedCerts] = useState<CertManual>({});
 
-  const [who, setWho] = useState<Who>(null);
+  const [who, setWho] = useState<Who>(() =>
+    initialUserId && data.employeesById[initialUserId] ? { kind: "employee", id: initialUserId } : null,
+  );
   const [what, setWhat] = useState<What>(null);
   const [whoQ, setWhoQ] = useState("");
   const [whatQ, setWhatQ] = useState("");

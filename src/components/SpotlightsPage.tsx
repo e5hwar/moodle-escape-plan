@@ -8,15 +8,6 @@ import { QueuePositionPicker } from "./QueuePositionPicker";
 import { SearchIcon, AddIcon, SmallXIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
-type FilterKey = "all" | "approved" | "pending" | "rejected";
-
-const FILTER_LABEL: Record<FilterKey, string> = {
-  all: "All",
-  approved: "Active",
-  pending: "Pending",
-  rejected: "Rejected",
-};
-
 type DisplayStatus =
   | "active"
   | "pending"
@@ -103,7 +94,6 @@ export function SpotlightsPage() {
   const [committed, setCommitted] = useState<Spotlight[]>(seedSpotlights);
   const [list, setList] = useState<Spotlight[]>(seedSpotlights);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<FilterKey>("all");
   const [creating, setCreating] = useState(false);
   const [menu, setMenu] = useState<{ item: Spotlight; rect: DOMRect } | null>(null);
   const [approving, setApproving] = useState<Spotlight | null>(null);
@@ -124,13 +114,7 @@ export function SpotlightsPage() {
   );
 
   // Reordering by drag only makes sense against the full, unfiltered queue.
-  const canReorder = filter === "all" && !query.trim();
-
-  const counts = useMemo(() => {
-    const c = { approved: 0, pending: 0, rejected: 0, deactivated: 0 };
-    list.forEach((s) => (c[s.status] += 1));
-    return c;
-  }, [list]);
+  const canReorder = !query.trim();
 
   // Only rows still in the Home-Screen queue (active / pending) get a position
   // number; rejected, ended, and deactivated rows are out of the queue.
@@ -147,7 +131,6 @@ export function SpotlightsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list.filter((s) => {
-      if (filter !== "all" && s.status !== filter) return false;
       if (q && !(
         s.headingEn.toLowerCase().includes(q) ||
         (s.descriptionEn ?? "").toLowerCase().includes(q) ||
@@ -156,7 +139,7 @@ export function SpotlightsPage() {
       )) return false;
       return true;
     });
-  }, [list, query, filter]);
+  }, [list, query]);
 
   function openCreate() {
     setCreating(true);
@@ -271,13 +254,6 @@ export function SpotlightsPage() {
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Spotlight</h1>
-              <div className="tasks-subtitle">
-                <span>{counts.approved} active</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{counts.pending} pending approval</span>
-                <span className="tasks-subtitle-dot" />
-                <span>shown on the app Home Screen in queue order</span>
-              </div>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={openCreate}>
@@ -303,28 +279,6 @@ export function SpotlightsPage() {
                 <span className="kbd-cmd">⌘</span>
                 <span className="kbd-letter">K</span>
               </span>
-            </div>
-            <div className="sp-tabs">
-              {(["all", "approved", "pending", "rejected"] as FilterKey[]).map(
-                (k) => (
-                  <button
-                    key={k}
-                    className={`sp-tab ${filter === k ? "is-active" : ""}`}
-                    onClick={() => setFilter(k)}
-                  >
-                    {FILTER_LABEL[k]}
-                    {k !== "all" && (
-                      <span className="sp-tab-count">
-                        {k === "approved"
-                          ? counts.approved
-                          : k === "pending"
-                          ? counts.pending
-                          : counts.rejected}
-                      </span>
-                    )}
-                  </button>
-                ),
-              )}
             </div>
           </div>
 

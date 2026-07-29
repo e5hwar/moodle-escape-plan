@@ -130,6 +130,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const [subCanceled, setSubCanceled] = useState(false);
   const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
+  const [downloadAllOpen, setDownloadAllOpen] = useState(false);
 
   const user: User = { ...seedUser, ...identity };
   const epaCard: EpaCardOrder | undefined =
@@ -258,7 +259,17 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
         </Card>
 
         {/* Awards */}
-        <Card title="Awards" count={p.awards.length}>
+        <Card
+          title="Awards"
+          count={p.awards.length}
+          action={
+            p.awards.length > 0 && (
+              <button className="prof-btn prof-btn--sm" onClick={() => setDownloadAllOpen(true)}>
+                <DownloadIcon /> Download All
+              </button>
+            )
+          }
+        >
           <table className="prof-table">
             <thead>
               <tr>
@@ -452,6 +463,13 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           }}
         />
       )}
+      {downloadAllOpen && (
+        <DownloadAllAwardsModal
+          userName={user.name}
+          awards={p.awards}
+          onClose={() => setDownloadAllOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -516,6 +534,143 @@ function Modal({
         </div>
         <div className="pm-body">{children}</div>
         <div className="pm-foot">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Download All Awards — grid of every Card/Certificate, all selected by default ── */
+function DownloadAllAwardsModal({
+  userName,
+  awards,
+  onClose,
+}: {
+  userName: string;
+  awards: AwardRecord[];
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    awards.forEach((a) => {
+      init[`${a.id}-card`] = true;
+      if (a.hasCertificate) init[`${a.id}-cert`] = true;
+    });
+    return init;
+  });
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function toggle(key: string) {
+    setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function unselectAll(kind: "card" | "cert") {
+    setSelected((prev) => {
+      const next = { ...prev };
+      awards.forEach((a) => {
+        const key = `${a.id}-${kind}`;
+        if (key in next) next[key] = false;
+      });
+      return next;
+    });
+  }
+
+  const count = Object.values(selected).filter(Boolean).length;
+
+  function downloadSelected() {
+    awards.forEach((a) => {
+      if (selected[`${a.id}-card`]) {
+        downloadFile(`${a.awardNumber}-card.svg`, awardCardSvg(userName, a), "image/svg+xml");
+      }
+      if (a.hasCertificate && selected[`${a.id}-cert`]) {
+        downloadFile(`${a.awardNumber}-certificate.svg`, awardCertSvg(userName, a), "image/svg+xml");
+      }
+    });
+    onClose();
+  }
+
+  return (
+    <div
+      className="pm-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="pm-modal dlall-modal" role="dialog" aria-modal="true" aria-label="Download All Awards">
+        <div className="pm-head">
+          <h2 className="pm-title">Download All Awards</h2>
+          <div className="pm-sub">Choose which Cards and Certificates to download for {userName}.</div>
+        </div>
+        <div className="dlall-body">
+          <table className="dlall-table">
+            <thead>
+              <tr>
+                <th>Award</th>
+                <th>
+                  <div className="dlall-col-head">
+                    Card
+                    <button type="button" className="dlall-unselect" onClick={() => unselectAll("card")}>
+                      Unselect all
+                    </button>
+                  </div>
+                </th>
+                <th>
+                  <div className="dlall-col-head">
+                    Certificate
+                    <button type="button" className="dlall-unselect" onClick={() => unselectAll("cert")}>
+                      Unselect all
+                    </button>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {awards.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <div className="dlall-award-name">{a.certification}</div>
+                    <span className="prof-tier" style={{ color: TIER_HEX[a.meritTier], borderColor: TIER_HEX[a.meritTier] }}>
+                      {a.meritTier}
+                    </span>
+                  </td>
+                  <td className="dlall-check-cell">
+                    <input
+                      type="checkbox"
+                      checked={!!selected[`${a.id}-card`]}
+                      onChange={() => toggle(`${a.id}-card`)}
+                    />
+                  </td>
+                  <td className="dlall-check-cell">
+                    {a.hasCertificate ? (
+                      <input
+                        type="checkbox"
+                        checked={!!selected[`${a.id}-cert`]}
+                        onChange={() => toggle(`${a.id}-cert`)}
+                      />
+                    ) : (
+                      <span className="prof-muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="pm-foot dlall-foot">
+          <span className="dlall-count">{count} selected</span>
+          <div className="dlall-foot-actions">
+            <button className="prof-btn" onClick={onClose}>Cancel</button>
+            <button className="prof-btn prof-btn--primary" disabled={count === 0} onClick={downloadSelected}>
+              <DownloadIcon /> Download{count > 0 ? ` (${count})` : ""}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

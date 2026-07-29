@@ -111,7 +111,9 @@ export type CompanyColumn =
   | "billingCycle"
   | "createdOn"
   | "canceledOn"
-  | "trialEndDate";
+  | "trialEndDate"
+  | "dashboardLastAccess"
+  | "price";
 
 export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] = [
   { key: "signUp", label: "Sign-Up" },
@@ -124,6 +126,8 @@ export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] =
   { key: "createdOn", label: "Created On" },
   { key: "canceledOn", label: "Canceled On" },
   { key: "trialEndDate", label: "Trial End Date" },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access" },
+  { key: "price", label: "Price" },
 ];
 
 export const COMPANY_FIXED_COLUMNS: { label: string }[] = [
@@ -644,6 +648,36 @@ export function getCanceledOn(billing: CompanyBilling): string {
  * company is actually on a Free Trial; every other status reads "—". */
 export function getTrialEndDate(billing: CompanyBilling): string {
   return billing.status === "Free Trial" ? billing.trialEndsOn : "—";
+}
+
+/* "Dashboard Last Access" column (Manage Companies) — the last time a Manager
+ * or Admin at the company viewed the B2B Dashboard. Deterministic per company;
+ * roughly 1 in 6 accounts have never logged into the dashboard (null). */
+export function getDashboardLastAccessDays(company: Company): number | null {
+  const h = hash(company.id + "dashboard");
+  if (h % 6 === 0) return null;
+  return 1 + (h % 60);
+}
+
+export function getDashboardLastAccess(company: Company): string {
+  const daysAgo = getDashboardLastAccessDays(company);
+  if (daysAgo === null) return "Never";
+  return daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
+}
+
+/* "Price" column (Manage Companies) — the per-seat rate a company pays, same
+ * value shown on its Manage Subscription page. Only meaningful for companies
+ * on a paid B2B subscription (Essentials/Growth/Pro); Free Trial and Free
+ * Access companies aren't billed, so the column reads "—" for them. */
+export function getCompanyPriceValue(company: Company): number | null {
+  if (!PAID_TIERS.includes(company.tier as (typeof PAID_TIERS)[number])) return null;
+  return getCompanyBilling(company).ratePerSeat;
+}
+
+export function getCompanyPrice(company: Company): string {
+  const rate = getCompanyPriceValue(company);
+  if (rate === null) return "—";
+  return `${getCompanyBilling(company).currency} ${rate.toFixed(2)}`;
 }
 
 // Deterministic fake Stripe customer id, stable per company — stands in for

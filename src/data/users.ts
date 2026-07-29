@@ -28,15 +28,19 @@ export type User = {
   platform?: Platform;
   /** ISO date the user joined SkillCat. */
   joinedOn: string;
-  /** ISO date of the user's most recent access. */
+  /** ISO date of the user's most recent access to the SkillCat app. */
   lastAccess: string;
+  /** ISO date this user (a B2B Manager/Admin) last viewed the B2B Dashboard.
+   *  Only ever set for role "Manager" or "Admin" — everyone else has no
+   *  Dashboard access, so the column reads "—" for them. */
+  dashboardLastAccess?: string;
 };
 
 /** Identity/role fields authored by hand; date + verification flags are
  *  augmented deterministically below so we don't hand-maintain 30 rows. */
 type BaseUser = Omit<
   User,
-  "emailVerified" | "phoneVerified" | "joinedOn" | "lastAccess"
+  "emailVerified" | "phoneVerified" | "joinedOn" | "lastAccess" | "dashboardLastAccess"
 >;
 
 const baseUsers: BaseUser[] = [
@@ -90,6 +94,7 @@ function isoDaysAgo(n: number): string {
 
 export const users: User[] = baseUsers.map((u) => {
   const k = uhash(u.id);
+  const isDashboardUser = u.role === "Manager" || u.role === "Admin";
   return {
     ...u,
     // Most emails verified; a deterministic minority not.
@@ -99,5 +104,7 @@ export const users: User[] = baseUsers.map((u) => {
     joinedOn: isoDaysAgo(150 + (k % 950)),
     // Last access within the past ~45 days (some users more recent than others).
     lastAccess: isoDaysAgo(k % 46),
+    // Only Managers/Admins can view the B2B Dashboard, within the past ~90 days.
+    dashboardLastAccess: isDashboardUser ? isoDaysAgo(k % 91) : undefined,
   };
 });

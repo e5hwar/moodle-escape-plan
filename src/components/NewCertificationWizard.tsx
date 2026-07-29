@@ -15,6 +15,7 @@ import {
   SmallXIcon,
 } from "./icons";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
+import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
@@ -580,6 +581,9 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(editingCert));
   const [splitTask, setSplitTask] = useState<{ courseId: string; lessonId?: string; taskType: TaskTypeKey } | null>(null);
+  // Where the "Add Existing Task" library picker will drop its Tasks, or null
+  // while the picker is closed.
+  const [existingPicker, setExistingPicker] = useState<{ courseId: string; lessonId?: string } | null>(null);
   // Completion criteria start locked when editing an existing Certification —
   // unlocking requires acknowledging that completion data will be reset.
   const [completionUnlocked, setCompletionUnlocked] = useState(false);
@@ -674,9 +678,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
               data={data}
               update={update}
               onCreateTask={(courseId, lessonId, taskType) => setSplitTask({ courseId, lessonId, taskType })}
-              onAddExisting={(courseId, lessonId, task) =>
-                appendTask(courseId, lessonId, libraryTaskToCertTask(task))
-              }
+              onAddExisting={(courseId, lessonId) => setExistingPicker({ courseId, lessonId })}
             />
           )}
           {step === 3 && (
@@ -706,8 +708,41 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
           </button>
         </div>
       </footer>
+
+      {existingPicker && (
+        <AddExistingTasksModal
+          certIndustries={data.industries}
+          destination={destinationLabel(data.courses, existingPicker)}
+          existingNames={flattenTasks(data.courses).map((t) => t.name)}
+          onCancel={() => setExistingPicker(null)}
+          onConfirm={(picked) => {
+            picked.forEach((t) =>
+              appendTask(existingPicker.courseId, existingPicker.lessonId, libraryTaskToCertTask(t)),
+            );
+            setExistingPicker(null);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/** Human-readable "Course › Lesson" label for the Task-library picker header. */
+function destinationLabel(
+  courses: CertCourse[],
+  target: { courseId: string; lessonId?: string },
+): string {
+  const idx = courses.findIndex((c) => c.id === target.courseId);
+  const course = courses[idx];
+  if (!course) return "this Certification";
+  const courseName = course.nameEn.trim() || `Course ${idx + 1}`;
+  if (!target.lessonId) return courseName;
+  const child = course.children.find(
+    (c) => c.kind === "lesson" && c.lesson.id === target.lessonId,
+  );
+  const lesson = child && child.kind === "lesson" ? child.lesson : null;
+  if (!lesson) return courseName;
+  return `${courseName} › ${lesson.nameEn.trim() || "Untitled Lesson"}`;
 }
 
 /* ─────────────────  Step 1: Details  ───────────────── */
@@ -1175,7 +1210,7 @@ function TasksStep({
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
   onCreateTask: (courseId: string, lessonId: string | undefined, taskType: TaskTypeKey) => void;
-  onAddExisting: (courseId: string, lessonId: string | undefined, task: Task) => void;
+  onAddExisting: (courseId: string, lessonId: string | undefined) => void;
 }) {
   const [importing, setImporting] = useState(false);
   // Which Course/Lesson node currently has its name/description editor open.
@@ -1533,10 +1568,10 @@ function TasksStep({
             onSaveEditor={() => setEditingId(null)}
             onRemove={() => removeCourse(course.id)}
             onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
-            onAddExistingTask={(task) => onAddExisting(course.id, undefined, task)}
+            onAddExistingTask={() => onAddExisting(course.id, undefined)}
             onAddLesson={() => addLesson(course.id)}
             onCreateTaskInLesson={(lessonId, taskType) => onCreateTask(course.id, lessonId, taskType)}
-            onAddExistingTaskInLesson={(lessonId, task) => onAddExisting(course.id, lessonId, task)}
+            onAddExistingTaskInLesson={(lessonId) => onAddExisting(course.id, lessonId)}
             onUpdateLesson={(lessonId, patch) => updateLesson(course.id, lessonId, patch)}
             onToggleLesson={(lessonId) => toggleLesson(course.id, lessonId)}
             onToggleLessonHidden={(lessonId) =>
@@ -1732,10 +1767,10 @@ function CourseCard({
   onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
-  onAddExistingTask: (task: Task) => void;
+  onAddExistingTask: () => void;
   onAddLesson: () => void;
   onCreateTaskInLesson: (lessonId: string, taskType: TaskTypeKey) => void;
-  onAddExistingTaskInLesson: (lessonId: string, task: Task) => void;
+  onAddExistingTaskInLesson: (lessonId: string) => void;
   onUpdateLesson: (lessonId: string, patch: Partial<CertLesson>) => void;
   onToggleLesson: (lessonId: string) => void;
   onToggleLessonHidden: (lessonId: string) => void;
@@ -1840,7 +1875,7 @@ function CourseCard({
                 onSaveEditor={onSaveLessonEditor}
                 onRemove={() => onRemoveLesson(c.lesson.id)}
                 onCreateTask={(taskType) => onCreateTaskInLesson(c.lesson.id, taskType)}
-                onAddExistingTask={(task) => onAddExistingTaskInLesson(c.lesson.id, task)}
+                onAddExistingTask={() => onAddExistingTaskInLesson(c.lesson.id)}
               />
             ),
           )}
@@ -1895,7 +1930,7 @@ function LessonCard({
   onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
-  onAddExistingTask: (task: Task) => void;
+  onAddExistingTask: () => void;
 }) {
   const esMiss = !lesson.nameEs.trim();
   const taskScope = `lesson:${lesson.id}`;
@@ -2121,9 +2156,10 @@ function AccessRestrictionEditor({
   );
 }
 
-// "+ Add Task" entry point. Opens a menu with two paths: add an existing Task
-// from the library (searchable), or create a new Task (pick a type → opens the
-// split-screen Task creation UI).
+// "+ Add Task" entry point. Opens a menu with two paths: add existing Tasks from
+// the library (opens the full-table picker — search, filters, preview, multi-
+// select), or create a new Task (pick a type → opens the split-screen Task
+// creation UI).
 function AddTaskMenu({
   label,
   onCreateNew,
@@ -2132,7 +2168,7 @@ function AddTaskMenu({
 }: {
   label: string;
   onCreateNew: (t: TaskTypeKey) => void;
-  onAddExisting: (task: Task) => void;
+  onAddExisting: () => void;
   variant?: "button" | "link";
 }) {
   return (
@@ -2154,7 +2190,7 @@ function AddTaskMenu({
       {({ close }) => (
         <AddTaskMenuContent
           onCreateNew={(t) => { onCreateNew(t); close(); }}
-          onAddExisting={(task) => { onAddExisting(task); close(); }}
+          onAddExisting={() => { onAddExisting(); close(); }}
         />
       )}
     </Dropdown>
@@ -2166,17 +2202,16 @@ function AddTaskMenuContent({
   onAddExisting,
 }: {
   onCreateNew: (t: TaskTypeKey) => void;
-  onAddExisting: (task: Task) => void;
+  onAddExisting: () => void;
 }) {
-  const [mode, setMode] = useState<"root" | "create" | "existing">("root");
-  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"root" | "create">("root");
 
   if (mode === "root") {
     return (
       <div className="menu">
-        <button className="menu-item" onClick={() => setMode("existing")}>
+        <button className="menu-item" onClick={onAddExisting}>
           <span className="menu-item-icon"><SearchIcon /></span>
-          Add Existing Task
+          Add Existing Tasks
         </button>
         <button className="menu-item" onClick={() => setMode("create")}>
           <span className="menu-item-icon"><AddIcon /></span>
@@ -2186,50 +2221,15 @@ function AddTaskMenuContent({
     );
   }
 
-  if (mode === "create") {
-    return (
-      <div className="menu">
-        <button className="menu-back" onClick={() => setMode("root")}>‹ Choose a Task type</button>
-        {TASK_TYPE_OPTIONS.map(({ key, label: optLabel, icon: Icon }) => (
-          <button key={key} className="menu-item" onClick={() => onCreateNew(key)}>
-            <span className="menu-item-icon"><Icon /></span>
-            {optLabel}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  const q = query.trim().toLowerCase();
-  const results = taskLibrary.filter(
-    (t) => !q || t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q),
-  );
-
   return (
-    <div className="cond-picker">
-      <button className="menu-back" onClick={() => setMode("root")}>‹ Add Existing Task</button>
-      <div className="dropdown-search">
-        <span className="dropdown-search-icon"><SearchIcon /></span>
-        <input
-          autoFocus
-          placeholder="Search Tasks…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-      <div className="dropdown-list cond-picker-list">
-        {results.length === 0 ? (
-          <div className="cond-picker-empty">No Tasks match your search.</div>
-        ) : (
-          results.map((t) => (
-            <button key={t.id} className="cond-picker-item" onClick={() => onAddExisting(t)}>
-              <TaskKindBadge kind={TASK_TYPE_TO_KIND[t.type]} />
-              <span className="cond-picker-item-name">{t.name}</span>
-              <span className="cond-picker-item-meta">{t.type}</span>
-            </button>
-          ))
-        )}
-      </div>
+    <div className="menu">
+      <button className="menu-back" onClick={() => setMode("root")}>‹ Choose a Task type</button>
+      {TASK_TYPE_OPTIONS.map(({ key, label: optLabel, icon: Icon }) => (
+        <button key={key} className="menu-item" onClick={() => onCreateNew(key)}>
+          <span className="menu-item-icon"><Icon /></span>
+          {optLabel}
+        </button>
+      ))}
     </div>
   );
 }

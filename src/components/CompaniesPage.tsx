@@ -5,6 +5,10 @@ import {
   getStatusPill,
   getCanceledOn,
   getTrialEndDate,
+  getDashboardLastAccess,
+  getDashboardLastAccessDays,
+  getCompanyPrice,
+  getCompanyPriceValue,
   getStripeCustomerId,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
@@ -59,7 +63,7 @@ const CardIcon = () => (
   </svg>
 );
 
-type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn" | "canceledOn" | "trialEndDate";
+type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn" | "canceledOn" | "trialEndDate" | "dashboardLastAccess" | "price";
 type SortDir = "asc" | "desc";
 
 const TIER_ORDER: Record<Tier, number> = {
@@ -86,6 +90,8 @@ function compare(a: Company, b: Company, key: SortKey): number {
     case "createdOn": return (Date.parse(getCompanyBilling(a).createdOn) || 0) - (Date.parse(getCompanyBilling(b).createdOn) || 0);
     case "canceledOn": return (Date.parse(getCanceledOn(getCompanyBilling(a))) || 0) - (Date.parse(getCanceledOn(getCompanyBilling(b))) || 0);
     case "trialEndDate": return (Date.parse(getTrialEndDate(getCompanyBilling(a))) || 0) - (Date.parse(getTrialEndDate(getCompanyBilling(b))) || 0);
+    case "dashboardLastAccess": return (getDashboardLastAccessDays(a) ?? Infinity) - (getDashboardLastAccessDays(b) ?? Infinity);
+    case "price": return (getCompanyPriceValue(a) ?? -1) - (getCompanyPriceValue(b) ?? -1);
   }
 }
 
@@ -121,6 +127,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
     createdOn: false,
     canceledOn: false,
     trialEndDate: false,
+    dashboardLastAccess: false,
+    price: false,
   });
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -205,7 +213,9 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
     (columns.partnership ? 155 : 0) +
     (columns.createdOn ? 130 : 0) +
     (columns.canceledOn ? 130 : 0) +
-    (columns.trialEndDate ? 140 : 0);
+    (columns.trialEndDate ? 140 : 0) +
+    (columns.dashboardLastAccess ? 170 : 0) +
+    (columns.price ? 110 : 0);
 
   return (
     <div className="main">
@@ -261,6 +271,17 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
                     {columns.createdOn && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} />}
                     {columns.canceledOn && <SortableHeader col="canceledOn" label="Canceled On" className="col-canceled" sort={sort} toggle={toggleSort} />}
                     {columns.trialEndDate && <SortableHeader col="trialEndDate" label="Trial End Date" className="col-trial-end" sort={sort} toggle={toggleSort} />}
+                    {columns.dashboardLastAccess && (
+                      <SortableHeader
+                        col="dashboardLastAccess"
+                        label="Dashboard Last Access"
+                        className="col-dashboard-access"
+                        sort={sort}
+                        toggle={toggleSort}
+                        tip="Last time a Manager/Admin viewed the Dashboard"
+                      />
+                    )}
+                    {columns.price && <SortableHeader col="price" label="Price" className="col-price" sort={sort} toggle={toggleSort} />}
                     <th className="col-actions">
                       <CompanyEditColumnsButton columns={columns} setColumns={setColumns} />
                     </th>
@@ -390,26 +411,28 @@ function ColGroup({ columns }: { columns: CompanyColumnState }) {
       {columns.createdOn && <col style={{ width: 130 }} />}
       {columns.canceledOn && <col style={{ width: 130 }} />}
       {columns.trialEndDate && <col style={{ width: 140 }} />}
+      {columns.dashboardLastAccess && <col style={{ width: 170 }} />}
+      {columns.price && <col style={{ width: 110 }} />}
       <col style={{ width: 40 }} />
     </colgroup>
   );
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle, sortable = true,
+  col, label, className, sort, toggle, sortable = true, tip,
 }: {
-  col: SortKey; label: string; className?: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void; sortable?: boolean;
+  col: SortKey; label: string; className?: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void; sortable?: boolean; tip?: string;
 }) {
   if (!sortable) {
     return (
-      <th className={`${className ?? ""} no-sort`.trim()}>
+      <th className={`${className ?? ""} no-sort`.trim()} data-tip={tip}>
         <span className="th-content">{label}</span>
       </th>
     );
   }
   const active = sort.key === col;
   return (
-    <th className={className} onClick={() => toggle(col)}>
+    <th className={className} onClick={() => toggle(col)} data-tip={tip}>
       <span className="th-content">
         {label}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
@@ -466,6 +489,8 @@ function CompanyRow({
       {columns.createdOn && <td className="col-created">{billing.createdOn}</td>}
       {columns.canceledOn && <td className="col-canceled">{getCanceledOn(billing)}</td>}
       {columns.trialEndDate && <td className="col-trial-end">{getTrialEndDate(billing)}</td>}
+      {columns.dashboardLastAccess && <td className="col-dashboard-access">{getDashboardLastAccess(company)}</td>}
+      {columns.price && <td className="col-price">{getCompanyPrice(company)}</td>}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -784,7 +809,7 @@ function EditCompanyModal({
               <input className="address-input" placeholder="Address Line 2 (Optional)" value={addrLine2} onChange={(e) => setAddrLine2(e.target.value)} />
               <div className="address-split">
                 <input className="address-input address-cell" placeholder="City (Optional)" value={addrCity} onChange={(e) => setAddrCity(e.target.value)} />
-                <input className="address-input address-cell" placeholder="PIN" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} />
+                <input className="address-input address-cell" placeholder="Zipcode" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} />
               </div>
               <div className="address-row">
                 <select className={`address-select ${addrState ? "" : "is-placeholder"}`} value={addrState} onChange={(e) => setAddrState(e.target.value)}>

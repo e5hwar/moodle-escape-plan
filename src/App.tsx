@@ -110,7 +110,7 @@ type View =
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
   | { name: "name-change-requests" }
-  | { name: "content-overrides" }
+  | { name: "content-overrides"; userId?: string }
   | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" }
   | { name: "merge-accounts" }
   | { name: "transfer-subscription" }
@@ -581,6 +581,7 @@ function AdminApp() {
       ) : view.name === "users" ? (
         <UsersPage
           onViewCompany={(name) => setView({ name: "companies", query: name })}
+          onManageCompletions={(userId) => setView({ name: "content-overrides", userId })}
           initialCompanyFilter={view.companyFilter}
         />
       ) : view.name === "offer-codes" ? (
@@ -590,7 +591,7 @@ function AdminApp() {
       ) : view.name === "name-change-requests" ? (
         <NameChangeRequestsPage />
       ) : view.name === "content-overrides" ? (
-        <ContentOverridesPage onViewAttempts={openAttemptsForUser} />
+        <ContentOverridesPage onViewAttempts={openAttemptsForUser} initialUserId={view.userId} />
       ) : view.name === "product-config" ? (
         <ProductConfigPage initialTab={view.tab} />
       ) : view.name === "merge-accounts" ? (

@@ -3310,12 +3310,12 @@ function TimeToCompleteField({ data, update }: StepProps) {
 function FinalExamField({ data, update }: StepProps) {
   return (
     <div className="form-group">
-      <label className="form-label">Final Exam</label>
+      <label className="form-label">Available during Free Trial?</label>
       <Toggle
         checked={data.finalExam}
         onChange={(v) => update({ finalExam: v })}
-        label="Mark this Task as a final exam"
-        sub="Flags the Task as the certifying final exam. Used for reporting and filterable from the Task list."
+        label="Make this Task available during the Free Trial"
+        sub="Recommendation: Tasks that complete a Certification should have this setting disabled. This is to prevent users from completing Certifications without subscribing."
       />
     </div>
   );

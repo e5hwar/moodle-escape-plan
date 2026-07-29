@@ -32,6 +32,7 @@ const DEFAULT_COLUMNS: UserColumnState = {
   zipCode: false,
   industryPreference: false,
   lastAccess: false,
+  dashboardLastAccess: false,
   joinedOn: false,
 };
 
@@ -130,13 +131,14 @@ const COLS: ColMeta[] = [
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
   { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: (_u, f) => f.zipCode, sortValue: (_u, f) => f.zipCode },
   { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 165, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 130, render: (u) => formatDate(u.lastAccess), sortValue: (u) => u.lastAccess },
+  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 130, render: (u) => formatDate(u.lastAccess), sortValue: (u) => u.lastAccess },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 150, render: (u) => (u.dashboardLastAccess ? formatDate(u.dashboardLastAccess) : <span className="u-muted">—</span>), sortValue: (u) => u.dashboardLastAccess ?? "" },
   { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: (u) => formatDate(u.joinedOn), sortValue: (u) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
 // Columns that have no meaningful sort order (free-text, contact info, codes)
-const NON_SORTABLE_COLS = new Set<UserColumnKey>(["email", "phone", "company", "attribution", "zipCode"]);
+const NON_SORTABLE_COLS = new Set<UserColumnKey>(["email", "phone", "attribution", "zipCode"]);
 
 function compareRows(a: Row, b: Row, key: SortKey): number {
   if (key === "name") return a.u.name.localeCompare(b.u.name);
@@ -149,9 +151,11 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
 
 export function UsersPage({
   onViewCompany,
+  onManageCompletions,
   initialCompanyFilter,
 }: {
   onViewCompany?: (companyName: string) => void;
+  onManageCompletions: (userId: string) => void;
   initialCompanyFilter?: string;
 }) {
   const [list] = useState<User[]>(seedUsers);
@@ -343,6 +347,7 @@ export function UsersPage({
               ? () => setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] }))
               : undefined
           }
+          onManageCompletions={() => onManageCompletions(menu.user.id)}
         />
       )}
     </div>
@@ -484,6 +489,7 @@ function UserActionsMenu({
   onOpenProfile,
   onViewCompany,
   onViewAllEmployees,
+  onManageCompletions,
 }: {
   user: User;
   rect: DOMRect;
@@ -492,6 +498,7 @@ function UserActionsMenu({
   onOpenProfile: () => void;
   onViewCompany?: () => void;
   onViewAllEmployees?: () => void;
+  onManageCompletions: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -569,6 +576,7 @@ function UserActionsMenu({
       {item(<ExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
       {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
       {onViewAllEmployees && item(<PeopleIcon />, "View All Employees", onViewAllEmployees)}
+      {item(<ChecklistIcon />, "Manage Completions", onManageCompletions)}
       <div className="u-menu-divider" />
       {item(<TrashIcon />, "Remove User", () => {}, true)}
     </div>
@@ -612,5 +620,14 @@ const PeopleIcon = () => (
 const LoginAsIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+  </svg>
+);
+
+const ChecklistIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <path d="M4 6l1.2 1.2L7.5 4.8" />
+    <path d="M4 12l1.2 1.2 2.3-2.4" />
+    <path d="M4 18l1.2 1.2 2.3-2.4" />
   </svg>
 );

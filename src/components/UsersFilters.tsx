@@ -25,6 +25,7 @@ export type UserColumnKey =
   | "zipCode"
   | "industryPreference"
   | "lastAccess"
+  | "dashboardLastAccess"
   | "joinedOn";
 
 export type UserColumnState = Record<UserColumnKey, boolean>;
@@ -43,7 +44,8 @@ export const USER_OPTIONAL_COLUMNS: { key: UserColumnKey; label: string }[] = [
   { key: "attribution", label: "Attribution" },
   { key: "zipCode", label: "Zip Code" },
   { key: "industryPreference", label: "Industry Preference" },
-  { key: "lastAccess", label: "Last Access" },
+  { key: "lastAccess", label: "App Last Access" },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access" },
   { key: "joinedOn", label: "Joined SkillCat" },
 ];
 

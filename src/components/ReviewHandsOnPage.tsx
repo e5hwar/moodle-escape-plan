@@ -5,6 +5,7 @@ import {
 } from "../data/reviewSubmissions";
 import { ReviewSearch } from "./ReviewSearch";
 import { ReviewConsole } from "./ReviewConsole";
+import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
 import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { SortIcon } from "./icons";
@@ -164,14 +165,23 @@ export function ReviewHandsOnPage() {
     setTasks([]);
   }
 
-  // The table's active pill filters, flattened so the review console can echo
-  // them as read-only "applied" chips in its queue bar.
-  const activeFilters = [
-    ...statuses.map((v) => ({ label: "Status", value: v })),
-    ...types.map((v) => ({ label: "User Type", value: v })),
-    ...creators.map((v) => ({ label: "Created By", value: v })),
-    ...tasks.map((v) => ({ label: "Task", value: v })),
-    ...companies.map((v) => ({ label: "Company", value: v })),
+  // The table's filters, handed to the review console so its queue popover can
+  // edit them in place (Status and Task get their own pill; the rest sit behind
+  // "More Filters"). They drive this page's state, so the queue re-filters live.
+  const queueFilters: QueueFilter[] = [
+    { label: "Status", all: STATUS_OPTIONS, value: statuses, onApply: setStatuses, primary: true },
+    {
+      label: "Task",
+      all: taskNames,
+      value: tasks,
+      onApply: setTasks,
+      searchable: true,
+      searchPlaceholder: "Search tasks…",
+      primary: true,
+    },
+    { label: "User Type", all: ["B2C", "B2B"], value: types, onApply: setTypes },
+    { label: "Created By", all: CREATOR_OPTIONS, value: creators, onApply: setCreators },
+    { label: "Company", all: companyNames, value: companies, onApply: setCompanies },
   ];
 
   // Clicking a row opens the review console with the table's current
@@ -183,7 +193,9 @@ export function ReviewHandsOnPage() {
       <ReviewConsole
         queue={sorted}
         initialId={open.id}
-        activeFilters={activeFilters}
+        queueFilters={queueFilters}
+        sort={sort}
+        onSort={(key) => toggleSort(key as SortKey)}
         onExit={(reviewed) => {
           const ids = Object.keys(reviewed);
           if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));

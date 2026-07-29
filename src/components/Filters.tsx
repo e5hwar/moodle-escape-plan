@@ -38,9 +38,20 @@ export type ColumnState = Record<OptionalColumn, boolean>;
 type Props = {
   filters: FilterState;
   setFilters: (next: FilterState) => void;
+  /** Extra filter pills appended to the row (e.g. the wizard's Industry pill). */
+  extraPills?: React.ReactNode;
+  /** How many values the extra pills currently hold — feeds "Clear Filters". */
+  extraActive?: number;
+  onClearExtra?: () => void;
 };
 
-export function Filters({ filters, setFilters }: Props) {
+export function Filters({
+  filters,
+  setFilters,
+  extraPills,
+  extraActive = 0,
+  onClearExtra,
+}: Props) {
   const moreCount =
     filters.types.length + filters.visibilities.length + filters.tags.length;
 
@@ -49,7 +60,8 @@ export function Filters({ filters, setFilters }: Props) {
       filters.certifications.length +
       filters.discoverable.length +
       filters.finalExam.length +
-      moreCount >
+      moreCount +
+      extraActive >
     0;
 
   function clearAll() {
@@ -62,6 +74,7 @@ export function Filters({ filters, setFilters }: Props) {
       visibilities: [],
       tags: [],
     });
+    onClearExtra?.();
   }
 
   return (
@@ -96,6 +109,7 @@ export function Filters({ filters, setFilters }: Props) {
           })
         }
       />
+      {extraPills}
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
           Clear Filters

@@ -212,8 +212,11 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // rail is hidden.
   const [step, setStep] = useState(subscriptionOnly ? 2 : 0);
 
-  // Success
+  // Success / confirmation
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
+  // Built but not yet created — shown on the confirmation screen so a brand-new
+  // company (not an edit) can be reviewed before it's actually saved.
+  const [pendingCompany, setPendingCompany] = useState<Omit<Company, "id"> | null>(null);
 
   const isSubscription = plan === "subscription";
   const sym = CURRENCY_SYMBOL[currency];
@@ -241,7 +244,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // surfaces the first thing the admin needs to fix as they scan down the page.
   const step0Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: name.trim().length > 0, message: "Add a company name to continue." },
-    { valid: addrPin.trim().length > 0, message: "Add a PIN to continue." },
+    { valid: addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
   ];
   const step1Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: contactName.trim().length > 0, message: "Add an account holder name to continue." },
@@ -373,20 +376,47 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     };
     if (isEdit && editCompany) {
       onSave?.({ ...company, id: editCompany.id });
+      setCreatedCompany(company);
     } else {
-      onCreate?.(company);
+      // New companies go through a confirmation screen before they're actually
+      // created — nothing is saved yet.
+      setPendingCompany(company);
     }
-    setCreatedCompany(company);
+  }
+
+  function handleConfirmCreate() {
+    if (!pendingCompany) return;
+    onCreate?.(pendingCompany);
+    setCreatedCompany(pendingCompany);
+    setPendingCompany(null);
   }
 
   if (createdCompany) {
-    return (
+    // A subscription billed automatically gets a Stripe payment link to send to
+    // the account holder; everything else (invoicing, trials, free access, or an
+    // edit) has nothing further to collect, so it goes straight to the full summary.
+    const showPaymentLink = !isEdit && isSubscription && createdCompany.payment === "Automatic";
+    return showPaymentLink ? (
+      <PaymentLinkScreen company={createdCompany} onClose={onClose} />
+    ) : (
       <SuccessScreen
         company={createdCompany}
         plan={plan}
         tier={isSubscription ? tier : undefined}
         isEdit={isEdit}
         onClose={onClose}
+      />
+    );
+  }
+
+  if (pendingCompany) {
+    return (
+      <ConfirmCompanyScreen
+        company={pendingCompany}
+        plan={plan}
+        tier={isSubscription ? tier : undefined}
+        onBack={() => setPendingCompany(null)}
+        onConfirm={handleConfirmCreate}
       />
     );
   }
@@ -1189,7 +1219,7 @@ function Step1Details({
 
       <div className="form-group">
         <label className="form-label" style={{ marginBottom: 0 }}>Address <span className="req">*</span></label>
-        <p className="form-help" style={{ margin: "0 0 8px" }}>Country and PIN are mandatory</p>
+        <p className="form-help" style={{ margin: "0 0 8px" }}>Country and Zipcode are mandatory</p>
         <div className="address-field">
           <div className="address-row">
             <select
@@ -1224,7 +1254,7 @@ function Step1Details({
             />
             <input
               className="address-input address-cell"
-              placeholder="PIN*"
+              placeholder="Zipcode*"
               value={addrPin}
               onChange={(e) => setAddrPin(e.target.value)}
             />
@@ -1305,7 +1335,7 @@ function Step1Details({
             Manage Industries on{" "}
             <a
               href="#"
-              className="co-w-manage-cta"
+              className="text-link"
               onClick={(e) => {
                 e.preventDefault();
                 onNavigateToProductConfig?.();
@@ -1327,7 +1357,7 @@ function Step1Details({
             Manage Partnerships on{" "}
             <a
               href="#"
-              className="co-w-manage-cta"
+              className="text-link"
               onClick={(e) => {
                 e.preventDefault();
                 onNavigateToProductConfig?.();
@@ -1869,33 +1899,172 @@ function fakeStripeLink(email: string, name: string): string {
   return `https://buy.stripe.com/${code}`;
 }
 
-function SuccessScreen({
-  company, plan, tier, isEdit = false, onClose,
+function CompanySummaryRows({
+  company, plan, tier,
 }: {
-  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier; isEdit?: boolean; onClose: () => void;
+  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier;
 }) {
-  const [copied, setCopied] = useState(false);
   const isSubscription = plan === "subscription";
-  const isAutomatic = company.payment === "Automatic";
   const sym = company.currency ? CURRENCY_SYMBOL[company.currency as Currency] : "$";
-  // No new Stripe payment link on edits — billing changes are handled in Stripe.
-  const stripeLink = !isEdit && isSubscription && isAutomatic ? fakeStripeLink(company.email, company.name) : null;
+
+  const detail = (label: string, value: React.ReactNode) => (
+    <div className="success-detail-row" key={label}>
+      <span className="success-detail-label">{label}</span>
+      <span className="success-detail-value">{value}</span>
+    </div>
+  );
+
+  return (
+    <>
+      {detail("Company", company.name)}
+      {company.address && detail("Address", company.address)}
+      {company.contactName && detail("Account Holder", company.contactName)}
+      {detail("Email", company.email)}
+      {company.phone && detail("Phone", company.phone)}
+      {company.industry && detail("Industry", company.industry)}
+      {company.partnership && detail("Partnership", company.partnership)}
+      {company.taxStatus && detail("Tax status", company.taxStatus)}
+      {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
+      {company.assignedSalesRep && detail("Assigned Sales Rep", company.assignedSalesRep)}
+      <div className="success-divider" />
+      {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
+      {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}
+      {isSubscription && tier && detail("Tier", tier)}
+      {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Yearly" : "Monthly")}
+      {isSubscription && detail("Currency", company.currency ?? "USD")}
+      {isSubscription && detail("Per-seat rate", `${sym}${company.ratePerSeat} / month`)}
+      {isSubscription && detail("Seats", String(company.seats))}
+      {isSubscription && detail("Payment method", company.payment === "Automatic" ? "Automatic" : "Manual (invoice)")}
+      {isSubscription && detail("Est. monthly total", `${sym}${((company.ratePerSeat ?? 0) * company.seats).toLocaleString()}`)}
+    </>
+  );
+}
+
+function StripeLinkBox({ stripeLink }: { stripeLink: string }) {
+  const [copied, setCopied] = useState(false);
 
   function copy() {
-    if (!stripeLink) return;
     navigator.clipboard.writeText(stripeLink).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   }
 
-  const detail = (label: string, value: React.ReactNode) => (
-    <div className="success-detail-row">
-      <span className="success-detail-label">{label}</span>
-      <span className="success-detail-value">{value}</span>
+  return (
+    <div className="stripe-link-box">
+      <div className="stripe-link-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        Stripe Payment Link
+      </div>
+      <div className="stripe-link-row">
+        <span className="stripe-link-url">{stripeLink}</span>
+        <button className="stripe-link-copy" onClick={copy}>
+          {copied ? (
+            <>
+              <CheckBoldIcon />
+              Copied
+            </>
+          ) : (
+            <>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+      <p className="stripe-link-note">
+        Share this link with the account holder to collect their payment method. The Stripe
+        subscription activates once payment is confirmed.
+      </p>
     </div>
   );
+}
 
+/* Reviewed-but-not-yet-created — shown for brand-new companies (not edits)
+ * after the wizard's final step, before anything is actually saved. No
+ * payment link here; that only appears once the company is confirmed. */
+function ConfirmCompanyScreen({
+  company, plan, tier, onBack, onConfirm,
+}: {
+  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier; onBack: () => void; onConfirm: () => void;
+}) {
+  return (
+    <div className="wizard">
+      <div className="wizard-body wizard-body--success">
+        <div className="wizard-content wizard-success-content">
+          <div className="wizard-success-icon wizard-success-icon--review">
+            <CheckBoldIcon />
+          </div>
+          <h1 className="wizard-title">Confirm details</h1>
+          <p className="wizard-desc">
+            Review the details below before creating <strong>{company.name}</strong>.
+          </p>
+
+          <div className="success-summary">
+            <CompanySummaryRows company={company} plan={plan} tier={tier} />
+          </div>
+        </div>
+      </div>
+
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left">
+          <button className="wizard-cancel" onClick={onBack}>Back</button>
+        </div>
+        <div className="wizard-actions">
+          <button className="btn-publish" onClick={onConfirm}>Confirm & create</button>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+/* Shown right after a brand-new automatically-billed subscription is created —
+ * just the company name and the Stripe link to send the account holder. The
+ * full detail summary was already reviewed on the confirmation screen. */
+function PaymentLinkScreen({
+  company, onClose,
+}: {
+  company: Omit<Company, "id">; onClose: () => void;
+}) {
+  const stripeLink = fakeStripeLink(company.email, company.name);
+
+  return (
+    <div className="wizard">
+      <div className="wizard-body wizard-body--success">
+        <div className="wizard-content wizard-success-content">
+          <div className="wizard-success-icon">
+            <CheckBoldIcon />
+          </div>
+          <h1 className="wizard-title">Company created</h1>
+          <p className="wizard-desc">
+            <strong>{company.name}</strong> has been added.
+          </p>
+
+          <StripeLinkBox stripeLink={stripeLink} />
+        </div>
+      </div>
+
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left" />
+        <div className="wizard-actions">
+          <button className="btn-publish" onClick={onClose}>Done</button>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function SuccessScreen({
+  company, plan, tier, isEdit = false, onClose,
+}: {
+  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier; isEdit?: boolean; onClose: () => void;
+}) {
   return (
     <div className="wizard">
       <div className="wizard-body wizard-body--success">
@@ -1909,62 +2078,8 @@ function SuccessScreen({
           </p>
 
           <div className="success-summary">
-            {detail("Company", company.name)}
-            {company.address && detail("Address", company.address)}
-            {company.contactName && detail("Account Holder", company.contactName)}
-            {detail("Email", company.email)}
-            {company.phone && detail("Phone", company.phone)}
-            {company.industry && detail("Industry", company.industry)}
-            {company.partnership && detail("Partnership", company.partnership)}
-            {company.taxStatus && detail("Tax status", company.taxStatus)}
-            {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
-            {company.assignedSalesRep && detail("Assigned Sales Rep", company.assignedSalesRep)}
-            <div className="success-divider" />
-            {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
-            {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}
-            {isSubscription && tier && detail("Tier", tier)}
-            {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Yearly" : "Monthly")}
-            {isSubscription && detail("Currency", company.currency ?? "USD")}
-            {isSubscription && detail("Per-seat rate", `${sym}${company.ratePerSeat} / month`)}
-            {isSubscription && detail("Seats", String(company.seats))}
-            {isSubscription && detail("Payment method", company.payment === "Automatic" ? "Automatic" : "Manual (invoice)")}
-            {isSubscription && detail("Est. monthly total", `${sym}${((company.ratePerSeat ?? 0) * company.seats).toLocaleString()}`)}
+            <CompanySummaryRows company={company} plan={plan} tier={tier} />
           </div>
-
-          {stripeLink && (
-            <div className="stripe-link-box">
-              <div className="stripe-link-header">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-                Stripe Payment Link
-              </div>
-              <div className="stripe-link-row">
-                <span className="stripe-link-url">{stripeLink}</span>
-                <button className="stripe-link-copy" onClick={copy}>
-                  {copied ? (
-                    <>
-                      <CheckBoldIcon />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="stripe-link-note">
-                Share this link with the account holder to collect their payment method. The Stripe
-                subscription activates once payment is confirmed.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 

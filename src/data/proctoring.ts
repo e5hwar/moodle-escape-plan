@@ -28,6 +28,8 @@ export type Submission = {
   webcamFlaggedCount: number;
   webcamTotal: number;
   frames: WebcamFrame[];
+  /** Freeform note an admin has attached to this candidate's integrity record. */
+  integrityNote?: string;
 };
 
 function makeFrames(totalCount: number, flagged: Array<{ at: number; reason: FlagReason }>): WebcamFrame[] {
@@ -102,6 +104,28 @@ export const submissions: Submission[] = [
       { at: 9, reason: "Looking Away" },
       { at: 14, reason: "Face Not Visible" },
       { at: 21, reason: "Looking Away" },
+    ]),
+  },
+  {
+    id: "PR-0977",
+    candidateName: "Michael Lee",
+    candidateEmail: "mlee@skillcatapp.com",
+    exam: "Electrical Fundamentals",
+    examShort: "Electrical Fundamentals",
+    grade: "6.1",
+    submittedAt: "August 3rd, 2025, 9:05 AM",
+    kind: "proctoring",
+    status: "rejected",
+    idConfidence: 71,
+    idType: "US Driver's License",
+    webcamFlaggedCount: 5,
+    webcamTotal: 180,
+    frames: makeFrames(24, [
+      { at: 2, reason: "Face Not Visible" },
+      { at: 8, reason: "Multiple Faces" },
+      { at: 13, reason: "Looking Away" },
+      { at: 18, reason: "Multiple Faces" },
+      { at: 22, reason: "Face Not Visible" },
     ]),
   },
   {
@@ -196,6 +220,8 @@ export const submissions: Submission[] = [
       { at: 17, reason: "Looking Away" },
       { at: 22, reason: "Face Not Visible" },
     ]),
+    integrityNote:
+      "Support flagged this candidate for coordinating answers with another user in the course chat during a prior attempt.",
   },
   {
     id: "PR-1034",

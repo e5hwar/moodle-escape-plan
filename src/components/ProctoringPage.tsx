@@ -6,7 +6,7 @@ import {
   type Submission,
 } from "../data/proctoring";
 import { ProctoringDetailModal } from "./ProctoringDetailModal";
-import { SearchIcon, ChevronDownIcon, CheckIcon, RowArrowIcon } from "./icons";
+import { SearchIcon, ChevronDownIcon, CheckIcon, RowArrowIcon, SortIcon } from "./icons";
 
 const FilterIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -15,6 +15,24 @@ const FilterIcon = () => (
 );
 
 type FilterKey = "all" | "proctoring" | "id-review" | "id-reupload";
+
+type SortKey = "candidate" | "exam" | "submittedAt";
+type SortDir = "asc" | "desc";
+
+// submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
+// the ordinal suffix so Date.parse can read it.
+function parseSubmittedAt(s: string): number {
+  return Date.parse(s.replace(/(\d+)(st|nd|rd|th)/, "$1")) || 0;
+}
+
+function compareRows(a: Submission, b: Submission, key: SortKey): number {
+  if (key === "submittedAt") return parseSubmittedAt(a.submittedAt) - parseSubmittedAt(b.submittedAt);
+  const va = key === "candidate" ? a.candidateName.toLowerCase() : a.exam.toLowerCase();
+  const vb = key === "candidate" ? b.candidateName.toLowerCase() : b.exam.toLowerCase();
+  if (va < vb) return -1;
+  if (va > vb) return 1;
+  return 0;
+}
 
 const FILTER_TITLE: Record<FilterKey, string> = {
   all: "ALL",
@@ -30,7 +48,14 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   const [selectedExams, setSelectedExams] = useState<Set<string>>(new Set());
   const [examOpen, setExamOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedAt", dir: "desc" });
   const examWrapRef = useRef<HTMLDivElement | null>(null);
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
+  }
 
   useEffect(() => {
     if (!examOpen) return;
@@ -79,10 +104,23 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
     });
   }, [list, filter, query, selectedExams]);
 
+  const sorted = useMemo(() => {
+    const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
+    return sort.dir === "desc" ? arr.reverse() : arr;
+  }, [filtered, sort]);
+
   const activeIndex = activeId
-    ? filtered.findIndex((s) => s.id === activeId)
+    ? sorted.findIndex((s) => s.id === activeId)
     : -1;
-  const active = activeIndex >= 0 ? filtered[activeIndex] : null;
+  const active = activeIndex >= 0 ? sorted[activeIndex] : null;
+
+  // Prior rejected attempts by this candidate, across any exam — not just the one open now.
+  const previousRejected = useMemo(() => {
+    if (!active) return [];
+    return list.filter(
+      (s) => s.candidateEmail === active.candidateEmail && s.status === "rejected" && s.id !== active.id,
+    );
+  }, [list, active]);
 
   function toggleExam(name: string) {
     setSelectedExams((prev) => {
@@ -106,15 +144,15 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   }
 
   function gotoIndex(idx: number) {
-    if (idx < 0 || idx >= filtered.length) return;
-    setActiveId(filtered[idx].id);
+    if (idx < 0 || idx >= sorted.length) return;
+    setActiveId(sorted[idx].id);
   }
 
   // Decide a submission (accept/reject): it leaves the review queue entirely and
   // whichever submission was next in line (or previous, if this was the last one) opens.
   function decide(id: string, status: ProctoringStatus) {
-    const idx = filtered.findIndex((s) => s.id === id);
-    const next = idx >= 0 ? filtered[idx + 1] ?? filtered[idx - 1] ?? null : null;
+    const idx = sorted.findIndex((s) => s.id === id);
+    const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
     setList((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
     setActiveId(next ? next.id : null);
   }
@@ -123,8 +161,8 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   // pending/secondary state — it no longer counts toward the stat tiles, but stays
   // visible in the table until it's accepted or rejected.
   function requestReupload(id: string) {
-    const idx = filtered.findIndex((s) => s.id === id);
-    const next = idx >= 0 ? filtered[idx + 1] ?? filtered[idx - 1] ?? null : null;
+    const idx = sorted.findIndex((s) => s.id === id);
+    const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
     setList((prev) =>
       prev.map((s) =>
         s.id === id ? { ...s, status: "id-requested", kind: "id-reupload" } : s,
@@ -254,19 +292,18 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
           <div className="tasks-scroll pr-scroll">
             <div className="pr-table">
               <div className="pr-thead">
-                <div className="pr-th pr-col-candidate">Candidate</div>
-                <div className="pr-th pr-col-exam">Exam</div>
-                <div className="pr-th pr-col-grade">Grade</div>
-                <div className="pr-th pr-col-date">Submitted On</div>
-                <div className="pr-th pr-col-review" aria-hidden />
+                <SortableTh col="candidate" label="Candidate" className="pr-col-candidate" sort={sort} toggle={toggleSort} />
+                <SortableTh col="exam" label="Exam" className="pr-col-exam" sort={sort} toggle={toggleSort} />
+                <SortableTh col="submittedAt" label="Submitted On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                <div className="pr-th pr-col-review no-sort" aria-hidden />
               </div>
               <div className="pr-tbody">
-                {filtered.length === 0 ? (
+                {sorted.length === 0 ? (
                   <div className="pr-empty">
                     No submissions match your filters.
                   </div>
                 ) : (
-                  filtered.map((s) => {
+                  sorted.map((s) => {
                     const isRequested = s.status === "id-requested";
                     return (
                     <div
@@ -290,7 +327,6 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                         </div>
                       </div>
                       <div className="pr-col-exam pr-cell-body">{s.exam}</div>
-                      <div className="pr-col-grade pr-cell-body">{s.grade}</div>
                       <div className="pr-col-date pr-cell-body">
                         {s.submittedAt}
                       </div>
@@ -319,17 +355,42 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
       {active && (
         <ProctoringDetailModal
           submission={active}
+          previousRejected={previousRejected}
           onClose={closeModal}
           onPrev={() => gotoIndex(activeIndex - 1)}
           onNext={() => gotoIndex(activeIndex + 1)}
           hasPrev={activeIndex > 0}
-          hasNext={activeIndex < filtered.length - 1}
+          hasNext={activeIndex < sorted.length - 1}
           onAccept={() => decide(active.id, "accepted")}
           onReject={() => decide(active.id, "rejected")}
           onRequestId={() => requestReupload(active.id)}
           onUpdateName={(name) => updateCandidateName(active.id, name)}
         />
       )}
+    </div>
+  );
+}
+
+function SortableTh({
+  col,
+  label,
+  className,
+  sort,
+  toggle,
+}: {
+  col: SortKey;
+  label: string;
+  className: string;
+  sort: { key: SortKey; dir: SortDir };
+  toggle: (k: SortKey) => void;
+}) {
+  const active = sort.key === col;
+  return (
+    <div className={`pr-th ${className}`} onClick={() => toggle(col)}>
+      <span className="th-content">
+        {label}
+        <SortIcon active={active} dir={active ? sort.dir : undefined} />
+      </span>
     </div>
   );
 }

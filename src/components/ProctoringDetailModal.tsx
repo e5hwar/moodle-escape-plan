@@ -71,6 +71,7 @@ type ConfirmKind = "accept" | "reject" | "request";
 
 type Props = {
   submission: Submission;
+  previousRejected?: Submission[];
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -95,6 +96,7 @@ const REJECT_REASONS = [
 
 export function ProctoringDetailModal({
   submission,
+  previousRejected = [],
   onClose,
   onPrev,
   onNext,
@@ -200,6 +202,8 @@ export function ProctoringDetailModal({
 
         {/* Body */}
         <div className="pr-modal-body">
+          <IntegrityNoteBanner submission={submission} previousRejected={previousRejected} />
+
           {/* ID Verification */}
           <section className="pr-section">
             <div className="pr-section-head">
@@ -602,6 +606,53 @@ function ImageZoomOverlay({
         </div>
       </div>
       <div className="ncr-fs-hint">Press Esc or click outside to close</div>
+    </div>
+  );
+}
+
+/** Not every candidate has integrity concerns — the banner only renders when there's
+ * an admin note or a prior rejected attempt (for any exam) to surface. */
+function IntegrityNoteBanner({
+  submission,
+  previousRejected,
+}: {
+  submission: Submission;
+  previousRejected: Submission[];
+}) {
+  if (!submission.integrityNote && previousRejected.length === 0) return null;
+
+  return (
+    <div className="pr-integrity">
+      <div className="pr-integrity-icon" aria-hidden>
+        <WarningIcon />
+      </div>
+      <div className="pr-integrity-body">
+        <div className="pr-integrity-title">Integrity Note</div>
+
+        {submission.integrityNote && (
+          <div className="pr-integrity-section">
+            <div className="pr-integrity-label">Admin Note</div>
+            <div className="pr-integrity-text">{submission.integrityNote}</div>
+          </div>
+        )}
+
+        {previousRejected.length > 0 && (
+          <div className="pr-integrity-section">
+            <div className="pr-integrity-label">
+              Previously Rejected Attempts ({previousRejected.length})
+            </div>
+            <div className="pr-integrity-list">
+              {previousRejected.map((r) => (
+                <div key={r.id} className="pr-integrity-item">
+                  <span className="pr-integrity-item-exam">{r.exam}</span>
+                  <span className="pr-meta-dot" />
+                  <span className="pr-integrity-item-date">{r.submittedAt}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

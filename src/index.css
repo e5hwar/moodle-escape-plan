@@ -3182,17 +3182,20 @@ a {
 }
 
 /* "Manage X on Product Config ↗" helper links (Company details step). */
-.co-w-manage-cta {
+/* Inline text link with a trailing icon (Figma 159:298). Shared — used by the
+   company wizard's "Product Config ↗" link and the review console's
+   "Download all" action. */
+.text-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: #f05523;
   text-decoration: none;
 }
-.co-w-manage-cta:hover {
+.text-link:hover {
   text-decoration: underline;
 }
-.co-w-manage-cta svg {
+.text-link svg {
   flex-shrink: 0;
 }
 
@@ -10425,6 +10428,12 @@ a {
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pr-th.no-sort {
+  cursor: default;
 }
 
 .pr-col-candidate {
@@ -10433,11 +10442,7 @@ a {
 }
 
 .pr-col-exam {
-  flex: 0 0 220px;
-}
-
-.pr-col-grade {
-  flex: 0 0 60px;
+  flex: 0 0 260px;
 }
 
 .pr-col-date {
@@ -10952,6 +10957,83 @@ a {
   border-radius: 8px;
   overflow: hidden;
   background: #15151a;
+}
+
+/* Integrity Note banner — admin note and/or prior rejected attempts, any exam */
+.pr-integrity {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(240, 94, 94, 0.35);
+  background: rgba(240, 94, 94, 0.06);
+  border-radius: 10px;
+}
+
+.pr-integrity-icon {
+  flex-shrink: 0;
+  color: #f06767;
+  padding-top: 2px;
+}
+
+.pr-integrity-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pr-integrity-title {
+  font-family: var(--font-sans);
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pr-integrity-section {
+  margin-top: 12px;
+}
+
+.pr-integrity-section:first-of-type {
+  margin-top: 10px;
+}
+
+.pr-integrity-label {
+  font-family: var(--font-sans);
+  font-size: 9.5pt;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.pr-integrity-text {
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.pr-integrity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pr-integrity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  color: var(--text);
+}
+
+.pr-integrity-item-exam {
+  font-weight: 500;
+}
+
+.pr-integrity-item-date {
+  color: var(--text-muted);
 }
 
 /* Names Don't Match banner */
@@ -16275,6 +16357,62 @@ a {
   padding: 18px 22px 20px;
 }
 
+/* ── Download All Awards modal ── */
+.dlall-modal { max-width: 620px; }
+.dlall-body {
+  padding: 16px 22px 2px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.dlall-table { width: 100%; border-collapse: collapse; }
+.dlall-table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 6px 10px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 9.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.dlall-table thead th:not(:first-child) { text-align: center; }
+.dlall-table tbody td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.dlall-table tbody tr:last-child td { border-bottom: none; }
+.dlall-award-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.dlall-check-cell { text-align: center; }
+.dlall-check-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.dlall-col-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.dlall-unselect {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 9pt;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.dlall-unselect:hover { text-decoration: underline; }
+.dlall-foot { justify-content: space-between; align-items: center; }
+.dlall-count { font-size: 10.5pt; color: var(--text-muted); }
+.dlall-foot-actions { display: flex; gap: 10px; }
+
 /* EPA status pills */
 .epa-status {
   display: inline-flex;
@@ -17693,8 +17831,10 @@ a {
   color: var(--text);
 }
 
-/* Status pills — Manage Companies status column (Figma 109:1237).
-   Bordered, tinted-fill pills with a coloured label, no dot. */
+/* Status pills — the shared "Table Pills" set (Figma 109:1237). First used in
+   the Manage Companies status column; also used as the generic status/verdict
+   pill elsewhere (e.g. the Hands-On review console). Bordered, tinted-fill
+   pills with a coloured label, no dot. */
 .co-status-pill {
   display: inline-flex;
   align-items: center;
@@ -17713,6 +17853,7 @@ a {
 .co-status-pill--grey      { color: #737373; border-color: #737373; background: rgba(115, 115, 115, 0.1); }
 .co-status-pill--purple    { color: #6944ff; border-color: #6944ff; background: rgba(105, 68, 255, 0.1); }
 .co-status-pill--secondary { color: #a8a8a8; border-color: #a8a8a8; background: rgba(168, 168, 168, 0.1); }
+.co-status-pill--accent    { color: #f05527; border-color: #f05527; background: rgba(240, 85, 39, 0.1); }
 
 /* The plain-text-column rule strips chrome from spans inside data cells; this
    re-enables the pill chrome for the status column specifically. The extra
@@ -19105,6 +19246,10 @@ a {
   justify-content: center;
   font-size: 20pt;
   margin-bottom: 20px;
+}
+.wizard-success-icon--review {
+  background: rgba(233, 114, 55, 0.14);
+  color: var(--accent);
 }
 .success-summary {
   margin-top: 24px;
@@ -23848,16 +23993,30 @@ a {
 }
 
 /* ═══════════════ Review Console (Hands-On submissions) ═══════════════
-   Queue-driven review screen per the "Hands-On Review Prototype" reference.
-   Reference tokens mapped to app vars: #E8500B → --accent, #141110 → --bg. */
+   Queue-driven review screen for Hands-On submissions.
+
+   Chrome is assembled from the shared design system (Figma "Components"
+   page 11:15114) rather than restyled here:
+     · header eyebrow + title  → .wizard-brand-eyebrow / .wizard-brand-name (78:395)
+     · status & verdict pills  → .co-status-pill--* (Table Pills 109:1237)
+     · inherited filter chips  → .filter-applied / .filter-applied-main (12:15221)
+     · section dividers        → <PageBreak /> (104:376)
+     · field label + textarea  → .form-label / .form-input / .form-help (49:367, 49:343)
+     · buttons                 → .btn-publish (73:473), .btn-save-draft (73:495)
+     · footer                  → .wizard-footer / .wizard-cancel (73:515)
+     · inline link + icon      → .text-link (159:298)
+
+   What remains below is only the review-specific structure that the design
+   system has no component for yet: the media stage + thumbnail strip, the
+   queue strip and progress meter, the attempt switcher, the 1–10 score pad,
+   the read-only banner/callout, and the toast. Those are built on design
+   system tokens (40px gutters, 32px controls, 8px radius, the 12/14/16/28
+   type ramp, rgba(122,122,122,.5) dividers, #404040 control borders and the
+   Table Pill palette) so they drop in cleanly once components exist. */
 
 .rvc-root {
-  --rvc-green: #5fd0a3;
-  --rvc-green-bg: rgba(95, 208, 163, 0.14);
-  --rvc-red: #e98a76;
-  --rvc-red-bg: rgba(217, 92, 74, 0.14);
-  --rvc-amber: #e6a03c;
-  --rvc-line: #212124;
+  --rvc-divider: rgba(122, 122, 122, 0.5); /* DS structural divider */
+  --rvc-ctl: #404040; /* DS control border */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -23868,311 +24027,360 @@ a {
 
 .rvc-flex { flex: 1; }
 
-/* ── header ── */
+/* Keycap — the Primary CTA's key badge (Figma 73:473). Same spec as the
+   .tasks-header override; scoped here because the atom has no global style. */
+.rvc-root .cta-kbd {
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  margin-left: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* ── header (page header 46:314 + eyebrow 78:395) ── */
 .rvc-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 24px 14px;
-  border-bottom: 1px solid var(--rvc-line);
+  gap: 16px;
+  padding: 24px 40px 18px;
+  border-bottom: 1px solid var(--rvc-divider);
   flex: none;
 }
 .rvc-back {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rvc-ctl);
   background: transparent;
-  color: var(--text-muted);
+  color: #a8a8a8;
   display: grid;
   place-items: center;
   cursor: pointer;
+  flex: none;
 }
-.rvc-back:hover { color: var(--text); border-color: var(--border-strong); }
-.rvc-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  color: var(--accent);
-  text-transform: uppercase;
-}
-.rvc-title-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-.rvc-title { font-size: 20px; font-weight: 700; line-height: 1; color: var(--text); }
-.rvc-pending-pill {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: rgba(233, 114, 55, 0.16);
-  color: var(--accent);
-}
+.rvc-back:hover { color: #fff; border-color: #7a7a7a; }
+.rvc-back svg { width: 16px; height: 16px; }
+/* Eyebrow → title gap, per the header atomic 78:395. */
+.rvc-title-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 
-/* ── queue bar ── */
-.rvc-queuebar { border-bottom: 1px solid var(--rvc-line); flex: none; }
-.rvc-queuebar-controls {
-  display: flex;
+/* ── review queue ──
+   Trigger (Figma 263:1579): a 48px control docked flush to the header's right
+   edge — hence the left-only radius — carrying "NEXT · n WAITING", the next
+   reviewer's name and the "Q" keycap.
+   Panel (Figma 263:1587): the shared dropdown shell (#0f0f10 on #3d3d43, 10px)
+   holding a filter row, the queue as a compact table, and a keycap legend. */
+.rvc-queue-wrap {
+  position: relative;
+  flex: none;
+  margin-right: -40px; /* cancel the header gutter so the trigger docks flush */
+}
+.rvc-queue-btn {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 24px;
-  flex-wrap: wrap;
-}
-.rvc-chipbtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12.5px;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 8px 0 0 8px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
   font-family: var(--font-sans);
   cursor: pointer;
   user-select: none;
 }
-.rvc-chipbtn:hover { border-color: var(--border-strong); color: var(--text); }
-.rvc-chipbtn.is-active { border-color: rgba(233, 114, 55, 0.55); color: var(--accent); }
-.rvc-filter-wrap { position: relative; }
-.rvc-filter-menu {
-  position: absolute;
-  top: 36px;
-  left: 0;
-  z-index: 30;
-  width: 280px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-  padding: 8px;
+.rvc-queue-btn:hover,
+.rvc-queue-btn.is-open { filter: brightness(1.15); }
+/* 200px column, eyebrow (14px line) flush above the name (17px line) = 31px. */
+.rvc-queue-btn-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 200px;
+  min-width: 0;
 }
-.rvc-filter-heading {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: var(--text-faint);
+.rvc-queue-btn-eyebrow {
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
   text-transform: uppercase;
-  padding: 5px 8px 3px;
+  white-space: nowrap;
 }
-.rvc-filter-heading--split {
-  border-top: 1px solid var(--rvc-line);
-  margin-top: 6px;
-  padding-top: 9px;
+.rvc-queue-btn-name {
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 17px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.rvc-filter-opt {
+/* "Q" keycap — 20px keycap spec (263:1582). */
+.rvc-queue-btn .kbd-letter {
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a8a8a8;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.rvc-qpanel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 40px; /* back inside the page gutter — the trigger alone docks flush */
+  z-index: 100;
+  width: 811px;
+  max-width: calc(100vw - 80px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 560px);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+.rvc-qpanel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12.5px;
+  gap: 12px;
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--border-strong);
+  flex: none;
+}
+.rvc-qcount {
   font-family: var(--font-sans);
-  color: var(--text-muted);
-  cursor: pointer;
+  font-size: 12px;
+  font-weight: 400;
+  color: #7a7a7a;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.rvc-qpanel-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Queue table — header row 263:1904, rows 263:1921. Fixed column widths with
+   the leftover space distributed between them, matching the Figma row. */
+.rvc-qhead,
+.rvc-qrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
   text-align: left;
 }
-.rvc-filter-opt:hover { background: rgba(255, 255, 255, 0.06); }
-.rvc-filter-opt.is-on { color: var(--accent); }
-.rvc-filter-opt-label {
-  flex: 1;
+/* 8px below the head bar, then the header row's own 12px inset on top of the
+   list's 8px — so header and row columns line up exactly. */
+.rvc-qhead { flex: none; margin-top: 8px; padding: 6px 20px; }
+.rvc-qc {
+  flex: none;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rvc-filter-opt-count { flex: none; font-size: 11px; color: var(--text-faint); }
-.rvc-filter-chip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 11px;
-  border-radius: 999px;
-  background: rgba(233, 114, 55, 0.1);
-  border: 1px solid rgba(233, 114, 55, 0.4);
+/* Column widths per Figma 263:1921; the index cell is a 14px right-aligned
+   gutter (overflow left so a 2-digit position isn't clipped). */
+.rvc-qc--idx { width: 14px; text-align: right; overflow: visible; }
+.rvc-qc--user { width: 180px; }
+.rvc-qc--task { width: 200px; }
+.rvc-qc--att { width: 24px; }
+.rvc-qc--date { width: 160px; }
+.rvc-qhead .rvc-qc {
   font-size: 12px;
+  line-height: 17px;
+  font-weight: 500;
+  color: #7a7a7a;
+  text-transform: uppercase;
 }
-.rvc-filter-chip.is-inherited { padding: 4px 11px; }
-.rvc-filter-chip-kind { color: var(--text-muted); }
-.rvc-filter-chip-label { font-weight: 600; color: var(--accent); white-space: nowrap; }
-.rvc-allnote { font-size: 12.5px; color: var(--text-faint); }
-.rvc-filter-chip-x {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  display: grid;
-  place-items: center;
-  color: var(--accent);
-  font-size: 13px;
-  line-height: 1;
+.rvc-qhead .rvc-qc--sortable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
   cursor: pointer;
-  padding: 0;
 }
-.rvc-filter-chip-x:hover { background: rgba(233, 114, 55, 0.3); }
-.rvc-upnext { font-size: 12.5px; color: var(--text-faint); }
-.rvc-upnext span { color: var(--text-muted); }
-.rvc-pos { font-size: 12.5px; color: var(--text-muted); }
-.rvc-progress {
-  width: 140px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-.rvc-progress > div { height: 100%; background: var(--accent); }
+.rvc-qhead .rvc-qc--sortable:hover { color: #fff; }
+.rvc-qhead .rvc-qc--sortable svg { width: 12px; height: 12px; flex: none; }
 
-.rvc-queue {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 3px 24px 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
+/* No top padding — the header row already supplies the gap above the first row. */
+.rvc-qlist {
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
-.rvc-queue::-webkit-scrollbar { display: none; }
-.rvc-qcard {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid var(--border);
-  cursor: pointer;
+.rvc-qrow { border-radius: 8px; cursor: pointer; }
+/* 19px line + 6px padding = the Figma's 31px row. */
+.rvc-qrow .rvc-qc { font-size: 14px; line-height: 19px; font-weight: 400; color: #a8a8a8; }
+.rvc-qrow .rvc-qc--user { font-weight: 500; color: #fff; }
+.rvc-qrow:hover { background: var(--bg-pill); }
+/* Accent left edge as an inset shadow, so it costs no layout width and the
+   columns stay aligned with the header row. */
+.rvc-qrow.is-selected {
+  background: rgba(240, 85, 35, 0.2);
+  box-shadow: inset 1px 0 0 #f05523;
+}
+.rvc-qrow.is-selected .rvc-qc { color: #fff; }
+.rvc-qrow.is-done:not(.is-selected) .rvc-qc--user { color: #7a7a7a; }
+.rvc-qrow.is-done:not(.is-selected) .rvc-qc--date { color: #14b867; }
+.rvc-qempty {
+  padding: 18px 12px;
   font-family: var(--font-sans);
-  user-select: none;
+  font-size: 14px;
+  color: #7a7a7a;
 }
-.rvc-qcard:hover { border-color: var(--border-strong); }
-.rvc-qcard.is-selected {
-  background: rgba(233, 114, 55, 0.1);
-  border-color: var(--accent);
+
+/* Keycap legend (263:1607). */
+.rvc-qpanel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--border-strong);
+  flex: none;
 }
-.rvc-qdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.rvc-qdot.dot-0 { background: var(--text-faint); }
-.rvc-qdot.dot-1 { background: var(--rvc-amber); }
-.rvc-qdot.dot-2 { background: #d95c4a; }
-.rvc-qdot.dot-done { background: #46a375; }
-.rvc-qname { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; }
-.rvc-qcard.is-done:not(.is-selected) .rvc-qname { color: var(--text-faint); }
-.rvc-qtask {
-  font-size: 11.5px;
-  color: var(--text-faint);
+.rvc-qhints { display: flex; align-items: center; gap: 16px; }
+.rvc-qhint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: #7a7a7a;
+  text-transform: uppercase;
   white-space: nowrap;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.rvc-qcard.is-selected .rvc-qtask { color: var(--text-muted); }
-.rvc-qmeta {
+.rvc-qkeypair { display: inline-flex; gap: 4px; }
+.rvc-qkey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a8a8a8;
+  flex: none;
+}
+.rvc-qkey svg { width: 12px; height: 12px; }
+.rvc-qkey--text {
+  width: auto;
+  min-width: 18px;
+  padding: 0 6px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-faint);
-  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
-.rvc-qmeta.is-done { color: var(--rvc-green); }
-.rvc-qtail { flex: none; font-size: 12px; color: var(--text-faint); padding: 0 6px; }
 
 /* ── submission header ── */
 .rvc-subheader {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--rvc-line);
+  padding: 18px 40px;
+  border-bottom: 1px solid var(--rvc-divider);
   flex: none;
 }
 .rvc-subheader-id { min-width: 0; }
 .rvc-subtask {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rvc-subwho { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.rvc-subwho { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+/* Avatar — no design system component yet (see handoff note). */
 .rvc-avatar {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: #3a2e23;
-  color: #e8a87c;
+  background: rgba(240, 85, 39, 0.1);
+  border: 1px solid rgba(240, 85, 39, 0.4);
+  color: #f05527;
   display: grid;
   place-items: center;
-  font-size: 9.5px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
   flex: none;
 }
-.rvc-subname { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.rvc-subdot { color: var(--text-faint); }
-.rvc-subago { font-size: 12.5px; color: var(--text-faint); white-space: nowrap; }
+.rvc-subname { font-size: 14px; font-weight: 500; color: #a8a8a8; white-space: nowrap; }
+.rvc-subdot { color: #7a7a7a; }
+.rvc-subago { font-size: 14px; font-weight: 400; color: #7a7a7a; white-space: nowrap; }
 .rvc-attempts {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-.rvc-attempts-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  margin-right: 4px;
-}
+/* Attempt switcher — square 32px controls tinted with the Table Pill palette. */
 .rvc-attempt {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: 8px;
   display: grid;
   place-items: center;
-  font-size: 12.5px;
-  font-weight: 600;
   font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rvc-ctl);
+  background: transparent;
+  color: #a8a8a8;
   user-select: none;
 }
-.rvc-attempt--cur { background: rgba(233, 114, 55, 0.14); color: var(--accent); }
-.rvc-attempt--pass { background: var(--rvc-green-bg); color: var(--rvc-green); }
-.rvc-attempt--fail { background: var(--rvc-red-bg); color: var(--rvc-red); }
-.rvc-attempt.is-active { border: 2px solid var(--accent); color: #fff; }
-.rvc-attempt:hover { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3); }
-.rvc-attempts-sum { font-size: 11.5px; color: var(--text-faint); margin-left: 6px; }
+.rvc-attempt--cur { border-color: #f05527; color: #f05527; background: rgba(240, 85, 39, 0.1); }
+.rvc-attempt--pass { border-color: #14b867; color: #14b867; background: rgba(20, 184, 103, 0.1); }
+.rvc-attempt--fail { border-color: #ff1f31; color: #ff1f31; background: rgba(255, 31, 49, 0.1); }
+/* Selected attempt keeps its pass/fail tone and picks up the app's accent
+   selection ring. */
+.rvc-attempt.is-active { box-shadow: 0 0 0 2px rgba(240, 85, 35, 0.55); }
+.rvc-attempt:hover { filter: brightness(1.3); }
+.rvc-attempts-sum { font-size: 12px; font-weight: 400; color: #7a7a7a; margin-left: 4px; }
 
-/* ── past attempt banner ── */
+/* ── past attempt banner (Table Pill yellow palette) ── */
 .rvc-past-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 24px;
-  background: rgba(230, 160, 60, 0.08);
-  border-bottom: 1px solid rgba(230, 160, 60, 0.3);
+  gap: 12px;
+  padding: 12px 40px;
+  background: rgba(255, 197, 36, 0.1);
+  border-bottom: 1px solid rgba(255, 197, 36, 0.5);
   flex: none;
 }
-.rvc-past-banner-title { font-size: 12.5px; color: #e8b36a; font-weight: 600; }
-.rvc-past-banner-sub { font-size: 12.5px; color: var(--text-muted); }
-.rvc-past-banner-back {
-  border: none;
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-  font-family: var(--font-sans);
-}
+.rvc-past-banner-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: #ffc524; }
+.rvc-past-banner-sub { font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: #a8a8a8; }
 
 /* ── body ── */
 .rvc-body {
@@ -24185,20 +24393,29 @@ a {
 .rvc-stagecol {
   flex: 1;
   min-width: 0;
-  padding: 18px 24px;
+  padding: 24px 40px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   overflow-y: auto;
+}
+/* Media — a 4:3 main stage with the remaining media stacked down its right
+   side. No design system component yet (see handoff note). */
+.rvc-media {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: none;
 }
 .rvc-stage {
   position: relative;
-  height: 420px;
-  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--rvc-line);
+  border: 1px solid var(--rvc-ctl);
   background: var(--bg-panel);
-  flex: none;
 }
 .rvc-stage > img {
   width: 100%;
@@ -24211,83 +24428,78 @@ a {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 58px;
-  height: 58px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(13, 13, 13, 0.65);
+  border: 0.5px solid rgba(122, 122, 122, 0.5);
   display: grid;
   place-items: center;
   color: #fff;
   padding-left: 4px;
 }
-.rvc-stage-dur {
+.rvc-stage-dur,
+.rvc-stage-counter {
   position: absolute;
-  right: 12px;
-  top: 12px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.55);
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: rgba(13, 13, 13, 0.75);
+  border: 0.5px solid rgba(122, 122, 122, 0.5);
+  font-family: var(--font-sans);
   font-size: 12px;
-  color: #d8d0c7;
+  font-weight: 500;
+  color: #fff;
 }
+.rvc-stage-dur { right: 16px; top: 16px; }
+.rvc-stage-counter { left: 16px; bottom: 16px; }
 .rvc-stage-nav {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.5);
+  border: 0.5px solid rgba(122, 122, 122, 0.5);
+  background: rgba(13, 13, 13, 0.65);
   display: grid;
   place-items: center;
-  font-size: 18px;
   color: #fff;
   cursor: pointer;
   user-select: none;
 }
-.rvc-stage-nav:hover { background: rgba(0, 0, 0, 0.75); }
-.rvc-stage-nav--prev { left: 12px; }
-.rvc-stage-nav--next { right: 12px; }
-.rvc-stage-counter {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.55);
-  font-size: 12px;
-  color: #d8d0c7;
+.rvc-stage-nav:hover { background: rgba(13, 13, 13, 0.9); }
+.rvc-stage-nav svg { width: 16px; height: 16px; }
+.rvc-stage-nav--prev { left: 16px; }
+.rvc-stage-nav--next { right: 16px; }
+.rvc-stage-download { position: absolute; right: 16px; bottom: 16px; gap: 6px; }
+/* Project description leads the column, so the page break sits flush at the
+   top (same rhythm as the rail's). */
+.rvc-stagecol .page-break { margin: 0 0 12px; }
+/* Additional media — a column to the right of the stage, scrolling with it. */
+.rvc-thumbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  align-self: stretch;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
-.rvc-stage-download {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  border: none;
-  background: rgba(0, 0, 0, 0.55);
-  font-size: 12px;
-  color: #d8d0c7;
-  cursor: pointer;
-  font-family: var(--font-sans);
-}
-.rvc-thumbs { display: flex; gap: 8px; align-items: center; flex: none; }
+.rvc-thumbs::-webkit-scrollbar { display: none; }
 .rvc-thumb {
   position: relative;
-  width: 84px;
-  height: 56px;
+  width: 148px;
+  aspect-ratio: 4 / 3;
   flex: none;
   cursor: pointer;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rvc-ctl);
   overflow: hidden;
   padding: 0;
   background: var(--bg-panel);
 }
 .rvc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.75; }
-.rvc-thumb.is-active { border: 2px solid var(--accent); }
+.rvc-thumb.is-active { border-color: #f05523; box-shadow: 0 0 0 1px #f05523; }
 .rvc-thumb.is-active img { opacity: 1; }
 .rvc-thumb-play {
   position: absolute;
@@ -24295,265 +24507,471 @@ a {
   display: grid;
   place-items: center;
   color: #fff;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(13, 13, 13, 0.35);
 }
-.rvc-thumb-play svg { width: 14px; height: 14px; }
-.rvc-download-all {
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  color: var(--text-faint);
-  cursor: pointer;
-  font-family: var(--font-sans);
-}
-.rvc-download-all:hover { color: var(--text); }
-.rvc-desc-block { border-top: 1px solid var(--rvc-line); padding-top: 14px; }
-.rvc-desc-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 6px;
-}
-.rvc-optional { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.rvc-thumb-play svg { width: 20px; height: 20px; }
 .rvc-desc {
-  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.6;
-  color: var(--text-muted);
+  color: #a8a8a8;
   max-width: 760px;
 }
 
 /* ── right rail ── */
+/* Rail content width is the Figma right column (452px) + 24px padding. */
 .rvc-rail {
-  width: 400px;
+  width: 500px;
   flex: none;
-  border-left: 1px solid var(--rvc-line);
-  padding: 18px 20px;
+  border-left: 1px solid var(--rvc-divider);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
   overflow-y: auto;
 }
-.rvc-rail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+.rvc-rail .page-break { margin: 0 0 12px; }
+
+/* Field group — label + subtext, then 8px to the control (Figma 263:1015,
+   263:865, 263:1045). Label and subtext sit flush against each other. */
+.rvc-field { display: flex; flex-direction: column; gap: 8px; }
+.rvc-field + .rvc-field { margin-top: 32px; }
+.rvc-field-head .form-label { margin-bottom: 0; }
+.rvc-field-head .form-help { margin: 0; }
+.rvc-field--fb { flex: 1; min-height: 0; }
+
+/* Reviewer's checklist (Figma 263:1045) — authored content, read-only. */
+.rvc-checklist {
+  padding: 0 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
 }
-.rvc-rail-heading { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.rvc-rail-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: var(--text-faint);
-  text-transform: uppercase;
-}
-.rvc-tagpill {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-faint);
-}
-/* Reviewer checklist is authored rich text (hoReviewerChecklist), shown
-   read-only to the reviewer — no checkboxes or interaction. */
-.rvc-checklist-static {
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-.rvc-checklist-static ul {
+.rvc-checklist ul {
   margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  padding-left: 24px;
+  list-style: disc;
 }
-.rvc-checklist-static li { padding-left: 2px; }
-.rvc-checklist-static li::marker { color: var(--text-faint); }
-.rvc-checklist-static p { margin: 0 0 8px; }
-.rvc-checklist-static p:last-child { margin-bottom: 0; }
-.rvc-checklist-note {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-}
-.rvc-rail-section { border-top: 1px solid var(--rvc-line); padding-top: 16px; }
-.rvc-rail-section--fb {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.rvc-passpill {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--rvc-green-bg);
-  color: var(--rvc-green);
-}
-.rvc-scores { display: flex; gap: 5px; align-items: stretch; }
+.rvc-checklist-fail { margin: 19px 0 0; }
+
+/* Scoring scale (Figma 263:1021) — ten 38×41 cells, 8px apart. The selected
+   cell carries the verdict: green fill for a pass, red for a rejection. */
+.rvc-scores { display: flex; gap: 8px; align-items: center; }
 .rvc-score {
-  flex: 1;
-  min-width: 0;
-  height: 32px;
+  flex: none;
+  width: 38px;
+  height: 41px;
+  padding: 0;
   border-radius: 8px;
   cursor: pointer;
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rvc-ctl);
   display: grid;
   place-items: center;
-  font-size: 13.5px;
-  font-weight: 600;
   font-family: var(--font-sans);
-  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 400;
+  color: #a8a8a8;
   user-select: none;
-  padding: 0;
 }
-.rvc-score:hover { border-color: var(--border-strong); }
-.rvc-score--passgap { margin-left: 10px; }
-.rvc-score.is-selected {
-  background: var(--accent);
-  border-color: var(--accent);
+.rvc-score:hover { border-color: #7a7a7a; color: #fff; }
+.rvc-score.is-pass {
+  background: #14b867;
+  border-color: #00572b;
   color: #fff;
+  font-weight: 600;
 }
-.rvc-score-readout { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.rvc-score-text { font-size: 15px; font-weight: 700; color: var(--text); }
-.rvc-verdict {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-faint);
+.rvc-score.is-fail {
+  background: #ff1f31;
+  border-color: #700009;
+  color: #fff;
+  font-weight: 600;
 }
-.rvc-verdict.is-pass { background: var(--rvc-green-bg); color: var(--rvc-green); }
-.rvc-verdict.is-fail { background: var(--rvc-red-bg); color: var(--rvc-red); }
-.rvc-keys-hint { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+/* Threshold legend (Figma 263:1042) — the active side turns bold + verdict colour. */
+.rvc-scale-legend {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.rvc-legend-fail.is-on { font-weight: 600; color: #ff1f31; }
+.rvc-legend-pass.is-on { font-weight: 600; color: #14b867; }
+
+/* Feedback field (Figma 263:871) — 197px box: 171px of text + 12px padding. */
 .rvc-feedback {
   flex: 1;
-  min-height: 96px;
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text);
-  font-family: var(--font-sans);
+  min-height: 197px;
+  line-height: normal;
   resize: vertical;
 }
-.rvc-feedback:focus { outline: none; border-color: var(--accent); }
 
 /* past review (locked) in the rail */
-.rvc-rail-past { display: flex; flex-direction: column; gap: 12px; }
-.rvc-rail-past-head { display: flex; align-items: center; justify-content: space-between; }
-.rvc-rail-past-score { display: flex; align-items: center; gap: 10px; }
-.rvc-rail-past-num { font-size: 30px; font-weight: 700; line-height: 1; color: var(--text); }
+.rvc-rail-past { display: flex; flex-direction: column; gap: 16px; }
+.rvc-rail-past-score { display: flex; align-items: center; gap: 12px; }
+.rvc-rail-past-num {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
 .rvc-rail-past-quote {
-  border-left: 3px solid rgba(255, 255, 255, 0.14);
+  border-left: 2px solid var(--rvc-ctl);
   padding: 2px 0 2px 12px;
   margin: 0;
 }
-.rvc-rail-past-fb { font-size: 12.5px; line-height: 1.6; color: var(--text-muted); }
-.rvc-rail-past-by { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; }
-.rvc-rail-past-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; margin: 0; }
-.rvc-back-current {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px;
-  border-radius: 10px;
-  border: 1px solid rgba(233, 114, 55, 0.5);
-  background: transparent;
-  color: var(--accent);
-  font-size: 13.5px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  user-select: none;
-}
-.rvc-back-current:hover { background: rgba(233, 114, 55, 0.1); }
+.rvc-rail-past-fb { font-family: var(--font-sans); font-size: 16px; line-height: 1.6; color: #a8a8a8; }
+.rvc-rail-past-by { font-family: var(--font-sans); font-size: 12px; color: #7a7a7a; margin-top: 6px; }
+.rvc-back-current { width: 100%; margin-top: 16px; }
 
-/* company-owned lock note */
+/* company-owned lock note — no design system callout component yet. */
 .rvc-owner-note {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  padding: 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-.rvc-owner-note-icon { flex: none; color: var(--text-faint); margin-top: 1px; }
-
-/* ── footer ── */
-.rvc-footer {
-  border-top: 1px solid var(--rvc-line);
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-}
-.rvc-skip {
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  color: var(--text-faint);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  user-select: none;
-  padding: 0;
-}
-.rvc-skip:hover { color: var(--text); }
-.rvc-shortcuts {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-faint);
-  margin-right: 8px;
-}
-.rvc-footer-note { font-size: 12.5px; color: var(--text-faint); margin-right: 6px; }
-.rvc-submit {
-  padding: 10px 18px;
+  padding: 16px;
   border-radius: 8px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-size: 13.5px;
-  font-weight: 600;
+  border: 1px solid var(--rvc-ctl);
+  background: #0d0d0d;
   font-family: var(--font-sans);
-  cursor: pointer;
-  user-select: none;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #a8a8a8;
 }
-.rvc-submit:hover { background: var(--accent-strong); }
-.rvc-submit.is-dim { opacity: 0.45; }
+.rvc-owner-note strong { color: #fff; font-weight: 600; }
+.rvc-owner-note-icon { flex: none; color: #7a7a7a; margin-top: 2px; }
 
-/* ── toast ── */
+/* ── footer (shared .wizard-footer + Figma 267:1985) ──
+   Same 20px/40px box as the wizard footer, but with a 2px top rule, a bolder
+   "Skip", and keycap hints reusing the queue popover's legend atoms. */
+.rvc-footer { gap: 16px; border-top-width: 2px; }
+.rvc-footer .wizard-cancel { font-weight: 600; color: #a8a8a8; padding: 0; }
+.rvc-footer .wizard-cancel:hover { color: #fff; }
+.rvc-footer-hints { display: flex; align-items: center; gap: 16px; }
+.rvc-qkey-ellipsis {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #7a7a7a;
+  padding: 0 1px;
+}
+.rvc-qkeypair--tight { gap: 2px; }
+/* Keycap pair inside the primary CTA (267:2036) — ⌘ at 14px, ↵ at 12px, both
+   white against the orange fill. */
+.rvc-submit-keys { display: inline-flex; align-items: center; gap: 3px; }
+.btn-publish .rvc-qkey { color: #fff; }
+.rvc-qkey--cmd svg { width: 14px; height: 14px; }
+.rvc-footer-note { font-family: var(--font-sans); font-size: 14px; color: #7a7a7a; }
+.rvc-dim { opacity: 0.5; }
+
+/* ── toast — no design system component yet (see handoff note) ── */
 @keyframes rvcToastIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .rvc-toast {
   position: fixed;
-  right: 24px;
-  bottom: 72px;
+  right: 40px;
+  bottom: 88px;
   z-index: 9;
-  background: var(--bg-pill-strong);
-  border: 1px solid rgba(233, 114, 55, 0.45);
-  border-radius: 10px;
+  background: #0d0d0d;
+  border: 1px solid rgba(240, 85, 35, 0.5);
+  border-radius: 8px;
   padding: 12px 16px;
-  font-size: 13px;
-  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #fff;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   animation: rvcToastIn 0.18s ease;
+}
+
+/* =============================================================
+ * Add Existing Tasks — the Certification wizard's Task-library picker
+ * A ~3/4-screen modal built on the .cl-modal shell, holding the same search
+ * bar, filter pills and table vocabulary as the standalone Tasks page, plus
+ * multi-select checkboxes and a per-row Preview panel.
+ * ============================================================= */
+
+.aet-modal {
+  width: 75vw;
+  height: 75vh;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  padding: 0 22px 0;
+}
+
+.aet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 0 12px;
+}
+.aet-head-text { min-width: 0; }
+.aet-head .cl-modal-sub { max-width: 780px; }
+
+.aet-toolbar {
+  padding: 14px 0 10px;
+  flex: none;
+}
+/* The search bar is page-width on Tasks; inside the modal it fills the shell. */
+.aet-toolbar .usearch { width: 100%; }
+
+/* The picker owns the filter row's spacing — no page-level bottom padding. */
+.aet-modal > .filters {
+  padding-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.aet-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  gap: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.aet-table-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.aet-count {
+  flex: none;
+  padding: 10px 2px 0;
+  font-family: var(--font-sans);
+  font-size: 10.5pt;
+  color: var(--text-muted);
+}
+
+/* ── Columns ── */
+.aet-col-check { padding-right: 0 !important; padding-left: 14px !important; }
+.aet-col-name { color: var(--text) !important; font-weight: 500; }
+
+/* Preview pins to the right edge so the CTA stays reachable when the table is
+   wider than the modal — same trick as the pages' .col-actions column. */
+.aet-col-preview {
+  --aet-cell-bg: var(--bg-panel);
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  text-align: right;
+  background: var(--aet-cell-bg);
+}
+.table thead .aet-col-preview { z-index: 6; }
+.table tbody tr:hover .aet-col-preview { --aet-cell-bg: #191919; }
+.table tbody tr.aet-row.picked .aet-col-preview { --aet-cell-bg: #241611; }
+
+.aet-col-name,
+.aet-col-used,
+.aet-col-certtype {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aet-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Row state: picked rows keep a persistent accent tint; rows already in the
+   Certification are inert. */
+.table tbody tr.aet-row.picked {
+  background: rgba(240, 85, 35, 0.09);
+}
+.table tbody tr.aet-row.picked:hover {
+  background: rgba(240, 85, 35, 0.14);
+}
+.table tbody tr.aet-row.added {
+  cursor: default;
+  opacity: 0.55;
+}
+.table tbody tr.aet-row.added:hover {
+  background: transparent;
+}
+
+.aet-row .checkbox.is-disabled {
+  background: var(--bg-pill);
+  border-color: var(--border-strong);
+  color: var(--text-faint);
+}
+
+.aet-added,
+.aet-flag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 9pt;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.aet-added {
+  background: var(--bg-pill);
+  color: var(--text-muted);
+}
+.aet-flag {
+  background: rgba(240, 85, 35, 0.14);
+  color: #f0854f;
+}
+
+/* ── Industries cell ── */
+.aet-inds {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.aet-ind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 10pt;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+/* Matches an Industry the Certification being built belongs to. */
+.aet-ind.match {
+  border-color: rgba(240, 85, 35, 0.55);
+  background: rgba(240, 85, 35, 0.12);
+  color: #f0854f;
+}
+.aet-ind-check {
+  display: inline-flex;
+  align-items: center;
+  color: #f0854f;
+}
+.aet-ind-none { color: var(--text-faint); }
+
+/* Data cells are stripped to plain text by the shared table reset, so the chip
+   chrome drops away inside the table — but the match accent is the whole point
+   of the column, so it is re-enabled with the documented higher-specificity
+   override (extra :not() + !important). */
+.table tbody td.aet-col-inds:not(.col-actions):not(.col-checkbox) span.aet-ind.match {
+  color: #f0854f !important;
+}
+
+.aet-preview-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 10.5pt;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.aet-preview-btn:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+  background: var(--bg-pill);
+}
+.aet-preview-btn.on {
+  color: #f0854f;
+  border-color: rgba(240, 85, 35, 0.6);
+  background: rgba(240, 85, 35, 0.12);
+}
+
+.aet-empty-row td {
+  height: 120px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.table tbody tr.aet-empty-row {
+  cursor: default;
+  border-bottom: none;
+}
+.table tbody tr.aet-empty-row:hover { background: transparent; }
+
+/* ── Preview panel ── */
+.aet-panel {
+  width: 360px;
+  border-left: 1px solid var(--border-strong);
+  background: transparent;
+}
+.aet-panel .co-panel-head { padding-top: 16px; }
+.aet-panel .co-drawer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.aet-panel-foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+.aet-panel-foot > button { width: 100%; justify-content: center; }
+.aet-panel-added {
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  color: var(--text-muted);
+}
+.aet-chip-meta {
+  margin-left: 6px;
+  color: var(--text-faint);
+  font-size: 9.5pt;
+}
+
+/* ── Footer ── */
+.aet-foot {
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  flex: none;
+}
+.aet-selected {
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.aet-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aet-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.aet-clear:hover { color: var(--text); }
+.aet-foot .btn-publish:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .aet-modal { width: calc(100vw - 40px); height: calc(100vh - 80px); }
+  .aet-panel { width: 300px; }
 }

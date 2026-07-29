@@ -36,6 +36,9 @@ export type TaskSubmission = {
   audioLabel: string; // voice-note label
   audioDuration: string; // e.g. "0:48"
   criteria: EvaluationCriterion[];
+  /** "Fail if:" conditions the task author lists under the pass criteria
+   * (reviewer's checklist, Figma 263:1045). */
+  failCriteria: EvaluationCriterion[];
 };
 
 const TASK_NAMES = [
@@ -65,6 +68,13 @@ const CRITERIA: EvaluationCriterion[] = [
   { id: "c2", label: "Safety and compliance with procedure" },
   { id: "c3", label: "Execution accuracy and completeness" },
   { id: "c4", label: "Professional communication in notes" },
+];
+
+const FAIL_CRITERIA: EvaluationCriterion[] = [
+  { id: "f1", label: "Media does not clearly show the work being described" },
+  { id: "f2", label: "Unsafe practice shown or described (live circuits, removed guards)" },
+  { id: "f3", label: "Required steps skipped or performed out of sequence" },
+  { id: "f4", label: "Notes contradict the submitted evidence" },
 ];
 
 function uhash(s: string): number {
@@ -152,6 +162,7 @@ function buildSubmissions(): TaskSubmission[] {
       audioLabel: "Voice note",
       audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
       criteria: CRITERIA,
+      failCriteria: FAIL_CRITERIA,
     };
   });
 }

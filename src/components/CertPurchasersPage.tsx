@@ -65,6 +65,7 @@ const DEFAULT_COLUMNS: PurchaserColumnState = {
   zipCode: false,
   industryPreference: false,
   lastAccess: false,
+  dashboardLastAccess: false,
   joinedOn: false,
 };
 
