@@ -599,8 +599,8 @@ export function ReviewConsole({
                 aria-expanded={queueOpen}
               >
                 <span className="rvc-viewqueue-text">
-                  View Queue
-                  <span className="rvc-viewqueue-count"> · {pendingCount} waiting</span>
+                  <span className="rvc-viewqueue-label">View Queue</span>
+                  <span className="rvc-viewqueue-count">· {pendingCount} waiting</span>
                 </span>
                 <span className="kbd-letter">Q</span>
               </button>

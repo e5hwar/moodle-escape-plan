@@ -1,23 +1,22 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   submissions as seedSubmissions,
-  ALL_EXAMS,
+  PROCTORED_EXAMS,
+  ID_ONLY_EXAMS,
   type ProctoringStatus,
   type Submission,
 } from "../data/proctoring";
-import { ProctoringDetailModal } from "./ProctoringDetailModal";
-import { SearchIcon, ChevronDownIcon, CheckIcon, RowArrowIcon, SortIcon } from "./icons";
+import { ProctoringConsole } from "./ProctoringConsole";
+import { SearchIcon, RowArrowIcon, SortIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 
-const FilterIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 5h18M6 12h12M10 19h4" />
-  </svg>
-);
+const ALL_EXAMS = [...PROCTORED_EXAMS, ...ID_ONLY_EXAMS];
 
 type FilterKey = "all" | "proctoring" | "id-review" | "id-reupload";
 
-type SortKey = "candidate" | "exam" | "submittedAt";
-type SortDir = "asc" | "desc";
+export type SortKey = "candidate" | "exam" | "submittedAt";
+export type SortDir = "asc" | "desc";
 
 // submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
 // the ordinal suffix so Date.parse can read it.
@@ -45,27 +44,16 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
   const [list, setList] = useState<Submission[]>(seedSubmissions);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
-  const [selectedExams, setSelectedExams] = useState<Set<string>>(new Set());
-  const [examOpen, setExamOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [examFilter, setExamFilter] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedAt", dir: "desc" });
-  const examWrapRef = useRef<HTMLDivElement | null>(null);
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
   }
-
-  useEffect(() => {
-    if (!examOpen) return;
-    function onDocClick(e: MouseEvent) {
-      if (!examWrapRef.current) return;
-      if (!examWrapRef.current.contains(e.target as Node)) setExamOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [examOpen]);
 
   // Once a submission is accepted/rejected it's off the review queue entirely. A
   // requested reupload doesn't count toward the stat tiles — only true "pending"
@@ -91,7 +79,7 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
       } else {
         return false;
       }
-      if (selectedExams.size > 0 && !selectedExams.has(s.exam)) return false;
+      if (examFilter.length > 0 && !examFilter.includes(s.exam)) return false;
       if (q) {
         if (
           !s.candidateName.toLowerCase().includes(q) &&
@@ -102,17 +90,14 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
       }
       return true;
     });
-  }, [list, filter, query, selectedExams]);
+  }, [list, filter, query, examFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
     return sort.dir === "desc" ? arr.reverse() : arr;
   }, [filtered, sort]);
 
-  const activeIndex = activeId
-    ? sorted.findIndex((s) => s.id === activeId)
-    : -1;
-  const active = activeIndex >= 0 ? sorted[activeIndex] : null;
+  const active = activeId ? sorted.find((s) => s.id === activeId) ?? null : null;
 
   // Prior rejected attempts by this candidate, across any exam — not just the one open now.
   const previousRejected = useMemo(() => {
@@ -122,38 +107,28 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
     );
   }, [list, active]);
 
-  function toggleExam(name: string) {
-    setSelectedExams((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }
-
-  function clearExams() {
-    setSelectedExams(new Set());
-  }
-
   function openSubmission(id: string) {
     setActiveId(id);
   }
 
-  function closeModal() {
+  function closeConsole() {
     setActiveId(null);
-  }
-
-  function gotoIndex(idx: number) {
-    if (idx < 0 || idx >= sorted.length) return;
-    setActiveId(sorted[idx].id);
   }
 
   // Decide a submission (accept/reject): it leaves the review queue entirely and
   // whichever submission was next in line (or previous, if this was the last one) opens.
-  function decide(id: string, status: ProctoringStatus) {
+  // Rejection reasons are kept on the record so this candidate's later submissions
+  // can list them in the Integrity Note's "Rejected Attempts" detail.
+  function decide(id: string, status: ProctoringStatus, reasons?: string[]) {
     const idx = sorted.findIndex((s) => s.id === id);
     const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
-    setList((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+    setList((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? { ...s, status, ...(reasons?.length ? { rejectionReasons: reasons } : null) }
+          : s,
+      ),
+    );
     setActiveId(next ? next.id : null);
   }
 
@@ -179,12 +154,24 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
     );
   }
 
-  const examLabel =
-    selectedExams.size === 0
-      ? "Select Exams"
-      : selectedExams.size === 1
-      ? Array.from(selectedExams)[0]
-      : `${selectedExams.size} exams`;
+  if (active) {
+    return (
+      <ProctoringConsole
+        submission={active}
+        queue={sorted}
+        previousRejected={previousRejected}
+        examFilter={examFilter}
+        sort={sort}
+        onSort={toggleSort}
+        onGoto={openSubmission}
+        onExit={closeConsole}
+        onAccept={() => decide(active.id, "accepted")}
+        onReject={(details) => decide(active.id, "rejected", details?.reasons)}
+        onRequestId={() => requestReupload(active.id)}
+        onUpdateName={(name) => updateCandidateName(active.id, name)}
+      />
+    );
+  }
 
   return (
     <div className="main">
@@ -192,16 +179,14 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
         <div className="tasks pr-page">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Proctoring</h1>
-              <div className="tasks-subtitle">
-                <span>{counts.all} submissions awaiting review</span>
-                <span className="tasks-subtitle-dot" />
-                <span>Approve, reject, or request a new ID upload</span>
-              </div>
+              <h1 className="tasks-title">Proctoring & ID Review</h1>
             </div>
             <div className="tasks-header-actions">
-              <button className="btn-secondary" onClick={onManageIds}>
-                Manage IDs
+              {/* Design system Secondary Button (Figma 73:495) — .btn-save-draft is
+                  this codebase's mapping of it; .btn-secondary is an older
+                  off-spec style (wrong padding, fill and type size). */}
+              <button className="btn-save-draft" onClick={onManageIds}>
+                View All IDs
               </button>
             </div>
           </header>
@@ -223,69 +208,37 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
             )}
           </div>
 
-          {/* Controls */}
-          <div className="pr-controls">
-            <div className="pr-search-pill">
-              <span className="pr-search-pill-icon">
-                <SearchIcon />
-              </span>
-              <input
-                className="pr-search-pill-input"
-                placeholder="Search by name or email"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+          {/* Search — same styling as Tasks / Users / Manage IDs pages */}
+          <div className="toolbar">
+            <div className="usearch">
+              <div className={`usearch-bar ${searchFocused ? "open" : ""}`}>
+                <span className="usearch-icon">
+                  <SearchIcon />
+                </span>
+                <input
+                  className="usearch-input"
+                  placeholder="Search by candidate name or email…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                />
+                <span className="usearch-kbd">
+                  <span className="kbd-cmd">⌘</span>
+                  <span className="kbd-letter">K</span>
+                </span>
+              </div>
             </div>
+          </div>
 
-            <div className="pr-exam-wrap" ref={examWrapRef}>
-              <button
-                className={`pr-exam-pill ${examOpen ? "is-open" : ""}`}
-                onClick={() => setExamOpen((v) => !v)}
-              >
-                <span className="pr-exam-pill-icon">
-                  <FilterIcon />
-                </span>
-                <span className="pr-exam-pill-label">{examLabel}</span>
-                {selectedExams.size > 0 && (
-                  <span className="pr-exam-count">{selectedExams.size}</span>
-                )}
-                <span className="pr-exam-pill-caret">
-                  <ChevronDownIcon />
-                </span>
+          {/* Filters — same styling as other admin pages */}
+          <div className="filters">
+            <ExamPill value={examFilter} onApply={setExamFilter} />
+            {examFilter.length > 0 && (
+              <button className="filter-clear-link" onClick={() => setExamFilter([])}>
+                Clear Filters
               </button>
-
-              {examOpen && (
-                <div className="pr-exam-dropdown">
-                  <div className="pr-exam-dropdown-head">
-                    <span>Filter by exam</span>
-                    {selectedExams.size > 0 && (
-                      <button className="pr-exam-clear" onClick={clearExams}>
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="pr-exam-dropdown-list">
-                    {ALL_EXAMS.map((name) => {
-                      const checked = selectedExams.has(name);
-                      return (
-                        <button
-                          key={name}
-                          className="pr-exam-option"
-                          onClick={() => toggleExam(name)}
-                        >
-                          <span
-                            className={`pr-exam-check ${checked ? "is-on" : ""}`}
-                          >
-                            {checked && <CheckIcon />}
-                          </span>
-                          <span className="pr-exam-option-label">{name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Table */}
@@ -303,12 +256,10 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                     No submissions match your filters.
                   </div>
                 ) : (
-                  sorted.map((s) => {
-                    const isRequested = s.status === "id-requested";
-                    return (
+                  sorted.map((s) => (
                     <div
                       key={s.id}
-                      className={`pr-row ${isRequested ? "pr-row--secondary" : ""}`}
+                      className="pr-row"
                       onClick={() => openSubmission(s.id)}
                     >
                       <div className="pr-col-candidate">
@@ -316,11 +267,6 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                           <span className="pr-candidate-name">
                             {s.candidateName}
                           </span>
-                          {isRequested && (
-                            <span className="pr-status-pill pr-status-pill--requested">
-                              Reupload Requested
-                            </span>
-                          )}
                         </div>
                         <div className="pr-candidate-email">
                           {s.candidateEmail}
@@ -343,30 +289,13 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                         </button>
                       </div>
                     </div>
-                    );
-                  })
+                  ))
                 )}
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {active && (
-        <ProctoringDetailModal
-          submission={active}
-          previousRejected={previousRejected}
-          onClose={closeModal}
-          onPrev={() => gotoIndex(activeIndex - 1)}
-          onNext={() => gotoIndex(activeIndex + 1)}
-          hasPrev={activeIndex > 0}
-          hasNext={activeIndex < sorted.length - 1}
-          onAccept={() => decide(active.id, "accepted")}
-          onReject={() => decide(active.id, "rejected")}
-          onRequestId={() => requestReupload(active.id)}
-          onUpdateName={(name) => updateCandidateName(active.id, name)}
-        />
-      )}
     </div>
   );
 }
@@ -392,5 +321,45 @@ function SortableTh({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </div>
+  );
+}
+
+function ExamPill({
+  value,
+  onApply,
+}: {
+  value: string[];
+  onApply: (v: string[]) => void;
+}) {
+  return (
+    <Dropdown
+      width={300}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="Exam"
+          value={summarize(value, ALL_EXAMS)}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[
+            { label: "Proctored", items: [...PROCTORED_EXAMS] },
+            { label: "ID Only", items: [...ID_ONLY_EXAMS] },
+          ]}
+          subsectionStyle
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+          searchable
+          searchPlaceholder="Search exams…"
+        />
+      )}
+    </Dropdown>
   );
 }

@@ -1,6 +1,35 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { idPhotoUrl, type NameChangeRequest } from "../data/nameChangeRequests";
 
+/** The ID document fields this card renders. Kept separate from any one page's
+ *  record type so the card (and its hover-magnify / full-view / rotate tools)
+ *  can be shared — Name Change Requests and Proctoring both feed it. */
+export type IdCardData = {
+  name: string;
+  /** Free-form so callers can pass their own wording ("Driver License",
+   *  "Driver's License", …); rendered upper-cased in the header band. */
+  idType: string;
+  idNumber: string;
+  dob: string; // ISO date
+  expires: string; // ISO date
+  region: string; // issuing state / country
+  /** picsum seed used for the ID portrait photo. */
+  photoSeed: string;
+};
+
+/** Adapter for the Name Change Requests page's record shape. */
+export function idCardFromRequest(r: NameChangeRequest): IdCardData {
+  return {
+    name: r.currentName,
+    idType: r.idType,
+    idNumber: r.idNumber,
+    dob: r.dob,
+    expires: r.expires,
+    region: r.region,
+    photoSeed: r.photoSeed,
+  };
+}
+
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
@@ -9,14 +38,14 @@ function formatDate(iso: string): string {
 }
 
 /** A realistic-looking mock ID card rendered as SVG so it stays crisp when zoomed. */
-export function IdCard({ request }: { request: NameChangeRequest }) {
+export function IdCard({ data }: { data: IdCardData }) {
   return (
     <svg
       className="idcard-svg"
       viewBox="0 0 520 328"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label={`${request.idType} for ${request.currentName}`}
+      aria-label={`${data.idType} for ${data.name}`}
     >
       <defs>
         <linearGradient id="idc-bg" x1="0" y1="0" x2="1" y2="1">
@@ -39,16 +68,16 @@ export function IdCard({ request }: { request: NameChangeRequest }) {
       <rect x="2" y="2" width="516" height="54" rx="18" fill="url(#idc-band)" />
       <rect x="2" y="38" width="516" height="18" fill="url(#idc-band)" />
       <text x="24" y="36" fill="#fff" fontFamily="var(--font-sans)" fontSize="20" fontWeight="700">
-        {request.region.toUpperCase()}
+        {data.region.toUpperCase()}
       </text>
       <text x="496" y="36" fill="#dce8f6" fontFamily="var(--font-sans)" fontSize="15" fontWeight="600" textAnchor="end">
-        {request.idType.toUpperCase()}
+        {data.idType.toUpperCase()}
       </text>
 
       {/* Photo */}
       <rect x="26" y="90" width="124" height="154" rx="10" fill="#cfd9e6" stroke="#b3c2d6" strokeWidth="2" />
       <image
-        href={idPhotoUrl(request.photoSeed)}
+        href={idPhotoUrl(data.photoSeed)}
         x="28"
         y="92"
         width="120"
@@ -59,16 +88,16 @@ export function IdCard({ request }: { request: NameChangeRequest }) {
 
       {/* Fields */}
       <FieldLabel x={176} y={104} label="NAME" />
-      <FieldValue x={176} y={126} value={request.currentName} size={21} />
+      <FieldValue x={176} y={126} value={data.name} size={21} />
 
       <FieldLabel x={176} y={158} label="DOB" />
-      <FieldValue x={176} y={178} value={formatDate(request.dob)} />
+      <FieldValue x={176} y={178} value={formatDate(data.dob)} />
 
       <FieldLabel x={340} y={158} label="EXP" />
-      <FieldValue x={340} y={178} value={formatDate(request.expires)} />
+      <FieldValue x={340} y={178} value={formatDate(data.expires)} />
 
       <FieldLabel x={176} y={206} label="ID NO." />
-      <FieldValue x={176} y={226} value={request.idNumber} mono />
+      <FieldValue x={176} y={226} value={data.idNumber} mono />
 
       {/* Signature line */}
       <text x={28} y={272} fill="#7c8aa0" fontFamily="var(--font-sans)" fontSize="11" fontWeight="600">
@@ -153,12 +182,27 @@ function fitScale(rotation: number, box: { w: number; h: number }): number {
  * ID card with hover-to-magnify: a lens tracks the pointer and a panel beside the
  * card renders that region enlarged. Click (or the caption button) opens full view.
  */
-export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
+export function ZoomableIdCard({
+  data,
+  onFullViewChange,
+}: {
+  data: IdCardData;
+  /** Fires when the full-view overlay opens/closes. Host pages that bind their
+   *  own window-level keys need this: the overlay handles its own Escape, so
+   *  without it the host's Escape handler fires on the same event too (in the
+   *  Proctoring console that closed the overlay AND exited the review page). */
+  onFullViewChange?: (open: boolean) => void;
+}) {
   const [rotation, setRotation] = useState(0);
-  const [fullView, setFullView] = useState(false);
+  const [fullView, setFullViewState] = useState(false);
   const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const stageRef = useRef<HTMLDivElement>(null);
+
+  const setFullView = (open: boolean) => {
+    setFullViewState(open);
+    onFullViewChange?.(open);
+  };
 
   // The stage keeps its natural (unrotated) size, so one measurement covers both
   // the lens clamp and the rotate fit.
@@ -208,7 +252,7 @@ export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
           }}
         >
           <div className="idhz-card" style={cardStyle}>
-            <IdCard request={request} />
+            <IdCard data={data} />
           </div>
           {lens && (
             <span
@@ -229,7 +273,7 @@ export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
               }}
             >
               <div className="idhz-card" style={cardStyle}>
-                <IdCard request={request} />
+                <IdCard data={data} />
               </div>
             </div>
           </div>
@@ -251,7 +295,7 @@ export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
       </div>
 
       {fullView && (
-        <IdFullView request={request} rotation={rotation} onClose={() => setFullView(false)} />
+        <IdFullView data={data} rotation={rotation} onClose={() => setFullView(false)} />
       )}
     </div>
   );
@@ -259,11 +303,11 @@ export function ZoomableIdCard({ request }: { request: NameChangeRequest }) {
 
 /** Full-view overlay — reuses the shared .ncr-fs-* shell used by Proctoring. */
 function IdFullView({
-  request,
+  data,
   rotation: initial,
   onClose,
 }: {
-  request: NameChangeRequest;
+  data: IdCardData;
   rotation: number;
   onClose: () => void;
 }) {
@@ -296,7 +340,7 @@ function IdFullView({
     <div className="ncr-fs-overlay" onClick={onClose}>
       <div className="ncr-fs-bar">
         <div className="ncr-fs-title">
-          {request.idType} — {request.currentName}
+          {data.idType} — {data.name}
         </div>
         <div className="ncr-fs-actions">
           <button
@@ -320,7 +364,7 @@ function IdFullView({
             card itself would feed the fit calculation its own output. */}
         <div ref={stageRef} className="idhz-fs-box">
           <div className="idhz-card" style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box)})` }}>
-            <IdCard request={request} />
+            <IdCard data={data} />
           </div>
         </div>
       </div>

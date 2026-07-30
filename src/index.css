@@ -10147,7 +10147,18 @@ a {
   color: var(--accent-strong);
 }
 
-/* Stat cards row */
+/* Stat cards row — Figma 300:311 selected (120×98) / 300:363 unselected (103×96).
+   Equal width via the grid's repeat(4, 1fr).
+
+   Both states use raw values from the design rather than app tokens, because the
+   nearest tokens are all slightly off: the design's base is #0d0d0d (not
+   --bg-panel #0f0f10) and BOTH the label and the value are pure #fff (not
+   --text #e7e7e8 / --text-muted #8b8b8f).
+
+   Padding is 24px in both states. Figma shows the selected card at p-25 with a
+   1px stroke, but Figma strokes don't offset auto-layout children, so 1px border
+   + 24px padding reproduces the same 25px content inset — and the two borders
+   are exactly what takes the card from 96px to 98px. */
 .pr-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -10159,245 +10170,54 @@ a {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 18px 22px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: 0;
+  padding: 24px;
+  /* 10% grey wash over #0d0d0d. */
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1)),
+    #0d0d0d;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: filter 0.12s ease;
 }
 
+/* Brightness rather than a swapped fill, so hover can't drift from the spec. */
 .pr-stat:hover {
-  border-color: var(--border-strong);
+  filter: brightness(1.25);
 }
 
 .pr-stat.is-active {
-  border: 2px solid var(--accent);
-  background: linear-gradient(180deg, rgba(233, 114, 55, 0.06) 0%, rgba(233, 114, 55, 0.02) 100%), var(--bg-panel);
-  padding: 17px 21px;
+  border: 1px solid #8a3114;
+  /* The design has NO opaque base here — the accent gradient and grey wash
+     composite straight over the page background. */
+  background:
+    linear-gradient(180deg, rgba(138, 49, 20, 0) 0%, rgba(240, 85, 35, 0.3) 100%),
+    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1));
+  box-shadow: inset 0 0 19.9px rgba(240, 85, 35, 0.5);
 }
 
+/* Line heights are Figma's measured text-node heights (14 / 34), which is what
+   `leading-normal` resolves to for Fira Sans at these sizes. */
 .pr-stat-label {
   font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 14px;
+  color: #fff;
 }
 
+/* The label goes Regular → Medium when the card is selected. */
 .pr-stat.is-active .pr-stat-label {
-  color: var(--accent-strong);
+  font-weight: 500;
 }
 
 .pr-stat-value {
   font-family: var(--font-sans);
-  font-size: 26pt;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.01em;
-  line-height: 1.05;
-}
-
-.pr-stat.is-active .pr-stat-value {
-  color: var(--accent-strong);
-}
-
-/* Controls (search + exam filter) */
-.pr-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.pr-search-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 36px;
-  width: 280px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: rgba(0, 0, 0, 0.35);
-  transition: border-color 0.12s ease;
-}
-
-.pr-search-pill:focus-within {
-  border-color: var(--border-strong);
-}
-
-.pr-search-pill-icon {
-  color: var(--text-faint);
-  display: inline-flex;
-}
-
-.pr-search-pill-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-}
-
-.pr-search-pill-input::placeholder {
-  color: var(--text-faint);
-}
-
-.pr-exam-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-.pr-exam-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 12px;
-  min-width: 200px;
-  border: 1px solid #3b3b3f;
-  border-radius: 20px;
-  background: transparent;
-  color: #a8a8a8;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.pr-exam-pill:hover,
-.pr-exam-pill.is-open {
-  border-color: var(--text-faint);
-}
-
-.pr-exam-pill-icon {
-  color: var(--text-muted);
-  display: inline-flex;
-}
-
-.pr-exam-pill-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pr-exam-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 18px;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
-  background: rgba(233, 114, 55, 0.22);
-  color: var(--accent-strong);
-  font-family: var(--font-mono);
-  font-size: 10pt;
+  font-size: 28px;
   font-weight: 600;
-}
-
-.pr-exam-pill-caret {
-  color: var(--text-muted);
-  display: inline-flex;
-}
-
-.pr-exam-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 50;
-  width: 320px;
-  max-height: 360px;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-}
-
-.pr-exam-dropdown-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.pr-exam-clear {
-  color: #4ea1ff;
-  font-size: 10pt;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.pr-exam-clear:hover {
-  color: #79bbff;
-}
-
-.pr-exam-dropdown-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px;
-}
-
-.pr-exam-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text);
-}
-
-.pr-exam-option:hover {
-  background: var(--bg-pill);
-}
-
-.pr-exam-check {
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: transparent;
-}
-
-.pr-exam-check.is-on {
-  background: var(--accent);
-  border-color: var(--accent);
+  line-height: 34px;
   color: #fff;
-}
-
-.pr-exam-option-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Table — sits flush on the page background like every other admin table
@@ -10480,14 +10300,9 @@ a {
   background: var(--bg-row-hover);
 }
 
-.pr-row--secondary {
-  background: rgba(255, 255, 255, 0.015);
-}
-
-.pr-row--secondary .pr-candidate-name,
-.pr-row--secondary .pr-cell-body {
-  color: var(--text-muted);
-}
+/* `.pr-row--secondary` (a tinted, dimmed row for status "id-requested") and the
+   "Reupload Requested" `.pr-status-pill` were removed 2026-07-30 — every row now
+   reads the same. The ID Re-uploads stat card is what surfaces that state. */
 
 .pr-candidate-name-row {
   display: flex;
@@ -10501,25 +10316,6 @@ a {
   font-size: 16px;
   font-weight: 500;
   color: #e7e7e8;
-}
-
-.pr-status-pill {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.pr-status-pill--requested {
-  background: rgba(252, 211, 77, 0.12);
-  color: #f5d36b;
-  border: 1px solid rgba(252, 211, 77, 0.35);
 }
 
 .pr-candidate-email {
@@ -10748,11 +10544,27 @@ a {
   font-size: 14pt;
   font-weight: 600;
   color: var(--text);
+  /* The header is the collapse control in the Proctoring console; it stays a
+     plain heading row elsewhere (the reset above zeroes button chrome). */
+  width: 100%;
+  text-align: left;
 }
 
 .pr-section-caret {
   color: var(--text-muted);
   display: inline-flex;
+  transition: transform 0.15s ease;
+}
+
+/* Caret points down while the section is open (at the content), right when
+   collapsed — the classic disclosure idiom, and it leaves the default
+   expanded state looking exactly as it did before. */
+.pr-section.is-collapsed .pr-section-caret {
+  transform: rotate(-90deg);
+}
+
+.pr-section-head:hover .pr-section-caret {
+  color: var(--text);
 }
 
 .pr-section-title {
@@ -10785,6 +10597,44 @@ a {
   font-weight: 500;
   color: var(--text);
 }
+
+/* Collapsible-section header stats (Figma 302:104) — labelled columns pinned to
+   the far right of the header: a small uppercase label over its value. */
+.pr-section-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 30px;
+  margin-left: auto;
+}
+
+.pr-hstat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.1;
+}
+
+.pr-hstat-label {
+  font-family: var(--font-sans);
+  font-size: 8.5pt;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pr-hstat-value {
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pr-hstat-value.is-strong { color: #5fd0a3; }
+.pr-hstat-value.is-ok { color: #f5d36b; }
+.pr-hstat-value.is-weak,
+.pr-hstat-value.is-bad { color: #e25555; }
+.pr-hstat-value.is-muted { color: var(--text-faint); }
 
 /* ID card */
 .pr-id-row {
@@ -24195,17 +24045,31 @@ a {
    holding a filter row, the queue as a compact table, and a keycap legend. It
    opens UPWARD from the footer button. */
 .rvc-queue-wrap { position: relative; flex: none; }
-/* "View Queue · n WAITING" — the shared Secondary Button with a 14px/500 label,
-   a 12px uppercase count and a white mono keycap. */
-.rvc-viewqueue { gap: 8px; font-weight: 500; overflow: hidden; }
-.rvc-viewqueue-text { display: inline-flex; align-items: center; line-height: 17px; }
+/* "View Queue · n WAITING" (Figma 293:759, re-synced 2026-07-30) — the shared
+   Secondary Button (32px, 0 16px, r8) at gap 8 to a white mono keycap. The
+   label and count are SIBLINGS in a 2px-gap flex row (293:760), not one string
+   with a literal space: the space character is font-metric-dependent (~4px at
+   12px Fira Sans) and drifted wider than the design's 2px. */
+.rvc-viewqueue { gap: 8px; overflow: hidden; }
+.rvc-viewqueue-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+.rvc-viewqueue-label {
+  font-size: 14px;
+  line-height: 17px;
+  font-weight: 500;
+  color: #fff;
+}
 .rvc-viewqueue-count {
   font-size: 12px;
   line-height: 14px;
   font-weight: 400;
   color: #a8a8a8;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 .rvc-viewqueue .kbd-letter {
   justify-content: center;
@@ -24760,6 +24624,279 @@ a {
   color: #fff;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   animation: rvcToastIn 0.18s ease;
+}
+
+/* ── Proctoring console (ProctoringConsole.tsx) ──
+   Page shell + queue chrome reuse the .rvc-* classes above as-is (header,
+   body, footer, "View Queue" popover). Unlike ReviewConsole this page is a
+   SINGLE column — there's no review rail to grade in, so `.rvc-stagecol`
+   runs full width and the integrity note is a full-width card heading it,
+   above the ID. Only the footer's right-hand button group and the narrower
+   queue panel (4 columns, not 5) are specific to this page. */
+.prc-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rvc-qpanel--proctoring {
+  width: 620px;
+}
+/* Sections need the modal's old 28px separation, not the media column's 10px. */
+.prc-stagecol {
+  gap: 28px;
+}
+/* The shared ZoomableIdCard's magnifier panel is anchored to the right of the
+   card (left: 100% + 26px). Name Change Requests bounds it naturally with a
+   two-column layout; here the column is full width, so cap the card at the
+   SVG's natural 520px — that leaves room for the 400px panel alongside it. */
+.prc-idcard {
+  max-width: 520px;
+}
+/* ID card left, name-mismatch prompt right. The card can shrink below its 520px
+   natural width on narrow viewports (the SVG is width:100%, so it just scales).
+   Note the magnifier panel opens over this right-hand column — same as it
+   overlays the form pane on Name Change Requests. */
+.prc-idrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 26px;
+  width: 100%;
+}
+.prc-idrow .prc-idcard {
+  flex: 0 1 520px;
+}
+.prc-idrow .prc-mismatch {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Name Mismatch card (Figma 308:2299) ──
+   The Secondary-Button-at-10% card shell, same construction as .rvc-rail — NOT
+   the old amber warning banner (`.pr-mismatch`, still used by the kept-for-revert
+   ProctoringDetailModal). Reuses the DS form atoms (.form-label/.req/.form-input/
+   .form-help) and only overrides where the design differs from them. */
+.prc-mismatch {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20.5px;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+  /* Inset so the 0.5px stroke doesn't grow the card (Chrome rounds it to 1px). */
+  box-shadow: inset 0 0 0 0.5px rgba(122, 122, 122, 0.1);
+}
+
+/* Title and subtext sit flush — no gap in the design. */
+.prc-mismatch-head {
+  display: flex;
+  flex-direction: column;
+}
+.prc-mismatch-title {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: normal;
+  color: #e7e7e8;
+}
+.prc-mismatch-sub {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+
+.prc-mismatch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Hairline above the field, then 16px before its label. */
+.prc-mismatch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
+}
+/* The 8px gap already spaces the group — drop the atoms' own margins. */
+.prc-mismatch-field .form-label {
+  margin-bottom: 0;
+}
+.prc-mismatch-help {
+  margin: 0;
+  font-style: italic;
+  color: #7a7a7a;
+}
+/* .form-input is transparent on a #404040 border; this field is a filled input. */
+.prc-mismatch-input {
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: rgba(122, 122, 122, 0.15);
+  line-height: normal;
+}
+
+/* The detected name + "Use This" row. */
+.prc-mismatch-detected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(115, 115, 115, 0.1);
+}
+.prc-mismatch-detected-text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prc-mismatch-detected-text strong {
+  font-weight: 600;
+}
+.prc-mismatch-use {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #f05523;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.prc-mismatch-use:hover {
+  color: #f5875f;
+}
+/* ── Integrity Note (Figma 302:883 collapsed 52px / 303:905 expanded 135px) ──
+   A collapsible red-tinted card heading the column. The old `.pr-integrity`
+   stack is left alone — the kept-for-revert ProctoringDetailModal still uses it.
+   Shell is shared by both states; only the row gap and the detail block differ. */
+.prc-inote {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)),
+    linear-gradient(rgba(13, 13, 13, 0.75), rgba(13, 13, 13, 0.75));
+  /* Figma's 0.5px stroke is drawn INSIDE the frame, so it must not grow the box:
+     as a real border Chrome rounds 0.5px up to 1px per side and the card came out
+     137px instead of the design's 135px. An inset ring costs no layout. */
+  box-shadow: inset 0 0 0 0.5px rgba(255, 31, 49, 0.1);
+  /* Figma "Glass Effect" on the card — no-op over an opaque page, kept for fidelity. */
+  backdrop-filter: blur(20px);
+  flex: none;
+}
+/* Collapsed puts a fixed 40px between the text row and the chevron; expanded
+   lets the lead fill and pushes the chevron out with space-between. */
+.prc-inote-head {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  width: 100%;
+}
+.prc-inote.is-open .prc-inote-head {
+  gap: 0;
+  justify-content: space-between;
+}
+.prc-inote-lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 0 0;
+  min-width: 0;
+}
+/* Both glyphs are #a8a8a8 in the design — NOT the red the card's tint suggests. */
+.prc-inote-icon {
+  display: inline-flex;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: #a8a8a8;
+}
+.prc-inote-title {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #d9d9d9;
+  white-space: nowrap;
+  flex: none;
+}
+/* Truncates rather than wrapping — the design keeps this on one line. */
+.prc-inote-sub {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #d9d9d9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Expanding dims the inline note — the detail below carries the weight now. */
+.prc-inote.is-open .prc-inote-sub {
+  color: #a8a8a8;
+}
+.prc-inote-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  flex: none;
+  color: #a8a8a8;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.12s ease;
+}
+.prc-inote-toggle:hover {
+  color: #fff;
+}
+.prc-inote.is-open .prc-inote-toggle {
+  transform: rotate(180deg);
+}
+/* 32px inset lines the detail up with the title (20px icon + 12px gap). */
+.prc-inote-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0 32px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #d9d9d9;
+}
+.prc-inote-detail-label {
+  font-weight: 500;
+  line-height: normal;
+  white-space: nowrap;
+}
+.prc-inote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.prc-inote-item {
+  margin: 0;
+  font-weight: 400;
+  line-height: normal;
+}
+.prc-inote-item strong {
+  font-weight: 600;
 }
 
 /* =============================================================

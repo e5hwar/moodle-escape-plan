@@ -40,6 +40,24 @@ const EditIcon = () => (
   </svg>
 );
 
+const ExternalLinkIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 4h6v6M20 4l-9 9" />
+    <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
+  </svg>
+);
+
+/** Opens the candidate's Manage Users profile in a new tab — the same
+ *  standalone `?profile=` route UsersPage uses, since submissions and
+ *  users share the same underlying User records. */
+function openUserProfile(userId: string) {
+  window.open(
+    `${window.location.origin}${window.location.pathname}?profile=${userId}`,
+    "_blank",
+    "noopener",
+  );
+}
+
 const WarningIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.3 3.8L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z" />
@@ -165,6 +183,14 @@ export function ProctoringDetailModal({
               <span className="pr-modal-name">{submission.candidateName}</span>
               <button className="pr-modal-edit" aria-label="Edit candidate">
                 <EditIcon />
+              </button>
+              <button
+                className="pr-modal-edit"
+                aria-label="View full profile"
+                title="Open full profile in Manage Users"
+                onClick={() => openUserProfile(submission.userId)}
+              >
+                <ExternalLinkIcon />
               </button>
             </div>
             <div className="pr-modal-meta">

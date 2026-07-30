@@ -4,7 +4,7 @@ import {
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
 import { users } from "../data/users";
-import { ZoomableIdCard } from "./IdCard";
+import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
 import { SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon } from "./icons";
 
 const PAGE_SIZE = 25;
@@ -307,7 +307,7 @@ function ReviewModal({
         <div className="ncr-modal-split">
           {/* Left — ID for reference (hover to magnify, click for full view) */}
           <div className="ncr-id-pane">
-            <ZoomableIdCard request={request} />
+            <ZoomableIdCard data={idCardFromRequest(request)} />
           </div>
 
           {/* Right — mode-specific content */}

@@ -80,7 +80,7 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
             <div>
               <button className="attempts-back" onClick={onBack}>
                 <ChevronLeftIcon />
-                Proctoring
+                Proctoring &amp; ID Review
               </button>
               <h1 className="tasks-title">Manage IDs</h1>
               <div className="tasks-subtitle">
