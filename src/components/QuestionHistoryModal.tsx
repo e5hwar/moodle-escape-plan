@@ -33,17 +33,17 @@ export function QuestionHistoryModal({
   }, [onClose]);
 
   return (
-    <div className="ind-modal-overlay" onClick={onClose}>
-      <div className="ind-modal qh-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
+    <div className="pm-overlay" onClick={onClose}>
+      <div className="pm-modal qh-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head qh-head">
           <div>
-            <h3 className="ind-modal-title">Version history</h3>
+            <h3 className="pm-title">Version history</h3>
             <div className="qh-sub">
               {question.id} · {shortQuestionType(question.type)} —{" "}
               <span className="qh-sub-text">{question.text}</span>
             </div>
           </div>
-          <button className="ind-modal-close" aria-label="Close" onClick={onClose}>
+          <button className="ind-icon-btn" aria-label="Close" onClick={onClose}>
             <SmallXIcon />
           </button>
         </div>

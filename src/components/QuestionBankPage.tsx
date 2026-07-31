@@ -19,7 +19,6 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   SearchIcon,
-  SmallXIcon,
   SortIcon,
   UploadIcon,
 } from "./icons";
@@ -758,12 +757,12 @@ export function QuestionBankPage({
           <>
             <div className="ind-menu-backdrop" onClick={() => setCatMenu(null)} />
             <div
-              className="ind-row-menu"
-              style={{ top: catMenu.y + 4, left: catMenu.x }}
+              className="u-menu ind-row-menu"
+              style={{ top: catMenu.y + 6, left: catMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="ind-row-menu-item"
+                className="u-menu-item"
                 onClick={() => {
                   setCatModal(
                     target.kind === "category"
@@ -777,10 +776,10 @@ export function QuestionBankPage({
                   setCatMenu(null);
                 }}
               >
-                <PencilIcon /> Edit
+                <span className="u-menu-item-icon"><PencilIcon /></span> Edit
               </button>
               <button
-                className="ind-row-menu-item ind-row-menu-item--danger"
+                className="u-menu-item u-menu-item--danger"
                 disabled={!canDelete}
                 title={canDelete ? undefined : "Only empty categories can be deleted"}
                 onClick={() => {
@@ -789,7 +788,7 @@ export function QuestionBankPage({
                   setCatMenu(null);
                 }}
               >
-                <TrashIcon /> Delete
+                <span className="u-menu-item-icon"><TrashIcon /></span> Delete
               </button>
             </div>
           </>
@@ -919,42 +918,36 @@ function CatNameModal({
   const isValid = !!trimmed && !isDuplicate;
 
   return (
-    <div className="ind-modal-overlay" onClick={onCancel}>
-      <div className="ind-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <h3 className="ind-modal-title">{title}</h3>
-          <button className="ind-modal-close" aria-label="Close" onClick={onCancel}>
-            <SmallXIcon />
-          </button>
+    <div className="pm-overlay" onClick={onCancel}>
+      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head">
+          <h3 className="pm-title">{title}</h3>
+          <p className="pm-sub">Must be unique.</p>
         </div>
-        <div className="ind-modal-body">
-          <label className="ind-field">
-            <span className="ind-field-label">
-              Name <span className="ind-field-required">*</span>
-            </span>
+        <div className="pm-body">
+          <div className="form-group">
+            <label className="form-label">
+              Name <span className="req">*</span>
+            </label>
             <input
               autoFocus
-              className="ind-field-input"
+              className="form-input"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && isValid) onSubmit(trimmed);
               }}
-              placeholder="e.g. EPA 608"
+              placeholder="EPA 608"
             />
-            <span className="ind-field-help">
-              {isDuplicate ? (
-                <span className="ind-field-error">A category with this name already exists.</span>
-              ) : (
-                "Must be unique."
-              )}
-            </span>
-          </label>
+            {isDuplicate && (
+              <div className="pm-error">A category with this name already exists.</div>
+            )}
+          </div>
         </div>
-        <div className="ind-modal-foot">
-          <button className="ind-btn-secondary" onClick={onCancel}>Cancel</button>
+        <div className="pm-foot">
+          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
           <button
-            className="ind-btn-primary"
+            className="btn-publish"
             disabled={!isValid}
             onClick={() => isValid && onSubmit(trimmed)}
           >
@@ -978,20 +971,17 @@ function CatDeleteConfirm({
   onCancel: () => void;
 }) {
   return (
-    <div className="ind-modal-overlay" onClick={onCancel}>
-      <div className="ind-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <h3 className="ind-modal-title">
+    <div className="pm-overlay" onClick={onCancel}>
+      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head">
+          <h3 className="pm-title">
             Delete {isCategory ? "Category" : "Subcategory"}?
           </h3>
-          <button className="ind-modal-close" aria-label="Close" onClick={onCancel}>
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="ind-modal-body">
-          <p className="ind-modal-text">
+          <p className="pm-sub">
             Delete <strong>{label}</strong>? This can't be undone.
           </p>
+        </div>
+        <div className="pm-body">
           <ul className="ind-modal-list">
             <li>
               This {isCategory ? "category" : "subcategory"} is empty — no questions
@@ -999,9 +989,9 @@ function CatDeleteConfirm({
             </li>
           </ul>
         </div>
-        <div className="ind-modal-foot">
-          <button className="ind-btn-secondary" onClick={onCancel}>Cancel</button>
-          <button className="ind-btn-danger" onClick={onConfirm}>
+        <div className="pm-foot">
+          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
+          <button className="btn-publish mg-btn-danger" onClick={onConfirm}>
             Delete {isCategory ? "Category" : "Subcategory"}
           </button>
         </div>

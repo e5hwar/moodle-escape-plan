@@ -249,14 +249,18 @@ export const SmallXIcon = () => (
   </svg>
 );
 
+/* Drag handle — Figma "move" (314:2054): 12×12, two columns of four 1.5px
+   square dots (columns at x 4.125/7.875, rows at y 1.875/4.625/7.375/10.125). */
 export const DragHandleIcon = () => (
-  <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
-    <circle cx="2" cy="2" r="1.2" />
-    <circle cx="8" cy="2" r="1.2" />
-    <circle cx="2" cy="7" r="1.2" />
-    <circle cx="8" cy="7" r="1.2" />
-    <circle cx="2" cy="12" r="1.2" />
-    <circle cx="8" cy="12" r="1.2" />
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+    <rect x="3.375" y="1.125" width="1.5" height="1.5" />
+    <rect x="7.125" y="1.125" width="1.5" height="1.5" />
+    <rect x="3.375" y="3.875" width="1.5" height="1.5" />
+    <rect x="7.125" y="3.875" width="1.5" height="1.5" />
+    <rect x="3.375" y="6.625" width="1.5" height="1.5" />
+    <rect x="7.125" y="6.625" width="1.5" height="1.5" />
+    <rect x="3.375" y="9.375" width="1.5" height="1.5" />
+    <rect x="7.125" y="9.375" width="1.5" height="1.5" />
   </svg>
 );
 
@@ -271,6 +275,41 @@ export const LockIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="4" y="11" width="16" height="9" rx="2" />
     <path d="M8 11V8a4 4 0 018 0v3" />
+  </svg>
+);
+
+/* Account-operations icons (Merge Accounts / Transfer Subscription) */
+export const AlertTriangleIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
+    <path d="M12 9v4M12 17h.01" />
+  </svg>
+);
+
+export const InfoCircleIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9.3" />
+    <path d="M12 11v5.4M12 7.5h.01" />
+  </svg>
+);
+
+export const SwapIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 8h13M14 5l3 3-3 3" />
+    <path d="M20 16H7M10 13l-3 3 3 3" />
+  </svg>
+);
+
+export const ArrowRightIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12h15M13 6l6 6-6 6" />
+  </svg>
+);
+
+export const CreditCardIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+    <path d="M2.5 10h19" />
   </svg>
 );
 

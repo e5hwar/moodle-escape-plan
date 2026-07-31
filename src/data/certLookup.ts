@@ -368,68 +368,27 @@ export function progress(
 }
 
 export type StatusVisual = {
-  bg: string;
-  color: string;
-  border: string;
-  boxShadow?: string;
-  mark: string;
+  /** Table Pill tone (Figma 109:1237) — drives `.co-status-pill--{tone}`. */
+  tone: "green" | "accent" | "grey";
+  /** Status-dot modifier — drives `.mc-dot--{dot}` in the matrix. */
+  dot: "done" | "review" | "todo";
+  /** True when the completion was applied by an admin rather than earned. */
+  manual: boolean;
   label: string;
-  badgeBg: string;
-  badgeColor: string;
-  tone: string;
 };
 
-/** Dark-theme status dot styling (the only theme this page uses). */
-export function statusVisual(
-  st: CellStatus,
-  accent: string,
-  manual: boolean,
-): StatusVisual {
-  if (st === "complete") {
-    if (manual)
-      return {
-        bg: "#d8d6cd",
-        color: "#15161a",
-        border: "1px solid #d8d6cd",
-        boxShadow: `0 0 0 1.5px #15161a, 0 0 0 3.5px ${accent}`,
-        mark: "✓",
-        label: "Complete · marked manually",
-        badgeBg: "#2f2516",
-        badgeColor: accent,
-        tone: accent,
-      };
+/** Maps a cell status onto the design system's status vocabulary. */
+export function statusVisual(st: CellStatus, manual: boolean): StatusVisual {
+  if (st === "complete")
     return {
-      bg: "#d8d6cd",
-      color: "#15161a",
-      border: "1px solid #d8d6cd",
-      mark: "✓",
-      label: "Complete",
-      badgeBg: "#2b2d32",
-      badgeColor: "#e7e6e1",
-      tone: "#d8d6cd",
+      tone: "green",
+      dot: "done",
+      manual,
+      label: manual ? "Complete · Marked Manually" : "Complete",
     };
-  }
   if (st === "review")
-    return {
-      bg: "transparent",
-      color: accent,
-      border: `2px solid ${accent}`,
-      mark: "•",
-      label: "In Review",
-      badgeBg: "#2f2516",
-      badgeColor: accent,
-      tone: accent,
-    };
-  return {
-    bg: "transparent",
-    color: "#5c5e64",
-    border: "1px solid #45474c",
-    mark: "",
-    label: "Incomplete",
-    badgeBg: "#26282d",
-    badgeColor: "#9a9ca1",
-    tone: "#5c5e64",
-  };
+    return { tone: "accent", dot: "review", manual: false, label: "In Review" };
+  return { tone: "grey", dot: "todo", manual: false, label: "Incomplete" };
 }
 
 export type AttemptInfo = {

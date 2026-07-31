@@ -7,7 +7,16 @@ import {
   type CareerStage,
   type IndustryCert,
 } from "../data/industries";
-import { SearchIcon, SmallXIcon, DragHandleIcon } from "./icons";
+import {
+  SearchIcon,
+  SmallXIcon,
+  DragHandleIcon,
+  RowArrowIcon,
+  CheckIcon,
+} from "./icons";
+import { PageBreak } from "./PageBreak";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger } from "./Filters";
 
 type Scope =
   | { kind: "industry"; industryKey: string }
@@ -25,9 +34,20 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
+/* Tree caret — Figma "Icon Library" chevron (I314:2057;7:1537): a 3.21×6.42
+   chevron with a 1.167 square-cap stroke, centred in a 14px slot. */
 const CaretRightIcon = () => (
-  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 6l6 6-6 6" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M5.54 3.79L8.75 7l-3.21 3.21" />
+  </svg>
+);
+/* Tree rows use the vertical 3-dot kebab (Figma "more" 314:2060: 14×14, 1.75px
+   dots at y 2.625/7/11.375); the detail header keeps the horizontal one. */
+const MoreVertIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+    <rect x="6.125" y="1.75" width="1.75" height="1.75" />
+    <rect x="6.125" y="6.125" width="1.75" height="1.75" />
+    <rect x="6.125" y="10.5" width="1.75" height="1.75" />
   </svg>
 );
 const PencilIcon = () => (
@@ -370,22 +390,24 @@ export function IndustriesPage() {
           {/* ─── Left rail ─── */}
           <aside className="ind-rail">
             <div className="ind-rail-head">
-              <div className="ind-rail-titleblock">
-                <h1 className="ind-rail-title">Industries</h1>
-                <div className="ind-rail-sub">
-                  {industries.length} Industries · {totalSubIndustries} Sub-Industries
-                </div>
+              <h1 className="tasks-title">Industries</h1>
+              <div className="tasks-subtitle">
+                {industries.length} Industries · {totalSubIndustries} Sub-Industries
               </div>
             </div>
 
-            <div className="ind-rail-search">
-              <span className="ind-rail-search-icon"><SearchIcon /></span>
+            <div className="search-wrap ind-rail-search">
+              <span className="search-icon"><SearchIcon /></span>
               <input
-                className="ind-rail-search-input"
+                className="search-input"
                 placeholder="Search Industries"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              <span className="search-kbd">
+                <span className="kbd-cmd">⌘</span>
+                <span className="kbd-letter">K</span>
+              </span>
             </div>
 
             <div className="ind-tree">
@@ -412,7 +434,7 @@ export function IndustriesPage() {
                 className="ind-rail-add"
                 onClick={() => setModal({ kind: "new-industry" })}
               >
-                + Add Industry
+                Add Industry
               </button>
             </div>
 
@@ -426,37 +448,35 @@ export function IndustriesPage() {
             <header className="ind-detail-head">
               <div className="ind-detail-titleblock">
                 <div className="ind-detail-toprow">
-                  <h2 className="ind-detail-title">
+                  <h2 className="tasks-title ind-detail-title">
                     {scope.kind === "industry"
                       ? currentIndustry.name
                       : currentSub?.name ?? "—"}
                   </h2>
-                  <div className="ind-seg" role="group" aria-label="Visibility">
+                  <div className="tab-switch ind-vis-switch" role="group" aria-label="Visibility">
                     <button
-                      className={`ind-seg-opt ${!currentHidden ? "is-active" : ""}`}
+                      className={`tab-switch-tab ${!currentHidden ? "active" : ""}`}
                       onClick={() => {
                         if (!currentHidden) return;
                         if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
                         else toggleSubHidden(scope.industryKey, scope.subKey);
                       }}
                     >
-                      {!currentHidden && <span className="ind-seg-dot" />}
                       Visible
                     </button>
                     <button
-                      className={`ind-seg-opt ${currentHidden ? "is-active" : ""}`}
+                      className={`tab-switch-tab ${currentHidden ? "active" : ""}`}
                       onClick={() => {
                         if (currentHidden) return;
                         if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
                         else toggleSubHidden(scope.industryKey, scope.subKey);
                       }}
                     >
-                      {currentHidden && <span className="ind-seg-dot ind-seg-dot--muted" />}
                       Hidden
                     </button>
                   </div>
                 </div>
-                <div className="ind-detail-sub">
+                <div className="tasks-subtitle ind-detail-sub">
                   {scope.kind === "industry" ? (
                     <>
                       Position <strong>{currentIndustry.displayPosition}</strong> in
@@ -500,17 +520,15 @@ export function IndustriesPage() {
             </header>
 
             <div className="ind-section">
-              <div className="ind-sec-head">
-                <span className="ind-sec-title">
-                  {scope.kind === "industry" ? "Industry level" : "Certifications"}
-                </span>
-                <span className="ind-sec-hint">
-                  {scope.kind === "industry"
-                    ? currentIndustry.subIndustries.length > 0
-                      ? "shown before sub-industries · drag rows to reorder"
-                      : `shown when users browse ${currentIndustry.name} · drag rows to reorder`
-                    : `shown when users browse ${currentIndustry.name} › ${currentSub?.name} · drag rows to reorder`}
-                </span>
+              <PageBreak
+                label={scope.kind === "industry" ? "Industry Level" : "Certifications"}
+              />
+              <div className="ind-sec-hint">
+                {scope.kind === "industry"
+                  ? currentIndustry.subIndustries.length > 0
+                    ? "Shown before sub-industries · drag rows to reorder"
+                    : `Shown when users browse ${currentIndustry.name} · drag rows to reorder`
+                  : `Shown when users browse ${currentIndustry.name} › ${currentSub?.name} · drag rows to reorder`}
               </div>
               <CertList
                 certIds={scopeCertIds}
@@ -521,41 +539,44 @@ export function IndustriesPage() {
 
             {scope.kind === "industry" && orderedCurrentSubs.length > 0 && (
               <div className="ind-section">
-                <div className="ind-sec-head">
-                  <span className="ind-sec-title">In sub-industries</span>
-                  <span className="ind-sec-hint">select a card to manage its certs</span>
+                <PageBreak label="In Sub-Industries" />
+                <div className="ind-sec-hint">
+                  Select a row to manage its certifications
                 </div>
-                <div className="ind-subcards">
+                <div className="ind-certtable">
                   {orderedCurrentSubs.map((sub) => {
                     // Placeholder certs pad the seed data; fold them into "+ N more".
                     const names = sub.certIds
                       .map((id) => allCertsById[id]?.name)
                       .filter((n): n is string => !!n && !n.startsWith("Placeholder Cert"));
-                    const shown = names.slice(0, 3);
+                    const shown = names.slice(0, 2);
                     const more = sub.certIds.length - shown.length;
+                    const summary = [...shown, more > 0 ? `+${more} more` : ""]
+                      .filter(Boolean)
+                      .join(" · ");
                     return (
                       <button
                         key={sub.key}
-                        className="ind-subcard"
+                        className="ind-ct-row ind-subrow"
                         onClick={() => {
                           pickSub(currentIndustry.key, sub.key);
                           setOpenIds((prev) => new Set([...prev, currentIndustry.key]));
                         }}
                       >
-                        <div className="ind-subcard-head">
-                          <span className="ind-subcard-name">{sub.name}</span>
-                          <span className="ind-subcard-count">
-                            {sub.certIds.length} cert{sub.certIds.length === 1 ? "" : "s"}
-                          </span>
-                          {sub.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
-                          <span className="ind-subcard-arrow">→</span>
-                        </div>
-                        <div className="ind-subcard-list">
-                          {shown.map((n) => (
-                            <div key={n}>{n}</div>
-                          ))}
-                          {more > 0 && <div className="ind-subcard-more">+ {more} more</div>}
-                        </div>
+                        <span className="ind-ct-cell">
+                          <span className="ind-ct-name">{sub.name}</span>
+                          {summary && <span className="ind-ct-sub">{summary}</span>}
+                        </span>
+                        {sub.hidden && (
+                          <span className="co-status-pill co-status-pill--grey">Hidden</span>
+                        )}
+                        <span className="ind-ct-plain">
+                          {sub.certIds.length} certification
+                          {sub.certIds.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="row-arrow">
+                          <RowArrowIcon />
+                        </span>
                       </button>
                     );
                   })}
@@ -577,12 +598,12 @@ export function IndustriesPage() {
         <>
           <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
           <div
-            className="ind-row-menu"
-            style={{ top: menu.y + 4, left: menu.x }}
+            className="u-menu ind-row-menu"
+            style={{ top: menu.y + 6, left: menu.x }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              className="ind-row-menu-item"
+              className="u-menu-item"
               onClick={() => {
                 setModal(
                   menu.scope.kind === "industry"
@@ -596,10 +617,10 @@ export function IndustriesPage() {
                 setMenu(null);
               }}
             >
-              <PencilIcon /> Edit
+              <span className="u-menu-item-icon"><PencilIcon /></span> Edit
             </button>
             <button
-              className="ind-row-menu-item"
+              className="u-menu-item"
               onClick={() => {
                 if (menu.scope.kind === "industry") {
                   toggleIndustryHidden(menu.scope.industryKey);
@@ -609,18 +630,20 @@ export function IndustriesPage() {
                 setMenu(null);
               }}
             >
-              {menuIsHidden ? <EyeIcon /> : <EyeOffIcon />}{" "}
+              <span className="u-menu-item-icon">
+                {menuIsHidden ? <EyeIcon /> : <EyeOffIcon />}
+              </span>{" "}
               {menuIsHidden ? "Show" : "Hide"}
             </button>
-            <div className="ind-row-menu-sep" />
+            <div className="u-menu-divider" />
             <button
-              className="ind-row-menu-item ind-row-menu-item--danger"
+              className="u-menu-item u-menu-item--danger"
               onClick={() => {
                 setModal({ kind: "delete-confirm", scope: menu.scope });
                 setMenu(null);
               }}
             >
-              <TrashIcon /> Delete
+              <span className="u-menu-item-icon"><TrashIcon /></span> Delete
             </button>
           </div>
         </>
@@ -857,7 +880,7 @@ function IndustryTreeGroup({
         </button>
         <button className="ind-tree-main" onClick={onPickIndustry}>
           <span className="ind-tree-row-label">{ind.name}</span>
-          {ind.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
+          {ind.hidden && <span className="co-status-pill co-status-pill--grey ind-hidden-pill">Hidden</span>}
           <span className="ind-tree-row-count">{totalCerts}</span>
         </button>
         <button
@@ -865,31 +888,35 @@ function IndustryTreeGroup({
           aria-label="Industry options"
           onClick={(e) => onMenu(e, { kind: "industry", industryKey: ind.key })}
         >
-          <MoreDotsIcon />
+          <MoreVertIcon />
         </button>
       </div>
 
       {isOpen && (
         <div className="ind-sublist">
-          {orderedSubs.map((sub) => (
-            <SubRow
-              key={sub.key}
-              sub={sub}
-              industryKey={ind.key}
-              active={
-                scope.kind === "sub" &&
-                scope.industryKey === ind.key &&
-                scope.subKey === sub.key
-              }
-              canDrag={canDrag}
-              orderedSubs={orderedSubs}
-              onPick={() => onPickSub(sub.key)}
-              onMenu={onMenu}
-              onReorderSubs={onReorderSubs}
-            />
-          ))}
+          {orderedSubs.length > 0 && (
+            <div className="ind-sublist-rows">
+              {orderedSubs.map((sub) => (
+                <SubRow
+                  key={sub.key}
+                  sub={sub}
+                  industryKey={ind.key}
+                  active={
+                    scope.kind === "sub" &&
+                    scope.industryKey === ind.key &&
+                    scope.subKey === sub.key
+                  }
+                  canDrag={canDrag}
+                  orderedSubs={orderedSubs}
+                  onPick={() => onPickSub(sub.key)}
+                  onMenu={onMenu}
+                  onReorderSubs={onReorderSubs}
+                />
+              ))}
+            </div>
+          )}
           <button className="ind-sub-add" onClick={onAddSub}>
-            + Add Sub-Industry
+            Add Sub-Industry
           </button>
         </div>
       )}
@@ -960,15 +987,15 @@ function SubRow({
       </span>
       <button className="ind-sub-main" onClick={onPick}>
         <span className="ind-sub-row-label">{sub.name}</span>
-        {sub.hidden && <span className="ind-row-hidden-tag">Hidden</span>}
+        {sub.hidden && <span className="co-status-pill co-status-pill--grey ind-hidden-pill">Hidden</span>}
         <span className="ind-sub-row-count">{sub.certIds.length}</span>
       </button>
       <button
-        className="ind-tree-menu-btn"
+        className="ind-tree-menu-btn ind-sub-menu-btn"
         aria-label="Sub-Industry options"
         onClick={(e) => onMenu(e, { kind: "sub", industryKey, subKey: sub.key })}
       >
-        <MoreDotsIcon />
+        <MoreVertIcon />
       </button>
     </div>
   );
@@ -990,10 +1017,10 @@ function CertList({
 
   if (certIds.length === 0) {
     return (
-      <div className="ind-cert-empty">
-        <div className="ind-cert-empty-title">No certifications tagged here yet.</div>
+      <div className="u-empty ind-cert-empty">
+        <div className="ind-cert-empty-title">No certifications tagged here yet</div>
         <div className="ind-cert-empty-sub">
-          Click <strong>+ Add Certifications</strong> above to attach existing certifications.
+          Use <strong>Add Certifications</strong> to attach existing certifications.
         </div>
       </div>
     );
@@ -1044,12 +1071,11 @@ function CertList({
               <DragHandleIcon />
             </span>
             <span className="ind-ct-num">{idx + 1}</span>
-            <span className="ind-ct-id">{cert.id}</span>
-            <span
-              className="ind-ct-name"
-              title={`${cert.stage} · ${cert.hours} ${cert.hours === 1 ? "hour" : "hours"}`}
-            >
-              {cert.name}
+            <span className="ind-ct-cell">
+              <span className="ind-ct-name">{cert.name}</span>
+              <span className="ind-ct-sub">
+                {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
+              </span>
             </span>
             <button
               className="ind-ct-x"
@@ -1101,77 +1127,77 @@ function NameModal({
   const isValid = !!trimmed && !isDuplicate;
 
   return (
-    <div className="ind-modal-overlay" onClick={onCancel}>
-      <div className="ind-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <h3 className="ind-modal-title">{title}</h3>
-          <button className="ind-modal-close" aria-label="Close" onClick={onCancel}>
-            <SmallXIcon />
-          </button>
+    <div className="pm-overlay" onClick={onCancel}>
+      <div className="pm-modal ind-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head">
+          <h3 className="pm-title">{title}</h3>
+          <p className="pm-sub">{nameHelp}</p>
         </div>
-        <div className="ind-modal-body">
-          <label className="ind-field">
-            <span className="ind-field-label">
-              {nameLabel} <span className="ind-field-flag">EN</span>{" "}
-              <span className="ind-field-required">*</span>
-            </span>
-            <input
-              autoFocus
-              className="ind-field-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Solar & Renewables"
-            />
-            <span className="ind-field-help">
-              {isDuplicate ? (
-                <span className="ind-field-error">A {nameLabel.toLowerCase()} with this name already exists.</span>
-              ) : (
-                nameHelp
-              )}
-            </span>
-          </label>
+        <div className="pm-body">
+          <div className="form-group">
+            <label className="form-label">
+              {nameLabel} <span className="req">*</span>
+            </label>
+            <div className="lang-field">
+              <div className="lang-field-row">
+                <span className="lang-tag">EN</span>
+                <input
+                  autoFocus
+                  className="lang-field-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Solar & Renewables"
+                />
+              </div>
+              <div className="lang-field-divider" />
+              <div className="lang-field-row">
+                <span className="lang-tag">ES</span>
+                <input
+                  className="lang-field-input"
+                  value={nameEs}
+                  onChange={(e) => setNameEs(e.target.value)}
+                  placeholder="Solar y Energías Renovables"
+                />
+              </div>
+            </div>
+            {isDuplicate ? (
+              <div className="pm-error">
+                A {nameLabel.toLowerCase()} with this name already exists.
+              </div>
+            ) : (
+              <div className="form-help">
+                Spanish is optional — it falls back to the English name.
+              </div>
+            )}
+          </div>
 
-          <label className="ind-field">
-            <span className="ind-field-label">
-              {nameLabel} <span className="ind-field-flag">ES</span>
-            </span>
-            <input
-              className="ind-field-input"
-              value={nameEs}
-              onChange={(e) => setNameEs(e.target.value)}
-              placeholder="e.g. Solar y Energías Renovables"
-            />
-            <span className="ind-field-help">
-              Spanish translation shown to Spanish-locale learners. Optional — falls back to the English name.
-            </span>
-          </label>
-
-          <div className="ind-toggle-field">
-            <button
-              type="button"
-              className={`ind-toggle ${hidden ? "" : "is-on"}`}
-              role="switch"
-              aria-checked={!hidden}
-              onClick={() => setHidden((h) => !h)}
-            >
-              <span className="ind-toggle-knob" />
-            </button>
-            <div className="ind-toggle-text">
-              <span className="ind-toggle-title">
-                {hidden ? "Hidden" : "Visible"}
-              </span>
-              <span className="ind-toggle-sub">
-                {hidden
-                  ? "Won't appear to learners browsing the catalog."
-                  : "Appears to learners browsing the catalog."}
-              </span>
+          <div className="form-group">
+            <label className="form-label">Visibility</label>
+            <div className="tab-switch">
+              <button
+                className={`tab-switch-tab ${hidden ? "" : "active"}`}
+                onClick={() => setHidden(false)}
+              >
+                Visible
+              </button>
+              <button
+                className={`tab-switch-tab ${hidden ? "active" : ""}`}
+                onClick={() => setHidden(true)}
+              >
+                Hidden
+              </button>
+            </div>
+            <div className="form-help">
+              {hidden
+                ? "Won't appear to learners browsing the catalog."
+                : "Appears to learners browsing the catalog."}
             </div>
           </div>
         </div>
-        <div className="ind-modal-foot">
-          <button className="ind-btn-secondary" onClick={onCancel}>Cancel</button>
+        <div className="pm-foot">
+          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
           <button
-            className="ind-btn-primary"
+            className="btn-publish"
             disabled={!isValid}
             onClick={() => {
               if (!isValid) return;
@@ -1206,18 +1232,15 @@ function DeleteConfirm({
   onCancel: () => void;
 }) {
   return (
-    <div className="ind-modal-overlay" onClick={onCancel}>
-      <div className="ind-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <h3 className="ind-modal-title">{title}</h3>
-          <button className="ind-modal-close" aria-label="Close" onClick={onCancel}>
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="ind-modal-body">
-          <p className="ind-modal-text">
+    <div className="pm-overlay" onClick={onCancel}>
+      <div className="pm-modal ind-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head">
+          <h3 className="pm-title">{title}</h3>
+          <p className="pm-sub">
             Delete <strong>{label}</strong>? This can't be undone.
           </p>
+        </div>
+        <div className="pm-body">
           <ul className="ind-modal-list">
             {isIndustry && subCount > 0 && (
               <li>
@@ -1234,9 +1257,9 @@ function DeleteConfirm({
             )}
           </ul>
         </div>
-        <div className="ind-modal-foot">
-          <button className="ind-btn-secondary" onClick={onCancel}>Cancel</button>
-          <button className="ind-btn-danger" onClick={onConfirm}>
+        <div className="pm-foot">
+          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
+          <button className="btn-publish mg-btn-danger" onClick={onConfirm}>
             Delete {isIndustry ? "Industry" : "Sub-Industry"}
           </button>
         </div>
@@ -1272,8 +1295,8 @@ function AddCertsModal({
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
 
   const scopeLabel = subName
-    ? `${industryName} › ${subName.toUpperCase()}`
-    : `${industryName} (INDUSTRY-LEVEL)`;
+    ? `${industryName} › ${subName}`
+    : `${industryName} (Industry-level)`;
 
   // Build the cert universe — names from data/industries.ts certPool
   const universe = useMemo(() => {
@@ -1321,56 +1344,79 @@ function AddCertsModal({
       .map(([id]) => id);
   }, [selected]);
 
+  const hasFilters =
+    stageFilter !== "All" || tagFilter !== "All" || timeFilter !== "Any";
+
   return (
-    <div className="ind-modal-overlay" onClick={onClose}>
-      <div className="ind-modal ind-modal--lg" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <div className="ind-modal-eyebrow">
-            ADDING TO · <span className="ind-modal-eyebrow-strong">{scopeLabel}</span>
+    <div className="pm-overlay" onClick={onClose}>
+      <div className="pm-modal ind-addcerts" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head ind-addcerts-head">
+          <div>
+            <h3 className="pm-title">Add Certifications</h3>
+            <p className="pm-sub">
+              Adding to <strong>{scopeLabel}</strong>
+            </p>
           </div>
-          <button className="ind-modal-close" aria-label="Close" onClick={onClose}>
+          <button className="ind-icon-btn" aria-label="Close" onClick={onClose}>
             <SmallXIcon />
           </button>
         </div>
-        <h3 className="ind-modal-title ind-modal-title--padded">Add Certifications</h3>
 
-        <div className="ind-addcerts-search">
-          <span className="search-icon"><SearchIcon /></span>
-          <input
-            autoFocus
-            className="ind-addcerts-search-input"
-            placeholder="Search Certifications by name…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <div className="ind-addcerts-controls">
+          <div className="search-wrap ind-addcerts-search">
+            <span className="search-icon"><SearchIcon /></span>
+            <input
+              autoFocus
+              className="search-input"
+              placeholder="Search Certifications"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
 
-        <div className="ind-addcerts-filters">
-          <FilterPill
-            label="Career stage"
-            value={stageFilter}
-            options={["All", ...CAREER_STAGES]}
-            onChange={(v) => setStageFilter(v as CareerStage | "All")}
-          />
-          <FilterPill
-            label="Industry tag"
-            value={tagFilter}
-            options={["All", "Tagged", "Untagged"]}
-            onChange={(v) => setTagFilter(v as "All" | "Untagged" | "Tagged")}
-          />
-          <FilterPill
-            label="Time"
-            value={timeFilter === "Any" ? "Any" : timeFilter}
-            options={["Any", "Short", "Medium", "Long"]}
-            onChange={(v) => setTimeFilter(v as "Any" | "Short" | "Medium" | "Long")}
-          />
-          <button className="ind-filter-more">+ More filters</button>
-          <div className="ind-addcerts-count">{filtered.length} Certifications</div>
+          <div className="filters ind-addcerts-filters">
+            <SelectPill
+              label="Career Stage"
+              value={stageFilter}
+              blank="All"
+              options={["All", ...CAREER_STAGES]}
+              onChange={(v) => setStageFilter(v as CareerStage | "All")}
+            />
+            <SelectPill
+              label="Industry Tag"
+              value={tagFilter}
+              blank="All"
+              options={["All", "Tagged", "Untagged"]}
+              onChange={(v) => setTagFilter(v as "All" | "Untagged" | "Tagged")}
+            />
+            <SelectPill
+              label="Time"
+              value={timeFilter}
+              blank="Any"
+              options={["Any", "Short", "Medium", "Long"]}
+              onChange={(v) => setTimeFilter(v as "Any" | "Short" | "Medium" | "Long")}
+            />
+            {hasFilters && (
+              <button
+                className="filter-clear-link"
+                onClick={() => {
+                  setStageFilter("All");
+                  setTagFilter("All");
+                  setTimeFilter("Any");
+                }}
+              >
+                Clear Filters
+              </button>
+            )}
+            <div className="filters-end ind-addcerts-count">
+              {filtered.length} Certifications
+            </div>
+          </div>
         </div>
 
         <div className="ind-addcerts-list">
           {filtered.length === 0 ? (
-            <div className="ind-addcerts-empty">No certifications match the current filters.</div>
+            <div className="u-empty">No certifications match the current filters.</div>
           ) : (
             filtered.map((cert) => {
               const alreadyAdded = alreadyAtScope.has(cert.id);
@@ -1379,37 +1425,37 @@ function AddCertsModal({
               return (
                 <button
                   key={cert.id}
-                  className={`ind-addcerts-row ${order !== undefined ? "is-selected" : ""} ${alreadyAdded ? "is-disabled" : ""}`}
+                  className={`ind-ct-row ind-addcerts-row ${order !== undefined ? "is-selected" : ""} ${alreadyAdded ? "is-disabled" : ""}`}
                   disabled={alreadyAdded}
                   onClick={() => !alreadyAdded && toggleSelect(cert.id)}
                 >
-                  <span className={`ind-addcerts-bullet ${order !== undefined ? "is-num" : ""} ${alreadyAdded ? "is-check" : ""}`}>
-                    {alreadyAdded ? "✓" : order !== undefined ? order : ""}
+                  <span
+                    className={`checkbox ind-addcerts-box ${order !== undefined || alreadyAdded ? "checked" : ""}`}
+                  >
+                    {alreadyAdded ? <CheckIcon /> : order !== undefined ? order : null}
                   </span>
-                  <div className="ind-addcerts-meta">
-                    <div className="ind-addcerts-name">{cert.name}</div>
-                    <div className="ind-addcerts-sub">
+                  <span className="ind-ct-cell">
+                    <span className="ind-ct-name">{cert.name}</span>
+                    <span className="ind-ct-sub">
                       {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
-                    </div>
-                    <div className="ind-addcerts-tags">
-                      {alreadyAdded ? (
-                        <span className="ind-addcerts-tag-label ind-addcerts-tag-label--added">
-                          Currently tagged in:
-                        </span>
-                      ) : tags.length > 0 ? (
-                        <span className="ind-addcerts-tag-label">Currently tagged in:</span>
-                      ) : (
-                        <span className="ind-addcerts-tag-empty">No Industry tags yet</span>
-                      )}
-                      {tags.map((t, i) => (
-                        <span key={`${cert.id}-tag-${i}`} className="ind-cert-tag">
+                    </span>
+                  </span>
+                  <span className="ind-addcerts-tags">
+                    {tags.length > 0 ? (
+                      tags.map((t, i) => (
+                        <span
+                          key={`${cert.id}-tag-${i}`}
+                          className="co-status-pill co-status-pill--secondary"
+                        >
                           {t.subName ? `${t.industryName} › ${t.subName}` : t.industryName}
                         </span>
-                      ))}
-                    </div>
-                  </div>
+                      ))
+                    ) : (
+                      <span className="ind-ct-plain">No industry tags yet</span>
+                    )}
+                  </span>
                   {alreadyAdded && (
-                    <span className="ind-addcerts-already">Already added</span>
+                    <span className="co-status-pill co-status-pill--green">Already added</span>
                   )}
                 </button>
               );
@@ -1417,20 +1463,23 @@ function AddCertsModal({
           )}
         </div>
 
-        <div className="ind-modal-foot ind-modal-foot--addcerts">
+        <div className="pm-foot ind-addcerts-foot">
           <div className="ind-addcerts-foot-text">
             <strong>{selectedCount} selected</strong>
             {selectedCount > 0 && (
               <span className="ind-addcerts-foot-sub">
-                Will be added to <strong>{subName ? `${industryName} › ${subName}` : `${industryName} (Industry-level)`}</strong>{" "}
-                in the order shown by the numbers. Click again to deselect.
+                Added to{" "}
+                <strong>
+                  {subName ? `${industryName} › ${subName}` : `${industryName} (Industry-level)`}
+                </strong>{" "}
+                in the order shown. Click a row again to deselect.
               </span>
             )}
           </div>
           <div className="ind-addcerts-foot-actions">
-            <button className="ind-btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-save-draft" onClick={onClose}>Cancel</button>
             <button
-              className="ind-btn-primary"
+              className="btn-publish"
               disabled={selectedCount === 0}
               onClick={() => onAdd(selectedInOrder)}
             >
@@ -1444,31 +1493,54 @@ function AddCertsModal({
   );
 }
 
-function FilterPill({
+/* Single-select filter pill on the shared Dropdown + PillTrigger chrome.
+   `blank` is the value that counts as "no filter applied". */
+function SelectPill({
   label,
   value,
+  blank,
   options,
   onChange,
 }: {
   label: string;
   value: string;
+  blank: string;
   options: string[];
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="ind-filter-pill">
-      <span className="ind-filter-pill-label">{label}:</span>
-      <select
-        className="ind-filter-pill-select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
-      <span className="ind-filter-pill-caret">▾</span>
-    </label>
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label={label}
+          value={value === blank ? null : value}
+          open={open}
+          toggle={toggle}
+          onClear={() => onChange(blank)}
+        />
+      )}
+    >
+      {({ close }) => (
+        <div className="dropdown-list">
+          {options.map((o) => (
+            <button
+              key={o}
+              className="dropdown-item"
+              onClick={() => {
+                onChange(o);
+                close();
+              }}
+            >
+              <span className={`checkbox ${o === value ? "checked" : ""}`}>
+                {o === value && <CheckIcon />}
+              </span>
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
   );
 }
 

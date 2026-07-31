@@ -1,8 +1,9 @@
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
-  type CSSProperties,
-  type HTMLAttributes,
+  type JSX,
   type ReactNode,
 } from "react";
 import type { TaskType } from "../data/tasks";
@@ -26,9 +27,27 @@ import {
   type Employee,
   type TimelineEvent,
 } from "../data/certLookup";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { PageBreak } from "./PageBreak";
+import { SearchHints } from "./SearchPanelParts";
+import {
+  ArrowUpRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FileIcon,
+  HandsOnIcon,
+  PackageIcon,
+  PlusCircleIcon,
+  QuizIcon,
+  RowArrowIcon,
+  SearchIcon,
+  SmallXIcon,
+  XCircleIcon,
+} from "./icons";
 
 /**
- * Certification Lookup — search an employee or a cohort, then a certification
+ * Manage Completions — search an employee or a cohort, then a certification
  * or a single task. The combination drives the view:
  *
  *   employee + cert  → accordion of every task with grades, attempts, timeline
@@ -38,71 +57,34 @@ import {
  *
  * From a cohort you can open any person beside the matrix/roster (split view).
  * Admin actions — mark complete (with optional grade), grant a quiz attempt,
- * mark a certification — overlay the generated baseline via local state.
+ * mark a certification — overlay the generated baseline via local state and are
+ * committed with the footer's Save Changes.
  *
- * Replaces the former Content Overrides grid; keeps the same export + route.
+ * Chrome is assembled from the shared design system (Figma "Components" page
+ * 11:15114) rather than restyled here — see the `.mc-root` comment in
+ * index.css for the component-by-component mapping.
  */
-
-const ACCENT = "#ec5e2c";
-const AMBER = "#e8a24e";
 
 /* ───────────────────────── small presentational bits ───────────────────── */
 
-function TaskTypeIcon({
-  type,
-  size = 14,
-  color = "currentColor",
-}: {
-  type: TaskType;
-  size?: number;
-  color?: string;
-}) {
-  const common: HTMLAttributes<SVGSVGElement> & Record<string, unknown> = {
-    width: size,
-    height: size,
-    viewBox: "0 0 16 16",
-    fill: "none",
-    stroke: color,
-    strokeWidth: 1.4,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    style: { display: "block" },
-  };
-  let body: ReactNode;
-  switch (type) {
-    case "Quiz":
-      body = (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="M6.4 6.4a1.7 1.7 0 1 1 2.4 1.55c-.55.35-.9.7-.9 1.35" />
-          <circle cx="8" cy="11.4" r="0.55" fill={color} stroke="none" />
-        </>
-      );
-      break;
-    case "xAPI":
-      body = <polyline points="1.8,8 4.3,8 6.2,3.8 9.8,12.2 11.7,8 14.2,8" />;
-      break;
-    case "Hands-On Task":
-      body = <path d="M3 2.4 L3 12.2 L5.9 9.4 L8 13.4 L9.6 12.7 L7.6 8.8 L11.8 8.6 Z" />;
-      break;
-    case "Resource":
-      body = (
-        <>
-          <path d="M4 1.8h5l3 3v9.4H4z" />
-          <path d="M9 1.8v3h3" />
-        </>
-      );
-      break;
-    default:
-      body = <circle cx="8" cy="8" r="5" />;
-  }
+/* Shared task-type glyphs (same map TasksPage uses). */
+const TYPE_ICON: Record<TaskType, () => JSX.Element> = {
+  xAPI: PackageIcon,
+  Quiz: QuizIcon,
+  "Hands-On Task": HandsOnIcon,
+  Resource: FileIcon,
+};
+
+function TaskTypeIcon({ type }: { type: TaskType }) {
+  const Icon = TYPE_ICON[type] ?? FileIcon;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center" }}>
-      <svg {...common}>{body}</svg>
+    <span className="mc-typeicon">
+      <Icon />
     </span>
   );
 }
 
+/** Status glyph used in the matrix grid and beside task names. */
 function StatusDot({
   status,
   manual,
@@ -112,120 +94,43 @@ function StatusDot({
   manual?: boolean;
   size?: number;
 }) {
-  const v = statusVisual(status, ACCENT, !!manual);
+  const v = statusVisual(status, !!manual);
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        fontSize: Math.round(size * 0.56),
-        lineHeight: 1,
-        flex: "none",
-        background: v.bg,
-        color: v.color,
-        border: v.border,
-        boxShadow: v.boxShadow,
-      }}
-    >
-      {v.mark}
+      className={`mc-dot mc-dot--${v.dot}${v.manual ? " is-manual" : ""}`}
+      style={{ width: size, height: size }}
+      aria-label={v.label}
+    />
+  );
+}
+
+/** Table Pill (Figma 109:1237) carrying the same status. */
+function StatusPill({ status, manual }: { status: CellStatus; manual?: boolean }) {
+  const v = statusVisual(status, !!manual);
+  return <span className={`co-status-pill co-status-pill--${v.tone}`}>{v.label}</span>;
+}
+
+function Avatar({ initials, size = 28 }: { initials: string; size?: number }) {
+  return (
+    <span className="mc-avatar" style={{ width: size, height: size }}>
+      {initials}
     </span>
   );
 }
 
-/** Inline-style element with a hover override (the design's `style-hover`). */
-function HoverDiv({
-  style,
-  hoverStyle,
-  children,
-  ...rest
-}: {
-  style: CSSProperties;
-  hoverStyle?: CSSProperties;
-  children?: ReactNode;
-} & Omit<HTMLAttributes<HTMLDivElement>, "style">) {
-  const [h, setH] = useState(false);
-  return (
-    <div
-      {...rest}
-      style={{ ...style, ...(h && hoverStyle ? hoverStyle : null) }}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
-    >
-      {children}
-    </div>
-  );
-}
-
-function HoverButton({
-  style,
-  hoverStyle,
-  children,
-  ...rest
-}: {
-  style: CSSProperties;
-  hoverStyle?: CSSProperties;
-  children?: ReactNode;
-} & Omit<HTMLAttributes<HTMLButtonElement>, "style">) {
-  const [h, setH] = useState(false);
-  return (
-    <button
-      {...rest}
-      style={{ ...style, ...(h && hoverStyle ? hoverStyle : null) }}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
-    >
-      {children}
-    </button>
-  );
-}
-
+/** Vertical event rail — same construction as the billing `.sub-timeline`. */
 function Timeline({ events }: { events: TimelineEvent[] }) {
-  const dotFor = (tone: TimelineEvent["tone"]): CSSProperties => {
-    if (tone === "done")
-      return { background: "#d8d6cd", border: "2px solid #d8d6cd" };
-    if (tone === "accent")
-      return { background: "#16171a", border: `3px solid ${ACCENT}` };
-    return { background: "#16171a", border: "2px solid #45474c" };
-  };
-  const colorFor = (tone: TimelineEvent["tone"]) =>
-    tone === "done" ? "#ece9e2" : tone === "accent" ? ACCENT : "#85878c";
   return (
-    <div style={{ position: "relative" }}>
-      <div
-        style={{
-          position: "absolute",
-          left: 6,
-          top: 5,
-          bottom: 10,
-          width: 2,
-          background: "#2c2e33",
-        }}
-      />
+    <div className="mc-timeline">
       {events.map((ev, i) => (
-        <div
-          key={i}
-          style={{ display: "flex", gap: 12, position: "relative", paddingBottom: 12 }}
-        >
-          <span
-            style={{
-              width: 13,
-              height: 13,
-              borderRadius: "50%",
-              flex: "none",
-              position: "relative",
-              zIndex: 1,
-              ...dotFor(ev.tone),
-            }}
-          />
-          <div style={{ marginTop: -2 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: colorFor(ev.tone) }}>
-              {ev.label}
-            </div>
-            <div style={{ fontSize: 10.5, color: "#9a9ca1" }}>{ev.tsStr}</div>
+        <div className="mc-tl-item" key={i}>
+          <div className="mc-tl-rail">
+            <span className={`mc-tl-dot mc-tl-dot--${ev.tone}`} />
+            {i < events.length - 1 && <span className="mc-tl-divider" />}
+          </div>
+          <div className="mc-tl-body">
+            <p className={`mc-tl-label${ev.tone === "future" ? " is-muted" : ""}`}>{ev.label}</p>
+            <p className="mc-tl-ts">{ev.tsStr}</p>
           </div>
         </div>
       ))}
@@ -236,34 +141,13 @@ function Timeline({ events }: { events: TimelineEvent[] }) {
 /* metrics 4-up grid used in both detail views */
 function MetricsGrid({ d }: { d: ReturnType<typeof buildDetail> }) {
   const cell = (label: string, value: ReactNode, big?: boolean) => (
-    <div style={{ background: "#1a1b1e", padding: "11px 13px" }}>
-      <div
-        style={{
-          fontSize: 9,
-          textTransform: "uppercase",
-          letterSpacing: ".1em",
-          color: "#9a9ca1",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: big ? 16 : 13, fontWeight: 600 }}>{value}</div>
+    <div className="mc-metric">
+      <div className="mc-metric-label">{label}</div>
+      <div className={`mc-metric-value${big ? " is-big" : ""}`}>{value}</div>
     </div>
   );
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr 1fr",
-        gap: 1,
-        background: "#24262b",
-        border: "1px solid #24262b",
-        borderRadius: 10,
-        overflow: "hidden",
-        marginBottom: 14,
-      }}
-    >
+    <div className="mc-metrics">
       {cell("Grade", d.gradeStr, true)}
       {cell("Done", d.completedStr)}
       {cell("Time", d.durStr)}
@@ -282,76 +166,26 @@ function QuizAttemptBox({
   onViewAttempts: () => void;
 }) {
   return (
-    <div
-      style={{
-        border: "1.5px solid #4a3a1f",
-        background: "#1f1a12",
-        borderRadius: 11,
-        padding: "13px 15px",
-        marginBottom: 14,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 10,
-              textTransform: "uppercase",
-              letterSpacing: ".1em",
-              color: AMBER,
-              fontWeight: 700,
-              marginBottom: 4,
-            }}
-          >
-            Quiz attempts
-          </div>
-          <div style={{ fontSize: 12, color: "#bdbfc4" }}>{d.attemptsRemainingStr}</div>
-        </div>
-        <div style={{ display: "flex", gap: 8, flex: "none" }}>
-          <HoverButton
-            onClick={onViewAttempts}
-            style={{
-              flex: "none",
-              padding: "10px 14px",
-              border: "1.5px solid #3b3e44",
-              borderRadius: 9,
-              background: "#1a1b1e",
-              color: "#bdbfc4",
-              fontSize: 12.5,
-              fontWeight: 700,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-            hoverStyle={{ background: "#26282d" }}
-          >
-            View attempts ↗
-          </HoverButton>
-          <HoverButton
-            onClick={onGrant}
-            style={{
-              flex: "none",
-              padding: "10px 14px",
-              border: `1.5px solid ${ACCENT}`,
-              borderRadius: 9,
-              background: "#1a1b1e",
-              color: AMBER,
-              fontSize: 12.5,
-              fontWeight: 700,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-            hoverStyle={{ background: "#2f2516" }}
-          >
-            + Grant another attempt
-          </HoverButton>
+    <div className="mc-quizbox">
+      <PageBreak label="Quiz attempts" />
+      <div className="mc-quizbox-row">
+        <span className="mc-quizbox-text">{d.attemptsRemainingStr}</span>
+        <div className="mc-quizbox-actions">
+          <button className="btn-save-draft" onClick={onViewAttempts}>
+            View attempts
+            <ArrowUpRightIcon />
+          </button>
+          <button className="btn-publish" onClick={onGrant}>
+            Grant another attempt
+          </button>
         </div>
       </div>
       {d.hasGrants && (
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="mc-grantlog">
           {d.grantLog.map((g, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ fontWeight: 600, color: AMBER }}>{g.amountStr}</span>
-              <span style={{ color: "#83858b" }}>{g.atStr}</span>
+            <div className="mc-grantlog-row" key={i}>
+              <span className="mc-grantlog-amount">{g.amountStr}</span>
+              <span className="mc-grantlog-at">{g.atStr}</span>
             </div>
           ))}
         </div>
@@ -393,13 +227,11 @@ export function ContentOverridesPage({
   const [what, setWhat] = useState<What>(null);
   const [whoQ, setWhoQ] = useState("");
   const [whatQ, setWhatQ] = useState("");
-  const [whoOpen, setWhoOpen] = useState(false);
-  const [whatOpen, setWhatOpen] = useState(false);
 
   const [focusEmp, setFocusEmp] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const [ftypes, setFtypes] = useState<Record<string, boolean>>({});
+  const [ftypes, setFtypes] = useState<string[]>([]);
   const [finalOnly, setFinalOnly] = useState(false);
 
   const [gradePrompt, setGradePrompt] = useState<GradePrompt>(null);
@@ -409,14 +241,12 @@ export function ContentOverridesPage({
   function selectWho(kind: "employee" | "cohort", id: string) {
     setWho({ kind, id });
     setWhoQ("");
-    setWhoOpen(false);
     setFocusEmp(null);
     setExpanded({});
   }
   function selectWhat(kind: "cert" | "task", id: string) {
     setWhat({ kind, id });
     setWhatQ("");
-    setWhatOpen(false);
     setFocusEmp(null);
     setExpanded({});
   }
@@ -437,11 +267,9 @@ export function ContentOverridesPage({
     setWhat(x);
     setWhoQ("");
     setWhatQ("");
-    setWhoOpen(false);
-    setWhatOpen(false);
     setFocusEmp(null);
     setExpanded({});
-    setFtypes({});
+    setFtypes([]);
     setFinalOnly(false);
   }
 
@@ -536,8 +364,8 @@ export function ContentOverridesPage({
   ctAll.forEach((t) => {
     if (!types.includes(t.type)) types.push(t.type);
   });
-  const anyType = Object.keys(ftypes).some((k) => ftypes[k]);
-  const ctF = ctAll.filter((t) => (!anyType || ftypes[t.type]) && (!finalOnly || t.isFinal));
+  const anyType = ftypes.length > 0;
+  const ctF = ctAll.filter((t) => (!anyType || ftypes.includes(t.type)) && (!finalOnly || t.isFinal));
   const filtersActive = anyType || finalOnly;
 
   const showMatrix = cohortScope && whatCert;
@@ -550,21 +378,6 @@ export function ContentOverridesPage({
     cohortId != null
       ? (data.cohorts.find((c) => c.id === cohortId)?.userIds ?? []).map((id) => data.employeesById[id])
       : [];
-
-  const detailWrapStyle: CSSProperties = split
-    ? {
-        width: 560,
-        flex: "none",
-        borderLeft: "1px solid #2c2e33",
-        background: "#202125",
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-      }
-    : { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 };
-  const detailContentStyle: CSSProperties = split
-    ? { padding: "16px 18px" }
-    : { padding: "20px 24px", maxWidth: 860, margin: "0 auto", width: "100%" };
 
   const focusUser = focusEmp ? data.employeesById[focusEmp] : null;
 
@@ -583,11 +396,84 @@ export function ContentOverridesPage({
   const certMatches = data.certifications.filter((c) => !whatQl || c.name.toLowerCase().includes(whatQl));
   const taskMatches = (whatQl ? data.tasks.filter((t) => t.name.toLowerCase().includes(whatQl)) : []).slice(0, 10);
 
-  /* who/what chips */
-  const whoChip = whoUser
-    ? { badge: whoUser.initials, label: whoUser.name, radius: "50%" }
+  /* ───── combobox option lists ───── */
+  const whoOptions: ScopeOption[] = [
+    ...cohortMatches.map((c) => ({
+      key: "cohort_" + c.id,
+      section: "Cohorts",
+      onSelect: () => selectWho("cohort", c.id),
+      node: (
+        <>
+          <span className="usearch-chip">Cohort</span>
+          <span className="usearch-user-text">
+            <span className="usearch-user-name">{c.name}</span>
+          </span>
+          <span className="usearch-row-desc">
+            {c.userIds.length} {c.userIds.length === 1 ? "employee" : "employees"}
+          </span>
+        </>
+      ),
+    })),
+    ...peopleMatches.map((e) => ({
+      key: "emp_" + e.id,
+      section: "Employees",
+      onSelect: () => selectWho("employee", e.id),
+      node: (
+        <>
+          <Avatar initials={e.initials} size={30} />
+          <span className="usearch-user-text">
+            <span className="usearch-user-name">{e.name}</span>
+            <span className="usearch-user-sub">{e.contact}</span>
+          </span>
+          <span className="usearch-row-desc">{e.cohort ?? "B2C"}</span>
+        </>
+      ),
+    })),
+  ];
+
+  const whatOptions: ScopeOption[] = [
+    ...certMatches.map((c) => ({
+      key: "cert_" + c.id,
+      section: "Certifications",
+      onSelect: () => selectWhat("cert", c.id),
+      node: (
+        <>
+          <span className="usearch-chip">Cert</span>
+          <span className="usearch-user-text">
+            <span className="usearch-user-name">{c.name}</span>
+            <span className="usearch-user-sub">{c.industry}</span>
+          </span>
+          <span className="usearch-row-desc">{c.taskIds.length} tasks</span>
+        </>
+      ),
+    })),
+    ...taskMatches.map((t) => ({
+      key: "task_" + t.id,
+      section: "Tasks",
+      onSelect: () => selectWhat("task", t.id),
+      node: (
+        <>
+          <TaskTypeIcon type={t.type} />
+          <span className="usearch-user-text">
+            <span className="usearch-user-name">{t.name}</span>
+            <span className="usearch-user-sub">{t.certName}</span>
+          </span>
+          <span className="usearch-row-desc">{t.type}</span>
+        </>
+      ),
+    })),
+  ];
+
+  /* ───── selected-scope tokens ───── */
+  const whoScope = whoUser
+    ? { label: "Employee", name: whoUser.name }
     : cohortId
-    ? { badge: "⊞", label: cohortId, radius: "8px" }
+    ? { label: "Cohort", name: cohortId }
+    : null;
+  const whatScope = certObj
+    ? { label: "Certification", name: certObj.name }
+    : taskObj
+    ? { label: "Task", name: taskObj.name }
     : null;
 
   /* examples (real entities) */
@@ -605,1058 +491,515 @@ export function ContentOverridesPage({
   /* half-state copy */
   const half =
     who && !what
-      ? { title: "Now pick what to check", sub: "Search a certification or a single task above.", num: "2", bg: "#2f2516", color: AMBER }
-      : { title: "Now pick who to check", sub: "Search an employee or a cohort above.", num: "1", bg: "#2a2b30", color: "#fff" };
+      ? { title: "Now pick what to check", sub: "Search a certification or a single task above.", num: "2" }
+      : { title: "Now pick who to check", sub: "Search an employee or a cohort above.", num: "1" };
 
   return (
-    <div
-      className="main"
-      style={{
-        height: "100%",
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "#0e0f11",
-        color: "#f1f1ec",
-        overflow: "hidden",
-        fontFamily: "'Helvetica Neue', Helvetica, system-ui, sans-serif",
-        fontSize: 14,
-      }}
-    >
-      <style>{`@keyframes clAcc{from{opacity:.3;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}@keyframes clPane{from{opacity:.35;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}`}</style>
-
-      {/* ===== top search header ===== */}
-      <header
-        style={{
-          flex: "none",
-          background: "#1a1b1e",
-          borderBottom: "1px solid #2c2e33",
-          padding: "13px 24px",
-          display: "flex",
-          alignItems: "center",
-          gap: 13,
-        }}
-      >
-        <div style={{ flex: "none", marginRight: 4 }}>
-          <div
-            style={{
-              fontSize: 9,
-              letterSpacing: ".16em",
-              textTransform: "uppercase",
-              color: "#83858b",
-            }}
-          >
-            SkillCat · Admin
-          </div>
-          <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.01em" }}>
-            Certification Lookup
-          </div>
-        </div>
-
-        {/* WHO */}
-        <SearchField
-          accent={whoUser || cohortId ? ACCENT : "#3b3e44"}
-          chip={whoChip}
-          chipColor="#fff"
-          query={whoQ}
-          placeholder="Search employee or cohort…"
-          open={whoOpen}
-          onInput={(v) => {
-            setWhoQ(v);
-            setWhoOpen(true);
-          }}
-          onFocus={() => setWhoOpen(true)}
-          onBlur={() => setWhoOpen(false)}
-          onClear={clearWho}
-        >
-          {(cohortMatches.length > 0 || peopleMatches.length > 0) ? (
-            <>
-              {cohortMatches.length > 0 && (
-                <>
-                  <DropLabel>Cohorts</DropLabel>
-                  {cohortMatches.map((c) => (
-                    <DropRow key={c.id} onSelect={() => selectWho("cohort", c.id)}>
-                      <span
-                        style={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: 8,
-                          background: "#2a2b30",
-                          color: "#fff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 13,
-                          flex: "none",
-                        }}
-                      >
-                        ⊞
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{c.name}</span>
-                        <span style={{ display: "block", fontSize: 11, color: "#83858b" }}>
-                          Cohort · {c.userIds.length} {c.userIds.length === 1 ? "employee" : "employees"}
-                        </span>
-                      </span>
-                    </DropRow>
-                  ))}
-                </>
-              )}
-              {peopleMatches.length > 0 && (
-                <>
-                  <DropLabel>Employees</DropLabel>
-                  {peopleMatches.map((e) => (
-                    <DropRow key={e.id} onSelect={() => selectWho("employee", e.id)}>
-                      <span
-                        style={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: "50%",
-                          background: "#2c2e33",
-                          color: "#bdbfc4",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          flex: "none",
-                        }}
-                      >
-                        {e.initials}
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={ellipsis(13, 600)}>{e.name}</span>
-                        <span style={ellipsis(11, 400, "#83858b")}>
-                          {e.cohort ? `${e.cohort} · ${e.contact}` : e.contact}
-                        </span>
-                      </span>
-                    </DropRow>
-                  ))}
-                </>
-              )}
-            </>
-          ) : (
-            <DropEmpty>No employees or cohorts match.</DropEmpty>
-          )}
-        </SearchField>
-
-        <span style={{ color: "#54565c", flex: "none", fontSize: 15 }}>›</span>
-
-        {/* WHAT */}
-        <SearchField
-          accent={certObj || taskObj ? ACCENT : "#3b3e44"}
-          chip={
-            certObj
-              ? { node: <span style={{ fontSize: 12 }}>◆</span>, label: certObj.name }
-              : taskObj
-              ? { node: <TaskTypeIcon type={taskObj.type} size={14} />, label: taskObj.name }
-              : null
-          }
-          chipColor={AMBER}
-          query={whatQ}
-          placeholder="Search certification or task…"
-          open={whatOpen}
-          onInput={(v) => {
-            setWhatQ(v);
-            setWhatOpen(true);
-          }}
-          onFocus={() => setWhatOpen(true)}
-          onBlur={() => setWhatOpen(false)}
-          onClear={clearWhat}
-        >
-          {certMatches.length > 0 || taskMatches.length > 0 ? (
-            <>
-              {certMatches.length > 0 && (
-                <>
-                  <DropLabel>Certifications</DropLabel>
-                  {certMatches.map((c) => (
-                    <DropRow key={c.id} onSelect={() => selectWhat("cert", c.id)} spread>
-                      <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                        <span
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 7,
-                            background: "#2f2516",
-                            color: AMBER,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 12,
-                            flex: "none",
-                          }}
-                        >
-                          ◆
-                        </span>
-                        <span style={ellipsis(13, 600)}>{c.name}</span>
-                      </span>
-                      <span style={{ fontSize: 11, color: "#83858b", flex: "none" }}>
-                        {c.taskIds.length} tasks
-                      </span>
-                    </DropRow>
-                  ))}
-                </>
-              )}
-              {taskMatches.length > 0 && (
-                <>
-                  <DropLabel border>Tasks</DropLabel>
-                  {taskMatches.map((t) => (
-                    <DropRow key={t.id} onSelect={() => selectWhat("task", t.id)}>
-                      <span style={{ display: "inline-flex", color: "#9a9ca1", flex: "none" }}>
-                        <TaskTypeIcon type={t.type} size={14} />
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={ellipsis(13, 600)}>{t.name}</span>
-                        <span style={ellipsis(11, 400, "#83858b")}>
-                          {t.certName} · {t.type}
-                        </span>
-                      </span>
-                    </DropRow>
-                  ))}
-                </>
-              )}
-            </>
-          ) : (
-            <DropEmpty>No certifications or tasks match.</DropEmpty>
-          )}
-        </SearchField>
-
-        {/* legend */}
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            gap: 11,
-            alignItems: "center",
-            fontSize: 11.5,
-            color: "#bdbfc4",
-            flex: "none",
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}
-        >
-          <LegendItem>
-            <span style={{ width: 14, height: 14, borderRadius: "50%", background: "#1a1b1e", border: "1px solid #3b3e44" }} />
-            Incomplete
-          </LegendItem>
-          <LegendItem>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                background: "#1a1b1e",
-                border: `2px solid ${ACCENT}`,
-                color: ACCENT,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 7,
-              }}
-            >
-              •
-            </span>
-            In review
-          </LegendItem>
-          <LegendItem>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                background: "#d8d6cd",
-                color: "#15161a",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 7,
-              }}
-            >
-              ✓
-            </span>
-            Complete
-          </LegendItem>
-        </div>
-      </header>
-
-      {/* ===== body ===== */}
-      <main style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {isLanding && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-            <div style={{ textAlign: "center", maxWidth: 460 }}>
-              <div
-                style={{
-                  width: 70,
-                  height: 70,
-                  borderRadius: 20,
-                  border: "2px dashed #3b3e44",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 20px",
-                  fontSize: 27,
-                  color: "#6b6d72",
-                }}
-              >
-                ⌕
-              </div>
-              <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: "-.015em", color: "#e7e6e2" }}>
-                Find someone, then pick what to check
-              </div>
-              <div style={{ fontSize: 13.5, lineHeight: 1.6, color: "#9a9ca1", marginTop: 9 }}>
-                Search an <strong style={{ color: "#bdbfc4" }}>employee or a cohort</strong>, then a{" "}
-                <strong style={{ color: "#bdbfc4" }}>certification or a single task</strong>. Pick a cohort to see
-                everyone in a matrix and open any person beside it.
-              </div>
-              {examples.length > 0 && (
-                <>
-                  <div
-                    style={{
-                      marginTop: 22,
-                      fontSize: 10.5,
-                      textTransform: "uppercase",
-                      letterSpacing: ".1em",
-                      color: "#6b6d72",
-                    }}
-                  >
-                    Jump to an example
-                  </div>
-                  <div style={{ marginTop: 11, display: "flex", gap: 9, justifyContent: "center", flexWrap: "wrap" }}>
-                    {examples.map((ex, i) => (
-                      <HoverButton
-                        key={i}
-                        onClick={() => setScope(ex.w, ex.x)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          border: "1px solid #3b3e44",
-                          background: "#1a1b1e",
-                          borderRadius: 10,
-                          padding: "10px 13px",
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}
-                        hoverStyle={{ borderColor: ACCENT, background: "#1f1a12" }}
-                      >
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: "#f1f1ec" }}>{ex.who}</span>
-                        <span style={{ color: "#54565c" }}>›</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: AMBER }}>{ex.what}</span>
-                      </HoverButton>
-                    ))}
-                  </div>
-                </>
-              )}
+    <div className="main">
+      <div className="workspace">
+        <div className="mc-root">
+          {/* ===== page header (Figma 46:314) ===== */}
+          <header className="mc-header">
+            <h1 className="tasks-title">Manage Completions</h1>
+            <div className="tasks-subtitle">
+              Look up an employee or a cohort, then a certification or a single task, to review and
+              override completions.
             </div>
-          </div>
-        )}
+          </header>
 
-        {isHalf && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-            <div style={{ textAlign: "center", maxWidth: 360 }}>
-              <div
-                style={{
-                  width: 46,
-                  height: 46,
-                  borderRadius: "50%",
-                  background: half.bg,
-                  color: half.color,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 19,
-                  fontWeight: 700,
-                  margin: "0 auto 14px",
-                }}
-              >
-                {half.num}
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#bdbfc4" }}>{half.title}</div>
-              <div style={{ fontSize: 13, color: "#9a9ca1", marginTop: 6, lineHeight: 1.5 }}>{half.sub}</div>
-            </div>
+          {/* ===== scope pickers ===== */}
+          <div className="mc-scoperow">
+            <ScopeSearch
+              placeholder="Search employee or cohort…"
+              scope={whoScope}
+              query={whoQ}
+              onQuery={setWhoQ}
+              onClearScope={clearWho}
+              options={whoOptions}
+              emptyText="No employees or cohorts match."
+              showKbd
+            />
+            <span className="mc-scope-sep">
+              <ChevronRightIcon />
+            </span>
+            <ScopeSearch
+              placeholder="Search certification or task…"
+              scope={whatScope}
+              query={whatQ}
+              onQuery={setWhatQ}
+              onClearScope={clearWhat}
+              options={whatOptions}
+              emptyText="No certifications or tasks match."
+            />
           </div>
-        )}
 
-        {hasScope && (
-          <>
-            {/* cert filter bar */}
-            {certObj && (
-              <div
-                style={{
-                  flex: "none",
-                  background: "#141517",
-                  borderBottom: "1px solid #23242a",
-                  padding: "8px 24px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  flexWrap: "wrap",
-                }}
+          {/* ===== task filters (certification scope only) ===== */}
+          {hasScope && certObj && (
+            <div className="filters mc-filters">
+              <Dropdown
+                width={260}
+                trigger={({ open, toggle }) => (
+                  <PillTrigger
+                    label="Task Type"
+                    value={summarize(ftypes, types)}
+                    open={open}
+                    toggle={toggle}
+                    onClear={() => setFtypes([])}
+                  />
+                )}
               >
-                <span
-                  style={{
-                    fontSize: 10,
-                    textTransform: "uppercase",
-                    letterSpacing: ".1em",
-                    color: "#6b6d72",
-                    flex: "none",
-                    marginRight: 2,
-                  }}
-                >
-                  Filter tasks
-                </span>
-                <span style={{ fontSize: 11, color: "#83858b", flex: "none" }}>Type</span>
-                {types.map((ty) => {
-                  const on = !!ftypes[ty];
-                  return (
-                    <button
-                      key={ty}
-                      onClick={() => setFtypes((f) => ({ ...f, [ty]: !f[ty] }))}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        padding: "5px 11px",
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        fontFamily: "inherit",
-                        cursor: "pointer",
-                        border: `1px solid ${on ? ACCENT : "#2f3137"}`,
-                        background: on ? "#271f12" : "#1a1b1e",
-                        color: on ? AMBER : "#bdbfc4",
-                      }}
-                    >
-                      {ty}
-                    </button>
-                  );
-                })}
-                <span style={{ width: 1, height: 18, background: "#2c2e33", flex: "none", margin: "0 3px" }} />
-                <button
-                  onClick={() => setFinalOnly((v) => !v)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: finalOnly ? AMBER : "#bdbfc4",
-                  }}
-                >
-                  <span
-                    style={{
-                      position: "relative",
-                      display: "inline-block",
-                      width: 34,
-                      height: 18,
-                      borderRadius: 20,
-                      flex: "none",
-                      transition: "background .15s",
-                      background: finalOnly ? ACCENT : "#3b3e44",
+                {({ close }) => (
+                  <SectionedMultiSelect
+                    sections={[{ items: types }]}
+                    value={ftypes}
+                    onApply={(v) => {
+                      setFtypes(v);
+                      close();
                     }}
-                  >
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 2,
-                        left: finalOnly ? 18 : 2,
-                        width: 14,
-                        height: 14,
-                        borderRadius: "50%",
-                        background: "#fff",
-                        transition: "left .15s",
-                      }}
-                    />
-                  </span>
-                  Final exam only
-                </button>
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "#9a9ca1", flex: "none" }}>
-                  {ctF.length === ctAll.length ? `${ctAll.length} tasks` : `${ctF.length} of ${ctAll.length} tasks`}
-                </span>
-                {filtersActive && (
+                  />
+                )}
+              </Dropdown>
+
+              {finalOnly ? (
+                <span className="filter-applied">
                   <button
-                    onClick={() => {
-                      setFtypes({});
-                      setFinalOnly(false);
-                    }}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "#5b9cff",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                      flex: "none",
-                    }}
+                    className="filter-applied-clear"
+                    onClick={() => setFinalOnly(false)}
+                    aria-label="Clear Final Exam filter"
                   >
-                    Clear Filters
+                    <XCircleIcon />
                   </button>
+                  <button className="filter-applied-main" onClick={() => setFinalOnly(false)}>
+                    <span className="label">Final Exam</span>
+                    <span className="sep" />
+                    <span className="value">Only</span>
+                  </button>
+                </span>
+              ) : (
+                <button className="filter-pill-dashed" onClick={() => setFinalOnly(true)}>
+                  <span className="icon">
+                    <PlusCircleIcon />
+                  </span>
+                  Final Exam
+                </button>
+              )}
+
+              {filtersActive && (
+                <button
+                  className="filter-clear-link"
+                  onClick={() => {
+                    setFtypes([]);
+                    setFinalOnly(false);
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+
+              {/* Legend for the status glyphs used by the matrix + accordion. */}
+              <span className="filters-end mc-filters-end">
+                <span className="mc-legend">
+                  <span className="mc-legend-item">
+                    <StatusDot status="incomplete" size={14} />
+                    Incomplete
+                  </span>
+                  <span className="mc-legend-item">
+                    <StatusDot status="review" size={14} />
+                    In Review
+                  </span>
+                  <span className="mc-legend-item">
+                    <StatusDot status="complete" size={14} />
+                    Complete
+                  </span>
+                </span>
+                <span className="mc-filter-count">
+                  {ctF.length === ctAll.length
+                    ? `${ctAll.length} tasks`
+                    : `${ctF.length} of ${ctAll.length} tasks`}
+                </span>
+              </span>
+            </div>
+          )}
+
+          {/* ===== body ===== */}
+          <main className="mc-body">
+            {isLanding && (
+              <div className="mc-empty">
+                <div className="mc-empty-inner">
+                  <span className="mc-empty-icon">
+                    <SearchIcon />
+                  </span>
+                  <div className="mc-empty-title">Find someone, then pick what to check</div>
+                  <div className="mc-empty-sub">
+                    Search an <strong>employee or a cohort</strong>, then a{" "}
+                    <strong>certification or a single task</strong>. Pick a cohort to see everyone in a
+                    matrix and open any person beside it.
+                  </div>
+                  {examples.length > 0 && (
+                    <>
+                      <PageBreak label="Jump to an example" />
+                      <div className="mc-examples">
+                        {examples.map((ex, i) => (
+                          <button key={i} className="btn-save-draft mc-example" onClick={() => setScope(ex.w, ex.x)}>
+                            <span>{ex.who}</span>
+                            <ChevronRightIcon />
+                            <span className="mc-example-what">{ex.what}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isHalf && (
+              <div className="mc-empty">
+                <div className="mc-empty-inner is-narrow">
+                  <span className="mc-empty-step">{half.num}</span>
+                  <div className="mc-empty-title">{half.title}</div>
+                  <div className="mc-empty-sub">{half.sub}</div>
+                </div>
+              </div>
+            )}
+
+            {hasScope && (
+              <div className="mc-split">
+                {/* LEFT: matrix */}
+                {showMatrix && (
+                  <Matrix
+                    members={cohortMembers}
+                    columns={ctF}
+                    certId={certObj!.id}
+                    allTasks={ctAll}
+                    cells={cells}
+                    certManual={certManual}
+                    focusEmp={focusEmp}
+                    expanded={expanded}
+                    onOpenEmp={focusName}
+                    onCell={focusCell}
+                    onMarkCert={markCert}
+                  />
+                )}
+
+                {/* LEFT: roster */}
+                {showRoster && (
+                  <Roster
+                    members={cohortMembers}
+                    task={taskObj!}
+                    cells={cells}
+                    compact={split}
+                    focusEmp={focusEmp}
+                    onOpen={focusName}
+                    onGrant={doGrant}
+                    onMark={requestMark}
+                    onViewAttempts={onViewAttempts}
+                  />
+                )}
+
+                {/* pick hint */}
+                {showPickHint && (
+                  <div className="mc-detail mc-detail--split mc-pickhint">
+                    <div className="mc-empty-inner is-narrow">
+                      <span className="mc-empty-icon">
+                        <RowArrowIcon />
+                      </span>
+                      <div className="mc-empty-title">Open someone</div>
+                      <div className="mc-empty-sub">
+                        Click a name or a cell to see {showRoster ? "their task detail" : "their tasks"} on
+                        this side — the {showRoster ? "list" : "matrix"} stays put.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* RIGHT: employee + cert (accordion) */}
+                {showCertDetail && (
+                  <div className={`mc-detail${split ? " mc-detail--split" : ""}`}>
+                    {split && focusUser && <FocusHeader user={focusUser} onClose={clearFocus} />}
+                    <div className="mc-detail-scroll">
+                      <div className={`mc-detail-inner${split ? " is-split" : ""}`}>
+                        <CertDetail
+                          uid={activeEmpId!}
+                          certId={certObj!.id}
+                          allTasks={ctAll}
+                          filteredTasks={ctF}
+                          cells={cells}
+                          certManual={certManual}
+                          expanded={expanded}
+                          onToggle={toggleExpand}
+                          onMark={requestMark}
+                          onGrant={doGrant}
+                          onMarkCert={markCert}
+                          onUndoCert={undoCert}
+                          onViewAttempts={onViewAttempts}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* RIGHT: employee + task */}
+                {showTaskDetail && (
+                  <div className={`mc-detail${split ? " mc-detail--split" : ""}`}>
+                    {split && focusUser && <FocusHeader user={focusUser} onClose={clearFocus} />}
+                    <div className="mc-detail-scroll">
+                      <div className={`mc-detail-inner${split ? " is-split" : ""}`}>
+                        <TaskDetailPanel
+                          uid={activeEmpId!}
+                          task={taskObj!}
+                          cells={cells}
+                          onGrant={doGrant}
+                          onMark={requestMark}
+                          onViewAttempts={onViewAttempts}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
+          </main>
 
-            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-              {/* LEFT: matrix */}
-              {showMatrix && (
-                <Matrix
-                  members={cohortMembers}
-                  columns={ctF}
-                  certId={certObj!.id}
-                  allTasks={ctAll}
-                  cells={cells}
-                  certManual={certManual}
-                  focusEmp={focusEmp}
-                  expanded={expanded}
-                  onOpenEmp={focusName}
-                  onCell={focusCell}
-                  onMarkCert={markCert}
-                />
-              )}
+          {/* ===== unsaved-changes footer (deferred save, like the wizards) ===== */}
+          {dirty && (
+            <footer className="wizard-footer mc-footer">
+              <span className="mc-dirty">
+                <span className="mc-dirty-dot" />
+                <strong>
+                  {pendingCount} unsaved {pendingCount === 1 ? "change" : "changes"}
+                </strong>
+                <span className="mc-dirty-sub"> — not applied yet</span>
+              </span>
+              <div className="wizard-actions">
+                <button className="btn-save-draft" onClick={discardChanges}>
+                  Discard
+                </button>
+                <button className="btn-publish" onClick={saveChanges}>
+                  Save Changes
+                </button>
+              </div>
+            </footer>
+          )}
 
-              {/* LEFT: roster */}
-              {showRoster && (
-                <Roster
-                  members={cohortMembers}
-                  task={taskObj!}
-                  cells={cells}
-                  compact={split}
-                  focusEmp={focusEmp}
-                  onOpen={focusName}
-                  onGrant={doGrant}
-                  onMark={requestMark}
-                  onViewAttempts={onViewAttempts}
-                />
-              )}
-
-              {/* pick hint */}
-              {showPickHint && (
-                <div
-                  style={{
-                    width: 300,
-                    flex: "none",
-                    borderLeft: "1px solid #2c2e33",
-                    background: "#202125",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 26,
-                  }}
-                >
-                  <div style={{ textAlign: "center" }}>
-                    <div
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 13,
-                        border: "1.5px dashed #3b3e44",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        margin: "0 auto 13px",
-                        color: "#6b6d72",
-                        fontSize: 20,
-                      }}
-                    >
-                      ›
-                    </div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "#bdbfc4" }}>Open someone</div>
-                    <div style={{ fontSize: 12, color: "#9a9ca1", marginTop: 5, lineHeight: 1.5 }}>
-                      Click a name or a cell to see {showRoster ? "their task detail" : "their tasks"} on this side —
-                      the {showRoster ? "list" : "matrix"} stays put.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* RIGHT: employee + cert (accordion) */}
-              {showCertDetail && (
-                <div style={detailWrapStyle}>
-                  {split && focusUser && (
-                    <FocusHeader user={focusUser} onClose={clearFocus} />
-                  )}
-                  <div style={{ flex: 1, overflow: "auto", minHeight: 0, animation: "clPane .18s ease" }}>
-                    <div style={detailContentStyle}>
-                      <CertDetail
-                        uid={activeEmpId!}
-                        certId={certObj!.id}
-                        allTasks={ctAll}
-                        filteredTasks={ctF}
-                        cells={cells}
-                        certManual={certManual}
-                        expanded={expanded}
-                        onToggle={toggleExpand}
-                        onMark={requestMark}
-                        onGrant={doGrant}
-                        onMarkCert={markCert}
-                        onUndoCert={undoCert}
-                        onViewAttempts={onViewAttempts}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* RIGHT: employee + task */}
-              {showTaskDetail && (
-                <div style={detailWrapStyle}>
-                  {split && focusUser && <FocusHeader user={focusUser} onClose={clearFocus} />}
-                  <div style={{ flex: 1, overflow: "auto", minHeight: 0, animation: "clPane .18s ease" }}>
-                    <div style={detailContentStyle}>
-                      <TaskDetail
-                        uid={activeEmpId!}
-                        task={taskObj!}
-                        cells={cells}
-                        onGrant={doGrant}
-                        onMark={requestMark}
-                        onViewAttempts={onViewAttempts}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </main>
-
-      {/* ===== unsaved-changes footer (deferred save, like the wizards) ===== */}
-      {dirty && (
-        <footer
-          style={{
-            flex: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 18,
-            minHeight: 64,
-            padding: "12px 24px",
-            background: "#1a1b1e",
-            borderTop: "1px solid #2c2e33",
-            boxShadow: "0 -8px 24px rgba(0,0,0,.28)",
-            zIndex: 20,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
-            <span
-              style={{
-                flex: "none",
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: AMBER,
-                boxShadow: `0 0 0 3px ${AMBER}22`,
-              }}
-            />
-            <span style={{ fontSize: 13, color: "#f1f1ec" }}>
-              <strong style={{ fontWeight: 700 }}>
-                {pendingCount} unsaved {pendingCount === 1 ? "change" : "changes"}
-              </strong>
-              <span style={{ color: "#9a9ca1" }}> — not applied yet</span>
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
-            <button
-              onClick={discardChanges}
-              style={{
-                padding: "9px 16px",
-                border: "1px solid #3b3e44",
-                borderRadius: 8,
-                background: "transparent",
-                color: "#bdbfc4",
-                fontSize: 12.5,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              Discard
-            </button>
-            <button
-              onClick={saveChanges}
-              style={{
-                padding: "9px 20px",
-                border: "none",
-                borderRadius: 8,
-                background: ACCENT,
-                color: "#fff",
-                fontSize: 12.5,
-                fontWeight: 700,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              Save changes
-            </button>
-          </div>
-        </footer>
-      )}
-
-      {/* grade prompt */}
-      {gradePrompt && (
-        <div
-          onClick={() => {
-            setGradePrompt(null);
-            setGradeInput("");
-          }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(28,28,25,.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-            padding: 24,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: 360,
-              maxWidth: "100%",
-              background: "#1a1b1e",
-              borderRadius: 12,
-              boxShadow: "0 24px 60px rgba(0,0,0,.32)",
-              padding: 24,
-            }}
-          >
-            <div style={{ fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: "#83858b" }}>
-              Mark complete · {gradePrompt.type}
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{gradePrompt.taskName}</div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "#9a9ca1", marginTop: 9 }}>
-              Enter a grade, or leave blank to mark complete without one.
-            </div>
+          {/* grade prompt */}
+          {gradePrompt && (
             <div
-              style={{
-                marginTop: 15,
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                border: "1px solid #3b3e44",
-                borderRadius: 8,
-                padding: "10px 13px",
+              className="pm-overlay"
+              onClick={() => {
+                setGradePrompt(null);
+                setGradeInput("");
               }}
             >
-              <input
-                type="number"
-                min={0}
-                max={100}
-                autoFocus
-                value={gradeInput}
-                onChange={(e) => setGradeInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmGrade();
-                }}
-                placeholder="Optional"
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  outline: "none",
-                  fontSize: 14,
-                  fontFamily: "inherit",
-                  width: "100%",
-                  color: "#f1f1ec",
-                }}
-              />
-              <span style={{ fontSize: 12, color: "#83858b", flex: "none" }}>/ 100</span>
+              <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="pm-head">
+                  <h2 className="pm-title">Mark Complete</h2>
+                  <div className="pm-sub">
+                    {gradePrompt.taskName} · {gradePrompt.type}
+                  </div>
+                </div>
+                <div className="pm-body">
+                  <div className="pm-field">
+                    <label className="form-label" htmlFor="mc-grade">
+                      Grade
+                    </label>
+                    <div className="mc-gradefield">
+                      <input
+                        id="mc-grade"
+                        className="form-input"
+                        type="number"
+                        min={0}
+                        max={100}
+                        autoFocus
+                        value={gradeInput}
+                        onChange={(e) => setGradeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") confirmGrade();
+                        }}
+                        placeholder="Optional"
+                      />
+                      <span className="mc-gradefield-suffix">/ 100</span>
+                    </div>
+                    <p className="form-help">
+                      Enter a grade, or leave blank to mark complete without one.
+                    </p>
+                  </div>
+                </div>
+                <div className="pm-foot">
+                  <button
+                    className="btn-save-draft"
+                    onClick={() => {
+                      setGradePrompt(null);
+                      setGradeInput("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button className="btn-publish" onClick={confirmGrade}>
+                    Mark Complete
+                  </button>
+                </div>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 9, justifyContent: "flex-end", marginTop: 20 }}>
-              <button
-                onClick={() => {
-                  setGradePrompt(null);
-                  setGradeInput("");
-                }}
-                style={{
-                  padding: "9px 16px",
-                  border: "1px solid #3b3e44",
-                  borderRadius: 7,
-                  background: "#1a1b1e",
-                  color: "#bdbfc4",
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmGrade}
-                style={{
-                  padding: "9px 18px",
-                  border: "none",
-                  borderRadius: 7,
-                  background: ACCENT,
-                  color: "#fff",
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                Mark complete
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-/* ───────────────────────── header search field ─────────────────────────── */
+/* ───────────────────── scope search combobox (Figma "Expanded Search") ──── */
 
-function SearchField({
-  accent,
-  chip,
-  chipColor,
-  query,
+type ScopeOption = {
+  key: string;
+  /** Section heading this row belongs under (`.usearch-head`). */
+  section: string;
+  node: ReactNode;
+  onSelect: () => void;
+};
+
+/**
+ * The shared `.usearch` combobox (as used by Manage Users / Tasks / Review).
+ * A committed selection shows as a `.usearch-scope` token inside the bar and
+ * is cleared with Backspace on an empty input — the app-wide scope-token rule.
+ */
+function ScopeSearch({
   placeholder,
-  open,
-  onInput,
-  onFocus,
-  onBlur,
-  onClear,
-  children,
+  scope,
+  query,
+  onQuery,
+  onClearScope,
+  options,
+  emptyText,
+  showKbd,
 }: {
-  accent: string;
-  chip: { badge?: string; node?: ReactNode; label: string; radius?: string } | null;
-  chipColor: string;
-  query: string;
   placeholder: string;
-  open: boolean;
-  onInput: (v: string) => void;
-  onFocus: () => void;
-  onBlur: () => void;
-  onClear: () => void;
-  children: ReactNode;
+  scope: { label: string; name: string } | null;
+  query: string;
+  onQuery: (v: string) => void;
+  onClearScope: () => void;
+  options: ScopeOption[];
+  emptyText: string;
+  showKbd?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => setActive(-1), [query, scope?.name]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function choose(opt: ScopeOption) {
+    opt.onSelect();
+    setOpen(false);
+    setActive(-1);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpen(true);
+      setActive((a) => Math.min(options.length - 1, a + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) => Math.max(-1, a - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = options[active >= 0 ? active : 0];
+      if (opt) choose(opt);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    } else if (e.key === "Backspace" && query === "" && scope) {
+      onClearScope();
+    }
+  }
+
+  /* Group consecutive options by section so each gets one `.usearch-head`. */
+  let lastSection = "";
+
   return (
-    <div style={{ position: "relative", flex: 1, minWidth: 0, maxWidth: 360 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 9,
-          border: `1.5px solid ${accent}`,
-          borderRadius: 10,
-          padding: "9px 12px",
-          background: "#202125",
-        }}
-      >
-        <span style={{ color: "#83858b", fontSize: 14, flex: "none" }}>⌕</span>
-        {chip ? (
-          <>
-            {chip.badge !== undefined ? (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 22,
-                  height: 22,
-                  borderRadius: chip.radius ?? "50%",
-                  background: "#2a2b30",
-                  color: "#fff",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  flex: "none",
-                }}
-              >
-                {chip.badge}
-              </span>
-            ) : (
-              <span style={{ display: "inline-flex", color: chipColor, flex: "none" }}>{chip.node}</span>
-            )}
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 13.5,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                color: chip.node ? chipColor : "#f1f1ec",
-              }}
-            >
-              {chip.label}
-            </span>
-            <button
-              onClick={onClear}
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                color: "#83858b",
-                fontSize: 13,
-                fontFamily: "inherit",
-                flex: "none",
-              }}
-            >
-              ✕
-            </button>
-          </>
-        ) : (
-          <input
-            value={query}
-            onChange={(e) => onInput(e.target.value)}
-            onFocus={onFocus}
-            onBlur={() => window.setTimeout(onBlur, 160)}
-            placeholder={placeholder}
-            style={{
-              border: "none",
-              background: "transparent",
-              outline: "none",
-              fontSize: 13.5,
-              fontFamily: "inherit",
-              width: "100%",
-              color: "#f1f1ec",
-            }}
-          />
+    <div className="usearch mc-search" ref={wrapRef}>
+      <div className={`usearch-bar ${open ? "open" : ""}`}>
+        <span className="usearch-icon">
+          <SearchIcon />
+        </span>
+        {scope && (
+          <span className="usearch-scope" title={`${scope.label}: ${scope.name} — press Backspace to clear`}>
+            <span className="usearch-scope-label">{scope.label}:</span>
+            <span className="usearch-scope-name">{scope.name}</span>
+          </span>
+        )}
+        <input
+          ref={inputRef}
+          className="usearch-input"
+          placeholder={scope ? "Change…" : placeholder}
+          value={query}
+          onChange={(e) => {
+            onQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+        />
+        {showKbd && (
+          <span className="usearch-kbd">
+            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-letter">K</span>
+          </span>
         )}
       </div>
-      {open && !chip && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            right: 0,
-            background: "#1a1b1e",
-            border: "1px solid #3b3e44",
-            borderRadius: 11,
-            boxShadow: "0 16px 38px rgba(0,0,0,.16)",
-            zIndex: 40,
-            padding: 6,
-            maxHeight: 380,
-            overflow: "auto",
-          }}
-        >
-          {children}
+
+      {open && (
+        <div className="usearch-panel">
+          {options.length === 0 ? (
+            <div className="usearch-empty">{emptyText}</div>
+          ) : (
+            options.map((opt, i) => {
+              const head = opt.section !== lastSection ? opt.section : null;
+              lastSection = opt.section;
+              return (
+                <div key={opt.key}>
+                  {head && <div className="usearch-head">{head}</div>}
+                  <button
+                    className={`usearch-row ${active === i ? "active" : ""}`}
+                    onMouseEnter={() => setActive(i)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => choose(opt)}
+                  >
+                    {opt.node}
+                  </button>
+                </div>
+              );
+            })
+          )}
+          <SearchHints />
         </div>
       )}
     </div>
   );
-}
-
-function DropLabel({ children, border }: { children: ReactNode; border?: boolean }) {
-  return (
-    <div
-      style={{
-        padding: "7px 10px 4px",
-        fontSize: 9.5,
-        textTransform: "uppercase",
-        letterSpacing: ".1em",
-        color: "#6b6d72",
-        borderTop: border ? "1px solid #24262b" : undefined,
-        marginTop: border ? 3 : undefined,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function DropRow({
-  children,
-  onSelect,
-  spread,
-}: {
-  children: ReactNode;
-  onSelect: () => void;
-  spread?: boolean;
-}) {
-  return (
-    <HoverButton
-      onMouseDown={onSelect}
-      style={{
-        display: "flex",
-        width: "100%",
-        alignItems: "center",
-        justifyContent: spread ? "space-between" : undefined,
-        gap: spread ? 10 : 11,
-        border: "none",
-        background: "transparent",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        textAlign: "left",
-        padding: spread ? 10 : "9px 10px",
-        borderRadius: 8,
-      }}
-      hoverStyle={{ background: "#26282d" }}
-    >
-      {children}
-    </HoverButton>
-  );
-}
-
-function DropEmpty({ children }: { children: ReactNode }) {
-  return <div style={{ padding: 14, fontSize: 12, color: "#83858b", textAlign: "center" }}>{children}</div>;
-}
-
-function LegendItem({ children }: { children: ReactNode }) {
-  return <span style={{ display: "flex", gap: 6, alignItems: "center" }}>{children}</span>;
 }
 
 function FocusHeader({ user, onClose }: { user: Employee; onClose: () => void }) {
   return (
-    <div
-      style={{
-        flex: "none",
-        padding: "13px 18px",
-        borderBottom: "1px solid #2c2e33",
-        background: "#1a1b1e",
-        display: "flex",
-        alignItems: "center",
-        gap: 11,
-      }}
-    >
-      <div
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: "50%",
-          background: "#2c2e33",
-          color: "#bdbfc4",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 12,
-          fontWeight: 600,
-          flex: "none",
-        }}
-      >
-        {user.initials}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={ellipsis(14, 700)}>{user.name}</div>
-        <div style={{ fontSize: 11.5, color: "#9a9ca1" }}>
+    <div className="mc-focushead">
+      <Avatar initials={user.initials} size={32} />
+      <div className="mc-focushead-text">
+        <div className="mc-focushead-name">{user.name}</div>
+        <div className="mc-focushead-sub">
           {(user.cohort ? user.cohort + " · " : "") + user.contact}
         </div>
       </div>
-      <button
-        onClick={onClose}
-        title="Back to cohort"
-        style={{
-          border: "none",
-          background: "#26282d",
-          borderRadius: "50%",
-          width: 28,
-          height: 28,
-          cursor: "pointer",
-          color: "#bdbfc4",
-          fontSize: 13,
-          flex: "none",
-        }}
-      >
-        ✕
+      <button className="mc-iconbtn" onClick={onClose} title="Back to cohort" aria-label="Back to cohort">
+        <SmallXIcon />
       </button>
     </div>
   );
@@ -1690,90 +1033,25 @@ function Matrix({
   onMarkCert: (uid: string, cid: string) => void;
 }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, overflow: "auto", minHeight: 0, background: "#1a1b1e" }}>
-      <div style={{ width: "max-content", minWidth: "100%" }}>
+    <div className="mc-matrix-scroll">
+      <div className="mc-matrix">
         {/* header */}
-        <div
-          style={{
-            display: "flex",
-            position: "sticky",
-            top: 0,
-            zIndex: 5,
-            background: "#1a1b1e",
-            borderBottom: "1px solid #3b3e44",
-          }}
-        >
-          <div
-            style={{
-              width: 206,
-              flex: "none",
-              position: "sticky",
-              left: 0,
-              zIndex: 6,
-              background: "#202125",
-              borderRight: "1px solid #3b3e44",
-              padding: "10px 13px",
-              display: "flex",
-              alignItems: "flex-end",
-              height: 128,
-            }}
-          >
-            <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "#9a9ca1" }}>
-              Employee · {members.length}
-            </span>
+        <div className="mc-matrix-head">
+          <div className="mc-matrix-namecell mc-matrix-headcell">
+            <span className="page-break-label">Employee · {members.length}</span>
           </div>
           {columns.map((t) => (
             <div
               key={t.id}
               title={t.name}
-              style={{
-                width: 44,
-                flex: "none",
-                borderRight: "1px solid #23242a",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: "9px 0",
-                height: 128,
-                background: t.isFinal ? "#202125" : undefined,
-                borderTop: `3px solid ${t.isFinal ? ACCENT : "#2c2e33"}`,
-              }}
+              className={`mc-matrix-colhead${t.isFinal ? " is-final" : ""}`}
             >
-              <span style={{ marginBottom: 7, display: "inline-flex" }}>
-                <TaskTypeIcon type={t.type} size={13} />
-              </span>
-              <div
-                style={{
-                  writingMode: "vertical-rl",
-                  transform: "rotate(180deg)",
-                  whiteSpace: "nowrap",
-                  fontSize: 11,
-                  fontWeight: t.isFinal ? 700 : 600,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxHeight: 86,
-                  color: t.isFinal ? AMBER : "#e7e6e2",
-                }}
-              >
-                {t.name}
-              </div>
+              <TaskTypeIcon type={t.type} />
+              <span className="mc-matrix-colname">{t.name}</span>
             </div>
           ))}
-          <div
-            style={{
-              width: 138,
-              flex: "none",
-              background: "#202125",
-              borderLeft: "1px solid #3b3e44",
-              padding: "10px 12px",
-              display: "flex",
-              alignItems: "flex-end",
-              height: 128,
-            }}
-          >
-            <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "#9a9ca1" }}>
-              Certification
-            </span>
+          <div className="mc-matrix-certcell mc-matrix-headcell">
+            <span className="page-break-label">Certification</span>
           </div>
         </div>
 
@@ -1782,132 +1060,61 @@ function Matrix({
           const ps = progress(cells, certManual, u.id, allTasks, certId);
           const isFocus = focusEmp === u.id;
           return (
-            <div
-              key={u.id}
-              style={{
-                display: "flex",
-                borderBottom: "1px solid #23242a",
-                background: isFocus ? "rgba(236,94,44,0.10)" : undefined,
-              }}
-            >
-              <HoverDiv
+            <div className={`mc-matrix-row${isFocus ? " is-focus" : ""}`} key={u.id}>
+              <div
+                className="mc-matrix-namecell mc-matrix-name"
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenEmp(u.id)}
-                title={`Open all tasks for ${u.name}`}
-                style={{
-                  width: 206,
-                  flex: "none",
-                  position: "sticky",
-                  left: 0,
-                  zIndex: 2,
-                  background: isFocus ? "#2c1d10" : "#1a1b1e",
-                  borderRight: "1px solid #3b3e44",
-                  padding: "8px 13px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  cursor: "pointer",
-                  boxShadow: isFocus ? `inset 4px 0 0 ${ACCENT}` : undefined,
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") onOpenEmp(u.id);
                 }}
-                hoverStyle={{ background: "#26282d" }}
+                title={`Open all tasks for ${u.name}`}
               >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    background: "#2c2e33",
-                    color: "#bdbfc4",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    flex: "none",
-                  }}
-                >
-                  {u.initials}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={ellipsis(12, 600)}>{u.name}</div>
-                  <div style={{ fontSize: 10, color: "#83858b" }}>{ps.pct}%</div>
-                </div>
-              </HoverDiv>
+                <Avatar initials={u.initials} size={28} />
+                <span className="mc-matrix-nametext">
+                  <span className="mc-matrix-nameline">{u.name}</span>
+                  <span className="mc-matrix-pct">{ps.pct}%</span>
+                </span>
+              </div>
               {columns.map((t) => {
                 const cl = cells[u.id + "_" + t.id];
                 const cellFocus = isFocus && expanded[t.id];
                 return (
-                  <HoverDiv
+                  <div
                     key={t.id}
-                    title={`${u.name} · ${t.name} — ${statusVisual(cl.status, ACCENT, cl.manual).label}${
+                    className={`mc-matrix-cell${t.isFinal ? " is-final" : ""}${cellFocus ? " is-open" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onCell(u.id, t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") onCell(u.id, t.id);
+                    }}
+                    title={`${u.name} · ${t.name} — ${statusVisual(cl.status, cl.manual).label}${
                       cl.grade ? " · " + cl.grade + "/100" : ""
                     }`}
-                    onClick={() => onCell(u.id, t.id)}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRight: "1px solid #23242a",
-                      cursor: "pointer",
-                      background: cellFocus
-                        ? "rgba(236,94,44,0.22)"
-                        : t.isFinal
-                        ? "#202125"
-                        : undefined,
-                    }}
-                    hoverStyle={{ boxShadow: "inset 0 0 0 2px #54565c" }}
                   >
                     <StatusDot status={cl.status} manual={cl.manual} size={18} />
-                  </HoverDiv>
+                  </div>
                 );
               })}
-              <div
-                style={{
-                  width: 138,
-                  flex: "none",
-                  borderLeft: "1px solid #23242a",
-                  padding: "8px 12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                }}
-              >
+              <div className="mc-matrix-certcell">
                 {ps.certified ? (
                   <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 10.5,
-                      fontWeight: 600,
-                      color: "#d8d6cd",
-                    }}
+                    className={`co-status-pill co-status-pill--${ps.certManual ? "accent" : "green"}`}
                   >
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: ACCENT, flex: "none" }} />
                     {ps.certManual ? "Manual" : "Certified"}
                   </span>
                 ) : (
-                  <HoverButton
+                  <button
+                    className="btn-save-draft mc-btn-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       onMarkCert(u.id, certId);
                     }}
-                    style={{
-                      padding: "6px 9px",
-                      border: "1px solid #3b3e44",
-                      borderRadius: 7,
-                      background: "#1a1b1e",
-                      color: "#bdbfc4",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                    }}
-                    hoverStyle={{ borderColor: "#d8d6cd", color: "#f1f1ec" }}
                   >
-                    Mark cert
-                  </HoverButton>
+                    Mark Cert
+                  </button>
                 )}
               </div>
             </div>
@@ -1942,185 +1149,94 @@ function Roster({
   onViewAttempts: (uid: string, tid: string) => void;
 }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, overflow: "auto", minHeight: 0, padding: "18px 22px" }}>
-      <div style={{ background: "#1a1b1e", border: "1px solid #2f3137", borderRadius: 13, overflow: "hidden" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 13,
-            padding: "10px 16px",
-            borderBottom: "1px solid #2c2e33",
-            background: "#1d1e22",
-            fontSize: 10,
-            textTransform: "uppercase",
-            letterSpacing: ".08em",
-            color: "#83858b",
-          }}
-        >
-          <span style={{ flex: 1 }}>Employee · {members.length}</span>
-          <span style={compact ? { flex: "none" } : { width: 150, flex: "none" }}>Task status</span>
-          {!compact && <span style={{ width: 317, flex: "none", textAlign: "right" }}>Attempts left · Action</span>}
-        </div>
-        {members.map((u) => {
-          const cl = cells[u.id + "_" + task.id];
-          const v = statusVisual(cl.status, ACCENT, cl.manual);
-          const ai = attemptInfo(task, cl);
-          const isFocus = focusEmp === u.id;
-          return (
-            <HoverDiv
-              key={u.id}
-              onClick={() => onOpen(u.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 13,
-                padding: "11px 16px",
-                borderBottom: "1px solid #23242a",
-                cursor: "pointer",
-                background: isFocus ? "#241a0e" : undefined,
-                boxShadow: isFocus ? `inset 3px 0 0 ${ACCENT}` : undefined,
-              }}
-              hoverStyle={{ background: "#202125" }}
-            >
-              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 11 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    background: "#2c2e33",
-                    color: "#bdbfc4",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    flex: "none",
-                  }}
-                >
-                  {u.initials}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={ellipsis(13, 600)}>{u.name}</div>
-                  {!compact && <div style={ellipsis(10.5, 400, "#83858b")}>{u.contact}</div>}
-                </div>
-              </div>
-              <div
-                style={
-                  compact
-                    ? { flex: "none", display: "flex", alignItems: "center" }
-                    : { width: 150, flex: "none", display: "flex", alignItems: "center", gap: 8 }
-                }
-              >
-                <StatusDot status={cl.status} manual={cl.manual} size={16} />
+    <div className="mc-roster-scroll">
+      <table className="mc-table">
+        <thead>
+          <tr>
+            <th>Employee · {members.length}</th>
+            <th className="mc-col-status">Task Status</th>
+            {!compact && <th className="mc-col-attempts">Attempts Left</th>}
+            {!compact && <th className="mc-col-actions" />}
+            <th className="mc-col-open" />
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((u) => {
+            const cl = cells[u.id + "_" + task.id];
+            const ai = attemptInfo(task, cl);
+            const isFocus = focusEmp === u.id;
+            return (
+              <tr key={u.id} className={isFocus ? "is-focus" : ""} onClick={() => onOpen(u.id)}>
+                <td>
+                  <div className="mc-cell-user">
+                    <Avatar initials={u.initials} size={32} />
+                    <span className="mc-cell-user-text">
+                      <span className="mc-cell-user-name">{u.name}</span>
+                      {!compact && <span className="mc-cell-user-sub">{u.contact}</span>}
+                    </span>
+                  </div>
+                </td>
+                <td className="mc-col-status">
+                  <StatusPill status={cl.status} manual={cl.manual} />
+                  {!compact && cl.grade ? <span className="mc-grade">{cl.grade}/100</span> : null}
+                </td>
                 {!compact && (
-                  <span style={ellipsis(11.5, 400, "#bdbfc4")}>
-                    {v.label}
-                    {cl.grade ? " · " + cl.grade : ""}
-                  </span>
+                  <td className="mc-col-attempts">
+                    {ai.hasLimit ? `${ai.remaining} of ${ai.totalAllowed}` : "—"}
+                  </td>
                 )}
-              </div>
-              {!compact ? (
-                <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 9 }}>
-                  <span
-                    style={{
-                      width: 84,
-                      flex: "none",
-                      textAlign: "right",
-                      fontSize: 10.5,
-                      color: "#9a9ca1",
-                      fontVariantNumeric: "tabular-nums",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {ai.hasLimit ? `${ai.remaining} of ${ai.totalAllowed} left` : ""}
+                {!compact && (
+                  <td className="mc-col-actions">
+                    <div className="mc-rowactions">
+                      {ai.hasLimit && (
+                        <button
+                          className="mc-iconbtn"
+                          title="View attempts"
+                          aria-label="View attempts"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewAttempts(u.id, task.id);
+                          }}
+                        >
+                          <ArrowUpRightIcon />
+                        </button>
+                      )}
+                      {ai.hasLimit && (
+                        <button
+                          className="btn-save-draft mc-btn-sm"
+                          title="Grant another attempt"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGrant(u.id, task.id);
+                          }}
+                        >
+                          Grant
+                        </button>
+                      )}
+                      {cl.status !== "complete" && (
+                        <button
+                          className="btn-publish mc-btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMark(u.id, task.id);
+                          }}
+                        >
+                          Mark Complete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
+                <td className="mc-col-open">
+                  <span className="row-arrow">
+                    <RowArrowIcon />
                   </span>
-                  <div style={{ width: 30, flex: "none", display: "flex", justifyContent: "flex-start" }}>
-                    {ai.hasLimit && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onViewAttempts(u.id, task.id);
-                        }}
-                        title="View attempts"
-                        style={{
-                          width: 30,
-                          height: 30,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: "1px solid #3b3e44",
-                          borderRadius: 8,
-                          background: "#1a1b1e",
-                          color: "#bdbfc4",
-                          fontSize: 13,
-                          fontFamily: "inherit",
-                          cursor: "pointer",
-                        }}
-                      >
-                        ↗
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ width: 90, flex: "none", display: "flex", justifyContent: "flex-start" }}>
-                    {ai.hasLimit && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onGrant(u.id, task.id);
-                        }}
-                        title="Grant another attempt"
-                        style={{
-                          padding: "7px 11px",
-                          border: `1.5px solid ${ACCENT}`,
-                          borderRadius: 8,
-                          background: "#271f12",
-                          color: AMBER,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          fontFamily: "inherit",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        + Grant
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ width: 76, flex: "none", display: "flex", justifyContent: "flex-start" }}>
-                    {cl.status !== "complete" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onMark(u.id, task.id);
-                        }}
-                        style={{
-                          padding: "7px 12px",
-                          border: `1px solid ${ACCENT}`,
-                          borderRadius: 8,
-                          background: "#1a1b1e",
-                          color: "#f1f1ec",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          fontFamily: "inherit",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        ✓ Mark
-                      </button>
-                    )}
-                  </div>
-                  <span style={{ color: "#54565c", fontSize: 15, flex: "none" }}>›</span>
-                </div>
-              ) : (
-                <span style={{ color: "#54565c", fontSize: 15, flex: "none" }}>›</span>
-              )}
-            </HoverDiv>
-          );
-        })}
-      </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -2160,102 +1276,35 @@ function CertDetail({
   const remain = ps.rv + ps.inc;
   return (
     <>
-      {ps.certified ? (
-        <div
-          style={{
-            background: "#2a2b30",
-            color: "#fff",
-            borderRadius: 12,
-            padding: "13px 16px",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 13,
-          }}
-        >
-          <span
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: "50%",
-              background: "#1a1b1e",
-              color: "#f1f1ec",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 14,
-              flex: "none",
-            }}
-          >
-            ✓
-          </span>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-              {ps.certManual ? "Certification marked complete by admin" : "Certification complete"}
-            </div>
-            <div style={{ fontSize: 11.5, color: "#9a9ca1" }}>
-              {(ps.certManual ? "Manually certified " : "Certified ") + (ps.certAt ? fmtDT(ps.certAt) : "—")}
-            </div>
+      <div className="mc-notice">
+        <div className="mc-notice-text">
+          <div className="mc-notice-title">
+            {ps.certified
+              ? ps.certManual
+                ? "Certification marked complete by admin"
+                : "Certification complete"
+              : `${remain} task${remain === 1 ? "" : "s"} still open before certified`}
           </div>
-          {ps.certManual && (
-            <button
-              onClick={() => onUndoCert(uid, certId)}
-              style={{
-                flex: "none",
-                padding: "8px 12px",
-                border: "1px solid #55534a",
-                borderRadius: 8,
-                background: "transparent",
-                color: "#e6e4da",
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
+          <div className="mc-notice-sub">
+            {ps.certified
+              ? (ps.certManual ? "Manually certified " : "Certified ") + (ps.certAt ? fmtDT(ps.certAt) : "—")
+              : `${ps.pct}% of this certification complete`}
+          </div>
+        </div>
+        {ps.certified ? (
+          ps.certManual && (
+            <button className="btn-save-draft" onClick={() => onUndoCert(uid, certId)}>
               Undo
             </button>
-          )}
-        </div>
-      ) : (
-        <div
-          style={{
-            background: "#1a1b1e",
-            border: "1px solid #2c2e33",
-            borderRadius: 12,
-            padding: "12px 16px",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 13,
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#bdbfc4" }}>
-            {remain} task{remain === 1 ? "" : "s"} still open before certified.
-          </span>
-          <button
-            onClick={() => onMarkCert(uid, certId)}
-            style={{
-              marginLeft: "auto",
-              flex: "none",
-              padding: "9px 14px",
-              border: "none",
-              borderRadius: 9,
-              background: ACCENT,
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            ✓ Mark certification complete
+          )
+        ) : (
+          <button className="btn-publish" onClick={() => onMarkCert(uid, certId)}>
+            Mark Certification Complete
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      <div className="mc-acc-list">
         {filteredTasks.map((t) => (
           <AccordionCard
             key={t.id}
@@ -2295,89 +1344,53 @@ function AccordionCard({
 }) {
   const cl = cells[uid + "_" + task.id];
   const manual = cl.status === "complete" && cl.manual;
-  const v = statusVisual(cl.status, ACCENT, manual);
   const detail = expanded ? buildDetail(cells, uid, task) : null;
 
-  const metaBits: string[] = [v.label];
-  if (cl.status === "complete" && cl.grade) metaBits.push("grade " + cl.grade + "/100");
+  const metaBits: string[] = [];
+  if (cl.status === "complete" && cl.grade) metaBits.push("Grade " + cl.grade + "/100");
   if (cl.completedAt) metaBits.push(fmtD(cl.completedAt));
 
   return (
-    <div
-      style={{
-        background: "#1a1b1e",
-        border: `1px solid ${expanded ? "#54565c" : task.isFinal ? "#4a3a1f" : "#2f3137"}`,
-        borderRadius: 12,
-        overflow: "hidden",
-        boxShadow: expanded ? "0 4px 14px rgba(0,0,0,.06)" : undefined,
-      }}
-    >
-      <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 15px", cursor: "pointer" }}>
-        <StatusDot status={cl.status} manual={manual} size={28} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ display: "inline-flex", color: "#83858b", flex: "none" }}>
-              <TaskTypeIcon type={task.type} size={14} />
-            </span>
-            <span
-              style={{
-                fontSize: 15,
-                fontWeight: task.isFinal ? 700 : 600,
-                minWidth: 0,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                color: task.isFinal ? AMBER : undefined,
-              }}
-            >
-              {task.name}
-            </span>
-            {task.isFinal && <Pill>Final</Pill>}
-            {manual && <Pill>Manual</Pill>}
+    <div className={`mc-acc${expanded ? " is-open" : ""}`}>
+      <div className="mc-acc-head" role="button" tabIndex={0} onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") onToggle();
+        }}
+      >
+        <StatusDot status={cl.status} manual={manual} size={24} />
+        <div className="mc-acc-text">
+          <div className="mc-acc-titlerow">
+            <TaskTypeIcon type={task.type} />
+            <span className="mc-acc-name">{task.name}</span>
+            {task.isFinal && <span className="co-status-pill co-status-pill--accent">Final</span>}
+            {manual && <span className="co-status-pill co-status-pill--accent">Manual</span>}
           </div>
-          <div style={{ fontSize: 12, color: "#9a9ca1", marginTop: 3 }}>{metaBits.join(" · ")}</div>
+          <div className="mc-acc-meta">
+            <StatusPill status={cl.status} manual={manual} />
+            {metaBits.length > 0 && <span className="mc-acc-metatext">{metaBits.join(" · ")}</span>}
+          </div>
         </div>
-        <span style={{ color: "#6b6d72", fontSize: 13, flex: "none" }}>{expanded ? "⌃" : "⌄"}</span>
+        <span className="mc-acc-caret">
+          <ChevronDownIcon />
+        </span>
       </div>
       {expanded && detail && (
-        <div style={{ borderTop: "1px solid #24262b", padding: 15, animation: "clAcc .16s ease" }}>
+        <div className="mc-acc-body">
           <MetricsGrid d={detail} />
           {detail.isQuizLimited && (
             <QuizAttemptBox d={detail} onGrant={onGrant} onViewAttempts={onViewAttempts} />
           )}
-          <div
-            style={{
-              fontSize: 9,
-              textTransform: "uppercase",
-              letterSpacing: ".12em",
-              color: "#9a9ca1",
-              marginBottom: 12,
-            }}
-          >
-            Status timeline
-          </div>
+          <PageBreak label="Status timeline" />
           <Timeline events={detail.timeline} />
           {cl.status !== "complete" && (
             <button
+              className="btn-publish mc-acc-cta"
               onClick={(e) => {
                 e.stopPropagation();
                 onMark();
               }}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                padding: 12,
-                border: "none",
-                borderRadius: 9,
-                background: ACCENT,
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 700,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
             >
-              ✓ Mark complete
+              Mark Complete
             </button>
           )}
         </div>
@@ -2388,7 +1401,7 @@ function AccordionCard({
 
 /* ───────────────────────── employee + task ─────────────────────────────── */
 
-function TaskDetail({
+function TaskDetailPanel({
   uid,
   task,
   cells,
@@ -2405,40 +1418,26 @@ function TaskDetail({
 }) {
   const cl = cells[uid + "_" + task.id];
   const manual = cl.status === "complete" && cl.manual;
-  const v = statusVisual(cl.status, ACCENT, manual);
   const detail = buildDetail(cells, uid, task);
 
   return (
-    <div style={{ background: "#1a1b1e", border: "1px solid #2f3137", borderRadius: 15, overflow: "hidden" }}>
-      <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid #24262b" }}>
-        <StatusDot status={cl.status} manual={manual} size={28} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <span style={{ display: "inline-flex", color: "#83858b", flex: "none" }}>
-              <TaskTypeIcon type={task.type} size={16} />
-            </span>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-.01em" }}>{task.name}</span>
-            {task.isFinal && <Pill big>Final</Pill>}
+    <div className="mc-taskcard">
+      <div className="mc-taskcard-head">
+        <StatusDot status={cl.status} manual={manual} size={24} />
+        <div className="mc-taskcard-text">
+          <div className="mc-acc-titlerow">
+            <TaskTypeIcon type={task.type} />
+            <span className="mc-acc-name">{task.name}</span>
+            {task.isFinal && <span className="co-status-pill co-status-pill--accent">Final</span>}
           </div>
-          <div style={{ fontSize: 12.5, color: "#9a9ca1", marginTop: 3 }}>
+          <div className="mc-acc-metatext">
             {task.certName} · {task.type}
           </div>
         </div>
-        <span
-          style={{
-            flex: "none",
-            fontSize: 11.5,
-            fontWeight: 600,
-            padding: "6px 13px",
-            borderRadius: 20,
-            background: v.badgeBg,
-            color: v.badgeColor,
-          }}
-        >
-          {v.label}
-        </span>
+        <StatusPill status={cl.status} manual={manual} />
       </div>
-      <div style={{ padding: "18px 20px" }}>
+
+      <div className="mc-taskcard-body">
         <MetricsGrid d={detail} />
         {detail.isQuizLimited && (
           <QuizAttemptBox
@@ -2447,81 +1446,18 @@ function TaskDetail({
             onViewAttempts={() => onViewAttempts(uid, task.id)}
           />
         )}
-        <div
-          style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", color: "#9a9ca1", marginBottom: 13 }}
-        >
-          Status timeline
-        </div>
+        <PageBreak label="Status timeline" />
         <Timeline events={detail.timeline} />
       </div>
-      {cl.status !== "complete" ? (
-        <div
-          style={{
-            padding: "15px 20px",
-            borderTop: "1px solid #2c2e33",
-            background: "#202125",
-            display: "flex",
-            alignItems: "center",
-            gap: 11,
-          }}
-        >
-          <button
-            onClick={() => onMark(uid, task.id)}
-            style={{
-              padding: "12px 18px",
-              border: "none",
-              borderRadius: 9,
-              background: ACCENT,
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            ✓ Mark complete
+
+      <div className="mc-taskcard-foot">
+        {cl.status !== "complete" && (
+          <button className="btn-publish" onClick={() => onMark(uid, task.id)}>
+            Mark Complete
           </button>
-          <span style={{ fontSize: 12, color: "#9a9ca1", lineHeight: 1.4 }}>{detail.footerNote}</span>
-        </div>
-      ) : (
-        <div style={{ padding: "14px 20px", borderTop: "1px solid #2c2e33", background: "#202125", fontSize: 12, color: "#9a9ca1" }}>
-          {detail.footerNote}
-        </div>
-      )}
+        )}
+        <span className="mc-taskcard-note">{detail.footerNote}</span>
+      </div>
     </div>
   );
-}
-
-function Pill({ children, big }: { children: ReactNode; big?: boolean }) {
-  return (
-    <span
-      style={{
-        flex: "none",
-        fontSize: big ? 9 : 8.5,
-        fontWeight: 700,
-        letterSpacing: ".05em",
-        textTransform: "uppercase",
-        color: AMBER,
-        background: "#2f2516",
-        border: "1px solid #4a3a1f",
-        borderRadius: 20,
-        padding: big ? "1px 7px" : "1px 6px",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-/* helper: ellipsis text block */
-function ellipsis(size: number, weight: number, color?: string): CSSProperties {
-  return {
-    display: "block",
-    fontSize: size,
-    fontWeight: weight,
-    color,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  };
 }

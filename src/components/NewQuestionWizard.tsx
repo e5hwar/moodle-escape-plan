@@ -1257,18 +1257,21 @@ function GradingCard({
 
 function EmptyHistoryModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="ind-modal-overlay" onClick={onClose}>
-      <div className="ind-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ind-modal-head">
-          <h3 className="ind-modal-title">Version history</h3>
-          <button className="ind-modal-close" aria-label="Close" onClick={onClose}>
+    <div className="pm-overlay" onClick={onClose}>
+      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pm-head qh-head">
+          <h3 className="pm-title">Version history</h3>
+          <button className="ind-icon-btn" aria-label="Close" onClick={onClose}>
             <SmallXIcon />
           </button>
         </div>
-        <div className="ind-modal-body">
-          <p className="ind-modal-text">
+        <div className="pm-body">
+          <p className="pm-text">
             No versions yet — this question becomes <strong>v1</strong> when it's created.
           </p>
+        </div>
+        <div className="pm-foot">
+          <button className="btn-save-draft" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
