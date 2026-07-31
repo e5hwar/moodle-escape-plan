@@ -14,9 +14,9 @@ import {
   RowArrowIcon,
   CheckIcon,
 } from "./icons";
-import { PageBreak } from "./PageBreak";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type Scope =
   | { kind: "industry"; industryKey: string }
@@ -34,6 +34,13 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
+/* Cert-row remove ✕ — Figma "Icon Library" (I318:1351;7:1802): a 6.6px cross
+   centred in a 16px slot, 1.333 square-cap stroke. */
+const RowCloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <path d="M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6" />
+  </svg>
+);
 /* Tree caret — Figma "Icon Library" chevron (I314:2057;7:1537): a 3.21×6.42
    chevron with a 1.167 square-cap stroke, centred in a 14px slot. */
 const CaretRightIcon = () => (
@@ -60,13 +67,6 @@ const TrashIcon = () => (
     <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a1 1 0 001 1h8a1 1 0 001-1l1-14M10 11v6M14 11v6" />
   </svg>
 );
-const MoreDotsIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 const EyeIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
@@ -88,6 +88,12 @@ export function IndustriesPage() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [menu, setMenu] = useState<MenuState>(null);
+
+  // "C" opens Add Certification for whatever scope is selected.
+  useCreateShortcut(
+    () => setModal({ kind: "add-certs", scope }),
+    modal.kind === "none",
+  );
 
   const orderedIndustries = useMemo(
     () =>
@@ -372,10 +378,6 @@ export function IndustriesPage() {
   const scopeCertIds =
     scope.kind === "industry" ? currentIndustry.certIds : currentSub?.certIds ?? [];
 
-  const currentIndustryTotalCerts =
-    currentIndustry.certIds.length +
-    currentIndustry.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
-
   const currentHidden =
     scope.kind === "industry" ? !!currentIndustry.hidden : !!currentSub?.hidden;
 
@@ -453,82 +455,29 @@ export function IndustriesPage() {
                       ? currentIndustry.name
                       : currentSub?.name ?? "—"}
                   </h2>
-                  <div className="tab-switch ind-vis-switch" role="group" aria-label="Visibility">
-                    <button
-                      className={`tab-switch-tab ${!currentHidden ? "active" : ""}`}
-                      onClick={() => {
-                        if (!currentHidden) return;
-                        if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
-                        else toggleSubHidden(scope.industryKey, scope.subKey);
-                      }}
-                    >
-                      Visible
-                    </button>
-                    <button
-                      className={`tab-switch-tab ${currentHidden ? "active" : ""}`}
-                      onClick={() => {
-                        if (currentHidden) return;
-                        if (scope.kind === "industry") toggleIndustryHidden(scope.industryKey);
-                        else toggleSubHidden(scope.industryKey, scope.subKey);
-                      }}
-                    >
-                      Hidden
-                    </button>
-                  </div>
-                </div>
-                <div className="tasks-subtitle ind-detail-sub">
-                  {scope.kind === "industry" ? (
-                    <>
-                      Position <strong>{currentIndustry.displayPosition}</strong> in
-                      browse · <strong>{currentIndustryTotalCerts}</strong>{" "}
-                      certifications
-                      {currentIndustry.subIndustries.length > 0 ? (
-                        <>
-                          {" "}across industry level +{" "}
-                          <strong>{currentIndustry.subIndustries.length}</strong>{" "}
-                          sub-industr{currentIndustry.subIndustries.length === 1 ? "y" : "ies"}
-                        </>
-                      ) : (
-                        <> at industry level</>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      Position <strong>{currentSub?.displayPosition ?? 0}</strong> in{" "}
-                      <strong>{currentIndustry.name}</strong> ·{" "}
-                      <strong>{currentSub?.certIds.length ?? 0}</strong>{" "}
-                      certification{(currentSub?.certIds.length ?? 0) === 1 ? "" : "s"}
-                    </>
+                  {currentHidden && (
+                    <span className="ind-hidden-pill">Hidden</span>
                   )}
                 </div>
-              </div>
-              <div className="ind-detail-actions">
-                <button
-                  className="ind-icon-btn"
-                  aria-label="More options"
-                  onClick={(e) => openMenu(e, scope)}
-                >
-                  <MoreDotsIcon />
-                </button>
-                <button
-                  className="cta-primary"
-                  onClick={() => setModal({ kind: "add-certs", scope })}
-                >
-                  Add Certifications
-                </button>
               </div>
             </header>
 
             <div className="ind-section">
-              <PageBreak
-                label={scope.kind === "industry" ? "Industry Level" : "Certifications"}
-              />
-              <div className="ind-sec-hint">
-                {scope.kind === "industry"
-                  ? currentIndustry.subIndustries.length > 0
-                    ? "Shown before sub-industries · drag rows to reorder"
-                    : `Shown when users browse ${currentIndustry.name} · drag rows to reorder`
-                  : `Shown when users browse ${currentIndustry.name} › ${currentSub?.name} · drag rows to reorder`}
+              <div className="ind-sec-head">
+                <h3 className="ind-sec-title">
+                  Certifications in “
+                  {scope.kind === "industry"
+                    ? currentIndustry.name
+                    : currentSub?.name ?? "—"}
+                  ”
+                </h3>
+                <button
+                  className="cta-primary"
+                  onClick={() => setModal({ kind: "add-certs", scope })}
+                >
+                  Add Certification
+                  <span className="cta-kbd">C</span>
+                </button>
               </div>
               <CertList
                 certIds={scopeCertIds}
@@ -539,42 +488,52 @@ export function IndustriesPage() {
 
             {scope.kind === "industry" && orderedCurrentSubs.length > 0 && (
               <div className="ind-section">
-                <PageBreak label="In Sub-Industries" />
-                <div className="ind-sec-hint">
-                  Select a row to manage its certifications
-                </div>
-                <div className="ind-certtable">
+                <h3 className="ind-sec-title">
+                  Sub-Industries in “{currentIndustry.name}”
+                </h3>
+                <div className="ind-subcards">
                   {orderedCurrentSubs.map((sub) => {
-                    // Placeholder certs pad the seed data; fold them into "+ N more".
+                    // Up to four certs are listed in full; only a fifth and
+                    // beyond collapse into "+ N MORE".
                     const names = sub.certIds
                       .map((id) => allCertsById[id]?.name)
-                      .filter((n): n is string => !!n && !n.startsWith("Placeholder Cert"));
-                    const shown = names.slice(0, 2);
+                      .filter((n): n is string => !!n);
+                    const shown = names.slice(0, 4);
                     const more = sub.certIds.length - shown.length;
-                    const summary = [...shown, more > 0 ? `+${more} more` : ""]
-                      .filter(Boolean)
-                      .join(" · ");
                     return (
                       <button
                         key={sub.key}
-                        className="ind-ct-row ind-subrow"
+                        className="ind-subcard"
                         onClick={() => {
                           pickSub(currentIndustry.key, sub.key);
                           setOpenIds((prev) => new Set([...prev, currentIndustry.key]));
                         }}
                       >
-                        <span className="ind-ct-cell">
-                          <span className="ind-ct-name">{sub.name}</span>
-                          {summary && <span className="ind-ct-sub">{summary}</span>}
+                        <span className="ind-subcard-body">
+                          <span className="ind-subcard-head">
+                            <span className="ind-subcard-name">{sub.name}</span>
+                            <span className="ind-subcard-count">
+                              · {sub.certIds.length} certification
+                              {sub.certIds.length === 1 ? "" : "s"}
+                            </span>
+                            {sub.hidden && (
+                              <span className="ind-hidden-pill">Hidden</span>
+                            )}
+                          </span>
+                          <span className="ind-subcard-list">
+                            <span className="ind-subcard-items">
+                              {shown.map((n) => (
+                                <span key={n} className="ind-subcard-item">{n}</span>
+                              ))}
+                            </span>
+                            {/* Figma keeps this line as a spacer when nothing
+                                overflows, so the cards stay the same height. */}
+                            <span className={`ind-subcard-more ${more > 0 ? "" : "is-empty"}`}>
+                              + {more} more
+                            </span>
+                          </span>
                         </span>
-                        {sub.hidden && (
-                          <span className="co-status-pill co-status-pill--grey">Hidden</span>
-                        )}
-                        <span className="ind-ct-plain">
-                          {sub.certIds.length} certification
-                          {sub.certIds.length === 1 ? "" : "s"}
-                        </span>
-                        <span className="row-arrow">
+                        <span className="ind-subcard-arrow">
                           <RowArrowIcon />
                         </span>
                       </button>
@@ -584,11 +543,6 @@ export function IndustriesPage() {
               </div>
             )}
 
-            <div className="ind-detail-hint">
-              "Add Certifications" tags at{" "}
-              {scope.kind === "industry" ? "industry" : "sub-industry"} level ·
-              structure is managed in the tree
-            </div>
           </section>
         </div>
       </div>
@@ -880,7 +834,7 @@ function IndustryTreeGroup({
         </button>
         <button className="ind-tree-main" onClick={onPickIndustry}>
           <span className="ind-tree-row-label">{ind.name}</span>
-          {ind.hidden && <span className="co-status-pill co-status-pill--grey ind-hidden-pill">Hidden</span>}
+          {ind.hidden && <span className="ind-hidden-pill">Hidden</span>}
           <span className="ind-tree-row-count">{totalCerts}</span>
         </button>
         <button
@@ -901,6 +855,7 @@ function IndustryTreeGroup({
                   key={sub.key}
                   sub={sub}
                   industryKey={ind.key}
+                  parentHidden={!!ind.hidden}
                   active={
                     scope.kind === "sub" &&
                     scope.industryKey === ind.key &&
@@ -927,6 +882,7 @@ function IndustryTreeGroup({
 function SubRow({
   sub,
   industryKey,
+  parentHidden,
   active,
   canDrag,
   orderedSubs,
@@ -936,6 +892,7 @@ function SubRow({
 }: {
   sub: SubIndustry;
   industryKey: string;
+  parentHidden: boolean;
   active: boolean;
   canDrag: boolean;
   orderedSubs: SubIndustry[];
@@ -943,6 +900,9 @@ function SubRow({
   onMenu: (e: React.MouseEvent, scope: Scope) => void;
   onReorderSubs: (orderedKeys: string[]) => void;
 }) {
+  // A hidden Industry hides its Sub-Industries too: they take the hidden
+  // colour, but only an explicitly hidden Sub carries the pill.
+  const isHidden = sub.hidden || parentHidden;
   const [isOver, setIsOver] = useState(false);
   // Sub drags carry their parent key so they can't cross into another Industry.
   const dragType = `ind/sub/${industryKey}`;
@@ -963,7 +923,7 @@ function SubRow({
 
   return (
     <div
-      className={`ind-sub-row ${active ? "is-active" : ""} ${sub.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
+      className={`ind-sub-row ${active ? "is-active" : ""} ${isHidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
       onDragOver={(e) => {
         if (!canDrag) return;
         if (e.dataTransfer.types.includes(dragType)) {
@@ -987,7 +947,7 @@ function SubRow({
       </span>
       <button className="ind-sub-main" onClick={onPick}>
         <span className="ind-sub-row-label">{sub.name}</span>
-        {sub.hidden && <span className="co-status-pill co-status-pill--grey ind-hidden-pill">Hidden</span>}
+        {sub.hidden && !parentHidden && <span className="ind-hidden-pill">Hidden</span>}
         <span className="ind-sub-row-count">{sub.certIds.length}</span>
       </button>
       <button
@@ -1083,7 +1043,7 @@ function CertList({
               title="Remove from this Industry"
               onClick={() => onRemove(id)}
             >
-              <SmallXIcon />
+              <RowCloseIcon />
             </button>
           </div>
         );
