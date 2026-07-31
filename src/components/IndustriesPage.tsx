@@ -16,6 +16,7 @@ import {
 } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
+import { PageBreak } from "./PageBreak";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type Scope =
@@ -34,6 +35,17 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
+/* Filled info glyph — Figma "Icon Library" (I314:829;7:5011): a 12.83px disc
+   with the "i" knocked out, centred in a 14px slot. */
+const InfoFilledIcon = () => (
+  <svg width="14" height="14" viewBox="-0.583 -0.583 14 14" fill="currentColor">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M6.41667 12.8333C9.96042 12.8333 12.8333 9.96042 12.8333 6.41667C12.8333 2.87292 9.96042 0 6.41667 0C2.87292 0 0 2.87292 0 6.41667C0 9.96042 2.87292 12.8333 6.41667 12.8333ZM5.831 4.375V3.206H7V4.375H5.831ZM7 5.25V9.625H5.83333V5.25H7Z"
+    />
+  </svg>
+);
 /* Cert-row remove ✕ — Figma "Icon Library" (I318:1351;7:1802): a 6.6px cross
    centred in a 16px slot, 1.333 square-cap stroke. */
 const RowCloseIcon = () => (
@@ -89,10 +101,16 @@ export function IndustriesPage() {
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [menu, setMenu] = useState<MenuState>(null);
 
-  // "C" opens Add Certification for whatever scope is selected.
+  // "C" opens Add Certification for whatever scope is selected; "I" opens the
+  // rail's Add Industry (both badges are shown on their buttons).
   useCreateShortcut(
     () => setModal({ kind: "add-certs", scope }),
     modal.kind === "none",
+  );
+  useCreateShortcut(
+    () => setModal({ kind: "new-industry" }),
+    modal.kind === "none",
+    "i",
   );
 
   const orderedIndustries = useMemo(
@@ -393,24 +411,33 @@ export function IndustriesPage() {
           <aside className="ind-rail">
             <div className="ind-rail-head">
               <h1 className="tasks-title">Industries</h1>
-              <div className="tasks-subtitle">
-                {industries.length} Industries · {totalSubIndustries} Sub-Industries
+              <div className="ind-rail-desc">
+                Learners and Companies browse content by Industry
+                <span
+                  className="ind-info"
+                  tabIndex={0}
+                  role="note"
+                  aria-label="About Industries"
+                  data-tooltip={`Placeholder copy — ${industries.length} Industries and ${totalSubIndustries} Sub-Industries make up the browse tree learners see in the app.`}
+                >
+                  <InfoFilledIcon />
+                </span>
               </div>
             </div>
 
-            <div className="search-wrap ind-rail-search">
+            <div className="ind-rail-search">
               <span className="search-icon"><SearchIcon /></span>
               <input
                 className="search-input"
-                placeholder="Search Industries"
+                placeholder="Search Industries, Sub-Industries, Certifications..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <span className="search-kbd">
-                <span className="kbd-cmd">⌘</span>
-                <span className="kbd-letter">K</span>
-              </span>
             </div>
+
+            <PageBreak
+              label={`${industries.length} Industries · ${totalSubIndustries} Sub-Industries`}
+            />
 
             <div className="ind-tree">
               {filteredIndustries.map((ind) => (
@@ -430,18 +457,20 @@ export function IndustriesPage() {
                   onReorderSubs={(orderedKeys) => reorderSubs(ind.key, orderedKeys)}
                 />
               ))}
+            </div>
 
-              {/* Add Industry sits under the last Industry in the list */}
+            <div className="ind-rail-foot">
               <button
-                className="ind-rail-add"
+                className="cta-primary"
                 onClick={() => setModal({ kind: "new-industry" })}
               >
                 Add Industry
+                <span className="cta-kbd">I</span>
               </button>
-            </div>
-
-            <div className="ind-rail-hint">
-              Drag ⠿ to reorder · select a row to manage its certifications
+              <div className="ind-rail-hint">
+                Drag ⠿ to reorder · Select an Industry/Sub-Industry to manage
+                Certifications
+              </div>
             </div>
           </aside>
 

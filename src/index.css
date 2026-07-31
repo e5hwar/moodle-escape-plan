@@ -14277,14 +14277,125 @@ a {
   overflow: hidden;
 }
 
-/* Page header block — the shared 46:314 header (.tasks-title/.tasks-subtitle). */
+/* Rail header — Figma 314:899: 28px title, 2px to a 16px description carrying
+   the info glyph, then 20px to the search box. */
 .ind-rail-head {
-  margin-bottom: 18px;
+  position: relative;
+  margin-bottom: 24px;
 }
 
-/* Inline "add" rows — Figma's dashed Secondary Button (314:2121): full width,
-   28px, 0.5px dashed hairline, centred 14px white label. */
-.ind-rail-add,
+/* Inline flow (not flex) so the glyph follows the last word when the copy
+   wraps in a narrower rail than the 462px Figma frame. */
+.ind-rail-desc {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #a8a8a8;
+}
+
+/* Info glyph + hover/focus tooltip. The tooltip is positioned against the
+   header block (not the glyph) so it always spans the rail and can never spill
+   past its edges — the rail clips its overflow. */
+.ind-info {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+  flex-shrink: 0;
+  color: #a8a8a8;
+  cursor: help;
+}
+
+.ind-info::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 30;
+}
+
+.ind-info:hover::after,
+.ind-info:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Rail search (314:834) — its own box, not the app-wide .search-input chrome:
+   #0f0f10 fill, #3d3d43 hairline, 10px radius, no ⌘K keycap. The input keeps
+   the .search-input class so the global ⌘K handler still finds it. */
+.ind-rail-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 9px 13px;
+  margin-bottom: 24px;
+  background: #0f0f10;
+  border: 1px solid #3d3d43;
+  border-radius: 10px;
+}
+
+.ind-rail-search .search-icon {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: #a8a8a8;
+}
+
+.ind-rail-search .search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ind-rail-search .search-input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ind-rail-search .search-input::placeholder {
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+
+/* Count divider above the tree (323:1760) — the shared PageBreak with its
+   label one size down (12px mono). */
+.ind-rail .page-break {
+  margin: 0 0 12px;
+}
+
+.ind-rail .page-break-label {
+  font-size: 12px;
+}
+
+/* Inline "Add Sub-Industry" — Figma's dashed Secondary Button (314:2121). */
 .ind-sub-add {
   display: flex;
   align-items: center;
@@ -14300,37 +14411,40 @@ a {
   font-weight: 500;
 }
 
-.ind-rail-add {
-  margin-top: 8px;
-}
-
-.ind-rail-add:hover,
 .ind-sub-add:hover {
   border-color: rgba(122, 122, 122, 0.9);
   background: rgba(217, 217, 217, 0.04);
 }
 
-.ind-rail-search {
-  margin-bottom: 10px;
+/* Rail footer (313:807) — full-bleed sticky block: 2px top rule, centred
+   primary CTA with its "I" keycap, then the hint line. */
+.ind-rail-foot {
+  margin: auto -22px -16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-top: 2px solid rgba(122, 122, 122, 0.5);
 }
 
 .ind-rail-hint {
-  margin-top: auto;
-  padding: 14px 4px 0;
+  width: 100%;
   font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 400;
   color: #7a7a7a;
-  line-height: 1.6;
 }
 
 .ind-tree {
   flex: 1;
   overflow-y: auto;
   margin: 0 -8px;
-  padding: 4px 8px 16px;
+  padding: 0 8px 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* 8px between industry groups (323:1685). */
+  gap: 8px;
 }
 
 .ind-tree-group {
@@ -14352,7 +14466,7 @@ a {
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   transition: background 0.1s ease;
 }
 
@@ -14552,13 +14666,13 @@ a {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
+  height: 32px;
   padding: 0 4px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 400;
   transition: background 0.1s ease;
 }
 
@@ -14572,6 +14686,7 @@ a {
 
 .ind-sub-row.is-active {
   background: rgba(115, 115, 115, 0.15);
+  font-weight: 500;
 }
 
 .ind-sub-row.is-drop-over {
@@ -14820,7 +14935,8 @@ a {
 }
 
 /* The keycap atom has no global style — each consumer re-scopes it. */
-.ind-sec-head .cta-kbd {
+.ind-sec-head .cta-kbd,
+.ind-rail-foot .cta-kbd {
   width: 20px;
   height: 20px;
   min-width: 0;
