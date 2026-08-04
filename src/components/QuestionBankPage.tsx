@@ -18,17 +18,25 @@ import {
 import {
   CheckIcon,
   ChevronLeftIcon,
+  InfoFilledIcon,
   SearchIcon,
   SortIcon,
+  TreeCaretIcon,
+  TreeKebabIcon,
   UploadIcon,
 } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
+import { PageBreak } from "./PageBreak";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 12;
+
+/* The seed set is a sample of a much larger bank, so the rail's "All Questions"
+   total is the mock figure the category counts add up to — not `questions.length`. */
+const TOTAL_QUESTIONS = "1,089";
 
 const TYPE_OPTIONS: (ShortQuestionType | "All")[] = [
   "All",
@@ -120,12 +128,6 @@ const ArchiveIcon = () => (
 const TrashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a1 1 0 001 1h8a1 1 0 001-1l1-14M10 11v6M14 11v6" />
-  </svg>
-);
-
-const CaretRightIcon = () => (
-  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 6l6 6-6 6" />
   </svg>
 );
 
@@ -287,7 +289,15 @@ export function QuestionBankPage({
     onNewQuestion?.(path);
   }
 
-  useCreateShortcut(startCreate);
+  // "C" opens the right pane's Create Question; "A" opens the rail's Add
+  // Category (both badges are shown on their buttons). Neither fires while a
+  // category modal is open.
+  useCreateShortcut(startCreate, catModal.kind === "none");
+  useCreateShortcut(
+    () => setCatModal({ kind: "new-category" }),
+    catModal.kind === "none",
+    "a",
+  );
 
   // Toggle a question between Active and Archived from the row menu.
   function toggleArchive(id: string) {
@@ -382,22 +392,22 @@ export function QuestionBankPage({
     setCatMenu({ target, x: r.right, y: r.bottom });
   }
 
-  // Title + counts derived from selection
-  const selectionInfo = useMemo(() => {
-    if (selection.kind === "all") {
-      return { breadcrumb: "All Questions", count: allQuestions.length };
-    }
-    const cat = categories.find((c) => c.key === selection.categoryKey);
-    if (!cat) return { breadcrumb: "—", count: 0 };
-    if (selection.kind === "category") {
-      return { breadcrumb: cat.label, count: cat.count };
-    }
-    const sub = cat.subcategories?.find((s) => s.key === selection.subKey);
-    return {
-      breadcrumb: `${cat.label} / ${sub?.label ?? "—"}`,
-      count: sub?.count ?? 0,
-    };
-  }, [selection, categories]);
+  // Rail totals + the search-filtered tree. A category matches on its own label
+  // or on any of its subcategories', so a subcategory hit keeps its parent row.
+  const totalSubcategories = useMemo(
+    () => categories.reduce((n, c) => n + (c.subcategories?.length ?? 0), 0),
+    [categories],
+  );
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter(
+      (c) =>
+        c.label.toLowerCase().includes(q) ||
+        (c.subcategories ?? []).some((s) => s.label.toLowerCase().includes(q)),
+    );
+  }, [categories, categorySearch]);
 
   // CSV dropzone — purely visual + accept handler
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -421,137 +431,153 @@ export function QuestionBankPage({
     <div className="main">
       <div className="workspace">
         <div className="qb-page">
-          {/* Left rail — categories */}
-          <aside className="qb-cats">
-            <div className="qb-cats-head">
-              <h1 className="qb-cats-title">Question Bank</h1>
-              <div className="qb-cats-sub">
-                {selectionInfo.breadcrumb} · {selectionInfo.count.toLocaleString()} Questions
+          {/* Left rail — categories. Shared design-system rail + tree chrome
+              (`.rail*`/`.tree*`), the same elements the Industries page uses. */}
+          <aside className="rail">
+            <div className="rail-head">
+              <h1 className="tasks-title">Question Bank</h1>
+              <div className="rail-desc">
+                Categories group the Questions used by Quizzes and Feedback Forms
+                <span
+                  className="rail-info"
+                  tabIndex={0}
+                  role="note"
+                  aria-label="About the Question Bank"
+                  data-tooltip={`Placeholder copy — ${categories.length} Categories and ${totalSubcategories} Subcategories organise the ${TOTAL_QUESTIONS} Questions authors pick from.`}
+                >
+                  <InfoFilledIcon />
+                </span>
               </div>
             </div>
 
-            <div className="qb-cat-search">
-              <span className="qb-cat-search-icon"><SearchIcon /></span>
+            <div className="rail-search">
+              <span className="search-icon"><SearchIcon /></span>
+              {/* Deliberately NOT `.search-input`: ⌘K belongs to the question
+                  search in the right pane, and it grabs the first match in DOM
+                  order. */}
               <input
-                className="qb-cat-search-input"
-                placeholder="Search 200 categories"
+                placeholder="Search Categories, Subcategories..."
                 value={categorySearch}
                 onChange={(e) => setCategorySearch(e.target.value)}
               />
             </div>
 
-            <div className="qb-cats-section-label">ALL CATEGORIES</div>
+            <PageBreak
+              label={`${categories.length} Categories · ${totalSubcategories} Subcategories`}
+            />
 
-            <div className="qb-cat-list">
-              <button
-                className={`qb-cat-row qb-cat-row--top ${selection.kind === "all" ? "is-active" : ""}`}
-                onClick={() => setSelection({ kind: "all" })}
-              >
-                <span className="qb-cat-row-label">All Questions</span>
-                <span className="qb-cat-row-count">1,089</span>
-              </button>
+            <div className="tree">
+              <div className={`tree-row ${selection.kind === "all" ? "is-active" : ""}`}>
+                {/* Caret-sized spacer keeps this label on the category column. */}
+                <span className="tree-caret-btn" aria-hidden />
+                <button className="tree-main" onClick={() => setSelection({ kind: "all" })}>
+                  <span className="tree-row-label">All Questions</span>
+                  <span className="tree-row-count">{TOTAL_QUESTIONS}</span>
+                </button>
+              </div>
 
-              {categories
-                .filter((c) =>
-                  categorySearch.trim()
-                    ? c.label.toLowerCase().includes(categorySearch.trim().toLowerCase())
-                    : true,
-                )
-                .map((cat) => {
-                  const isOpen = !!openGroups[cat.key];
-                  const isActiveCat =
-                    selection.kind === "category" && selection.categoryKey === cat.key;
-                  const hasActiveSub =
-                    selection.kind === "subcategory" && selection.categoryKey === cat.key;
-                  return (
-                    <div key={cat.key} className="qb-cat-group">
-                      <div className={`qb-cat-row ${isActiveCat ? "is-active" : ""}`}>
-                        {/* Every category is expandable so subcategories can be added inside it. */}
+              {filteredCategories.map((cat) => {
+                const isOpen = !!openGroups[cat.key];
+                const isActiveCat =
+                  selection.kind === "category" && selection.categoryKey === cat.key;
+                const hasActiveSub =
+                  selection.kind === "subcategory" && selection.categoryKey === cat.key;
+                return (
+                  <div key={cat.key} className="tree-group">
+                    <div className={`tree-row ${isActiveCat ? "is-active" : ""}`}>
+                      {/* Every category is expandable so subcategories can be added inside it. */}
+                      <button
+                        className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
+                        onClick={() => toggleGroup(cat.key)}
+                        aria-label={isOpen ? "Collapse" : "Expand"}
+                      >
+                        <TreeCaretIcon />
+                      </button>
+                      <button
+                        className="tree-main"
+                        onClick={() => setSelection({ kind: "category", categoryKey: cat.key })}
+                      >
+                        <span className="tree-row-label">{cat.label}</span>
+                        <span className="tree-row-count">{cat.count}</span>
+                      </button>
+                      <button
+                        className="tree-menu-btn"
+                        aria-label="Category options"
+                        onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: cat.key })}
+                      >
+                        <TreeKebabIcon />
+                      </button>
+                    </div>
+
+                    {isOpen && (
+                      <div className="tree-sublist">
+                        {!!cat.subcategories?.length && (
+                          <div className="tree-sublist-rows">
+                            {cat.subcategories.map((sub) => {
+                              const isActive =
+                                hasActiveSub &&
+                                selection.kind === "subcategory" &&
+                                selection.subKey === sub.key;
+                              return (
+                                <div
+                                  key={sub.key}
+                                  className={`tree-sub-row ${isActive ? "is-active" : ""}`}
+                                >
+                                  <button
+                                    className="tree-sub-main"
+                                    onClick={() =>
+                                      setSelection({
+                                        kind: "subcategory",
+                                        categoryKey: cat.key,
+                                        subKey: sub.key,
+                                      })
+                                    }
+                                  >
+                                    <span className="tree-sub-row-label">{sub.label}</span>
+                                    <span className="tree-sub-row-count">{sub.count}</span>
+                                  </button>
+                                  <button
+                                    className="tree-menu-btn tree-sub-menu-btn"
+                                    aria-label="Subcategory options"
+                                    onClick={(e) =>
+                                      openCatMenu(e, {
+                                        kind: "subcategory",
+                                        categoryKey: cat.key,
+                                        subKey: sub.key,
+                                      })
+                                    }
+                                  >
+                                    <TreeKebabIcon />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                         <button
-                          className="qb-cat-caret-btn"
-                          onClick={() => toggleGroup(cat.key)}
-                          aria-label={isOpen ? "Collapse" : "Expand"}
+                          className="tree-add"
+                          onClick={() => setCatModal({ kind: "new-sub", categoryKey: cat.key })}
                         >
-                          <span className={`qb-cat-caret ${isOpen ? "is-open" : ""}`}>
-                            <CaretRightIcon />
-                          </span>
-                        </button>
-                        <button
-                          className="qb-cat-main"
-                          onClick={() => setSelection({ kind: "category", categoryKey: cat.key })}
-                        >
-                          <span className="qb-cat-row-label">{cat.label}</span>
-                          <span className="qb-cat-row-count">{cat.count}</span>
-                        </button>
-                        <button
-                          className="qb-cat-menu-btn"
-                          aria-label="Category options"
-                          onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: cat.key })}
-                        >
-                          <MoreIcon />
+                          Add Subcategory
                         </button>
                       </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-                      {isOpen && (
-                        <div className="qb-sublist">
-                          {cat.subcategories?.map((sub) => {
-                            const isActive =
-                              hasActiveSub &&
-                              selection.kind === "subcategory" &&
-                              selection.subKey === sub.key;
-                            return (
-                              <div
-                                key={sub.key}
-                                className={`qb-sub-row ${isActive ? "is-active" : ""}`}
-                              >
-                                <button
-                                  className="qb-sub-main"
-                                  onClick={() =>
-                                    setSelection({
-                                      kind: "subcategory",
-                                      categoryKey: cat.key,
-                                      subKey: sub.key,
-                                    })
-                                  }
-                                >
-                                  <span className="qb-sub-row-label">{sub.label}</span>
-                                  <span className="qb-sub-row-count">{sub.count}</span>
-                                </button>
-                                <button
-                                  className="qb-cat-menu-btn"
-                                  aria-label="Subcategory options"
-                                  onClick={(e) =>
-                                    openCatMenu(e, {
-                                      kind: "subcategory",
-                                      categoryKey: cat.key,
-                                      subKey: sub.key,
-                                    })
-                                  }
-                                >
-                                  <MoreIcon />
-                                </button>
-                              </div>
-                            );
-                          })}
-                          <button
-                            className="qb-sub-add"
-                            onClick={() => setCatModal({ kind: "new-sub", categoryKey: cat.key })}
-                          >
-                            + Add Subcategory
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-              {/* Add Category sits at the bottom of the category list. */}
+            <div className="rail-foot">
               <button
-                className="qb-cat-add qb-cat-add--bottom"
+                className="cta-primary"
                 onClick={() => setCatModal({ kind: "new-category" })}
               >
-                + Add Category
+                Add Category
+                <span className="cta-kbd">A</span>
               </button>
+              <div className="rail-hint">
+                Select a Category/Subcategory to filter the Questions beside it
+              </div>
             </div>
           </aside>
 

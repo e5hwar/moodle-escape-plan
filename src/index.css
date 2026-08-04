@@ -2323,6 +2323,10 @@ a {
   height: 32px;
   padding: 0 16px;
   border-radius: 8px;
+  /* The button is a fixed 32px, so a wrapped label would overflow it — a CTA
+     next to a shrinking row of filter pills must keep its own width. */
+  flex-shrink: 0;
+  white-space: nowrap;
   background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
   color: #fff;
   font-family: var(--font-sans);
@@ -5149,20 +5153,19 @@ a {
 .cert-source-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-left: 10px;
-  padding: 2px 9px;
+  gap: 4px;
+  flex: none;
+  padding: 1px 9px;
   border-radius: 999px;
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.3);
   font-family: var(--font-sans);
-  font-size: 9.5pt;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--accent-strong);
-  vertical-align: middle;
 }
-.cert-source-pill svg { width: 12px; height: 12px; }
+.cert-source-pill svg { width: 11px; height: 11px; }
 
 /* ── Import Certifications modal (Learning Plan picker) ── */
 .lp-modal { max-width: 760px; }
@@ -5390,78 +5393,90 @@ a {
   white-space: nowrap;
 }
 
-/* Course tree */
+/* ===== Course tree (Figma "Course Card" 340:2346) =====
+   A hairline card per Course: header (drag · eyebrow/name/description · pencil ·
+   kebab) over a body of Lesson blocks. A Lesson is a "page break" rule with its
+   name inline; its Tasks are 33px cards indented 24px beneath it. Drag grips sit
+   in the card's left gutter and fade in on row hover — the Figma rows carry no
+   grip at rest. */
 .cert-courses {
   display: flex;
   flex-direction: column;
   gap: 16px;
   max-width: 980px;
 }
-.cert-dots {
-  width: 10px;
-  height: 16px;
+
+/* Drag handle — inline on a Course header, gutter-parked on Lesson/Task rows */
+.cert-grip {
+  width: 14px;
+  height: 14px;
   flex: none;
-  opacity: 0.4;
-  cursor: grab;
-  background-image: radial-gradient(circle, var(--text-muted) 1.3px, transparent 1.4px);
-  background-size: 5px 6px;
-  transition: opacity 0.12s ease;
-}
-.cert-dots:hover {
-  opacity: 0.75;
-}
-.cert-dots:active {
-  cursor: grabbing;
-}
-.cert-course {
-  border: 1px solid var(--border);
-  border-radius: 13px;
-  background: var(--bg-panel);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-  /* visible (not hidden) so the "Add task" menu can escape the card */
-  overflow: visible;
-}
-.cert-course-header {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 14px 16px;
-  cursor: pointer;
-  background: linear-gradient(180deg, #191919, #121212);
-  border-radius: 12px 12px 0 0;
-  border-bottom: 1px solid transparent;
-}
-.cert-course:not(.expanded) .cert-course-header {
-  border-radius: 12px;
-}
-.cert-course.expanded .cert-course-header {
-  border-bottom-color: var(--border);
-}
-.cert-course-caret {
-  color: var(--text-muted);
-  width: 20px;
-  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: transform 160ms ease;
+  color: #a8a8a8;
+  cursor: grab;
+  transition: color 0.12s ease, opacity 0.12s ease;
 }
-.cert-course.expanded .cert-course-caret {
-  transform: rotate(90deg);
+.cert-grip svg {
+  width: 14px;
+  height: 14px;
 }
-.cert-course-num {
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.055);
-  padding: 2px 7px;
-  border-radius: 5px;
-  flex-shrink: 0;
+.cert-grip:hover {
+  color: var(--text);
+}
+.cert-grip:active {
+  cursor: grabbing;
+}
+.cert-grip--gutter {
+  position: absolute;
+  left: -19px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+.cert-lesson-head:hover > .cert-grip--gutter,
+.cert-task:hover > .cert-grip--gutter {
+  opacity: 1;
+}
+
+.cert-course {
+  border: 1px solid var(--bg-pill-strong);
+  border-radius: 10px;
+  background: transparent;
+  /* visible (not hidden) so a row menu can escape the card */
+  overflow: visible;
+}
+
+/* ── Course header ── */
+.cert-course-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  cursor: pointer;
+  background: rgba(16, 16, 16, 0.2);
+  border-radius: 9px 9px 0 0;
+  border-bottom: 2px solid var(--bg-pill-strong);
+}
+.cert-course:not(.expanded) .cert-course-header {
+  border-radius: 9px;
+  border-bottom-color: transparent;
 }
 .cert-course-titles {
   flex: 1;
   min-width: 0;
+}
+.cert-course-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 13px;
+  text-transform: uppercase;
+  color: #404040;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cert-course-name-row {
   display: flex;
@@ -5470,175 +5485,247 @@ a {
 }
 .cert-course-name {
   font-family: var(--font-sans);
-  font-size: 14pt;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.2px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cert-course-spacer {
-  flex: 1;
-}
-.cert-course-meta {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  color: var(--text-faint);
-}
 .cert-course-desc {
-  font-size: 12pt;
-  color: var(--text-muted);
-  margin-top: 5px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 17px;
+  color: #a8a8a8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Missing-Spanish warning chip on a Course / Lesson */
+/* Missing-Spanish warning chip on a Course / Lesson name */
 .cert-es-chip {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 8.5pt;
+  font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--skill-yellow);
   border: 1px solid rgba(245, 211, 107, 0.4);
   border-radius: 4px;
-  padding: 1px 5px;
+  padding: 0 5px;
 }
 
-/* Edit / hide / remove icon buttons on a Course or Lesson header */
-.cert-node-acts {
+/* Pencil + kebab, on Course and Lesson headers alike */
+.cert-hdr-acts,
+.cert-lesson-acts {
   display: flex;
+  align-items: center;
   gap: 2px;
   flex: none;
 }
-.cert-node-act {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+.cert-hdr-btn {
+  width: 14px;
+  height: 14px;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-.cert-node-act:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-}
-.cert-node-act.danger:hover {
-  background: rgba(255, 49, 49, 0.15);
-  color: #ff8080;
-}
-.cert-node-act:disabled {
-  opacity: 0.25;
-  cursor: not-allowed;
-}
-.cert-node-act:disabled:hover {
+  color: #a8a8a8;
   background: transparent;
-  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.cert-hdr-btn:hover {
+  color: #fff;
+}
+/* The kebab lives in a Dropdown wrapper — keep the wrapper out of the way so
+   the row's own 2px gap is the only spacing between pencil and kebab. */
+.cert-hdr-acts .dropdown-wrap,
+.cert-lesson-acts .dropdown-wrap {
+  display: inline-flex;
 }
 
+/* ── Course body ── */
 .cert-course-body {
-  padding: 12px 20px 16px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 20px;
 }
 .cert-course-empty {
   font-family: var(--font-sans);
-  font-size: 11.5pt;
+  font-size: 14px;
   color: var(--text-faint);
-  padding: 6px 4px 10px;
 }
 
-/* Task row — dot handle · type gutter · name · duration · lock · remove */
-.cert-task-row {
+/* ── Lesson: a "page break" header + its indented task list ── */
+.cert-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cert-lesson-head {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0;
-  height: 40px;
-  padding: 0 8px 0 10px;
-  border-radius: 8px;
+  gap: 8px;
+  min-height: 33px;
+  cursor: pointer;
 }
-.cert-task-row:hover {
-  background: rgba(255, 255, 255, 0.035);
-}
-.cert-task-gutter {
-  width: 96px;
+.cert-lesson-stub,
+.cert-lesson-rule {
+  height: 1px;
+  background: #404040;
   flex: none;
-  text-align: right;
-  box-sizing: border-box;
-  padding-right: 16px;
-  margin-left: 4px;
+}
+.cert-lesson-stub {
+  width: 8px;
+}
+.cert-lesson-rule {
+  flex: 1;
+  min-width: 8px;
+}
+.cert-lesson-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-width: 0;
+}
+.cert-lesson-titles {
+  min-width: 0;
+}
+.cert-lesson-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cert-lesson-name {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 19px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.cert-lesson-desc {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.cert-lesson-eyebrow {
+  flex: none;
   font-family: var(--font-mono);
-  font-size: 9.5pt;
-  letter-spacing: 0.08em;
-  border-right: 1px solid var(--border);
+  font-size: 8px;
+  line-height: 10px;
+  text-transform: uppercase;
+  color: #404040;
+  white-space: nowrap;
+}
+/* Lesson controls stay out of the way until the row is hovered, so the rule
+   runs to the card edge at rest exactly as it does in the design. The negative
+   margin swallows the row gap while they are collapsed. */
+.cert-lesson-acts {
+  width: 0;
+  margin-left: -8px;
+  overflow: hidden;
+  opacity: 0;
+}
+.cert-lesson-head:hover .cert-lesson-acts,
+.cert-lesson-acts:focus-within {
+  width: auto;
+  margin-left: 0;
+  overflow: visible;
+  opacity: 1;
+}
+
+.cert-lesson-tasks,
+.cert-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cert-lesson-tasks {
+  padding-left: 24px;
+}
+.cert-lesson-tasks > .dropdown-wrap {
+  display: block;
+}
+
+/* ── Task card ── */
+.cert-task {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+  text-align: left;
+}
+.cert-task--add {
+  border: 0.5px dashed rgba(122, 122, 122, 0.5);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.cert-task--add:hover {
+  border-color: rgba(240, 85, 35, 0.5);
+  background: rgba(240, 85, 35, 0.05);
+}
+.cert-task-icon {
+  flex: none;
+  display: inline-flex;
+  color: #a8a8a8;
 }
 .cert-task-name {
-  font-size: 13.5pt;
-  color: var(--text);
-  margin-left: 16px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 17px;
+  color: #d9d9d9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.cert-task-meta {
+  flex: none;
+  margin-left: -4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 10px;
+  color: #7a7a7a;
+  white-space: nowrap;
+}
 .cert-task-spacer {
   flex: 1;
 }
-.cert-task-dur {
-  flex: none;
-  width: 56px;
-  text-align: right;
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  color: var(--text-muted);
-  margin-left: 14px;
-}
-.cert-task-flag,
-.cert-task-lock,
-.cert-task-remove {
-  width: 26px;
-  height: 26px;
-  flex: none;
-  margin-left: 6px;
-  border-radius: 6px;
+/* The task kebab sits flush at the card's right edge. */
+.cert-task > .dropdown-wrap {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  opacity: 0.6;
-}
-.cert-task-flag:hover,
-.cert-task-lock:hover {
-  opacity: 1;
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-.cert-task-flag.active {
-  color: #46c98b;
-  opacity: 1;
-}
-.cert-task-lock.active {
-  color: var(--accent);
-  opacity: 1;
-}
-.cert-task-lock.open {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-  opacity: 1;
-}
-.cert-task-remove:hover {
-  opacity: 1;
-  background: rgba(255, 49, 49, 0.15);
-  color: #ff8080;
+  flex: none;
 }
 
+/* Row menus on the tree pull glyphs from a few different icon sets — pin them
+   all to the 14px slot the rows themselves use. */
+.cert-course .menu-item-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Square type badge — used by the Access Restriction prerequisite picker */
 .task-kind-badge {
   width: 26px;
   height: 26px;
@@ -5661,87 +5748,18 @@ a {
 .task-kind-badge.url { background: #1f4e4a; color: #c5f0e6; }
 .task-kind-badge.cert { background: #3d3066; color: #c8b8ff; }
 
-/* Lesson — a titled group inside a Course; its tasks nest under a left rail */
-.cert-lesson {
-  margin: 10px 0 2px;
-}
-.cert-lesson-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 6px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.cert-lesson-header:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-.cert-lesson-caret {
-  color: var(--text-muted);
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  transition: transform 160ms ease;
-}
-.cert-lesson.expanded .cert-lesson-caret {
-  transform: rotate(90deg);
-}
-.cert-lesson-icon {
-  color: var(--text-muted);
-  display: inline-flex;
-  flex: none;
-}
-.cert-lesson-name {
-  font-size: 13.5pt;
-  font-weight: 600;
-  color: var(--text);
-  flex: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 360px;
-}
-.cert-lesson-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-  margin: 0 4px;
-}
-.cert-lesson-meta {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 9.5pt;
-  color: var(--text-muted);
-}
-.cert-lesson-tasks {
-  margin-left: 18px;
-  border-left: 2px solid var(--border);
-  padding-left: 2px;
-}
-.cert-lesson-tasks .cert-task-row {
-  border-radius: 0 8px 8px 0;
-}
-.cert-lesson-tasks .cert-task-gutter {
-  width: 84px;
-}
-.cert-lesson-add {
-  padding: 4px 0 4px 14px;
-}
-
 /* ===== Task Access Restrictions ===== */
+/* State chips on a Task card — sized for the 33px row, so they read as
+   annotations beside the mono suffix rather than as pills of their own. */
 .cert-restricted-pill {
   flex-shrink: 0;
-  margin-left: 12px;
-  padding: 2px 8px;
+  margin-left: 4px;
+  padding: 1px 8px;
   border-radius: 999px;
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.4);
   font-family: var(--font-sans);
-  font-size: 9.5pt;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
@@ -5749,23 +5767,26 @@ a {
 
 .cert-final-pill {
   flex-shrink: 0;
-  margin-left: 12px;
+  margin-left: 4px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px 2px 7px;
+  gap: 4px;
+  padding: 1px 9px 1px 7px;
   border-radius: 999px;
   background: rgba(70, 201, 139, 0.12);
   border: 1px solid rgba(70, 201, 139, 0.4);
   font-family: var(--font-sans);
-  font-size: 9.5pt;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #46c98b;
 }
+.cert-final-pill svg {
+  width: 11px;
+  height: 11px;
+}
 
 .cert-restrict-edit {
-  margin: 2px 8px 10px 28px;
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -5773,9 +5794,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-.cert-restrict-edit.in-lesson {
-  margin-left: 40px;
 }
 .cert-restrict-head {
   display: flex;
@@ -5883,121 +5901,98 @@ a {
   line-height: 1.45;
 }
 
-/* Course footer — "Add task" (menu) + "Add lesson" */
-.cert-course-actions {
+/* Course footer (Figma 344:194) — two equal accent cards: "Add Lesson" and
+   "Add Task". "Add Task" is a dropdown (library picker vs. create-new-by-type),
+   which is what its trailing ⋮ opens; "Add Lesson" acts on click, so it has no ⋮. */
+.cert-course-foot {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+}
+/* Halve on flex-basis, not on `flex: 1 1 0` — with border-box the bordered
+   button's base size floors at its own padding+border, so a 0 basis would hand
+   it 26px more than the (unpadded) dropdown wrapper beside it. */
+.cert-course-foot > .cert-bigadd,
+.cert-course-foot > .dropdown-wrap {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+.cert-course-foot > .dropdown-wrap {
+  display: block;
+}
+.cert-bigadd {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  position: relative;
-}
-.cert-add-task-btn,
-.cert-add-lesson {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
   border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  cursor: pointer;
   background: transparent;
-  transition: all 160ms ease;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-.cert-add-task-btn {
-  border: 1px solid var(--border);
-  color: var(--accent);
+.cert-bigadd:hover {
+  background: rgba(240, 85, 35, 0.06);
+  border-color: rgba(240, 85, 35, 0.3);
 }
-.cert-add-task-btn:hover {
-  border-color: rgba(233, 114, 55, 0.5);
-  background: rgba(233, 114, 55, 0.06);
-}
-.cert-add-lesson {
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-weight: 400;
-}
-.cert-add-lesson:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-/* Inline "Add task to this lesson" link */
-.cert-add-task-link {
+.cert-bigadd-icon {
+  flex: none;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 4px;
-  border-radius: 6px;
-  color: var(--accent);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  cursor: pointer;
-  background: transparent;
+  color: #f05523;
 }
-.cert-add-task-link:hover {
-  color: var(--accent-strong);
+.cert-bigadd-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #f05523;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cert-bigadd-more {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  color: #a8a8a8;
 }
 
+/* "Add Course" closes the tree — the footer card treatment, full width. */
 .cert-add-course {
-  align-self: flex-start;
-  display: inline-flex;
+  width: 100%;
+  display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  padding: 15px 22px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 13px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 13pt;
-  font-weight: 600;
+  padding: 12px;
+  border: 0.5px dashed rgba(122, 122, 122, 0.5);
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
-  transition: all 160ms ease;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 .cert-add-course:hover {
-  color: var(--text);
-  border-color: rgba(233, 114, 55, 0.5);
-}
-
-/* "Required" badge on the mandatory Course */
-.cert-required-pill {
-  display: inline-block;
-  margin-left: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  vertical-align: middle;
+  background: rgba(240, 85, 35, 0.06);
+  border-color: rgba(240, 85, 35, 0.4);
 }
 
 /* "Hidden" indicator on a hidden Course / Lesson */
 .cert-hidden-pill {
   display: inline-block;
-  margin-left: 10px;
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: 999px;
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.4);
   font-family: var(--font-sans);
-  font-size: 9.5pt;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
-  vertical-align: middle;
 }
 
 /* Hidden Courses / Lessons read as dimmed; their own controls stay legible. */
 .cert-course.hidden > .cert-course-header > .cert-course-titles,
-.cert-lesson.hidden > .cert-lesson-header > .cert-lesson-name {
+.cert-lesson.hidden > .cert-lesson-head > .cert-lesson-title {
   opacity: 0.5;
 }
 
@@ -6020,11 +6015,19 @@ a {
 
 /* Inline bilingual name + description editor (pencil / new node) */
 .cert-editor {
-  margin: 10px 14px 4px;
+  margin: 0;
   border: 1px solid rgba(233, 114, 55, 0.45);
   background: #15120f;
   border-radius: 12px;
   padding: 14px 16px;
+}
+/* A Course editor insets to the card's own 24px gutter; a Lesson editor lines
+   up with the Lesson's task list. Vertical spacing comes from the flex gaps. */
+.cert-course > .cert-editor {
+  margin: 14px 24px;
+}
+.cert-lesson > .cert-editor {
+  margin-left: 24px;
 }
 .cert-editor-head {
   display: flex;
@@ -6137,6 +6140,19 @@ a {
 }
 .menu-item.danger:hover {
   background: rgba(255, 107, 107, 0.1);
+}
+.menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+/* Menu-row glyph states: caret points down when the node is already expanded,
+   and a toggle that is currently ON picks up the accent. */
+.menu-item-icon.is-open {
+  transform: rotate(90deg);
+}
+.menu-item-icon.is-on {
+  color: var(--accent);
 }
 .menu-item:disabled {
   opacity: 0.4;
@@ -7897,324 +7913,9 @@ a {
   min-height: 0;
 }
 
-/* ─── Left rail: categories ─── */
-.qb-cats {
-  width: 320px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  padding: 32px 24px 16px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.qb-cats-head {
-  margin-bottom: 18px;
-}
-
-.qb-cats-title {
-  font-family: var(--font-sans);
-  font-size: 26pt;
-  font-weight: 700;
-  margin: 0 0 4px;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
-}
-
-.qb-cats-sub {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.qb-cat-search {
-  position: relative;
-  margin-bottom: 8px;
-}
-
-.qb-cat-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-faint);
-  display: inline-flex;
-}
-
-.qb-cat-search-input {
-  width: 100%;
-  padding: 9px 12px 9px 34px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-}
-
-.qb-cat-search-input::placeholder {
-  color: var(--text-faint);
-}
-
-.qb-cat-search-input:focus {
-  border-color: var(--border-strong);
-}
-
-.qb-cat-add {
-  display: flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 12px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 500;
-  text-align: left;
-  border-radius: 6px;
-  margin-bottom: 14px;
-}
-
-.qb-cat-add:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-
-.qb-cats-section-label {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 600;
-  padding: 6px 12px;
-}
-
-.qb-cat-list {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0 -8px;
-  padding: 4px 8px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.qb-cat-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.qb-cat-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 500;
-  text-align: left;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-
-.qb-cat-row:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-
-.qb-cat-row.is-active {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-
-.qb-cat-row--top {
-  padding-left: 20px;
-}
-
-.qb-cat-caret {
-  width: 12px;
-  height: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  flex-shrink: 0;
-  transition: transform 0.12s ease;
-}
-
-.qb-cat-caret.is-open {
-  transform: rotate(90deg);
-}
-
-.qb-cat-caret.is-hidden {
-  visibility: hidden;
-}
-
-.qb-cat-row-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.qb-cat-row-count {
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.qb-cat-row.is-active .qb-cat-row-count {
-  color: var(--text-muted);
-}
-
-.qb-sublist {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 2px 0 6px 30px;
-  position: relative;
-}
-
-.qb-sublist::before {
-  content: "";
-  position: absolute;
-  left: 24px;
-  top: 4px;
-  bottom: 8px;
-  width: 1px;
-  background: var(--border);
-}
-
-.qb-sub-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 400;
-  text-align: left;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-
-.qb-sub-row:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-
-.qb-sub-row.is-active {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.qb-sub-row-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.qb-sub-row-count {
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  flex-shrink: 0;
-}
-
-.qb-sub-add {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 12px;
-  margin-top: 2px;
-  border-radius: 6px;
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 500;
-  text-align: left;
-}
-
-.qb-sub-add:hover {
-  background: var(--bg-pill);
-  color: var(--text-muted);
-}
-
-/* Add Category pinned to the bottom of the list */
-.qb-cat-add--bottom {
-  margin-top: 6px;
-  margin-bottom: 0;
-}
-
-/* Caret toggle button (now present on every category) */
-.qb-cat-caret-btn {
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 4px;
-  color: var(--text-faint);
-}
-
-.qb-cat-caret-btn:hover {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-
-/* Selectable label area of a category row */
-.qb-cat-main,
-.qb-sub-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
-/* 3-dot menu trigger shown on hover */
-.qb-cat-menu-btn {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 5px;
-  color: var(--text-faint);
-  opacity: 0;
-  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
-}
-
-.qb-cat-row:hover .qb-cat-menu-btn,
-.qb-sub-row:hover .qb-cat-menu-btn {
-  opacity: 1;
-}
-
-.qb-cat-menu-btn:hover {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-
-/* Disabled Delete in the row menu (non-empty category) — the .u-menu
-   :disabled rules already cover this; kept here as the QB-specific note. */
+/* The left rail is the shared `.rail`/`.tree` chrome — see the "Rail + tree"
+   section. Disabled Delete in the row menu (non-empty category) is covered by
+   the shared `.u-menu :disabled` rules. */
 
 /* ─── Right pane ─── */
 .qb-content {
@@ -14256,17 +13957,12 @@ a {
 }
 
 /* =============================================================
- * Industries page
+ * Rail + tree — shared design-system chrome for a page's left
+ * navigation panel (Industries, Question Bank). Figma 314:899
+ * (rail) and 314:2239 "Tree Menu States" (rows).
  * ============================================================= */
-.ind-page {
-  flex: 1;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-
 /* ─── Left rail ─── */
-.ind-rail {
+.rail {
   width: 380px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
@@ -14279,14 +13975,14 @@ a {
 
 /* Rail header — Figma 314:899: 28px title, 2px to a 16px description carrying
    the info glyph, then 20px to the search box. */
-.ind-rail-head {
+.rail-head {
   position: relative;
   margin-bottom: 24px;
 }
 
 /* Inline flow (not flex) so the glyph follows the last word when the copy
    wraps in a narrower rail than the 462px Figma frame. */
-.ind-rail-desc {
+.rail-desc {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
@@ -14297,7 +13993,7 @@ a {
 /* Info glyph + hover/focus tooltip. The tooltip is positioned against the
    header block (not the glyph) so it always spans the rail and can never spill
    past its edges — the rail clips its overflow. */
-.ind-info {
+.rail-info {
   display: inline-flex;
   vertical-align: middle;
   margin-left: 8px;
@@ -14306,7 +14002,7 @@ a {
   cursor: help;
 }
 
-.ind-info::after {
+.rail-info::after {
   content: attr(data-tooltip);
   position: absolute;
   top: 100%;
@@ -14331,16 +14027,19 @@ a {
   z-index: 30;
 }
 
-.ind-info:hover::after,
-.ind-info:focus-visible::after {
+.rail-info:hover::after,
+.rail-info:focus-visible::after {
   opacity: 1;
   transform: translateY(0);
 }
 
 /* Rail search (314:834) — its own box, not the app-wide .search-input chrome:
-   #0f0f10 fill, #3d3d43 hairline, 10px radius, no ⌘K keycap. The input keeps
-   the .search-input class so the global ⌘K handler still finds it. */
-.ind-rail-search {
+   #0f0f10 fill, #3d3d43 hairline, 10px radius, no ⌘K keycap. The input is
+   matched structurally (`> input`) so a page can choose whether to also give it
+   `.search-input`: that class is what App.tsx's ⌘K handler looks for, and on a
+   page whose main search lives in the right pane (Question Bank) the rail must
+   NOT claim it — the handler focuses the first visible match in DOM order. */
+.rail-search {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -14352,7 +14051,7 @@ a {
   border-radius: 10px;
 }
 
-.ind-rail-search .search-icon {
+.rail-search .search-icon {
   position: static;
   transform: none;
   display: inline-flex;
@@ -14362,12 +14061,12 @@ a {
   color: #a8a8a8;
 }
 
-.ind-rail-search .search-icon svg {
+.rail-search .search-icon svg {
   width: 14px;
   height: 14px;
 }
 
-.ind-rail-search .search-input {
+.rail-search > input {
   flex: 1;
   min-width: 0;
   height: auto;
@@ -14375,11 +14074,13 @@ a {
   background: none;
   border: none;
   border-radius: 0;
+  color: var(--text);
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
 }
 
-.ind-rail-search .search-input::placeholder {
+.rail-search > input::placeholder {
   font-size: 14px;
   font-weight: 500;
   color: #a8a8a8;
@@ -14387,16 +14088,16 @@ a {
 
 /* Count divider above the tree (323:1760) — the shared PageBreak with its
    label one size down (12px mono). */
-.ind-rail .page-break {
+.rail .page-break {
   margin: 0 0 12px;
 }
 
-.ind-rail .page-break-label {
+.rail .page-break-label {
   font-size: 12px;
 }
 
 /* Inline "Add Sub-Industry" — Figma's dashed Secondary Button (314:2121). */
-.ind-sub-add {
+.tree-add {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14411,14 +14112,14 @@ a {
   font-weight: 500;
 }
 
-.ind-sub-add:hover {
+.tree-add:hover {
   border-color: rgba(122, 122, 122, 0.9);
   background: rgba(217, 217, 217, 0.04);
 }
 
 /* Rail footer (313:807) — full-bleed sticky block: 2px top rule, centred
-   primary CTA with its "I" keycap, then the hint line. */
-.ind-rail-foot {
+   primary CTA with its keycap, then the hint line. */
+.rail-foot {
   margin: auto -22px -16px;
   padding: 20px;
   display: flex;
@@ -14428,7 +14129,23 @@ a {
   border-top: 2px solid rgba(122, 122, 122, 0.5);
 }
 
-.ind-rail-hint {
+/* The keycap atom has no global style — each consumer re-scopes it. */
+.rail-foot .cta-kbd {
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  margin-left: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.rail-hint {
   width: 100%;
   font-family: var(--font-sans);
   font-size: 12px;
@@ -14436,7 +14153,7 @@ a {
   color: #7a7a7a;
 }
 
-.ind-tree {
+.tree {
   flex: 1;
   overflow-y: auto;
   margin: 0 -8px;
@@ -14447,14 +14164,14 @@ a {
   gap: 8px;
 }
 
-.ind-tree-group {
+.tree-group {
   display: flex;
   flex-direction: column;
 }
 
 /* Industry row — Figma "Tree - Collapsed/Expanded" states (314:2239):
    32px tall, 6px/4px padding, 8px radius, 8px gap, white 16px Medium label. */
-.ind-tree-row {
+.tree-row {
   display: flex;
   align-items: center;
   /* Figma nests two gaps: 2px drag→caret→label (314:2069/2072), 8px
@@ -14472,7 +14189,7 @@ a {
 
 /* Hover 314:2051, Selected 314:2169 (selected wins on hover — this rule order
    is what makes Selected + Hover keep the flat fill). */
-.ind-tree-row:hover {
+.tree-row:hover {
   background: linear-gradient(
     to right,
     rgba(217, 217, 217, 0.05) 50%,
@@ -14480,30 +14197,30 @@ a {
   );
 }
 
-.ind-tree-row.is-active {
+.tree-row.is-active {
   background: rgba(115, 115, 115, 0.15);
 }
 
-.ind-tree-row.is-drop-over {
+.tree-row.is-drop-over {
   box-shadow: inset 0 2px 0 var(--accent, #6ea8fe);
 }
 
 /* Hidden state — Figma 320:1424 / 320:1440: everything drops to #404040 and
    the industry label goes SemiBold. Sub rows inherit the colour from a hidden
    parent but keep Regular weight and get no pill. */
-.ind-tree-row.is-hidden-item .ind-tree-row-label {
+.tree-row.is-hidden-item .tree-row-label {
   font-weight: 600;
   color: #404040;
 }
 
-.ind-tree-row.is-hidden-item .ind-tree-row-count,
-.ind-sub-row.is-hidden-item .ind-sub-row-count {
+.tree-row.is-hidden-item .tree-row-count,
+.tree-sub-row.is-hidden-item .tree-sub-row-count {
   color: #404040;
 }
 
 /* Drag handle (industry + sub share visuals) */
-.ind-tree-drag,
-.ind-sub-drag {
+.tree-drag,
+.tree-sub-drag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -14516,23 +14233,23 @@ a {
   transition: opacity 0.1s ease;
 }
 
-.ind-tree-row:hover .ind-tree-drag,
-.ind-sub-row:hover .ind-sub-drag {
+.tree-row:hover .tree-drag,
+.tree-sub-row:hover .tree-sub-drag {
   opacity: 0.8;
 }
 
-.ind-tree-drag:active,
-.ind-sub-drag:active {
+.tree-drag:active,
+.tree-sub-drag:active {
   cursor: grabbing;
 }
 
-.ind-tree-drag.is-disabled,
-.ind-sub-drag.is-disabled {
+.tree-drag.is-disabled,
+.tree-sub-drag.is-disabled {
   cursor: default;
   opacity: 0 !important;
 }
 
-.ind-tree-caret-btn {
+.tree-caret-btn {
   width: 14px;
   height: 14px;
   display: inline-flex;
@@ -14543,11 +14260,11 @@ a {
   transition: transform 0.12s ease;
 }
 
-.ind-tree-caret-btn.is-open {
+.tree-caret-btn.is-open {
   transform: rotate(90deg);
 }
 
-.ind-tree-main {
+.tree-main {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -14562,7 +14279,7 @@ a {
   text-align: left;
 }
 
-.ind-tree-row-label {
+.tree-row-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -14571,8 +14288,8 @@ a {
 }
 
 /* Count column — 28px, right-aligned (314:2075). */
-.ind-tree-row-count,
-.ind-sub-row-count {
+.tree-row-count,
+.tree-sub-row-count {
   width: 28px;
   text-align: right;
   color: #a8a8a8;
@@ -14583,7 +14300,7 @@ a {
 }
 
 /* 3-dot menu trigger on each row — glyph only, revealed on row hover. */
-.ind-tree-menu-btn {
+.tree-menu-btn {
   width: 14px;
   height: 14px;
   /* 2px row gap + 6px = the 8px Figma leaves between the count and the kebab. */
@@ -14597,22 +14314,22 @@ a {
   transition: opacity 0.1s ease, color 0.1s ease;
 }
 
-.ind-sub-menu-btn {
+.tree-sub-menu-btn {
   width: 12px;
   height: 12px;
 }
 
-.ind-sub-menu-btn svg {
+.tree-sub-menu-btn svg {
   width: 12px;
   height: 12px;
 }
 
-.ind-tree-row:hover .ind-tree-menu-btn,
-.ind-sub-row:hover .ind-tree-menu-btn {
+.tree-row:hover .tree-menu-btn,
+.tree-sub-row:hover .tree-menu-btn {
   opacity: 1;
 }
 
-.ind-tree-menu-btn:hover {
+.tree-menu-btn:hover {
   color: #fff;
 }
 
@@ -14635,14 +14352,14 @@ a {
    block is indented 24px and carries the 1px vertical divider; rows themselves
    start 6px further in (divider 2px + 4px gap). The divider spans the rows
    only — never the add button. */
-.ind-sublist {
+.tree-sublist {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 4px 0 10px;
 }
 
-.ind-sublist-rows {
+.tree-sublist-rows {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -14652,7 +14369,7 @@ a {
   padding: 4px 0 4px 6px;
 }
 
-.ind-sublist-rows::before {
+.tree-sublist-rows::before {
   content: "";
   position: absolute;
   left: 0.5px;
@@ -14662,7 +14379,7 @@ a {
   background: rgba(122, 122, 122, 0.5);
 }
 
-.ind-sub-row {
+.tree-sub-row {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -14676,7 +14393,7 @@ a {
   transition: background 0.1s ease;
 }
 
-.ind-sub-row:hover {
+.tree-sub-row:hover {
   background: linear-gradient(
     to right,
     rgba(217, 217, 217, 0.05) 50%,
@@ -14684,21 +14401,21 @@ a {
   );
 }
 
-.ind-sub-row.is-active {
+.tree-sub-row.is-active {
   background: rgba(115, 115, 115, 0.15);
   font-weight: 500;
 }
 
-.ind-sub-row.is-drop-over {
+.tree-sub-row.is-drop-over {
   box-shadow: inset 0 2px 0 var(--accent, #6ea8fe);
 }
 
-.ind-sub-row.is-hidden-item .ind-sub-row-label {
+.tree-sub-row.is-hidden-item .tree-sub-row-label {
   font-weight: 400;
   color: #404040;
 }
 
-.ind-sub-main {
+.tree-sub-main {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -14710,7 +14427,7 @@ a {
   text-align: left;
 }
 
-.ind-sub-row-label {
+.tree-sub-row-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -14718,10 +14435,21 @@ a {
   white-space: nowrap;
 }
 
-/* Add Sub-Industry sits inset from both edges (314:2120: pl 42 / pr 22). */
-.ind-sub-add {
+/* Inside a sub-list the add button sits inset from both edges
+   (314:2120: pl 42 / pr 22). */
+.tree-sublist .tree-add {
   width: auto;
   margin: 0 22px 0 42px;
+}
+
+/* =============================================================
+ * Industries page
+ * ============================================================= */
+.ind-page {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ─── Row 3-dot menu — the shared .u-menu popover, right-anchored ─── */
@@ -14935,8 +14663,7 @@ a {
 }
 
 /* The keycap atom has no global style — each consumer re-scopes it. */
-.ind-sec-head .cta-kbd,
-.ind-rail-foot .cta-kbd {
+.ind-sec-head .cta-kbd {
   width: 20px;
   height: 20px;
   min-width: 0;

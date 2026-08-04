@@ -13,6 +13,9 @@ import {
   DragHandleIcon,
   RowArrowIcon,
   CheckIcon,
+  InfoFilledIcon,
+  TreeCaretIcon,
+  TreeKebabIcon,
 } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
@@ -35,38 +38,11 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
-/* Filled info glyph — Figma "Icon Library" (I314:829;7:5011): a 12.83px disc
-   with the "i" knocked out, centred in a 14px slot. */
-const InfoFilledIcon = () => (
-  <svg width="14" height="14" viewBox="-0.583 -0.583 14 14" fill="currentColor">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M6.41667 12.8333C9.96042 12.8333 12.8333 9.96042 12.8333 6.41667C12.8333 2.87292 9.96042 0 6.41667 0C2.87292 0 0 2.87292 0 6.41667C0 9.96042 2.87292 12.8333 6.41667 12.8333ZM5.831 4.375V3.206H7V4.375H5.831ZM7 5.25V9.625H5.83333V5.25H7Z"
-    />
-  </svg>
-);
 /* Cert-row remove ✕ — Figma "Icon Library" (I318:1351;7:1802): a 6.6px cross
    centred in a 16px slot, 1.333 square-cap stroke. */
 const RowCloseIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
     <path d="M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6" />
-  </svg>
-);
-/* Tree caret — Figma "Icon Library" chevron (I314:2057;7:1537): a 3.21×6.42
-   chevron with a 1.167 square-cap stroke, centred in a 14px slot. */
-const CaretRightIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
-    <path d="M5.54 3.79L8.75 7l-3.21 3.21" />
-  </svg>
-);
-/* Tree rows use the vertical 3-dot kebab (Figma "more" 314:2060: 14×14, 1.75px
-   dots at y 2.625/7/11.375); the detail header keeps the horizontal one. */
-const MoreVertIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-    <rect x="6.125" y="1.75" width="1.75" height="1.75" />
-    <rect x="6.125" y="6.125" width="1.75" height="1.75" />
-    <rect x="6.125" y="10.5" width="1.75" height="1.75" />
   </svg>
 );
 const PencilIcon = () => (
@@ -408,13 +384,13 @@ export function IndustriesPage() {
       <div className="workspace">
         <div className="ind-page">
           {/* ─── Left rail ─── */}
-          <aside className="ind-rail">
-            <div className="ind-rail-head">
+          <aside className="rail">
+            <div className="rail-head">
               <h1 className="tasks-title">Industries</h1>
-              <div className="ind-rail-desc">
+              <div className="rail-desc">
                 Learners and Companies browse content by Industry
                 <span
-                  className="ind-info"
+                  className="rail-info"
                   tabIndex={0}
                   role="note"
                   aria-label="About Industries"
@@ -425,7 +401,7 @@ export function IndustriesPage() {
               </div>
             </div>
 
-            <div className="ind-rail-search">
+            <div className="rail-search">
               <span className="search-icon"><SearchIcon /></span>
               <input
                 className="search-input"
@@ -439,7 +415,7 @@ export function IndustriesPage() {
               label={`${industries.length} Industries · ${totalSubIndustries} Sub-Industries`}
             />
 
-            <div className="ind-tree">
+            <div className="tree">
               {filteredIndustries.map((ind) => (
                 <IndustryTreeGroup
                   key={ind.key}
@@ -459,7 +435,7 @@ export function IndustriesPage() {
               ))}
             </div>
 
-            <div className="ind-rail-foot">
+            <div className="rail-foot">
               <button
                 className="cta-primary"
                 onClick={() => setModal({ kind: "new-industry" })}
@@ -467,7 +443,7 @@ export function IndustriesPage() {
                 Add Industry
                 <span className="cta-kbd">I</span>
               </button>
-              <div className="ind-rail-hint">
+              <div className="rail-hint">
                 Drag ⠿ to reorder · Select an Industry/Sub-Industry to manage
                 Certifications
               </div>
@@ -830,9 +806,9 @@ function IndustryTreeGroup({
   }
 
   return (
-    <div className="ind-tree-group">
+    <div className="tree-group">
       <div
-        className={`ind-tree-row ${industryActive ? "is-active" : ""} ${ind.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
+        className={`tree-row ${industryActive ? "is-active" : ""} ${ind.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
         onDragOver={(e) => {
           if (!canDrag) return;
           if (e.dataTransfer.types.includes("ind/industry")) {
@@ -844,7 +820,7 @@ function IndustryTreeGroup({
         onDrop={onIndustryDrop}
       >
         <span
-          className={`ind-tree-drag ${canDrag ? "" : "is-disabled"}`}
+          className={`tree-drag ${canDrag ? "" : "is-disabled"}`}
           draggable={canDrag}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = "move";
@@ -855,30 +831,30 @@ function IndustryTreeGroup({
           <DragHandleIcon />
         </span>
         <button
-          className={`ind-tree-caret-btn ${isOpen ? "is-open" : ""}`}
+          className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
           onClick={onToggle}
           aria-label={isOpen ? "Collapse" : "Expand"}
         >
-          <CaretRightIcon />
+          <TreeCaretIcon />
         </button>
-        <button className="ind-tree-main" onClick={onPickIndustry}>
-          <span className="ind-tree-row-label">{ind.name}</span>
+        <button className="tree-main" onClick={onPickIndustry}>
+          <span className="tree-row-label">{ind.name}</span>
           {ind.hidden && <span className="ind-hidden-pill">Hidden</span>}
-          <span className="ind-tree-row-count">{totalCerts}</span>
+          <span className="tree-row-count">{totalCerts}</span>
         </button>
         <button
-          className="ind-tree-menu-btn"
+          className="tree-menu-btn"
           aria-label="Industry options"
           onClick={(e) => onMenu(e, { kind: "industry", industryKey: ind.key })}
         >
-          <MoreVertIcon />
+          <TreeKebabIcon />
         </button>
       </div>
 
       {isOpen && (
-        <div className="ind-sublist">
+        <div className="tree-sublist">
           {orderedSubs.length > 0 && (
-            <div className="ind-sublist-rows">
+            <div className="tree-sublist-rows">
               {orderedSubs.map((sub) => (
                 <SubRow
                   key={sub.key}
@@ -899,7 +875,7 @@ function IndustryTreeGroup({
               ))}
             </div>
           )}
-          <button className="ind-sub-add" onClick={onAddSub}>
+          <button className="tree-add" onClick={onAddSub}>
             Add Sub-Industry
           </button>
         </div>
@@ -952,7 +928,7 @@ function SubRow({
 
   return (
     <div
-      className={`ind-sub-row ${active ? "is-active" : ""} ${isHidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
+      className={`tree-sub-row ${active ? "is-active" : ""} ${isHidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
       onDragOver={(e) => {
         if (!canDrag) return;
         if (e.dataTransfer.types.includes(dragType)) {
@@ -964,7 +940,7 @@ function SubRow({
       onDrop={onSubDrop}
     >
       <span
-        className={`ind-sub-drag ${canDrag ? "" : "is-disabled"}`}
+        className={`tree-sub-drag ${canDrag ? "" : "is-disabled"}`}
         draggable={canDrag}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = "move";
@@ -974,17 +950,17 @@ function SubRow({
       >
         <DragHandleIcon />
       </span>
-      <button className="ind-sub-main" onClick={onPick}>
-        <span className="ind-sub-row-label">{sub.name}</span>
+      <button className="tree-sub-main" onClick={onPick}>
+        <span className="tree-sub-row-label">{sub.name}</span>
         {sub.hidden && !parentHidden && <span className="ind-hidden-pill">Hidden</span>}
-        <span className="ind-sub-row-count">{sub.certIds.length}</span>
+        <span className="tree-sub-row-count">{sub.certIds.length}</span>
       </button>
       <button
-        className="ind-tree-menu-btn ind-sub-menu-btn"
+        className="tree-menu-btn tree-sub-menu-btn"
         aria-label="Sub-Industry options"
         onClick={(e) => onMenu(e, { kind: "sub", industryKey, subKey: sub.key })}
       >
-        <MoreVertIcon />
+        <TreeKebabIcon />
       </button>
     </div>
   );

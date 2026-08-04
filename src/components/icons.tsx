@@ -385,3 +385,37 @@ export const AudioIcon = () => (
     <circle cx="17" cy="16" r="3" />
   </svg>
 );
+
+/* ─── Rail / tree atoms — Figma 314:899 (rail) + 314:2239 "Tree Menu States" ───
+   Shared by every page whose left panel is a rail + tree (Industries,
+   Question Bank). All three render at #a8a8a8 via the row's colour. */
+
+/* Filled info glyph (I314:829;7:5011) — a 12.83px disc with the "i" knocked
+   out, centred in a 14px slot. Carries the rail header's tooltip. */
+export const InfoFilledIcon = () => (
+  <svg width="14" height="14" viewBox="-0.583 -0.583 14 14" fill="currentColor">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M6.41667 12.8333C9.96042 12.8333 12.8333 9.96042 12.8333 6.41667C12.8333 2.87292 9.96042 0 6.41667 0C2.87292 0 0 2.87292 0 6.41667C0 9.96042 2.87292 12.8333 6.41667 12.8333ZM5.831 4.375V3.206H7V4.375H5.831ZM7 5.25V9.625H5.83333V5.25H7Z"
+    />
+  </svg>
+);
+
+/* Tree caret (I314:2057;7:1537) — a 3.21×6.42 chevron with a 1.167 square-cap
+   stroke, centred in a 14px slot. Rotated 90° by `.tree-caret-btn.is-open`. */
+export const TreeCaretIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M5.54 3.79L8.75 7l-3.21 3.21" />
+  </svg>
+);
+
+/* Tree row kebab (314:2060) — the VERTICAL 3-dot: 1.75px dots at y
+   2.625/7/11.375 in a 14px slot (12px on sub rows via `.tree-sub-menu-btn`). */
+export const TreeKebabIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+    <rect x="6.125" y="1.75" width="1.75" height="1.75" />
+    <rect x="6.125" y="6.125" width="1.75" height="1.75" />
+    <rect x="6.125" y="10.5" width="1.75" height="1.75" />
+  </svg>
+);

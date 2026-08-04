@@ -17,7 +17,7 @@ import {
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
-import { SearchIcon, AddIcon, LockIcon } from "./icons";
+import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { type Certification, certifications } from "../data/certifications";
@@ -177,11 +177,28 @@ const LayersIcon = () => (
   </svg>
 );
 
-// Pencil — opens a node's inline name/description editor.
+// Pencil (Figma I340:1516;7:3612) — opens a node's inline name/description
+// editor. The 11.48px stroke path, offset into a 14px slot.
 const PencilIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 20h9" />
-    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M8.228 3.502L2.793 8.938L2.333 11.667L5.062 11.206L10.497 5.771L12.28 3.988L10.012 1.719L8.228 3.502ZM8.228 3.502L10.497 5.771" />
+  </svg>
+);
+// Task glyph (Figma I340:2636;7:3060) — a filled play-in-circle, 12.83px
+// centred in a 14px slot. One glyph for every Task type; the type itself is
+// spelled out in the mono suffix beside the name.
+const TaskGlyphIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+    <g transform="translate(0.583 0.583)">
+      <path d="M6.41667 0C9.96042 0 12.8333 2.87292 12.8333 6.41667C12.8333 9.96042 9.96042 12.8333 6.41667 12.8333C2.87292 12.8333 0 9.96042 0 6.41667C0 2.87292 2.87292 0 6.41667 0ZM4.52083 9.04167L9.1875 6.41667L4.52083 3.79167V9.04167Z" />
+    </g>
+  </svg>
+);
+// Plus (Figma I341:2722;7:30) — a 9.33px cross centred in a 14px slot. Leads
+// every "Add …" affordance on the tree.
+const PlusThinIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M7 2.917V11.083M11.083 7H2.917" />
   </svg>
 );
 // Trash — removes a Course, Lesson, or Task from the tree.
@@ -192,16 +209,10 @@ const TrashIcon = () => (
     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
   </svg>
 );
-// Book — Lesson marker in the tree.
-const BookIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-  </svg>
-);
-// Right chevron — rotates 90° when a Course is expanded (see .cert-course.expanded).
+// Right chevron — the Collapse / Expand item in a Course or Lesson kebab menu.
+// (The tree itself has no caret: the header row is the collapse affordance.)
 const CaretIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 6 15 12 9 18" />
   </svg>
 );
@@ -212,16 +223,21 @@ const FlagIcon = () => (
     <line x1="4" y1="22" x2="4" y2="15" />
   </svg>
 );
-const PlusMiniIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
-// Draggable dot-grid handle. Grab it to reorder siblings within the same list
-// (Courses among Courses, a Course's Tasks/Lessons among themselves, a Lesson's
-// Tasks among themselves). Handle props are supplied by the owning list.
-function DragDots(props: React.HTMLAttributes<HTMLSpanElement> & { draggable?: boolean }) {
-  return <span className="cert-dots" title="Drag to reorder" {...props} />;
+// Draggable dot-grid handle (Figma "move" 340:1502 — the shared 2×4 glyph at
+// 14px). Grab it to reorder siblings within the same list (Courses among
+// Courses, a Course's Tasks/Lessons among themselves, a Lesson's Tasks among
+// themselves). Handle props are supplied by the owning list. Course headers
+// carry it inline; Lesson and Task rows park it in the card's left gutter,
+// where it fades in on hover — the Figma rows have no grip at rest.
+function DragDots({
+  className = "",
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement> & { draggable?: boolean }) {
+  return (
+    <span className={`cert-grip ${className}`} title="Drag to reorder" {...props}>
+      <DragHandleIcon />
+    </span>
+  );
 }
 
 // Tree-node IDs created during a session. The counter guards against collisions
@@ -1167,14 +1183,18 @@ function TaskKindBadge({ kind }: { kind: TaskKind }) {
   return <span className={`task-kind-badge ${k.cls}`}>{k.letter}</span>;
 }
 
-// The "warmed gutter" that labels each Task row by type. The label sits in a
-// mono, type-coloured left rail — the type is legible without a coloured chip.
-const KIND_GUTTER: Record<TaskKind, { label: string; color: string }> = {
-  xapi: { label: "xAPI", color: "#7fa9ff" },
-  quiz: { label: "QUIZ", color: "#f0a76a" },
-  "hands-on": { label: "HANDS-ON", color: "#c79be6" },
-  file: { label: "RESOURCE", color: "#9aa6b2" },
+// The mono suffix that trails a Task's name on the tree ("·xAPI · 10 min").
+// Replaces the old type-coloured gutter column — the Figma row is a single
+// neutral glyph plus this label.
+const KIND_MONO: Record<TaskKind, string> = {
+  xapi: "xAPI",
+  quiz: "Quiz",
+  "hands-on": "Hands-On",
+  file: "Resource",
 };
+
+// Plural helper for the mono eyebrows on Course and Lesson headers.
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function courseStats(course: CertCourse): { tasks: number; lessons: number; minutes: number } {
   let tasks = 0;
@@ -1585,7 +1605,8 @@ function TasksStep({
         ))}
 
         <button className="cert-add-course" onClick={addCourse}>
-          <PlusMiniIcon /> Add course
+          <span className="cert-bigadd-icon"><PlusThinIcon /></span>
+          <span className="cert-bigadd-label">Add Course</span>
         </button>
       </div>
 
@@ -1690,34 +1711,88 @@ function NodeEditor({
   );
 }
 
-// Small icon-button used for edit / hide / remove on Course and Lesson headers.
+// Small icon-button on a Course or Lesson header (pencil / kebab trigger).
 function NodeAction({
-  variant,
   label,
-  disabled,
   onClick,
   children,
 }: {
-  variant?: "danger";
   label: string;
-  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
-      className={`cert-node-act ${variant === "danger" ? "danger" : ""}`}
+      className="cert-hdr-btn"
       aria-label={label}
       title={label}
-      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
-        if (!disabled) onClick();
+        onClick();
       }}
     >
       {children}
     </button>
   );
+}
+
+// The ⋮ kebab shared by Course, Lesson and Task rows. Everything the Figma
+// header dropped — hide/show, collapse, delete, and the per-Task Final Exam and
+// Access Restriction toggles — lives behind it.
+function NodeMenu({
+  label,
+  direction = "down",
+  children,
+}: {
+  label: string;
+  direction?: "up" | "down";
+  children: (args: { close: () => void }) => React.ReactNode;
+}) {
+  return (
+    <Dropdown
+      width={232}
+      align="right"
+      direction={direction}
+      trigger={({ toggle }) => (
+        <button
+          className="cert-hdr-btn"
+          aria-label={label}
+          title={label}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
+        >
+          <TreeKebabIcon />
+        </button>
+      )}
+    >
+      {children}
+    </Dropdown>
+  );
+}
+
+// A Course's children in render order, with runs of consecutive loose Tasks
+// (Tasks pinned straight to the Course rather than to a Lesson) collected into
+// one 6px-gap list so they don't inherit the 20px gap between Lesson blocks.
+type CourseGroup =
+  | { kind: "tasks"; key: string; tasks: CertTask[] }
+  | { kind: "lesson"; key: string; lesson: CertLesson; num: number };
+
+function groupChildren(children: CourseChild[]): CourseGroup[] {
+  const out: CourseGroup[] = [];
+  let lessonNum = 0;
+  for (const ch of children) {
+    if (ch.kind === "task") {
+      const last = out[out.length - 1];
+      if (last && last.kind === "tasks") last.tasks.push(ch.task);
+      else out.push({ kind: "tasks", key: `t-${ch.task.id}`, tasks: [ch.task] });
+    } else {
+      lessonNum += 1;
+      out.push({ kind: "lesson", key: ch.lesson.id, lesson: ch.lesson, num: lessonNum });
+    }
+  }
+  return out;
 }
 
 function CourseCard({
@@ -1780,9 +1855,12 @@ function CourseCard({
   onRemoveLesson: (lessonId: string) => void;
 }) {
   const stats = courseStats(course);
-  const meta = [
-    `${stats.tasks} Task${stats.tasks === 1 ? "" : "s"}`,
-    stats.lessons > 0 ? `${stats.lessons} Lesson${stats.lessons > 1 ? "s" : ""}` : null,
+  // Mono eyebrow above the name — the Figma slot for "COURSE 1", widened to
+  // carry the per-Course counts the old meta column used to show.
+  const eyebrow = [
+    `Course ${index}`,
+    plural(stats.tasks, "Task"),
+    stats.lessons > 0 ? plural(stats.lessons, "Lesson") : null,
     stats.minutes > 0 ? formatDuration(stats.minutes) : null,
   ]
     .filter(Boolean)
@@ -1790,39 +1868,52 @@ function CourseCard({
   const esMiss = !course.nameEs.trim();
   const selfDnd = dnd("courses", course.id);
   const childScope = `course:${course.id}`;
+  const groups = groupChildren(course.children);
   return (
     <div className={`cert-course ${course.expanded ? "expanded" : ""} ${course.hidden ? "hidden" : ""}`}>
       <div className="cert-course-header" onClick={onToggle} {...selfDnd.target}>
         <DragDots {...selfDnd.handle} />
-        <span className="cert-course-caret"><CaretIcon /></span>
-        <span className="cert-course-num">{index}</span>
         <div className="cert-course-titles">
+          <div className="cert-course-eyebrow">{eyebrow}</div>
           <div className="cert-course-name-row">
             <span className="cert-course-name">{course.nameEn || "Untitled Course"}</span>
             {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
             {course.sourceCertName && (
               <span className="cert-source-pill"><LayersIcon />Imported</span>
             )}
-            {required && <span className="cert-required-pill">Required</span>}
             {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
-            <span className="cert-course-spacer" />
-            <span className="cert-course-meta">{meta}</span>
           </div>
           {course.descEn && <div className="cert-course-desc">{course.descEn}</div>}
         </div>
-        <div className="cert-node-acts" onClick={(e) => e.stopPropagation()}>
+        <div className="cert-hdr-acts" onClick={(e) => e.stopPropagation()}>
           <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
-          <NodeAction label={course.hidden ? "Show Course" : "Hide Course"} onClick={onToggleHidden}>
-            {course.hidden ? <EyeOffIcon /> : <EyeIcon />}
-          </NodeAction>
-          <NodeAction
-            variant="danger"
-            label={required ? "At least one Course is required" : "Remove Course"}
-            disabled={required}
-            onClick={onRemove}
-          >
-            <TrashIcon />
-          </NodeAction>
+          <NodeMenu label="Course actions">
+            {({ close }) => (
+              <div className="menu">
+                <button className="menu-item" onClick={() => { onToggle(); close(); }}>
+                  <span className={`menu-item-icon ${course.expanded ? "is-open" : ""}`}><CaretIcon /></span>
+                  {course.expanded ? "Collapse Course" : "Expand Course"}
+                </button>
+                <button className="menu-item" onClick={() => { onToggleHidden(); close(); }}>
+                  <span className="menu-item-icon">{course.hidden ? <EyeOffIcon /> : <EyeIcon />}</span>
+                  {course.hidden ? "Show Course" : "Hide Course"}
+                </button>
+                <div className="menu-divider" />
+                <button
+                  className="menu-item danger"
+                  disabled={required}
+                  title={required ? "At least one Course is required" : undefined}
+                  onClick={() => { onRemove(); close(); }}
+                >
+                  <span className="menu-item-icon"><TrashIcon /></span>
+                  Delete Course
+                </button>
+                {required && (
+                  <div className="menu-note">Every Certification needs at least one Course.</div>
+                )}
+              </div>
+            )}
+          </NodeMenu>
         </div>
       </div>
 
@@ -1847,49 +1938,56 @@ function CourseCard({
             <div className="cert-course-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
           )}
 
-          {course.children.map((c) =>
-            c.kind === "task" ? (
-              <TaskRow
-                key={c.task.id}
-                task={c.task}
-                allTasks={allTasks}
-                dndRow={dnd(childScope, c.task.id)}
-                onUpdate={(patch) => onUpdateTask(c.task.id, patch)}
-                onRemove={() => onRemoveTask(c.task.id)}
-              />
+          {groups.map((g) =>
+            g.kind === "tasks" ? (
+              <div className="cert-task-list" key={g.key}>
+                {g.tasks.map((t) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    allTasks={allTasks}
+                    dndRow={dnd(childScope, t.id)}
+                    onUpdate={(patch) => onUpdateTask(t.id, patch)}
+                    onRemove={() => onRemoveTask(t.id)}
+                  />
+                ))}
+              </div>
             ) : (
               <LessonCard
-                key={c.lesson.id}
-                lesson={c.lesson}
-                editing={editingId === c.lesson.id}
+                key={g.key}
+                lesson={g.lesson}
+                courseIndex={index}
+                num={g.num}
+                editing={editingId === g.lesson.id}
                 allTasks={allTasks}
                 dnd={dnd}
-                dndRow={dnd(childScope, c.lesson.id)}
+                dndRow={dnd(childScope, g.lesson.id)}
                 onUpdateTask={onUpdateTask}
                 onRemoveTask={onRemoveTask}
-                onToggle={() => onToggleLesson(c.lesson.id)}
-                onUpdate={(patch) => onUpdateLesson(c.lesson.id, patch)}
-                onToggleHidden={() => onToggleLessonHidden(c.lesson.id)}
-                onOpenEditor={() => onOpenLessonEditor(c.lesson.id)}
-                onCancelEditor={() => onCancelLessonEditor(c.lesson)}
+                onToggle={() => onToggleLesson(g.lesson.id)}
+                onUpdate={(patch) => onUpdateLesson(g.lesson.id, patch)}
+                onToggleHidden={() => onToggleLessonHidden(g.lesson.id)}
+                onOpenEditor={() => onOpenLessonEditor(g.lesson.id)}
+                onCancelEditor={() => onCancelLessonEditor(g.lesson)}
                 onSaveEditor={onSaveLessonEditor}
-                onRemove={() => onRemoveLesson(c.lesson.id)}
-                onCreateTask={(taskType) => onCreateTaskInLesson(c.lesson.id, taskType)}
-                onAddExistingTask={() => onAddExistingTaskInLesson(c.lesson.id)}
+                onRemove={() => onRemoveLesson(g.lesson.id)}
+                onCreateTask={(taskType) => onCreateTaskInLesson(g.lesson.id, taskType)}
+                onAddExistingTask={() => onAddExistingTaskInLesson(g.lesson.id)}
               />
             ),
           )}
 
-          <div className="cert-course-actions">
+          <div className="cert-course-foot">
+            <button className="cert-bigadd" onClick={onAddLesson}>
+              <span className="cert-bigadd-icon"><PlusThinIcon /></span>
+              <span className="cert-bigadd-label">Add Lesson</span>
+            </button>
             <AddTaskMenu
-              variant="button"
-              label="Add task"
+              variant="bigadd"
+              label="Add Task"
               onCreateNew={onCreateTask}
               onAddExisting={onAddExistingTask}
             />
-            <button className="cert-add-lesson" onClick={onAddLesson}>
-              <BookIcon /> Add lesson
-            </button>
           </div>
         </div>
       )}
@@ -1897,8 +1995,13 @@ function CourseCard({
   );
 }
 
+// A Lesson inside a Course. Its header is the Figma "Page Break": a stub rule,
+// the name + description, a mono "· LESSON 1.1 · 3 TASKS" tag, then a hairline
+// running to the card edge. Edit / hide / delete fade in at the far right.
 function LessonCard({
   lesson,
+  courseIndex,
+  num,
   editing,
   allTasks,
   dnd,
@@ -1916,6 +2019,8 @@ function LessonCard({
   onAddExistingTask,
 }: {
   lesson: CertLesson;
+  courseIndex: number;
+  num: number;
   editing: boolean;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
@@ -1936,23 +2041,44 @@ function LessonCard({
   const taskScope = `lesson:${lesson.id}`;
   return (
     <div className={`cert-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
-      <div className="cert-lesson-header" onClick={onToggle} {...dndRow.target}>
-        <DragDots {...dndRow.handle} />
-        <span className="cert-lesson-caret"><CaretIcon /></span>
-        <span className="cert-lesson-icon"><BookIcon /></span>
-        <span className="cert-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
-        {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
-        {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+      <div className="cert-lesson-head" onClick={onToggle} {...dndRow.target}>
+        <DragDots className="cert-grip--gutter" {...dndRow.handle} />
+        <span className="cert-lesson-stub" />
+        <div className="cert-lesson-title">
+          <div className="cert-lesson-titles">
+            <div className="cert-lesson-name-row">
+              <span className="cert-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
+              {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
+              {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+            </div>
+            {lesson.descEn && <div className="cert-lesson-desc">{lesson.descEn}</div>}
+          </div>
+          <span className="cert-lesson-eyebrow">
+            {`· Lesson ${courseIndex}.${num} · ${plural(lesson.tasks.length, "Task")}`}
+          </span>
+        </div>
         <span className="cert-lesson-rule" />
-        <span className="cert-lesson-meta">
-          {lesson.tasks.length} Task{lesson.tasks.length === 1 ? "" : "s"}
-        </span>
-        <div className="cert-node-acts" onClick={(e) => e.stopPropagation()}>
+        <div className="cert-lesson-acts" onClick={(e) => e.stopPropagation()}>
           <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
-          <NodeAction label={lesson.hidden ? "Show Lesson" : "Hide Lesson"} onClick={onToggleHidden}>
-            {lesson.hidden ? <EyeOffIcon /> : <EyeIcon />}
-          </NodeAction>
-          <NodeAction variant="danger" label="Remove Lesson" onClick={onRemove}><TrashIcon /></NodeAction>
+          <NodeMenu label="Lesson actions">
+            {({ close }) => (
+              <div className="menu">
+                <button className="menu-item" onClick={() => { onToggle(); close(); }}>
+                  <span className={`menu-item-icon ${lesson.expanded ? "is-open" : ""}`}><CaretIcon /></span>
+                  {lesson.expanded ? "Collapse Lesson" : "Expand Lesson"}
+                </button>
+                <button className="menu-item" onClick={() => { onToggleHidden(); close(); }}>
+                  <span className="menu-item-icon">{lesson.hidden ? <EyeOffIcon /> : <EyeIcon />}</span>
+                  {lesson.hidden ? "Show Lesson" : "Hide Lesson"}
+                </button>
+                <div className="menu-divider" />
+                <button className="menu-item danger" onClick={() => { onRemove(); close(); }}>
+                  <span className="menu-item-icon"><TrashIcon /></span>
+                  Delete Lesson
+                </button>
+              </div>
+            )}
+          </NodeMenu>
         </div>
       </div>
 
@@ -1978,39 +2104,35 @@ function LessonCard({
               key={t.id}
               task={t}
               allTasks={allTasks}
-              inLesson
               dndRow={dnd(taskScope, t.id)}
               onUpdate={(patch) => onUpdateTask(t.id, patch)}
               onRemove={() => onRemoveTask(t.id)}
             />
           ))}
-          <div className="cert-lesson-add">
-            <AddTaskMenu
-              variant="link"
-              label="Add task to this lesson"
-              onCreateNew={onCreateTask}
-              onAddExisting={onAddExistingTask}
-            />
-          </div>
+          <AddTaskMenu
+            variant="dashed"
+            label="Add Task"
+            onCreateNew={onCreateTask}
+            onAddExisting={onAddExistingTask}
+          />
         </div>
       )}
     </div>
   );
 }
 
-// A Task row in the cert tree. A type-coloured "gutter" labels the Task; the lock
-// toggles an inline Access Restriction editor, and the trash removes the Task.
+// A Task card on the cert tree. One neutral glyph, the name, and a mono
+// "·xAPI · 10 min" suffix; the Final Exam flag and the Access Restriction editor
+// moved into the row's kebab, and their state shows as a chip after the suffix.
 function TaskRow({
   task,
   allTasks,
-  inLesson,
   dndRow,
   onUpdate,
   onRemove,
 }: {
   task: CertTask;
   allTasks: CertTask[];
-  inLesson?: boolean;
   dndRow: DndProps;
   onUpdate: (patch: Partial<CertTask>) => void;
   onRemove: () => void;
@@ -2018,40 +2140,40 @@ function TaskRow({
   const [open, setOpen] = useState(false);
   const restricted = !!task.restriction?.enabled;
   const finalExam = !!task.finalExam;
-  const g = KIND_GUTTER[task.kind];
   return (
     <>
-      <div className={`cert-task-row ${inLesson ? "in-lesson" : ""}`} {...dndRow.target}>
-        <DragDots {...dndRow.handle} />
-        <span className="cert-task-gutter" style={{ color: g.color }}>{g.label}</span>
+      <div className="cert-task" {...dndRow.target}>
+        <DragDots className="cert-grip--gutter" {...dndRow.handle} />
+        <span className="cert-task-icon"><TaskGlyphIcon /></span>
         <span className="cert-task-name">{task.name}</span>
+        <span className="cert-task-meta">
+          {`·${KIND_MONO[task.kind]}${task.duration ? ` · ${task.duration}` : ""}`}
+        </span>
         {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
         {restricted && <span className="cert-restricted-pill">Restricted</span>}
         <span className="cert-task-spacer" />
-        <span className="cert-task-dur">{task.duration}</span>
-        <button
-          className={`cert-task-flag ${finalExam ? "active" : ""}`}
-          aria-label={finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
-          aria-pressed={finalExam}
-          title={finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
-          onClick={() => onUpdate({ finalExam: !finalExam })}
-        >
-          <FlagIcon />
-        </button>
-        <button
-          className={`cert-task-lock ${restricted ? "active" : ""} ${open ? "open" : ""}`}
-          aria-label="Access restrictions"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <LockIcon />
-        </button>
-        <button className="cert-task-remove" aria-label="Remove Task" title="Remove from this course" onClick={onRemove}>
-          <TrashIcon />
-        </button>
+        <NodeMenu label="Task actions">
+          {({ close }) => (
+            <div className="menu">
+              <button className="menu-item" onClick={() => { onUpdate({ finalExam: !finalExam }); close(); }}>
+                <span className={`menu-item-icon ${finalExam ? "is-on" : ""}`}><FlagIcon /></span>
+                {finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
+              </button>
+              <button className="menu-item" onClick={() => { setOpen((o) => !o); close(); }}>
+                <span className={`menu-item-icon ${restricted ? "is-on" : ""}`}><LockIcon /></span>
+                {open ? "Hide access restrictions" : "Access restrictions"}
+              </button>
+              <div className="menu-divider" />
+              <button className="menu-item danger" onClick={() => { onRemove(); close(); }}>
+                <span className="menu-item-icon"><TrashIcon /></span>
+                Remove from Course
+              </button>
+            </div>
+          )}
+        </NodeMenu>
       </div>
       {open && (
-        <AccessRestrictionEditor task={task} allTasks={allTasks} inLesson={inLesson} onUpdate={onUpdate} />
+        <AccessRestrictionEditor task={task} allTasks={allTasks} onUpdate={onUpdate} />
       )}
     </>
   );
@@ -2060,12 +2182,10 @@ function TaskRow({
 function AccessRestrictionEditor({
   task,
   allTasks,
-  inLesson,
   onUpdate,
 }: {
   task: CertTask;
   allTasks: CertTask[];
-  inLesson?: boolean;
   onUpdate: (patch: Partial<CertTask>) => void;
 }) {
   const r = task.restriction ?? { enabled: false, mode: "all" as const, taskIds: [] };
@@ -2078,7 +2198,7 @@ function AccessRestrictionEditor({
     setR({ taskIds: r.taskIds.includes(id) ? r.taskIds.filter((x) => x !== id) : [...r.taskIds, id] });
 
   return (
-    <div className={`cert-restrict-edit ${inLesson ? "in-lesson" : ""}`}>
+    <div className="cert-restrict-edit">
       <div className="cert-restrict-head">
         <div className="cert-restrict-head-text">
           <div className="cert-restrict-title">Access restriction</div>
@@ -2164,25 +2284,30 @@ function AddTaskMenu({
   label,
   onCreateNew,
   onAddExisting,
-  variant = "link",
+  variant,
 }: {
   label: string;
   onCreateNew: (t: TaskTypeKey) => void;
   onAddExisting: () => void;
-  variant?: "button" | "link";
+  // "dashed" — the trailing row inside a Lesson's task list.
+  // "bigadd"  — the half-width card in the Course footer.
+  variant: "dashed" | "bigadd";
 }) {
   return (
     <Dropdown
       width={300}
       direction="up"
       trigger={({ toggle }) =>
-        variant === "button" ? (
-          <button className="cert-add-task-btn" onClick={toggle}>
-            <PlusMiniIcon /> {label}
+        variant === "dashed" ? (
+          <button className="cert-task cert-task--add" onClick={toggle}>
+            <span className="cert-task-icon"><PlusThinIcon /></span>
+            <span className="cert-task-name">{label}</span>
           </button>
         ) : (
-          <button className="cert-add-task-link" onClick={toggle}>
-            <PlusMiniIcon /> {label}
+          <button className="cert-bigadd" onClick={toggle}>
+            <span className="cert-bigadd-icon"><PlusThinIcon /></span>
+            <span className="cert-bigadd-label">{label}</span>
+            <span className="cert-bigadd-more"><TreeKebabIcon /></span>
           </button>
         )
       }
