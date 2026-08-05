@@ -6,21 +6,8 @@ import {
   type PastReview,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import {
-  AudioIcon,
-  BoldIcon,
-  BulletListIcon,
-  ChevronLeftIcon,
-  ImageIcon,
-  IndentLeftIcon,
-  IndentRightIcon,
-  ItalicIcon,
-  LinkSmallIcon,
-  LockIcon,
-  NumberListIcon,
-  UnderlineIcon,
-  VideoIcon,
-} from "./icons";
+import { ChevronLeftIcon, LockIcon } from "./icons";
+import { RteToolbar } from "./RteToolbar";
 
 function formatDate(iso: string): string {
   if (!iso || iso === "—") return "—";
@@ -365,23 +352,7 @@ function ReviewerChecklistField({
 
   return (
     <div className={`rte-field ${focused ? "is-focused" : ""}`}>
-      {focused && (
-        <div className="rte-toolbar">
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><BoldIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><ItalicIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><UnderlineIcon /></button>
-          <span className="rte-sep" />
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><BulletListIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><NumberListIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><IndentRightIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><IndentLeftIcon /></button>
-          <span className="rte-sep" />
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><LinkSmallIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><ImageIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><VideoIcon /></button>
-          <button type="button" className="rte-btn" onMouseDown={(e) => e.preventDefault()}><AudioIcon /></button>
-        </div>
-      )}
+      {focused && <RteToolbar />}
       <textarea
         ref={ref}
         className="rte-area"

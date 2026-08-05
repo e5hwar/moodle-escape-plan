@@ -9,20 +9,10 @@ import {
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import {
   ChevronLeftIcon,
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  IndentRightIcon,
-  IndentLeftIcon,
-  LinkSmallIcon,
-  ImageIcon,
-  VideoIcon,
-  AudioIcon,
   SmallXIcon,
   DragHandleIcon,
 } from "./icons";
+import { RteToolbar } from "./RteToolbar";
 
 const InfoIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -545,23 +535,23 @@ function QuestionTextCard({
       <div className="rte-field">
         <RteToolbar />
         <div className="rte-lang-row">
+          <span className="lang-tag">EN</span>
           <AutoTextarea
             className="rte-area"
             value={data.text}
             placeholder="Write the question…"
             onChange={(v) => update({ text: v })}
           />
-          <span className="lang-tag floating">EN</span>
         </div>
         <div className="rte-field-divider" />
         <div className="rte-lang-row">
+          <span className="lang-tag">ES</span>
           <AutoTextarea
             className="rte-area"
             value={data.textEs}
             placeholder="Escribe la pregunta…"
             onChange={(v) => update({ textEs: v })}
           />
-          <span className="lang-tag floating">ES</span>
         </div>
       </div>
       <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" hidden multiple onChange={() => {/* noop in mock */}} />
@@ -1327,10 +1317,6 @@ function ToggleRow({
 }) {
   return (
     <div className={`toggle-row ${disabled ? "qed-toggle-disabled" : ""}`}>
-      <div className="toggle-text">
-        <div className="toggle-label">{label}</div>
-        {sub && <div className="toggle-sub">{sub}</div>}
-      </div>
       <button
         type="button"
         className={`toggle ${checked ? "on" : ""}`}
@@ -1340,6 +1326,10 @@ function ToggleRow({
       >
         <span className="toggle-knob" />
       </button>
+      <div className="toggle-text">
+        <div className="toggle-label">{label}</div>
+        {sub && <div className="toggle-sub">{sub}</div>}
+      </div>
     </div>
   );
 }
@@ -1442,48 +1432,6 @@ function BiField({
           onChange={(e) => onEs(e.target.value)}
         />
       </label>
-    </div>
-  );
-}
-
-function RteToolbar() {
-  return (
-    <div className="rte-toolbar">
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <BoldIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <ItalicIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <UnderlineIcon />
-      </button>
-      <span className="rte-sep" />
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <BulletListIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <NumberListIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <IndentRightIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <IndentLeftIcon />
-      </button>
-      <span className="rte-sep" />
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <LinkSmallIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <ImageIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <VideoIcon />
-      </button>
-      <button className="rte-btn" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
-        <AudioIcon />
-      </button>
     </div>
   );
 }

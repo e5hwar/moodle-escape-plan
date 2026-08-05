@@ -1,19 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CheckBoldIcon,
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  IndentRightIcon,
-  IndentLeftIcon,
-  LinkSmallIcon,
   ImageIcon,
-  VideoIcon,
-  AudioIcon,
   SmallXIcon,
 } from "./icons";
+import { RteToolbar } from "./RteToolbar";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
@@ -184,18 +175,60 @@ const PencilIcon = () => (
     <path d="M8.228 3.502L2.793 8.938L2.333 11.667L5.062 11.206L10.497 5.771L12.28 3.988L10.012 1.719L8.228 3.502ZM8.228 3.502L10.497 5.771" />
   </svg>
 );
-// Task glyph (Figma I340:2636;7:3060) — a filled play-in-circle, 12.83px
-// centred in a 14px slot. One glyph for every Task type; the type itself is
-// spelled out in the mono suffix beside the name.
-const TaskGlyphIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-    <g transform="translate(0.583 0.583)">
-      <path d="M6.41667 0C9.96042 0 12.8333 2.87292 12.8333 6.41667C12.8333 9.96042 9.96042 12.8333 6.41667 12.8333C2.87292 12.8333 0 9.96042 0 6.41667C0 2.87292 2.87292 0 6.41667 0ZM4.52083 9.04167L9.1875 6.41667L4.52083 3.79167V9.04167Z" />
+/* Task glyphs — one per Task type, each a stroked 1.333 path offset into a 16px
+   slot. Replaced the single play-in-circle: the tree now names the type twice,
+   once by glyph and once in the mono suffix. */
+// xAPI (Figma I354:249;7:648) — open book with lines on the right leaf.
+const XapiTaskIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333">
+    <g transform="translate(0.667 1.333)">
+      <path d="M7.33333 12.6667V2.66667M7.33333 12.6667H6.66667C6.66667 12.6667 4.66667 12 0.666667 12V0.666667H5.33333C5.86377 0.666667 6.37247 0.87738 6.74755 1.25245C7.12262 1.62753 7.33333 2.13623 7.33333 2.66667M7.33333 12.6667H8C8 12.6667 10 12 14 12V0.666667H9.33333C8.8029 0.666667 8.29419 0.87738 7.91912 1.25245C7.54405 1.62753 7.33333 2.13623 7.33333 2.66667" />
+      <path d="M11.3333 4.66667H10M11.3333 6.66667H10" strokeLinecap="square" />
     </g>
   </svg>
 );
-// Plus (Figma I341:2722;7:30) — a 9.33px cross centred in a 14px slot. Leads
-// every "Add …" affordance on the tree.
+// Quiz (Figma I354:255;7:3217) — speech bubble carrying a question mark.
+const QuizTaskIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <g transform="translate(1 1.333)">
+      <path d="M0.666667 0.666667H13.3333V10H3.33333L0.666667 12.3333V0.666667Z" />
+      <path d="M5.66667 4.33333C5.66667 3.97971 5.80714 3.64057 6.05719 3.39052C6.30724 3.14048 6.64638 3 7 3C7.35362 3 7.69276 3.14048 7.94281 3.39052C8.19286 3.64057 8.33333 3.97971 8.33333 4.33333C8.33333 5.66667 7.002 5.68533 7.002 5.83333M7 7.66667H7.00267V7.66933H7V7.66667Z" />
+    </g>
+  </svg>
+);
+// Resource (Figma I354:261;7:3796) — document with a folded corner.
+const ResourceTaskIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333">
+    <g transform="translate(2 0.667)">
+      <path d="M7.33333 0.666667V4.66667H11.3333M7.33333 0.666667H8L11.3333 4V4.66667M7.33333 0.666667H0.666667V14H11.3333V4.66667" />
+      <path d="M8.66667 8H3.33333M8.66667 10.6667H3.33333" strokeLinecap="square" />
+    </g>
+  </svg>
+);
+// Hands-On Task (Figma 354:267 "upload") — arrow rising out of a tray.
+const HandsOnTaskIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <path d="M11 5.66667L8 2.66667L5 5.66667M8 3.5V10" />
+    <path d="M13.6667 10V13.3333H2.33333V10" />
+  </svg>
+);
+// Plus, 16px slot (Figma I341:2722;7:30) — leads the dashed "Add Task" row,
+// which now sits at full Task-card scale.
+const PlusRowIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <path d="M8 3.333V12.667M12.667 8H3.333" />
+  </svg>
+);
+// Padlock (Figma I356:1945;7:2434) — a filled 7.08×8.75 lock centred in a 10px
+// slot. Leads the gate banner on a Task with an Access Restriction applied.
+const RestrictionLockIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+    <g transform="translate(1.458 0.417)">
+      <path d="M1.04167 3.75H0V8.75H7.08333V3.75H6.04167V2.5C6.04167 1.83696 5.77828 1.20107 5.30943 0.732233C4.84059 0.263392 4.20471 0 3.54167 0C2.87863 0 2.24274 0.263392 1.7739 0.732233C1.30506 1.20107 1.04167 1.83696 1.04167 2.5V3.75ZM1.875 2.5C1.875 2.05797 2.05059 1.63405 2.36316 1.32149C2.67572 1.00893 3.09964 0.833333 3.54167 0.833333C3.98369 0.833333 4.40762 1.00893 4.72018 1.32149C5.03274 1.63405 5.20833 2.05797 5.20833 2.5V3.75H1.875V2.5ZM2.29167 6.66667V5.83333H4.79167V6.66667H2.29167Z" />
+    </g>
+  </svg>
+);
+// Plus, 14px slot (Figma I340:2676;7:30) — leads the two Course-footer cards.
 const PlusThinIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
     <path d="M7 2.917V11.083M11.083 7H2.917" />
@@ -858,20 +891,21 @@ function DetailsStep({
 
       <div className="form-group">
         <label className="form-label">Career stage</label>
+        {/* "None" is a segment of its own (Figma 359:2373) rather than the old
+            click-the-active-one-again gesture, which nothing announced. */}
         <div className="seg-control">
-          {(["apprentice", "journeyman", "master"] as CareerStage[]).map((s) => (
+          {(["", "apprentice", "journeyman", "master"] as (CareerStage | "")[]).map((s) => (
             <button
-              key={s}
+              key={s || "none"}
               type="button"
               className={`seg-btn ${data.careerStage === s ? "active" : ""}`}
-              // Clicking the active stage again clears it — a Cert can have none.
-              onClick={() => update({ careerStage: data.careerStage === s ? "" : s })}
+              onClick={() => update({ careerStage: s })}
             >
-              {s[0].toUpperCase() + s.slice(1)}
+              {s ? s[0].toUpperCase() + s.slice(1) : "None"}
             </button>
           ))}
         </div>
-        <p className="form-help">Optional. Click again to clear — Certifications can have no career stage.</p>
+        <p className="form-help">Optional — Certifications can have no career stage.</p>
       </div>
 
       <div className="form-group">
@@ -1183,43 +1217,22 @@ function TaskKindBadge({ kind }: { kind: TaskKind }) {
   return <span className={`task-kind-badge ${k.cls}`}>{k.letter}</span>;
 }
 
-// The mono suffix that trails a Task's name on the tree ("·xAPI · 10 min").
-// Replaces the old type-coloured gutter column — the Figma row is a single
-// neutral glyph plus this label.
+// The mono suffix that trails a Task's name on the tree ("·xAPI"), and the
+// glyph that leads it. Replaced the old type-coloured gutter column — the row
+// names its type twice, once as an icon and once as this label.
 const KIND_MONO: Record<TaskKind, string> = {
   xapi: "xAPI",
   quiz: "Quiz",
-  "hands-on": "Hands-On",
+  "hands-on": "Hands-On Task",
   file: "Resource",
 };
 
-// Plural helper for the mono eyebrows on Course and Lesson headers.
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-
-function courseStats(course: CertCourse): { tasks: number; lessons: number; minutes: number } {
-  let tasks = 0;
-  let lessons = 0;
-  let minutes = 0;
-  const parseMin = (d: string) => parseInt(d) || 0;
-  for (const c of course.children) {
-    if (c.kind === "task") {
-      tasks += 1;
-      minutes += parseMin(c.task.duration);
-    } else {
-      lessons += 1;
-      tasks += c.lesson.tasks.length;
-      for (const t of c.lesson.tasks) minutes += parseMin(t.duration);
-    }
-  }
-  return { tasks, lessons, minutes };
-}
-
-function formatDuration(mins: number): string {
-  if (mins < 60) return `${mins} min`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}min`;
-}
+const KIND_GLYPH: Record<TaskKind, () => React.JSX.Element> = {
+  xapi: XapiTaskIcon,
+  quiz: QuizTaskIcon,
+  "hands-on": HandsOnTaskIcon,
+  file: ResourceTaskIcon,
+};
 
 function TasksStep({
   data,
@@ -1494,26 +1507,6 @@ function TasksStep({
   const allTasks = flattenTasks(data.courses);
   const plan = data.importedCerts;
 
-  // Header summary — total Courses, Tasks, and run time across the whole tree.
-  const totals = data.courses.reduce(
-    (acc, c) => {
-      const s = courseStats(c);
-      acc.courses += 1;
-      acc.tasks += s.tasks;
-      acc.lessons += s.lessons;
-      acc.minutes += s.minutes;
-      return acc;
-    },
-    { courses: 0, tasks: 0, lessons: 0, minutes: 0 },
-  );
-  const summary = [
-    `${totals.courses} Course${totals.courses === 1 ? "" : "s"}`,
-    `${totals.tasks} Task${totals.tasks === 1 ? "" : "s"}`,
-    totals.minutes > 0 ? formatDuration(totals.minutes) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   return (
     <>
       {plan.length === 0 ? (
@@ -1564,7 +1557,6 @@ function TasksStep({
         <span className="cert-tasks-topline-hint">
           Courses hold Tasks — group with Lessons where it helps.
         </span>
-        <span className="cert-tasks-topline-sum">{summary}</span>
       </div>
 
       <div className="cert-courses">
@@ -1854,17 +1846,6 @@ function CourseCard({
   onSaveLessonEditor: () => void;
   onRemoveLesson: (lessonId: string) => void;
 }) {
-  const stats = courseStats(course);
-  // Mono eyebrow above the name — the Figma slot for "COURSE 1", widened to
-  // carry the per-Course counts the old meta column used to show.
-  const eyebrow = [
-    `Course ${index}`,
-    plural(stats.tasks, "Task"),
-    stats.lessons > 0 ? plural(stats.lessons, "Lesson") : null,
-    stats.minutes > 0 ? formatDuration(stats.minutes) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
   const esMiss = !course.nameEs.trim();
   const selfDnd = dnd("courses", course.id);
   const childScope = `course:${course.id}`;
@@ -1874,7 +1855,7 @@ function CourseCard({
       <div className="cert-course-header" onClick={onToggle} {...selfDnd.target}>
         <DragDots {...selfDnd.handle} />
         <div className="cert-course-titles">
-          <div className="cert-course-eyebrow">{eyebrow}</div>
+          <div className="cert-course-eyebrow">Course {index}</div>
           <div className="cert-course-name-row">
             <span className="cert-course-name">{course.nameEn || "Untitled Course"}</span>
             {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
@@ -2053,9 +2034,7 @@ function LessonCard({
             </div>
             {lesson.descEn && <div className="cert-lesson-desc">{lesson.descEn}</div>}
           </div>
-          <span className="cert-lesson-eyebrow">
-            {`· Lesson ${courseIndex}.${num} · ${plural(lesson.tasks.length, "Task")}`}
-          </span>
+          <span className="cert-lesson-eyebrow">{`· Lesson ${courseIndex}.${num}`}</span>
         </div>
         <span className="cert-lesson-rule" />
         <div className="cert-lesson-acts" onClick={(e) => e.stopPropagation()}>
@@ -2121,9 +2100,10 @@ function LessonCard({
   );
 }
 
-// A Task card on the cert tree. One neutral glyph, the name, and a mono
-// "·xAPI · 10 min" suffix; the Final Exam flag and the Access Restriction editor
-// moved into the row's kebab, and their state shows as a chip after the suffix.
+// A Task card on the cert tree: type glyph, name, and the mono "·xAPI" suffix.
+// The Final Exam flag and the Access Restriction editor live in the row's kebab.
+// A Task whose restriction is configured wears the gate banner above the card
+// (Figma "Access Restriction Task" 356:1934), which names its prerequisites.
 function TaskRow({
   task,
   allTasks,
@@ -2140,17 +2120,48 @@ function TaskRow({
   const [open, setOpen] = useState(false);
   const restricted = !!task.restriction?.enabled;
   const finalExam = !!task.finalExam;
+  const Glyph = KIND_GLYPH[task.kind];
+
+  // The prerequisites the gate names, resolved to live Task names — a
+  // prerequisite that was since deleted simply drops out of the sentence.
+  const prereqs = restricted
+    ? (task.restriction?.taskIds ?? [])
+        .map((id) => allTasks.find((t) => t.id === id)?.name)
+        .filter((n): n is string => !!n)
+    : [];
+  const mode = task.restriction?.mode ?? "all";
+  // "A and B are completed" vs. the single-prerequisite / any-of "is completed".
+  const verb = mode === "all" && prereqs.length > 1 ? "are completed" : "is completed";
+
   return (
     <>
+      <div className={`cert-task-wrap ${prereqs.length > 0 ? "has-gate" : ""}`}>
+      {prereqs.length > 0 && (
+        <div className="cert-task-gate">
+          <span className="cert-task-gate-icon"><RestrictionLockIcon /></span>
+          <p className="cert-task-gate-text">
+            Not Available Unless:{" "}
+            {prereqs.map((name, i) => (
+              <Fragment key={i}>
+                {i > 0 && (mode === "all" ? ", " : " or ")}
+                <strong>{name}</strong>
+              </Fragment>
+            ))}{" "}
+            {verb}
+          </p>
+        </div>
+      )}
       <div className="cert-task" {...dndRow.target}>
         <DragDots className="cert-grip--gutter" {...dndRow.handle} />
-        <span className="cert-task-icon"><TaskGlyphIcon /></span>
+        <span className="cert-task-icon"><Glyph /></span>
         <span className="cert-task-name">{task.name}</span>
-        <span className="cert-task-meta">
-          {`·${KIND_MONO[task.kind]}${task.duration ? ` · ${task.duration}` : ""}`}
-        </span>
+        <span className="cert-task-meta">{`·${KIND_MONO[task.kind]}`}</span>
         {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
-        {restricted && <span className="cert-restricted-pill">Restricted</span>}
+        {/* Restriction switched on but no prerequisite picked yet — the gate has
+            nothing to name, so flag the half-configured state instead. */}
+        {restricted && prereqs.length === 0 && (
+          <span className="cert-restricted-pill">Restricted</span>
+        )}
         <span className="cert-task-spacer" />
         <NodeMenu label="Task actions">
           {({ close }) => (
@@ -2171,6 +2182,7 @@ function TaskRow({
             </div>
           )}
         </NodeMenu>
+      </div>
       </div>
       {open && (
         <AccessRestrictionEditor task={task} allTasks={allTasks} onUpdate={onUpdate} />
@@ -2200,12 +2212,6 @@ function AccessRestrictionEditor({
   return (
     <div className="cert-restrict-edit">
       <div className="cert-restrict-head">
-        <div className="cert-restrict-head-text">
-          <div className="cert-restrict-title">Access restriction</div>
-          <div className="cert-restrict-desc">
-            Block learners from starting this Task until they satisfy other Tasks in this Certification.
-          </div>
-        </div>
         <button
           className={`toggle ${r.enabled ? "on" : ""}`}
           onClick={() => setR({ enabled: !r.enabled })}
@@ -2213,6 +2219,12 @@ function AccessRestrictionEditor({
         >
           <span className="toggle-knob" />
         </button>
+        <div className="cert-restrict-head-text">
+          <div className="cert-restrict-title">Access restriction</div>
+          <div className="cert-restrict-desc">
+            Block learners from starting this Task until they satisfy other Tasks in this Certification.
+          </div>
+        </div>
       </div>
 
       {r.enabled &&
@@ -2300,7 +2312,7 @@ function AddTaskMenu({
       trigger={({ toggle }) =>
         variant === "dashed" ? (
           <button className="cert-task cert-task--add" onClick={toggle}>
-            <span className="cert-task-icon"><PlusThinIcon /></span>
+            <span className="cert-task-icon"><PlusRowIcon /></span>
             <span className="cert-task-name">{label}</span>
           </button>
         ) : (
@@ -3213,13 +3225,6 @@ function ArchivingStep({
         </div>
 
         <div className="toggle-row">
-          <div className="toggle-text">
-            <div className="toggle-label">Archive this Certification</div>
-            <div className="toggle-sub">
-              Retires the Certification and removes it from the catalog. This action is
-              permanent and cannot be undone.
-            </div>
-          </div>
           <button
             className={`toggle ${data.archived ? "on" : ""}`}
             onClick={() => update({ archived: !data.archived })}
@@ -3227,6 +3232,13 @@ function ArchivingStep({
           >
             <span className="toggle-knob" />
           </button>
+          <div className="toggle-text">
+            <div className="toggle-label">Archive this Certification</div>
+            <div className="toggle-sub">
+              Retires the Certification and removes it from the catalog. This action is
+              permanent and cannot be undone.
+            </div>
+          </div>
         </div>
       </section>
 
@@ -3438,55 +3450,40 @@ function RichTextField({
   placeholderEn?: string;
   placeholderEs?: string;
 }) {
-  // Compact (inline-tree) editors only reveal a toolbar on focus; the full-size
-  // editors keep the toolbar pinned to English, matching their prior behaviour.
-  const [focus, setFocus] = useState<"en" | "es" | null>(compact ? null : "en");
-  const blur = compact ? () => setFocus(null) : undefined;
+  // Compact (inline-tree) editors keep the toolbar hidden until the field is
+  // focused — a tree row can't spare 30px of permanent chrome. Full-size
+  // editors show it always, per the Figma component.
+  const [focused, setFocused] = useState(false);
+  const showToolbar = !compact || focused;
+  const focus = compact ? () => setFocused(true) : undefined;
+  const blur = compact ? () => setFocused(false) : undefined;
 
   return (
     <div className={`rte-field ${compact ? "rte-field--compact" : ""}`}>
-      {focus === "en" && <RteToolbar />}
-      <AutoTextarea
-        className="rte-area"
-        value={en}
-        placeholder={placeholderEn}
-        onChange={onChangeEn}
-        onFocus={() => setFocus("en")}
-        onBlur={blur}
-      />
-      <div className="rte-field-divider" />
-      {focus === "es" && <RteToolbar />}
+      {showToolbar && <RteToolbar />}
       <div className="rte-lang-row">
+        <span className="lang-tag">EN</span>
+        <AutoTextarea
+          className="rte-area"
+          value={en}
+          placeholder={placeholderEn}
+          onChange={onChangeEn}
+          onFocus={focus}
+          onBlur={blur}
+        />
+      </div>
+      <div className="rte-field-divider" />
+      <div className="rte-lang-row">
+        <span className="lang-tag">ES</span>
         <AutoTextarea
           className="rte-area"
           value={es}
           placeholder={placeholderEs}
           onChange={onChangeEs}
-          onFocus={() => setFocus("es")}
+          onFocus={focus}
           onBlur={blur}
         />
-        <span className="lang-tag floating">ESPAÑOL</span>
       </div>
-    </div>
-  );
-}
-
-function RteToolbar() {
-  return (
-    <div className="rte-toolbar">
-      <button className="rte-btn"><BoldIcon /></button>
-      <button className="rte-btn"><ItalicIcon /></button>
-      <button className="rte-btn"><UnderlineIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><BulletListIcon /></button>
-      <button className="rte-btn"><NumberListIcon /></button>
-      <button className="rte-btn"><IndentRightIcon /></button>
-      <button className="rte-btn"><IndentLeftIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><LinkSmallIcon /></button>
-      <button className="rte-btn"><ImageIcon /></button>
-      <button className="rte-btn"><VideoIcon /></button>
-      <button className="rte-btn"><AudioIcon /></button>
     </div>
   );
 }

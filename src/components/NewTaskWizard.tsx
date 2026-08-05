@@ -4,18 +4,8 @@ import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
 import {
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  IndentRightIcon,
-  IndentLeftIcon,
-  LinkSmallIcon,
-  ImageIcon,
-  VideoIcon,
-  AudioIcon,
   UploadIcon,
+  UploadTrayIcon,
   DocumentIcon,
   SmallXIcon,
   DragHandleIcon,
@@ -24,6 +14,8 @@ import {
   SearchIcon,
   CheckIcon,
 } from "./icons";
+import { PageBreak } from "./PageBreak";
+import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import {
   questions as QUESTION_BANK,
@@ -481,7 +473,7 @@ const INITIAL_DATA: WizardData = {
 type StepDef = { id: string; label: string; sub: string; desc: string };
 
 const XAPI_STEPS: StepDef[] = [
-  { id: "details", label: "Details", sub: "Name, file, time", desc: "Name and describe the Task, upload the xAPI/SCORM package per language, and estimate the duration." },
+  { id: "details", label: "Task Details", sub: "Name, file, time", desc: "Name and describe the Task, upload the xAPI package per language, and estimate the duration." },
   { id: "launch", label: "Launch Behaviour", sub: "Rotation & orientation", desc: "How the package handles screen rotation when a learner opens it on a mobile phone." },
   { id: "completion", label: "Completion & Scoring", sub: "Completion and score capture", desc: "Decide what marks this Task complete, and whether to capture a score reported by the package." },
   { id: "visibility", label: "Visibility", sub: "Visibility", desc: "Whether learners can find and start this Task." },
@@ -976,25 +968,73 @@ type StepProps = {
   nameError?: boolean;
 };
 
+/* Figma 366:6266 — the assembled first step. Three page-broken sections: what
+   the learner reads, the package itself, then the product flag. The name here is
+   single-language (365:2467), unlike the description and package below it. */
 function XapiDetailsStep({ data, update, nameError }: StepProps) {
   return (
     <>
-      <NameAndDescription data={data} update={update} nameError={nameError} />
+      <p className="required-fields-note">* Required Fields</p>
 
-      <div className="form-group">
-        <label className="form-label">
-          xAPI Package <span className="req">*</span>
-        </label>
-        <PackageField
-          enFiles={data.packageEn}
-          esFiles={data.packageEs}
-          setEnFiles={(files) => update({ packageEn: files })}
-          setEsFiles={(files) => update({ packageEs: files })}
-        />
+      <div className="wizard-sections">
+        <section className="wizard-section">
+          <PageBreak label="Info displayed to users" />
+          <div className="wizard-fields">
+            <div className="form-group">
+              <label className="form-label">
+                Name <span className="req">*</span>
+              </label>
+              <input
+                className={`form-input ${nameError ? "has-error" : ""}`}
+                value={data.nameEn}
+                placeholder="Name"
+                aria-invalid={nameError || undefined}
+                onChange={(e) => update({ nameEn: e.target.value })}
+              />
+              {nameError && (
+                <p className="form-error-text">Enter a name to publish.</p>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <RichTextField
+                en={data.descEn}
+                es={data.descEs}
+                onChangeEn={(v) => update({ descEn: v })}
+                onChangeEs={(v) => update({ descEs: v })}
+              />
+            </div>
+
+            <TimeToCompleteField data={data} update={update} />
+          </div>
+        </section>
+
+        <section className="wizard-section">
+          <PageBreak label="Task contents" />
+          <div className="form-group">
+            <label className="form-label">
+              xAPI Package <span className="req">*</span>
+            </label>
+            <PackageField
+              enFiles={data.packageEn}
+              esFiles={data.packageEs}
+              setEnFiles={(files) => update({ packageEn: files })}
+              setEsFiles={(files) => update({ packageEs: files })}
+            />
+          </div>
+        </section>
+
+        <section className="wizard-section">
+          <PageBreak label="Product settings" />
+          <Toggle
+            checked={data.finalExam}
+            onChange={(v) => update({ finalExam: v })}
+            label="Available during Free Trial"
+            sub="Recommendation: Tasks that complete a Certification should have this setting disabled. This is to prevent users from completing Certifications without subscribing."
+          />
+        </section>
       </div>
-
-      <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
     </>
   );
 }
@@ -1196,7 +1236,7 @@ function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
             esFiles={data.fileEs}
             setEnFiles={(files) => update({ fileEn: files })}
             setEsFiles={(files) => update({ fileEs: files })}
-            hint="PDF, DOCX, PPTX, images · 250 MB MAX"
+            accept="PDF, DOCX, PPTX, images"
           />
           <p className="form-help">
             The file learners open for this Task. If no Spanish file is added,
@@ -1315,7 +1355,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           esFiles={data.hoFilesEs}
           setEnFiles={(files) => update({ hoFilesEn: files })}
           setEsFiles={(files) => update({ hoFilesEs: files })}
-          hint="PDF, images, video · 250 MB MAX"
+          accept="PDF, images, video"
         />
       </Section>
 
@@ -3280,7 +3320,16 @@ function NameAndDescription({ data, update, nameError }: StepProps) {
 function TimeToCompleteField({ data, update }: StepProps) {
   return (
     <div className="form-group">
-      <label className="form-label">Time to Complete</label>
+      {/* Label and helper sit flush (Figma 366:6227); the 8px gap goes below the
+          pair, not between them. */}
+      <div className="form-field-head">
+        <label className="form-label">
+          Time to Complete <span className="req">*</span>
+        </label>
+        <p className="form-help">
+          Estimated time required for the user to complete the Task
+        </p>
+      </div>
       <div className="time-row">
         <input
           className="form-input no-spinner small"
@@ -3297,10 +3346,10 @@ function TimeToCompleteField({ data, update }: StepProps) {
           value={data.timeUnit}
           onChange={(e) => update({ timeUnit: e.target.value as TimeUnit })}
         >
-          <option value="minutes">minutes</option>
-          <option value="hours">hours</option>
-          <option value="days">days</option>
-          <option value="weeks">weeks</option>
+          <option value="minutes">Minutes</option>
+          <option value="hours">Hours</option>
+          <option value="days">Days</option>
+          <option value="weeks">Weeks</option>
         </select>
       </div>
     </div>
@@ -3411,13 +3460,9 @@ function Toggle({
 }) {
   return (
     <div className={`toggle-row ${inline ? "inline" : ""} ${disabled ? "disabled" : ""}`}>
+      {/* Block rows lead with the control (Figma 361:2434); the compact inline
+          variant keeps its label-then-switch reading. */}
       {inline && <span className="toggle-inline-label">{label}</span>}
-      {!inline && (
-        <div className="toggle-text">
-          <div className="toggle-label">{label}</div>
-          {sub && <div className="toggle-sub">{sub}</div>}
-        </div>
-      )}
       <button
         type="button"
         className={`toggle ${checked ? "on" : ""}`}
@@ -3427,56 +3472,88 @@ function Toggle({
       >
         <span className="toggle-knob" />
       </button>
+      {!inline && (
+        <div className="toggle-text">
+          <div className="toggle-label">{label}</div>
+          {sub && <div className="toggle-sub">{sub}</div>}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─────────────────  Field components  ───────────────── */
 
+/* Dual-language upload — Figma 365:2608 "File Upload - 2 Languages": one
+   bordered shell holding two equal columns, each a language tag over its own
+   drop zone. A column that already has files swaps the zone for the file list
+   plus a slim "add more" strip (a state the Figma component doesn't cover). */
 function PackageField({
   enFiles,
   esFiles,
   setEnFiles,
   setEsFiles,
-  hint,
+  accept = "ZIP",
+  maxSize = "250 MB",
 }: {
   enFiles: UploadedFile[];
   esFiles: UploadedFile[];
   setEnFiles: (f: UploadedFile[]) => void;
   setEsFiles: (f: UploadedFile[]) => void;
-  hint?: string;
+  accept?: string;
+  maxSize?: string;
 }) {
   return (
-    <div className="upload-container">
-      {enFiles.length === 0 ? (
-        <BigDropZone onAdd={(files) => setEnFiles(files)} hint={hint} />
+    <div className="upload-2lang">
+      <UploadLangColumn
+        tag="English"
+        files={enFiles}
+        setFiles={setEnFiles}
+        accept={accept}
+        maxSize={maxSize}
+      />
+      <UploadLangColumn
+        tag="Español"
+        files={esFiles}
+        setFiles={setEsFiles}
+        accept={accept}
+        maxSize={maxSize}
+      />
+    </div>
+  );
+}
+
+function UploadLangColumn({
+  tag,
+  files,
+  setFiles,
+  accept,
+  maxSize,
+}: {
+  tag: string;
+  files: UploadedFile[];
+  setFiles: (f: UploadedFile[]) => void;
+  accept: string;
+  maxSize: string;
+}) {
+  return (
+    <div className="upload-lang-col">
+      <span className="upload-lang-tag">{tag}</span>
+      {files.length === 0 ? (
+        <BigDropZone
+          onAdd={(picked) => setFiles(picked)}
+          accept={accept}
+          maxSize={maxSize}
+        />
       ) : (
         <>
           <FileList
-            files={enFiles}
-            onRemove={(idx) =>
-              setEnFiles(enFiles.filter((_, i) => i !== idx))
-            }
+            files={files}
+            onRemove={(idx) => setFiles(files.filter((_, i) => i !== idx))}
           />
-          <SlimDrop
-            onAdd={(files) => setEnFiles([...enFiles, ...files])}
-          />
+          <SlimDrop onAdd={(picked) => setFiles([...files, ...picked])} />
         </>
       )}
-
-      <div className="upload-lang-divider">
-        <span className="lang-tag">ESPAÑOL</span>
-      </div>
-
-      {esFiles.length > 0 && (
-        <FileList
-          files={esFiles}
-          onRemove={(idx) =>
-            setEsFiles(esFiles.filter((_, i) => i !== idx))
-          }
-        />
-      )}
-      <SlimDrop onAdd={(files) => setEsFiles([...esFiles, ...files])} />
     </div>
   );
 }
@@ -3516,20 +3593,25 @@ function FileList({
 
 function BigDropZone({
   onAdd,
-  hint = "ZIP · 250 MB MAX",
+  accept = "ZIP",
+  maxSize = "250 MB",
 }: {
   onAdd: (files: UploadedFile[]) => void;
-  hint?: string;
+  accept?: string;
+  maxSize?: string;
 }) {
   return (
     <FilePicker onPick={onAdd}>
       {(open) => (
         <button className="drop-big" onClick={open} type="button">
           <span className="drop-big-icon">
-            <UploadIcon />
+            <UploadTrayIcon />
           </span>
-          <div className="drop-big-title">Drop files or click to upload</div>
-          <div className="drop-big-hint">{hint}</div>
+          <div className="drop-big-title">Drag and drop, or click to upload</div>
+          <div className="drop-big-hint">
+            <div>Accepted File Types: {accept}</div>
+            <div>Maximum File Size: {maxSize}</div>
+          </div>
         </button>
       )}
     </FilePicker>
@@ -3642,27 +3724,17 @@ function RichTextField({
   onChangeEn: (v: string) => void;
   onChangeEs: (v: string) => void;
 }) {
-  const [focus, setFocus] = useState<"en" | "es">("en");
-
   return (
     <div className="rte-field">
-      {focus === "en" && <RteToolbar />}
-      <AutoTextarea
-        className="rte-area"
-        value={en}
-        onChange={onChangeEn}
-        onFocus={() => setFocus("en")}
-      />
-      <div className="rte-field-divider" />
-      {focus === "es" && <RteToolbar />}
+      <RteToolbar />
       <div className="rte-lang-row">
-        <AutoTextarea
-          className="rte-area"
-          value={es}
-          onChange={onChangeEs}
-          onFocus={() => setFocus("es")}
-        />
-        <span className="lang-tag floating">ESPAÑOL</span>
+        <span className="lang-tag">EN</span>
+        <AutoTextarea className="rte-area" value={en} onChange={onChangeEn} />
+      </div>
+      <div className="rte-field-divider" />
+      <div className="rte-lang-row">
+        <span className="lang-tag">ES</span>
+        <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
       </div>
     </div>
   );
@@ -3687,26 +3759,6 @@ function SingleRichText({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
-    </div>
-  );
-}
-
-function RteToolbar() {
-  return (
-    <div className="rte-toolbar">
-      <button className="rte-btn"><BoldIcon /></button>
-      <button className="rte-btn"><ItalicIcon /></button>
-      <button className="rte-btn"><UnderlineIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><BulletListIcon /></button>
-      <button className="rte-btn"><NumberListIcon /></button>
-      <button className="rte-btn"><IndentRightIcon /></button>
-      <button className="rte-btn"><IndentLeftIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><LinkSmallIcon /></button>
-      <button className="rte-btn"><ImageIcon /></button>
-      <button className="rte-btn"><VideoIcon /></button>
-      <button className="rte-btn"><AudioIcon /></button>
     </div>
   );
 }

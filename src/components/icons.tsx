@@ -200,6 +200,15 @@ export const UploadIcon = () => (
   </svg>
 );
 
+/* Drop-zone upload glyph (365:6129) — an arrow rising out of a tray. A distinct
+   design from UploadIcon above, which the toolbar/thumbnail buttons still use. */
+export const UploadTrayIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+    <path d="M16.5 8.5L12 4L7.5 8.5M12 5.25V15" />
+    <path d="M20.5 15V20H3.5V15" />
+  </svg>
+);
+
 /* Keycap arrows — the ↑ ↓ hints in the review queue footer (Figma 263:1618). */
 export const ArrowUpIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -313,33 +322,71 @@ export const CreditCardIcon = () => (
   </svg>
 );
 
-/* Rich-text editor toolbar icons */
+/* ─── Rich-text editor toolbar icons — Figma 327:137 ───
+   The toolbar set is its own icon family: square-cap strokes, drawn at #a8a8a8
+   via the button's colour. Path data is the exported Figma vector, so these
+   render 1:1 with the design rather than approximating it. The viewBox stays in
+   the original 12-unit space and each renders at 16px, which scales the 1px
+   stroke to Figma's 1.3333px — the same result as its 16px export. */
 export const BoldIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M7 5h6.5a3.5 3.5 0 010 7H7zM7 12h7.5a3.5 3.5 0 010 7H7z" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1">
+    <path d="M3 6H6.5C7.60457 6 8.5 5.10457 8.5 4C8.5 2.89543 7.60457 2 6.5 2H3V6ZM3 6H7C8.10457 6 9 6.89543 9 8C9 9.10457 8.10457 10 7 10H3V6Z" />
   </svg>
 );
 export const ItalicIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 5h-7M12 19H5M14 5L10 19" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M4.5 2H8.75M3.5 10H7.75M6.70306 2.25L5.29681 9.75" />
   </svg>
 );
 export const UnderlineIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M7 4v8a5 5 0 0010 0V4M5 21h14" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M8.5 2V6C8.5 7.38071 7.38071 8.5 6 8.5C4.61929 8.5 3.5 7.38071 3.5 6V2" />
+    <path d="M9.5 10.5H2.5" />
   </svg>
 );
 export const BulletListIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 6h13M8 12h13M8 18h13" />
-    <circle cx="4" cy="6" r="1" fill="currentColor" />
-    <circle cx="4" cy="12" r="1" fill="currentColor" />
-    <circle cx="4" cy="18" r="1" fill="currentColor" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M4 2.5H10.5M4 6H10.5M4 9.5H10.5M1.4999 2.50202H1.50185V2.50007H1.4999V2.50202ZM1.4999 6.00202H1.50185V6.00007H1.4999V6.00202ZM1.4999 9.50202H1.50185V9.50007H1.4999V9.50202Z" />
   </svg>
 );
 export const NumberListIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 6h12M9 12h12M9 18h12M4 4l1-1v5M4 16h2a1 1 0 010 2l-2 2h3" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M5.5 2H11M5.5 6H11M5.5 10H11" />
+    <path d="M1 1.5H1.5C1.77614 1.5 2 1.7257 2 2.00184V5M2 5H1M2 5H3M1 7H2.5C2.77614 7 3 7.22386 3 7.5V8.25C3 8.52614 2.77614 8.75 2.5 8.75H1.5C1.22386 8.75 1 8.97386 1 9.25V10.5H3" />
+  </svg>
+);
+/* Image + "add" badge (333:177) — distinct from the plain ImageIcon above,
+   which is still used by the media pickers. */
+export const ImageAddIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M10.5 5.5V1.5H1.5V10.5H5.5M6.5 7L4.5 5L1.75 7.75M8.875 4.125C8.875 4.67728 8.42728 5.125 7.875 5.125C7.32272 5.125 6.875 4.67728 6.875 4.125C6.875 3.57272 7.32272 3.125 7.875 3.125C8.42728 3.125 8.875 3.57272 8.875 4.125Z" />
+    <path d="M9.5 7.5V9.5M9.5 9.5V11.5M9.5 9.5H7.5M9.5 9.5H11.5" />
+  </svg>
+);
+/* Superscript / subscript (I333:203;7:6188, I333:204;7:6153) and inline code
+   (I333:213;7:1874). Each is a smaller-than-12px vector that Figma nests inside
+   the 12px slot, so the viewBox is offset to reproduce that placement. */
+export const SuperscriptIcon = () => (
+  <svg width="16" height="16" viewBox="-1.049 -0.5 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M3.45109 5.8675L0.956088 9.5H0.951088L3.45109 5.8675ZM3.45109 5.8675L3.95109 5.1395M3.95109 5.1395L6.45109 1.5H6.44609L3.95109 5.1395ZM3.95109 5.8675L6.44609 9.5H6.45109L3.95109 5.8675ZM3.95109 5.8675L3.44409 5.13M3.44409 5.13L0.951088 1.5H0.956088L3.44409 5.13ZM8.57609 0.5H9.70109C9.76739 0.5 9.83098 0.526339 9.87786 0.573223C9.92475 0.620107 9.95109 0.683696 9.95109 0.75V1.5C9.95109 1.5663 9.92475 1.62989 9.87786 1.67678C9.83098 1.72366 9.76739 1.75 9.70109 1.75H8.70109C8.63478 1.75 8.5712 1.77634 8.52431 1.82322C8.47743 1.87011 8.45109 1.9337 8.45109 2V3H9.82609" />
+  </svg>
+);
+export const SubscriptIcon = () => (
+  <svg width="16" height="16" viewBox="-1.049 -1.5 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M3.45109 4.8675L0.956088 8.5H0.951088L3.45109 4.8675ZM3.45109 4.8675L3.95109 4.1395M3.95109 4.1395L6.45109 0.5H6.44609L3.95109 4.1395ZM3.95109 4.8675L6.44609 8.5H6.45109L3.95109 4.8675ZM3.95109 4.8675L3.44409 4.13M3.44409 4.13L0.951088 0.5H0.956088L3.44409 4.13ZM8.57609 6H9.70109C9.76739 6 9.83098 6.02634 9.87786 6.07322C9.92475 6.12011 9.95109 6.1837 9.95109 6.25V7C9.95109 7.0663 9.92475 7.12989 9.87786 7.17678C9.83098 7.22366 9.76739 7.25 9.70109 7.25H8.70109C8.63478 7.25 8.5712 7.27634 8.52431 7.32322C8.47743 7.37011 8.45109 7.4337 8.45109 7.5V8.5H9.82609" />
+  </svg>
+);
+export const CodeBlockIcon = () => (
+  <svg width="16" height="16" viewBox="-0.293 -1.394 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M2.47511 6.37434L0.707107 4.60634L2.47511 2.83834M8.93911 6.37434L10.7071 4.60634L8.93911 2.83834M6.70711 0.606339L4.70711 8.60634" />
+  </svg>
+);
+/* Block-format caret (I333:145;7:1513) — a chevron centred in the 14px slot the
+   heading picker reserves for it. The viewBox stays in 10-unit space, so the
+   0.8333 stroke renders at Figma's 1.1667px. */
+export const RteCaretIcon = () => (
+  <svg width="14" height="14" viewBox="-2.938 -3.884 10 10" fill="none" stroke="currentColor" strokeWidth="0.8333" strokeLinecap="square">
+    <path d="M3.53551 0.589256L2.06259 2.06217L0.589256 0.589256" />
   </svg>
 );
 export const IndentRightIcon = () => (
@@ -353,9 +400,8 @@ export const IndentLeftIcon = () => (
   </svg>
 );
 export const LinkSmallIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 14a4 4 0 005.66 0l3-3a4 4 0 00-5.66-5.66l-1.5 1.5" />
-    <path d="M14 10a4 4 0 00-5.66 0l-3 3a4 4 0 005.66 5.66l1.5-1.5" />
+  <svg width="16" height="16" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M5.64641 9.18183L4.9393 9.88893C4.06062 10.7676 2.63598 10.7676 1.75732 9.88893C0.878661 9.01027 0.878642 7.58563 1.75732 6.70695L3.34831 5.11596C4.22699 4.23728 5.65163 4.2373 6.53029 5.11596L6.82468 5.41035M6.35342 2.81819L7.06053 2.11108C7.93921 1.2324 9.36385 1.23242 10.2425 2.11108C11.1212 2.98974 11.1212 4.41438 10.2425 5.29306L8.65152 6.88405C7.77284 7.76273 6.3482 7.76271 5.46954 6.88405L5.05682 6.47133" />
   </svg>
 );
 export const ImageIcon = () => (

@@ -1,19 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CheckBoldIcon,
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  IndentRightIcon,
-  IndentLeftIcon,
-  LinkSmallIcon,
-  ImageIcon,
   SmallXIcon,
   SearchIcon,
   UploadIcon,
 } from "./icons";
+import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";
 import {
@@ -673,35 +665,18 @@ function RichTextField({
   onChangeEn: (v: string) => void;
   onChangeEs: (v: string) => void;
 }) {
-  const [focus, setFocus] = useState<"en" | "es">("en");
   return (
     <div className="rte-field">
-      {focus === "en" && <RteToolbar />}
-      <AutoTextarea className="rte-area" value={en} onChange={onChangeEn} onFocus={() => setFocus("en")} />
-      <div className="rte-field-divider" />
-      {focus === "es" && <RteToolbar />}
+      <RteToolbar />
       <div className="rte-lang-row">
-        <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} onFocus={() => setFocus("es")} />
-        <span className="lang-tag floating">ESPAÑOL</span>
+        <span className="lang-tag">EN</span>
+        <AutoTextarea className="rte-area" value={en} onChange={onChangeEn} />
       </div>
-    </div>
-  );
-}
-
-function RteToolbar() {
-  return (
-    <div className="rte-toolbar">
-      <button className="rte-btn"><BoldIcon /></button>
-      <button className="rte-btn"><ItalicIcon /></button>
-      <button className="rte-btn"><UnderlineIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><BulletListIcon /></button>
-      <button className="rte-btn"><NumberListIcon /></button>
-      <button className="rte-btn"><IndentRightIcon /></button>
-      <button className="rte-btn"><IndentLeftIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn"><LinkSmallIcon /></button>
-      <button className="rte-btn"><ImageIcon /></button>
+      <div className="rte-field-divider" />
+      <div className="rte-lang-row">
+        <span className="lang-tag">ES</span>
+        <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
+      </div>
     </div>
   );
 }

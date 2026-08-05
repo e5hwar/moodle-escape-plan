@@ -3363,8 +3363,9 @@ a {
 }
 .page-break-label {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 16px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #a8a8a8;
@@ -3381,6 +3382,65 @@ a {
   flex: 0 0 4px;
   width: 4px;
   min-width: 4px;
+}
+
+/* ===== Page-broken wizard step (Figma 366:6266) =====
+   Sections 40px apart; inside one, 16px from the page break to its content and
+   20px between stacked fields. The margin-based spacing of .form-group and
+   .page-break is switched off so the gaps are the only thing positioning. */
+.wizard-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  max-width: 920px;
+}
+
+.wizard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wizard-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.wizard-section .page-break,
+.wizard-section .form-group {
+  margin: 0;
+}
+
+.wizard-section .form-group {
+  max-width: none;
+}
+
+/* Label + flush helper text (Figma 366:6227): the helper sits directly beneath
+   the label, and the 8px breathing room moves below the pair. */
+.form-field-head {
+  margin-bottom: 8px;
+}
+
+.form-field-head .form-label {
+  margin-bottom: 0;
+}
+
+.form-field-head .form-help {
+  margin: 0;
+}
+
+/* Required-fields note (365:2454) — reinstated for this step only. */
+.required-fields-note {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: #f05523;
+  margin: 0 0 24px;
+}
+
+.wizard-desc:has(+ .required-fields-note) {
+  margin-bottom: 12px;
 }
 
 /* Danger-tinted callout — e.g. the permanent-archive warning */
@@ -3632,10 +3692,20 @@ a {
   padding-top: 14px;
 }
 
+/* Value + unit (Figma 366:6242): an 81px number box beside a 140px unit
+   dropdown, 4px apart. */
 .time-row {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.time-row .form-input.small {
+  width: 81px;
+}
+
+.time-row .form-select {
+  width: 140px;
 }
 
 .no-spinner {
@@ -3649,15 +3719,38 @@ a {
 }
 
 /* ===== Package upload (Images 1 & 2) ===== */
-.upload-container {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg);
-  padding: 14px;
+/* ===== Dual-language file upload (Figma 365:2608) =====
+   One bordered shell — the same 13px/9px card shell as .radio-card — split into
+   two equal columns, each a language tag above its own drop zone. */
+.upload-2lang {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  /* Figma's 13px inset is measured from the outer edge with the stroke inside
+     it, so the padding carries 12 and the border the 13th (208px tall). */
+  padding: 12px;
+  border: 1px solid #404040;
+  border-radius: 9px;
+  background: transparent;
   max-width: 920px;
+}
+
+.upload-lang-col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 4px;
+}
+
+.upload-lang-tag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-transform: uppercase;
+  color: #a8a8a8;
 }
 
 .file-list {
@@ -3721,17 +3814,21 @@ a {
   color: var(--text);
 }
 
+/* Drop zone (365:6128): fixed 160px tall, dashed #7a7a7a hairline, stacked
+   icon / prompt / file-rules with 9px between each. */
 .drop-big {
   width: 100%;
-  padding: 32px 16px;
-  border: 1px dashed var(--border-strong);
+  height: 160px;
+  padding: 0 39px;
+  border: 1px dashed #7a7a7a;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: #7a7a7a;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 9px;
   cursor: pointer;
 }
 
@@ -3742,22 +3839,27 @@ a {
 
 .drop-big-icon {
   display: inline-flex;
-  color: var(--text-muted);
+  color: #a8a8a8;
 }
 
 .drop-big-title {
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: #7a7a7a;
+  text-align: center;
 }
 
+/* Two stacked rules: accepted types, then max size. 12px per the in-context
+   instance (366:6216) — the standalone component still shows 14px. */
 .drop-big-hint {
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 12px;
   font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
+  line-height: 14px;
+  color: #7a7a7a;
+  text-align: center;
 }
 
 .drop-slim {
@@ -3784,90 +3886,135 @@ a {
   border-color: var(--text-faint);
 }
 
-.upload-lang-divider {
-  border-top: 1px solid var(--border);
-  margin: 4px -14px;
-  padding: 8px 16px 0;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
 
-/* ===== Rich text editor (Image 4) ===== */
+/* ===== Rich text editor (Figma 327:137 "Rich Text Input - Dual Language") =====
+   Same shell as the plain-text dual-language field (49:348) — transparent fill,
+   1px #404040 border, 8px radius — with a #1e1e20 toolbar strip pinned above the
+   language rows. */
 .rte-field {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
   overflow: hidden;
   max-width: 920px;
 }
 
+/* Toolbar strip: 12px above/below the glyph row and NO side padding — the first
+   group's own 12px inset is what sets the left edge. 42px tall with the border. */
 .rte-toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-pill);
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid #404040;
+  background: #1e1e20;
 }
 
+/* Each tool group is padded 12px a side and closed by a hairline; the trailing
+   group has no divider. */
+.rte-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-right: 0.5px solid #404040;
+}
+
+.rte-group:last-child {
+  border-right: none;
+}
+
+/* Bare 16px glyphs — the design gives the buttons no hit-box chrome. */
 .rte-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #a8a8a8;
 }
 
 .rte-btn:hover {
-  background: var(--bg-pill);
-  color: var(--text);
+  color: #fff;
 }
 
-.rte-sep {
-  width: 1px;
-  height: 18px;
-  background: var(--border);
-  margin: 0 4px;
+/* Block-format picker: 14px label + 14px caret, 4px apart. Its 17px line is the
+   tallest thing in the strip, so it sets the toolbar's content height. */
+.rte-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #a8a8a8;
 }
 
+.rte-heading-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 17px;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.rte-heading:hover {
+  color: #fff;
+}
+
+/* Text body. Standalone (single-language) areas carry the full 12px inset;
+   inside a language row the row owns the horizontal half. */
 .rte-area {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 14px 16px;
+  padding: 12px;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 400;
-  color: var(--text);
+  color: #fff;
   outline: none;
   resize: none;
   overflow: hidden;
   display: block;
-  line-height: 1.55;
-  min-height: 24px;
+  line-height: 23px;
+  min-height: 23px;
+}
+
+.rte-area::placeholder {
+  color: #404040;
 }
 
 .rte-field-divider {
   height: 1px;
-  background: var(--border);
+  background: #404040;
 }
 
+/* Language rows mirror .lang-field-row: [tag] [text], 11px gap, 12px inset. */
 .rte-lang-row {
-  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 0 12px;
 }
 
-.rte-lang-row .lang-tag.floating {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  pointer-events: none;
+.rte-lang-row .lang-tag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a8a8a8;
+  /* Match the area's own top inset + first line box so the tag sits centred on
+     line one rather than on the whole (growing) textarea. */
+  padding-top: 12px;
+  line-height: 23px;
 }
 
 .rte-lang-row .rte-area {
-  padding-right: 90px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0;
 }
 
 /* ===== Radio cards ===== */
@@ -4022,7 +4169,8 @@ a {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 13px;
+  /* 12 + the 1px border = Figma's 13px inset, which lands the card on 79px. */
+  padding: 12px;
   background: transparent;
   border: 1px solid #404040;
   border-radius: 9px;
@@ -4071,25 +4219,28 @@ a {
   background: #d4632c;
 }
 
+/* Title and description stack flush — Figma 134:1790 has no gap between them. */
 .radio-card-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .radio-card-title {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
+  line-height: 19px;
   color: var(--text);
 }
 
 .radio-card-desc {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 17px;
 }
 
 /* ===== Tag editor ===== */
@@ -4372,11 +4523,13 @@ a {
 }
 
 /* ============== Toggle ============== */
+/* ===== Toggle (Figma 361:2434 off / 362:2440 on) =====
+   The row leads with the control — toggle, 20px gap, then the label stack —
+   matching how the radio cards are ordered. */
 .toggle-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -4400,58 +4553,62 @@ a {
 
 .toggle-label {
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  line-height: 19px;
+  color: #fff;
 }
 
 .toggle-inline-label {
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 400;
   color: var(--text-muted);
 }
 
+/* 14px on a tight 17px line — Figma's mock wraps to two lines at 34px, so the
+   leading is specified, not inferred from a single-line node. */
 .toggle-sub {
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 14px;
   font-weight: 400;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.45;
+  color: #a8a8a8;
+  line-height: 17px;
 }
 
+/* 41×24 track, no border; a 20px white knob inset 2.5px, so the travel is
+   41 − 2.5 − 20 = 18.5px. */
 .toggle {
-  width: 38px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
+  width: 41px;
+  height: 24px;
+  border-radius: 40px;
+  background: #404040;
+  border: none;
   position: relative;
   flex-shrink: 0;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
+/* Figma specifies the brand orange #f05523 here, not the slightly lighter
+   --accent (#e97237) — hardcoded to match, as the other synced components do. */
 .toggle.on {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: #f05523;
 }
 
 .toggle-knob {
   position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 18px;
-  height: 18px;
+  top: 2px;
+  left: 2.5px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #fff;
   transition: left 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .toggle.on .toggle-knob {
-  left: 17px;
+  left: 18.5px;
 }
 
 .toggle-sub-row {
@@ -4933,29 +5090,40 @@ a {
   color: #b69cff;
 }
 
-/* Segmented control (career stage) */
+/* ===== Single-Select (Figma 359:2373) =====
+   The app's segmented single-choice control (career stage, cert type, award
+   rule). Transparent shell with a hairline border — only the chosen segment
+   takes a fill, and it is the only one set in Medium. */
 .seg-control {
   display: inline-flex;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 3px;
+  align-items: stretch;
+  gap: 2px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 10px;
+  /* Figma insets the segments 5px from the outer edge with the hairline inside
+     that inset, so 4px of padding sits on top of the 1px border (43px tall). */
+  padding: 4px;
 }
 .seg-btn {
-  padding: 8px 22px;
-  border-radius: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 17px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 .seg-btn.active {
-  background: #fff;
-  color: #111;
+  background: #1e1e20;
+  color: #fff;
+  font-weight: 500;
 }
 .seg-btn:hover:not(.active) {
-  color: var(--text);
+  color: #fff;
 }
 
 /* Cert thumbnail row */
@@ -5160,7 +5328,7 @@ a {
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.3);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--accent-strong);
@@ -5367,11 +5535,10 @@ a {
 }
 
 /* Force order banner */
-/* Add Tasks — section topline (helper text + running summary pill) */
+/* Add Tasks — section topline (helper text) */
 .cert-tasks-topline {
   display: flex;
   align-items: baseline;
-  gap: 14px;
   max-width: 980px;
   margin-bottom: 18px;
 }
@@ -5381,16 +5548,6 @@ a {
   color: var(--text-muted);
   flex: 1;
   min-width: 0;
-}
-.cert-tasks-topline-sum {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 11px;
-  white-space: nowrap;
 }
 
 /* ===== Course tree (Figma "Course Card" 340:2346) =====
@@ -5441,7 +5598,7 @@ a {
 }
 
 .cert-course {
-  border: 1px solid var(--bg-pill-strong);
+  border: 2px solid var(--bg-pill-strong);
   border-radius: 10px;
   background: transparent;
   /* visible (not hidden) so a row menu can escape the card */
@@ -5455,12 +5612,13 @@ a {
   gap: 2px;
   padding: 12px 8px;
   cursor: pointer;
-  background: rgba(16, 16, 16, 0.2);
-  border-radius: 9px 9px 0 0;
+  background: rgba(29, 29, 32, 0.2);
+  /* inner radius = the card's 10px less its 2px border */
+  border-radius: 8px 8px 0 0;
   border-bottom: 2px solid var(--bg-pill-strong);
 }
 .cert-course:not(.expanded) .cert-course-header {
-  border-radius: 9px;
+  border-radius: 8px;
   border-bottom-color: transparent;
 }
 .cert-course-titles {
@@ -5473,7 +5631,7 @@ a {
   font-weight: 500;
   line-height: 13px;
   text-transform: uppercase;
-  color: #404040;
+  color: #7a7a7a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5507,7 +5665,7 @@ a {
 .cert-es-chip {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   color: var(--skill-yellow);
   border: 1px solid rgba(245, 211, 107, 0.4);
@@ -5624,10 +5782,10 @@ a {
 .cert-lesson-eyebrow {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 8px;
-  line-height: 10px;
+  font-size: 10px;
+  line-height: 13px;
   text-transform: uppercase;
-  color: #404040;
+  color: #7a7a7a;
   white-space: nowrap;
 }
 /* Lesson controls stay out of the way until the row is hovered, so the rule
@@ -5660,14 +5818,14 @@ a {
   display: block;
 }
 
-/* ── Task card ── */
+/* ── Task card ── 43px: 12px padding around a 19px row */
 .cert-task {
   position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px;
   border: 0.5px solid rgba(122, 122, 122, 0.1);
   border-radius: 8px;
   background:
@@ -5675,6 +5833,60 @@ a {
     #0d0d0d;
   text-align: left;
 }
+/* Restricted Task (Figma "Access Restriction Task" 356:1934) — a red gate
+   banner fused to the top of the card, naming the prerequisites. The stack is
+   rounded by splitting the 8px radius across the two halves rather than by
+   clipping, so the gutter drag grip can still overhang the card's left edge. */
+.cert-task-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.cert-task-gate {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 8px 16px;
+  border-radius: 8px 8px 0 0;
+  background:
+    linear-gradient(rgba(255, 31, 23, 0.15), rgba(255, 31, 23, 0.15)),
+    rgba(13, 13, 13, 0.75);
+}
+.cert-task-gate-icon {
+  flex: none;
+  display: inline-flex;
+  color: #a8a8a8;
+}
+.cert-task-gate-text {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 400;
+  color: #d9d9d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Prerequisite names carry the emphasis inside the sentence. */
+.cert-task-gate-text strong {
+  font-weight: 500;
+}
+/* Under a gate the card gives up its top corners and takes a dimmer fill —
+   it reads as unavailable rather than as another live row. */
+.cert-task-wrap.has-gate > .cert-task {
+  border-radius: 0 0 8px 8px;
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
+    #0d0d0d;
+}
+.cert-task-wrap:hover .cert-grip--gutter {
+  opacity: 1;
+}
+
+/* The dashed "Add Task" row matches a Task card exactly — same 43px box, same
+   16px glyph and label — and differs only in its border and fill. */
 .cert-task--add {
   border: 0.5px dashed rgba(122, 122, 122, 0.5);
   background: transparent;
@@ -5692,9 +5904,9 @@ a {
 }
 .cert-task-name {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  line-height: 17px;
+  line-height: 19px;
   color: #d9d9d9;
   white-space: nowrap;
   overflow: hidden;
@@ -5704,8 +5916,8 @@ a {
   flex: none;
   margin-left: -4px;
   font-family: var(--font-mono);
-  font-size: 8px;
-  line-height: 10px;
+  font-size: 12px;
+  line-height: 16px;
   color: #7a7a7a;
   white-space: nowrap;
 }
@@ -5759,7 +5971,7 @@ a {
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.4);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
@@ -5776,7 +5988,7 @@ a {
   background: rgba(70, 201, 139, 0.12);
   border: 1px solid rgba(70, 201, 139, 0.4);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #46c98b;
@@ -5795,10 +6007,11 @@ a {
   flex-direction: column;
   gap: 14px;
 }
+/* Toggle leads the row, per the toggle component (Figma 361:2434). */
 .cert-restrict-head {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 20px;
 }
 .cert-restrict-head-text {
   flex: 1;
@@ -5984,7 +6197,7 @@ a {
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.4);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
@@ -20277,29 +20490,30 @@ a {
   cursor: not-allowed;
 }
 
-/* compact RTE inside option rows */
-.rte-field--compact {
-  border-radius: 8px;
-}
-
+/* Compact RTE inside the inline course/lesson tree — same anatomy as the full
+   editor, tightened one step so a row still fits the tree. */
 .rte-field--compact .rte-area {
   padding: 8px 12px;
-  font-size: 11.5pt;
+  font-size: 14px;
+  line-height: 20px;
   min-height: 20px;
 }
 
-/* Keep room for the floating ESPAÑOL tag on the compact Spanish row */
-.rte-field--compact .rte-lang-row .rte-area {
-  padding: 8px 78px 8px 12px;
+.rte-field--compact .rte-lang-row {
+  padding: 0 12px;
 }
 
-.rte-field--compact .rte-lang-row .lang-tag.floating {
-  top: 8px;
-  right: 12px;
+.rte-field--compact .rte-lang-row .rte-area {
+  padding: 8px 0;
+}
+
+.rte-field--compact .rte-lang-row .lang-tag {
+  padding-top: 8px;
+  line-height: 20px;
 }
 
 .rte-field--compact .rte-toolbar {
-  padding: 5px 8px;
+  padding: 8px 0;
 }
 
 /* Options footer */

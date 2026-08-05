@@ -2,18 +2,11 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import {
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  IndentRightIcon,
-  IndentLeftIcon,
-  LinkSmallIcon,
   UploadIcon,
   GlobeIcon,
   LockIcon,
 } from "./icons";
+import { RteToolbar } from "./RteToolbar";
 
 /* ─── Icons ─── */
 const TrashIcon = () => (
@@ -655,23 +648,6 @@ function ForceAppUpdate({
 }
 
 /* ─── Legal (rich text, EN + ES) ─── */
-function LegalRteToolbar() {
-  return (
-    <div className="rte-toolbar">
-      <button className="rte-btn" type="button"><BoldIcon /></button>
-      <button className="rte-btn" type="button"><ItalicIcon /></button>
-      <button className="rte-btn" type="button"><UnderlineIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn" type="button"><BulletListIcon /></button>
-      <button className="rte-btn" type="button"><NumberListIcon /></button>
-      <button className="rte-btn" type="button"><IndentRightIcon /></button>
-      <button className="rte-btn" type="button"><IndentLeftIcon /></button>
-      <span className="rte-sep" />
-      <button className="rte-btn" type="button"><LinkSmallIcon /></button>
-    </div>
-  );
-}
-
 function LegalAutoTextarea({
   value,
   onChange,
@@ -715,17 +691,17 @@ function LegalRichTextField({
   onChangeEn: (v: string) => void;
   onChangeEs: (v: string) => void;
 }) {
-  const [focus, setFocus] = useState<"en" | "es">("en");
-
   return (
     <div className="rte-field">
-      {focus === "en" && <LegalRteToolbar />}
-      <LegalAutoTextarea value={en} onChange={onChangeEn} onFocus={() => setFocus("en")} placeholder="Enter the English text…" />
-      <div className="rte-field-divider" />
-      {focus === "es" && <LegalRteToolbar />}
+      <RteToolbar />
       <div className="rte-lang-row">
-        <LegalAutoTextarea value={es} onChange={onChangeEs} onFocus={() => setFocus("es")} placeholder="Introduce el texto en español…" />
-        <span className="lang-tag floating">ESPAÑOL</span>
+        <span className="lang-tag">EN</span>
+        <LegalAutoTextarea value={en} onChange={onChangeEn} placeholder="Enter the English text…" />
+      </div>
+      <div className="rte-field-divider" />
+      <div className="rte-lang-row">
+        <span className="lang-tag">ES</span>
+        <LegalAutoTextarea value={es} onChange={onChangeEs} placeholder="Introduce el texto en español…" />
       </div>
     </div>
   );
