@@ -25,6 +25,9 @@ export type Task = {
   hidden?: boolean;
   /** True when this Task is the certifying final exam for its certification. */
   finalExam?: boolean;
+  /** True when the Task needs a paid subscription — i.e. it is NOT available
+   * during the Free Trial. Defaults to true for new Tasks. */
+  requiresSubscription?: boolean;
   /** True when the Task sits in an Access Restriction chain (a prerequisite gate
    * for another Task/Certification). Such Tasks can't be hidden until removed
    * from the chain. */

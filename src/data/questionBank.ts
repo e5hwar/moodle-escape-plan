@@ -30,6 +30,31 @@ export function shortQuestionType(type: QuestionType): ShortQuestionType {
   }
 }
 
+/* Full type names, as filters and pickers show them. The table's Type column
+   keeps the short form; everywhere a user reads or picks a type, use these. */
+const LONG_BY_SHORT: Record<ShortQuestionType, string> = {
+  MCQ: "Multiple Choice",
+  "T/F": "True/False",
+  Match: "Match the Following",
+  Short: "Short Answer",
+  Scale: "Linear Scale",
+  File: "File Upload",
+};
+
+/** Full type names in the order the Question Bank filters list them. */
+export const QUESTION_TYPE_OPTIONS: string[] = [
+  "Multiple Choice",
+  "True/False",
+  "Match the Following",
+  "Short Answer",
+  "Linear Scale",
+  "File Upload",
+];
+
+export function longQuestionType(type: QuestionType): string {
+  return LONG_BY_SHORT[shortQuestionType(type)];
+}
+
 // Short answer, File upload and Linear scale are always ungraded in V1.
 export function supportsGrading(type: QuestionType): boolean {
   return (
@@ -140,6 +165,14 @@ export type QuestionVersion = {
   note: string;
   attempts: number; // quiz attempts + form responses pinned to this version
 };
+
+/* Created / last-modified dates for the list's optional columns. Derived from
+   versionHistory so they always agree with the version history page: v1's row
+   is the creation date, the newest row is the last edit. */
+export function questionDates(q: Question): { created: string; modified: string } {
+  const rows = versionHistory(q);
+  return { created: rows[rows.length - 1].date, modified: rows[0].date };
+}
 
 const VERSION_AUTHORS = ["Priya N.", "Marcus L.", "Dana R.", "Eshwar V."];
 const VERSION_NOTES = [

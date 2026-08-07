@@ -227,12 +227,6 @@ function LinkStep({
         <label className="form-label">
           Linked Certification <span className="req">*</span>
         </label>
-        <p className="form-help" style={{ marginTop: 0 }}>
-          Only Certifications without an Award are shown — a Certification can have at most one.
-          Completing it issues the Award; users who already completed it receive it retroactively
-          on save.
-        </p>
-
         <div className="sk-picker">
           <div className="sk-picker-search">
             <span className="search-icon"><SearchIcon /></span>
@@ -276,16 +270,17 @@ function LinkStep({
             )}
           </div>
         </div>
+        <p className="form-help">
+          Only Certifications without an Award are shown — a Certification can have at most one.
+          Completing it issues the Award; users who already completed it receive it retroactively
+          on save.
+        </p>
       </div>
 
       <div className="form-divider" />
 
       <div className="form-group">
         <label className="form-label">Merit Tier <span className="req">*</span></label>
-        <p className="form-help" style={{ marginTop: 0 }}>
-          Tiers are fixed and control where the Award sits in the user’s Portfolio —
-          Platinum at the top, Bronze at the bottom.
-        </p>
         <div className="aw-tier-grid">
           {MERIT_TIERS.map((tier) => (
             <button
@@ -301,6 +296,10 @@ function LinkStep({
             </button>
           ))}
         </div>
+        <p className="form-help">
+          Tiers are fixed and control where the Award sits in the user’s Portfolio —
+          Platinum at the top, Bronze at the bottom.
+        </p>
       </div>
 
       <div className="form-divider" />
@@ -397,7 +396,6 @@ function AppearanceSlot({
       <label className="form-label">
         {title} design {required && <span className="req">*</span>}
       </label>
-      <p className="form-help" style={{ marginTop: 0 }}>{hint}</p>
       <div className="aw-template-pick">
         <button
           type="button"
@@ -424,6 +422,7 @@ function AppearanceSlot({
           );
         })}
       </div>
+      <p className="form-help">{hint}</p>
       {onCreateTemplate && (
         <button className="aw-link-btn" onClick={onCreateTemplate} type="button">
           + Create a new Design Template

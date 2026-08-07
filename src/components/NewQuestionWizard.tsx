@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -8,25 +8,15 @@ import {
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import {
-  ChevronLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  ChevronRightIcon,
   SmallXIcon,
   DragHandleIcon,
+  PlusThinIcon,
 } from "./icons";
+import { PageBreak } from "./PageBreak";
 import { RteToolbar } from "./RteToolbar";
-
-const InfoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 8.4v.01M11 12h1v4h1" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="11" width="16" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 018 0v4" />
-  </svg>
-);
 
 /* ─────────────────  Types  ───────────────── */
 
@@ -382,33 +372,89 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
         : "complete";
 
   const version = editingQuestion?.version ?? 0;
+  const title = isEditing ? "Edit question" : "New question";
 
   return (
     <div className="qed">
-      <header className="qed-topbar">
-        <div className="qed-topbar-left">
-          <button className="qed-back" aria-label="Back to Question Bank" onClick={onClose}>
-            <ChevronLeftIcon />
-          </button>
-          <nav className="qed-crumbs" aria-label="Breadcrumb">
-            <button className="qed-crumb-link" onClick={onClose}>Question Bank</button>
+      <div className="qed-content">
+        {/* Page header (Figma 46:314) under a breadcrumb (275:2108). */}
+        <div className="qed-pagehead">
+          <nav className="breadcrumb" aria-label="Breadcrumb">
+            <button className="breadcrumb-item" onClick={onClose}>
+              Question Bank
+            </button>
             {crumbs.map((c) => (
-              <span key={c} className="qed-crumb">
-                <span className="qed-crumb-sep">›</span>
-                {c}
-              </span>
+              <Fragment key={c}>
+                <span className="breadcrumb-sep">
+                  <ChevronRightIcon />
+                </span>
+                <span className="breadcrumb-item">{c}</span>
+              </Fragment>
             ))}
+            <span className="breadcrumb-sep">
+              <ChevronRightIcon />
+            </span>
+            <span className="breadcrumb-current">{title}</span>
           </nav>
-          <h1 className="qed-title">{isEditing ? "Edit question" : "New question"}</h1>
-          <span className="qed-vchip">
-            {isEditing ? `v${version} · v${version + 1} on save` : "new · v1 on save"}
+          <div>
+            <h1 className="tasks-title">{title}</h1>
+            <p className="tasks-subtitle">
+              {isEditing
+                ? `Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`
+                : `This question will be created as v1 in ${catLabel}.`}
+            </p>
+          </div>
+        </div>
+
+        <SetupSection
+          data={data}
+          update={update}
+          isEditing={isEditing}
+          catOptions={catOptions}
+        />
+
+        <QuestionTextSection data={data} update={update} />
+
+        {data.type === "mcq" && <McqSection data={data} update={update} grading={grading} />}
+        {data.type === "true-false" && (
+          <TrueFalseSection data={data} update={update} grading={grading} />
+        )}
+        {data.type === "match" && <MatchSection data={data} update={update} grading={grading} />}
+        {data.type === "short" && <ShortAnswerSection />}
+        {data.type === "file" && <FileUploadSection data={data} update={update} />}
+        {data.type === "scale" && <ScaleSection data={data} update={update} />}
+
+        <GradingSection
+          data={data}
+          update={update}
+          gradable={gradable}
+          usedInQuizzes={usedInQuizzes}
+        />
+
+        {grading && <FeedbackSection data={data} update={update} />}
+
+        <TranslationsSection
+          enDone={data.text.trim() !== ""}
+          esState={esState}
+          esDone={esDone}
+          total={filled.length}
+        />
+      </div>
+
+      {/* Footer (Figma 73:515) */}
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left">
+          <button className="wizard-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <span className="wizard-saved">
+            {isEditing ? `last saved · v${version}` : "not saved yet"}
           </span>
-          <button className="qed-history-link" onClick={() => setShowHistory(true)}>
+        </div>
+        <div className="wizard-actions">
+          <button className="btn-save-draft" onClick={() => setShowHistory(true)}>
             View history
           </button>
-        </div>
-        <div className="qed-topbar-actions">
-          <button className="btn-save-draft" onClick={onClose}>Cancel</button>
           <button
             className="btn-publish"
             onClick={() => {
@@ -421,89 +467,7 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
             {isEditing ? "Save changes" : "Create question"}
           </button>
         </div>
-      </header>
-
-      <div className="qed-scroll">
-        <div className="qed-inner">
-          <div className="qed-banner">
-            <span className="qed-banner-icon"><InfoIcon /></span>
-            <div className="qed-banner-text">
-              {isEditing ? (
-                <>
-                  Saving creates <strong>v{version + 1}</strong> in {catLabel}. Quizzes and
-                  feedback forms using this question move to the new version; past attempts
-                  keep v{version}.
-                </>
-              ) : (
-                <>
-                  This question will be created as <strong>v1</strong> in {catLabel}.
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="qed-cols">
-            <div className="qed-main">
-              <QuestionTextCard data={data} update={update} />
-              {data.type === "mcq" && (
-                <McqCard data={data} update={update} grading={grading} />
-              )}
-              {data.type === "true-false" && (
-                <TrueFalseCard data={data} update={update} grading={grading} />
-              )}
-              {data.type === "match" && (
-                <MatchCard data={data} update={update} grading={grading} />
-              )}
-              {data.type === "short" && <ShortAnswerCard />}
-              {data.type === "file" && <FileUploadCard data={data} update={update} />}
-              {data.type === "scale" && <ScaleCard data={data} update={update} />}
-              {grading && <FeedbackCard data={data} update={update} />}
-            </div>
-
-            <aside className="qed-side">
-              <SettingsCard
-                data={data}
-                update={update}
-                isEditing={isEditing}
-                catOptions={catOptions}
-              />
-              <GradingCard
-                data={data}
-                update={update}
-                gradable={gradable}
-                usedInQuizzes={usedInQuizzes}
-              />
-              <div className="qed-card">
-                <div className="qed-card-title">Translations</div>
-                <div className="qed-trans-row">
-                  <span className="qed-lang-tag">EN</span>
-                  <span className="qed-trans-name">English</span>
-                  <span className={`qed-trans-status ${data.text.trim() ? "is-complete" : ""}`}>
-                    {data.text.trim() ? "✓ Complete" : "In progress"}
-                  </span>
-                </div>
-                <div className="qed-trans-row">
-                  <span className="qed-lang-tag">ES</span>
-                  <span className="qed-trans-name">Español</span>
-                  {esState === "complete" ? (
-                    <span className="qed-trans-status is-complete">✓ Complete</span>
-                  ) : (
-                    <span className="qed-trans-status is-missing">
-                      ⚠ {esState === "partial" ? `${esDone}/${filled.length} translated` : "Missing"}
-                    </span>
-                  )}
-                </div>
-                <div className="qed-trans-note">
-                  Fill the <strong>ES</strong> row on each field to translate this question.
-                </div>
-              </div>
-              <div className="qed-save-note">
-                {isEditing ? `last saved · v${version}` : "not saved yet"}
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
+      </footer>
 
       {showHistory &&
         (isEditing ? (
@@ -518,9 +482,131 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
   );
 }
 
-/* ─────────────────  Main-column cards  ───────────────── */
+/* ─────────────────  Sections  ───────────────── */
 
-function QuestionTextCard({
+function SetupSection({
+  data,
+  update,
+  isEditing,
+  catOptions,
+}: {
+  data: QuestionDraft;
+  update: (p: Partial<QuestionDraft>) => void;
+  isEditing: boolean;
+  catOptions: { key: string; label: string }[];
+}) {
+  const changeType = (t: QType) => {
+    const gradable = typeSupportsGrading(t);
+    const wasRandomisable = data.type === "mcq" || data.type === "match";
+    const isRandomisable = t === "mcq" || t === "match";
+    update({
+      type: t,
+      grading: gradable && !data.otherOption,
+      // Keep the user's choice while moving between randomisable types;
+      // restore the default (on) when coming back from one that isn't.
+      randomise: isRandomisable ? (wasRandomisable ? data.randomise : true) : false,
+      otherOption: t === "mcq" ? data.otherOption : false,
+    });
+  };
+
+  const toSingle = () => {
+    // Keep the first correct option at +100%; the rest turn into wrong answers.
+    let kept = false;
+    update({
+      mcqMode: "single",
+      choices: data.choices.map((c) => {
+        if (c.grade > 0 && !kept) {
+          kept = true;
+          return { ...c, grade: 100 };
+        }
+        return c.grade > 0 ? { ...c, grade: -25 } : c;
+      }),
+    });
+  };
+
+  const toMultiple = () => {
+    const correct = data.choices.filter((c) => c.grade > 0);
+    const share = equalShare(Math.max(1, correct.length));
+    update({
+      mcqMode: "multiple",
+      choices: data.choices.map((c) => (c.grade > 0 ? { ...c, grade: share } : c)),
+    });
+  };
+
+  return (
+    <>
+      <PageBreak label="Question setup" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Status</label>
+          <Select
+            value={data.status}
+            onChange={(v) => update({ status: v as QuestionDraft["status"] })}
+            options={[
+              { value: "Draft", label: "Draft" },
+              { value: "Active", label: "Active" },
+              ...(isEditing ? [{ value: "Archived", label: "Archived" }] : []),
+            ]}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Category</label>
+          <Select
+            value={data.catKey}
+            onChange={(v) => update({ catKey: v })}
+            options={[
+              { value: "", label: "Uncategorized" },
+              ...catOptions.map((o) => ({
+                value: o.key,
+                label: o.label.replace(" > ", " / "),
+              })),
+            ]}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">
+            Question type <span className="req">*</span>
+          </label>
+          <Select
+            value={data.type}
+            disabled={isEditing}
+            onChange={(v) => changeType(v as QType)}
+            options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
+          />
+          {isEditing && (
+            <p className="form-help">Type can't change on a saved question.</p>
+          )}
+        </div>
+
+        {data.type === "mcq" && (
+          <div className="form-group">
+            <label className="form-label">Answers</label>
+            {/* Single-Select (Figma 359:2373) */}
+            <div className="seg-control">
+              <button
+                className={`seg-btn ${data.mcqMode === "single" ? "active" : ""}`}
+                onClick={toSingle}
+              >
+                Single answer
+              </button>
+              <button
+                className={`seg-btn ${data.mcqMode === "multiple" ? "active" : ""}`}
+                onClick={toMultiple}
+              >
+                Multiple answers
+              </button>
+            </div>
+            <p className="form-help">How many options a learner can pick.</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function QuestionTextSection({
   data,
   update,
 }: {
@@ -529,40 +615,60 @@ function QuestionTextCard({
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   return (
-    <section className="qed-card">
-      <div className="qed-card-title">Question text</div>
-      {/* Rich text is authored per language — English on top, Spanish below. */}
-      <div className="rte-field">
-        <RteToolbar />
-        <div className="rte-lang-row">
-          <span className="lang-tag">EN</span>
-          <AutoTextarea
-            className="rte-area"
-            value={data.text}
-            placeholder="Write the question…"
-            onChange={(v) => update({ text: v })}
+    <>
+      <PageBreak label="Question" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">
+            Question text <span className="req">*</span>
+          </label>
+          {/* Rich Text Input - Dual Language (Figma 327:137) */}
+          <div className="rte-field">
+            <RteToolbar />
+            <div className="rte-lang-row">
+              <span className="lang-tag">EN</span>
+              <AutoTextarea
+                className="rte-area"
+                value={data.text}
+                placeholder="Write the question…"
+                onChange={(v) => update({ text: v })}
+              />
+            </div>
+            <div className="rte-field-divider" />
+            <div className="rte-lang-row">
+              <span className="lang-tag">ES</span>
+              <AutoTextarea
+                className="rte-area"
+                value={data.textEs}
+                placeholder="Escribe la pregunta…"
+                onChange={(v) => update({ textEs: v })}
+              />
+            </div>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,video/*,audio/*"
+            hidden
+            multiple
+            onChange={() => {
+              /* noop in mock */
+            }}
           />
-        </div>
-        <div className="rte-field-divider" />
-        <div className="rte-lang-row">
-          <span className="lang-tag">ES</span>
-          <AutoTextarea
-            className="rte-area"
-            value={data.textEs}
-            placeholder="Escribe la pregunta…"
-            onChange={(v) => update({ textEs: v })}
-          />
+          <p className="form-help">
+            Shown to the learner. Fill the ES row to translate it.
+          </p>
+          <button className="text-link qed-attach" onClick={() => fileRef.current?.click()}>
+            <PlusThinIcon />
+            Attach media
+          </button>
         </div>
       </div>
-      <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" hidden multiple onChange={() => {/* noop in mock */}} />
-      <button className="qed-attach-link" onClick={() => fileRef.current?.click()}>
-        + Attach media
-      </button>
-    </section>
+    </>
   );
 }
 
-function McqCard({
+function McqSection({
   data,
   update,
   grading,
@@ -618,109 +724,126 @@ function McqCard({
   const bestOk = Math.abs(positiveTotal - 100) < 0.01;
 
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Answer options</span>
-          <span className="qed-card-sub">
+    <>
+      <PageBreak
+        label="Answer options"
+        trailing={
+          grading ? (
+            <span className={`co-status-pill co-status-pill--${bestOk ? "green" : "yellow"}`}>
+              {bestOk
+                ? "Best score 100%"
+                : `Best score ${Math.round(positiveTotal * 100) / 100}%`}
+            </span>
+          ) : undefined
+        }
+      />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">
+            Options <span className="req">*</span>
+          </label>
+
+          <div className="qed-rows">
+            {choices.map((c) => (
+              <div className="qed-row" key={c.id}>
+                <span className="qed-row-grip" aria-hidden>
+                  <DragHandleIcon />
+                </span>
+                {grading &&
+                  (single ? (
+                    <button
+                      className={`radio-dot ${c.grade > 0 ? "is-on" : ""}`}
+                      aria-label={c.grade > 0 ? "Correct answer" : "Mark as correct"}
+                      onClick={() => markCorrect(c.id)}
+                    />
+                  ) : (
+                    <button
+                      className={`checkbox ${c.grade > 0 ? "checked" : ""}`}
+                      aria-label={c.grade > 0 ? "Correct answer" : "Mark as correct"}
+                      onClick={() => markCorrect(c.id)}
+                    >
+                      {c.grade > 0 && <CheckIcon />}
+                    </button>
+                  ))}
+                <LangField
+                  en={c.text}
+                  es={c.textEs}
+                  onEn={(v) => setChoice(c.id, { text: v })}
+                  onEs={(v) => setChoice(c.id, { textEs: v })}
+                  placeholder="Option text…"
+                  esPlaceholder="Texto de la opción…"
+                />
+                {grading && (
+                  <GradeSelect value={c.grade} onChange={(v) => setChoice(c.id, { grade: v })} />
+                )}
+                <button
+                  className="qed-row-remove"
+                  aria-label="Remove option"
+                  disabled={choices.length <= 2}
+                  onClick={() => removeChoice(c.id)}
+                >
+                  <SmallXIcon />
+                </button>
+              </div>
+            ))}
+
+            {!grading && data.otherOption && (
+              <div className="qed-row qed-row--other">
+                <span className="qed-row-grip" aria-hidden>
+                  <DragHandleIcon />
+                </span>
+                <span className="qed-row-static">
+                  Other — learner types a free-text answer
+                </span>
+                <button
+                  className="qed-row-remove"
+                  aria-label="Remove Other option"
+                  onClick={() => update({ otherOption: false })}
+                >
+                  <SmallXIcon />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <p className="form-help">
             {grading
               ? single
-                ? "single answer · grade per option, −100% to 100%"
-                : "multiple answers · correct options share the mark"
-              : "ungraded · responses are collected, not scored"}
-          </span>
-        </div>
-        {grading && (
-          <span className={`qed-best-tag ${bestOk ? "is-ok" : "is-warn"}`}>
-            {bestOk ? "✓ best score = 100%" : `best score = ${Math.round(positiveTotal * 100) / 100}%`}
-          </span>
-        )}
-      </div>
+                ? "Mark the correct option — it takes the full mark and the rest go negative."
+                : "Mark every correct option — they share the mark equally."
+              : "Ungraded — responses are collected, not scored."}
+          </p>
 
-      <div className="qed-opts">
-        {choices.map((c) => (
-          <div className="qed-opt-row" key={c.id}>
-            <span className="qe-option-handle" aria-hidden>
-              <DragHandleIcon />
-            </span>
-            {grading && (
-              <button
-                className={`qed-correct ${single ? "is-radio" : "is-check"} ${c.grade > 0 ? "is-on" : ""}`}
-                aria-label={c.grade > 0 ? "Correct answer" : "Mark as correct"}
-                onClick={() => markCorrect(c.id)}
-              >
-                {!single && c.grade > 0 && <CheckMark />}
-              </button>
-            )}
-            <BiField
-              en={c.text}
-              es={c.textEs}
-              onEn={(v) => setChoice(c.id, { text: v })}
-              onEs={(v) => setChoice(c.id, { textEs: v })}
-              placeholder="Option text…"
-              esPlaceholder="Texto de la opción…"
+          <div className="qed-row-adds">
+            <AddCard
+              label="Add option"
+              onClick={addChoice}
+              disabled={choices.length >= MAX_OPTIONS}
             />
-            {grading && (
-              <GradeSelect value={c.grade} onChange={(v) => setChoice(c.id, { grade: v })} />
-            )}
-            <button
-              className="qe-icon-btn"
-              aria-label="Remove option"
-              disabled={choices.length <= 2}
-              onClick={() => removeChoice(c.id)}
-            >
-              <SmallXIcon />
-            </button>
+            <AddCard
+              label="Add “Other” option"
+              onClick={() => update({ otherOption: true })}
+              disabled={grading || data.otherOption}
+            />
           </div>
-        ))}
 
-        {!grading && data.otherOption && (
-          <div className="qed-opt-row qed-opt-row--other">
-            <span className="qe-option-handle" aria-hidden>
-              <DragHandleIcon />
-            </span>
-            <span className="qed-other-text">Other — learner types a free-text answer</span>
-            <button
-              className="qe-icon-btn"
-              aria-label="Remove Other option"
-              onClick={() => update({ otherOption: false })}
-            >
-              <SmallXIcon />
-            </button>
-          </div>
-        )}
+          {grading && (
+            <p className="form-help">“Other” is unavailable while grading is on.</p>
+          )}
+          {grading && !bestOk && (
+            <p className="form-help error">
+              {single
+                ? "One option should be graded +100% so a right answer earns full marks."
+                : `Correct options add up to ${fmtPct(positiveTotal)}. For full marks they should total 100%.`}
+            </p>
+          )}
+        </div>
       </div>
-
-      <div className="qed-opts-foot">
-        <button className="qe-add-btn" onClick={addChoice} disabled={choices.length >= MAX_OPTIONS}>
-          + Add option
-        </button>
-        <button
-          className="qe-add-btn"
-          disabled={grading || data.otherOption}
-          onClick={() => update({ otherOption: true })}
-        >
-          + Add “Other” option
-        </button>
-        {grading && (
-          <span className="qed-lock-note">
-            <LockIcon /> “Other” is unavailable while grading is on
-          </span>
-        )}
-      </div>
-
-      {grading && !bestOk && (
-        <p className="form-help error">
-          {single
-            ? "One option should be graded +100% so a right answer earns full marks."
-            : `Correct options add up to ${fmtPct(positiveTotal)}. For full marks they should total 100%.`}
-        </p>
-      )}
-    </section>
+    </>
   );
 }
 
-function TrueFalseCard({
+function TrueFalseSection({
   data,
   update,
   grading,
@@ -730,39 +853,48 @@ function TrueFalseCard({
   grading: boolean;
 }) {
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Answer options</span>
-          <span className="qed-card-sub">
+    <>
+      <PageBreak
+        label="Answer options"
+        trailing={
+          grading ? (
+            <span className="co-status-pill co-status-pill--green">Best score 100%</span>
+          ) : undefined
+        }
+      />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">
+            Correct answer <span className="req">*</span>
+          </label>
+          {/* Radio cards (Figma 134:1790 / 136:294) */}
+          <div className="radio-card-group">
+            {[true, false].map((val) => {
+              const selected = grading && data.tfAnswer === val;
+              return (
+                <RadioCard
+                  key={String(val)}
+                  selected={selected}
+                  disabled={!grading}
+                  onSelect={() => grading && update({ tfAnswer: val })}
+                  title={val ? "True" : "False"}
+                  desc={selected ? "Correct — graded +100%" : undefined}
+                />
+              );
+            })}
+          </div>
+          <p className="form-help">
             {grading
-              ? "the correct value is graded +100%, the other 0%"
-              : "ungraded · responses are collected, not scored"}
-          </span>
+              ? "The correct value is graded +100%, the other 0%."
+              : "Ungraded — responses are collected, not scored."}
+          </p>
         </div>
-        {grading && <span className="qed-best-tag is-ok">✓ best score = 100%</span>}
       </div>
-      <div className="qe-tf-group">
-        {[true, false].map((val) => {
-          const selected = grading && data.tfAnswer === val;
-          return (
-            <button
-              key={String(val)}
-              className={`qe-tf-card ${selected ? "selected" : ""} ${!grading ? "is-static" : ""}`}
-              onClick={() => grading && update({ tfAnswer: val })}
-            >
-              {grading && <span className="radio-dot" />}
-              <span className="qe-tf-label">{val ? "True" : "False"}</span>
-              {selected && <span className="qe-grade-tag">+100%</span>}
-            </button>
-          );
-        })}
-      </div>
-    </section>
+    </>
   );
 }
 
-function MatchCard({
+function MatchSection({
   data,
   update,
   grading,
@@ -784,110 +916,128 @@ function MatchCard({
   };
 
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Pairs</span>
-          <span className="qed-card-sub">
-            blank prompt = extra wrong answer (distractor)
+    <>
+      <PageBreak
+        label="Pairs"
+        trailing={
+          <span className="co-status-pill co-status-pill--secondary">
+            {pairs.length}/{MAX_OPTIONS} rows
           </span>
-        </div>
-      </div>
+        }
+      />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">
+            Prompts and answers <span className="req">*</span>
+          </label>
 
-      <div className="qe-pair-head">
-        <span>Prompt</span>
-        <span>Matches with</span>
-      </div>
-      <div className="qed-opts">
-        {pairs.map((p, idx) => {
-          const isDistractor = p.left.trim() === "" && p.right.trim() !== "";
-          return (
-            <div className="qed-opt-row" key={p.id}>
-              <span className="qe-option-letter">{idx + 1}</span>
-              <div className="qed-pair-field">
-                <BiField
-                  en={p.left}
-                  es={p.leftEs}
-                  onEn={(v) => setPair(p.id, { left: v })}
-                  onEs={(v) => setPair(p.id, { leftEs: v })}
-                  placeholder="Prompt (blank = distractor)"
-                  esPlaceholder="Enunciado…"
-                />
-                {isDistractor && <span className="qe-distractor-tag">Distractor</span>}
-              </div>
-              <span className="qe-pair-arrow">→</span>
-              <div className="qed-pair-field">
-                <BiField
-                  en={p.right}
-                  es={p.rightEs}
-                  onEn={(v) => setPair(p.id, { right: v })}
-                  onEs={(v) => setPair(p.id, { rightEs: v })}
-                  placeholder="Answer"
-                  esPlaceholder="Respuesta…"
-                />
-              </div>
-              <button
-                className="qe-icon-btn"
-                aria-label="Remove pair"
-                disabled={pairs.length <= 2}
-                onClick={() => removePair(p.id)}
-              >
-                <SmallXIcon />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <div className="qed-opts-foot">
-        <button className="qe-add-btn" onClick={addPair} disabled={pairs.length >= MAX_OPTIONS}>
-          + Add pair
-        </button>
-        <span className="qe-options-meta">{pairs.length}/{MAX_OPTIONS} rows</span>
-      </div>
+          <div className="qed-rows">
+            {pairs.map((p, idx) => {
+              const isDistractor = p.left.trim() === "" && p.right.trim() !== "";
+              return (
+                <div className="qed-row" key={p.id}>
+                  <span className="qed-row-num">{idx + 1}</span>
+                  <div className="qed-pair-side">
+                    <LangField
+                      en={p.left}
+                      es={p.leftEs}
+                      onEn={(v) => setPair(p.id, { left: v })}
+                      onEs={(v) => setPair(p.id, { leftEs: v })}
+                      placeholder="Prompt (blank = distractor)"
+                      esPlaceholder="Enunciado…"
+                    />
+                    {isDistractor && (
+                      <span className="co-status-pill co-status-pill--secondary qed-distractor">
+                        Distractor
+                      </span>
+                    )}
+                  </div>
+                  <span className="qed-pair-arrow" aria-hidden>
+                    <ArrowRightIcon />
+                  </span>
+                  <div className="qed-pair-side">
+                    <LangField
+                      en={p.right}
+                      es={p.rightEs}
+                      onEn={(v) => setPair(p.id, { right: v })}
+                      onEs={(v) => setPair(p.id, { rightEs: v })}
+                      placeholder="Answer"
+                      esPlaceholder="Respuesta…"
+                    />
+                  </div>
+                  <button
+                    className="qed-row-remove"
+                    aria-label="Remove pair"
+                    disabled={pairs.length <= 2}
+                    onClick={() => removePair(p.id)}
+                  >
+                    <SmallXIcon />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
 
-      {grading && (
-        <div className="qed-match-grading">
-          <div className="qed-card-subtitle">Scoring</div>
-          <div className="radio-card-group">
-            <RadioCard
-              selected={data.matchGrading === "all-or-nothing"}
-              onSelect={() => update({ matchGrading: "all-or-nothing" })}
-              title="All-or-Nothing"
-              desc="Every pair must be correct to score. A single wrong match gives 0% for the whole question."
-            />
-            <RadioCard
-              selected={data.matchGrading === "partial"}
-              onSelect={() => update({ matchGrading: "partial" })}
-              title="Partial credit"
-              desc="Each correct match earns a proportional share of the mark."
+          <p className="form-help">
+            Each prompt matches one answer. A blank prompt leaves its answer in
+            play as an extra wrong option (distractor).
+          </p>
+
+          <div className="qed-row-adds">
+            <AddCard
+              label="Add pair"
+              onClick={addPair}
+              disabled={pairs.length >= MAX_OPTIONS}
             />
           </div>
         </div>
-      )}
-    </section>
+
+        {grading && (
+          <div className="form-group">
+            <label className="form-label">Scoring</label>
+            <div className="radio-card-group">
+              <RadioCard
+                selected={data.matchGrading === "all-or-nothing"}
+                onSelect={() => update({ matchGrading: "all-or-nothing" })}
+                title="All-or-Nothing"
+                desc="Every pair must be correct to score. A single wrong match gives 0% for the whole question."
+              />
+              <RadioCard
+                selected={data.matchGrading === "partial"}
+                onSelect={() => update({ matchGrading: "partial" })}
+                title="Partial credit"
+                desc="Each correct match earns a proportional share of the mark."
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
-function ShortAnswerCard() {
+function ShortAnswerSection() {
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Response</span>
-          <span className="qed-card-sub">ungraded · responses are collected, not scored</span>
+    <>
+      <PageBreak label="Response" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Learner's answer</label>
+          <input
+            className="form-input"
+            disabled
+            placeholder="Learner types a plain-text answer…"
+          />
+          <p className="form-help">
+            Ungraded — plain text only, with a fixed limit of 512 characters.
+          </p>
         </div>
       </div>
-      <input
-        className="qe-text-input"
-        disabled
-        placeholder="Learner types a plain-text answer…"
-      />
-      <p className="qed-field-note">Plain text only · fixed limit of 512 characters.</p>
-    </section>
+    </>
   );
 }
 
-function FileUploadCard({
+function FileUploadSection({
   data,
   update,
 }: {
@@ -895,17 +1045,12 @@ function FileUploadCard({
   update: (p: Partial<QuestionDraft>) => void;
 }) {
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Response</span>
-          <span className="qed-card-sub">ungraded · learner uploads one or more files</span>
-        </div>
-      </div>
-      <div className="qed-field-row">
-        <div className="qed-field">
-          <label className="form-sub-label">Maximum files</label>
-          <SelectBox
+    <>
+      <PageBreak label="Response" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Maximum files</label>
+          <Select
             value={data.maxFiles}
             onChange={(v) => update({ maxFiles: v })}
             options={[
@@ -916,10 +1061,14 @@ function FileUploadCard({
               })),
             ]}
           />
+          <p className="form-help">
+            Ungraded — the learner uploads one or more files. Leave the
+            system-wide default or set a per-question limit.
+          </p>
         </div>
-        <div className="qed-field">
-          <label className="form-sub-label">Max size per file</label>
-          <SelectBox
+        <div className="form-group">
+          <label className="form-label">Max size per file</label>
+          <Select
             value={data.maxSizeMb}
             onChange={(v) => update({ maxSizeMb: v })}
             options={[
@@ -932,14 +1081,11 @@ function FileUploadCard({
           />
         </div>
       </div>
-      <p className="qed-field-note">
-        Leave the system-wide defaults or set per-question limits.
-      </p>
-    </section>
+    </>
   );
 }
 
-function ScaleCard({
+function ScaleSection({
   data,
   update,
 }: {
@@ -947,40 +1093,47 @@ function ScaleCard({
   update: (p: Partial<QuestionDraft>) => void;
 }) {
   return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Response</span>
-          <span className="qed-card-sub">ungraded · learner picks a value on the scale</span>
+    <>
+      <PageBreak label="Response" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Scale range</label>
+          <div className="qed-inline-fields">
+            <Select
+              value={String(data.scaleMin)}
+              onChange={(v) => update({ scaleMin: Number(v) })}
+              options={[0, 1].map((n) => ({ value: String(n), label: String(n) }))}
+              width="narrow"
+            />
+            <span className="qed-range-to">to</span>
+            <Select
+              value={String(data.scaleMax)}
+              onChange={(v) => update({ scaleMax: Number(v) })}
+              options={Array.from({ length: 9 }, (_, i) => i + 2).map((n) => ({
+                value: String(n),
+                label: String(n),
+              }))}
+              width="narrow"
+            />
+          </div>
+          <div className="qed-scale-preview">
+            {Array.from(
+              { length: data.scaleMax - data.scaleMin + 1 },
+              (_, i) => data.scaleMin + i,
+            ).map((n) => (
+              <span key={n} className="qed-scale-dot">
+                {n}
+              </span>
+            ))}
+          </div>
+          <p className="form-help">
+            Ungraded — the learner picks a value on the scale.
+          </p>
         </div>
-      </div>
-      <div className="qed-field-row">
-        <div className="qed-field qed-field--narrow">
-          <label className="form-sub-label">From</label>
-          <SelectBox
-            value={String(data.scaleMin)}
-            onChange={(v) => update({ scaleMin: Number(v) })}
-            options={[0, 1].map((n) => ({ value: String(n), label: String(n) }))}
-          />
-        </div>
-        <div className="qed-field qed-field--narrow">
-          <label className="form-sub-label">To</label>
-          <SelectBox
-            value={String(data.scaleMax)}
-            onChange={(v) => update({ scaleMax: Number(v) })}
-            options={Array.from({ length: 9 }, (_, i) => i + 2).map((n) => ({
-              value: String(n),
-              label: String(n),
-            }))}
-          />
-        </div>
-      </div>
-      <div className="qed-field-row">
-        <div className="qed-field">
-          <label className="form-sub-label">
-            Label for {data.scaleMin} <span className="qe-optional">optional</span>
-          </label>
-          <BiField
+
+        <div className="form-group">
+          <label className="form-label">Label for {data.scaleMin}</label>
+          <LangField
             en={data.scaleMinLabel}
             es={data.scaleMinLabelEs}
             onEn={(v) => update({ scaleMinLabel: v })}
@@ -988,12 +1141,12 @@ function ScaleCard({
             placeholder="e.g. Extremely disappointed"
             esPlaceholder="p. ej. Muy decepcionado"
           />
+          <p className="form-help">Optional — shown at the low end of the scale.</p>
         </div>
-        <div className="qed-field">
-          <label className="form-sub-label">
-            Label for {data.scaleMax} <span className="qe-optional">optional</span>
-          </label>
-          <BiField
+
+        <div className="form-group">
+          <label className="form-label">Label for {data.scaleMax}</label>
+          <LangField
             en={data.scaleMaxLabel}
             es={data.scaleMaxLabelEs}
             onEn={(v) => update({ scaleMaxLabel: v })}
@@ -1001,192 +1154,14 @@ function ScaleCard({
             placeholder="e.g. Extremely satisfied"
             esPlaceholder="p. ej. Muy satisfecho"
           />
+          <p className="form-help">Optional — shown at the high end of the scale.</p>
         </div>
       </div>
-      <div className="qed-scale-preview">
-        {Array.from(
-          { length: data.scaleMax - data.scaleMin + 1 },
-          (_, i) => data.scaleMin + i,
-        ).map((n) => (
-          <span key={n} className="qed-scale-dot">
-            {n}
-          </span>
-        ))}
-      </div>
-    </section>
+    </>
   );
 }
 
-function FeedbackCard({
-  data,
-  update,
-}: {
-  data: QuestionDraft;
-  update: (p: Partial<QuestionDraft>) => void;
-}) {
-  const singleAnswer =
-    data.type === "true-false" || (data.type === "mcq" && data.mcqMode === "single");
-  return (
-    <section className="qed-card">
-      <div className="qed-card-head">
-        <div className="qed-card-title-row">
-          <span className="qed-card-title">Feedback</span>
-          <span className="qed-card-sub">
-            shown after submission when the quiz's review settings allow it
-          </span>
-        </div>
-      </div>
-      <div className="qed-fb-grid">
-        <label className="qe-fb-label qe-fb-correct qed-fb-name">Correct</label>
-        <BiField
-          en={data.fbCorrect}
-          es={data.fbCorrectEs}
-          onEn={(v) => update({ fbCorrect: v })}
-          onEs={(v) => update({ fbCorrectEs: v })}
-          placeholder="Shown for a correct response…"
-          esPlaceholder="Se muestra en una respuesta correcta…"
-        />
-        <label className="qe-fb-label qe-fb-partial qed-fb-name">Partially correct</label>
-        <BiField
-          en={singleAnswer ? "" : data.fbPartial}
-          es={singleAnswer ? "" : data.fbPartialEs}
-          onEn={(v) => update({ fbPartial: v })}
-          onEs={(v) => update({ fbPartialEs: v })}
-          disabled={singleAnswer}
-          placeholder={
-            singleAnswer
-              ? "Not used for single-answer questions"
-              : "Shown for a partially correct response…"
-          }
-          esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
-        />
-        <label className="qe-fb-label qe-fb-incorrect qed-fb-name">Incorrect</label>
-        <BiField
-          en={data.fbIncorrect}
-          es={data.fbIncorrectEs}
-          onEn={(v) => update({ fbIncorrect: v })}
-          onEs={(v) => update({ fbIncorrectEs: v })}
-          placeholder="Shown for an incorrect response…"
-          esPlaceholder="Se muestra en una respuesta incorrecta…"
-        />
-      </div>
-    </section>
-  );
-}
-
-/* ─────────────────  Sidebar cards  ───────────────── */
-
-function SettingsCard({
-  data,
-  update,
-  isEditing,
-  catOptions,
-}: {
-  data: QuestionDraft;
-  update: (p: Partial<QuestionDraft>) => void;
-  isEditing: boolean;
-  catOptions: { key: string; label: string }[];
-}) {
-  const changeType = (t: QType) => {
-    const gradable = typeSupportsGrading(t);
-    const wasRandomisable = data.type === "mcq" || data.type === "match";
-    const isRandomisable = t === "mcq" || t === "match";
-    update({
-      type: t,
-      grading: gradable && !data.otherOption,
-      // Keep the user's choice while moving between randomisable types;
-      // restore the default (on) when coming back from one that isn't.
-      randomise: isRandomisable ? (wasRandomisable ? data.randomise : true) : false,
-      otherOption: t === "mcq" ? data.otherOption : false,
-    });
-  };
-
-  const toSingle = () => {
-    // Keep the first correct option at +100%; the rest turn into wrong answers.
-    let kept = false;
-    update({
-      mcqMode: "single",
-      choices: data.choices.map((c) => {
-        if (c.grade > 0 && !kept) {
-          kept = true;
-          return { ...c, grade: 100 };
-        }
-        return c.grade > 0 ? { ...c, grade: -25 } : c;
-      }),
-    });
-  };
-
-  const toMultiple = () => {
-    const correct = data.choices.filter((c) => c.grade > 0);
-    const share = equalShare(Math.max(1, correct.length));
-    update({
-      mcqMode: "multiple",
-      choices: data.choices.map((c) => (c.grade > 0 ? { ...c, grade: share } : c)),
-    });
-  };
-
-  return (
-    <div className="qed-card">
-      <div className="qed-card-title">Question settings</div>
-      <div className="qed-side-field">
-        <label className="form-sub-label">Status</label>
-        <SelectBox
-          value={data.status}
-          onChange={(v) => update({ status: v as QuestionDraft["status"] })}
-          options={[
-            { value: "Draft", label: "● Draft" },
-            { value: "Active", label: "● Active" },
-            ...(isEditing ? [{ value: "Archived", label: "● Archived" }] : []),
-          ]}
-        />
-      </div>
-      <div className="qed-side-field">
-        <label className="form-sub-label">Category</label>
-        <SelectBox
-          value={data.catKey}
-          onChange={(v) => update({ catKey: v })}
-          options={[
-            { value: "", label: "Uncategorized" },
-            ...catOptions.map((o) => ({
-              value: o.key,
-              label: o.label.replace(" > ", " / "),
-            })),
-          ]}
-        />
-      </div>
-      <div className="qed-side-field">
-        <label className="form-sub-label">Type</label>
-        <SelectBox
-          value={data.type}
-          disabled={isEditing}
-          onChange={(v) => changeType(v as QType)}
-          options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
-        />
-        {isEditing && (
-          <span className="qed-field-hint">Type can't change on a saved question.</span>
-        )}
-      </div>
-      {data.type === "mcq" && (
-        <div className="tab-switch qed-mode-switch">
-          <button
-            className={`tab-switch-tab ${data.mcqMode === "single" ? "active" : ""}`}
-            onClick={toSingle}
-          >
-            Single answer
-          </button>
-          <button
-            className={`tab-switch-tab ${data.mcqMode === "multiple" ? "active" : ""}`}
-            onClick={toMultiple}
-          >
-            Multiple answers
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GradingCard({
+function GradingSection({
   data,
   update,
   gradable,
@@ -1214,32 +1189,142 @@ function GradingCard({
   const canRandomise = data.type === "mcq" || data.type === "match";
 
   return (
-    <div className="qed-card">
-      <ToggleRow
-        checked={grading}
-        disabled={gradingDisabled}
-        onChange={(v) => update({ grading: v })}
-        label="Grading"
-        sub={gradingSub}
-      />
-      {canRandomise && (
+    <>
+      <PageBreak label="Grading" />
+      <div className="qed-toggles">
         <ToggleRow
-          checked={data.randomise}
-          onChange={(v) => update({ randomise: v })}
-          label="Randomise options"
-          sub="New order on every attempt or prompt"
+          checked={grading}
+          disabled={gradingDisabled}
+          onChange={(v) => update({ grading: v })}
+          label="Grading"
+          sub={gradingSub}
         />
-      )}
-      {data.type === "mcq" && (
-        <ToggleRow
-          checked={data.otherOption}
-          disabled={grading}
-          onChange={(v) => update({ otherOption: v })}
-          label="“Other” free-text option"
-          sub="Only when grading is off"
-        />
-      )}
-    </div>
+        {canRandomise && (
+          <ToggleRow
+            checked={data.randomise}
+            onChange={(v) => update({ randomise: v })}
+            label="Randomise options"
+            sub="New order on every attempt or prompt"
+          />
+        )}
+        {data.type === "mcq" && (
+          <ToggleRow
+            checked={data.otherOption}
+            disabled={grading}
+            onChange={(v) => update({ otherOption: v })}
+            label="“Other” free-text option"
+            sub="Only when grading is off"
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+function FeedbackSection({
+  data,
+  update,
+}: {
+  data: QuestionDraft;
+  update: (p: Partial<QuestionDraft>) => void;
+}) {
+  const singleAnswer =
+    data.type === "true-false" || (data.type === "mcq" && data.mcqMode === "single");
+  return (
+    <>
+      <PageBreak label="Feedback" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Correct</label>
+          <LangField
+            en={data.fbCorrect}
+            es={data.fbCorrectEs}
+            onEn={(v) => update({ fbCorrect: v })}
+            onEs={(v) => update({ fbCorrectEs: v })}
+            placeholder="Shown for a correct response…"
+            esPlaceholder="Se muestra en una respuesta correcta…"
+          />
+          <p className="form-help">
+            Shown after submission when the quiz's review settings allow it.
+          </p>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Partially correct</label>
+          <LangField
+            en={singleAnswer ? "" : data.fbPartial}
+            es={singleAnswer ? "" : data.fbPartialEs}
+            onEn={(v) => update({ fbPartial: v })}
+            onEs={(v) => update({ fbPartialEs: v })}
+            disabled={singleAnswer}
+            placeholder={
+              singleAnswer
+                ? "Not used for single-answer questions"
+                : "Shown for a partially correct response…"
+            }
+            esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
+          />
+          {singleAnswer && (
+            <p className="form-help">Not used for single-answer questions.</p>
+          )}
+        </div>
+        <div className="form-group">
+          <label className="form-label">Incorrect</label>
+          <LangField
+            en={data.fbIncorrect}
+            es={data.fbIncorrectEs}
+            onEn={(v) => update({ fbIncorrect: v })}
+            onEs={(v) => update({ fbIncorrectEs: v })}
+            placeholder="Shown for an incorrect response…"
+            esPlaceholder="Se muestra en una respuesta incorrecta…"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TranslationsSection({
+  enDone,
+  esState,
+  esDone,
+  total,
+}: {
+  enDone: boolean;
+  esState: "missing" | "partial" | "complete";
+  esDone: number;
+  total: number;
+}) {
+  return (
+    <>
+      <PageBreak label="Translations" />
+      <div className="qed-trans">
+        <div className="qed-trans-row">
+          <span className="lang-tag">EN</span>
+          <span className="qed-trans-name">English</span>
+          <span
+            className={`co-status-pill co-status-pill--${enDone ? "green" : "secondary"}`}
+          >
+            {enDone ? "Complete" : "In progress"}
+          </span>
+        </div>
+        <div className="qed-trans-row">
+          <span className="lang-tag">ES</span>
+          <span className="qed-trans-name">Español</span>
+          <span
+            className={`co-status-pill co-status-pill--${esState === "complete" ? "green" : "yellow"}`}
+          >
+            {esState === "complete"
+              ? "Complete"
+              : esState === "partial"
+                ? `${esDone}/${total} translated`
+                : "Missing"}
+          </span>
+        </div>
+        <p className="form-help">
+          Fill the ES row on each field to translate this question.
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -1270,28 +1355,46 @@ function EmptyHistoryModal({ onClose }: { onClose: () => void }) {
 
 /* ─────────────────  Primitives  ───────────────── */
 
-const CheckMark = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 12.5l5 5L20 6.5" />
-  </svg>
-);
+/* "Add X" card — the design system's add affordance (Figma 341:2764). */
+function AddCard({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button className="add-card" onClick={onClick} disabled={disabled}>
+      <span className="add-card-icon">
+        <PlusThinIcon />
+      </span>
+      <span className="add-card-label">{label}</span>
+    </button>
+  );
+}
 
 function RadioCard({
   selected,
   onSelect,
   title,
   desc,
+  disabled,
 }: {
   selected: boolean;
   onSelect: () => void;
   title: React.ReactNode;
   desc?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       className={`radio-card ${selected ? "selected" : ""}`}
       onClick={onSelect}
+      aria-pressed={selected}
+      aria-disabled={disabled || undefined}
     >
       <span className="radio-dot" />
       <div className="radio-card-text">
@@ -1316,46 +1419,54 @@ function ToggleRow({
   disabled?: boolean;
 }) {
   return (
-    <div className={`toggle-row ${disabled ? "qed-toggle-disabled" : ""}`}>
-      <button
-        type="button"
-        className={`toggle ${checked ? "on" : ""}`}
-        disabled={disabled}
-        onClick={() => !disabled && onChange(!checked)}
-        aria-pressed={checked}
-      >
-        <span className="toggle-knob" />
-      </button>
-      <div className="toggle-text">
-        <div className="toggle-label">{label}</div>
-        {sub && <div className="toggle-sub">{sub}</div>}
+    /* Figma 373:233 / 362:2440 — label, then the switch beside the state it's
+       in, then the note. */
+    <div className={`toggle-field ${disabled ? "is-disabled" : ""}`}>
+      <span className="form-label">{label}</span>
+      <div className="toggle-switch-row">
+        <button
+          type="button"
+          className={`toggle ${checked ? "on" : ""}`}
+          disabled={disabled}
+          onClick={() => !disabled && onChange(!checked)}
+          aria-pressed={checked}
+        >
+          <span className="toggle-knob" />
+        </button>
+        <span className="toggle-state">{checked ? "Yes" : "No"}</span>
       </div>
+      {sub && <p className="toggle-sub">{sub}</p>}
     </div>
   );
 }
 
-function SelectBox({
+/* Dropdown input (Figma 101:272 / 101:281). */
+function Select({
   value,
   onChange,
   options,
   disabled,
+  width = "field",
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   disabled?: boolean;
+  width?: "field" | "narrow";
 }) {
   return (
-    <div className={`qe-select ${disabled ? "is-disabled" : ""}`}>
-      <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <span className="qe-select-caret">▾</span>
-    </div>
+    <select
+      className={`form-select ${width === "narrow" ? "qed-select-narrow" : "qed-select"}`}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -1374,25 +1485,24 @@ function GradeSelect({
     ? GRADE_OPTIONS
     : [{ value, label: label(value) }, ...GRADE_OPTIONS];
   return (
-    <div
-      className={`qe-select qe-grade-select ${value > 0 ? "is-pos" : value < 0 ? "is-neg" : ""}`}
+    <select
+      className={`form-select qed-grade ${value > 0 ? "is-pos" : value < 0 ? "is-neg" : ""}`}
+      value={String(value)}
+      onChange={(e) => onChange(Number(e.target.value))}
     >
-      <select value={String(value)} onChange={(e) => onChange(Number(e.target.value))}>
-        {opts.map((o) => (
-          <option key={o.label} value={String(o.value)}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <span className="qe-select-caret">▾</span>
-    </div>
+      {opts.map((o) => (
+        <option key={o.label} value={String(o.value)}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
-/* Bilingual plain-text field — English row over a Spanish row, sharing one
-   bordered box. Used for every user-facing field except the rich question text
-   (options, match pairs, scale labels, feedback). */
-function BiField({
+/* Plain Text Input - Dual Language (Figma 49:348) — one bordered box holding an
+   EN row over an ES row. Used for options, match pairs, scale labels and
+   feedback; the question text itself uses the rich-text variant. */
+function LangField({
   en,
   es,
   onEn,
@@ -1410,22 +1520,22 @@ function BiField({
   disabled?: boolean;
 }) {
   return (
-    <div className={`qed-bi ${disabled ? "is-disabled" : ""}`}>
-      <label className="qed-bi-row">
-        <span className="qed-bi-tag">EN</span>
+    <div className={`lang-field ${disabled ? "is-disabled" : ""}`}>
+      <label className="lang-field-row">
+        <span className="lang-tag">EN</span>
         <input
-          className="qed-bi-input"
+          className="lang-field-input"
           value={en}
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => onEn(e.target.value)}
         />
       </label>
-      <div className="qed-bi-divider" />
-      <label className="qed-bi-row">
-        <span className="qed-bi-tag">ES</span>
+      <div className="lang-field-divider" />
+      <label className="lang-field-row">
+        <span className="lang-tag">ES</span>
         <input
-          className="qed-bi-input"
+          className="lang-field-input"
           value={es}
           disabled={disabled}
           placeholder={esPlaceholder ?? "Traducción en español…"}

@@ -11,48 +11,18 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { SearchIcon, SortIcon, AddIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CertPreviewPanel } from "./CertPreviewPanel";
 
 const PAGE_SIZE = 50;
 
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-    <circle cx="12" cy="12" r="2.6" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13.2 13.2 0 0 1-2.16 2.92M6.6 6.6A13.3 13.3 0 0 0 2 12s3.5 7 10 7a9.3 9.3 0 0 0 5.4-1.6" />
-    <path d="M9.9 9.9a2.6 2.6 0 0 0 3.7 3.7" />
-    <path d="M2 2l20 20" />
-  </svg>
-);
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 const PayersIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
     <circle cx="9" cy="7" r="4" />
     <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </svg>
 );
 const BackupIcon = () => (
@@ -378,6 +348,7 @@ export function CertificationsPage({
                               onEdit={() => editCert(cert)}
                               onToggleVisibility={() => toggleHidden(cert)}
                               onOpenMenu={(rect) => setMenu({ cert, rect })}
+                              menuOpen={menu?.cert.id === cert.id}
                             />
                           ))}
                         </tbody>
@@ -481,6 +452,7 @@ function CertRow({
   onEdit,
   onToggleVisibility,
   onOpenMenu,
+  menuOpen,
 }: {
   cert: Certification;
   selected: boolean;
@@ -489,12 +461,14 @@ function CertRow({
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const vis = cert.visibility ?? "Visible";
   const hidden = vis === "Hidden";
   return (
     <tr
-      className={`${selected ? "selected" : ""} ${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""}`}
+      className={`${selected ? "selected" : ""} ${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onClick}
     >
       {columns.id && <td className="col-id">{cert.id}</td>}
@@ -531,7 +505,7 @@ function CertRow({
           aria-label="More"
           onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -540,7 +514,7 @@ function CertRow({
             title="Edit certification"
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
           >
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
@@ -548,14 +522,14 @@ function CertRow({
             title={hidden ? "Make visible" : "Hide certification"}
             onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
           >
-            {hidden ? <EyeOffIcon /> : <EyeIcon />}
+            {hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
           </button>
           <button
             className="row-action-btn"
             aria-label="More"
             onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -655,14 +629,12 @@ function CertActionsMenu({
         <div className="u-menu-head-name">{cert.name}</div>
         <div className="u-menu-head-id">{cert.id}{cert.type ? ` · ${cert.type}` : ""}</div>
       </div>
-      <div className="u-menu-divider" />
-      {item(<PencilIcon />, "Edit", onEdit)}
+      {item(<RowEditIcon />, "Edit", onEdit)}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<PayersIcon />, "View who paid", onViewPayers)}
       {item(<LinkIcon />, "Manage Content Links", onManageContentLinks)}
       {item(<BackupIcon />, "Backup Certification", onBackup)}
-      <div className="u-menu-divider" />
-      {item(<TrashIcon />, "Delete", onDelete, true)}
+      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );
 }

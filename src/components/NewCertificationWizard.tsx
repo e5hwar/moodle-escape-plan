@@ -8,7 +8,7 @@ import { RteToolbar } from "./RteToolbar";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
-import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon } from "./icons";
+import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { type Certification, certifications } from "../data/certifications";
@@ -226,12 +226,6 @@ const RestrictionLockIcon = () => (
     <g transform="translate(1.458 0.417)">
       <path d="M1.04167 3.75H0V8.75H7.08333V3.75H6.04167V2.5C6.04167 1.83696 5.77828 1.20107 5.30943 0.732233C4.84059 0.263392 4.20471 0 3.54167 0C2.87863 0 2.24274 0.263392 1.7739 0.732233C1.30506 1.20107 1.04167 1.83696 1.04167 2.5V3.75ZM1.875 2.5C1.875 2.05797 2.05059 1.63405 2.36316 1.32149C2.67572 1.00893 3.09964 0.833333 3.54167 0.833333C3.98369 0.833333 4.40762 1.00893 4.72018 1.32149C5.03274 1.63405 5.20833 2.05797 5.20833 2.5V3.75H1.875V2.5ZM2.29167 6.66667V5.83333H4.79167V6.66667H2.29167Z" />
     </g>
-  </svg>
-);
-// Plus, 14px slot (Figma I340:2676;7:30) — leads the two Course-footer cards.
-const PlusThinIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
-    <path d="M7 2.917V11.083M11.083 7H2.917" />
   </svg>
 );
 // Trash — removes a Course, Lesson, or Task from the tree.
@@ -1597,8 +1591,8 @@ function TasksStep({
         ))}
 
         <button className="cert-add-course" onClick={addCourse}>
-          <span className="cert-bigadd-icon"><PlusThinIcon /></span>
-          <span className="cert-bigadd-label">Add Course</span>
+          <span className="add-card-icon"><PlusThinIcon /></span>
+          <span className="add-card-label">Add Course</span>
         </button>
       </div>
 
@@ -1959,9 +1953,9 @@ function CourseCard({
           )}
 
           <div className="cert-course-foot">
-            <button className="cert-bigadd" onClick={onAddLesson}>
-              <span className="cert-bigadd-icon"><PlusThinIcon /></span>
-              <span className="cert-bigadd-label">Add Lesson</span>
+            <button className="add-card" onClick={onAddLesson}>
+              <span className="add-card-icon"><PlusThinIcon /></span>
+              <span className="add-card-label">Add Lesson</span>
             </button>
             <AddTaskMenu
               variant="bigadd"
@@ -2316,10 +2310,10 @@ function AddTaskMenu({
             <span className="cert-task-name">{label}</span>
           </button>
         ) : (
-          <button className="cert-bigadd" onClick={toggle}>
-            <span className="cert-bigadd-icon"><PlusThinIcon /></span>
-            <span className="cert-bigadd-label">{label}</span>
-            <span className="cert-bigadd-more"><TreeKebabIcon /></span>
+          <button className="add-card" onClick={toggle}>
+            <span className="add-card-icon"><PlusThinIcon /></span>
+            <span className="add-card-label">{label}</span>
+            <span className="add-card-more"><TreeKebabIcon /></span>
           </button>
         )
       }
@@ -2587,11 +2581,6 @@ function CompletionStep({
         <label className="form-label">
           Completion criteria <span className="req">*</span>
         </label>
-        <p className="form-help cond-intro">
-          The Certification is complete when a learner satisfies <strong>any one</strong> Condition
-          Set in full. Within a Condition Set, <strong>all</strong> items must be completed.
-        </p>
-
         <CompletionCriteriaGate locked={criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
           {sets.length === 0 ? (
             <div className="cert-empty-hint">
@@ -2629,6 +2618,10 @@ function CompletionStep({
           </div>
         </CompletionCriteriaGate>
 
+        <p className="form-help cond-intro">
+          The Certification is complete when a learner satisfies <strong>any one</strong> Condition
+          Set in full. Within a Condition Set, <strong>all</strong> items must be completed.
+        </p>
         <p className="form-help">
           Any change to completion criteria resets completion data for all enrolled users. Awards already issued are not revoked.
         </p>
@@ -3224,21 +3217,22 @@ function ArchivingStep({
           </div>
         </div>
 
-        <div className="toggle-row">
-          <button
-            className={`toggle ${data.archived ? "on" : ""}`}
-            onClick={() => update({ archived: !data.archived })}
-            aria-pressed={data.archived}
-          >
-            <span className="toggle-knob" />
-          </button>
-          <div className="toggle-text">
-            <div className="toggle-label">Archive this Certification</div>
-            <div className="toggle-sub">
-              Retires the Certification and removes it from the catalog. This action is
-              permanent and cannot be undone.
-            </div>
+        <div className="toggle-field">
+          <span className="form-label">Archive this Certification</span>
+          <div className="toggle-switch-row">
+            <button
+              className={`toggle ${data.archived ? "on" : ""}`}
+              onClick={() => update({ archived: !data.archived })}
+              aria-pressed={data.archived}
+            >
+              <span className="toggle-knob" />
+            </button>
+            <span className="toggle-state">{data.archived ? "Yes" : "No"}</span>
           </div>
+          <p className="toggle-sub">
+            Retires the Certification and removes it from the catalog. This action is
+            permanent and cannot be undone.
+          </p>
         </div>
       </section>
 

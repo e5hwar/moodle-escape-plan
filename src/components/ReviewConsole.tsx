@@ -562,12 +562,7 @@ export function ReviewConsole({
 
                   {/* Feedback — Figma 263:865; read-only 298:1092 */}
                   <div className="rvc-field rvc-field--fb">
-                    <div className="rvc-field-head">
-                      <label className="form-label" htmlFor="rvc-feedback">Feedback</label>
-                      <p className="form-help">
-                        Optional. Shown to the user along with their score.
-                      </p>
-                    </div>
+                    <label className="form-label" htmlFor="rvc-feedback">Feedback</label>
                     <textarea
                       id="rvc-feedback"
                       className="form-input rvc-feedback"
@@ -580,6 +575,9 @@ export function ReviewConsole({
                       value={shownFeedback}
                       onChange={(e) => setDraft({ feedback: e.target.value })}
                     />
+                    <p className="form-help">
+                      Optional. Shown to the user along with their score.
+                    </p>
                   </div>
                 </>
               )}

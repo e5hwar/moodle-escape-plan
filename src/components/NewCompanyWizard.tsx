@@ -1218,8 +1218,7 @@ function Step1Details({
       </div>
 
       <div className="form-group">
-        <label className="form-label" style={{ marginBottom: 0 }}>Address <span className="req">*</span></label>
-        <p className="form-help" style={{ margin: "0 0 8px" }}>Country and Zipcode are mandatory</p>
+        <label className="form-label">Address <span className="req">*</span></label>
         <div className="address-field">
           <div className="address-row">
             <select
@@ -1273,11 +1272,21 @@ function Step1Details({
             <span className="address-chevron"><ChevronDownIcon /></span>
           </div>
         </div>
+        <p className="form-help">Country and Zipcode are mandatory</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label" style={{ marginBottom: 0 }}>Tax Status <span className="req">*</span></label>
-        <p className="form-help" style={{ margin: "0 0 8px" }}>
+        <label className="form-label">Tax Status <span className="req">*</span></label>
+        <select
+          className="form-select"
+          value={taxStatus}
+          onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}
+        >
+          {TAX_STATUSES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        <p className="form-help">
           Refer to{" "}
           <a
             href="https://docs.stripe.com/tax/zero-tax"
@@ -1289,15 +1298,6 @@ function Step1Details({
           </a>{" "}
           for more details
         </p>
-        <select
-          className="form-select"
-          value={taxStatus}
-          onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}
-        >
-          {TAX_STATUSES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
       </div>
 
       <div className="form-group">
@@ -1330,8 +1330,14 @@ function Step1Details({
 
       <div className="form-row-2">
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label" style={{ marginBottom: 0 }}>Industry</label>
-          <p className="form-help co-w-manage-link" style={{ margin: "0 0 8px" }}>
+          <label className="form-label">Industry</label>
+          <MultiSelect
+            options={INDUSTRY_OPTIONS}
+            value={industries}
+            onChange={setIndustries}
+            placeholder="Select industries…"
+          />
+          <p className="form-help co-w-manage-link">
             Manage Industries on{" "}
             <a
               href="#"
@@ -1344,16 +1350,16 @@ function Step1Details({
               Product Config <ArrowUpRightIcon />
             </a>
           </p>
-          <MultiSelect
-            options={INDUSTRY_OPTIONS}
-            value={industries}
-            onChange={setIndustries}
-            placeholder="Select industries…"
-          />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label" style={{ marginBottom: 0 }}>Partnership</label>
-          <p className="form-help co-w-manage-link" style={{ margin: "0 0 8px" }}>
+          <label className="form-label">Partnership</label>
+          <MultiSelect
+            options={PARTNERSHIP_OPTIONS}
+            value={partnerships}
+            onChange={setPartnerships}
+            placeholder="Select partnerships…"
+          />
+          <p className="form-help co-w-manage-link">
             Manage Partnerships on{" "}
             <a
               href="#"
@@ -1366,12 +1372,6 @@ function Step1Details({
               Product Config <ArrowUpRightIcon />
             </a>
           </p>
-          <MultiSelect
-            options={PARTNERSHIP_OPTIONS}
-            value={partnerships}
-            onChange={setPartnerships}
-            placeholder="Select partnerships…"
-          />
         </div>
       </div>
     </>
@@ -1478,10 +1478,7 @@ function StepAdminAccount({
       </div>
 
       <div className="form-group">
-        <label className="form-label" style={{ marginBottom: 0 }}>Email <span className="req">*</span></label>
-        <p className="form-help" style={{ margin: "0 0 8px" }}>
-          Becomes the Stripe billing email and the company's first Admin account.
-        </p>
+        <label className="form-label">Email <span className="req">*</span></label>
         <input
           className="form-input"
           type="email"
@@ -1489,6 +1486,9 @@ function StepAdminAccount({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        <p className="form-help">
+          Becomes the Stripe billing email and the company's first Admin account.
+        </p>
       </div>
 
       <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1880,7 +1880,7 @@ function PerSeatPriceField({
         </p>
       )}
 
-      <p className="form-help" style={{ marginTop: 8 }}>
+      <p className="form-help">
         Default for {tier} {billingCycle === "Annual" ? "Yearly" : "Monthly"} is {sym}{baseRate} / seat / {unitWordLong}.
       </p>
     </div>

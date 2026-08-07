@@ -171,7 +171,7 @@ function DetailsStep({ data, update }: { data: Data; update: (p: Partial<Data>) 
             >
               <UploadIcon /> Upload image
             </button>
-            <p className="form-help" style={{ marginTop: 4 }}>JPEG or PNG. This is the visual base of the Card or Certificate.</p>
+            <p className="form-help">JPEG or PNG. This is the visual base of the Card or Certificate.</p>
             <div className="aw-swatch-row">
               {SWATCHES.map((sw) => (
                 <button

@@ -3,74 +3,119 @@ import {
   categories as seedCategories,
   questions as allQuestions,
   flattenCategories,
-  selectionLabel,
+  longQuestionType,
+  questionDates,
   shortQuestionType,
+  QUESTION_TYPE_OPTIONS,
   supportsGrading,
   versionHistory,
   type Category,
-  type CategorySelection,
   type Question,
   type QuestionStatus,
   type QuestionVersion,
-  type ShortQuestionType,
   type Subcategory,
 } from "../data/questionBank";
 import {
-  CheckIcon,
+  ArrowRightUpIcon,
   ChevronLeftIcon,
   InfoFilledIcon,
+  MenuArchiveIcon,
+  MenuHistoryIcon,
+  MenuPreviewIcon,
+  RowEditIcon,
+  RowKebabIcon,
   SearchIcon,
   SortIcon,
   TreeCaretIcon,
   TreeKebabIcon,
-  UploadIcon,
+  UploadTrayIcon,
 } from "./icons";
 import { Dropdown } from "./Dropdown";
-import { PillTrigger } from "./Filters";
+import {
+  CascadingMultiSelect,
+  EditColumnsButton,
+  PillTrigger,
+  SectionedMultiSelect,
+  summarize,
+} from "./Filters";
 import { PageBreak } from "./PageBreak";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 50;
 
 /* The seed set is a sample of a much larger bank, so the rail's "All Questions"
    total is the mock figure the category counts add up to — not `questions.length`. */
 const TOTAL_QUESTIONS = "1,089";
 
-const TYPE_OPTIONS: (ShortQuestionType | "All")[] = [
-  "All",
-  "MCQ",
-  "T/F",
-  "Match",
-  "Short",
-  "File",
-  "Scale",
+/* Every filter is a multi-select, matching the Tasks row: empty = unapplied,
+   values inside one filter OR together, filters AND together. */
+const TYPE_OPTIONS = QUESTION_TYPE_OPTIONS;
+const STATUS_OPTIONS: QuestionStatus[] = ["Active", "Archived", "Draft"];
+const GRADING_OPTIONS = ["Graded", "Ungraded"];
+const USED_IN_OPTIONS = ["In a quiz", "In a feedback form", "Not in use"];
+
+/* Toggleable table columns (Question is fixed). */
+type QbColumn =
+  | "id"
+  | "type"
+  | "version"
+  | "status"
+  | "category"
+  | "grading"
+  | "quizzes"
+  | "forms"
+  | "createdOn"
+  | "lastModified";
+
+type QbColumnState = Record<QbColumn, boolean>;
+
+const QB_OPTIONAL_COLUMNS: { key: QbColumn; label: string }[] = [
+  { key: "id", label: "ID" },
+  { key: "type", label: "Type" },
+  { key: "version", label: "Version" },
+  { key: "status", label: "Status" },
+  { key: "category", label: "Category" },
+  { key: "grading", label: "Grading" },
+  { key: "quizzes", label: "Quizzes" },
+  { key: "forms", label: "Feedback Forms" },
+  { key: "createdOn", label: "Created On" },
+  { key: "lastModified", label: "Last Modified" },
 ];
 
-const STATUS_OPTIONS: (QuestionStatus | "All")[] = [
-  "All",
-  "Active",
-  "Archived",
-  "Draft",
-];
+const QB_FIXED_COLUMNS = [{ label: "Question" }];
 
-const GRADING_OPTIONS = ["Any", "Graded", "Ungraded"] as const;
-type GradingOption = (typeof GRADING_OPTIONS)[number];
+const QB_COLUMN_WIDTHS: Record<QbColumn, number> = {
+  id: 100,
+  // Wide enough for the longest spelled-out type ("Match the Following").
+  type: 170,
+  version: 84,
+  status: 108,
+  category: 190,
+  grading: 110,
+  quizzes: 190,
+  forms: 190,
+  createdOn: 130,
+  lastModified: 130,
+};
 
-const USED_IN_OPTIONS = [
-  "Any",
-  "In a quiz",
-  "In a feedback form",
-  "Not in use",
-] as const;
-type UsedInOption = (typeof USED_IN_OPTIONS)[number];
+// Roomy, because the question text is allowed to run to a second line.
+const QUESTION_COL_WIDTH = 420;
+const ACTIONS_COL_WIDTH = 40;
 
 function isGraded(q: Question): boolean {
   return q.gradingEnabled && supportsGrading(q.type);
 }
 
-type QSortKey = "question" | "type" | "version" | "status" | "usage";
+type QSortKey =
+  | "question"
+  | "id"
+  | "type"
+  | "version"
+  | "status"
+  | "category"
+  | "usage";
 type SortDir = "asc" | "desc";
 
 const STATUS_ORDER: Record<QuestionStatus, number> = {
@@ -83,6 +128,10 @@ function compareQuestions(a: Question, b: Question, key: QSortKey): number {
   switch (key) {
     case "question":
       return a.text.localeCompare(b.text);
+    case "id":
+      return a.id.localeCompare(b.id);
+    case "category":
+      return a.categoryPath.join(" > ").localeCompare(b.categoryPath.join(" > "));
     case "type":
       return shortQuestionType(a.type).localeCompare(shortQuestionType(b.type));
     case "version":
@@ -111,38 +160,9 @@ type CatModalState =
   | { kind: "edit-sub"; categoryKey: string; subKey: string }
   | { kind: "delete"; target: CatTarget };
 
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-
-const ArchiveIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7h18v3H3zM5 10v9a1 1 0 001 1h12a1 1 0 001-1v-9M10 14h4" />
-  </svg>
-);
-
 const TrashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a1 1 0 001 1h8a1 1 0 001-1l1-14M10 11v6M14 11v6" />
-  </svg>
-);
-
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const HistoryIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 3v5h5" />
-    <path d="M3.05 13a9 9 0 1 0 2.6-6.36L3 8" />
-    <path d="M12 7v5l3 2" />
   </svg>
 );
 
@@ -167,11 +187,9 @@ export function QuestionBankPage({
   // Row-click preview panel + version-history modal
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [historyQ, setHistoryQ] = useState<Question | null>(null);
-  const [selection, setSelection] = useState<CategorySelection>({
-    kind: "subcategory",
-    categoryKey: "epa-608",
-    subKey: "universal",
-  });
+  // Category is a multi-select like every other filter — labels from
+  // flattenCategories ("EPA 608" / "EPA 608 > Universal"). Empty = all questions.
+  const [selection, setSelection] = useState<string[]>([]);
   const [categorySearch, setCategorySearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     "epa-608": true,
@@ -180,10 +198,28 @@ export function QuestionBankPage({
   const [catModal, setCatModal] = useState<CatModalState>({ kind: "none" });
 
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<ShortQuestionType | "All">("All");
-  const [statusFilter, setStatusFilter] = useState<QuestionStatus | "All">("Active");
-  const [gradingFilter, setGradingFilter] = useState<GradingOption>("Any");
-  const [usedInFilter, setUsedInFilter] = useState<UsedInOption>("Any");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  // Draft questions are hidden until the author asks for them.
+  const [statusFilter, setStatusFilter] = useState<string[]>(["Active"]);
+  const [gradingFilter, setGradingFilter] = useState<string[]>([]);
+  // The three below live in "More filters"; quizzes/forms are also set from the
+  // search box's Quizzes: / Feedback Form: tokens.
+  const [usedInFilter, setUsedInFilter] = useState<string[]>([]);
+  const [quizFilter, setQuizFilter] = useState<string[]>([]);
+  const [formFilter, setFormFilter] = useState<string[]>([]);
+
+  const [columns, setColumns] = useState<QbColumnState>({
+    id: false,
+    type: true,
+    version: true,
+    status: true,
+    category: false,
+    grading: false,
+    quizzes: false,
+    forms: false,
+    createdOn: false,
+    lastModified: false,
+  });
 
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: QSortKey; dir: SortDir }>({
@@ -191,22 +227,60 @@ export function QuestionBankPage({
     dir: "asc",
   });
 
+  // Every category and subcategory, as "Parent" / "Parent > Sub" labels.
+  const categoryLabels = useMemo(
+    () => flattenCategories(categories).map((o) => o.label),
+    [categories],
+  );
+
+  // Every quiz / feedback form name that appears on at least one question.
+  const quizNames = useMemo(
+    () => [...new Set(questions.flatMap((q) => q.quizzes))].sort((a, b) => a.localeCompare(b)),
+    [questions],
+  );
+  const formNames = useMemo(
+    () => [...new Set(questions.flatMap((q) => q.forms))].sort((a, b) => a.localeCompare(b)),
+    [questions],
+  );
+
+  const appliedCount =
+    typeFilter.length +
+    statusFilter.length +
+    gradingFilter.length +
+    usedInFilter.length +
+    quizFilter.length +
+    formFilter.length +
+    selection.length;
+
+  function clearFilters() {
+    setSelection([]);
+    setTypeFilter([]);
+    setStatusFilter([]);
+    setGradingFilter([]);
+    setUsedInFilter([]);
+    setQuizFilter([]);
+    setFormFilter([]);
+  }
+
+  // Natural table width so columns scroll horizontally instead of crushing on a
+  // narrow page — mirrors the visible <col>s.
+  const activeColumns = QB_OPTIONAL_COLUMNS.filter((c) => columns[c.key]);
+  const tableMin =
+    QUESTION_COL_WIDTH +
+    ACTIONS_COL_WIDTH +
+    activeColumns.reduce((sum, c) => sum + QB_COLUMN_WIDTHS[c.key], 0);
+  const visibleColCount = activeColumns.length + 2; // Question + actions
+
   // Filter by category selection
   const inCategory = useMemo(() => {
+    if (selection.length === 0) return questions;
     return questions.filter((q) => {
-      if (selection.kind === "all") return true;
-      const catLabel = categories.find((c) => c.key === selection.categoryKey)?.label;
-      if (!catLabel) return false;
-      if (selection.kind === "category") {
-        return q.categoryPath[0] === catLabel;
-      }
-      const sub = categories
-        .find((c) => c.key === selection.categoryKey)
-        ?.subcategories?.find((s) => s.key === selection.subKey);
-      if (!sub) return false;
-      return q.categoryPath[0] === catLabel && q.categoryPath[1] === sub.label;
+      const [cat, sub] = q.categoryPath;
+      return selection.some(
+        (label) => label === cat || (sub != null && label === `${cat} > ${sub}`),
+      );
     });
-  }, [selection, categories, questions]);
+  }, [selection, questions]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -214,17 +288,33 @@ export function QuestionBankPage({
       if (q && !(row.id.toLowerCase().includes(q) || row.text.toLowerCase().includes(q))) {
         return false;
       }
-      if (typeFilter !== "All" && shortQuestionType(row.type) !== typeFilter) return false;
-      if (statusFilter !== "All" && row.status !== statusFilter) return false;
-      if (gradingFilter === "Graded" && !isGraded(row)) return false;
-      if (gradingFilter === "Ungraded" && isGraded(row)) return false;
-      if (usedInFilter === "In a quiz" && row.quizzes.length === 0) return false;
-      if (usedInFilter === "In a feedback form" && row.forms.length === 0) return false;
-      if (usedInFilter === "Not in use" && row.quizzes.length + row.forms.length > 0)
+      if (typeFilter.length && !typeFilter.includes(longQuestionType(row.type)))
         return false;
+      if (statusFilter.length && !statusFilter.includes(row.status)) return false;
+      if (gradingFilter.length && !gradingFilter.includes(isGraded(row) ? "Graded" : "Ungraded"))
+        return false;
+      if (usedInFilter.length) {
+        const inQuiz = row.quizzes.length > 0;
+        const inForm = row.forms.length > 0;
+        const hit = usedInFilter.some((o) =>
+          o === "In a quiz" ? inQuiz : o === "In a feedback form" ? inForm : !inQuiz && !inForm,
+        );
+        if (!hit) return false;
+      }
+      if (quizFilter.length && !row.quizzes.some((n) => quizFilter.includes(n))) return false;
+      if (formFilter.length && !row.forms.some((n) => formFilter.includes(n))) return false;
       return true;
     });
-  }, [inCategory, query, typeFilter, statusFilter, gradingFilter, usedInFilter]);
+  }, [
+    inCategory,
+    query,
+    typeFilter,
+    statusFilter,
+    gradingFilter,
+    usedInFilter,
+    quizFilter,
+    formFilter,
+  ]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareQuestions(a, b, sort.key));
@@ -235,7 +325,17 @@ export function QuestionBankPage({
 
   useEffect(() => {
     setPage(1);
-  }, [selection, query, typeFilter, statusFilter, gradingFilter, usedInFilter, sort]);
+  }, [
+    selection,
+    query,
+    typeFilter,
+    statusFilter,
+    gradingFilter,
+    usedInFilter,
+    quizFilter,
+    formFilter,
+    sort,
+  ]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -276,15 +376,8 @@ export function QuestionBankPage({
 
   function startCreate() {
     let path: string[] | undefined;
-    if (selection.kind !== "all") {
-      const cat = categories.find((c) => c.key === selection.categoryKey);
-      if (cat) {
-        path = [cat.label];
-        if (selection.kind === "subcategory") {
-          const sub = cat.subcategories?.find((s) => s.key === selection.subKey);
-          if (sub) path.push(sub.label);
-        }
-      }
+    if (selection.length === 1) {
+      path = selection[0].split(" > ");
     }
     onNewQuestion?.(path);
   }
@@ -361,8 +454,11 @@ export function QuestionBankPage({
 
   function deleteCategory(key: string) {
     setCategories((prev) => prev.filter((c) => c.key !== key));
-    if (selection.kind !== "all" && selection.categoryKey === key) {
-      setSelection({ kind: "all" });
+    const label = categories.find((c) => c.key === key)?.label;
+    if (label) {
+      setSelection((prev) =>
+        prev.filter((l) => l !== label && !l.startsWith(`${label} > `)),
+      );
     }
   }
 
@@ -376,8 +472,11 @@ export function QuestionBankPage({
         };
       }),
     );
-    if (selection.kind === "subcategory" && selection.subKey === subKey) {
-      setSelection({ kind: "category", categoryKey });
+    const cat = categories.find((c) => c.key === categoryKey);
+    const sub = cat?.subcategories?.find((sc) => sc.key === subKey);
+    if (cat && sub) {
+      const label = `${cat.label} > ${sub.label}`;
+      setSelection((prev) => prev.filter((l) => l !== label));
     }
   }
 
@@ -467,10 +566,10 @@ export function QuestionBankPage({
             />
 
             <div className="tree">
-              <div className={`tree-row ${selection.kind === "all" ? "is-active" : ""}`}>
+              <div className={`tree-row ${selection.length === 0 ? "is-active" : ""}`}>
                 {/* Caret-sized spacer keeps this label on the category column. */}
                 <span className="tree-caret-btn" aria-hidden />
-                <button className="tree-main" onClick={() => setSelection({ kind: "all" })}>
+                <button className="tree-main" onClick={() => setSelection([])}>
                   <span className="tree-row-label">All Questions</span>
                   <span className="tree-row-count">{TOTAL_QUESTIONS}</span>
                 </button>
@@ -478,10 +577,7 @@ export function QuestionBankPage({
 
               {filteredCategories.map((cat) => {
                 const isOpen = !!openGroups[cat.key];
-                const isActiveCat =
-                  selection.kind === "category" && selection.categoryKey === cat.key;
-                const hasActiveSub =
-                  selection.kind === "subcategory" && selection.categoryKey === cat.key;
+                const isActiveCat = selection.includes(cat.label);
                 return (
                   <div key={cat.key} className="tree-group">
                     <div className={`tree-row ${isActiveCat ? "is-active" : ""}`}>
@@ -495,7 +591,7 @@ export function QuestionBankPage({
                       </button>
                       <button
                         className="tree-main"
-                        onClick={() => setSelection({ kind: "category", categoryKey: cat.key })}
+                        onClick={() => setSelection([cat.label])}
                       >
                         <span className="tree-row-label">{cat.label}</span>
                         <span className="tree-row-count">{cat.count}</span>
@@ -514,10 +610,8 @@ export function QuestionBankPage({
                         {!!cat.subcategories?.length && (
                           <div className="tree-sublist-rows">
                             {cat.subcategories.map((sub) => {
-                              const isActive =
-                                hasActiveSub &&
-                                selection.kind === "subcategory" &&
-                                selection.subKey === sub.key;
+                              const subLabel = `${cat.label} > ${sub.label}`;
+                              const isActive = selection.includes(subLabel);
                               return (
                                 <div
                                   key={sub.key}
@@ -525,13 +619,7 @@ export function QuestionBankPage({
                                 >
                                   <button
                                     className="tree-sub-main"
-                                    onClick={() =>
-                                      setSelection({
-                                        kind: "subcategory",
-                                        categoryKey: cat.key,
-                                        subKey: sub.key,
-                                      })
-                                    }
+                                    onClick={() => setSelection([subLabel])}
                                   >
                                     <span className="tree-sub-row-label">{sub.label}</span>
                                     <span className="tree-sub-row-count">{sub.count}</span>
@@ -584,14 +672,22 @@ export function QuestionBankPage({
           {/* Right pane */}
           <section className="qb-content">
             <QuestionSearch
-              categories={categories}
+              questions={questions}
+              categoryOptions={categoryLabels}
+              selection={selection}
               onSelectionChange={setSelection}
+              types={typeFilter}
+              onTypesChange={setTypeFilter}
+              quizzes={quizFilter}
+              onQuizzesChange={setQuizFilter}
+              forms={formFilter}
+              onFormsChange={setFormFilter}
               query={query}
-              onQueryChange={setQuery}
+              onCommit={setQuery}
             />
 
             <label
-              className={`qb-dropzone ${dropzoneActive ? "is-active" : ""}`}
+              className={`drop-primary qb-bulk-upload ${dropzoneActive ? "is-active" : ""}`}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDropzoneActive(true);
@@ -609,63 +705,68 @@ export function QuestionBankPage({
                 hidden
                 onChange={() => {/* noop in mock */}}
               />
-              <div className="qb-dropzone-icon"><UploadIcon /></div>
-              <div className="qb-dropzone-text">
-                <div className="qb-dropzone-title">Drop CSV file to bulk upload questions</div>
-                <div className="qb-dropzone-sub">
-                  Categories and subcategories are created automatically from the file.{" "}
-                  <a className="qb-dropzone-link" onClick={(e) => e.preventDefault()} href="#">
-                    Download template
+              <span className="drop-primary-icon"><UploadTrayIcon /></span>
+              <span className="drop-primary-text">
+                <span className="drop-primary-title">Bulk Upload Questions</span>
+                <span className="drop-primary-sub">
+                  Drag and drop, or click to upload.{" "}
+                  {/* preventDefault also stops the label from opening the file picker. */}
+                  <a
+                    className="drop-primary-link"
+                    onClick={(e) => e.preventDefault()}
+                    href="#"
+                  >
+                    Download Template
+                    <ArrowRightUpIcon />
                   </a>
-                </div>
-              </div>
-              <button
-                className="qb-dropzone-btn"
-                onClick={(e) => {
-                  e.preventDefault();
-                  fileRef.current?.click();
-                }}
-              >
-                Browse files
-              </button>
+                </span>
+              </span>
             </label>
 
             <div className="qb-filters-row">
               <div className="qb-filters">
-                <CategoryFilterPill
-                  categories={categories}
-                  selection={selection}
-                  onChange={setSelection}
+                <MultiSelectPill
+                  label="Category"
+                  options={categoryLabels}
+                  value={selection}
+                  onApply={setSelection}
+                  searchPlaceholder="Search categories…"
                 />
-                <SingleSelectPill
+                <MultiSelectPill
                   label="Type"
-                  value={typeFilter}
-                  neutral="All"
                   options={TYPE_OPTIONS}
-                  onChange={(v) => setTypeFilter(v as ShortQuestionType | "All")}
+                  value={typeFilter}
+                  onApply={setTypeFilter}
                 />
-                <SingleSelectPill
+                <MultiSelectPill
                   label="Status"
-                  value={statusFilter}
-                  neutral="All"
                   options={STATUS_OPTIONS}
-                  onChange={(v) => setStatusFilter(v as QuestionStatus | "All")}
+                  value={statusFilter}
+                  onApply={setStatusFilter}
                 />
-                <SingleSelectPill
+                <MultiSelectPill
                   label="Grading"
+                  options={GRADING_OPTIONS}
                   value={gradingFilter}
-                  neutral="Any"
-                  options={[...GRADING_OPTIONS]}
-                  onChange={(v) => setGradingFilter(v as GradingOption)}
+                  onApply={setGradingFilter}
                 />
-                <SingleSelectPill
-                  label="Used in"
-                  value={usedInFilter}
-                  neutral="Any"
-                  options={[...USED_IN_OPTIONS]}
-                  onChange={(v) => setUsedInFilter(v as UsedInOption)}
+                <QbMoreFiltersPill
+                  usedIn={usedInFilter}
+                  quizzes={quizFilter}
+                  forms={formFilter}
+                  quizNames={quizNames}
+                  formNames={formNames}
+                  onApply={(v) => {
+                    setUsedInFilter(v.usedIn);
+                    setQuizFilter(v.quizzes);
+                    setFormFilter(v.forms);
+                  }}
                 />
-                <button className="qb-more-filters">+ More filters</button>
+                {appliedCount > 0 && (
+                  <button className="filter-clear-link" onClick={clearFilters}>
+                    Clear Filters
+                  </button>
+                )}
               </div>
               <button className="cta-primary" onClick={startCreate}>
                 Create Question
@@ -673,45 +774,85 @@ export function QuestionBankPage({
               </button>
             </div>
 
-            <div className="table-xscroll" style={{ "--table-min": "976px" } as React.CSSProperties}>
+            <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
             <table className="table table-head qb-q-table">
-              <QbColGroup />
+              <QbColGroup columns={columns} />
               <thead>
                 <tr>
                   <QbHeader col="question" label="Question" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="type" label="Type" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="version" label="Version" sort={sort} toggle={toggleSort} />
-                  <QbHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
-                  <th className="qb-col-quizzes no-sort">
-                    <span className="th-content">Quizzes</span>
+                  {columns.id && (
+                    <QbHeader col="id" label="ID" sort={sort} toggle={toggleSort} />
+                  )}
+                  {columns.type && (
+                    <QbHeader col="type" label="Type" sort={sort} toggle={toggleSort} />
+                  )}
+                  {columns.version && (
+                    <QbHeader col="version" label="Version" sort={sort} toggle={toggleSort} />
+                  )}
+                  {columns.status && (
+                    <QbHeader col="status" label="Status" sort={sort} toggle={toggleSort} />
+                  )}
+                  {columns.category && (
+                    <QbHeader col="category" label="Category" sort={sort} toggle={toggleSort} />
+                  )}
+                  {columns.grading && (
+                    <th className="qb-col-grading no-sort">
+                      <span className="th-content">Grading</span>
+                    </th>
+                  )}
+                  {columns.quizzes && (
+                    <th className="qb-col-quizzes no-sort">
+                      <span className="th-content">Quizzes</span>
+                    </th>
+                  )}
+                  {columns.forms && (
+                    <th className="qb-col-forms no-sort">
+                      <span className="th-content">Feedback Forms</span>
+                    </th>
+                  )}
+                  {columns.createdOn && (
+                    <th className="qb-col-date no-sort">
+                      <span className="th-content">Created On</span>
+                    </th>
+                  )}
+                  {columns.lastModified && (
+                    <th className="qb-col-date no-sort">
+                      <span className="th-content">Last Modified</span>
+                    </th>
+                  )}
+                  <th className="col-actions">
+                    <EditColumnsButton
+                      columns={columns}
+                      setColumns={setColumns}
+                      optional={QB_OPTIONAL_COLUMNS}
+                      fixed={QB_FIXED_COLUMNS}
+                    />
                   </th>
-                  <th className="qb-col-forms no-sort">
-                    <span className="th-content">Feedback Forms</span>
-                  </th>
-                  <th className="col-actions" />
                 </tr>
               </thead>
             </table>
 
             <div className="tasks-scroll">
               <table className="table table-body qb-q-table">
-                <QbColGroup />
+                <QbColGroup columns={columns} />
                 <tbody>
                   {paged.map((q) => (
                     <QuestionRow
                       key={q.id}
                       q={q}
+                      columns={columns}
                       selected={q.id === selectedId}
                       onSelect={() =>
                         setSelectedId((cur) => (cur === q.id ? null : q.id))
                       }
                       onEdit={() => onEditQuestion?.(q)}
                       onOpenMenu={(rect) => setRowMenu({ q, rect })}
+                      menuOpen={rowMenu?.q.id === q.id}
                     />
                   ))}
                   {paged.length === 0 && (
                     <tr className="qb-empty-row">
-                      <td colSpan={7}>
+                      <td colSpan={visibleColCount}>
                         <div className="qb-empty">No questions match the current filters.</div>
                       </td>
                     </tr>
@@ -1026,16 +1167,14 @@ function CatDeleteConfirm({
   );
 }
 
-function QbColGroup() {
+function QbColGroup({ columns }: { columns: QbColumnState }) {
   return (
     <colgroup>
-      <col style={{ width: 280 }} />
-      <col style={{ width: 84 }} />
-      <col style={{ width: 84 }} />
-      <col style={{ width: 108 }} />
-      <col style={{ width: 190 }} />
-      <col style={{ width: 190 }} />
-      <col style={{ width: 40 }} />
+      <col style={{ width: QUESTION_COL_WIDTH }} />
+      {QB_OPTIONAL_COLUMNS.filter((c) => columns[c.key]).map((c) => (
+        <col key={c.key} style={{ width: QB_COLUMN_WIDTHS[c.key] }} />
+      ))}
+      <col style={{ width: ACTIONS_COL_WIDTH }} />
     </colgroup>
   );
 }
@@ -1233,42 +1372,69 @@ function UsageNames({ items }: { items: string[] }) {
 
 function QuestionRow({
   q,
+  columns,
   selected,
   onSelect,
   onEdit,
   onOpenMenu,
+  menuOpen,
 }: {
   q: Question;
+  columns: QbColumnState;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const isArchived = q.status === "Archived";
+  const dates = questionDates(q);
   return (
     <tr
-      className={`qb-row ${isArchived ? "is-archived" : ""} ${selected ? "is-selected" : ""}`}
+      className={`qb-row ${isArchived ? "is-archived" : ""} ${selected ? "is-selected" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onSelect}
     >
       <td className="qb-col-question">
         <div className="qb-q-text">{q.text}</div>
       </td>
-      <td className="qb-col-type">
-        <span className="qb-type-tag">{shortQuestionType(q.type)}</span>
-      </td>
-      <td className="qb-col-version">v{q.version}</td>
-      <td className="qb-col-status">
-        <span className={`qb-status qb-status--${q.status.toLowerCase()}`}>
-          <span className="qb-status-dot" />
-          {q.status}
-        </span>
-      </td>
-      <td className="qb-col-quizzes">
-        <UsageNames items={q.quizzes} />
-      </td>
-      <td className="qb-col-forms">
-        <UsageNames items={q.forms} />
-      </td>
+      {columns.id && <td className="qb-col-id">{q.id}</td>}
+      {columns.type && (
+        <td className="qb-col-type">
+          <span className="qb-type-tag">{longQuestionType(q.type)}</span>
+        </td>
+      )}
+      {columns.version && <td className="qb-col-version">v{q.version}</td>}
+      {columns.status && (
+        <td className="qb-col-status">
+          <span className={`qb-status qb-status--${q.status.toLowerCase()}`}>
+            <span className="qb-status-dot" />
+            {q.status}
+          </span>
+        </td>
+      )}
+      {columns.category && (
+        <td className="qb-col-category">
+          <span className="qb-usage-main" title={q.categoryPath.join(" > ")}>
+            {q.categoryPath.join(" > ")}
+          </span>
+        </td>
+      )}
+      {columns.grading && (
+        <td className="qb-col-grading">{isGraded(q) ? "Graded" : "Ungraded"}</td>
+      )}
+      {columns.quizzes && (
+        <td className="qb-col-quizzes">
+          <UsageNames items={q.quizzes} />
+        </td>
+      )}
+      {columns.forms && (
+        <td className="qb-col-forms">
+          <UsageNames items={q.forms} />
+        </td>
+      )}
+      {columns.createdOn && <td className="qb-col-date">{dates.created}</td>}
+      {columns.lastModified && <td className="qb-col-date">{dates.modified}</td>}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -1278,7 +1444,7 @@ function QuestionRow({
             onOpenMenu(e.currentTarget.getBoundingClientRect());
           }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -1287,7 +1453,7 @@ function QuestionRow({
             title="Edit question"
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
           >
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
@@ -1297,7 +1463,7 @@ function QuestionRow({
               onOpenMenu(e.currentTarget.getBoundingClientRect());
             }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -1396,17 +1562,14 @@ function QuestionActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{q.id}</div>
-        <div className="u-menu-head-id">{shortQuestionType(q.type)} · v{q.version}</div>
-      </div>
-      <div className="u-menu-divider" />
-      {item(<PencilIcon />, "Edit", onEdit)}
-      {item(<EyeIcon />, "Preview", onPreview)}
-      {item(<HistoryIcon />, "Version history", onVersionHistory)}
-      <div className="u-menu-divider" />
+      {/* Figma 388:354 is the exact item list for this menu — four rows, no
+          heading and no dividers. The open row is already identified by its
+          held hover state, so the Q-id header the menu used to carry is gone. */}
+      {item(<RowEditIcon />, "Edit Question", onEdit)}
+      {item(<MenuPreviewIcon />, "Preview", onPreview)}
+      {item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
       {item(
-        <ArchiveIcon />,
+        <MenuArchiveIcon />,
         isArchived ? "Unarchive" : "Archive",
         onArchive,
         blockArchive
@@ -1420,160 +1583,100 @@ function QuestionActionsMenu({
   );
 }
 
-/* Single-select filter pill. When the value equals `neutral`, the filter counts
-   as not applied and renders as the dashed "+ Label" pill (matching the app's
-   filter-chip convention). Selecting a real value shows the applied chip with a
-   clear button that resets back to `neutral`. */
-function SingleSelectPill({
+/* Multi-select filter pill — the same Dropdown + PillTrigger + checklist/Apply
+   body the Tasks filter row uses. Empty selection = unapplied dashed pill. */
+function MultiSelectPill({
   label,
-  value,
-  neutral,
   options,
-  onChange,
+  value,
+  onApply,
+  searchPlaceholder,
 }: {
   label: string;
-  value: string;
-  neutral: string;
   options: string[];
-  onChange: (v: string) => void;
+  value: string[];
+  onApply: (v: string[]) => void;
+  searchPlaceholder?: string;
 }) {
-  const applied = value !== neutral;
   return (
     <Dropdown
-      width={220}
+      width={searchPlaceholder ? 300 : 220}
       trigger={({ open, toggle }) => (
         <PillTrigger
           label={label}
-          value={applied ? value : null}
+          value={summarize(value, options)}
           open={open}
           toggle={toggle}
-          onClear={() => onChange(neutral)}
+          onClear={() => onApply([])}
         />
       )}
     >
       {({ close }) => (
-        <div className="dropdown-list">
-          <div className="dropdown-section">
-            {options.map((opt) => (
-              <SingleSelectRow
-                key={opt}
-                label={opt}
-                active={opt === value}
-                onClick={() => {
-                  onChange(opt);
-                  close();
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        <SectionedMultiSelect
+          sections={[{ items: options }]}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+          searchable={!!searchPlaceholder}
+          searchPlaceholder={searchPlaceholder}
+        />
       )}
     </Dropdown>
   );
 }
 
-/* "Category" filter — lists every category and subcategory together
-   (e.g. "EPA 608 > Universal"). Drives the same selection as the left rail, so
-   "All Questions" counts as not applied. */
-function CategoryFilterPill({
-  categories,
-  selection,
-  onChange,
+/* "More filters" — the low-traffic filters, in the shared cascading menu. */
+function QbMoreFiltersPill({
+  usedIn,
+  quizzes,
+  forms,
+  quizNames,
+  formNames,
+  onApply,
 }: {
-  categories: Category[];
-  selection: CategorySelection;
-  onChange: (sel: CategorySelection) => void;
+  usedIn: string[];
+  quizzes: string[];
+  forms: string[];
+  quizNames: string[];
+  formNames: string[];
+  onApply: (v: { usedIn: string[]; quizzes: string[]; forms: string[] }) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const applied = selection.kind !== "all";
-  const options = useMemo(() => flattenCategories(categories), [categories]);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
-  }, [options, query]);
-
-  const currentKey =
-    selection.kind === "category"
-      ? selection.categoryKey
-      : selection.kind === "subcategory"
-        ? `${selection.categoryKey}/${selection.subKey}`
-        : null;
+  const count = usedIn.length + quizzes.length + forms.length;
+  const value = useMemo(
+    () => ({ usedIn, quizzes, forms }),
+    [usedIn, quizzes, forms],
+  );
 
   return (
     <Dropdown
-      width={300}
+      width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Category"
-          value={applied ? selectionLabel(selection, categories) : null}
+          label="More filters"
+          value={count > 0 ? `${count} active` : null}
           open={open}
           toggle={toggle}
-          onClear={() => onChange({ kind: "all" })}
+          onClear={() => onApply({ usedIn: [], quizzes: [], forms: [] })}
         />
       )}
     >
       {({ close }) => (
-        <>
-          <div className="dropdown-search">
-            <span className="dropdown-search-icon"><SearchIcon /></span>
-            <input
-              autoFocus
-              placeholder="Search categories…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="dropdown-list">
-            <div className="dropdown-section">
-              <SingleSelectRow
-                label="All Questions"
-                active={selection.kind === "all"}
-                onClick={() => {
-                  onChange({ kind: "all" });
-                  close();
-                }}
-              />
-              {filtered.map((opt) => (
-                <SingleSelectRow
-                  key={opt.key}
-                  label={opt.label}
-                  active={opt.key === currentKey}
-                  onClick={() => {
-                    onChange(opt.sel);
-                    close();
-                  }}
-                />
-              ))}
-              {filtered.length === 0 && (
-                <div className="cols-empty">No categories match.</div>
-              )}
-            </div>
-          </div>
-        </>
+        <CascadingMultiSelect
+          sections={[
+            { key: "usedIn", label: "Used in", groups: [{ items: USED_IN_OPTIONS }] },
+            { key: "quizzes", label: "Quizzes", groups: [{ items: quizNames }] },
+            { key: "forms", label: "Feedback Forms", groups: [{ items: formNames }] },
+          ]}
+          value={value}
+          onApply={(v) => {
+            onApply({ usedIn: v.usedIn, quizzes: v.quizzes, forms: v.forms });
+            close();
+          }}
+        />
       )}
     </Dropdown>
   );
 }
 
-function SingleSelectRow({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`dropdown-item qb-single-row ${active ? "is-active" : ""}`}
-      onClick={onClick}
-    >
-      <span className="qb-single-row-label">{label}</span>
-      {active && (
-        <span className="qb-single-row-check"><CheckIcon /></span>
-      )}
-    </button>
-  );
-}

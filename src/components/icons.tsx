@@ -37,6 +37,13 @@ export const AddIcon = () => (
   </svg>
 );
 
+/* Thin plus — the "Add X" card's glyph (Figma 341:2764). */
+export const PlusThinIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M7 2.917V11.083M11.083 7H2.917" />
+  </svg>
+);
+
 export const EditColumnsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 14.5813 14.6667" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -170,6 +177,15 @@ export const ArrowUpRightIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M7 17L17 7" />
     <path d="M8 7h9v9" />
+  </svg>
+);
+
+/* "arrow-right-up" from the File Upload - Primary component (378:257) — a
+   16px square-capped glyph, distinct from the rounded 12px ArrowUpRightIcon
+   above that the breadcrumb/link rows use. */
+export const ArrowRightUpIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M5.5146 5.33332L10.7001 5.33332V10.5188M10.1137 5.91963L5.34961 10.6838" />
   </svg>
 );
 
@@ -463,5 +479,90 @@ export const TreeKebabIcon = () => (
     <rect x="6.125" y="1.75" width="1.75" height="1.75" />
     <rect x="6.125" y="6.125" width="1.75" height="1.75" />
     <rect x="6.125" y="10.5" width="1.75" height="1.75" />
+  </svg>
+);
+
+/* ─── Table row-action icons — Figma "3-Dot Menu - Hover State" (386:269) ───
+   The hover bar that every table row reveals draws from one icon family: 16px
+   in a 16-unit box, 1.3333px square-cap strokes, tinted #a8a8a8 by the button.
+   Path data is the exported Figma vector translated back into the 16-unit frame
+   (Figma exports the tight stroke bbox), so these render 1:1 with the design.
+
+   A table keeps whichever subset of actions it already had — the Figma frame is
+   a combined state showing every glyph at once, not a fixed set of buttons. */
+export const RowEditIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M8.67 4.33L2 11V14H5L11.67 7.33M8.67 4.33L11.67 7.33M8.67 4.33L11.33 1.67L14.33 4.67L11.67 7.33" />
+  </svg>
+);
+
+export const RowEyeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M8.005 2.667C4.584 2.667 1.687 4.907 0.7 8C1.686 11.093 4.584 13.333 8.005 13.333C11.425 13.333 14.323 11.093 15.31 8C14.323 4.907 11.426 2.667 8.005 2.667Z" />
+    <path d="M10.672 8C10.672 8.707 10.391 9.386 9.891 9.886C9.391 10.386 8.712 10.667 8.005 10.667C7.298 10.667 6.62 10.386 6.12 9.886C5.619 9.386 5.338 8.707 5.338 8C5.338 7.293 5.619 6.614 6.12 6.114C6.62 5.614 7.298 5.333 8.005 5.333C8.712 5.333 9.391 5.614 9.891 6.114C10.391 6.614 10.672 7.293 10.672 8Z" />
+  </svg>
+);
+
+export const RowEyeOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M8.79 5.45C9.206 5.582 9.584 5.81 9.892 6.118C10.2 6.425 10.428 6.804 10.556 7.22M14.196 10.19C14.683 9.527 15.06 8.788 15.312 8.003C14.325 4.909 11.426 2.669 8.006 2.669C7.585 2.669 7.174 2.702 6.771 2.768M14.006 14.003L2.006 2.003M3.878 3.875C2.37 4.839 1.246 6.299 0.7 8.003C1.687 11.096 4.585 13.336 8.005 13.336C9.525 13.336 10.941 12.894 12.133 12.131L3.878 3.875ZM5.339 8.003C5.339 7.267 5.638 6.6 6.121 6.117L9.891 9.889C9.518 10.262 9.043 10.516 8.526 10.618C8.009 10.721 7.472 10.668 6.985 10.466C6.498 10.264 6.082 9.923 5.789 9.484C5.496 9.046 5.339 8.53 5.339 8.003Z" />
+  </svg>
+);
+
+export const RowExternalLinkIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M6 2.667H2.667V13.333H13.333V10M12.833 3.167L8 8M9.333 2.667H13.333V6.667" />
+  </svg>
+);
+
+/* Trash can with an ✕ on the body — the delete / revoke action. Added to the
+   Figma family on 2026-08-06; replaced the off-family `SmallXIcon` the Revoke
+   and Delete buttons used to borrow. */
+export const RowDeleteIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M3.333 3.333H12.667M3.333 3.333L3.667 14.667H12.333L12.667 3.333M3.333 3.333H2M12.667 3.333H14M9.886 7.115L8 9M8 9L6.115 10.886M8 9L6.115 7.115M8 9L9.886 10.886M5.667 1.333H10.333V3.333H5.667V1.333Z" />
+  </svg>
+);
+
+/* Card with a bookmark ribbon — the subscription/plan action. */
+export const RowCardIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M8.667 6.667H12V10.667L10.333 9.667L8.667 10.667V6.667Z" />
+    <path d="M14.667 6.667H1.333M14.667 6.667V2.667H1.333V6.667M14.667 6.667V13.333H1.333V6.667" />
+  </svg>
+);
+
+/* ─── Row 3-dot MENU icons — Figma "3-Dot Menu - Menu Clicked" (388:354) ───
+   Same 16px / 1.3333 square-cap library as the `Row*` bar icons above; the menu
+   just tints them white (or #404040 when the row is disabled) instead of
+   #a8a8a8. Kept under their own prefix because these glyphs only appear in the
+   dropdown, never in the hover bar. */
+export const MenuPreviewIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M3.667 12.667H1.334L1.333 2.667H14.667V12.667H12.333M8 13L7 14H9L8 13Z" />
+  </svg>
+);
+
+export const MenuHistoryIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M1.701 8.668C2.035 11.852 4.727 14.334 8 14.334C9.68 14.334 11.291 13.667 12.479 12.479C13.666 11.292 14.333 9.681 14.333 8.001C14.333 6.321 13.666 4.71 12.479 3.523C11.291 2.335 9.68 1.668 8 1.668C6.915 1.668 5.893 1.941 5 2.422C3.795 3.072 2.832 4.093 2.253 5.334M8 4.668V8.001L9.667 9.668M1.667 2.334V5.668H5" />
+  </svg>
+);
+
+/* Octagon with an ✕ — the archive/deactivate glyph (Figma node 7:1812). */
+export const MenuArchiveIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M10.121 5.879L8 8M8 8L5.879 10.121M8 8L10.121 10.121M8 8L5.879 5.878M5.377 1.667H10.623L14.333 5.377V10.623L10.623 14.333H5.377L1.667 10.623V5.377L5.377 1.667Z" />
+  </svg>
+);
+
+/* Kebab Menu - Horizontal (386:260) — three 2px square dots on the 8px
+   centreline, at x 2/7/12. Figma strokes a 0.667 square with a 1.3333 cap,
+   which resolves to exactly these filled rects. */
+export const RowKebabIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <rect x="2" y="7" width="2" height="2" />
+    <rect x="7" y="7" width="2" height="2" />
+    <rect x="12" y="7" width="2" height="2" />
   </svg>
 );

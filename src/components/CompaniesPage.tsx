@@ -20,7 +20,7 @@ import {
   type SignUpChannel,
   type TaxStatus,
 } from "../data/companies";
-import { SortIcon, AddIcon, ChevronDownIcon } from "./icons";
+import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
@@ -41,27 +41,6 @@ import {
 } from "./NewCompanyWizard";
 
 const PAGE_SIZE = 50;
-
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-
-const CardIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="5" width="20" height="14" rx="2.5" />
-    <path d="M2 10h20" />
-  </svg>
-);
 
 type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn" | "canceledOn" | "trialEndDate" | "dashboardLastAccess" | "price";
 type SortDir = "asc" | "desc";
@@ -301,6 +280,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
                         onEdit={() => setEditModal(c)}
                         onManageSubscription={() => onManageSubscription(c)}
                         onOpenMenu={(rect) => setMenu({ company: c, rect })}
+                        menuOpen={menu?.company.id === c.id}
                       />
                     ))}
                   </tbody>
@@ -468,13 +448,15 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, columns, onEdit, onManageSubscription, onOpenMenu,
+  company, columns, onEdit, onManageSubscription, onOpenMenu, menuOpen,
 }: {
   company: Company; columns: CompanyColumnState; onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const billing = getCompanyBilling(company);
   return (
-    <tr>
+    <tr className={menuOpen ? "menu-open" : ""}>
       <td className="col-name">{company.name}</td>
       <td className="col-email">{company.email}</td>
       <td className="col-tier"><TierPill tier={company.tier} /></td>
@@ -497,21 +479,21 @@ function CompanyRow({
           aria-label="More"
           onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button className="row-action-btn" aria-label="Edit" title="Edit company" onClick={onEdit}>
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={onManageSubscription}>
-            <CardIcon />
+            <RowCardIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More"
             onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -557,19 +539,6 @@ const DashboardIcon = () => (
     <rect x="13" y="3" width="8" height="5" rx="1.5" />
     <rect x="13" y="10" width="8" height="11" rx="1.5" />
     <rect x="3" y="13" width="8" height="8" rx="1.5" />
-  </svg>
-);
-
-const PencilMenuIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-
-const CardMenuIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="5" width="20" height="14" rx="2.5" />
-    <path d="M2 10h20" />
   </svg>
 );
 
@@ -653,9 +622,8 @@ function CompanyActionsMenu({
         <div className="u-menu-head-name">{company.name}</div>
         <div className="u-menu-head-id">{company.id} · {company.tier}</div>
       </div>
-      <div className="u-menu-divider" />
-      {item(<PencilMenuIcon />, "Edit company details", onEditCompany)}
-      {item(<CardMenuIcon />, "Manage Subscription", onManageSubscription)}
+      {item(<RowEditIcon />, "Edit company details", onEditCompany)}
+      {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
       {item(<HolderIcon />, "Account Holder", onEditAccountHolder)}
       {item(<MailIcon />, "Add Billing Emails", onAddBillingEmails)}
       {item(<PeopleIcon />, "View Employees", onViewEmployees)}
@@ -663,7 +631,6 @@ function CompanyActionsMenu({
       {item(<DashboardIcon />, "View Dashboard", () => viewDashboard(company))}
       {canCancel && (
         <>
-          <div className="u-menu-divider" />
           {item(<CancelIcon />, "Cancel Subscription", onCancelSubscription, true)}
         </>
       )}

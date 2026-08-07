@@ -5,7 +5,7 @@ import { tasks as allTasks, discoverableLabel, finalExamLabel, isPaid, type Task
 // import { RotaryDialPreview } from "./RotaryDialPreview";
 import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
@@ -19,35 +19,6 @@ const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Elem
 
 const PAGE_SIZE = 50;
 
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-    <circle cx="12" cy="12" r="2.6" />
-  </svg>
-);
-
-const EyeOffIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13.2 13.2 0 0 1-2.16 2.92M6.6 6.6A13.3 13.3 0 0 0 2 12s3.5 7 10 7a9.3 9.3 0 0 0 5.4-1.6" />
-    <path d="M9.9 9.9a2.6 2.6 0 0 0 3.7 3.7" />
-    <path d="M2 2l20 20" />
-  </svg>
-);
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-
 const ReportIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -60,12 +31,6 @@ const AttemptsIcon = () => (
     <path d="M3 3v5h5" />
     <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
     <path d="M12 7v5l3 2" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </svg>
 );
 
@@ -439,6 +404,7 @@ export function TasksPage({
                         onEdit={() => editTask(task)}
                         onToggleVisibility={() => toggleVisibility(task)}
                         onOpenMenu={(rect) => setMenu({ task, rect })}
+                        menuOpen={menu?.task.id === task.id}
                       />
                     ))}
                   </tbody>
@@ -615,6 +581,7 @@ function TableRow({
   onEdit,
   onToggleVisibility,
   onOpenMenu,
+  menuOpen,
 }: {
   task: Task;
   selected: boolean;
@@ -624,10 +591,12 @@ function TableRow({
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   return (
     <tr
-      className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""} ${task.hidden ? "task-hidden" : ""}`}
+      className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""} ${task.hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onClick}
     >
       {columns.id && <td className="col-id">{task.id}</td>}
@@ -673,7 +642,7 @@ function TableRow({
           aria-label="More"
           onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -682,7 +651,7 @@ function TableRow({
             title="Edit task"
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
           >
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
@@ -690,14 +659,14 @@ function TableRow({
             title={task.hidden ? "Make visible" : "Hide task"}
             onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
           >
-            {task.hidden ? <EyeOffIcon /> : <EyeIcon />}
+            {task.hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
           </button>
           <button
             className="row-action-btn"
             aria-label="More"
             onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -797,13 +766,11 @@ function TaskActionsMenu({
         <div className="u-menu-head-name">{task.name}</div>
         <div className="u-menu-head-id">{task.id} · {task.type}</div>
       </div>
-      <div className="u-menu-divider" />
       {item(<ReportIcon />, "Open Completion Report", onCompletionReport)}
       {showAttempts && item(<AttemptsIcon />, "View Attempts", onViewAttempts)}
       {/* Only paid Tasks have payers to view. */}
       {isPaid(task) && item(<PayersIcon />, "View who paid", onViewPayers)}
-      <div className="u-menu-divider" />
-      {item(<TrashIcon />, "Delete", onDelete, true)}
+      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );
 }

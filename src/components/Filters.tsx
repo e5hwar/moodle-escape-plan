@@ -373,12 +373,19 @@ function MoreFiltersPill({
   );
 }
 
-export function EditColumnsButton({
+/** Column set for a table's Edit Columns menu. Defaults to the Tasks table. */
+export type ColumnDef<K extends string> = { key: K; label: string };
+
+export function EditColumnsButton<C extends Record<string, boolean>>({
   columns,
   setColumns,
+  optional = OPTIONAL_COLUMNS as unknown as ColumnDef<keyof C & string>[],
+  fixed = FIXED_COLUMNS,
 }: {
-  columns: ColumnState;
-  setColumns: (c: ColumnState) => void;
+  columns: C;
+  setColumns: (c: C) => void;
+  optional?: ColumnDef<keyof C & string>[];
+  fixed?: { label: string }[];
 }) {
   return (
     <Dropdown
@@ -399,7 +406,12 @@ export function EditColumnsButton({
       )}
     >
       {() => (
-        <ColumnsBody value={columns} onApply={(c) => setColumns(c)} />
+        <ColumnsBody
+          value={columns}
+          optional={optional}
+          fixed={fixed}
+          onApply={(c) => setColumns(c)}
+        />
       )}
     </Dropdown>
   );
@@ -500,6 +512,105 @@ export function SectionedMultiSelect({
   );
 }
 
+/** One row of a "More filters" menu — hovering it opens its checklist alongside. */
+export type CascadingSection = {
+  key: string;
+  label: string;
+  /** A group with a label renders as a titled subsection (e.g. the tag groups). */
+  groups: { label?: string; items: string[] }[];
+};
+
+/* The shared "More filters" body: a list of submenu rows over one Apply button,
+   each row revealing its own checklist. Used by the Tasks and Question Bank
+   filter rows — pass the sections and a {key: values} map. */
+export function CascadingMultiSelect({
+  sections,
+  value,
+  onApply,
+}: {
+  sections: CascadingSection[];
+  value: Record<string, string[]>;
+  onApply: (v: Record<string, string[]>) => void;
+}) {
+  const [draft, setDraft] = useState<Record<string, string[]>>(value);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredTop, setHoveredTop] = useState(0);
+
+  useEffect(() => setDraft(value), [value]);
+
+  function toggleIn(sectionKey: string, item: string) {
+    setDraft((d) => {
+      const list = d[sectionKey] ?? [];
+      return {
+        ...d,
+        [sectionKey]: list.includes(item)
+          ? list.filter((x) => x !== item)
+          : [...list, item],
+      };
+    });
+  }
+
+  const openSection = sections.find((s) => s.key === hovered);
+
+  return (
+    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
+      <div className="cascading-root">
+        <div className="dropdown-list">
+          {sections.map((s) => (
+            <SubmenuRow
+              key={s.key}
+              label={s.label}
+              active={hovered === s.key}
+              onHover={(top) => {
+                setHovered(s.key);
+                setHoveredTop(top);
+              }}
+            />
+          ))}
+        </div>
+        <div className="dropdown-footer">
+          <button className="btn-apply" onClick={() => onApply(draft)}>
+            Apply
+          </button>
+        </div>
+      </div>
+
+      {openSection && (
+        <div
+          className="cascading-sub"
+          style={{ top: hoveredTop }}
+          onMouseEnter={() => setHovered(openSection.key)}
+        >
+          <div className="dropdown-list">
+            {openSection.groups.map((group, i) => (
+              <div
+                key={group.label ?? i}
+                className={group.label ? "dropdown-subsection" : "dropdown-section"}
+              >
+                {group.label && (
+                  <div className="dropdown-subsection-label">{group.label}</div>
+                )}
+                {group.items.length === 0 ? (
+                  <div className="cols-empty">Nothing to filter by yet</div>
+                ) : (
+                  group.items.map((item) => (
+                    <CheckRow
+                      key={item}
+                      label={item}
+                      checked={(draft[openSection.key] ?? []).includes(item)}
+                      onChange={() => toggleIn(openSection.key, item)}
+                    />
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MoreFiltersBody({
   types,
   visibilities,
@@ -511,102 +622,27 @@ function MoreFiltersBody({
   tags: string[];
   onApply: (v: { types: string[]; visibilities: string[]; tags: string[] }) => void;
 }) {
-  const [draftTypes, setDraftTypes] = useState(types);
-  const [draftVis, setDraftVis] = useState(visibilities);
-  const [draftTags, setDraftTags] = useState(tags);
-  const [hovered, setHovered] = useState<"type" | "visibility" | "tags" | null>(null);
-  const [hoveredTop, setHoveredTop] = useState(0);
-
-  useEffect(() => setDraftTypes(types), [types]);
-  useEffect(() => setDraftVis(visibilities), [visibilities]);
-  useEffect(() => setDraftTags(tags), [tags]);
-
-  function toggleIn(list: string[], setList: (v: string[]) => void, item: string) {
-    setList(list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
-  }
-
-  function applyAll() {
-    onApply({ types: draftTypes, visibilities: draftVis, tags: draftTags });
-  }
+  const value = useMemo(
+    () => ({ types, visibilities, tags }),
+    [types, visibilities, tags],
+  );
 
   return (
-    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
-      <div className="cascading-root">
-        <div className="dropdown-list">
-          <SubmenuRow
-            label="Task Type"
-            active={hovered === "type"}
-            onHover={(top) => { setHovered("type"); setHoveredTop(top); }}
-          />
-          <SubmenuRow
-            label="Visibility"
-            active={hovered === "visibility"}
-            onHover={(top) => { setHovered("visibility"); setHoveredTop(top); }}
-          />
-          <SubmenuRow
-            label="Content/Trade Tags"
-            active={hovered === "tags"}
-            onHover={(top) => { setHovered("tags"); setHoveredTop(top); }}
-          />
-        </div>
-        <div className="dropdown-footer">
-          <button className="btn-apply" onClick={applyAll}>
-            Apply
-          </button>
-        </div>
-      </div>
-
-      {hovered && (
-        <div
-          className="cascading-sub"
-          style={{ top: hoveredTop }}
-          onMouseEnter={() => setHovered(hovered)}
-        >
-          <div className="dropdown-list">
-            {hovered === "type" && (
-              <div className="dropdown-section">
-                {TASK_TYPES.map((t) => (
-                  <CheckRow
-                    key={t}
-                    label={t}
-                    checked={draftTypes.includes(t)}
-                    onChange={() => toggleIn(draftTypes, setDraftTypes, t)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {hovered === "visibility" && (
-              <div className="dropdown-section">
-                {VISIBILITIES.map((v) => (
-                  <CheckRow
-                    key={v}
-                    label={v}
-                    checked={draftVis.includes(v)}
-                    onChange={() => toggleIn(draftVis, setDraftVis, v)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {hovered === "tags" &&
-              TAG_GROUPS.map((group) => (
-                <div key={group.label} className="dropdown-subsection">
-                  <div className="dropdown-subsection-label">{group.label}</div>
-                  {group.tags.map((t) => (
-                    <CheckRow
-                      key={t}
-                      label={t}
-                      checked={draftTags.includes(t)}
-                      onChange={() => toggleIn(draftTags, setDraftTags, t)}
-                    />
-                  ))}
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-    </div>
+    <CascadingMultiSelect
+      sections={[
+        { key: "types", label: "Task Type", groups: [{ items: [...TASK_TYPES] }] },
+        { key: "visibilities", label: "Visibility", groups: [{ items: [...VISIBILITIES] }] },
+        {
+          key: "tags",
+          label: "Content/Trade Tags",
+          groups: TAG_GROUPS.map((g) => ({ label: g.label, items: [...g.tags] })),
+        },
+      ]}
+      value={value}
+      onApply={(v) =>
+        onApply({ types: v.types, visibilities: v.visibilities, tags: v.tags })
+      }
+    />
   );
 }
 
@@ -643,37 +679,39 @@ function SubmenuRow({
   );
 }
 
-function ColumnsBody({
+function ColumnsBody<C extends Record<string, boolean>>({
   value,
+  optional,
+  fixed,
   onApply,
 }: {
-  value: ColumnState;
-  onApply: (v: ColumnState) => void;
+  value: C;
+  optional: ColumnDef<keyof C & string>[];
+  fixed: { label: string }[];
+  onApply: (v: C) => void;
 }) {
-  const active = OPTIONAL_COLUMNS.filter((c) => value[c.key]);
-  const available = OPTIONAL_COLUMNS.filter((c) => !value[c.key]);
+  const active = optional.filter((c) => value[c.key]);
+  const available = optional.filter((c) => !value[c.key]);
 
-  function clearAll() {
+  function setAll(on: boolean) {
     const next = { ...value };
-    OPTIONAL_COLUMNS.forEach((c) => {
-      next[c.key] = false;
+    optional.forEach((c) => {
+      next[c.key] = on as C[keyof C & string];
     });
     onApply(next);
   }
 
-  function activateAll() {
-    const next = { ...value };
-    OPTIONAL_COLUMNS.forEach((c) => {
-      next[c.key] = true;
-    });
-    onApply(next);
-  }
+  const clearAll = () => setAll(false);
+  const activateAll = () => setAll(true);
+
+  const setOne = (key: keyof C & string, on: boolean) =>
+    onApply({ ...value, [key]: on as C[keyof C & string] });
 
   return (
     <div className="dropdown-list cols-menu">
       <div className="dropdown-section">
         <div className="dropdown-section-label">Fixed columns</div>
-        {FIXED_COLUMNS.map(({ label }) => (
+        {fixed.map(({ label }) => (
           <div key={label} className="cols-fixed-row">
             {label}
           </div>
@@ -698,7 +736,7 @@ function ColumnsBody({
               label={label}
               checked
               draggable
-              onChange={() => onApply({ ...value, [key]: false })}
+              onChange={() => setOne(key, false)}
             />
           ))
         )}
@@ -721,7 +759,7 @@ function ColumnsBody({
               key={key}
               label={label}
               checked={false}
-              onChange={() => onApply({ ...value, [key]: true })}
+              onChange={() => setOne(key, true)}
             />
           ))
         )}

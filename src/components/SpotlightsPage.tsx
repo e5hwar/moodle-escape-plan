@@ -5,7 +5,7 @@ import {
 } from "../data/spotlights";
 import { CreateSpotlightPanel } from "./CreateSpotlightPanel";
 import { QueuePositionPicker } from "./QueuePositionPicker";
-import { SearchIcon, AddIcon, SmallXIcon } from "./icons";
+import { SearchIcon, AddIcon, SmallXIcon, RowKebabIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type DisplayStatus =
@@ -30,14 +30,6 @@ function deriveStatus(s: Spotlight): DisplayStatus {
   if (s.status === "deactivated") return "deactivated";
   return daysUntil(s.endDate) < 0 ? "ended" : "active";
 }
-
-const MoreIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 
 const DeactivateIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -323,6 +315,7 @@ export function SpotlightsPage() {
                         isDragging={dragIndex === idx}
                         isOver={overIndex === idx && dragIndex !== idx}
                         onOpenMenu={(rect) => setMenu({ item: s, rect })}
+                        menuOpen={menu?.item.id === s.id}
                         onApprove={() => setApproving(s)}
                         onDecline={() => decline(s)}
                         onDragStart={() => startDrag(idx)}
@@ -469,6 +462,7 @@ function SpotlightRow({
   onDragEnterRow,
   onDropRow,
   onDragEndRow,
+  menuOpen,
 }: {
   spotlight: Spotlight;
   /** Queue position — null for rows out of the queue (rejected/ended/deactivated). */
@@ -476,6 +470,8 @@ function SpotlightRow({
   canReorder: boolean;
   isDragging: boolean;
   isOver: boolean;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
   onOpenMenu: (rect: DOMRect) => void;
   onApprove: () => void;
   onDecline: () => void;
@@ -498,7 +494,7 @@ function SpotlightRow({
     <tr
       className={`sp-tr sp-tr--${s.status} ${isDragging ? "is-dragging" : ""} ${
         isOver ? "is-drop-target" : ""
-      }`}
+      } ${menuOpen ? "menu-open" : ""}`}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragEnter={canReorder ? onDragEnterRow : undefined}
@@ -579,7 +575,7 @@ function SpotlightRow({
               onOpenMenu(e.currentTarget.getBoundingClientRect());
             }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         )}
       </td>

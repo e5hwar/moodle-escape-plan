@@ -7,16 +7,7 @@ import {
   type CareerStage,
   type IndustryCert,
 } from "../data/industries";
-import {
-  SearchIcon,
-  SmallXIcon,
-  DragHandleIcon,
-  RowArrowIcon,
-  CheckIcon,
-  InfoFilledIcon,
-  TreeCaretIcon,
-  TreeKebabIcon,
-} from "./icons";
+import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { PageBreak } from "./PageBreak";
@@ -43,27 +34,6 @@ type MenuState = { scope: Scope; x: number; y: number } | null;
 const RowCloseIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
     <path d="M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6" />
-  </svg>
-);
-const PencilIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a1 1 0 001 1h8a1 1 0 001-1l1-14M10 11v6M14 11v6" />
-  </svg>
-);
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.9 5.2A9.5 9.5 0 0112 5c6.4 0 10 7 10 7a17 17 0 01-3.3 4.1M6.1 6.1A17 17 0 002 12s3.6 7 10 7a9.6 9.6 0 003.9-.8" />
   </svg>
 );
 
@@ -576,7 +546,7 @@ export function IndustriesPage() {
                 setMenu(null);
               }}
             >
-              <span className="u-menu-item-icon"><PencilIcon /></span> Edit
+              <span className="u-menu-item-icon"><RowEditIcon /></span> Edit
             </button>
             <button
               className="u-menu-item"
@@ -590,11 +560,10 @@ export function IndustriesPage() {
               }}
             >
               <span className="u-menu-item-icon">
-                {menuIsHidden ? <EyeIcon /> : <EyeOffIcon />}
+                {menuIsHidden ? <RowEyeIcon /> : <RowEyeOffIcon />}
               </span>{" "}
               {menuIsHidden ? "Show" : "Hide"}
             </button>
-            <div className="u-menu-divider" />
             <button
               className="u-menu-item u-menu-item--danger"
               onClick={() => {
@@ -602,7 +571,7 @@ export function IndustriesPage() {
                 setMenu(null);
               }}
             >
-              <span className="u-menu-item-icon"><TrashIcon /></span> Delete
+              <span className="u-menu-item-icon"><RowDeleteIcon /></span> Delete
             </button>
           </div>
         </>

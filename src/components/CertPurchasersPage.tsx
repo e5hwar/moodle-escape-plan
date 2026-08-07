@@ -25,7 +25,7 @@ import {
   type UserFilterState,
 } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon } from "./icons";
+import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -90,14 +90,6 @@ const VerifiedIcon = () => (
   <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="9" />
     <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
   </svg>
 );
 
@@ -400,6 +392,7 @@ export function CertPurchasersPage({
                           selected={row.u.id === selectedId}
                           onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
                           onOpenMenu={(rect) => setMenu({ row, rect })}
+                          menuOpen={menu?.row.p.userId === row.p.userId}
                         />
                       ))}
                       {paged.length === 0 && (
@@ -581,16 +574,19 @@ function PurchaserRow({
   selected,
   onClick,
   onOpenMenu,
+  menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
   selected: boolean;
   onClick: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const { u, p } = row;
   return (
-    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""}`.trim()} onClick={onClick}>
+    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
       <td className="col-name">
         <span className="cp-name-wrap">
           <span className="cp-name">{u.name}</span>
@@ -614,7 +610,7 @@ function PurchaserRow({
             onOpenMenu(e.currentTarget.getBoundingClientRect());
           }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -625,7 +621,7 @@ function PurchaserRow({
               onOpenMenu(e.currentTarget.getBoundingClientRect());
             }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -724,7 +720,6 @@ function PurchaserActionsMenu({
         <div className="u-menu-head-name">{row.u.name}</div>
         <div className="u-menu-head-id">{row.u.email}</div>
       </div>
-      <div className="u-menu-divider" />
       {item(<RevokeIcon />, "Revoke access", onRevoke, true, alreadyRevoked)}
       {alreadyRevoked && <div className="u-menu-note">Access already revoked.</div>}
     </div>

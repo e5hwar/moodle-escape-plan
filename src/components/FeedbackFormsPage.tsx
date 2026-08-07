@@ -5,24 +5,12 @@ import {
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
-import { SearchIcon, SortIcon, AddIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowKebabIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { NewFeedbackFormModal } from "./NewFeedbackFormModal";
 
 const PAGE_SIZE = 50;
 
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 const ResponsesIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -237,6 +225,7 @@ export function FeedbackFormsPage({ forms, onOpen, onViewResponses, onCreate }: 
                                 onClick={() => onOpen(f.id)}
                                 onEdit={() => onOpen(f.id)}
                                 onOpenMenu={(rect) => setMenu({ form: f, rect })}
+                                menuOpen={menu?.form.id === f.id}
                               />
                             ))
                           )}
@@ -303,16 +292,19 @@ function FormRow({
   onClick,
   onEdit,
   onOpenMenu,
+  menuOpen,
 }: {
   form: FeedbackForm;
   onClick: () => void;
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const actives = activeLinks(form).length;
   const inactive = form.questions.length - actives;
   return (
-    <tr onClick={onClick}>
+    <tr className={menuOpen ? "menu-open" : ""} onClick={onClick}>
       <td className="col-id">{form.id}</td>
       <td className={`col-name ${form.name ? "" : "fb-faint"}`} data-tip={form.name || undefined}>
         {form.name || "Untitled form"}
@@ -343,7 +335,7 @@ function FormRow({
           aria-label="More"
           onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -352,14 +344,14 @@ function FormRow({
             title="Edit form"
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
           >
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More"
             onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -476,8 +468,7 @@ function FormActionsMenu({
         <div className="u-menu-head-name">{form.name || "Untitled form"}</div>
         <div className="u-menu-head-id">{form.id} · {STATUS_LABEL[form.status]}</div>
       </div>
-      <div className="u-menu-divider" />
-      {item(<PencilIcon />, "Edit", onEdit)}
+      {item(<RowEditIcon />, "Edit", onEdit)}
       {item(<ResponsesIcon />, "View Responses", onViewResponses)}
     </div>
   );

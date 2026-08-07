@@ -15,7 +15,7 @@ import {
   type UserFilterState,
 } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
-import { SortIcon } from "./icons";
+import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -53,33 +53,10 @@ function formatDate(iso: string): string {
 }
 
 /* ─── local icons (match the Tasks/Certifications action bar) ─── */
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const ExternalLinkIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 4h6v6M20 4l-9 9" />
-    <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
-  </svg>
-);
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 const PortfolioIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="7" width="18" height="13" rx="2" />
     <path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
   </svg>
 );
 
@@ -300,6 +277,7 @@ export function UsersPage({
                         row={row}
                         cols={visibleCols}
                         onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
+                        menuOpen={menu?.user.id === row.u.id}
                       />
                     ))}
                     {paged.length === 0 && (
@@ -432,14 +410,17 @@ function UserRow({
   row,
   cols,
   onOpenMenu,
+  menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
   onOpenMenu: (anchor: HTMLElement) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const { u, f } = row;
   return (
-    <tr>
+    <tr className={menuOpen ? "menu-open" : ""}>
       <td className="col-name">{u.name}</td>
       {cols.map((c) => (
         <td key={c.key} className={c.className}>
@@ -452,11 +433,11 @@ function UserRow({
           aria-label="Actions"
           onClick={(e) => onOpenMenu(e.currentTarget)}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button className="row-action-btn" aria-label="Edit">
-            <PencilIcon />
+            <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
@@ -464,14 +445,14 @@ function UserRow({
             title="Open full profile in a new tab"
             onClick={() => openProfile(u)}
           >
-            <ExternalLinkIcon />
+            <RowExternalLinkIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More actions"
             onClick={(e) => onOpenMenu(e.currentTarget)}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -570,15 +551,13 @@ function UserActionsMenu({
         <div className="u-menu-head-name">{user.name}</div>
         <div className="u-menu-head-id">{user.id}</div>
       </div>
-      <div className="u-menu-divider" />
       {item(<LoginAsIcon />, "Login As", () => {})}
       {item(<PortfolioIcon />, "View Portfolio", onViewPortfolio)}
-      {item(<ExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
+      {item(<RowExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
       {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
       {onViewAllEmployees && item(<PeopleIcon />, "View All Employees", onViewAllEmployees)}
       {item(<ChecklistIcon />, "Manage Completions", onManageCompletions)}
-      <div className="u-menu-divider" />
-      {item(<TrashIcon />, "Remove User", () => {}, true)}
+      {item(<RowDeleteIcon />, "Remove User", () => {}, true)}
     </div>
   );
 }

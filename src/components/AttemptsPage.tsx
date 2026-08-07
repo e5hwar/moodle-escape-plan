@@ -14,23 +14,11 @@ import {
   XCircleIcon,
   PlusCircleIcon,
   CheckIcon,
+  RowKebabIcon,
+  RowDeleteIcon,
 } from "./icons";
 
 const PAGE_SIZE = 50;
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
-  </svg>
-);
 
 type SortKey =
   | "name"
@@ -268,6 +256,7 @@ export function AttemptsPage({
                         attempt={a}
                         onView={() => onViewAttempt(a)}
                         onOpenMenu={(rect) => setMenu({ attempt: a, rect })}
+                        menuOpen={menu?.attempt.id === a.id}
                       />
                     ))}
                     {paged.length === 0 && (
@@ -320,13 +309,16 @@ function AttemptRow({
   attempt: a,
   onView,
   onOpenMenu,
+  menuOpen,
 }: {
   attempt: Attempt;
   onView: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   return (
-    <tr>
+    <tr className={menuOpen ? "menu-open" : ""}>
       <td className="att-col-name">{a.name}</td>
       <td className="att-col-email">{a.email}</td>
       <td className="att-col-phone">{a.phone}</td>
@@ -374,7 +366,7 @@ function AttemptRow({
           aria-label="More"
           onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
       </td>
     </tr>
@@ -439,12 +431,11 @@ function AttemptActionsMenu({
         <div className="u-menu-head-name">{a.name}</div>
         <div className="u-menu-head-id">Attempt #{a.attemptNumber} · {a.quizName}</div>
       </div>
-      <div className="u-menu-divider" />
       <button
         className="u-menu-item u-menu-item--danger"
         onClick={(e) => { e.stopPropagation(); onDelete(); onClose(); }}
       >
-        <span className="u-menu-item-icon"><TrashIcon /></span>
+        <span className="u-menu-item-icon"><RowDeleteIcon /></span>
         Delete Attempt
       </button>
     </div>

@@ -333,11 +333,10 @@ function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>)
         <label className="form-label">
           Awarding Tasks <span className="req">*</span>
         </label>
-        <p className="form-help" style={{ marginTop: 0 }}>
+        <TaskPicker selected={selected} onToggle={toggle} />
+        <p className="form-help">
           Awarding is based on binary Task completion only — a Task counts once it is marked complete per its completion criteria. The same Task can award multiple Skills.
         </p>
-
-        <TaskPicker selected={selected} onToggle={toggle} />
       </div>
 
       {multi && (

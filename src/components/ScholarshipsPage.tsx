@@ -5,7 +5,7 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, SmallXIcon, AddIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
@@ -249,6 +249,7 @@ export function ScholarshipsPage() {
                         selected={menu?.scholarship.id === s.id}
                         onRevoke={() => handleRevoke(s.id)}
                         onOpenMenu={(rect) => setMenu({ scholarship: s, rect })}
+                        menuOpen={menu?.scholarship.id === s.id}
                       />
                     ))}
                     {paged.length === 0 && (
@@ -375,18 +376,21 @@ function ScholarshipRow({
   selected,
   onRevoke,
   onOpenMenu,
+  menuOpen,
 }: {
   scholarship: Scholarship;
   selected: boolean;
   onRevoke: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const status = statusOf(scholarship);
   const days = daysFromToday(scholarship.expiresOn);
   const expiringSoon = status === "active" && days >= 0 && days <= 14;
 
   return (
-    <tr className={selected ? "selected" : ""}>
+    <tr className={`${selected ? "selected" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td>
         <UserCell user={scholarship.user} />
       </td>
@@ -425,7 +429,7 @@ function ScholarshipRow({
             onOpenMenu(e.currentTarget.getBoundingClientRect());
           }}
         >
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
         <div className="row-action-bar">
           <button
@@ -437,7 +441,7 @@ function ScholarshipRow({
               onRevoke();
             }}
           >
-            <SmallXIcon />
+            <RowDeleteIcon />
           </button>
           <button
             className="row-action-btn"
@@ -447,7 +451,7 @@ function ScholarshipRow({
               onOpenMenu(e.currentTarget.getBoundingClientRect());
             }}
           >
-            <MoreIcon />
+            <RowKebabIcon />
           </button>
         </div>
       </td>
@@ -456,14 +460,6 @@ function ScholarshipRow({
 }
 
 /* ───────────────── Row actions menu (fixed-positioned) ───────────────── */
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" />
-    <circle cx="12" cy="12" r="1.9" />
-    <circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
 
 const CalendarPlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -560,13 +556,11 @@ function ScholarshipActionsMenu({
           {scholarship.id} · {status === "active" ? "Active" : "Expired"}
         </div>
       </div>
-      <div className="u-menu-divider" />
       {item(<CalendarPlusIcon />, "Extend 6 months", onExtend)}
       {email &&
         item(<MailMenuIcon />, "Copy user email", () => {
           navigator.clipboard?.writeText(email);
         })}
-      <div className="u-menu-divider" />
       {item(<RevokeIcon />, "Revoke scholarship", onRevoke, true)}
     </div>
   );

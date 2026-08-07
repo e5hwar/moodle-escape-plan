@@ -16,35 +16,15 @@ import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
-import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
 /* ─────────────── Local icons ─────────────── */
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" />
-  </svg>
-);
-const ArchiveIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M9 12h6" />
-  </svg>
-);
 const UnarchiveIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 18v-6M9.5 14.5 12 12l2.5 2.5" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </svg>
 );
 const WarnIcon = () => (
@@ -352,6 +332,7 @@ export function SkillsPage() {
                                 onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
                                 onEdit={() => setMode({ kind: "edit-skill", skill: s })}
                                 onMenu={(rect) => setMenu({ rect, tab: "skills", id: s.id })}
+                                menuOpen={menu?.tab === "skills" && menu.id === s.id}
                               />
                             ))}
                           </tbody>
@@ -391,6 +372,7 @@ export function SkillsPage() {
                                 onClick={() => setSelectedId(m.id === selectedId ? null : m.id)}
                                 onEdit={() => setMode({ kind: "edit-mastery", mastery: m })}
                                 onMenu={(rect) => setMenu({ rect, tab: "mastery", id: m.id })}
+                                menuOpen={menu?.tab === "mastery" && menu.id === m.id}
                               />
                             ))}
                           </tbody>
@@ -606,7 +588,7 @@ function TasksCell({ skill }: { skill: Skill }) {
 }
 
 function SkillRow({
-  skill, cols, masteryLinked, selected, onClick, onEdit, onMenu,
+  skill, cols, masteryLinked, selected, onClick, onEdit, onMenu, menuOpen,
 }: {
   skill: Skill;
   cols: Record<SkillColKey, boolean>;
@@ -615,10 +597,12 @@ function SkillRow({
   onClick: () => void;
   onEdit: () => void;
   onMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const archived = skill.status === "Archived";
   return (
-    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""}`} onClick={onClick}>
+    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
       <td className="col-name">
         {skill.name}
         {archived && <span className="hidden-badge">Archived</span>}
@@ -652,7 +636,7 @@ function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
 }
 
 function MasteryRow({
-  mastery, cols, selected, onClick, onEdit, onMenu,
+  mastery, cols, selected, onClick, onEdit, onMenu, menuOpen,
 }: {
   mastery: MasterySkill;
   cols: Record<MasteryColKey, boolean>;
@@ -660,10 +644,12 @@ function MasteryRow({
   onClick: () => void;
   onEdit: () => void;
   onMenu: (rect: DOMRect) => void;
+  /** This row's 3-dot menu is open — hold the hover treatment. */
+  menuOpen: boolean;
 }) {
   const archived = mastery.status === "Archived";
   return (
-    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""}`} onClick={onClick}>
+    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
       <td className="col-name">
         {mastery.name}
         {archived && <span className="hidden-badge">Archived</span>}
@@ -693,14 +679,14 @@ function RowActions({
         aria-label="More"
         onClick={(e) => { e.stopPropagation(); onMenu(e.currentTarget.getBoundingClientRect()); }}
       >
-        <MoreIcon />
+        <RowKebabIcon />
       </button>
       <div className="row-action-bar">
         <button className="row-action-btn" aria-label="Edit" title={editTitle} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-          <PencilIcon />
+          <RowEditIcon />
         </button>
         <button className="row-action-btn" aria-label="More" onClick={(e) => { e.stopPropagation(); onMenu(e.currentTarget.getBoundingClientRect()); }}>
-          <MoreIcon />
+          <RowKebabIcon />
         </button>
       </div>
     </td>
@@ -805,13 +791,11 @@ function ActionsMenu({
         <div className="u-menu-head-name">{title}</div>
         <div className="u-menu-head-id">{subtitle}</div>
       </div>
-      <div className="u-menu-divider" />
       {archived
         ? item(<UnarchiveIcon />, `Unarchive ${archiveLabel}`, onArchive)
-        : item(<ArchiveIcon />, `Archive ${archiveLabel}`, onArchive)}
-      {item(<PencilIcon />, "Edit", onEdit)}
-      <div className="u-menu-divider" />
-      {item(<TrashIcon />, "Delete", onDelete, true)}
+        : item(<MenuArchiveIcon />, `Archive ${archiveLabel}`, onArchive)}
+      {item(<RowEditIcon />, "Edit", onEdit)}
+      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );
 }

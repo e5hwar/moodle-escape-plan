@@ -8,7 +8,7 @@ import {
   type BillingPlan,
   type Platform,
 } from "../data/offerCodes";
-import { SearchIcon, SortIcon, SmallXIcon, AddIcon, CheckIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, CheckIcon, RowDeleteIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
@@ -375,7 +375,7 @@ function OfferCodeRow({
             onDelete();
           }}
         >
-          <SmallXIcon />
+          <RowDeleteIcon />
         </button>
       </td>
     </tr>

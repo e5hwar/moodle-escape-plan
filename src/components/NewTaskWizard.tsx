@@ -14,7 +14,6 @@ import {
   SearchIcon,
   CheckIcon,
 } from "./icons";
-import { PageBreak } from "./PageBreak";
 import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import {
@@ -162,7 +161,9 @@ type WizardData = {
   timeValue: string;
   timeUnit: TimeUnit;
   visibility: Visibility | null;
-  finalExam: boolean;
+  /** Paywall flag — the Task needs a paid subscription, i.e. it is NOT part of
+   * the Free Trial. Distinct from the Task's `finalExam` flag. */
+  requiresSubscription: boolean;
   tags: string[];
 
   // xAPI
@@ -387,7 +388,10 @@ const INITIAL_DATA: WizardData = {
   timeValue: "",
   timeUnit: "minutes",
   visibility: DEFAULT_VISIBILITY,
-  finalExam: false,
+  /* Defaults off for every Task type — the toggle's copy still recommends
+     turning it on for Tasks that complete a Certification, but that's a
+     per-Task call, not the default. */
+  requiresSubscription: false,
   tags: [],
 
   packageEn: [],
@@ -492,7 +496,7 @@ const QUIZ_STEPS: StepDef[] = [
 
 const RESOURCE_STEPS: StepDef[] = [
   { id: "basics", label: "Basic Info", sub: "Type, content, time", desc: "Name the Task, choose whether it points at a file or a link, add the content, and estimate how long it takes to complete." },
-  { id: "launch", label: "Launch Behaviour", sub: "How it opens", desc: "Choose how the Resource opens on the learner's device." },
+  { id: "launch", label: "Launch Behaviour", sub: "How it opens", desc: "Choose how the Task opens for the learner" },
   { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Decide what marks this Task as complete for a learner." },
   { id: "visibility", label: "Visibility", sub: "Visibility", desc: "Whether learners can find and start this Task." },
 ];
@@ -595,7 +599,7 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
     descEn: editingTask.description ?? base.descEn,
     tags: editingTask.tags ?? base.tags,
     visibility: editingTask.hidden ? "hidden" : "visible",
-    finalExam: editingTask.finalExam ?? base.finalExam,
+    requiresSubscription: editingTask.requiresSubscription ?? base.requiresSubscription,
     discoverable: editingTask.discoverable ?? base.discoverable,
     ...(time ? { timeValue: time.timeValue, timeUnit: time.timeUnit } : {}),
     // A Quiz Task carrying section config opens in the sectioned structure with
@@ -968,72 +972,54 @@ type StepProps = {
   nameError?: boolean;
 };
 
-/* Figma 366:6266 — the assembled first step. Three page-broken sections: what
-   the learner reads, the package itself, then the product flag. The name here is
-   single-language (365:2467), unlike the description and package below it. */
+/* Figma 366:6266 — the assembled first step: one evenly spaced stack of fields,
+   no section dividers. The name here is single-language (367:6332), unlike the
+   description and package below it. */
 function XapiDetailsStep({ data, update, nameError }: StepProps) {
   return (
     <>
-      <p className="required-fields-note">* Required Fields</p>
-
-      <div className="wizard-sections">
-        <section className="wizard-section">
-          <PageBreak label="Info displayed to users" />
-          <div className="wizard-fields">
-            <div className="form-group">
-              <label className="form-label">
-                Name <span className="req">*</span>
-              </label>
-              <input
-                className={`form-input ${nameError ? "has-error" : ""}`}
-                value={data.nameEn}
-                placeholder="Name"
-                aria-invalid={nameError || undefined}
-                onChange={(e) => update({ nameEn: e.target.value })}
-              />
-              {nameError && (
-                <p className="form-error-text">Enter a name to publish.</p>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Description</label>
-              <RichTextField
-                en={data.descEn}
-                es={data.descEs}
-                onChangeEn={(v) => update({ descEn: v })}
-                onChangeEs={(v) => update({ descEs: v })}
-              />
-            </div>
-
-            <TimeToCompleteField data={data} update={update} />
-          </div>
-        </section>
-
-        <section className="wizard-section">
-          <PageBreak label="Task contents" />
-          <div className="form-group">
-            <label className="form-label">
-              xAPI Package <span className="req">*</span>
-            </label>
-            <PackageField
-              enFiles={data.packageEn}
-              esFiles={data.packageEs}
-              setEnFiles={(files) => update({ packageEn: files })}
-              setEsFiles={(files) => update({ packageEs: files })}
-            />
-          </div>
-        </section>
-
-        <section className="wizard-section">
-          <PageBreak label="Product settings" />
-          <Toggle
-            checked={data.finalExam}
-            onChange={(v) => update({ finalExam: v })}
-            label="Available during Free Trial"
-            sub="Recommendation: Tasks that complete a Certification should have this setting disabled. This is to prevent users from completing Certifications without subscribing."
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">
+            Name <span className="req">*</span>
+          </label>
+          <input
+            className={`form-input ${nameError ? "has-error" : ""}`}
+            value={data.nameEn}
+            placeholder="Name"
+            aria-invalid={nameError || undefined}
+            onChange={(e) => update({ nameEn: e.target.value })}
           />
-        </section>
+          {nameError && (
+            <p className="form-error-text">Enter a name to publish.</p>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <RichTextField
+            en={data.descEn}
+            es={data.descEs}
+            onChangeEn={(v) => update({ descEn: v })}
+            onChangeEs={(v) => update({ descEs: v })}
+          />
+        </div>
+
+        <TimeToCompleteField data={data} update={update} />
+
+        <div className="form-group">
+          <label className="form-label">
+            xAPI Package <span className="req">*</span>
+          </label>
+          <PackageField
+            enFiles={data.packageEn}
+            esFiles={data.packageEs}
+            setEnFiles={(files) => update({ packageEn: files })}
+            setEsFiles={(files) => update({ packageEs: files })}
+          />
+        </div>
+
+        <SubscriptionAccessField data={data} update={update} />
       </div>
     </>
   );
@@ -1125,39 +1111,48 @@ function XapiVisibilityStep({ data, update }: StepProps) {
   return <VisibilitySection data={data} update={update} heading={false} />;
 }
 
-function RotationOrientationFields({ data, update }: StepProps) {
+/* `nested` keeps the sub-group/sub-label treatment used under a Section heading
+   (the xAPI Launch step); the Resource step renders these as top-level fields. */
+function RotationOrientationFields({
+  data,
+  update,
+  nested = true,
+  rotationSub = "When on, the learner can rotate freely between portrait and landscape. When off, the orientation is locked to your choice below.",
+}: StepProps & { nested?: boolean; rotationSub?: string }) {
+  const groupClass = nested ? "form-sub-group" : "form-group";
+  const labelClass = nested ? "form-sub-label" : "form-label";
   return (
     <>
-      <div className="form-sub-group">
+      <div className={groupClass}>
         <Toggle
           checked={data.allowRotation}
           onChange={(v) => update({ allowRotation: v })}
-          label="Allow rotation"
-          sub="When on, the learner can rotate freely between portrait and landscape. When off, the orientation is locked to your choice below."
+          label="Allow Rotation"
+          stateOn="Rotation Allowed"
+          stateOff="Rotation Blocked"
+          sub={rotationSub}
         />
       </div>
 
-      <div className="form-sub-group">
-        <label className="form-sub-label">Locked orientation</label>
+      <div className={groupClass}>
+        <label className={labelClass}>Locked Orientation</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.lockedOrientation === "portrait"}
             onSelect={() => update({ lockedOrientation: "portrait" })}
             disabled={data.allowRotation}
             title="Portrait"
-            desc="Lock the content to a vertical orientation on launch."
           />
           <RadioCard
             selected={data.lockedOrientation === "landscape"}
             onSelect={() => update({ lockedOrientation: "landscape" })}
             disabled={data.allowRotation}
             title="Landscape"
-            desc="Lock the content to a horizontal orientation on launch."
           />
         </div>
         {data.allowRotation && (
           <p className="form-help">
-            Turn off Allow rotation to lock the orientation.
+            Turn off Allow Rotation to lock the orientation.
           </p>
         )}
       </div>
@@ -1200,16 +1195,21 @@ function UrlVisibilityStep({ data, update }: StepProps) {
 
 /* ─────────────────  Resource step components  ───────────────── */
 
+/* Flat field stack, same assembly as {@link XapiDetailsStep} — Resource type is
+   a mandatory field like Name/Description (label + subtext + control), not a
+   titled Section. */
 function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
   const isFileType = data.resourceType === "file";
   return (
-    <>
+    <div className="wizard-fields">
       <NameAndDescription data={data} update={update} nameError={nameError} />
 
-      <Section
-        title="Resource type"
-        desc="Choose whether this Resource is a file learners open, or a link to an external site or somewhere within the app."
-      >
+      <TimeToCompleteField data={data} update={update} />
+
+      <div className="form-group">
+        <label className="form-label">
+          Resource Type <span className="req">*</span>
+        </label>
         <div className="radio-card-group">
           <RadioCard
             selected={isFileType}
@@ -1224,7 +1224,11 @@ function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
             desc="Point at an external URL, or a SkillCat Deep Link to a page within the app."
           />
         </div>
-      </Section>
+        <p className="form-help">
+          Choose whether this Resource is a file learners open, or a link to an
+          external site or somewhere within the app.
+        </p>
+      </div>
 
       {isFileType ? (
         <div className="form-group">
@@ -1239,8 +1243,7 @@ function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
             accept="PDF, DOCX, PPTX, images"
           />
           <p className="form-help">
-            The file learners open for this Task. If no Spanish file is added,
-            Spanish learners open the English file.
+            Optional: Configure how the file appears in Step 2: Launch Behaviour
           </p>
         </div>
       ) : (
@@ -1248,88 +1251,97 @@ function ResourceBasicInfoStep({ data, update, nameError }: StepProps) {
           <label className="form-label">
             Link <span className="req">*</span>
           </label>
-          <input
-            className="form-input"
+          <LangField
+            en={data.url}
+            es={data.urlEs}
+            onChangeEn={(v) => update({ url: v })}
+            onChangeEs={(v) => update({ urlEs: v })}
+            placeholderEn="https://example.com/resource or skillcat://course/123"
+            placeholderEs="https://ejemplo.com/recurso o skillcat://course/123"
             type="url"
             inputMode="url"
-            placeholder="https://example.com/resource or skillcat://course/123"
-            value={data.url}
-            onChange={(e) => update({ url: e.target.value })}
           />
           <p className="form-help">
             An external web address (including https://) or a SkillCat Deep Link
-            to a Certification, Task, or app page.
+            to a Certification, Task, or app page. If no Spanish link is added,
+            Spanish learners open the English link.
           </p>
         </div>
       )}
 
-      <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
-    </>
+      <SubscriptionAccessField data={data} update={update} />
+    </div>
   );
 }
 
+/* Flat field stack like {@link ResourceBasicInfoStep} — "Open In" and the
+   rotation fields are peers, with no section headings or divider between them.
+   The step heading carries the only description. */
 function ResourceLaunchStep({ data, update }: StepProps) {
   if (data.resourceType === "file") {
     return (
-      <Section
-        title="Open in"
-        desc="Where the file opens when a learner starts the Task. In-App Viewer is the default. If a file type only supports one of these, only that option is shown."
-      >
-        <div className="radio-card-group">
-          <RadioCard
-            selected={data.fileOpenIn === "in-app-viewer"}
-            onSelect={() => update({ fileOpenIn: "in-app-viewer" })}
-            title="In-App Viewer"
-            desc="Opens in the SkillCat app's built-in file viewer. Keeps learners in the app."
-          />
-          <RadioCard
-            selected={data.fileOpenIn === "external-app"}
-            onSelect={() => update({ fileOpenIn: "external-app" })}
-            title="External Application"
-            desc="Hands the file to the device's default app for that file type (e.g. a PDF reader). The app can't track activity once the file opens elsewhere."
-          />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <label className="form-label">Open In</label>
+          <div className="radio-card-group">
+            <RadioCard
+              selected={data.fileOpenIn === "in-app-viewer"}
+              onSelect={() => update({ fileOpenIn: "in-app-viewer" })}
+              title="In-App Viewer"
+              desc="Opens in the SkillCat app's built-in file viewer. Keeps learners in the app."
+            />
+            <RadioCard
+              selected={data.fileOpenIn === "external-app"}
+              onSelect={() => update({ fileOpenIn: "external-app" })}
+              title="External Application"
+              desc="Hands the file to the device's default app for that file type (e.g. a PDF reader)."
+            />
+          </div>
+          <p className="form-help">
+            Where the file opens when a learner starts the Task. In-App Viewer is
+            the default. If a file type only supports one of these, only that
+            option is shown.
+          </p>
         </div>
-      </Section>
+      </div>
     );
   }
 
   const inApp = data.openIn === "in-app";
   return (
-    <>
-      <Section
-        title="Open in"
-        desc="Where the link opens when a learner starts the Task. External Browser is the default. A SkillCat Deep Link always opens the respective page within the app."
-      >
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">Open In</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.openIn === "external"}
             onSelect={() => update({ openIn: "external" })}
             title="External Browser"
-            desc="Opens in the device's default browser, or a new tab on Web. The app hands the link off and can't track activity afterward."
+            desc="Opens in the device's default browser, or a new tab on Web."
           />
           <RadioCard
             selected={inApp}
             onSelect={() => update({ openIn: "in-app" })}
             title="In-App Browser"
-            desc="Opens in a webview inside the SkillCat app, or an iframe on Web. Keeps learners in the app and unlocks the rotation controls below."
+            desc="Opens in a webview inside the SkillCat app. Keeps learners in the app and unlocks the rotation controls below."
           />
         </div>
-      </Section>
+        <p className="form-help">
+          Where the link opens when a learner starts the Task. External Browser
+          is the default. A SkillCat Deep Link always opens the respective page
+          within the app.
+        </p>
+      </div>
 
       {inApp && (
-        <>
-          <div className="form-divider" />
-
-          <Section
-            title="Rotation & orientation"
-            desc="Mobile phones only. On iPad and tablets orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there."
-          >
-            <RotationOrientationFields data={data} update={update} />
-          </Section>
-        </>
+        <RotationOrientationFields
+          data={data}
+          update={update}
+          nested={false}
+          rotationSub="Rotation settings only applicable for the In-App Browser. Applies to mobile phones only. On iPads, orientation is never locked. On Web the layout adapts to the window size — these settings have no effect there."
+        />
       )}
-    </>
+    </div>
   );
 }
 
@@ -1341,7 +1353,7 @@ function HandsOnBasicStep({ data, update, nameError }: StepProps) {
     <>
       <NameAndDescription data={data} update={update} nameError={nameError} />
       <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
+      <SubscriptionAccessField data={data} update={update} />
     </>
   );
 }
@@ -1736,7 +1748,7 @@ function QuizBasicsStep({ data, update, nameError }: StepProps) {
       </div>
 
       <TimeToCompleteField data={data} update={update} />
-      <FinalExamField data={data} update={update} />
+      <SubscriptionAccessField data={data} update={update} />
     </>
   );
 }
@@ -3320,16 +3332,7 @@ function NameAndDescription({ data, update, nameError }: StepProps) {
 function TimeToCompleteField({ data, update }: StepProps) {
   return (
     <div className="form-group">
-      {/* Label and helper sit flush (Figma 366:6227); the 8px gap goes below the
-          pair, not between them. */}
-      <div className="form-field-head">
-        <label className="form-label">
-          Time to Complete <span className="req">*</span>
-        </label>
-        <p className="form-help">
-          Estimated time required for the user to complete the Task
-        </p>
-      </div>
+      <label className="form-label">Time to Complete</label>
       <div className="time-row">
         <input
           className="form-input no-spinner small"
@@ -3352,19 +3355,26 @@ function TimeToCompleteField({ data, update }: StepProps) {
           <option value="weeks">Weeks</option>
         </select>
       </div>
+      <p className="form-help">
+        Estimated time required for the user to complete the Task
+      </p>
     </div>
   );
 }
 
-function FinalExamField({ data, update }: StepProps) {
+/* Paywall flag (Figma 367:6411). Note this is NOT `finalExam` — the toggle used
+   to write to the Certification's Final Exam flag, which drives the Tasks-list
+   filter and the cert tree's pill. It has its own field now. */
+function SubscriptionAccessField({ data, update }: StepProps) {
   return (
     <div className="form-group">
-      <label className="form-label">Available during Free Trial?</label>
       <Toggle
-        checked={data.finalExam}
-        onChange={(v) => update({ finalExam: v })}
-        label="Make this Task available during the Free Trial"
-        sub="Recommendation: Tasks that complete a Certification should have this setting disabled. This is to prevent users from completing Certifications without subscribing."
+        checked={data.requiresSubscription}
+        onChange={(v) => update({ requiresSubscription: v })}
+        label="Require Subscription to Access"
+        stateOn="Yes: Requires Subscription"
+        stateOff="No: Can Access On Free Trial"
+        sub="Recommendation: Tasks that complete a Certification should have this setting enabled. This is to prevent users from completing Certifications without subscribing."
       />
     </div>
   );
@@ -3443,6 +3453,10 @@ function RadioCard({
   );
 }
 
+/* Toggle — Figma 373:233 (off) / 362:2440 (on). Reads as a normal labelled
+   field: title, then the switch beside a line naming the state it's in, then the
+   recommendation. `stateOn`/`stateOff` carry that line; they default to Yes/No
+   for settings whose design doesn't author richer copy. */
 function Toggle({
   checked,
   onChange,
@@ -3450,6 +3464,8 @@ function Toggle({
   sub,
   inline,
   disabled,
+  stateOn = "Yes",
+  stateOff = "No",
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -3457,27 +3473,39 @@ function Toggle({
   sub?: string;
   inline?: boolean;
   disabled?: boolean;
+  stateOn?: string;
+  stateOff?: string;
 }) {
+  const control = (
+    <button
+      type="button"
+      className={`toggle ${checked ? "on" : ""}`}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      aria-pressed={checked}
+    >
+      <span className="toggle-knob" />
+    </button>
+  );
+
+  // The compact variant is a single line, so it keeps its label-then-switch read.
+  if (inline) {
+    return (
+      <div className={`toggle-row inline ${disabled ? "disabled" : ""}`}>
+        <span className="toggle-inline-label">{label}</span>
+        {control}
+      </div>
+    );
+  }
+
   return (
-    <div className={`toggle-row ${inline ? "inline" : ""} ${disabled ? "disabled" : ""}`}>
-      {/* Block rows lead with the control (Figma 361:2434); the compact inline
-          variant keeps its label-then-switch reading. */}
-      {inline && <span className="toggle-inline-label">{label}</span>}
-      <button
-        type="button"
-        className={`toggle ${checked ? "on" : ""}`}
-        onClick={() => !disabled && onChange(!checked)}
-        disabled={disabled}
-        aria-pressed={checked}
-      >
-        <span className="toggle-knob" />
-      </button>
-      {!inline && (
-        <div className="toggle-text">
-          <div className="toggle-label">{label}</div>
-          {sub && <div className="toggle-sub">{sub}</div>}
-        </div>
-      )}
+    <div className={`toggle-field ${disabled ? "disabled" : ""}`}>
+      <span className="form-label">{label}</span>
+      <div className="toggle-switch-row">
+        {control}
+        <span className="toggle-state">{checked ? stateOn : stateOff}</span>
+      </div>
+      {sub && <p className="toggle-sub">{sub}</p>}
     </div>
   );
 }
@@ -3674,6 +3702,8 @@ function LangField({
   placeholderEs,
   error = false,
   errorMessage,
+  type,
+  inputMode,
 }: {
   en: string;
   es: string;
@@ -3683,6 +3713,8 @@ function LangField({
   placeholderEs?: string;
   error?: boolean;
   errorMessage?: string;
+  type?: React.ComponentProps<"input">["type"];
+  inputMode?: React.ComponentProps<"input">["inputMode"];
 }) {
   return (
     <>
@@ -3691,6 +3723,8 @@ function LangField({
         <span className="lang-tag">EN</span>
         <input
           className="lang-field-input"
+          type={type}
+          inputMode={inputMode}
           value={en}
           onChange={(e) => onChangeEn(e.target.value)}
           placeholder={placeholderEn}
@@ -3702,6 +3736,8 @@ function LangField({
         <span className="lang-tag">ES</span>
         <input
           className="lang-field-input"
+          type={type}
+          inputMode={inputMode}
           value={es}
           onChange={(e) => onChangeEs(e.target.value)}
           placeholder={placeholderEs}
