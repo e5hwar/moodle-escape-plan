@@ -20,7 +20,7 @@ import {
   type SignUpChannel,
   type TaxStatus,
 } from "../data/companies";
-import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon } from "./icons";
+import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
@@ -503,52 +503,6 @@ function CompanyRow({
 
 /* ─────────────── Row actions menu (fixed-positioned) ─────────────── */
 
-const HolderIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-
-const PeopleIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
-const MailIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <path d="M3 7l9 6 9-6" />
-  </svg>
-);
-
-const InvoiceIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 2h12a1 1 0 0 1 1 1v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21V3a1 1 0 0 1 1-1z" />
-    <path d="M9 8h6M9 12h6M9 16h4" />
-  </svg>
-);
-
-const DashboardIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-    <rect x="13" y="3" width="8" height="5" rx="1.5" />
-    <rect x="13" y="10" width="8" height="11" rx="1.5" />
-    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-  </svg>
-);
-
-const CancelIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M15 9l-6 6M9 9l6 6" />
-  </svg>
-);
-
 function CompanyActionsMenu({
   company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onViewInvoices,
 }: {
@@ -564,21 +518,22 @@ function CompanyActionsMenu({
   onViewInvoices: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   // Only paid, running subscriptions can be cancelled.
   const canCancel = getCompanyBilling(company).status === "Active";
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -613,7 +568,7 @@ function CompanyActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 220,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -624,14 +579,14 @@ function CompanyActionsMenu({
       </div>
       {item(<RowEditIcon />, "Edit company details", onEditCompany)}
       {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
-      {item(<HolderIcon />, "Account Holder", onEditAccountHolder)}
-      {item(<MailIcon />, "Add Billing Emails", onAddBillingEmails)}
-      {item(<PeopleIcon />, "View Employees", onViewEmployees)}
-      {item(<InvoiceIcon />, "View Invoices", onViewInvoices)}
-      {item(<DashboardIcon />, "View Dashboard", () => viewDashboard(company))}
+      {item(<MenuPlaceholderIcon />, "Account Holder", onEditAccountHolder)}
+      {item(<MenuPlaceholderIcon />, "Add Billing Emails", onAddBillingEmails)}
+      {item(<MenuPlaceholderIcon />, "View Employees", onViewEmployees)}
+      {item(<MenuPlaceholderIcon />, "View Invoices", onViewInvoices)}
+      {item(<MenuPlaceholderIcon />, "View Dashboard", () => viewDashboard(company))}
       {canCancel && (
         <>
-          {item(<CancelIcon />, "Cancel Subscription", onCancelSubscription, true)}
+          {item(<MenuPlaceholderIcon />, "Cancel Subscription", onCancelSubscription, true)}
         </>
       )}
     </div>

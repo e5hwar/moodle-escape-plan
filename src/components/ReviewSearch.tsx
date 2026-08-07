@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TaskSubmission } from "../data/reviewSubmissions";
-import { SearchIcon } from "./icons";
+import { SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -43,6 +43,10 @@ export function ReviewSearch({
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Keep the bar showing the applied query when it changes from outside
+  // (Clear Filters, a preset, the ✕ on another control).
+  useEffect(() => setText(query), [query]);
 
   const allCompanies = useMemo(() => {
     const counts = new Map<string, number>();
@@ -121,14 +125,37 @@ export function ReviewSearch({
 
   useEffect(() => setActive(-1), [text, draftCompanies.length, draftTasks.length]);
 
+  /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
+     query, so a bar left showing half-typed text would be lying about what the
+     results are for — clicking away or pressing Escape puts the applied query
+     (and no pending scope) back. */
+  function revert() {
+    setText(query);
+    setDraftCompanies([]);
+    setDraftTasks([]);
+    setActive(-1);
+    setOpen(false);
+  }
+
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) revert();
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+    // `query`/drafts are deps so the handler always reverts to current state.
+  }, [open, query, draftCompanies, draftTasks]);
+
+  // Clear the applied search outright — no Enter needed.
+  function clearSearch() {
+    setText("");
+    setDraftCompanies([]);
+    setDraftTasks([]);
+    setActive(-1);
+    setOpen(false);
+    onCommit("");
+  }
 
   function addCompany(name: string) {
     if (!draftCompanies.includes(name)) setDraftCompanies([...draftCompanies, name]);
@@ -197,7 +224,7 @@ export function ReviewSearch({
       }
       commit();
     } else if (e.key === "Escape") {
-      setOpen(false);
+      revert();
     } else if (e.key === "Backspace" && text === "") {
       if (scopedTask) setDraftTasks(draftTasks.slice(0, -1));
       else if (scopedCompany) setDraftCompanies(draftCompanies.slice(0, -1));
@@ -237,10 +264,25 @@ export function ReviewSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        <span className="usearch-kbd">
-          <span className="kbd-cmd">⌘</span>
-          <span className="kbd-letter">K</span>
-        </span>
+        {/* Figma 399:216 "Search Bar - Applied": once there is something to
+            clear, the ⌘K badge gives way to a ✕ that clears on click. */}
+        {text || scopedCompany || scopedTask || query ? (
+          <button
+            type="button"
+            className="usearch-clear"
+            aria-label="Clear search"
+            title="Clear search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={clearSearch}
+          >
+            <SearchClearIcon />
+          </button>
+        ) : (
+          <span className="usearch-kbd">
+            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-letter">K</span>
+          </span>
+        )}
       </div>
 
       {open && (

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
+import { ColumnsBody } from "./Filters";
 import {
   PlusCircleIcon,
   XCircleIcon,
@@ -149,12 +150,17 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
   setColumns,
   fixed = USER_FIXED_COLUMNS,
   optional = USER_OPTIONAL_COLUMNS as { key: string; label: string }[],
+  order,
+  onOrderChange,
 }: {
   columns: T;
   setColumns: (c: T) => void;
   /** Override the column definitions to reuse this control on other tables. */
   fixed?: { label: string }[];
   optional?: { key: string; label: string }[];
+  /** Pass both to enable drag-to-reorder. */
+  order?: string[];
+  onOrderChange?: (next: string[]) => void;
 }) {
   return (
     <Dropdown
@@ -180,6 +186,8 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
           onApply={(c) => setColumns(c as T)}
           fixed={fixed}
           optional={optional}
+          order={order}
+          onOrderChange={onOrderChange as ((n: string[]) => void) | undefined}
         />
       )}
     </Dropdown>
@@ -484,54 +492,6 @@ function SubmenuRow({
   );
 }
 
-function ColumnsBody({
-  value,
-  onApply,
-  fixed,
-  optional,
-}: {
-  value: Record<string, boolean>;
-  onApply: (v: Record<string, boolean>) => void;
-  fixed: { label: string }[];
-  optional: { key: string; label: string }[];
-}) {
-  const active = optional.filter((c) => value[c.key]);
-  const available = optional.filter((c) => !value[c.key]);
-  return (
-    <div className="dropdown-list cols-menu">
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Fixed columns</div>
-        {fixed.map(({ label }) => (
-          <div key={label} className="cols-fixed-row">
-            {label}
-          </div>
-        ))}
-      </div>
-
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Active columns</div>
-        {active.length === 0 ? (
-          <div className="cols-empty">No active columns</div>
-        ) : (
-          active.map(({ key, label }) => (
-            <CheckRow key={key} label={label} checked draggable onChange={() => onApply({ ...value, [key]: false })} />
-          ))
-        )}
-      </div>
-
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Available columns</div>
-        {available.length === 0 ? (
-          <div className="cols-empty">All columns are active</div>
-        ) : (
-          available.map(({ key, label }) => (
-            <CheckRow key={key} label={label} checked={false} onChange={() => onApply({ ...value, [key]: true })} />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
 
 function CheckRow({
   label,

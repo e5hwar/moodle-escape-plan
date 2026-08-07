@@ -5,7 +5,7 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
@@ -461,27 +461,6 @@ function ScholarshipRow({
 
 /* ───────────────── Row actions menu (fixed-positioned) ───────────────── */
 
-const CalendarPlusIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="17" rx="2" />
-    <path d="M3 9h18M8 2v4M16 2v4M12 13v5M9.5 15.5h5" />
-  </svg>
-);
-
-const MailMenuIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <path d="M3 7l9 6 9-6" />
-  </svg>
-);
-
-const RevokeIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M15 9l-6 6M9 9l6 6" />
-  </svg>
-);
-
 function ScholarshipActionsMenu({
   scholarship,
   rect,
@@ -496,21 +475,22 @@ function ScholarshipActionsMenu({
   onRevoke: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const status = statusOf(scholarship);
   const email = scholarship.user.email;
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -545,7 +525,7 @@ function ScholarshipActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 220,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -556,12 +536,12 @@ function ScholarshipActionsMenu({
           {scholarship.id} · {status === "active" ? "Active" : "Expired"}
         </div>
       </div>
-      {item(<CalendarPlusIcon />, "Extend 6 months", onExtend)}
+      {item(<MenuPlaceholderIcon />, "Extend 6 months", onExtend)}
       {email &&
-        item(<MailMenuIcon />, "Copy user email", () => {
+        item(<MenuPlaceholderIcon />, "Copy user email", () => {
           navigator.clipboard?.writeText(email);
         })}
-      {item(<RevokeIcon />, "Revoke scholarship", onRevoke, true)}
+      {item(<MenuPlaceholderIcon />, "Revoke scholarship", onRevoke, true)}
     </div>
   );
 }

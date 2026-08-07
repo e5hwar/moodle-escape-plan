@@ -482,6 +482,14 @@ export const TreeKebabIcon = () => (
   </svg>
 );
 
+/* Clear-search ✕ — Figma "Search Bar - Applied" (399:216, node 7:1802). Same
+   16px / 1.3333 square-cap family as the row-action icons below. */
+export const SearchClearIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M11.301 4.701L8 8M8 8L4.701 11.301M8 8L11.301 11.301M8 8L4.701 4.701" />
+  </svg>
+);
+
 /* ─── Table row-action icons — Figma "3-Dot Menu - Hover State" (386:269) ───
    The hover bar that every table row reveals draws from one icon family: 16px
    in a 16-unit box, 1.3333px square-cap strokes, tinted #a8a8a8 by the button.
@@ -546,6 +554,16 @@ export const MenuPreviewIcon = () => (
 export const MenuHistoryIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
     <path d="M1.701 8.668C2.035 11.852 4.727 14.334 8 14.334C9.68 14.334 11.291 13.667 12.479 12.479C13.666 11.292 14.333 9.681 14.333 8.001C14.333 6.321 13.666 4.71 12.479 3.523C11.291 2.335 9.68 1.668 8 1.668C6.915 1.668 5.893 1.941 5 2.422C3.795 3.072 2.832 4.093 2.253 5.334M8 4.668V8.001L9.667 9.668M1.667 2.334V5.668H5" />
+  </svg>
+);
+
+/* Stand-in for a menu action the Figma Icon Library has no glyph for yet
+   (Revoke, Login As, Invoice, Dashboard, …). Deliberately reads as an empty
+   slot rather than as meaning — swap each one out as the real icon lands. */
+export const MenuPlaceholderIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M1.333 1.333H14.667V14.667H1.333V1.333Z" />
+    <path d="M1.333 1.333L14.667 14.667M14.667 1.333L1.333 14.667" strokeOpacity="0.45" />
   </svg>
 );
 

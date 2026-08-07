@@ -8,6 +8,7 @@ import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
 import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
+import { useColumnOrder, orderedColumns } from "./Filters";
 import { SortIcon } from "./icons";
 
 const PAGE_SIZE = 50;
@@ -145,7 +146,9 @@ export function ReviewHandsOnPage() {
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
+  // Column display order — reordered by dragging in the Edit Columns menu.
+  const [order, setOrder] = useColumnOrder(COLS);
+  const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
   const colSpan = visibleCols.length + 1; // name + cols
   // Natural table width (name col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
@@ -292,6 +295,8 @@ export function ReviewHandsOnPage() {
                         setColumns={setColumns}
                         fixed={[{ label: "User Name" }]}
                         optional={EDIT_COLUMN_DEFS as unknown as { key: string; label: string }[]}
+                        order={order}
+                        onOrderChange={(o) => setOrder(o as typeof order)}
                       />
                     </th>
                   </tr>

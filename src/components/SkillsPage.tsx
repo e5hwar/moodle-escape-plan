@@ -16,17 +16,12 @@ import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
-import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
 /* ─────────────── Local icons ─────────────── */
-const UnarchiveIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 18v-6M9.5 14.5 12 12l2.5 2.5" />
-  </svg>
-);
 const WarnIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
@@ -737,19 +732,20 @@ function ActionsMenu({
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -782,7 +778,7 @@ function ActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -792,7 +788,7 @@ function ActionsMenu({
         <div className="u-menu-head-id">{subtitle}</div>
       </div>
       {archived
-        ? item(<UnarchiveIcon />, `Unarchive ${archiveLabel}`, onArchive)
+        ? item(<MenuPlaceholderIcon />, `Unarchive ${archiveLabel}`, onArchive)
         : item(<MenuArchiveIcon />, `Archive ${archiveLabel}`, onArchive)}
       {item(<RowEditIcon />, "Edit", onEdit)}
       {item(<RowDeleteIcon />, "Delete", onDelete, true)}

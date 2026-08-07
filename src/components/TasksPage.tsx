@@ -3,9 +3,17 @@ import { tasks as allTasks, discoverableLabel, finalExamLabel, isPaid, type Task
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
-import { Filters, EditColumnsButton, type FilterState, type ColumnState } from "./Filters";
+import {
+  Filters,
+  EditColumnsButton,
+  useColumnOrder,
+  orderedColumns,
+  type FilterState,
+  type ColumnState,
+} from "./Filters";
+import type { OptionalColumn } from "../data/filters";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
@@ -18,29 +26,6 @@ const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Elem
 ];
 
 const PAGE_SIZE = 50;
-
-const ReportIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-    <path d="M14 3v6h6M8 13h8M8 17h5" />
-  </svg>
-);
-
-const AttemptsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 3v5h5" />
-    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-
-const PayersIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
 
 /** View Attempts is only meaningful for graded/launchable Task types. */
 const ATTEMPTS_TYPES: TaskType[] = ["Quiz", "Hands-On Task", "xAPI"];
@@ -85,6 +70,83 @@ function compare(a: Task, b: Task, key: SortKey): number {
     case "dateModified":
       return (Date.parse(a.dateModified ?? "") || 0) - (Date.parse(b.dateModified ?? "") || 0);
   }
+}
+
+
+/* ─────────── Column registry ───────────
+   One entry per optional column: width, cell class, sortability, and how the
+   cell renders. The table walks `orderedColumns(...)` so dragging a row in the
+   Edit Columns menu moves the real column. `keepCompact` marks the columns that
+   survive the side-panel's compact mode. */
+type TaskColMeta = {
+  key: OptionalColumn;
+  label: string;
+  className: string;
+  width: number;
+  sortable?: boolean;
+  keepCompact?: boolean;
+  tip?: (t: Task) => string | undefined;
+  render: (t: Task) => React.ReactNode;
+};
+
+const TASK_COLS: TaskColMeta[] = [
+  { key: "id", label: "ID", className: "col-id", width: 100, keepCompact: true, render: (t) => t.id },
+  { key: "type", label: "Type", className: "col-type", width: 160, render: (t) => t.type },
+  {
+    key: "paid", label: "Paid", className: "col-type", width: 110,
+    render: (t) =>
+      isPaid(t) ? (
+        <span className="pay-badge pay-badge--paid">Paid</span>
+      ) : (
+        <span className="pay-badge pay-badge--free">Free</span>
+      ),
+  },
+  {
+    key: "usedIn", label: "Used in", className: "col-used", width: 180, sortable: false,
+    tip: (t) => (t.usedIn.length ? t.usedIn.join("\n") : undefined),
+    render: (t) =>
+      t.usedIn.length === 0 ? (
+        "—"
+      ) : (
+        <>
+          {t.usedIn[0]}
+          {t.usedIn.length > 1 && <span className="used-extra">+{t.usedIn.length - 1}</span>}
+        </>
+      ),
+  },
+  {
+    key: "createdBy", label: "Created By", className: "col-creator", width: 200, sortable: false,
+    tip: (t) => t.createdBy, render: (t) => t.createdBy,
+  },
+  {
+    key: "tradeTag", label: "Trade Tag", className: "col-tags", width: 210, sortable: false,
+    tip: (t) => tagTip(pickTags(t.tags, TRADE_TAGS)), render: (t) => <TagText tags={pickTags(t.tags, TRADE_TAGS)} />,
+  },
+  {
+    key: "partnershipTag", label: "Partnership Tag", className: "col-tags", width: 160, sortable: false,
+    tip: (t) => tagTip(pickTags(t.tags, PARTNERSHIP_TAGS)),
+    render: (t) => <TagText tags={pickTags(t.tags, PARTNERSHIP_TAGS)} />,
+  },
+  {
+    key: "userTypeTag", label: "User Type Tag", className: "col-tags", width: 150, sortable: false,
+    render: (t) => pickTag(t.tags, USER_TYPE_TAGS) ?? "—",
+  },
+  { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated ?? "—" },
+  { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified ?? "—" },
+];
+
+function tagTip(tags: string[]): string | undefined {
+  return tags.length ? tags.join("\n") : undefined;
+}
+
+function TagText({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return <>—</>;
+  return (
+    <>
+      {tags[0]}
+      {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
+    </>
+  );
 }
 
 export function TasksPage({
@@ -132,6 +194,8 @@ export function TasksPage({
     dateCreated: false,
     dateModified: false,
   });
+  // Column display order — reordered by dragging in the Edit Columns menu.
+  const [order, setOrder] = useColumnOrder(TASK_COLS);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "id",
     dir: "desc",
@@ -213,24 +277,18 @@ export function TasksPage({
   const selected = selectedId ? taskList.find((t) => t.id === selectedId) ?? null : null;
   const panelOpen = selected !== null;
 
+  // Column display order — reordered by dragging in the Edit Columns menu.
+  // The side panel's compact mode drops every column that isn't `keepCompact`.
+  const visibleCols = useMemo(
+    () => orderedColumns(TASK_COLS, order, columns).filter((c) => !panelOpen || c.keepCompact),
+    [columns, order, panelOpen],
+  );
+
   // Natural table width so columns scroll horizontally instead of crushing on a
   // narrow page. Mirrors the visible columns in <ColGroup>; optional columns are
   // hidden while the side panel is open (compact mode), so they don't count then.
   const tableMin =
-    240 /* name */ +
-    40 /* actions */ +
-    (columns.id ? 100 : 0) +
-    (!panelOpen
-      ? (columns.type ? 160 : 0) +
-        (columns.paid ? 110 : 0) +
-        (columns.usedIn ? 180 : 0) +
-        (columns.createdBy ? 200 : 0) +
-        (columns.tradeTag ? 210 : 0) +
-        (columns.partnershipTag ? 160 : 0) +
-        (columns.userTypeTag ? 150 : 0) +
-        (columns.dateCreated ? 130 : 0) +
-        (columns.dateModified ? 130 : 0)
-      : 0);
+    240 /* name */ + 40 /* actions */ + visibleCols.reduce((sum, c) => sum + c.width, 0);
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -348,42 +406,28 @@ export function TasksPage({
             <div className="co-table-col">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
-                <ColGroup columns={columns} compact={panelOpen} />
+                <ColGroup cols={visibleCols} />
                 <thead>
                   <tr>
-                    {columns.id && (
-                      <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />
-                    )}
                     <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                    {columns.type && !panelOpen && (
-                      <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />
-                    )}
-                    {columns.paid && !panelOpen && (
-                      <SortableHeader col="paid" label="Paid" className="col-type" sort={sort} toggle={toggleSort} />
-                    )}
-                    {columns.usedIn && !panelOpen && (
-                      <SortableHeader col="usedIn" label="Used in" className="col-used" sort={sort} toggle={toggleSort} sortable={false} />
-                    )}
-                    {columns.createdBy && !panelOpen && (
-                      <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />
-                    )}
-                    {columns.tradeTag && !panelOpen && (
-                      <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
-                    )}
-                    {columns.partnershipTag && !panelOpen && (
-                      <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
-                    )}
-                    {columns.userTypeTag && !panelOpen && (
-                      <SortableHeader col="userTypeTag" label="User Type Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />
-                    )}
-                    {columns.dateCreated && !panelOpen && (
-                      <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />
-                    )}
-                    {columns.dateModified && !panelOpen && (
-                      <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />
-                    )}
+                    {visibleCols.map((c) => (
+                      <SortableHeader
+                        key={c.key}
+                        col={c.key as SortKey}
+                        label={c.label}
+                        className={c.className}
+                        sort={sort}
+                        toggle={toggleSort}
+                        sortable={c.sortable !== false}
+                      />
+                    ))}
                     <th className="col-actions">
-                      <EditColumnsButton columns={columns} setColumns={setColumns} />
+                      <EditColumnsButton
+                        columns={columns}
+                        setColumns={setColumns}
+                        order={order}
+                        onOrderChange={setOrder}
+                      />
                     </th>
                   </tr>
                 </thead>
@@ -391,15 +435,14 @@ export function TasksPage({
 
               <div className="tasks-scroll">
                 <table className="table table-body">
-                  <ColGroup columns={columns} compact={panelOpen} />
+                  <ColGroup cols={visibleCols} />
                   <tbody>
                     {paged.map((task) => (
                       <TableRow
                         key={task.id}
                         task={task}
                         selected={task.id === selectedId}
-                        columns={columns}
-                        compact={panelOpen}
+                        cols={visibleCols}
                         onClick={() => setSelectedId(task.id === selectedId ? null : task.id)}
                         onEdit={() => editTask(task)}
                         onToggleVisibility={() => toggleVisibility(task)}
@@ -505,35 +548,14 @@ function CompanyEditBlockedModal({
 /** Renders a category's tags like the "Used in" column — first value plus a
  * "+N" overflow badge. Trade and Partnership categories allow more than one;
  * hovering the cell shows the full list via a native tooltip. */
-function TagCell({ tags }: { tags: string[] }) {
-  return (
-    <td className="col-tags" data-tip={tags.length ? tags.join("\n") : undefined}>
-      {tags.length === 0 ? (
-        "—"
-      ) : (
-        <>
-          {tags[0]}
-          {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
-        </>
-      )}
-    </td>
-  );
-}
 
-function ColGroup({ columns, compact }: { columns: ColumnState; compact?: boolean }) {
+function ColGroup({ cols }: { cols: TaskColMeta[] }) {
   return (
     <colgroup>
-      {columns.id && <col style={{ width: 100 }} />}
       <col style={{ width: 240 }} />
-      {columns.type && !compact && <col style={{ width: 160 }} />}
-      {columns.paid && !compact && <col style={{ width: 110 }} />}
-      {columns.usedIn && !compact && <col style={{ width: 180 }} />}
-      {columns.createdBy && !compact && <col style={{ width: 200 }} />}
-      {columns.tradeTag && !compact && <col style={{ width: 210 }} />}
-      {columns.partnershipTag && !compact && <col style={{ width: 160 }} />}
-      {columns.userTypeTag && !compact && <col style={{ width: 150 }} />}
-      {columns.dateCreated && !compact && <col style={{ width: 130 }} />}
-      {columns.dateModified && !compact && <col style={{ width: 130 }} />}
+      {cols.map((c) => (
+        <col key={c.key} style={{ width: c.width }} />
+      ))}
       <col style={{ width: 40 }} />
     </colgroup>
   );
@@ -575,8 +597,7 @@ function SortableHeader({
 function TableRow({
   task,
   selected,
-  columns,
-  compact,
+  cols,
   onClick,
   onEdit,
   onToggleVisibility,
@@ -585,8 +606,8 @@ function TableRow({
 }: {
   task: Task;
   selected: boolean;
-  columns: ColumnState;
-  compact?: boolean;
+  /** Visible optional columns, already in the user's order. */
+  cols: TaskColMeta[];
   onClick: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
@@ -599,43 +620,15 @@ function TableRow({
       className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""} ${task.hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onClick}
     >
-      {columns.id && <td className="col-id">{task.id}</td>}
       <td className="col-name" data-tip={task.name}>
         {task.name}
         {task.hidden && <span className="hidden-badge">Hidden</span>}
       </td>
-      {columns.type && !compact && <td className="col-type">{task.type}</td>}
-      {columns.paid && !compact && (
-        <td className="col-type">
-          {isPaid(task) ? (
-            <span className="pay-badge pay-badge--paid">Paid</span>
-          ) : (
-            <span className="pay-badge pay-badge--free">Free</span>
-          )}
+      {cols.map((c) => (
+        <td key={c.key} className={c.className} data-tip={c.tip?.(task)}>
+          {c.render(task)}
         </td>
-      )}
-      {columns.usedIn && !compact && (
-        <td className="col-used" data-tip={task.usedIn.length ? task.usedIn.join("\n") : undefined}>
-          {task.usedIn.length === 0 ? (
-            "—"
-          ) : (
-            <>
-              {task.usedIn[0]}
-              {task.usedIn.length > 1 && (
-                <span className="used-extra">+{task.usedIn.length - 1}</span>
-              )}
-            </>
-          )}
-        </td>
-      )}
-      {columns.createdBy && !compact && <td className="col-creator" data-tip={task.createdBy}>{task.createdBy}</td>}
-      {columns.tradeTag && !compact && <TagCell tags={pickTags(task.tags, TRADE_TAGS)} />}
-      {columns.partnershipTag && !compact && <TagCell tags={pickTags(task.tags, PARTNERSHIP_TAGS)} />}
-      {columns.userTypeTag && !compact && (
-        <td className="col-tags">{pickTag(task.tags, USER_TYPE_TAGS) ?? "—"}</td>
-      )}
-      {columns.dateCreated && !compact && <td className="col-date">{task.dateCreated ?? "—"}</td>}
-      {columns.dateModified && !compact && <td className="col-date">{task.dateModified ?? "—"}</td>}
+      ))}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -695,19 +688,20 @@ function TaskActionsMenu({
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -757,7 +751,7 @@ function TaskActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -766,10 +760,10 @@ function TaskActionsMenu({
         <div className="u-menu-head-name">{task.name}</div>
         <div className="u-menu-head-id">{task.id} · {task.type}</div>
       </div>
-      {item(<ReportIcon />, "Open Completion Report", onCompletionReport)}
-      {showAttempts && item(<AttemptsIcon />, "View Attempts", onViewAttempts)}
+      {item(<MenuPlaceholderIcon />, "Open Completion Report", onCompletionReport)}
+      {showAttempts && item(<MenuPlaceholderIcon />, "View Attempts", onViewAttempts)}
       {/* Only paid Tasks have payers to view. */}
-      {isPaid(task) && item(<PayersIcon />, "View who paid", onViewPayers)}
+      {isPaid(task) && item(<MenuPlaceholderIcon />, "View who paid", onViewPayers)}
       {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );

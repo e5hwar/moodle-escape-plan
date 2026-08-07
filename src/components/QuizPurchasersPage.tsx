@@ -22,8 +22,9 @@ import {
   type UserColumnKey,
   type UserFilterState,
 } from "./UsersFilters";
+import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon } from "./icons";
+import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -90,13 +91,6 @@ const VerifiedIcon = () => (
   <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="9" />
     <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
-
-const RevokeIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M5.6 5.6l12.8 12.8" />
   </svg>
 );
 
@@ -175,6 +169,8 @@ export function QuizPurchasersPage({
 
   const [purchases, setPurchases] = useState<QuizPurchase[]>(() => buildQuizPurchases(task));
   const [columns, setColumns] = useState<QuizColumnState>(DEFAULT_COLUMNS);
+  // Column display order — reordered by dragging in the Edit Columns menu.
+  const [order, setOrder] = useColumnOrder(COLS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
   const [accessTypes, setAccessTypes] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
@@ -241,7 +237,7 @@ export function QuizPurchasersPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
+  const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
   const colSpan = visibleCols.length + 2; // name + cols + actions
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
@@ -352,6 +348,8 @@ export function QuizPurchasersPage({
                           setColumns={setColumns}
                           fixed={FIXED_COLUMNS}
                           optional={OPTIONAL_COLUMNS}
+                          order={order}
+                          onOrderChange={(o) => setOrder(o as typeof order)}
                         />
                       </th>
                     </tr>
@@ -501,19 +499,20 @@ function AttemptActionsMenu({
   onRevoke: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -546,7 +545,7 @@ function AttemptActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -565,14 +564,20 @@ function AttemptActionsMenu({
           onClose();
         }}
       >
-        <span className="u-menu-item-icon"><RevokeIcon /></span>
-        Revoke access
+        <span className="u-menu-item-icon"><MenuPlaceholderIcon /></span>
+        {/* The reason sits INSIDE the button as a second line (Figma 388:354)
+            so the icon centres against the whole block, not just the label. */}
+        <span className="u-menu-item-text">
+          <span>Revoke access</span>
+          {alreadyRevoked ? (
+            <span className="u-menu-item-sub">Attempt already revoked</span>
+          ) : (
+            !notStarted && (
+              <span className="u-menu-item-sub">Only a not-started attempt can be revoked</span>
+            )
+          )}
+        </span>
       </button>
-      {alreadyRevoked ? (
-        <div className="u-menu-note">Attempt already revoked.</div>
-      ) : (
-        !notStarted && <div className="u-menu-note">Only a not-started attempt can be revoked.</div>
-      )}
     </div>
   );
 }

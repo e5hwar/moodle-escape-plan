@@ -5,7 +5,7 @@ import {
   type Question,
 } from "../data/questionBank";
 
-import { SearchIcon } from "./icons";
+import { SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 8;
@@ -202,14 +202,35 @@ export function QuestionSearch({
     setActive(!inMode && hasQuery ? FILTER_ROWS : -1);
   }, [text, draft.length, inMode, hasQuery]);
 
+  /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
+     query, so a bar left showing half-typed text would be lying about what the
+     results are for — clicking away or pressing Escape puts the applied query
+     (and no pending scope) back. */
+  function revert() {
+    setText(query);
+    setDraft([]);
+    setActive(-1);
+    setOpen(false);
+  }
+
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) revert();
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+    // `query`/`draft` are deps so the handler always reverts to current state.
+  }, [open, query, draft]);
+
+  // Clear the applied search outright — no Enter needed.
+  function clearSearch() {
+    setText("");
+    setDraft([]);
+    setActive(-1);
+    setOpen(false);
+    onCommit("");
+  }
 
   // Add a token to the pending scope — one per kind, re-picking replaces it.
   function addToken(token: Token) {
@@ -284,7 +305,7 @@ export function QuestionSearch({
       }
       commit();
     } else if (e.key === "Escape") {
-      setOpen(false);
+      revert();
     } else if (e.key === "Backspace" && text === "" && scoped) {
       setDraft(draft.slice(0, -1));
     }
@@ -324,10 +345,25 @@ export function QuestionSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        <span className="usearch-kbd">
-          <span className="kbd-cmd">⌘</span>
-          <span className="kbd-letter">K</span>
-        </span>
+        {/* Figma 399:216 "Search Bar - Applied": once there is something to
+            clear, the ⌘K badge gives way to a ✕ that clears on click. */}
+        {text || scoped || query ? (
+          <button
+            type="button"
+            className="usearch-clear"
+            aria-label="Clear search"
+            title="Clear search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={clearSearch}
+          >
+            <SearchClearIcon />
+          </button>
+        ) : (
+          <span className="usearch-kbd">
+            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-letter">K</span>
+          </span>
+        )}
       </div>
 
       {open && (

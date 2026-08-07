@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import skillcatLogo from "../assets/SkillCat-Logo.png";
 
 type IconProps = { className?: string };
@@ -101,89 +101,66 @@ const I = {
       <path d="M20 16H7M11 12l-4 4 4 4" />
     </svg>
   ),
-  chevronDown: (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  ),
-  chevronsLeft: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+  // Figma 421:1450 — the footer collapse control ("tdesign:terminal-window").
+  panel: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M9 4v16" />
     </svg>
   ),
 };
 
 type IconKey = keyof typeof I;
 
-type SubItem = { key: string; label: string; navKey?: string };
-type LinkItem = { kind: "link"; key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
-type GroupItem = { kind: "group"; key: string; label: string; icon: IconKey; children: SubItem[] };
-type SectionItem = { kind: "section"; label: string };
-type NavItem = LinkItem | GroupItem | SectionItem;
+type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
+// Figma 421:1419 — every destination is a top-level entry; sections are plain
+// labels, not collapsible groups.
+type NavSection = { label?: string; items: LinkItem[] };
 
-const items: NavItem[] = [
-  { kind: "section", label: "Content" },
+const sections: NavSection[] = [
   {
-    kind: "group",
-    key: "training",
-    label: "Training",
-    icon: "book",
-    children: [
-      { key: "tasks", label: "Tasks", navKey: "tasks" },
-      { key: "question-bank", label: "Question Bank", navKey: "question-bank" },
-      { key: "certifications", label: "Certifications", navKey: "certs" },
+    label: "Content",
+    items: [
+      { key: "tasks", label: "Tasks", icon: "book", navKey: "tasks" },
+      { key: "question-bank", label: "Question Bank", icon: "layers", navKey: "question-bank" },
+      { key: "certifications", label: "Certifications", icon: "award", navKey: "certs" },
+      { key: "industries", label: "Industries", icon: "companies", navKey: "industries" },
+      { key: "skills", label: "Skills", icon: "scholarship", navKey: "skills" },
+      { key: "awards", label: "Awards", icon: "award", navKey: "awards" },
+      { key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
     ],
   },
   {
-    kind: "group",
-    key: "organise",
-    label: "Organise",
-    icon: "layers",
-    children: [
-      { key: "industries", label: "Industries" },
+    label: "Operations",
+    items: [
+      { key: "content-overrides", label: "Manage Completions", icon: "edit", navKey: "content-overrides" },
+      { key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
+      { key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
+      { key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },
+      { key: "merge-accounts", label: "Merge Accounts", icon: "merge", navKey: "merge-accounts" },
+      { key: "transfer-subscription", label: "Transfer Subscription", icon: "transfer", navKey: "transfer-subscription" },
     ],
   },
   {
-    kind: "group",
-    key: "achievements",
-    label: "Achievements",
-    icon: "award",
-    children: [
-      { key: "skills", label: "Skills" },
-      { key: "awards", label: "Awards" },
-    ],
-  },
-  { kind: "link", key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
-
-  { kind: "section", label: "Operations" },
-  { kind: "link", key: "content-overrides", label: "Manage Completions", icon: "edit", navKey: "content-overrides" },
-  { kind: "link", key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
-  { kind: "link", key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
-  { kind: "link", key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },
-  { kind: "link", key: "merge-accounts", label: "Merge Accounts", icon: "merge", navKey: "merge-accounts" },
-  { kind: "link", key: "transfer-subscription", label: "Transfer Subscription", icon: "transfer", navKey: "transfer-subscription" },
-
-  { kind: "section", label: "Users" },
-  {
-    kind: "group",
-    key: "users",
     label: "Users",
-    icon: "users",
-    children: [
-      { key: "manage-users", label: "Manage Users", navKey: "manage-users" },
-      { key: "scholarship", label: "Scholarship", navKey: "scholarship" },
-      { key: "offer-codes", label: "Offer Codes", navKey: "offer-codes" },
+    items: [
+      { key: "manage-users", label: "Manage Users", icon: "users", navKey: "manage-users" },
+      { key: "scholarship", label: "Scholarship", icon: "scholarship", navKey: "scholarship" },
+      { key: "offer-codes", label: "Offer Codes", icon: "trialExtension", navKey: "offer-codes" },
+      { key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
     ],
   },
-  { kind: "link", key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
-
-  { kind: "section", label: "System" },
-  { kind: "link", key: "spotlight", label: "Spotlight", icon: "spotlight" },
-  { kind: "link", key: "product-config", label: "Product Config", icon: "edit", navKey: "product-config" },
-  { kind: "link", key: "permissions", label: "Permissions", icon: "shield", navKey: "permissions" },
+  {
+    label: "System",
+    items: [
+      { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight" },
+      { key: "product-config", label: "Product Config", icon: "edit", navKey: "product-config" },
+      { key: "permissions", label: "Permissions", icon: "shield", navKey: "permissions" },
+    ],
+  },
 ];
 
-// Map external app keys ("tasks", "certs") to sidebar sub-item keys.
+// Map external app keys ("certs") to sidebar item keys.
 const ACTIVE_MAP: Record<string, string> = {
   tasks: "tasks",
   certs: "certifications",
@@ -196,15 +173,6 @@ const ACTIVE_MAP: Record<string, string> = {
   industries: "industries",
 };
 
-function findGroupForSubKey(subKey: string): string | undefined {
-  for (const item of items) {
-    if (item.kind === "group" && item.children.some((c) => c.key === subKey)) {
-      return item.key;
-    }
-  }
-  return undefined;
-}
-
 type Props = {
   active?: string;
   onNavigate?: (key: string) => void;
@@ -213,21 +181,7 @@ type Props = {
 export function Sidebar({ active = "tasks", onNavigate }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const activeSubKey = ACTIVE_MAP[active] ?? active;
-  const activeGroupKey = useMemo(() => findGroupForSubKey(activeSubKey), [activeSubKey]);
-
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    activeGroupKey ? { [activeGroupKey]: true } : {}
-  );
-
-  function toggleGroup(key: string) {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  function handleSubClick(sub: SubItem) {
-    if (sub.navKey) onNavigate?.(sub.navKey);
-    else onNavigate?.(sub.key);
-  }
+  const activeKey = ACTIVE_MAP[active] ?? active;
 
   const showExpanded = !collapsed || hovered;
   const isOverlay = collapsed && hovered;
@@ -236,7 +190,6 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
   const onLeave = () => setHovered(false);
 
   if (!showExpanded) {
-    let seenFirstSection = false;
     return (
       <div className={hostClass} onMouseEnter={onEnter} onMouseLeave={onLeave}>
         <aside className="sidebar sidebar--collapsed">
@@ -246,48 +199,36 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
               aria-label="Expand sidebar"
               onClick={() => setCollapsed(false)}
             >
-              <HardHatLogo size={28} />
+              <HardHatLogo size={33} />
             </button>
           </div>
           <nav className="sidebar__nav-collapsed">
-            {items.map((item, idx) => {
-              if (item.kind === "section") {
-                if (!seenFirstSection) {
-                  seenFirstSection = true;
-                  return null;
-                }
-                return (
-                  <div
-                    key={`div-${idx}`}
-                    className="sidebar__divider-collapsed"
-                    aria-hidden="true"
-                  />
-                );
-              }
-              const isActive =
-                item.kind === "group"
-                  ? item.key === activeGroupKey
-                  : item.key === activeSubKey;
-              return (
-                <button
-                  key={item.key}
-                  className={`sidebar__icon-btn ${isActive ? "is-active" : ""}`}
-                  aria-label={item.label}
-                  title={item.label}
-                  onClick={() => {
-                    if (item.kind === "group") {
-                      setOpenGroups((prev) => ({ ...prev, [item.key]: true }));
-                      setCollapsed(false);
-                    } else {
-                      onNavigate?.(item.key);
-                    }
-                  }}
-                >
-                  {I[item.icon]}
-                </button>
-              );
-            })}
+            {sections.map((section, idx) => (
+              <div key={section.label ?? idx} className="sidebar__group-collapsed">
+                {idx > 0 && <div className="sidebar__divider-collapsed" aria-hidden="true" />}
+                {section.items.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`sidebar__icon-btn ${item.key === activeKey ? "is-active" : ""}`}
+                    aria-label={item.label}
+                    title={item.label}
+                    onClick={() => onNavigate?.(item.navKey ?? item.key)}
+                  >
+                    {I[item.icon]}
+                  </button>
+                ))}
+              </div>
+            ))}
           </nav>
+          <div className="sidebar__footer">
+            <button
+              className="sidebar__collapse-icon"
+              aria-label="Expand sidebar"
+              onClick={() => setCollapsed(false)}
+            >
+              {I.panel}
+            </button>
+          </div>
         </aside>
       </div>
     );
@@ -298,82 +239,40 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
       <aside className={`sidebar sidebar--expanded ${isOverlay ? "sidebar--overlay" : ""}`}>
         <div className="sidebar__header">
           <div className="sidebar__brand">
-            <HardHatLogo size={28} />
+            <HardHatLogo size={33} />
           </div>
-          <button
-            className="sidebar__collapse-icon"
-            aria-label={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
-            onClick={() => {
-              if (isOverlay) {
-                setCollapsed(false);
-              } else {
-                setCollapsed(true);
-              }
-            }}
-          >
-            {I.chevronsLeft}
-          </button>
         </div>
         <nav className="sidebar__nav">
-          {items.map((item, idx) => {
-            if (item.kind === "section") {
-              return (
-                <div key={`s-${idx}`} className="sidebar__section">
-                  {item.label}
-                </div>
-              );
-            }
-            if (item.kind === "group") {
-              const isOpen = !!openGroups[item.key];
-              const containsActive = item.key === activeGroupKey;
-              return (
-                <div key={item.key} className="sidebar__group">
+          {sections.map((section, idx) => (
+            <div key={section.label ?? idx} className="sidebar__group">
+              {section.label && <div className="sidebar__section">{section.label}</div>}
+              <div className="sidebar__group-items">
+                {section.items.map((item) => (
                   <button
-                    className={`sidebar__link ${containsActive && !isOpen ? "is-active" : ""}`}
-                    onClick={() => toggleGroup(item.key)}
-                    aria-expanded={isOpen}
+                    key={item.key}
+                    className={`sidebar__link ${item.key === activeKey ? "is-active" : ""}`}
+                    onClick={() => onNavigate?.(item.navKey ?? item.key)}
                   >
                     <span className="sidebar__link-icon">{I[item.icon]}</span>
                     <span className="sidebar__link-label">{item.label}</span>
-                    <span className={`sidebar__link-caret ${isOpen ? "is-open" : ""}`}>
-                      {I.chevronDown}
-                    </span>
+                    {item.badge !== undefined && (
+                      <span className="sidebar__link-badge">{item.badge}</span>
+                    )}
                   </button>
-                  {isOpen && (
-                    <div className="sidebar__sublist">
-                      {item.children.map((sub) => {
-                        const isSubActive = sub.key === activeSubKey;
-                        return (
-                          <button
-                            key={sub.key}
-                            className={`sidebar__sublink ${isSubActive ? "is-active" : ""}`}
-                            onClick={() => handleSubClick(sub)}
-                          >
-                            <span className="sidebar__sublink-label">{sub.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            const isActive = item.key === activeSubKey;
-            return (
-              <button
-                key={item.key}
-                className={`sidebar__link ${isActive ? "is-active" : ""}`}
-                onClick={() => onNavigate?.(item.navKey ?? item.key)}
-              >
-                <span className="sidebar__link-icon">{I[item.icon]}</span>
-                <span className="sidebar__link-label">{item.label}</span>
-                {item.badge !== undefined && (
-                  <span className="sidebar__link-badge">{item.badge}</span>
-                )}
-              </button>
-            );
-          })}
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
+        <div className="sidebar__footer">
+          <button
+            className="sidebar__collapse-icon"
+            aria-label={isOverlay ? "Pin sidebar open" : "Collapse sidebar"}
+            onClick={() => setCollapsed(!isOverlay)}
+          >
+            {I.panel}
+          </button>
+        </div>
       </aside>
     </div>
   );

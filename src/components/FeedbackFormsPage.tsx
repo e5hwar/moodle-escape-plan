@@ -5,17 +5,11 @@ import {
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
-import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowKebabIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { NewFeedbackFormModal } from "./NewFeedbackFormModal";
 
 const PAGE_SIZE = 50;
-
-const ResponsesIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
-);
 
 type FilterKey = "all" | FormStatus;
 
@@ -404,19 +398,20 @@ function FormActionsMenu({
   onViewResponses: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -459,7 +454,7 @@ function FormActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -469,7 +464,7 @@ function FormActionsMenu({
         <div className="u-menu-head-id">{form.id} · {STATUS_LABEL[form.status]}</div>
       </div>
       {item(<RowEditIcon />, "Edit", onEdit)}
-      {item(<ResponsesIcon />, "View Responses", onViewResponses)}
+      {item(<MenuPlaceholderIcon />, "View Responses", onViewResponses)}
     </div>
   );
 }

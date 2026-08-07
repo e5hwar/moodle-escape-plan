@@ -11,31 +11,12 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CertPreviewPanel } from "./CertPreviewPanel";
 
 const PAGE_SIZE = 50;
-
-const PayersIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-const BackupIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-  </svg>
-);
-const LinkIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5" />
-    <path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5" />
-  </svg>
-);
 
 // Trigger a client-side file download (used for Certification backups).
 function downloadTextFile(filename: string, content: string, mime: string) {
@@ -560,19 +541,15 @@ function CertActionsMenu({
   onManageContentLinks: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -620,7 +597,7 @@ function CertActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -631,9 +608,9 @@ function CertActionsMenu({
       </div>
       {item(<RowEditIcon />, "Edit", onEdit)}
       {/* Only paid certifications have payers to view. */}
-      {cert.payment && item(<PayersIcon />, "View who paid", onViewPayers)}
-      {item(<LinkIcon />, "Manage Content Links", onManageContentLinks)}
-      {item(<BackupIcon />, "Backup Certification", onBackup)}
+      {cert.payment && item(<MenuPlaceholderIcon />, "View who paid", onViewPayers)}
+      {item(<MenuPlaceholderIcon />, "Manage Content Links", onManageContentLinks)}
+      {item(<MenuPlaceholderIcon />, "Backup Certification", onBackup)}
       {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );

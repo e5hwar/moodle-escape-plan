@@ -14,8 +14,9 @@ import {
   type UserColumnState,
   type UserFilterState,
 } from "./UsersFilters";
+import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
-import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon } from "./icons";
+import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -53,12 +54,6 @@ function formatDate(iso: string): string {
 }
 
 /* ─── local icons (match the Tasks/Certifications action bar) ─── */
-const PortfolioIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="7" width="18" height="13" rx="2" />
-    <path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
-  </svg>
-);
 
 const VerifiedIcon = () => (
   <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -141,6 +136,8 @@ export function UsersPage({
     [list],
   );
   const [columns, setColumns] = useState<UserColumnState>(DEFAULT_COLUMNS);
+  // Column display order — reordered by dragging in the Edit Columns menu.
+  const [order, setOrder] = useColumnOrder(COLS);
   const [filters, setFilters] = useState<UserFilterState>(
     initialCompanyFilter ? { ...EMPTY_FILTERS, companies: [initialCompanyFilter] } : EMPTY_FILTERS,
   );
@@ -204,7 +201,7 @@ export function UsersPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  const visibleCols = useMemo(() => COLS.filter((c) => columns[c.key]), [columns]);
+  const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
   const colSpan = visibleCols.length + 2; // name + cols + actions
   // Natural table width (name col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
@@ -261,7 +258,12 @@ export function UsersPage({
                       <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={effectiveSort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
                     ))}
                     <th className="col-actions">
-                      <UsersEditColumns columns={columns} setColumns={setColumns} />
+                      <UsersEditColumns
+                        columns={columns}
+                        setColumns={setColumns}
+                        order={order}
+                        onOrderChange={(o) => setOrder(o as typeof order)}
+                      />
                     </th>
                   </tr>
                 </thead>
@@ -482,19 +484,20 @@ function UserActionsMenu({
   onManageCompletions: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -542,7 +545,7 @@ function UserActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -551,12 +554,12 @@ function UserActionsMenu({
         <div className="u-menu-head-name">{user.name}</div>
         <div className="u-menu-head-id">{user.id}</div>
       </div>
-      {item(<LoginAsIcon />, "Login As", () => {})}
-      {item(<PortfolioIcon />, "View Portfolio", onViewPortfolio)}
+      {item(<MenuPlaceholderIcon />, "Login As", () => {})}
+      {item(<MenuPlaceholderIcon />, "View Portfolio", onViewPortfolio)}
       {item(<RowExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
-      {onViewCompany && item(<CompanyIcon />, "View Company", onViewCompany)}
-      {onViewAllEmployees && item(<PeopleIcon />, "View All Employees", onViewAllEmployees)}
-      {item(<ChecklistIcon />, "Manage Completions", onManageCompletions)}
+      {onViewCompany && item(<MenuPlaceholderIcon />, "View Company", onViewCompany)}
+      {onViewAllEmployees && item(<MenuPlaceholderIcon />, "View All Employees", onViewAllEmployees)}
+      {item(<MenuPlaceholderIcon />, "Manage Completions", onManageCompletions)}
       {item(<RowDeleteIcon />, "Remove User", () => {}, true)}
     </div>
   );
@@ -581,32 +584,3 @@ function openPortfolio(user: User) {
   );
 }
 
-const CompanyIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 13v.01M9 17v.01" />
-  </svg>
-);
-
-const PeopleIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
-const LoginAsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
-  </svg>
-);
-
-const ChecklistIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 6h11M9 12h11M9 18h11" />
-    <path d="M4 6l1.2 1.2L7.5 4.8" />
-    <path d="M4 12l1.2 1.2 2.3-2.4" />
-    <path d="M4 18l1.2 1.2 2.3-2.4" />
-  </svg>
-);

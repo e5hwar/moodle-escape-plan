@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -9,7 +9,6 @@ import {
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import {
   ArrowRightIcon,
-  CheckIcon,
   ChevronRightIcon,
   SmallXIcon,
   DragHandleIcon,
@@ -64,6 +63,14 @@ type QuestionDraft = {
 };
 
 const MAX_OPTIONS = 10;
+
+/* Per-option labels down the left of each MCQ row (Figma 414:427). */
+const OPTION_LETTERS = "ABCDEFGHIJ".split("");
+
+/* Options a question is expected to have. Below this the add card counts down
+   to it ("Add 1 More" at 4, Figma 416:578); past it it's a plain "Add option"
+   up to MAX_OPTIONS. */
+const TARGET_OPTIONS = 5;
 
 const TYPE_LABELS: Record<QType, string> = {
   mcq: "Multiple choice",
@@ -146,14 +153,20 @@ function catKeyFromPath(path?: string[]): string {
 }
 
 function buildInitial(initialCategoryPath?: string[], editing?: Question): QuestionDraft {
+  // Category is required, so a fresh question starts on the first real
+  // category rather than "Uncategorized" — unless one was handed in already.
+  const defaultCatKey =
+    initialCategoryPath?.length
+      ? catKeyFromPath(initialCategoryPath)
+      : (flattenCategories(seedCategories)[0]?.key ?? "");
   const base: QuestionDraft = {
     type: "mcq",
     mcqMode: "single",
-    catKey: catKeyFromPath(initialCategoryPath),
-    status: "Draft",
+    catKey: defaultCatKey,
+    status: "Active",
     text: "",
     textEs: "",
-    choices: [blankChoice(100), blankChoice(-25), blankChoice(-25)],
+    choices: [blankChoice(100), blankChoice(-25), blankChoice(-25), blankChoice(-25)],
     otherOption: false,
     tfAnswer: true,
     pairs: [blankPair(), blankPair(), blankPair()],
@@ -354,25 +367,21 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
   const catLabel =
     catOptions.find((o) => o.key === data.catKey)?.label.replace(" > ", " / ") ??
     "Uncategorized";
-  const crumbs = catLabel === "Uncategorized" ? [] : catLabel.split(" / ");
 
   const gradable = typeSupportsGrading(data.type);
   const grading = data.grading && gradable;
   const usedInQuizzes = editingQuestion?.quizzes.length ?? 0;
 
-  // Translation completeness across every user-facing text field.
+  // Translation completeness across every user-facing text field — no longer
+  // surfaced in the editor, still decides whether the saved question is marked
+  // as having Spanish.
   const transEntries = useMemo(() => translationEntries(data), [data]);
   const filled = transEntries.filter((e) => e.en.trim() !== "");
   const esDone = filled.filter((e) => e.es.trim() !== "").length;
-  const esState: "missing" | "partial" | "complete" =
-    filled.length === 0 || esDone === 0
-      ? "missing"
-      : esDone < filled.length
-        ? "partial"
-        : "complete";
+  const esComplete = filled.length > 0 && esDone === filled.length;
 
   const version = editingQuestion?.version ?? 0;
-  const title = isEditing ? "Edit question" : "New question";
+  const title = isEditing ? "Edit Question" : "New Question";
 
   return (
     <div className="qed">
@@ -383,14 +392,6 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
             <button className="breadcrumb-item" onClick={onClose}>
               Question Bank
             </button>
-            {crumbs.map((c) => (
-              <Fragment key={c}>
-                <span className="breadcrumb-sep">
-                  <ChevronRightIcon />
-                </span>
-                <span className="breadcrumb-item">{c}</span>
-              </Fragment>
-            ))}
             <span className="breadcrumb-sep">
               <ChevronRightIcon />
             </span>
@@ -398,47 +399,53 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
           </nav>
           <div>
             <h1 className="tasks-title">{title}</h1>
-            <p className="tasks-subtitle">
-              {isEditing
-                ? `Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`
-                : `This question will be created as v1 in ${catLabel}.`}
-            </p>
+            {isEditing && (
+              <p className="tasks-subtitle">
+                {`Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`}
+              </p>
+            )}
           </div>
         </div>
 
-        <SetupSection
-          data={data}
-          update={update}
-          isEditing={isEditing}
-          catOptions={catOptions}
-        />
+        {/* Content on the left, settings on the right. */}
+        <div className="qed-split">
+          <div className="qed-main">
+            <QuestionTextSection data={data} update={update} />
 
-        <QuestionTextSection data={data} update={update} />
+            {data.type === "mcq" && <McqSection data={data} update={update} grading={grading} />}
+            {data.type === "true-false" && (
+              <TrueFalseSection data={data} update={update} grading={grading} />
+            )}
+            {data.type === "match" && <MatchSection data={data} update={update} />}
+            {data.type === "short" && <ShortAnswerSection />}
+            {data.type === "file" && <FileResponseSection />}
+            {data.type === "scale" && <ScaleLabelsSection data={data} update={update} />}
 
-        {data.type === "mcq" && <McqSection data={data} update={update} grading={grading} />}
-        {data.type === "true-false" && (
-          <TrueFalseSection data={data} update={update} grading={grading} />
-        )}
-        {data.type === "match" && <MatchSection data={data} update={update} grading={grading} />}
-        {data.type === "short" && <ShortAnswerSection />}
-        {data.type === "file" && <FileUploadSection data={data} update={update} />}
-        {data.type === "scale" && <ScaleSection data={data} update={update} />}
+            {grading && <FeedbackSection data={data} update={update} />}
+          </div>
 
-        <GradingSection
-          data={data}
-          update={update}
-          gradable={gradable}
-          usedInQuizzes={usedInQuizzes}
-        />
+          <aside className="qed-side">
+            <SetupSection
+              data={data}
+              update={update}
+              isEditing={isEditing}
+              catOptions={catOptions}
+            />
 
-        {grading && <FeedbackSection data={data} update={update} />}
+            {data.type === "match" && grading && (
+              <MatchScoringSection data={data} update={update} />
+            )}
+            {data.type === "file" && <FileRulesSection data={data} update={update} />}
+            {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
 
-        <TranslationsSection
-          enDone={data.text.trim() !== ""}
-          esState={esState}
-          esDone={esDone}
-          total={filled.length}
-        />
+            <GradingSection
+              data={data}
+              update={update}
+              gradable={gradable}
+              usedInQuizzes={usedInQuizzes}
+            />
+          </aside>
+        </div>
       </div>
 
       {/* Footer (Figma 73:515) */}
@@ -459,7 +466,7 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
             className="btn-publish"
             onClick={() => {
               if (!isEditing && onCreate) {
-                onCreate(questionFromDraft(data, esState === "complete" && filled.length > 0));
+                onCreate(questionFromDraft(data, esComplete));
               }
               onClose();
             }}
@@ -551,17 +558,16 @@ function SetupSection({
         </div>
 
         <div className="form-group">
-          <label className="form-label">Category</label>
+          <label className="form-label">
+            Category <span className="req">*</span>
+          </label>
           <Select
             value={data.catKey}
             onChange={(v) => update({ catKey: v })}
-            options={[
-              { value: "", label: "Uncategorized" },
-              ...catOptions.map((o) => ({
-                value: o.key,
-                label: o.label.replace(" > ", " / "),
-              })),
-            ]}
+            options={catOptions.map((o) => ({
+              value: o.key,
+              label: o.label.replace(" > ", " / "),
+            }))}
           />
         </div>
 
@@ -613,58 +619,23 @@ function QuestionTextSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
-  const fileRef = useRef<HTMLInputElement | null>(null);
   return (
-    <>
-      <PageBreak label="Question" />
-      <div className="wizard-fields">
-        <div className="form-group">
-          <label className="form-label">
-            Question text <span className="req">*</span>
-          </label>
-          {/* Rich Text Input - Dual Language (Figma 327:137) */}
-          <div className="rte-field">
-            <RteToolbar />
-            <div className="rte-lang-row">
-              <span className="lang-tag">EN</span>
-              <AutoTextarea
-                className="rte-area"
-                value={data.text}
-                placeholder="Write the question…"
-                onChange={(v) => update({ text: v })}
-              />
-            </div>
-            <div className="rte-field-divider" />
-            <div className="rte-lang-row">
-              <span className="lang-tag">ES</span>
-              <AutoTextarea
-                className="rte-area"
-                value={data.textEs}
-                placeholder="Escribe la pregunta…"
-                onChange={(v) => update({ textEs: v })}
-              />
-            </div>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*,audio/*"
-            hidden
-            multiple
-            onChange={() => {
-              /* noop in mock */
-            }}
-          />
-          <p className="form-help">
-            Shown to the learner. Fill the ES row to translate it.
-          </p>
-          <button className="text-link qed-attach" onClick={() => fileRef.current?.click()}>
-            <PlusThinIcon />
-            Attach media
-          </button>
-        </div>
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">
+          Question <span className="req">*</span>
+        </label>
+        {/* Rich Text Input - Dual Language, 2 lines (Figma 405:238) */}
+        <RichTextField
+          en={data.text}
+          es={data.textEs}
+          onEn={(v) => update({ text: v })}
+          onEs={(v) => update({ textEs: v })}
+          placeholder="Write the question…"
+          esPlaceholder="Escribe la pregunta…"
+        />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -678,7 +649,6 @@ function McqSection({
   grading: boolean;
 }) {
   const choices = data.choices;
-  const single = data.mcqMode === "single";
 
   const setChoice = (id: string, patch: Partial<Choice>) =>
     update({ choices: choices.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
@@ -693,79 +663,26 @@ function McqSection({
     update({ choices: choices.filter((c) => c.id !== id) });
   };
 
-  // Marking correct drives the grades: single answer → +100% and the rest go
-  // negative; multiple answers → the checked options share 100% equally.
-  const markCorrect = (id: string) => {
-    if (!grading) return;
-    if (single) {
-      update({
-        choices: choices.map((c) =>
-          c.id === id ? { ...c, grade: 100 } : c.grade > 0 ? { ...c, grade: -25 } : c,
-        ),
-      });
-    } else {
-      const nowCorrect = new Set(choices.filter((c) => c.grade > 0).map((c) => c.id));
-      if (nowCorrect.has(id)) nowCorrect.delete(id);
-      else nowCorrect.add(id);
-      const share = equalShare(nowCorrect.size);
-      update({
-        choices: choices.map((c) =>
-          nowCorrect.has(c.id)
-            ? { ...c, grade: share }
-            : { ...c, grade: c.grade > 0 ? -25 : c.grade },
-        ),
-      });
-    }
-  };
-
-  const positiveTotal = single
-    ? Math.max(0, ...choices.map((c) => c.grade))
-    : choices.filter((c) => c.grade > 0).reduce((n, c) => n + c.grade, 0);
-  const bestOk = Math.abs(positiveTotal - 100) < 0.01;
-
   return (
-    <>
-      <PageBreak
-        label="Answer options"
-        trailing={
-          grading ? (
-            <span className={`co-status-pill co-status-pill--${bestOk ? "green" : "yellow"}`}>
-              {bestOk
-                ? "Best score 100%"
-                : `Best score ${Math.round(positiveTotal * 100) / 100}%`}
-            </span>
-          ) : undefined
-        }
-      />
-      <div className="wizard-fields">
-        <div className="form-group">
-          <label className="form-label">
-            Options <span className="req">*</span>
-          </label>
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">
+          Options <span className="req">*</span>
+        </label>
 
           <div className="qed-rows">
-            {choices.map((c) => (
+            {choices.map((c, i) => (
               <div className="qed-row" key={c.id}>
                 <span className="qed-row-grip" aria-hidden>
                   <DragHandleIcon />
                 </span>
-                {grading &&
-                  (single ? (
-                    <button
-                      className={`radio-dot ${c.grade > 0 ? "is-on" : ""}`}
-                      aria-label={c.grade > 0 ? "Correct answer" : "Mark as correct"}
-                      onClick={() => markCorrect(c.id)}
-                    />
-                  ) : (
-                    <button
-                      className={`checkbox ${c.grade > 0 ? "checked" : ""}`}
-                      aria-label={c.grade > 0 ? "Correct answer" : "Mark as correct"}
-                      onClick={() => markCorrect(c.id)}
-                    >
-                      {c.grade > 0 && <CheckIcon />}
-                    </button>
-                  ))}
-                <LangField
+                {/* Figma 414:427 labels each option A, B, C… — the score
+                    dropdown is what marks an option correct, so there is no
+                    separate radio/checkbox. */}
+                <span className="qed-row-letter" aria-hidden>
+                  {OPTION_LETTERS[i] ?? i + 1}
+                </span>
+                <RichTextField
                   en={c.text}
                   es={c.textEs}
                   onEn={(v) => setChoice(c.id, { text: v })}
@@ -806,40 +723,27 @@ function McqSection({
             )}
           </div>
 
-          <p className="form-help">
-            {grading
-              ? single
-                ? "Mark the correct option — it takes the full mark and the rest go negative."
-                : "Mark every correct option — they share the mark equally."
-              : "Ungraded — responses are collected, not scored."}
-          </p>
-
+          {/* Figma 416:578 puts the add row directly under the options, with
+              the rule text closing the section beneath it. */}
           <div className="qed-row-adds">
             <AddCard
-              label="Add option"
+              label={
+                choices.length < TARGET_OPTIONS
+                  ? `Add ${TARGET_OPTIONS - choices.length} More`
+                  : "Add option"
+              }
               onClick={addChoice}
               disabled={choices.length >= MAX_OPTIONS}
             />
-            <AddCard
-              label="Add “Other” option"
-              onClick={() => update({ otherOption: true })}
-              disabled={grading || data.otherOption}
-            />
           </div>
 
-          {grading && (
-            <p className="form-help">“Other” is unavailable while grading is on.</p>
-          )}
-          {grading && !bestOk && (
-            <p className="form-help error">
-              {single
-                ? "One option should be graded +100% so a right answer earns full marks."
-                : `Correct options add up to ${fmtPct(positiveTotal)}. For full marks they should total 100%.`}
-            </p>
-          )}
-        </div>
+          <p className="form-help">
+            {grading
+              ? "The total of all percentages must be 100%."
+              : "Ungraded — responses are collected, not scored."}
+          </p>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -853,55 +757,48 @@ function TrueFalseSection({
   grading: boolean;
 }) {
   return (
-    <>
-      <PageBreak
-        label="Answer options"
-        trailing={
-          grading ? (
-            <span className="co-status-pill co-status-pill--green">Best score 100%</span>
-          ) : undefined
-        }
-      />
-      <div className="wizard-fields">
-        <div className="form-group">
+    <div className="wizard-fields">
+      <div className="form-group">
+        <div className="form-label-row">
           <label className="form-label">
             Correct answer <span className="req">*</span>
           </label>
-          {/* Radio cards (Figma 134:1790 / 136:294) */}
-          <div className="radio-card-group">
-            {[true, false].map((val) => {
-              const selected = grading && data.tfAnswer === val;
-              return (
-                <RadioCard
-                  key={String(val)}
-                  selected={selected}
-                  disabled={!grading}
-                  onSelect={() => grading && update({ tfAnswer: val })}
-                  title={val ? "True" : "False"}
-                  desc={selected ? "Correct — graded +100%" : undefined}
-                />
-              );
-            })}
-          </div>
-          <p className="form-help">
-            {grading
-              ? "The correct value is graded +100%, the other 0%."
-              : "Ungraded — responses are collected, not scored."}
-          </p>
+          {grading && (
+            <span className="co-status-pill co-status-pill--green">Best score 100%</span>
+          )}
         </div>
+        {/* Radio cards (Figma 134:1790 / 136:294) */}
+        <div className="radio-card-group">
+          {[true, false].map((val) => {
+            const selected = grading && data.tfAnswer === val;
+            return (
+              <RadioCard
+                key={String(val)}
+                selected={selected}
+                disabled={!grading}
+                onSelect={() => grading && update({ tfAnswer: val })}
+                title={val ? "True" : "False"}
+                desc={selected ? "Correct — graded +100%" : undefined}
+              />
+            );
+          })}
+        </div>
+        <p className="form-help">
+          {grading
+            ? "The correct value is graded +100%, the other 0%."
+            : "Ungraded — responses are collected, not scored."}
+        </p>
       </div>
-    </>
+    </div>
   );
 }
 
 function MatchSection({
   data,
   update,
-  grading,
 }: {
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
-  grading: boolean;
 }) {
   const pairs = data.pairs;
   const setPair = (id: string, patch: Partial<Pair>) =>
@@ -916,20 +813,16 @@ function MatchSection({
   };
 
   return (
-    <>
-      <PageBreak
-        label="Pairs"
-        trailing={
-          <span className="co-status-pill co-status-pill--secondary">
-            {pairs.length}/{MAX_OPTIONS} rows
-          </span>
-        }
-      />
-      <div className="wizard-fields">
-        <div className="form-group">
+    <div className="wizard-fields">
+      <div className="form-group">
+        <div className="form-label-row">
           <label className="form-label">
             Prompts and answers <span className="req">*</span>
           </label>
+          <span className="co-status-pill co-status-pill--secondary">
+            {pairs.length}/{MAX_OPTIONS} rows
+          </span>
+        </div>
 
           <div className="qed-rows">
             {pairs.map((p, idx) => {
@@ -990,54 +883,12 @@ function MatchSection({
               disabled={pairs.length >= MAX_OPTIONS}
             />
           </div>
-        </div>
-
-        {grading && (
-          <div className="form-group">
-            <label className="form-label">Scoring</label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={data.matchGrading === "all-or-nothing"}
-                onSelect={() => update({ matchGrading: "all-or-nothing" })}
-                title="All-or-Nothing"
-                desc="Every pair must be correct to score. A single wrong match gives 0% for the whole question."
-              />
-              <RadioCard
-                selected={data.matchGrading === "partial"}
-                onSelect={() => update({ matchGrading: "partial" })}
-                title="Partial credit"
-                desc="Each correct match earns a proportional share of the mark."
-              />
-            </div>
-          </div>
-        )}
       </div>
-    </>
+    </div>
   );
 }
 
-function ShortAnswerSection() {
-  return (
-    <>
-      <PageBreak label="Response" />
-      <div className="wizard-fields">
-        <div className="form-group">
-          <label className="form-label">Learner's answer</label>
-          <input
-            className="form-input"
-            disabled
-            placeholder="Learner types a plain-text answer…"
-          />
-          <p className="form-help">
-            Ungraded — plain text only, with a fixed limit of 512 characters.
-          </p>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function FileUploadSection({
+function MatchScoringSection({
   data,
   update,
 }: {
@@ -1046,7 +897,75 @@ function FileUploadSection({
 }) {
   return (
     <>
-      <PageBreak label="Response" />
+      <PageBreak label="Scoring" />
+      <div className="wizard-fields">
+        <div className="form-group">
+          <div className="radio-card-group">
+            <RadioCard
+              selected={data.matchGrading === "all-or-nothing"}
+              onSelect={() => update({ matchGrading: "all-or-nothing" })}
+              title="All-or-Nothing"
+              desc="Every pair must be correct to score. A single wrong match gives 0% for the whole question."
+            />
+            <RadioCard
+              selected={data.matchGrading === "partial"}
+              onSelect={() => update({ matchGrading: "partial" })}
+              title="Partial credit"
+              desc="Each correct match earns a proportional share of the mark."
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ShortAnswerSection() {
+  return (
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">Learner's answer</label>
+        <input
+          className="form-input"
+          disabled
+          placeholder="Learner types a plain-text answer…"
+        />
+        <p className="form-help">
+          Ungraded — plain text only, with a fixed limit of 512 characters.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FileResponseSection() {
+  return (
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">Learner's answer</label>
+        <input
+          className="form-input"
+          disabled
+          placeholder="Learner uploads one or more files…"
+        />
+        <p className="form-help">
+          Ungraded — file limits are set on the right.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FileRulesSection({
+  data,
+  update,
+}: {
+  data: QuestionDraft;
+  update: (p: Partial<QuestionDraft>) => void;
+}) {
+  return (
+    <>
+      <PageBreak label="File limits" />
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">Maximum files</label>
@@ -1062,8 +981,7 @@ function FileUploadSection({
             ]}
           />
           <p className="form-help">
-            Ungraded — the learner uploads one or more files. Leave the
-            system-wide default or set a per-question limit.
+            Leave the system-wide default or set a per-question limit.
           </p>
         </div>
         <div className="form-group">
@@ -1085,7 +1003,7 @@ function FileUploadSection({
   );
 }
 
-function ScaleSection({
+function ScaleRangeSection({
   data,
   update,
 }: {
@@ -1094,7 +1012,7 @@ function ScaleSection({
 }) {
   return (
     <>
-      <PageBreak label="Response" />
+      <PageBreak label="Scale" />
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">Scale range</label>
@@ -1116,48 +1034,65 @@ function ScaleSection({
               width="narrow"
             />
           </div>
-          <div className="qed-scale-preview">
-            {Array.from(
-              { length: data.scaleMax - data.scaleMin + 1 },
-              (_, i) => data.scaleMin + i,
-            ).map((n) => (
-              <span key={n} className="qed-scale-dot">
-                {n}
-              </span>
-            ))}
-          </div>
           <p className="form-help">
             Ungraded — the learner picks a value on the scale.
           </p>
         </div>
-
-        <div className="form-group">
-          <label className="form-label">Label for {data.scaleMin}</label>
-          <LangField
-            en={data.scaleMinLabel}
-            es={data.scaleMinLabelEs}
-            onEn={(v) => update({ scaleMinLabel: v })}
-            onEs={(v) => update({ scaleMinLabelEs: v })}
-            placeholder="e.g. Extremely disappointed"
-            esPlaceholder="p. ej. Muy decepcionado"
-          />
-          <p className="form-help">Optional — shown at the low end of the scale.</p>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Label for {data.scaleMax}</label>
-          <LangField
-            en={data.scaleMaxLabel}
-            es={data.scaleMaxLabelEs}
-            onEn={(v) => update({ scaleMaxLabel: v })}
-            onEs={(v) => update({ scaleMaxLabelEs: v })}
-            placeholder="e.g. Extremely satisfied"
-            esPlaceholder="p. ej. Muy satisfecho"
-          />
-          <p className="form-help">Optional — shown at the high end of the scale.</p>
-        </div>
       </div>
     </>
+  );
+}
+
+function ScaleLabelsSection({
+  data,
+  update,
+}: {
+  data: QuestionDraft;
+  update: (p: Partial<QuestionDraft>) => void;
+}) {
+  return (
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">Scale</label>
+        <div className="qed-scale-preview">
+          {Array.from(
+            { length: data.scaleMax - data.scaleMin + 1 },
+            (_, i) => data.scaleMin + i,
+          ).map((n) => (
+            <span key={n} className="qed-scale-dot">
+              {n}
+            </span>
+          ))}
+        </div>
+        <p className="form-help">Set the range on the right.</p>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Label for {data.scaleMin}</label>
+        <LangField
+          en={data.scaleMinLabel}
+          es={data.scaleMinLabelEs}
+          onEn={(v) => update({ scaleMinLabel: v })}
+          onEs={(v) => update({ scaleMinLabelEs: v })}
+          placeholder="e.g. Extremely disappointed"
+          esPlaceholder="p. ej. Muy decepcionado"
+        />
+        <p className="form-help">Optional — shown at the low end of the scale.</p>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Label for {data.scaleMax}</label>
+        <LangField
+          en={data.scaleMaxLabel}
+          es={data.scaleMaxLabelEs}
+          onEn={(v) => update({ scaleMaxLabel: v })}
+          onEs={(v) => update({ scaleMaxLabelEs: v })}
+          placeholder="e.g. Extremely satisfied"
+          esPlaceholder="p. ej. Muy satisfecho"
+        />
+        <p className="form-help">Optional — shown at the high end of the scale.</p>
+      </div>
+    </div>
   );
 }
 
@@ -1230,13 +1165,15 @@ function FeedbackSection({
 }) {
   const singleAnswer =
     data.type === "true-false" || (data.type === "mcq" && data.mcqMode === "single");
+  /* Figma 416:832 — one "Combined Feedback" heading over three bordered rows,
+     each a 62px label column beside the field, then a single closing subtext. */
   return (
-    <>
-      <PageBreak label="Feedback" />
-      <div className="wizard-fields">
-        <div className="form-group">
-          <label className="form-label">Correct</label>
-          <LangField
+    <div className="wizard-fields">
+      <div className="form-group">
+        <label className="form-label">Combined Feedback</label>
+        <div className="qed-rows">
+          <FeedbackRow
+            label="Correct Response"
             en={data.fbCorrect}
             es={data.fbCorrectEs}
             onEn={(v) => update({ fbCorrect: v })}
@@ -1244,13 +1181,8 @@ function FeedbackSection({
             placeholder="Shown for a correct response…"
             esPlaceholder="Se muestra en una respuesta correcta…"
           />
-          <p className="form-help">
-            Shown after submission when the quiz's review settings allow it.
-          </p>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Partially correct</label>
-          <LangField
+          <FeedbackRow
+            label="Partially Correct Response"
             en={singleAnswer ? "" : data.fbPartial}
             es={singleAnswer ? "" : data.fbPartialEs}
             onEn={(v) => update({ fbPartial: v })}
@@ -1263,13 +1195,8 @@ function FeedbackSection({
             }
             esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
           />
-          {singleAnswer && (
-            <p className="form-help">Not used for single-answer questions.</p>
-          )}
-        </div>
-        <div className="form-group">
-          <label className="form-label">Incorrect</label>
-          <LangField
+          <FeedbackRow
+            label="Incorrect Response"
             en={data.fbIncorrect}
             es={data.fbIncorrectEs}
             onEn={(v) => update({ fbIncorrect: v })}
@@ -1278,53 +1205,46 @@ function FeedbackSection({
             esPlaceholder="Se muestra en una respuesta incorrecta…"
           />
         </div>
+        <p className="form-help">
+          Combined feedback shown to the user when reviewing their Quiz Attempt.
+        </p>
       </div>
-    </>
+    </div>
   );
 }
 
-function TranslationsSection({
-  enDone,
-  esState,
-  esDone,
-  total,
+function FeedbackRow({
+  label,
+  en,
+  es,
+  onEn,
+  onEs,
+  placeholder,
+  esPlaceholder,
+  disabled,
 }: {
-  enDone: boolean;
-  esState: "missing" | "partial" | "complete";
-  esDone: number;
-  total: number;
+  label: string;
+  en: string;
+  es: string;
+  onEn: (v: string) => void;
+  onEs: (v: string) => void;
+  placeholder?: string;
+  esPlaceholder?: string;
+  disabled?: boolean;
 }) {
   return (
-    <>
-      <PageBreak label="Translations" />
-      <div className="qed-trans">
-        <div className="qed-trans-row">
-          <span className="lang-tag">EN</span>
-          <span className="qed-trans-name">English</span>
-          <span
-            className={`co-status-pill co-status-pill--${enDone ? "green" : "secondary"}`}
-          >
-            {enDone ? "Complete" : "In progress"}
-          </span>
-        </div>
-        <div className="qed-trans-row">
-          <span className="lang-tag">ES</span>
-          <span className="qed-trans-name">Español</span>
-          <span
-            className={`co-status-pill co-status-pill--${esState === "complete" ? "green" : "yellow"}`}
-          >
-            {esState === "complete"
-              ? "Complete"
-              : esState === "partial"
-                ? `${esDone}/${total} translated`
-                : "Missing"}
-          </span>
-        </div>
-        <p className="form-help">
-          Fill the ES row on each field to translate this question.
-        </p>
-      </div>
-    </>
+    <div className="qed-row">
+      <span className="qed-fb-label">{label}</span>
+      <RichTextField
+        en={en}
+        es={es}
+        onEn={onEn}
+        onEs={onEs}
+        placeholder={placeholder}
+        esPlaceholder={esPlaceholder}
+        disabled={disabled}
+      />
+    </div>
   );
 }
 
@@ -1365,8 +1285,11 @@ function AddCard({
   onClick: () => void;
   disabled?: boolean;
 }) {
+  /* The question editor's own variant (Figma 416:813 "Task Card") — dashed and
+     neutral. The plain .add-card the certification tree uses is a different
+     component (341:2764) and keeps its solid orange treatment. */
   return (
-    <button className="add-card" onClick={onClick} disabled={disabled}>
+    <button className="add-card add-card--dashed" onClick={onClick} disabled={disabled}>
       <span className="add-card-icon">
         <PlusThinIcon />
       </span>
@@ -1546,16 +1469,70 @@ function LangField({
   );
 }
 
+/* Dual-language rich text field — Question, Options, and Feedback all share
+   this (Figma 405:238 "2 Lines"). The toolbar is always visible: Figma
+   416:578 draws it on every field, including the option rows. */
+function RichTextField({
+  en,
+  es,
+  onEn,
+  onEs,
+  placeholder,
+  esPlaceholder,
+  disabled,
+}: {
+  en: string;
+  es: string;
+  onEn: (v: string) => void;
+  onEs: (v: string) => void;
+  placeholder?: string;
+  esPlaceholder?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={`rte-field ${disabled ? "is-disabled" : ""}`}>
+      <RteToolbar />
+      <div className="rte-lang-row">
+        <span className="lang-tag">EN</span>
+        <AutoTextarea
+          className="rte-area"
+          value={en}
+          placeholder={placeholder}
+          onChange={onEn}
+          disabled={disabled}
+        />
+      </div>
+      <div className="rte-field-divider" />
+      <div className="rte-lang-row">
+        <span className="lang-tag">ES</span>
+        <AutoTextarea
+          className="rte-area"
+          value={es}
+          placeholder={esPlaceholder ?? "Traducción en español…"}
+          onChange={onEs}
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
+
 function AutoTextarea({
   value,
   onChange,
   className,
   placeholder,
+  onFocus,
+  onBlur,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   className?: string;
   placeholder?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  disabled?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -1571,6 +1548,9 @@ function AutoTextarea({
       rows={2}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      disabled={disabled}
     />
   );
 }

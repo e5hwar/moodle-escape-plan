@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
 import {
   PlusCircleIcon,
@@ -376,16 +376,61 @@ function MoreFiltersPill({
 /** Column set for a table's Edit Columns menu. Defaults to the Tasks table. */
 export type ColumnDef<K extends string> = { key: K; label: string };
 
+/* ─────────────── Column order ───────────────
+   Visibility is a Record<key, boolean>; ORDER is a separate array of every
+   optional key, which the Edit Columns menu reorders by drag. Tables render by
+   walking the order and dropping anything switched off, so a drag in the menu
+   moves the real column. */
+export function useColumnOrder<K extends string>(defs: readonly ColumnDef<K>[]) {
+  return useState<K[]>(() => defs.map((d) => d.key));
+}
+
+/** The visible columns, in the user's order. */
+export function orderedColumns<K extends string, D extends ColumnDef<K>>(
+  defs: readonly D[],
+  order: readonly K[],
+  visible: Record<string, boolean>,
+): D[] {
+  const byKey = new Map(defs.map((d) => [d.key, d] as const));
+  const seen = new Set<K>();
+  const out: D[] = [];
+  order.forEach((k) => {
+    const d = byKey.get(k);
+    if (d && visible[k]) out.push(d);
+    seen.add(k);
+  });
+  // Defs added since the order was captured fall in at the end.
+  defs.forEach((d) => {
+    if (!seen.has(d.key) && visible[d.key]) out.push(d);
+  });
+  return out;
+}
+
+/** Move `from` to sit where `to` currently is, keeping everything else stable. */
+export function moveKey<K extends string>(order: readonly K[], from: K, to: K): K[] {
+  const next = [...order];
+  const fi = next.indexOf(from);
+  const ti = next.indexOf(to);
+  if (fi < 0 || ti < 0 || fi === ti) return next;
+  next.splice(ti, 0, ...next.splice(fi, 1));
+  return next;
+}
+
 export function EditColumnsButton<C extends Record<string, boolean>>({
   columns,
   setColumns,
   optional = OPTIONAL_COLUMNS as unknown as ColumnDef<keyof C & string>[],
   fixed = FIXED_COLUMNS,
+  order,
+  onOrderChange,
 }: {
   columns: C;
   setColumns: (c: C) => void;
   optional?: ColumnDef<keyof C & string>[];
   fixed?: { label: string }[];
+  /** Pass both to enable drag-to-reorder. */
+  order?: (keyof C & string)[];
+  onOrderChange?: (next: (keyof C & string)[]) => void;
 }) {
   return (
     <Dropdown
@@ -411,6 +456,8 @@ export function EditColumnsButton<C extends Record<string, boolean>>({
           optional={optional}
           fixed={fixed}
           onApply={(c) => setColumns(c)}
+          order={order}
+          onOrderChange={onOrderChange}
         />
       )}
     </Dropdown>
@@ -518,6 +565,10 @@ export type CascadingSection = {
   label: string;
   /** A group with a label renders as a titled subsection (e.g. the tag groups). */
   groups: { label?: string; items: string[] }[];
+  /** Adds a search box above this section's checklist (Figma 24:16115) — for
+     long option lists (e.g. Quizzes, Feedback Forms) where scanning unaided
+     doesn't scale. Omit for short, fixed option sets like Tasks' Type/Visibility. */
+  searchPlaceholder?: string;
 };
 
 /* The shared "More filters" body: a list of submenu rows over one Apply button,
@@ -535,6 +586,7 @@ export function CascadingMultiSelect({
   const [draft, setDraft] = useState<Record<string, string[]>>(value);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
+  const [query, setQuery] = useState("");
 
   useEffect(() => setDraft(value), [value]);
 
@@ -550,7 +602,14 @@ export function CascadingMultiSelect({
     });
   }
 
+  function hover(key: string, top: number) {
+    if (key !== hovered) setQuery("");
+    setHovered(key);
+    setHoveredTop(top);
+  }
+
   const openSection = sections.find((s) => s.key === hovered);
+  const q = query.trim().toLowerCase();
 
   return (
     <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
@@ -561,10 +620,7 @@ export function CascadingMultiSelect({
               key={s.key}
               label={s.label}
               active={hovered === s.key}
-              onHover={(top) => {
-                setHovered(s.key);
-                setHoveredTop(top);
-              }}
+              onHover={(top) => hover(s.key, top)}
             />
           ))}
         </div>
@@ -575,38 +631,60 @@ export function CascadingMultiSelect({
         </div>
       </div>
 
-      {openSection && (
-        <div
-          className="cascading-sub"
-          style={{ top: hoveredTop }}
-          onMouseEnter={() => setHovered(openSection.key)}
-        >
-          <div className="dropdown-list">
-            {openSection.groups.map((group, i) => (
-              <div
-                key={group.label ?? i}
-                className={group.label ? "dropdown-subsection" : "dropdown-section"}
-              >
-                {group.label && (
-                  <div className="dropdown-subsection-label">{group.label}</div>
-                )}
-                {group.items.length === 0 ? (
-                  <div className="cols-empty">Nothing to filter by yet</div>
-                ) : (
-                  group.items.map((item) => (
-                    <CheckRow
-                      key={item}
-                      label={item}
-                      checked={(draft[openSection.key] ?? []).includes(item)}
-                      onChange={() => toggleIn(openSection.key, item)}
-                    />
-                  ))
-                )}
+      {openSection && (() => {
+        const groups = q
+          ? openSection.groups
+              .map((g) => ({ ...g, items: g.items.filter((i) => i.toLowerCase().includes(q)) }))
+              .filter((g) => g.items.length > 0)
+          : openSection.groups;
+        return (
+          <div
+            className="cascading-sub"
+            style={{ top: hoveredTop }}
+            onMouseEnter={() => setHovered(openSection.key)}
+          >
+            {openSection.searchPlaceholder && (
+              <div className="dropdown-search">
+                <span className="dropdown-search-icon">
+                  <SearchIcon />
+                </span>
+                <input
+                  autoFocus
+                  placeholder={openSection.searchPlaceholder}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
               </div>
-            ))}
+            )}
+            <div className="dropdown-list">
+              {groups.length === 0 ? (
+                <div className="cols-empty">
+                  {q ? `No matches for "${query.trim()}".` : "Nothing to filter by yet"}
+                </div>
+              ) : (
+                groups.map((group, i) => (
+                  <div
+                    key={group.label ?? i}
+                    className={group.label ? "dropdown-subsection" : "dropdown-section"}
+                  >
+                    {group.label && (
+                      <div className="dropdown-subsection-label">{group.label}</div>
+                    )}
+                    {group.items.map((item) => (
+                      <CheckRow
+                        key={item}
+                        label={item}
+                        checked={(draft[openSection.key] ?? []).includes(item)}
+                        onChange={() => toggleIn(openSection.key, item)}
+                      />
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -679,19 +757,58 @@ function SubmenuRow({
   );
 }
 
-function ColumnsBody<C extends Record<string, boolean>>({
+export function ColumnsBody<C extends Record<string, boolean>>({
   value,
   optional,
   fixed,
   onApply,
+  order,
+  onOrderChange,
 }: {
   value: C;
   optional: ColumnDef<keyof C & string>[];
   fixed: { label: string }[];
   onApply: (v: C) => void;
+  /** Every optional key in display order. Omit to disable reordering. */
+  order?: (keyof C & string)[];
+  onOrderChange?: (next: (keyof C & string)[]) => void;
 }) {
-  const active = optional.filter((c) => value[c.key]);
-  const available = optional.filter((c) => !value[c.key]);
+  type K = keyof C & string;
+  const canReorder = !!order && !!onOrderChange;
+  const seq: K[] = order ?? optional.map((c) => c.key);
+  const byKey = new Map(optional.map((c) => [c.key, c] as const));
+  const inOrder = seq.map((k) => byKey.get(k)).filter(Boolean) as ColumnDef<K>[];
+  optional.forEach((c) => {
+    if (!seq.includes(c.key)) inOrder.push(c);
+  });
+
+  const active = inOrder.filter((c) => value[c.key]);
+  const available = inOrder.filter((c) => !value[c.key]);
+
+  /* Drag-to-reorder, same HTML5 pattern the Spotlights queue uses. The source
+     key lives in a ref as well as state: state drives the row styling, but the
+     ref is what `dropOn` reads, so the drop is correct even when dragstart and
+     drop land in the same render tick. */
+  const dragRef = useRef<K | null>(null);
+  const [dragKey, setDragKey] = useState<K | null>(null);
+  const [overKey, setOverKey] = useState<K | null>(null);
+
+  function startDrag(key: K) {
+    dragRef.current = key;
+    setDragKey(key);
+  }
+
+  function endDrag() {
+    dragRef.current = null;
+    setDragKey(null);
+    setOverKey(null);
+  }
+
+  function dropOn(target: K) {
+    const from = dragRef.current;
+    if (from && onOrderChange) onOrderChange(moveKey(seq, from, target));
+    endDrag();
+  }
 
   function setAll(on: boolean) {
     const next = { ...value };
@@ -735,7 +852,13 @@ function ColumnsBody<C extends Record<string, boolean>>({
               key={key}
               label={label}
               checked
-              draggable
+              draggable={canReorder}
+              dragging={dragKey === key}
+              dropTarget={overKey === key && dragKey !== key}
+              onDragStart={() => startDrag(key)}
+              onDragEnter={() => setOverKey(key)}
+              onDrop={() => dropOn(key)}
+              onDragEnd={endDrag}
               onChange={() => setOne(key, false)}
             />
           ))
@@ -773,14 +896,45 @@ export function CheckRow({
   checked,
   onChange,
   draggable = false,
+  dragging = false,
+  dropTarget = false,
+  onDragStart,
+  onDragEnter,
+  onDrop,
+  onDragEnd,
 }: {
   label: string;
   checked: boolean;
   onChange: () => void;
   draggable?: boolean;
+  dragging?: boolean;
+  dropTarget?: boolean;
+  onDragStart?: () => void;
+  onDragEnter?: () => void;
+  onDrop?: () => void;
+  onDragEnd?: () => void;
 }) {
   return (
-    <button className="dropdown-item cols-row" onClick={onChange}>
+    <button
+      className={`dropdown-item cols-row ${dragging ? "is-dragging" : ""} ${
+        dropTarget ? "is-drop-target" : ""
+      }`}
+      onClick={onChange}
+      draggable={draggable}
+      onDragStart={(e) => {
+        // Firefox needs payload set or the drag never starts.
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", label);
+        onDragStart?.();
+      }}
+      onDragEnter={onDragEnter}
+      onDragOver={draggable ? (e) => e.preventDefault() : undefined}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop?.();
+      }}
+      onDragEnd={onDragEnd}
+    >
       <span className={`checkbox ${checked ? "checked" : ""}`}>
         {checked && <CheckIcon />}
       </span>

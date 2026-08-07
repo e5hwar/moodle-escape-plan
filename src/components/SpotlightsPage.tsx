@@ -5,7 +5,7 @@ import {
 } from "../data/spotlights";
 import { CreateSpotlightPanel } from "./CreateSpotlightPanel";
 import { QueuePositionPicker } from "./QueuePositionPicker";
-import { SearchIcon, AddIcon, SmallXIcon, RowKebabIcon } from "./icons";
+import { SearchIcon, AddIcon, SmallXIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type DisplayStatus =
@@ -30,13 +30,6 @@ function deriveStatus(s: Spotlight): DisplayStatus {
   if (s.status === "deactivated") return "deactivated";
   return daysUntil(s.endDate) < 0 ? "ended" : "active";
 }
-
-const DeactivateIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M5.6 5.6l12.8 12.8" />
-  </svg>
-);
 
 /* 14px square-cap check / cross (Figma 192:385 / 192:388). */
 const CheckIcon = () => (
@@ -619,19 +612,20 @@ function SpotlightActionsMenu({
   onDeactivate: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.offsetWidth;
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    let left = rect.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-    setPos({ top, left });
+    /* Right-anchored to the trigger — the kebab is the action bar's last cell,
+       so the open menu's right edge lines up with the bar's. Using `right`
+       rather than (rect.right - measuredWidth) keeps that exact: the first-pass
+       width measurement is unreliable, because the fallback `left` shrink-to-
+       fits the menu against the viewport before it has been placed. */
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
   useEffect(() => {
@@ -660,7 +654,7 @@ function SpotlightActionsMenu({
       className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
-        left: pos ? pos.left : rect.right - 210,
+        right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
@@ -674,7 +668,7 @@ function SpotlightActionsMenu({
         }}
       >
         <span className="u-menu-item-icon">
-          <DeactivateIcon />
+          <MenuPlaceholderIcon />
         </span>
         Deactivate
       </button>
