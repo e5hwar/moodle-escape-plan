@@ -1,5 +1,6 @@
 import { users, type User } from "./users";
 import { CREATED_BY_B2B } from "./filters";
+import { tasks } from "./tasks";
 
 export type SubmissionMedia =
   | { kind: "video"; seed: string; duration: string }
@@ -18,6 +19,10 @@ export type TaskSubmission = {
   userType: "B2C" | "B2B";
   companyName?: string;
   taskName: string;
+  /** The Task's library id (e.g. "T-2299"), from the Tasks page dataset. */
+  taskId: string;
+  /** Certifications the Task is used in — a Task can sit in several. */
+  certifications: string[];
   /** ISO date the submission was sent for review. */
   submittedOn: string;
   /** Who created the task — "SkillCat" or the company. */
@@ -33,6 +38,9 @@ export type TaskSubmission = {
   versions: string[]; // newest first: ["V3","V2","V1"] (always rooted at V1)
   media: SubmissionMedia[];
   description: string;
+  /** Not every learner records one — the console only shows the player when
+   * this is true. */
+  hasAudio: boolean;
   audioLabel: string; // voice-note label
   audioDuration: string; // e.g. "0:48"
   criteria: EvaluationCriterion[];
@@ -55,6 +63,11 @@ const TASK_NAMES = [
   "Leak Detection Test",
   "Furnace Ignition Check",
 ];
+
+/* Every name above is a real Hands-On Task in the Tasks library, so a
+   submission's Task ID and Certifications are read from that record rather than
+   invented here — the review table shows the same values the Tasks page does. */
+const taskRecordByName = new Map(tasks.map((t) => [t.name, t] as const));
 
 const DESCRIPTIONS = [
   "I installed the HVAC split system by first confirming the work area was safe and isolating electrical power. I mounted the indoor air handler and outdoor condenser according to the specifications. I ran and connected the refrigerant line set, ensuring all flare fittings were tightened and properly insulated. I installed the condensate drain line with proper slope and connected the thermostat wiring. After completing all connections, I pressure tested the system for leaks, evacuated the lines using a vacuum pump, and charged the system with refrigerant to manufacturer specifications. Finally, I restored power, tested system operation in cooling mode, verified proper airflow and temperature drop, and confirmed there were no leaks or abnormal noises.",
@@ -115,6 +128,7 @@ function buildSubmissions(): TaskSubmission[] {
   return pool.map((u, i) => {
     const k = uhash(u.id + i);
     const taskName = TASK_NAMES[k % TASK_NAMES.length];
+    const taskRecord = taskRecordByName.get(taskName);
     const submittedDaysAgo = (k % 21) + 1;
     const mediaCount = 2 + (k % 3); // 2–4 media items
     const media: SubmissionMedia[] = Array.from({ length: mediaCount }, (_, m) =>
@@ -141,6 +155,8 @@ function buildSubmissions(): TaskSubmission[] {
       userType: u.userType,
       companyName: u.companyName,
       taskName,
+      taskId: taskRecord?.id ?? "—",
+      certifications: taskRecord?.usedIn ?? [],
       submittedOn: isoDaysAgo(submittedDaysAgo),
       // Who created the Task — SkillCat for B2C content, or a B2B customer for
       // company-owned Tasks. Uses the same shorthand creator list as the
@@ -159,6 +175,8 @@ function buildSubmissions(): TaskSubmission[] {
       versions,
       media,
       description: DESCRIPTIONS[k % DESCRIPTIONS.length],
+      // Two in three submissions come with a voice note.
+      hasAudio: k % 3 !== 0,
       audioLabel: "Voice note",
       audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
       criteria: CRITERIA,
@@ -168,6 +186,32 @@ function buildSubmissions(): TaskSubmission[] {
 }
 
 export const reviewSubmissions: TaskSubmission[] = buildSubmissions();
+
+/** A company-created Task is graded by that company, so SkillCat reviewers can
+ * only look at it — the review console opens it read-only. */
+export function isReadOnly(s: TaskSubmission): boolean {
+  return s.createdBy !== "SkillCat";
+}
+
+/** What the submissions table shows in Status: read-only submissions aren't
+ * waiting on anyone here, whatever their underlying review state. */
+export const NO_ACTION_STATUS = "No Action Required";
+export function displayStatus(s: TaskSubmission): string {
+  return isReadOnly(s) ? NO_ACTION_STATUS : s.status;
+}
+
+/** Free-text search over a submission — the fields the review search bar's
+ * placeholder promises: user's name, email, phone, task and parent
+ * certification. `q` must already be lower-cased and trimmed. */
+export function matchesQuery(s: TaskSubmission, q: string): boolean {
+  return (
+    s.userName.toLowerCase().includes(q) ||
+    s.email.toLowerCase().includes(q) ||
+    s.phone.toLowerCase().includes(q) ||
+    s.taskName.toLowerCase().includes(q) ||
+    s.certifications.some((c) => c.toLowerCase().includes(q))
+  );
+}
 
 /** picsum.photos URL for a media seed (deterministic image per seed). */
 export function mediaUrl(seed: string, w = 800, h = 600): string {

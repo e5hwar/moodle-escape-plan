@@ -14,10 +14,14 @@ import {
   DownloadIcon,
   EditOffIcon,
   EnterKeyIcon,
+  KeyArrowLeftIcon,
+  KeyArrowRightIcon,
   SortIcon,
 } from "./icons";
 import { tasks } from "../data/tasks";
 import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
+import { UserDetailsHover } from "./UserDetailsHover";
+import { ShortcutHint } from "./ShortcutHint";
 
 /* ── Review console ─────────────────────────────────────────────────────────
    Queue-driven, keyboard-first review screen for Hands-On submissions, per the
@@ -94,6 +98,19 @@ async function downloadMedia(url: string, filename: string) {
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/** The voice note's play button (Figma 440:757 — tdesign:play, accent-filled). */
+const AudioPlayGlyph = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M13.1714 7.4733C13.5574 7.71891 13.5573 8.2823 13.1714 8.52788L3.96052 14.3888C3.54445 14.6536 3 14.3547 3 13.8615V2.1386C3 1.64541 3.54449 1.34653 3.96057 1.61133L13.1714 7.4733Z" />
+  </svg>
+);
+
+/** "0:34" → "00:34" — the player prints two-digit minutes (Figma 440:816). */
+function clockDuration(d: string): string {
+  const [m, sec] = d.split(":");
+  return sec == null ? d : `${m.padStart(2, "0")}:${sec}`;
 }
 
 const PlayGlyph = () => (
@@ -351,7 +368,7 @@ export function ReviewConsole({
                   onClick={() => onExit(submitted)}
                   title="Back to the submissions table"
                 >
-                  Review Hands-On Tasks
+                  Hands-On Task Submissions
                 </button>
               </nav>
               <div className="rvc-pagehead-id">
@@ -370,13 +387,19 @@ export function ReviewConsole({
                   )}
                 </h1>
                 <div className="tasks-subtitle">
-                  <button
-                    className="rvc-headlink"
-                    onClick={() => openInNewTab(`profile=${sub.userId}`)}
-                    title="Open this user's profile in a new tab"
+                  {/* Hovering the name peeks at the learner's details (Figma
+                      436:572); clicking still opens their full profile. */}
+                  <UserDetailsHover
+                    user={sub}
+                    onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
                   >
-                    {sub.userName}
-                  </button>
+                    <button
+                      className="rvc-headlink"
+                      onClick={() => openInNewTab(`profile=${sub.userId}`)}
+                    >
+                      {sub.userName}
+                    </button>
+                  </UserDetailsHover>
                   {" · "}
                   {longDate(sub.submittedOn)}
                 </div>
@@ -420,6 +443,16 @@ export function ReviewConsole({
             <div className="rvc-stagecol">
               <p className="rvc-desc">{view.description}</p>
 
+              {/* Voice note, when the learner recorded one (Figma 440:812) */}
+              {view.hasAudio && (
+                <div className="rvc-audio">
+                  <button className="rvc-audio-play" aria-label="Play voice note">
+                    <AudioPlayGlyph />
+                  </button>
+                  <span className="rvc-audio-time">{clockDuration(view.audioDuration)}</span>
+                </div>
+              )}
+
               <div className={`rvc-media ${media.length > 1 ? "has-thumbs" : ""}`}>
               <div className="rvc-stage">
                 <img src={mediaUrl(main.seed, 1000, 750)} alt="" />
@@ -429,15 +462,21 @@ export function ReviewConsole({
                     <span className="rvc-stage-chip rvc-stage-dur">{main.duration}</span>
                   </>
                 )}
+                {/* ← / → step through the media; the arrows name that on hover
+                    (Figma 439:686 / 439:680). */}
                 {mi > 0 && (
-                  <button className="rvc-stage-nav rvc-stage-nav--prev" onClick={() => stepMedia(-1)} aria-label="Previous media">
-                    <ChevronLeftIcon />
-                  </button>
+                  <ShortcutHint label="Previous" keyIcon={<KeyArrowLeftIcon />}>
+                    <button className="rvc-stage-nav rvc-stage-nav--prev" onClick={() => stepMedia(-1)} aria-label="Previous media">
+                      <ChevronLeftIcon />
+                    </button>
+                  </ShortcutHint>
                 )}
                 {mi < media.length - 1 && (
-                  <button className="rvc-stage-nav rvc-stage-nav--next" onClick={() => stepMedia(1)} aria-label="Next media">
-                    <ChevronRightIcon />
-                  </button>
+                  <ShortcutHint label="Next" keyIcon={<KeyArrowRightIcon />}>
+                    <button className="rvc-stage-nav rvc-stage-nav--next" onClick={() => stepMedia(1)} aria-label="Next media">
+                      <ChevronRightIcon />
+                    </button>
+                  </ShortcutHint>
                 )}
                 <button
                   className="rvc-stage-chip rvc-stage-download"
@@ -586,7 +625,11 @@ export function ReviewConsole({
 
           {/* ── footer (Figma 267:1985) — keycap hints + the primary CTA ── */}
           <div className="wizard-footer rvc-footer">
-            <button className="wizard-cancel" onClick={doSkip}>Skip</button>
+            {/* Skip's shortcut isn't printed on the button, so it's named on
+                hover instead (Figma 437:638). */}
+            <ShortcutHint label="Skip &amp; Proceed" keyLabel="N">
+              <button className="wizard-cancel" onClick={doSkip}>Skip</button>
+            </ShortcutHint>
             <div className="rvc-flex" />
             {/* View Queue — the queue popover now hangs off the footer
                 (button Figma 293:759, panel 263:1587) */}

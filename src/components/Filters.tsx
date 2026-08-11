@@ -177,7 +177,10 @@ export function summarize(values: string[], all: string[]): string | null {
 
 /* ─────────────────────────────────────────────────────────────── */
 
-function CreatedByPill({
+/* The Created By pill — in-house and B2B creators as two labelled subsections
+   with their own All/None. Shared so every list page's Created By filter is the
+   same menu (Tasks, Certifications, Hands-On Task Submissions). */
+export function CreatedByPill({
   value,
   onApply,
 }: {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import type { Submission, WebcamFrame } from "../data/proctoring";
 import type { SortKey, SortDir } from "./ProctoringPage";
@@ -11,6 +12,10 @@ import {
   SortIcon,
 } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
+import { UserDetailsHover } from "./UserDetailsHover";
+import { FullscreenViewer } from "./FullscreenViewer";
+import { useHoverCard } from "../hooks/useHoverCard";
+import { attemptTaskIdForExam } from "../data/certLookup";
 
 /** Maps a submission's ID fields onto the shared card's shape. The "US " prefix
  *  is dropped from the document label because the card already shows the
@@ -36,9 +41,18 @@ function idCardOf(s: Submission): IdCardData {
    reject/request-ID actions) is the same content ProctoringDetailModal used
    to show in an overlay — it just lives in a page body now. ── */
 
+/* Transcribed from the header's exported "Icon Library" asset (444:821 et al):
+   a 9.219×5.552 chevron with a 1.33333 SQUARE-capped stroke, placed at the
+   asset's own offsets inside the 16px box — so it spans x 4.333→11.667,
+   y 6.333→10. Deliberately NOT the project's round-capped ChevronDownIcon. */
 const SectionCaretIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 9l6 6 6-6" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M11.6667 6.3333L8 10L4.3333 6.3333"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
   </svg>
 );
 
@@ -80,24 +94,6 @@ const NoteChevronIcon = () => (
   </svg>
 );
 
-const ZoomInIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3M11 8v6M8 11h6" />
-  </svg>
-);
-const ZoomOutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3M8 11h6" />
-  </svg>
-);
-const ResetIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-    <path d="M3 3v5h5" />
-  </svg>
-);
 
 /** Standalone pages open in their own tab, matching the Users table's `?profile=` pattern. */
 function openInNewTab(query: string) {
@@ -155,7 +151,9 @@ export function ProctoringConsole({
   onRequestId: () => void;
   onUpdateName: (name: string) => void;
 }) {
-  const [zoom, setZoom] = useState<{ title: string; content: ReactNode } | null>(null);
+  /* The frame viewer shows no title (same chrome as the ID full view), so the
+     state is just the node to display. */
+  const [zoom, setZoom] = useState<ReactNode | null>(null);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind | null>(null);
   /* The ID card's full-view overlay owns the keyboard while it's open — it has
      its own Escape handler, so this page must not also act on the same event. */
@@ -192,6 +190,9 @@ export function ProctoringConsole({
 
   // ID reviews and reupload requests only involve the ID — no exam was proctored.
   const hasFootage = submission.kind === "proctoring";
+  /* Already asked for a new ID and still waiting on the candidate (the "Requested"
+     state on the ID Re-uploads tab) — there's nothing to ask again for yet. */
+  const idAlreadyRequested = submission.status === "id-requested";
   const flaggedFrames = submission.frames.filter((f) => !!f.flag);
   const confidenceClass =
     submission.idConfidence >= 90
@@ -202,7 +203,7 @@ export function ProctoringConsole({
   // The header's Reason column surfaces the most common flag across the footage.
   const dominantReason =
     flaggedFrames.length === 0
-      ? "—"
+      ? "-" // Figma 308:2254 uses a plain hyphen here, not an em dash.
       : [
           ...flaggedFrames.reduce(
             (m, f) => m.set(f.flag!, (m.get(f.flag!) ?? 0) + 1),
@@ -232,12 +233,19 @@ export function ProctoringConsole({
       if (e.key === "ArrowLeft" && hasPrev) gotoIndex(index - 1);
       else if (e.key === "ArrowRight" && hasNext) gotoIndex(index + 1);
       else if (e.key === "q" || e.key === "Q") setQueueOpen((v) => !v);
+      /* The footer's keycaps (Figma 445:878). Its "Request ID Again" cap reads R,
+         the same letter as Reject — one of the two can't work, so Reject keeps R
+         (it matches the red button) and Request ID Again takes I. */
+      else if (e.key === "a" || e.key === "A") setConfirmKind("accept");
+      // No Reject button on ID-only submissions, so no R either.
+      else if ((e.key === "r" || e.key === "R") && hasFootage) setConfirmKind("reject");
+      else if ((e.key === "i" || e.key === "I") && !idAlreadyRequested) setConfirmKind("request");
       else if (e.key === "Escape") onExit();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, confirmKind, idFullView, queueOpen, index, hasPrev, hasNext, queue, highlightId, submission.id]);
+  }, [zoom, confirmKind, idFullView, queueOpen, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, highlightId, submission.id]);
 
   /* Opening the popover highlights whatever is on screen. */
   useEffect(() => {
@@ -273,21 +281,36 @@ export function ProctoringConsole({
               </nav>
               <div className="rvc-pagehead-id">
                 <h1 className="tasks-title">
-                  <button
-                    className="rvc-headlink"
-                    onClick={() => openInNewTab(`profile=${submission.userId}`)}
-                    title="Open this candidate's profile in a new tab"
+                  {/* Hovering the name peeks at the candidate's details (Figma
+                      436:572) — same card the Hands-On review console uses, which
+                      is also where the email now lives instead of the subtitle. */}
+                  <UserDetailsHover
+                    user={{
+                      userId: submission.userId,
+                      userName: submission.candidateName,
+                      email: submission.candidateEmail,
+                      phone: submission.candidatePhone,
+                    }}
+                    onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
                   >
-                    {submission.candidateName}
-                  </button>
+                    <button
+                      className="rvc-headlink"
+                      onClick={() => openInNewTab(`profile=${submission.userId}`)}
+                      title="Open this candidate's profile in a new tab"
+                    >
+                      {submission.candidateName}
+                    </button>
+                  </UserDetailsHover>
                 </h1>
-                <div className="tasks-subtitle">
-                  <span>{submission.candidateEmail}</span>
-                  <span className="tasks-subtitle-dot" />
-                  <span>{submission.examShort}</span>
-                  <span className="tasks-subtitle-dot" />
-                  <span>{submission.submittedAt}</span>
-                </div>
+                {/* Hovering the exam + date offers the quiz attempt behind this
+                    submission (Figma 451:545). */}
+                <QuizAttemptHover submission={submission}>
+                  <div className="tasks-subtitle prc-subtitle">
+                    <span>{submission.examShort}</span>
+                    <span className="tasks-subtitle-dot" />
+                    <span>{submission.submittedAt}</span>
+                  </div>
+                </QuizAttemptHover>
               </div>
             </div>
           </div>
@@ -318,7 +341,7 @@ export function ProctoringConsole({
                     magnifier panel has room to open over the column beside it. */}
                 <div className="prc-idrow">
                   <div className="prc-idcard">
-                    <ZoomableIdCard data={idCardOf(submission)} onFullViewChange={setIdFullView} />
+                    <ZoomableIdCard data={idCardOf(submission)} onFullViewChange={setIdFullView} hideTools />
                   </div>
                   <NameMismatchBanner submission={submission} onUpdate={onUpdateName} />
                 </div>
@@ -328,10 +351,10 @@ export function ProctoringConsole({
               {hasFootage && (
                 <>
                   <CollapsibleSection
-                    title="Complete Webcam Footage"
+                    title="Complete Proctoring Footage"
                     meta={
                       <span className="pr-section-stats">
-                        <SectionStat label="Frames" value={submission.webcamTotal} />
+                        <SectionStat label="Frames" value={submission.webcamTotal} tone="is-muted" />
                         <SectionStat
                           label="Flagged"
                           value={submission.webcamFlaggedCount}
@@ -347,7 +370,7 @@ export function ProctoringConsole({
                   >
                     <div className="pr-frame-grid">
                       {submission.frames.map((f, i) => (
-                        <FrameCell key={`all-${i}`} frame={f} onZoom={() => setZoom({ title: frameZoomTitle(f, i), content: <ZoomedFrame frame={f} /> })} />
+                        <FrameCell key={`all-${i}`} frame={f} onZoom={() => setZoom(<ZoomedFrame frame={f} />)} />
                       ))}
                     </div>
                   </CollapsibleSection>
@@ -361,7 +384,7 @@ export function ProctoringConsole({
                     ) : (
                       <div className="pr-frame-grid">
                         {flaggedFrames.map((f, i) => (
-                          <FrameCell key={`flag-${i}`} frame={f} onZoom={() => setZoom({ title: frameZoomTitle(f, i), content: <ZoomedFrame frame={f} /> })} />
+                          <FrameCell key={`flag-${i}`} frame={f} onZoom={() => setZoom(<ZoomedFrame frame={f} />)} />
                         ))}
                       </div>
                     )}
@@ -371,20 +394,18 @@ export function ProctoringConsole({
             </div>
           </div>
 
-          {/* ── footer — Reject / Request ID on the left, View Queue + Accept on the right ── */}
+          {/* ── footer (Figma 445:878) — Skip + View Queue on the left, the three
+                 CTAs on the right ── */}
           <div className="wizard-footer rvc-footer">
-            <div className="wizard-footer-left">
-              <button className="pr-action-btn pr-action-btn--reject" onClick={() => setConfirmKind("reject")}>
-                <RejectXIcon />
-                <span>REJECT</span>
+            <div className="wizard-footer-left prc-footer-left">
+              <button
+                className="prc-skip"
+                onClick={() => gotoIndex(index + 1)}
+                disabled={!hasNext}
+                title="Move to the next submission without deciding this one"
+              >
+                Skip
               </button>
-              <button className="pr-action-btn pr-action-btn--request" onClick={() => setConfirmKind("request")}>
-                <RequestIcon />
-                <span>REQUEST ID</span>
-              </button>
-            </div>
-            <div className="rvc-flex" />
-            <div className="prc-footer-right">
               <div className="rvc-queue-wrap" ref={queueWrapRef}>
                 <button
                   className="btn-save-draft rvc-viewqueue"
@@ -486,10 +507,40 @@ export function ProctoringConsole({
                   </div>
                 )}
               </div>
+            </div>
 
-              <button className="pr-action-btn pr-action-btn--accept" onClick={() => setConfirmKind("accept")}>
-                <CheckMarkIcon />
-                <span>ACCEPT</span>
+            <div className="prc-footer-right">
+              <button
+                className="prc-cta prc-cta--warn"
+                onClick={() => setConfirmKind("request")}
+                disabled={idAlreadyRequested}
+                title={
+                  idAlreadyRequested
+                    ? "A new ID has already been requested — waiting on the candidate"
+                    : undefined
+                }
+              >
+                Request ID Again
+                <span className="prc-key">I</span>
+              </button>
+              {/* ID-only submissions (ID reviews and re-uploads) can't be
+                  rejected — there's no exam attempt to throw out, only an ID to
+                  accept or ask again for. Reject is proctored-exam-only. */}
+              {hasFootage && (
+                <button
+                  className="prc-cta prc-cta--danger"
+                  onClick={() => setConfirmKind("reject")}
+                >
+                  Reject
+                  <span className="prc-key">R</span>
+                </button>
+              )}
+              <button
+                className="prc-cta prc-cta--ok"
+                onClick={() => setConfirmKind("accept")}
+              >
+                Approve
+                <span className="prc-key">A</span>
               </button>
             </div>
           </div>
@@ -497,8 +548,8 @@ export function ProctoringConsole({
       </div>
 
       {zoom && (
-        <ImageZoomOverlay title={zoom.title} onClose={() => setZoom(null)}>
-          {zoom.content}
+        <ImageZoomOverlay onClose={() => setZoom(null)}>
+          {zoom}
         </ImageZoomOverlay>
       )}
 
@@ -532,10 +583,12 @@ const CONFIRM_COPY: Record<
   ConfirmKind,
   { title: string; body: (name: string) => string; confirmLabel: string; icon: () => JSX.Element }
 > = {
+  /* Wording follows the footer's CTAs (Figma 445:878), which renamed
+     Accept → Approve and Request ID → Request ID Again. */
   accept: {
-    title: "Accept this submission?",
+    title: "Approve this submission?",
     body: (name) => `${name}'s exam will be marked approved and removed from the review queue.`,
-    confirmLabel: "Accept",
+    confirmLabel: "Approve",
     icon: CheckMarkIcon,
   },
   reject: {
@@ -548,7 +601,7 @@ const CONFIRM_COPY: Record<
     title: "Request a new ID upload?",
     body: (name) =>
       `${name} will be asked to re-upload a clearer ID. This submission moves to the ID Re-uploads tab until they do.`,
-    confirmLabel: "Request ID",
+    confirmLabel: "Request ID Again",
     icon: RequestIcon,
   },
 };
@@ -709,10 +762,6 @@ function RejectModal({
   );
 }
 
-function frameZoomTitle(frame: WebcamFrame, index: number) {
-  return frame.flag ? `Frame ${index + 1} · ${frame.flag}` : `Frame ${index + 1}`;
-}
-
 function FrameCell({ frame, onZoom }: { frame: WebcamFrame; onZoom: () => void }) {
   const flagged = !!frame.flag;
   return (
@@ -741,73 +790,23 @@ function ZoomedFrame({ frame }: { frame: WebcamFrame }) {
   );
 }
 
-/** Fullscreen zoom overlay for ID images and webcam frames (reuses .ncr-fs-* shell). */
+/** Fullscreen webcam-frame viewer — the same FullscreenViewer chrome the ID
+ *  full view uses (bare close, bottom rotate + zoom toolbar, no title bar). */
 function ImageZoomOverlay({
-  title,
   onClose,
   children,
 }: {
-  title: string;
   onClose: () => void;
   children: ReactNode;
 }) {
-  const [scale, setScale] = useState(1);
-  const clamp = (z: number) => Math.min(3, Math.max(1, z));
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
   return (
-    <div className="ncr-fs-overlay" onClick={onClose}>
-      <div className="ncr-fs-bar">
-        <div className="ncr-fs-title">{title}</div>
-        <button className="ncr-fs-close" onClick={onClose} aria-label="Close">
-          <SmallXIcon />
-        </button>
-      </div>
-      <div className="ncr-fs-stage" onClick={(e) => e.stopPropagation()}>
-        <div className="idzoom">
-          <div className="idzoom-viewport">
-            <div className="pr-zoom-stage" style={{ transform: `scale(${scale})` }}>
-              {children}
-            </div>
-          </div>
-          <div className="idzoom-controls">
-            <button
-              className="idzoom-btn"
-              onClick={() => setScale((z) => clamp(z - 0.25))}
-              disabled={scale <= 1}
-              aria-label="Zoom out"
-            >
-              <ZoomOutIcon />
-            </button>
-            <span className="idzoom-level">{Math.round(scale * 100)}%</span>
-            <button
-              className="idzoom-btn"
-              onClick={() => setScale((z) => clamp(z + 0.25))}
-              disabled={scale >= 3}
-              aria-label="Zoom in"
-            >
-              <ZoomInIcon />
-            </button>
-            <button
-              className="idzoom-btn idzoom-btn--reset"
-              onClick={() => setScale(1)}
-              disabled={scale === 1}
-              aria-label="Reset zoom"
-            >
-              <ResetIcon />
-            </button>
-          </div>
+    <FullscreenViewer onClose={onClose}>
+      {({ rotation, zoom }) => (
+        <div className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg) scale(${zoom})` }}>
+          {children}
         </div>
-      </div>
-      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
-    </div>
+      )}
+    </FullscreenViewer>
   );
 }
 
@@ -847,16 +846,20 @@ function CollapsibleSection({
   const [open, setOpen] = useState(true);
   return (
     <section className={`pr-section ${open ? "" : "is-collapsed"}`}>
+      {/* Figma 308:2208 / 2254 / 2269 / 2284: title + stats grouped on the left,
+          the chevron alone on the far right. */}
       <button
         className="pr-section-head"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
+        <span className="pr-section-headleft">
+          <span className="pr-section-title">{title}</span>
+          {meta}
+        </span>
         <span className="pr-section-caret">
           <SectionCaretIcon />
         </span>
-        <span className="pr-section-title">{title}</span>
-        {meta}
       </button>
       {open && children}
     </section>
@@ -888,6 +891,64 @@ function longDateOf(submittedAt: string): string {
  *  surface. Collapsed shows the flag + admin note on one line; expanding
  *  reveals the candidate's rejected attempts with the reason each was rejected.
  *  The chevron only appears when there's something to expand. */
+/* ── "View Quiz Attempt" hover (Figma 451:545) ──
+   A one-item popover hanging off the header's exam + date line. Clicking opens
+   the attempt viewer for this candidate + exam in a new tab, the same
+   `?attemptsUid=&attemptsTaskId=` deep link the Certification Lookup uses.
+   The exam has to resolve to a task id first — EPA 609 has no certification in
+   the data set, so there the line stays plain text with no hover. */
+const QUIZ_HOVER_WIDTH = 168;
+
+function QuizAttemptHover({
+  submission,
+  children,
+}: {
+  submission: Submission;
+  children: ReactNode;
+}) {
+  const { anchorRef, pos, open, close, hold } = useHoverCard({ width: QUIZ_HOVER_WIDTH });
+  const taskId = attemptTaskIdForExam(submission.exam);
+
+  if (!taskId) return <>{children}</>;
+
+  const openAttempt = () =>
+    openInNewTab(
+      `attemptsUid=${encodeURIComponent(submission.userId)}&attemptsTaskId=${encodeURIComponent(taskId)}`,
+    );
+
+  return (
+    <>
+      <span
+        ref={anchorRef}
+        className="prc-quizhover-anchor"
+        onMouseEnter={open}
+        onMouseLeave={close}
+      >
+        {children}
+      </span>
+      {pos &&
+        createPortal(
+          <div
+            className="prc-quizhover"
+            style={{
+              top: pos.top,
+              left: pos.left,
+              transform: pos.flip ? "translateY(-100%)" : undefined,
+              width: QUIZ_HOVER_WIDTH,
+            }}
+            onMouseEnter={hold}
+            onMouseLeave={close}
+          >
+            <button className="prc-quizhover-item" onClick={openAttempt}>
+              View Quiz Attempt
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 function IntegrityNoteBanner({
   submission,
   previousRejected,

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TaskSubmission } from "../data/reviewSubmissions";
+import { matchesQuery, type TaskSubmission } from "../data/reviewSubmissions";
 import { SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
+/** Per scope kind (Task / Certification / Company) in "Suggested filters". */
+const MAX_SUGGESTED_PER_KIND = 2;
 
 function initialsOf(name: string): string {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
@@ -12,9 +14,11 @@ function initialsOf(name: string): string {
 type Opt =
   | { kind: "company-filter" }
   | { kind: "task-filter" }
+  | { kind: "certification-filter" }
   | { kind: "submission"; submission: TaskSubmission }
   | { kind: "company"; name: string }
-  | { kind: "task"; name: string };
+  | { kind: "task"; name: string }
+  | { kind: "certification"; name: string };
 
 export function ReviewSearch({
   submissions,
@@ -22,6 +26,8 @@ export function ReviewSearch({
   onCompaniesChange,
   tasks: appliedTasks,
   onTasksChange,
+  certifications: appliedCerts,
+  onCertificationsChange,
   query,
   onCommit,
   onOpenSubmission,
@@ -31,6 +37,9 @@ export function ReviewSearch({
   onCompaniesChange: (next: string[]) => void;
   tasks: string[];
   onTasksChange: (next: string[]) => void;
+  /** Parent certifications — the certifications a submitted Task belongs to. */
+  certifications: string[];
+  onCertificationsChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
   onOpenSubmission: (s: TaskSubmission) => void;
@@ -39,6 +48,7 @@ export function ReviewSearch({
   // Pending scopes selected in THIS search session (not yet applied to the table).
   const [draftCompanies, setDraftCompanies] = useState<string[]>([]);
   const [draftTasks, setDraftTasks] = useState<string[]>([]);
+  const [draftCerts, setDraftCerts] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -62,35 +72,42 @@ export function ReviewSearch({
     return { names: [...counts.keys()].sort(), counts };
   }, [submissions]);
 
+  const allCerts = useMemo(() => {
+    const counts = new Map<string, number>();
+    submissions.forEach((s) =>
+      s.certifications.forEach((c) => counts.set(c, (counts.get(c) ?? 0) + 1)),
+    );
+    return { names: [...counts.keys()].sort(), counts };
+  }, [submissions]);
+
   const scopedCompany = draftCompanies.length > 0;
   const scopedTask = draftTasks.length > 0;
+  const scopedCert = draftCerts.length > 0;
 
   // Prefixes (case-insensitive) switch the panel into selection mode.
   const companyMatch = text.match(/^\s*company:\s*(.*)$/i);
   const taskMatch = text.match(/^\s*task:\s*(.*)$/i);
+  const certMatch = text.match(/^\s*certification:\s*(.*)$/i);
   const inCompanyMode = companyMatch != null;
   const inTaskMode = taskMatch != null;
+  const inCertMode = certMatch != null;
+  const inScopeMode = inCompanyMode || inTaskMode || inCertMode;
   const companyQuery = companyMatch ? companyMatch[1] : "";
   const taskQuery = taskMatch ? taskMatch[1] : "";
-  const freeQuery = inCompanyMode || inTaskMode ? "" : text;
+  const certQuery = certMatch ? certMatch[1] : "";
+  const freeQuery = inScopeMode ? "" : text;
 
   const submissionResults = useMemo(() => {
     let base = submissions;
     if (draftCompanies.length)
       base = base.filter((s) => s.companyName && draftCompanies.includes(s.companyName));
     if (draftTasks.length) base = base.filter((s) => draftTasks.includes(s.taskName));
+    if (draftCerts.length)
+      base = base.filter((s) => s.certifications.some((c) => draftCerts.includes(c)));
     const q = freeQuery.trim().toLowerCase();
-    const matched = q
-      ? base.filter(
-          (s) =>
-            s.userName.toLowerCase().includes(q) ||
-            s.email.toLowerCase().includes(q) ||
-            s.phone.toLowerCase().includes(q) ||
-            s.taskName.toLowerCase().includes(q),
-        )
-      : base;
+    const matched = q ? base.filter((s) => matchesQuery(s, q)) : base;
     return matched.slice(0, MAX_RESULTS);
-  }, [submissions, draftCompanies, draftTasks, freeQuery]);
+  }, [submissions, draftCompanies, draftTasks, draftCerts, freeQuery]);
 
   const companyResults = useMemo(() => {
     const q = companyQuery.trim().toLowerCase();
@@ -106,24 +123,66 @@ export function ReviewSearch({
       .slice(0, MAX_RESULTS);
   }, [allTasks, taskQuery, draftTasks, appliedTasks]);
 
+  const certResults = useMemo(() => {
+    const q = certQuery.trim().toLowerCase();
+    return allCerts.names
+      .filter((c) => !draftCerts.includes(c) && !appliedCerts.includes(c) && c.toLowerCase().includes(q))
+      .slice(0, MAX_RESULTS);
+  }, [allCerts, certQuery, draftCerts, appliedCerts]);
+
   const showDefaultResults =
-    !inCompanyMode && !inTaskMode && (scopedCompany || scopedTask || freeQuery.trim().length > 0);
+    !inScopeMode &&
+    (scopedCompany || scopedTask || scopedCert || freeQuery.trim().length > 0);
+
+  /* "Suggested filters" follows what's typed: with an empty box it teaches the
+     three scope prefixes, and as soon as there is text it offers the Tasks,
+     Parent Certifications and Companies that actually match it — so "ds" can be
+     turned into a scope without knowing the prefix syntax. */
+  const suggestions = useMemo<Opt[]>(() => {
+    const q = freeQuery.trim().toLowerCase();
+    if (!q) {
+      return [{ kind: "task-filter" }, { kind: "certification-filter" }, { kind: "company-filter" }];
+    }
+    const pick = (names: string[], draft: string[], applied: string[]) =>
+      names
+        .filter((n) => !draft.includes(n) && !applied.includes(n) && n.toLowerCase().includes(q))
+        .slice(0, MAX_SUGGESTED_PER_KIND);
+    return [
+      ...pick(allTasks.names, draftTasks, appliedTasks).map(
+        (name) => ({ kind: "task", name }) as Opt,
+      ),
+      ...pick(allCerts.names, draftCerts, appliedCerts).map(
+        (name) => ({ kind: "certification", name }) as Opt,
+      ),
+      ...pick(allCompanies.names, draftCompanies, appliedCompanies).map(
+        (name) => ({ kind: "company", name }) as Opt,
+      ),
+    ];
+  }, [
+    freeQuery,
+    allTasks, allCerts, allCompanies,
+    draftTasks, draftCerts, draftCompanies,
+    appliedTasks, appliedCerts, appliedCompanies,
+  ]);
 
   const optionCount = inCompanyMode
     ? companyResults.length
     : inTaskMode
     ? taskResults.length
-    : 2 + (showDefaultResults ? submissionResults.length : 0);
+    : inCertMode
+    ? certResults.length
+    : suggestions.length + (showDefaultResults ? submissionResults.length : 0);
 
   function optionAt(i: number): Opt | null {
     if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
     if (inTaskMode) return taskResults[i] ? { kind: "task", name: taskResults[i] } : null;
-    if (i === 0) return { kind: "company-filter" };
-    if (i === 1) return { kind: "task-filter" };
-    return submissionResults[i - 2] ? { kind: "submission", submission: submissionResults[i - 2] } : null;
+    if (inCertMode) return certResults[i] ? { kind: "certification", name: certResults[i] } : null;
+    if (suggestions[i]) return suggestions[i];
+    const s = submissionResults[i - suggestions.length];
+    return s ? { kind: "submission", submission: s } : null;
   }
 
-  useEffect(() => setActive(-1), [text, draftCompanies.length, draftTasks.length]);
+  useEffect(() => setActive(-1), [text, draftCompanies.length, draftTasks.length, draftCerts.length]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
      query, so a bar left showing half-typed text would be lying about what the
@@ -133,6 +192,7 @@ export function ReviewSearch({
     setText(query);
     setDraftCompanies([]);
     setDraftTasks([]);
+    setDraftCerts([]);
     setActive(-1);
     setOpen(false);
   }
@@ -145,13 +205,14 @@ export function ReviewSearch({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
     // `query`/drafts are deps so the handler always reverts to current state.
-  }, [open, query, draftCompanies, draftTasks]);
+  }, [open, query, draftCompanies, draftTasks, draftCerts]);
 
   // Clear the applied search outright — no Enter needed.
   function clearSearch() {
     setText("");
     setDraftCompanies([]);
     setDraftTasks([]);
+    setDraftCerts([]);
     setActive(-1);
     setOpen(false);
     onCommit("");
@@ -171,6 +232,13 @@ export function ReviewSearch({
     setOpen(true);
     inputRef.current?.focus();
   }
+  function addCert(name: string) {
+    if (!draftCerts.includes(name)) setDraftCerts([...draftCerts, name]);
+    setText("");
+    setActive(-1);
+    setOpen(true);
+    inputRef.current?.focus();
+  }
 
   function activate(opt: Opt) {
     if (opt.kind === "company-filter") {
@@ -181,10 +249,16 @@ export function ReviewSearch({
       setText("TASK:");
       setActive(-1);
       inputRef.current?.focus();
+    } else if (opt.kind === "certification-filter") {
+      setText("CERTIFICATION:");
+      setActive(-1);
+      inputRef.current?.focus();
     } else if (opt.kind === "company") {
       addCompany(opt.name);
     } else if (opt.kind === "task") {
       addTask(opt.name);
+    } else if (opt.kind === "certification") {
+      addCert(opt.name);
     } else {
       onOpenSubmission(opt.submission);
       setOpen(false);
@@ -194,9 +268,11 @@ export function ReviewSearch({
   function commit() {
     onCompaniesChange(Array.from(new Set([...appliedCompanies, ...draftCompanies])));
     onTasksChange(Array.from(new Set([...appliedTasks, ...draftTasks])));
+    onCertificationsChange(Array.from(new Set([...appliedCerts, ...draftCerts])));
     onCommit(freeQuery);
     setDraftCompanies([]);
     setDraftTasks([]);
+    setDraftCerts([]);
     setOpen(false);
   }
 
@@ -222,11 +298,16 @@ export function ReviewSearch({
         if (taskResults[0]) return addTask(taskResults[0]);
         return;
       }
+      if (inCertMode) {
+        if (certResults[0]) return addCert(certResults[0]);
+        return;
+      }
       commit();
     } else if (e.key === "Escape") {
       revert();
     } else if (e.key === "Backspace" && text === "") {
-      if (scopedTask) setDraftTasks(draftTasks.slice(0, -1));
+      if (scopedCert) setDraftCerts(draftCerts.slice(0, -1));
+      else if (scopedTask) setDraftTasks(draftTasks.slice(0, -1));
       else if (scopedCompany) setDraftCompanies(draftCompanies.slice(0, -1));
     }
   }
@@ -234,11 +315,12 @@ export function ReviewSearch({
   const scopeChips = [
     ...draftCompanies.map((c) => ({ kind: "Company", name: c })),
     ...draftTasks.map((t) => ({ kind: "Task", name: t })),
+    ...draftCerts.map((c) => ({ kind: "Certification", name: c })),
   ];
 
   const placeholder = scopeChips.length
     ? "Search within scope…"
-    : "Search by name, email, phone, or task…";
+    : "Search by User's Name, Email, Phone, Task, or Parent Certification…";
 
   return (
     <div className="usearch" ref={wrapRef}>
@@ -266,7 +348,7 @@ export function ReviewSearch({
         />
         {/* Figma 399:216 "Search Bar - Applied": once there is something to
             clear, the ⌘K badge gives way to a ✕ that clears on click. */}
-        {text || scopedCompany || scopedTask || query ? (
+        {text || scopedCompany || scopedTask || scopedCert || query ? (
           <button
             type="button"
             className="usearch-clear"
@@ -287,19 +369,25 @@ export function ReviewSearch({
 
       {open && (
         <div className="usearch-panel">
-          {!inCompanyMode && !inTaskMode && (
+          {!inScopeMode && (
             <>
-              <div className="usearch-head">Suggested filters</div>
-              <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "company-filter" })}>
-                <span className="usearch-chip">Company:</span>
-                <span className="usearch-row-ex">Company: Acme Inc.</span>
-                <span className="usearch-row-desc">Filter submissions by company</span>
-              </OptionRow>
-              <OptionRow active={active === 1} onHover={() => setActive(1)} onClick={() => activate({ kind: "task-filter" })}>
-                <span className="usearch-chip">Task:</span>
-                <span className="usearch-row-ex">Task: HVAC Install</span>
-                <span className="usearch-row-desc">Filter submissions by task</span>
-              </OptionRow>
+              {suggestions.length > 0 && <div className="usearch-head">Suggested filters</div>}
+              {suggestions.map((opt, i) => {
+                const row = suggestionRow(opt, { allTasks, allCerts, allCompanies });
+                if (!row) return null;
+                return (
+                  <OptionRow
+                    key={row.key}
+                    active={active === i}
+                    onHover={() => setActive(i)}
+                    onClick={() => activate(opt)}
+                  >
+                    <span className="usearch-chip">{row.chip}</span>
+                    <span className="usearch-row-ex">{row.example}</span>
+                    <span className="usearch-row-desc">{row.desc}</span>
+                  </OptionRow>
+                );
+              })}
 
               {showDefaultResults && <div className="usearch-head">Submissions</div>}
               {showDefaultResults && submissionResults.length === 0 && (
@@ -312,8 +400,8 @@ export function ReviewSearch({
                   <SubmissionOption
                     key={s.id}
                     submission={s}
-                    active={active === i + 2}
-                    onHover={() => setActive(i + 2)}
+                    active={active === i + suggestions.length}
+                    onHover={() => setActive(i + suggestions.length)}
                     onClick={() => activate({ kind: "submission", submission: s })}
                   />
                 ))}
@@ -358,6 +446,25 @@ export function ReviewSearch({
             </>
           )}
 
+          {inCertMode && (
+            <>
+              <div className="usearch-head">Certifications</div>
+              {certResults.length === 0 ? (
+                <div className="usearch-empty">
+                  {certQuery.trim() ? `No certifications match “${certQuery.trim()}”.` : "Start typing a certification name…"}
+                </div>
+              ) : (
+                certResults.map((name, i) => (
+                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "certification", name })}>
+                    <span className="usearch-chip">Certification:</span>
+                    <span className="usearch-row-ex">{name}</span>
+                    <span className="usearch-row-desc">{allCerts.counts.get(name)} submissions</span>
+                  </OptionRow>
+                ))
+              )}
+            </>
+          )}
+
           {freeQuery.trim() ? (
             <SearchForRow query={freeQuery.trim()} scope="Submissions" onClick={commit} />
           ) : (
@@ -367,6 +474,38 @@ export function ReviewSearch({
       )}
     </div>
   );
+}
+
+type NameCounts = { names: string[]; counts: Map<string, number> };
+
+/** Chip / example / description for one "Suggested filters" row — the static
+ * prefix hints when the box is empty, a real scope value once it isn't. */
+function suggestionRow(
+  opt: Opt,
+  all: { allTasks: NameCounts; allCerts: NameCounts; allCompanies: NameCounts },
+): { key: string; chip: string; example: string; desc: string } | null {
+  const count = (c: NameCounts, name: string) => `${c.counts.get(name) ?? 0} submissions`;
+  switch (opt.kind) {
+    case "task-filter":
+      return { key: "task-filter", chip: "Task:", example: "Task: HVAC Install", desc: "Filter by Task" };
+    case "certification-filter":
+      return {
+        key: "certification-filter",
+        chip: "Certification:",
+        example: "Certification: EPA 608 Type I",
+        desc: "Filter by Parent Certification",
+      };
+    case "company-filter":
+      return { key: "company-filter", chip: "Company:", example: "Company: Acme Inc.", desc: "Filter by User's Company" };
+    case "task":
+      return { key: `task:${opt.name}`, chip: "Task:", example: opt.name, desc: count(all.allTasks, opt.name) };
+    case "certification":
+      return { key: `cert:${opt.name}`, chip: "Certification:", example: opt.name, desc: count(all.allCerts, opt.name) };
+    case "company":
+      return { key: `company:${opt.name}`, chip: "Company:", example: opt.name, desc: count(all.allCompanies, opt.name) };
+    default:
+      return null;
+  }
 }
 
 function OptionRow({

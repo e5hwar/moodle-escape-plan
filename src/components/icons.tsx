@@ -584,3 +584,30 @@ export const RowKebabIcon = () => (
     <rect x="12" y="7" width="2" height="2" />
   </svg>
 );
+
+/* Copy — two stacked pages, from the Figma icon library (436:607). Drawn on the
+   library's 14px box: the sheet in front, then the one behind it. */
+export const CopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.1667" strokeLinecap="square">
+    <path d="M7.583 0.583V4.083H11.083M7.583 0.583H8.167L11.083 3.5V4.083M7.583 0.583H3.5V9.917H11.083V4.083" strokeLinecap="butt" />
+    <path d="M1.167 2.917V12.25H7.583" />
+  </svg>
+);
+
+/* Arrow keycaps (Figma 439:713 / 439:716) — the ← → glyphs shown inside a
+   20px key cap. 12px box, square caps, matching the icon library's geometry. */
+export const KeyArrowRightIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
+    <g transform="translate(1.83 2.54)">
+      <path d="M4.875 6.20711L7.625 3.45711L4.875 0.707107M7 3.45711H0.5" />
+    </g>
+  </svg>
+);
+
+export const KeyArrowLeftIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
+    <g transform="translate(1.83 2.54)">
+      <path d="M3.45711 0.707107L0.707107 3.45711L3.45711 6.20711M1.33211 3.45711H7.83211" />
+    </g>
+  </svg>
+);

@@ -1475,8 +1475,17 @@ button.breadcrumb-item:hover {
    High specificity beats the per-column color rules below — .qb-col-question
    IS this table's Name column (Question Bank has no separate name field), so
    it needs the same exclusion or this rule silently overrides its color. */
-.table tbody td:not(.col-name):not(.qb-col-question):not(.col-actions):not(.col-checkbox) {
+.table tbody td:not(.col-name):not(.qb-col-question):not(.col-rh-task):not(.col-actions):not(.col-checkbox) {
   color: #a8a8a8;
+}
+
+/* Task is the review table's second fixed column and reads as a title next to
+   the learner's name, so it takes the Name column's emphasis. */
+.table tbody td.col-rh-task {
+  color: #ffffff;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Keep rows at a fixed height — truncate long text instead of wrapping. */
@@ -10310,8 +10319,11 @@ button.breadcrumb-item:hover {
 /* =============================================================
  * Proctoring page
  * ============================================================= */
+/* No extra bottom padding: the page uses the standard .tasks-row/.tasks-content
+   shell now, and .pagination brings its own spacing — the old 24px made this
+   page's footer strip taller than every other list page's. */
 .pr-page {
-  padding-bottom: 24px;
+  padding-bottom: 0;
 }
 
 .sidebar__link-badge {
@@ -10385,13 +10397,13 @@ button.breadcrumb-item:hover {
   box-shadow: inset 0 0 19.9px rgba(240, 85, 35, 0.5);
 }
 
-/* Line heights are Figma's measured text-node heights (14 / 34), which is what
-   `leading-normal` resolves to for Fira Sans at these sizes. */
+/* Figma 300:311 / 300:363 — both text nodes are `leading-normal`, so the line
+   box is left to the font rather than pinned to a measured height. */
 .pr-stat-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 14px;
+  line-height: normal;
   color: #fff;
 }
 
@@ -10404,126 +10416,42 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 600;
-  line-height: 34px;
+  line-height: normal;
   color: #fff;
 }
 
-/* Table — sits flush on the page background like every other admin table
-   (the old bordered card wrapper is gone). */
-.pr-scroll {
-  overflow: hidden;
-}
+/* The old hand-rolled `.pr-table` flex grid (`.pr-thead` / `.pr-row` /
+   `.pr-col-candidate` …) was retired 2026-08-10: the queue now renders on the
+   shared `.table` system, same as Hands-On Task Submissions. Only the columns
+   the shared sheet doesn't already define live below. */
 
-.pr-table {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
+/* Width only — NO `color` on these column classes. They sit on the <th> as well
+   as the <td>, so colouring the class greys out the HEADER too (headers are
+   #fff everywhere else). Body cells need no rule at all: the shared
+   `.table tbody td:not(...)` muted rule above already covers them, and none of
+   these are in its exclusion list — which is also why Quiz correctly stays a
+   plain data column instead of taking `.col-rh-task`'s white/500 emphasis. */
 
-/* Header row follows the shared large-table style (Figma 190:285) — same as
-   the Tasks/Certifications header, just without the Edit Columns button. */
-.pr-thead {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  padding: 8px 20px;
-  border-bottom: 2px solid rgba(122, 122, 122, 0.5);
-}
-
-.pr-th {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.pr-th.no-sort {
-  cursor: default;
-}
-
-.pr-col-candidate {
-  flex: 1 1 0;
-  min-width: 220px;
-}
-
-.pr-col-exam {
-  flex: 0 0 260px;
-}
-
-.pr-col-date {
-  flex: 0 0 250px;
+/* No width: this is the table's one auto column, so it takes the slack (the
+   shared .col-email carries a fixed 185px, which would override the <col />). */
+.table .pr-col-email {
   white-space: nowrap;
 }
 
-.pr-col-review {
-  flex: 0 0 28px;
-  display: flex;
-  justify-content: flex-end;
+.table .pr-col-phone {
+  width: 170px;
+  white-space: nowrap;
 }
 
-.pr-tbody {
-  display: flex;
-  flex-direction: column;
+.table .pr-col-exam {
+  /* Fits the longest quiz name ("Building Science Principles Certificate", 274px)
+     plus the cell's 2×20px padding — see QUIZ_WIDTH in ProctoringPage.tsx. */
+  width: 316px;
 }
 
-/* Body rows follow the shared large-table row style (Figma 190:309). */
-.pr-row {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(122, 122, 122, 0.5);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-
-.pr-row:last-child {
-  border-bottom: none;
-}
-
-.pr-row:hover {
-  background: var(--bg-row-hover);
-}
-
-/* `.pr-row--secondary` (a tinted, dimmed row for status "id-requested") and the
-   "Reupload Requested" `.pr-status-pill` were removed 2026-07-30 — every row now
-   reads the same. The ID Re-uploads stat card is what surfaces that state. */
-
-.pr-candidate-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-
-.pr-candidate-name {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  color: #e7e7e8;
-}
-
-.pr-candidate-email {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: #7a7a7a;
-}
-
-.pr-cell-body {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: #a8a8a8;
-}
-
-.pr-empty {
-  padding: 36px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
+.table .pr-col-date {
+  width: 265px;
+  white-space: nowrap;
 }
 
 /* =============================================================
@@ -10724,13 +10652,14 @@ button.breadcrumb-item:hover {
   gap: 14px;
 }
 
+/* Figma 308:2208 / 2254 / 2269 / 2284 — title + stats on the left, the 16px
+   chevron alone on the right. */
 .pr-section-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   font-family: var(--font-sans);
-  font-size: 14pt;
-  font-weight: 600;
   color: var(--text);
   /* The header is the collapse control in the Proctoring console; it stays a
      plain heading row elsewhere (the reset above zeroes button chrome). */
@@ -10738,17 +10667,25 @@ button.breadcrumb-item:hover {
   text-align: left;
 }
 
+.pr-section-headleft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .pr-section-caret {
-  color: var(--text-muted);
+  color: #a8a8a8;
   display: inline-flex;
+  flex-shrink: 0;
   transition: transform 0.15s ease;
 }
 
-/* Caret points down while the section is open (at the content), right when
-   collapsed — the classic disclosure idiom, and it leaves the default
-   expanded state looking exactly as it did before. */
+/* Down while open (at the content), UP when collapsed — Figma 445:863, whose
+   collapsed icon is the exact vertical mirror of the open one (same 9.219×5.552
+   path, insets flipped), so a 180deg turn of the same glyph reproduces it. */
 .pr-section.is-collapsed .pr-section-caret {
-  transform: rotate(-90deg);
+  transform: rotate(180deg);
 }
 
 .pr-section-head:hover .pr-section-caret {
@@ -10756,7 +10693,11 @@ button.breadcrumb-item:hover {
 }
 
 .pr-section-title {
-  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: normal;
+  color: #e7e7e8;
+  white-space: nowrap;
 }
 
 .pr-section-stat {
@@ -10788,41 +10729,53 @@ button.breadcrumb-item:hover {
 
 /* Collapsible-section header stats (Figma 302:104) — labelled columns pinned to
    the far right of the header: a small uppercase label over its value. */
+/* The stats sit directly after the title (no margin-left:auto any more — the
+   header's space-between puts the chevron on the right instead). Cells are
+   separated by a hairline, not a gap. */
 .pr-section-stats {
   display: inline-flex;
   align-items: center;
-  gap: 30px;
-  margin-left: auto;
 }
 
 .pr-hstat {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  line-height: 1.1;
+  align-items: flex-start;
+  padding: 0 12px;
+  /* Figma's 0.5px divider as an INSET SHADOW, not a border: Chrome rounds a
+     0.5px border up to a full pixel AND adds it to the cell's width, which
+     shifts every stat after the first. Same trick the Integrity Note and the
+     stat cards use for their sub-pixel strokes. */
+  box-shadow: inset -0.5px 0 0 0 rgba(64, 64, 64, 0.5);
+  line-height: normal;
+}
+
+.pr-hstat:last-child {
+  box-shadow: none;
 }
 
 .pr-hstat-label {
   font-family: var(--font-sans);
-  font-size: 8.5pt;
-  font-weight: 600;
-  letter-spacing: 0.07em;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: #a8a8a8;
 }
 
+/* Values default to white; the tone classes below are the design's literal
+   pill-palette colours, not the app's older approximations. */
 .pr-hstat-value {
   font-family: var(--font-sans);
-  font-size: 11.5pt;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text);
+  color: #fff;
 }
 
-.pr-hstat-value.is-strong { color: #5fd0a3; }
-.pr-hstat-value.is-ok { color: #f5d36b; }
+.pr-hstat-value.is-strong { color: #14b867; }
+.pr-hstat-value.is-ok { color: #ffc524; }
 .pr-hstat-value.is-weak,
-.pr-hstat-value.is-bad { color: #e25555; }
-.pr-hstat-value.is-muted { color: var(--text-faint); }
+.pr-hstat-value.is-bad { color: #ff1f31; }
+.pr-hstat-value.is-muted { color: #a8a8a8; }
 
 /* ID card */
 .pr-id-row {
@@ -10982,15 +10935,16 @@ button.breadcrumb-item:hover {
   cursor: zoom-in;
 }
 
-/* Zoom overlay content — scaled via transform inside .idzoom-viewport */
+/* Zoom overlay content — transformed inside the FullscreenViewer's centred
+   stage, so it grows from its middle rather than the old top-anchored viewport. */
 .pr-zoom-stage {
-  transform-origin: top center;
+  transform-origin: center;
   transition: transform 0.12s ease;
-  margin: 0 auto;
 }
 
 .pr-zoom-frame {
-  width: 320px;
+  /* Sized to the overlay, not the 320px thumbnail it used to be. */
+  width: min(70vh, 560px);
   aspect-ratio: 1 / 1;
   border-radius: 8px;
   overflow: hidden;
@@ -12210,6 +12164,10 @@ button.breadcrumb-item:hover {
 .rh-status--completed .rh-status-dot { background: #6fdbb1; }
 .rh-status--rejected { background: rgba(231, 110, 110, 0.14); color: #e87171; }
 .rh-status--rejected .rh-status-dot { background: #e87171; }
+/* Company-created submissions: nothing for a SkillCat reviewer to do, so the
+   pill stays neutral instead of competing with the actionable states. */
+.rh-status--no-action-required { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
+.rh-status--no-action-required .rh-status-dot { background: var(--text-muted); }
 
 /* Split layout */
 .rh-split {
@@ -12826,17 +12784,33 @@ button.breadcrumb-item:hover {
 }
 
 /* Magnified region — overlays the form pane, like the reference. */
-.idhz-panel {
+/* The offset moved off .idhz-panel onto this wrapper so the caption below the
+   panel travels with it. */
+.idhz-panel-wrap {
   position: absolute;
   top: 0;
   left: calc(100% + 26px);
   z-index: 30;
+  pointer-events: none;
+}
+
+.idhz-panel {
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   background: var(--bg-panel);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
-  pointer-events: none;
+}
+
+/* The card itself is the control (clicking it opens full view) — this is the
+   hint for that, sitting under the magnifier where the eye already is. */
+.idhz-panel-cap {
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: center;
 }
 .idhz-panel-inner {
   transform-origin: 0 0;
@@ -12943,6 +12917,119 @@ button.breadcrumb-item:hover {
   width: 100%;
   max-width: 900px;
 }
+/* ── ID full-view chrome (IdCard.tsx) ──
+   Its own classes, NOT the .ncr-fs-bar/-title/-close set: those still dress the
+   webcam-frame zoom overlay in the Proctoring console, which keeps its titled
+   bar. Here the card already shows the name and number, so there is no title —
+   just a bare close button and a bottom Rotate + zoom toolbar. */
+.idfs-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  /* No box: border/fill/radius all off, per the design. */
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.idfs-close:hover {
+  color: #fff;
+}
+
+/* Zoom is a transform, so a magnified card would otherwise paint straight over
+   the toolbar and the close button — and you could no longer zoom back out.
+   Scoped to the ID overlay: `.ncr-fs-stage` alone also dresses the webcam-frame
+   overlay, which must not clip. */
+.idfs-stage {
+  overflow: hidden;
+}
+
+.idfs-toolbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Both segments share the pill shell — a rotate button on its own, then the
+   zoom group. */
+.idfs-toolbar > .idfs-btn,
+.idfs-zoom {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-pill);
+}
+
+.idfs-zoom {
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.idfs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.idfs-toolbar > .idfs-btn {
+  min-width: 36px;
+}
+.idfs-btn:hover:not(:disabled) {
+  color: #fff;
+}
+.idfs-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Track + thumb have to be authored per-engine; there is no shared shorthand. */
+.idfs-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+.idfs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: none;
+  background: #f05523;
+}
+.idfs-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: none;
+  background: #f05523;
+}
+
 .ncr-fs-hint {
   margin-top: 12px;
   font-family: var(--font-sans);
@@ -16516,6 +16603,29 @@ button.breadcrumb-item:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ✕ on a token. Only pages whose applied filters live in the bar rather than in
+   a pill row (Proctoring) render it — elsewhere the pill is what you clear. */
+.usearch-scope-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.usearch-scope-x:hover {
+  color: #fff;
+}
+.usearch-scope-x svg {
+  width: 10px;
+  height: 10px;
 }
 
 /* Dropdown panel */
@@ -23343,11 +23453,30 @@ button.breadcrumb-item:hover {
   white-space: nowrap;
 }
 .rvc-qpanel-filters {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+}
+/* One line, always: the pills that fit sit next to "More Filters", which never
+   leaves the row. Overflow stays visible so an open dropdown isn't clipped —
+   the fit pass runs in useLayoutEffect, so overflowing pills are never painted. */
+.rvc-qfilters {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.rvc-qfilters > [data-qpill],
+.rvc-qfilters-more {
+  display: inline-flex;
+  flex: none;
 }
 /* The panel lives at the bottom of the screen, so its filter dropdowns open
    UPWARD and are capped to fit above the pill row — opening downward ran them
@@ -23860,12 +23989,148 @@ button.breadcrumb-item:hover {
    runs full width and the integrity note is a full-width card heading it,
    above the ID. Only the footer's right-hand button group and the narrower
    queue panel (4 columns, not 5) are specific to this page. */
+/* ── "View Quiz Attempt" hover (Figma 451:545) ──
+   A one-item popover off the header's exam + date line, portalled to <body>
+   like the other hover cards. */
+.prc-quizhover-anchor {
+  display: inline-block;
+}
+
+.prc-subtitle {
+  cursor: default;
+}
+
+.prc-quizhover {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #1e1e20;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+
+.prc-quizhover-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+.prc-quizhover-item:hover {
+  color: var(--accent-strong);
+}
+
+/* ── Review footer (Figma 445:878) ──
+   Skip + View Queue on the left, the three CTAs on the right. The shell itself
+   (space-between, 20px/40px padding, 2px top rule) already comes from
+   .wizard-footer + .rvc-footer. */
+.prc-footer-left,
 .prc-footer-right {
   display: flex;
   align-items: center;
   gap: 16px;
 }
+
+/* Plain text, no button chrome. */
+.prc-skip {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #a8a8a8;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.prc-skip:hover:not(:disabled) {
+  color: #fff;
+}
+.prc-skip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Primary CTA: the tint at 75% over #0d0d0d, ringed by the same tint at 15%.
+   Side padding is Figma's 16 minus the 0.5px border, per the bordered-shell
+   rule — height is fixed at 32 so the border can't grow it. */
+.prc-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 15.5px;
+  border-radius: 8px;
+  border: 0.5px solid;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.prc-cta:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.prc-cta:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.prc-cta--warn {
+  border-color: rgba(255, 197, 36, 0.15);
+  background:
+    linear-gradient(rgba(255, 197, 36, 0.75), rgba(255, 197, 36, 0.75)),
+    #0d0d0d;
+}
+.prc-cta--danger {
+  border-color: rgba(255, 31, 49, 0.15);
+  background:
+    linear-gradient(rgba(255, 31, 49, 0.75), rgba(255, 31, 49, 0.75)),
+    #0d0d0d;
+}
+.prc-cta--ok {
+  border-color: rgba(20, 184, 103, 0.15);
+  background:
+    linear-gradient(rgba(20, 184, 103, 0.75), rgba(20, 184, 103, 0.75)),
+    #0d0d0d;
+}
+
+/* The shared "Overlay+Border" keycap the CTAs carry. */
+.prc-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: #fff;
+}
+/* View Queue sits on the LEFT of the Proctoring footer (Figma 445:878), so the
+   popover has to open rightwards — the shared .rvc-qpanel is `right: 0`, which
+   from here would hang off the left edge of the screen. */
 .rvc-qpanel--proctoring {
+  right: auto;
+  left: 0;
   width: 620px;
 }
 /* Sections need the modal's old 28px separation, not the media column's 10px. */
@@ -25466,4 +25731,153 @@ button.breadcrumb-item:hover {
   font-size: 14px;
   color: #7a7a7a;
   pointer-events: none;
+}
+
+/* ── User details hover card (Figma 436:572) ────────────────────────────────
+   Peek at the learner behind a submission from the table's name column. Fixed
+   positioning: the table scrolls, so an in-row popover would be clipped. */
+.udh-anchor {
+  /* The card is the affordance, so the name itself stays plain — but the cell
+     must not stretch the hover area past the text. */
+  display: inline-block;
+}
+.udh-card {
+  position: fixed;
+  z-index: 60;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 12px;
+  background: #1e1e20;
+  border: 1px solid rgba(122, 122, 122, 0.5);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+.udh-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  min-width: 0;
+}
+.udh-row--head {
+  justify-content: space-between;
+}
+.udh-row--last {
+  padding-bottom: 4px;
+  border-bottom: 0;
+}
+.udh-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.udh-value {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.udh-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.udh-icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.udh-icon-btn:hover { color: #ffffff; }
+.udh-icon-btn.is-copied { color: var(--accent, #e0621f); }
+
+/* ── Keyboard-shortcut hover hint (Figma 437:638) ───────────────────────────
+   Same shell as the user-details card, one row: what the key does + the cap. */
+.ksh-card {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  /* Figma 437:638 rev 2: no border, and the 6px row padding is the only
+     vertical padding on the shell. */
+  padding: 6px 12px;
+  background: #1e1e20;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+.ksh-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.ksh-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
+  color: #ffffff;
+}
+/* Arrow keys are drawn, not spelled — a square cap around a 12px glyph. */
+.ksh-key--icon {
+  width: 20px;
+  padding: 0;
+  color: #a8a8a8;
+}
+
+/* ── Voice note player (Figma 440:812) — sits between the submission's notes
+   and its media, and only when that submission has audio. */
+.rvc-audio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.15);
+}
+.rvc-audio-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 75px;
+  /* The icon-button's own fill (Figma 440:756), not a token — it reads as a
+     lighter disc on whatever it sits on. */
+  background: linear-gradient(90deg, rgba(217, 217, 217, 0.1), rgba(115, 115, 115, 0.1));
+  color: #f05523;
+  cursor: pointer;
+}
+.rvc-audio-play svg { width: 15px; height: 15px; }
+.rvc-audio-time {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
 }

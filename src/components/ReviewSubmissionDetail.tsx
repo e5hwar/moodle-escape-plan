@@ -75,7 +75,7 @@ export function ReviewSubmissionDetail({
               <ChevronLeftIcon />
             </button>
             <button className="rh-crumb-link" onClick={onBack}>
-              Review Hands-On Tasks
+              Hands-On Task Submissions
             </button>
             <span className="rh-crumb-sep">›</span>
             <span className="rh-crumb-link">{submission.userName}</span>

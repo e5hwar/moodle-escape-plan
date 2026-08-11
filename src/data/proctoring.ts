@@ -44,6 +44,9 @@ export type Submission = {
   userId: string;
   candidateName: string;
   candidateEmail: string;
+  candidatePhone: string;
+  /** B2B candidates only — the company on their User record. */
+  companyName?: string;
   exam: string;
   examShort: string;
   grade: string;
@@ -95,10 +98,22 @@ function makeFrames(totalCount: number, flagged: Array<{ at: number; reason: Fla
 
 /** Looks up a real user from the Manage Users roster so submissions carry the
  *  same name/email that page shows — not a separate, @skillcatapp.com-only cast. */
-function candidateOf(userId: string): { userId: string; candidateName: string; candidateEmail: string } {
+function candidateOf(userId: string): {
+  userId: string;
+  candidateName: string;
+  candidateEmail: string;
+  candidatePhone: string;
+  companyName?: string;
+} {
   const u = users.find((x) => x.id === userId);
   if (!u) throw new Error(`Unknown user id ${userId}`);
-  return { userId, candidateName: u.name, candidateEmail: u.email };
+  return {
+    userId,
+    candidateName: u.name,
+    candidateEmail: u.email,
+    candidatePhone: u.phone,
+    companyName: u.companyName,
+  };
 }
 
 /* ── Deterministic ID document details (same FNV-1a approach as data/users.ts) ── */
@@ -308,6 +323,23 @@ const seedRows: SeedRow[] = [
     frames: makeFrames(24, [{ at: 7, reason: "Looking Away" }]),
   },
   {
+    /* An ID re-upload the candidate has already sent back — it's waiting on an
+       admin, so it's `pending` (counts in the tiles, shows under All) and the
+       ID Re-uploads tab renders it as "To Review". Contrast PR-1037 above, which
+       is still `id-requested`: waiting on the candidate, ID Re-uploads tab only. */
+    id: "PR-1038",
+    userId: "U-10248", // Sophia Andersson — sophia.a@brennanhvac.com
+    exam: "EPA 608 Type 2 Certificate",
+    grade: "8.8",
+    submittedAt: "March 3rd, 2026, 9:05 AM",
+    kind: "id-reupload",
+    status: "pending",
+    idConfidence: 88,
+    idType: "US Driver's License",
+    webcamFlaggedCount: 0,
+    frames: makeFrames(24, []),
+  },
+  {
     id: "PR-1036",
     userId: "U-10692", // Samuel Okafor — sam.okafor@greenshieldsolar.com
     exam: "EPA 608 Type 3 Certificate",
@@ -389,3 +421,25 @@ export const submissions: Submission[] = seedRows.map((r) => ({
   integrityNote: r.integrityNote,
   rejectionReasons: r.rejectionReasons,
 }));
+
+/** Free-text match for the Proctoring search — the fields the placeholder
+ *  promises ("User's Name, Email, or Phone") plus the exam, so typing an exam
+ *  name still narrows the list without reaching for the `Exam:` scope. */
+export function matchesQuery(s: Submission, q: string): boolean {
+  return (
+    s.candidateName.toLowerCase().includes(q) ||
+    s.candidateEmail.toLowerCase().includes(q) ||
+    s.candidatePhone.toLowerCase().includes(q) ||
+    s.exam.toLowerCase().includes(q)
+  );
+}
+
+/** Where an ID re-upload sits, derived from the row's own state rather than a
+ *  separate field: `id-requested` means an admin asked and the candidate hasn't
+ *  sent it back yet; a `pending` re-upload has been sent back and is waiting on
+ *  an admin. Only the ID Re-uploads tab surfaces this. */
+export type ReuploadStatus = "Requested" | "To Review";
+
+export function reuploadStatusOf(s: Submission): ReuploadStatus {
+  return s.status === "id-requested" ? "Requested" : "To Review";
+}

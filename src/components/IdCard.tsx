@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { idPhotoUrl, type NameChangeRequest } from "../data/nameChangeRequests";
+import { FullscreenViewer } from "./FullscreenViewer";
 
 /** The ID document fields this card renders. Kept separate from any one page's
  *  record type so the card (and its hover-magnify / full-view / rotate tools)
@@ -158,12 +159,6 @@ const RotateIcon = () => (
   </svg>
 );
 
-const CloseIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
-
 /** Magnifier strength and the size of the panel the magnified region is drawn into. */
 const ZOOM = 2.5;
 const PANEL_W = 400;
@@ -185,6 +180,7 @@ function fitScale(rotation: number, box: { w: number; h: number }): number {
 export function ZoomableIdCard({
   data,
   onFullViewChange,
+  hideTools,
 }: {
   data: IdCardData;
   /** Fires when the full-view overlay opens/closes. Host pages that bind their
@@ -192,6 +188,11 @@ export function ZoomableIdCard({
    *  without it the host's Escape handler fires on the same event too (in the
    *  Proctoring console that closed the overlay AND exited the review page). */
   onFullViewChange?: (open: boolean) => void;
+  /** Drops the "Click to see full view" / "Rotate" row under the card. The
+   *  behaviour is unchanged — clicking the card still opens full view, and the
+   *  overlay still rotates. Set on the Proctoring report; Name Change Requests
+   *  keeps the row. */
+  hideTools?: boolean;
 }) {
   const [rotation, setRotation] = useState(0);
   const [fullView, setFullViewState] = useState(false);
@@ -263,36 +264,47 @@ export function ZoomableIdCard({
         </div>
 
         {lens && (
-          <div className="idhz-panel" style={{ width: PANEL_W, height: PANEL_H }}>
-            <div
-              className="idhz-panel-inner"
-              style={{
-                width: box.w,
-                height: box.h,
-                transform: `scale(${ZOOM}) translate(${-lens.x}px, ${-lens.y}px)`,
-              }}
-            >
-              <div className="idhz-card" style={cardStyle}>
-                <IdCard data={data} />
+          /* The wrapper carries the offset so the caption can sit under the
+             panel; the panel itself is a fixed PANEL_W×PANEL_H window. */
+          <div className="idhz-panel-wrap" style={{ width: PANEL_W }}>
+            <div className="idhz-panel" style={{ width: PANEL_W, height: PANEL_H }}>
+              <div
+                className="idhz-panel-inner"
+                style={{
+                  width: box.w,
+                  height: box.h,
+                  transform: `scale(${ZOOM}) translate(${-lens.x}px, ${-lens.y}px)`,
+                }}
+              >
+                <div className="idhz-card" style={cardStyle}>
+                  <IdCard data={data} />
+                </div>
               </div>
             </div>
+            <div className="idhz-panel-cap">Click for the Full-Screen View</div>
           </div>
         )}
       </div>
 
-      <div className="idhz-tools">
-        <button className="idhz-full" onClick={() => setFullView(true)}>
-          Click to see full view
-        </button>
-        <button
-          className="idhz-tool"
-          onClick={() => setRotation((r) => (r + 90) % 360)}
-          aria-label="Rotate ID"
-        >
-          <RotateIcon />
-          Rotate
-        </button>
-      </div>
+      {/* Both tools are redundant with the card itself: clicking the card is
+          already the way into full view, and rotating only matters once you're
+          there (the overlay has its own Rotate). `hideTools` drops the row where
+          that's been decided — see the prop's note. */}
+      {!hideTools && (
+        <div className="idhz-tools">
+          <button className="idhz-full" onClick={() => setFullView(true)}>
+            Click to see full view
+          </button>
+          <button
+            className="idhz-tool"
+            onClick={() => setRotation((r) => (r + 90) % 360)}
+            aria-label="Rotate ID"
+          >
+            <RotateIcon />
+            Rotate
+          </button>
+        </div>
+      )}
 
       {fullView && (
         <IdFullView data={data} rotation={rotation} onClose={() => setFullView(false)} />
@@ -301,7 +313,8 @@ export function ZoomableIdCard({
   );
 }
 
-/** Full-view overlay — reuses the shared .ncr-fs-* shell used by Proctoring. */
+/** Full-view overlay — the card inside the shared FullscreenViewer chrome. The
+ *  zoom multiplies the fit scale, so 1x always means "fits the stage". */
 function IdFullView({
   data,
   rotation: initial,
@@ -311,17 +324,8 @@ function IdFullView({
   rotation: number;
   onClose: () => void;
 }) {
-  const [rotation, setRotation] = useState(initial);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const stageRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   useLayoutEffect(() => {
     const el = stageRef.current;
@@ -337,38 +341,19 @@ function IdFullView({
   }, []);
 
   return (
-    <div className="ncr-fs-overlay" onClick={onClose}>
-      <div className="ncr-fs-bar">
-        <div className="ncr-fs-title">
-          {data.idType} — {data.name}
-        </div>
-        <div className="ncr-fs-actions">
-          <button
-            className="idhz-tool"
-            onClick={(e) => {
-              e.stopPropagation();
-              setRotation((r) => (r + 90) % 360);
-            }}
-            aria-label="Rotate ID"
-          >
-            <RotateIcon />
-            Rotate
-          </button>
-          <button className="ncr-fs-close" onClick={onClose} aria-label="Close">
-            <CloseIcon />
-          </button>
-        </div>
-      </div>
-      <div className="ncr-fs-stage" onClick={(e) => e.stopPropagation()}>
-        {/* Measured on the untransformed box — reading the rect off the rotated
-            card itself would feed the fit calculation its own output. */}
+    <FullscreenViewer initialRotation={initial} onClose={onClose}>
+      {({ rotation, zoom }) => (
+        /* Measured on the untransformed box — reading the rect off the rotated
+           card itself would feed the fit calculation its own output. */
         <div ref={stageRef} className="idhz-fs-box">
-          <div className="idhz-card" style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box)})` }}>
+          <div
+            className="idhz-card"
+            style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box) * zoom})` }}
+          >
             <IdCard data={data} />
           </div>
         </div>
-      </div>
-      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
-    </div>
+      )}
+    </FullscreenViewer>
   );
 }

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   reviewSubmissions as seed,
+  matchesQuery,
+  displayStatus,
+  NO_ACTION_STATUS,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
 import { ReviewSearch } from "./ReviewSearch";
@@ -8,32 +11,53 @@ import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
 import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
-import { useColumnOrder, orderedColumns } from "./Filters";
+import {
+  useColumnOrder,
+  orderedColumns,
+  CreatedByPill,
+  CascadingMultiSelect,
+  PillTrigger,
+} from "./Filters";
+import { Dropdown } from "./Dropdown";
 import { SortIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
-const STATUS_OPTIONS: TaskSubmission["status"][] = ["Rejected", "Review Pending", "Completed"];
+/* The statuses as the table shows them — company-created submissions read as
+   "No Action Required" rather than their underlying review state. */
+const STATUS_OPTIONS: string[] = ["Rejected", "Review Pending", "Completed", NO_ACTION_STATUS];
 
 // Same creator options as the Tasks/Certifications pages: SkillCat (in-house)
 // plus the B2B customers.
 const CREATOR_OPTIONS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
 
-/* ── Columns: Name is fixed; the rest are toggleable. Task + Status +
-   Submitted On are shown by default; Due Date / Email / Phone / Created By
-   are the "additional" columns. ── */
-type ColKey = "task" | "attempt" | "status" | "submittedOn" | "dueDate" | "email" | "phone" | "createdBy";
+/* ── Columns: User's Name and Task are fixed (always on, never in the menu).
+   Certifications / Status / Submitted On are the toggleable columns shown by
+   default; everything else is off until switched on from Edit Columns. ── */
+type ColKey =
+  | "certifications"
+  | "status"
+  | "submittedOn"
+  | "taskId"
+  | "email"
+  | "phone"
+  | "userType"
+  | "company"
+  | "attempt"
+  | "dueDate";
 type ColState = Record<ColKey, boolean>;
 
 const DEFAULT_COLUMNS: ColState = {
-  task: true,
-  attempt: true,
+  certifications: true,
   status: true,
   submittedOn: true,
-  dueDate: false,
+  taskId: false,
   email: false,
   phone: false,
-  createdBy: true,
+  userType: false,
+  company: false,
+  attempt: false,
+  dueDate: false,
 };
 
 /** The learner's current attempt number = how many submissions they've made. */
@@ -52,36 +76,52 @@ type ColMeta = {
   className: string;
   width: number;
   sortable?: boolean;
+  /** Native-title tooltip, for cells that truncate (e.g. Certifications). */
+  tip?: (s: TaskSubmission) => string | undefined;
   render: (s: TaskSubmission) => React.ReactNode;
   sortValue: (s: TaskSubmission) => string | number;
 };
 
+/* Declared in Edit-Columns order: the default-on columns first, then the
+   optional ones. A user's drag reorders them from here. */
 const COLS: ColMeta[] = [
-  { key: "task", label: "Task", className: "col-rh-task", width: 280, render: (s) => s.taskName, sortValue: (s) => s.taskName.toLowerCase() },
-  { key: "attempt", label: "Attempt #", className: "col-rh-attempt", width: 110, render: (s) => attemptNumber(s), sortValue: (s) => attemptNumber(s) },
-  { key: "status", label: "Status", className: "col-rh-status", width: 150, render: (s) => <StatusPill status={s.status} />, sortValue: (s) => s.status },
+  {
+    key: "certifications", label: "Certifications", className: "col-rh-certs", width: 220, sortable: false,
+    tip: (s) => (s.certifications.length ? s.certifications.join("\n") : undefined),
+    render: (s) =>
+      s.certifications.length === 0 ? (
+        "—"
+      ) : (
+        <>
+          {s.certifications[0]}
+          {s.certifications.length > 1 && (
+            <span className="used-extra">+{s.certifications.length - 1}</span>
+          )}
+        </>
+      ),
+    sortValue: (s) => (s.certifications[0] ?? "").toLowerCase(),
+  },
+  { key: "status", label: "Status", className: "col-rh-status", width: 200, render: (s) => <StatusPill status={displayStatus(s)} />, sortValue: (s) => displayStatus(s) },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
+  { key: "taskId", label: "Task ID", className: "col-rh-taskid", width: 120, sortable: false, render: (s) => s.taskId, sortValue: (s) => s.taskId },
+  { key: "email", label: "User's Email", className: "col-rh-email", width: 220, sortable: false, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
+  { key: "phone", label: "User's Phone", className: "col-rh-phone", width: 170, sortable: false, render: (s) => s.phone, sortValue: (s) => s.phone },
+  { key: "userType", label: "User Type", className: "col-rh-usertype", width: 120, sortable: false, render: (s) => s.userType, sortValue: (s) => s.userType },
+  { key: "company", label: "User's Company", className: "col-rh-company", width: 200, sortable: false, render: (s) => s.companyName ?? "—", sortValue: (s) => (s.companyName ?? "").toLowerCase() },
+  { key: "attempt", label: "Attempt #", className: "col-rh-attempt", width: 110, render: (s) => attemptNumber(s), sortValue: (s) => attemptNumber(s) },
   { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
-  { key: "email", label: "Email", className: "col-rh-email", width: 220, sortable: false, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
-  { key: "phone", label: "Phone Number", className: "col-rh-phone", width: 170, sortable: false, render: (s) => s.phone, sortValue: (s) => s.phone },
-  { key: "createdBy", label: "Created By", className: "col-rh-creator", width: 190, sortable: false, render: (s) => s.createdBy, sortValue: (s) => s.createdBy.toLowerCase() },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
 // Adapter so the existing Edit-Columns dropdown (built for the Users page) can
 // drive this page's column set. Only the keys present here are shown.
-const EDIT_COLUMN_DEFS = [
-  { key: "task", label: "Task" },
-  { key: "attempt", label: "Attempt #" },
-  { key: "status", label: "Status" },
-  { key: "submittedOn", label: "Submitted On" },
-  { key: "dueDate", label: "Due Date" },
-  { key: "email", label: "Email" },
-  { key: "phone", label: "Phone Number" },
-  { key: "createdBy", label: "Created By" },
-] as const;
+const EDIT_COLUMN_DEFS = COLS.map((c) => ({ key: c.key, label: c.label }));
 
-type SortKey = "name" | ColKey;
+/** The two columns that are always rendered, in order (Edit Columns lists these
+ * as "Fixed columns" — they can't be switched off or reordered). */
+const FIXED_COLUMNS = [{ label: "User's Name" }, { label: "Task" }];
+
+type SortKey = "name" | "task" | ColKey;
 type SortDir = "asc" | "desc";
 
 export function ReviewHandsOnPage() {
@@ -91,6 +131,7 @@ export function ReviewHandsOnPage() {
   const [types, setTypes] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
   const [tasks, setTasks] = useState<string[]>([]);
+  const [certs, setCerts] = useState<string[]>([]);
   // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
   const [creators, setCreators] = useState<string[]>(["SkillCat"]);
   const [committedQuery, setCommittedQuery] = useState("");
@@ -110,27 +151,32 @@ export function ReviewHandsOnPage() {
     return [...set].sort();
   }, [list]);
 
+  // Only the certifications that actually contain one of the submitted Tasks —
+  // filtering by anything else would always come back empty.
+  const certNames = useMemo(() => {
+    const set = new Set<string>();
+    list.forEach((s) => s.certifications.forEach((c) => set.add(c)));
+    return [...set].sort();
+  }, [list]);
+
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return list.filter((s) => {
-      if (statuses.length && !statuses.includes(s.status)) return false;
+      if (statuses.length && !statuses.includes(displayStatus(s))) return false;
       if (types.length && !types.includes(s.userType)) return false;
       if (creators.length && !creators.includes(s.createdBy)) return false;
       if (companies.length && !(s.companyName && companies.includes(s.companyName))) return false;
       if (tasks.length && !tasks.includes(s.taskName)) return false;
+      if (certs.length && !s.certifications.some((c) => certs.includes(c))) return false;
       if (!q) return true;
-      return (
-        s.userName.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q) ||
-        s.phone.toLowerCase().includes(q) ||
-        s.taskName.toLowerCase().includes(q)
-      );
+      return matchesQuery(s, q);
     });
-  }, [list, committedQuery, statuses, types, creators, companies, tasks]);
+  }, [list, committedQuery, statuses, types, creators, companies, tasks, certs]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => {
       if (sort.key === "name") return a.userName.localeCompare(b.userName);
+      if (sort.key === "task") return a.taskName.localeCompare(b.taskName);
       const col = COL_BY_KEY.get(sort.key)!;
       const va = col.sortValue(a);
       const vb = col.sortValue(b);
@@ -141,7 +187,7 @@ export function ReviewHandsOnPage() {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, sort]);
+  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -149,10 +195,11 @@ export function ReviewHandsOnPage() {
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 1; // name + cols
+  const colSpan = visibleCols.length + 2; // name + task + cols
   // Natural table width (name col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
-  const tableMin = 190 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
+  const tableMin =
+    NAME_WIDTH + TASK_WIDTH + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -166,13 +213,30 @@ export function ReviewHandsOnPage() {
     setCreators([]);
     setCompanies([]);
     setTasks([]);
+    setCerts([]);
   }
 
   // The table's filters, handed to the review console so its queue popover can
-  // edit them in place (Status and Task get their own pill; the rest sit behind
-  // "More Filters"). They drive this page's state, so the queue re-filters live.
+  // edit them in place — they drive this page's state, so the queue re-filters
+  // live. The popover's row is one line: `primary` marks the two pills shown
+  // when nothing is applied (Status, Created By); applied filters take
+  // precedence and the rest fall into its "More Filters".
   const queueFilters: QueueFilter[] = [
     { label: "Status", all: STATUS_OPTIONS, value: statuses, onApply: setStatuses, primary: true },
+    {
+      label: "Created By",
+      all: CREATOR_OPTIONS,
+      // Same two subsections as the Created By pill everywhere else.
+      sections: [
+        { label: "Made in house", items: [...CREATED_BY_IN_HOUSE] },
+        { label: "B2B customers", items: [...CREATED_BY_B2B].sort() },
+      ],
+      value: creators,
+      onApply: setCreators,
+      searchable: true,
+      searchPlaceholder: "Search creators…",
+      primary: true,
+    },
     {
       label: "Task",
       all: taskNames,
@@ -180,11 +244,17 @@ export function ReviewHandsOnPage() {
       onApply: setTasks,
       searchable: true,
       searchPlaceholder: "Search tasks…",
-      primary: true,
+    },
+    {
+      label: "Parent Certification",
+      all: certNames,
+      value: certs,
+      onApply: setCerts,
+      searchable: true,
+      searchPlaceholder: "Search certifications…",
     },
     { label: "User Type", all: ["B2C", "B2B"], value: types, onApply: setTypes },
-    { label: "Created By", all: CREATOR_OPTIONS, value: creators, onApply: setCreators },
-    { label: "Company", all: companyNames, value: companies, onApply: setCompanies },
+    { label: "User's Company", all: companyNames, value: companies, onApply: setCompanies },
   ];
 
   // Clicking a row opens the review console with the table's current
@@ -211,7 +281,8 @@ export function ReviewHandsOnPage() {
     );
   }
 
-  const hasFilters = statuses.length + types.length + creators.length + companies.length + tasks.length > 0;
+  const hasFilters =
+    statuses.length + types.length + creators.length + companies.length + tasks.length + certs.length > 0;
 
   return (
     <div className="main">
@@ -219,12 +290,7 @@ export function ReviewHandsOnPage() {
         <div className="tasks">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Review Hands-On Tasks</h1>
-              <div className="tasks-subtitle">
-                <span>{list.length} submissions</span>
-                <span className="tasks-subtitle-dot" />
-                <span>awaiting review</span>
-              </div>
+              <h1 className="tasks-title">Hands-On Task Submissions</h1>
             </div>
           </header>
 
@@ -237,6 +303,8 @@ export function ReviewHandsOnPage() {
                   onCompaniesChange={setCompanies}
                   tasks={tasks}
                   onTasksChange={setTasks}
+                  certifications={certs}
+                  onCertificationsChange={setCerts}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                   onOpenSubmission={(s) => setOpenId(s.id)}
@@ -245,16 +313,7 @@ export function ReviewHandsOnPage() {
 
               <div className="filters">
                 <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />
-                <MultiPill label="User Type" all={["B2C", "B2B"]} value={types} onApply={setTypes} />
-                <MultiPill
-                  label="Created By"
-                  all={CREATOR_OPTIONS}
-                  value={creators}
-                  onApply={setCreators}
-                  searchable
-                  searchPlaceholder="Search creators…"
-                  width={300}
-                />
+                <CreatedByPill value={creators} onApply={setCreators} />
                 <MultiPill
                   label="Task"
                   all={taskNames}
@@ -265,13 +324,22 @@ export function ReviewHandsOnPage() {
                   width={300}
                 />
                 <MultiPill
-                  label="Company"
-                  all={companyNames}
-                  value={companies}
-                  onApply={setCompanies}
+                  label="Parent Certification"
+                  all={certNames}
+                  value={certs}
+                  onApply={setCerts}
                   searchable
-                  searchPlaceholder="Search companies…"
+                  searchPlaceholder="Search certifications…"
                   width={300}
+                />
+                {/* The lower-traffic filters, same cascading menu the Tasks page
+                    uses for its "More filters" pill. */}
+                <MoreFiltersPill
+                  types={types}
+                  onTypesChange={setTypes}
+                  companies={companies}
+                  onCompaniesChange={setCompanies}
+                  companyNames={companyNames}
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
@@ -285,7 +353,8 @@ export function ReviewHandsOnPage() {
                 <ColGroup cols={visibleCols} />
                 <thead>
                   <tr>
-                    <SortableHeader col="name" label="User Name" className="col-name" sort={sort} toggle={toggleSort} />
+                    <SortableHeader col="name" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
+                    <SortableHeader col="task" label="Task" className="col-rh-task" sort={sort} toggle={toggleSort} />
                     {visibleCols.map((c) => (
                       <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={c.sortable} />
                     ))}
@@ -293,7 +362,7 @@ export function ReviewHandsOnPage() {
                       <UsersEditColumns
                         columns={columns}
                         setColumns={setColumns}
-                        fixed={[{ label: "User Name" }]}
+                        fixed={FIXED_COLUMNS}
                         optional={EDIT_COLUMN_DEFS as unknown as { key: string; label: string }[]}
                         order={order}
                         onOrderChange={(o) => setOrder(o as typeof order)}
@@ -310,11 +379,16 @@ export function ReviewHandsOnPage() {
                     {paged.map((s) => (
                       <tr key={s.id} onClick={() => setOpenId(s.id)}>
                         <td className="col-name">{s.userName}</td>
+                        <td className="col-rh-task">{s.taskName}</td>
                         {visibleCols.map((c) => (
-                          <td key={c.key} className={c.className}>
+                          <td key={c.key} className={c.className} data-tip={c.tip?.(s)}>
                             {c.render(s)}
                           </td>
                         ))}
+                        {/* Empty counterpart to the header's Edit Columns cell.
+                            Without it the sticky 40px strip has no cell in the
+                            row, so the hover highlight stops short of it. */}
+                        <td className="col-actions" />
                       </tr>
                     ))}
                     {paged.length === 0 && (
@@ -348,12 +422,20 @@ export function ReviewHandsOnPage() {
   );
 }
 
+const NAME_WIDTH = 190;
+const TASK_WIDTH = 260;
+
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
     <colgroup>
       {/* Explicit width so the fixed-layout name column never collapses to 0
          when many optional columns are enabled. */}
-      <col style={{ width: 190 }} />
+      <col style={{ width: NAME_WIDTH }} />
+      {/* Task is left auto so it, and not the 40px actions column, soaks up any
+         space left over when few columns are on — the Edit Columns cell must
+         stay the same width whatever the column set is. `--table-min` reserves
+         TASK_WIDTH for it, so it can only ever grow past that, never shrink. */}
+      <col />
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />
       ))}
@@ -362,7 +444,68 @@ function ColGroup({ cols }: { cols: ColMeta[] }) {
   );
 }
 
-function StatusPill({ status }: { status: TaskSubmission["status"] }) {
+/** The secondary filters, behind one pill — the cascading menu the Tasks and
+ * Question Bank pages use, with a row per filter over a single Apply. */
+function MoreFiltersPill({
+  types,
+  onTypesChange,
+  companies,
+  onCompaniesChange,
+  companyNames,
+}: {
+  types: string[];
+  onTypesChange: (v: string[]) => void;
+  companies: string[];
+  onCompaniesChange: (v: string[]) => void;
+  companyNames: string[];
+}) {
+  const count = types.length + companies.length;
+  const value = useMemo(
+    () => ({ types, companies }),
+    [types, companies],
+  );
+
+  return (
+    <Dropdown
+      width={260}
+      // Right-aligned: this pill sits at the end of the row, and the cascading
+      // submenu opens to its right — anchoring left would push it off-page.
+      align="right"
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="More Filters"
+          value={count > 0 ? `${count} active` : null}
+          open={open}
+          toggle={toggle}
+          onClear={() => {
+            onTypesChange([]);
+            onCompaniesChange([]);
+          }}
+        />
+      )}
+    >
+      {({ close }) => (
+        <CascadingMultiSelect
+          sections={[
+            { key: "types", label: "User Type", groups: [{ items: ["B2C", "B2B"] }] },
+            // No search box here: the list is only the companies that actually
+            // have submissions, and the autofocused input scrolls the submenu
+            // (which sits at the right edge of the page) into view with a jump.
+            { key: "companies", label: "User's Company", groups: [{ items: companyNames }] },
+          ]}
+          value={value}
+          onApply={(v) => {
+            onTypesChange(v.types ?? []);
+            onCompaniesChange(v.companies ?? []);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
   const key = status.toLowerCase().replace(/\s+/g, "-");
   return (
     <span className={`rh-status rh-status--${key}`}>

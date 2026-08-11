@@ -637,3 +637,51 @@ export function applyClearCert(certManual: CertManual, uid: string, certId: stri
   delete next[uid + "_" + certId];
   return next;
 }
+
+/* ──────────────── Proctoring exam ⇄ quiz attempt ────────────────
+   The Proctoring queue names an exam ("EPA 608 Type 2 Certificate"); the
+   attempt viewer is addressed by a TASK id. These are explicit rather than
+   fuzzy-matched: the two data sets spell the same certification differently
+   (roman numerals vs digits, a "Certificate" suffix), so a normalising match
+   would be guesswork. EPA 609 has no certification here and stays unmapped. */
+const PROCTORED_EXAM_TO_CERT: Record<string, string> = {
+  "EPA 608 Universal Certificate": "C-0421",
+  "EPA 608 Type 1 Certificate": "C-0420",
+  "EPA 608 Type 2 Certificate": "C-0419",
+  "EPA 608 Type 3 Certificate": "C-0418",
+  "NATE Ready To Work": "C-0410",
+};
+
+/** buildData() rebuilds the whole seeded data set; this only needs to read it. */
+let cachedData: CertData | null = null;
+
+/** The task whose attempt a proctored submission refers to.
+ *
+ *  Resolved from the TASK data (`usedIn`), not from `certsById[...].taskIds`:
+ *  a certification's task list is padded and then sliced to its declared task
+ *  count, so the real exam is often not in it — EPA 608 Type II's list keeps
+ *  five tasks and drops "Combustion Analysis", the quiz that is actually
+ *  proctored. Preference: the certification's final exam, then its first Quiz,
+ *  then anything it uses.
+ *
+ *  The id is checked against `tasksById` before being returned, because the
+ *  attempt viewer renders "not found" for a task the seeded data set doesn't
+ *  know. Returns null when nothing usable resolves — the caller then offers no
+ *  attempt link at all rather than a dead one. */
+export function attemptTaskIdForExam(examName: string): string | null {
+  const certId = PROCTORED_EXAM_TO_CERT[examName];
+  if (!certId) return null;
+  cachedData ??= buildData();
+
+  const used = (appTasks as Task[]).filter(
+    (t) => !t.draft && t.usedIn.some((u) => USEDIN_TO_CERT[u] === certId),
+  );
+  const candidates = [
+    ...used.filter((t) => t.finalExam),
+    ...used.filter((t) => !t.finalExam && t.type === "Quiz"),
+    ...used,
+    // Last resort: whatever the certification's own (sliced) list holds.
+    ...(cachedData.certsById[certId]?.taskIds ?? []).map((id) => ({ id })),
+  ];
+  return candidates.find((t) => cachedData!.tasksById[t.id])?.id ?? null;
+}
