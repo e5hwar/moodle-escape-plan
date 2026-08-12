@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ShortcutHint } from "./ShortcutHint";
 
 /* ── Fullscreen viewer shell ──────────────────────────────────────────────
    The chrome behind both fullscreen views in the Proctoring console — the ID
@@ -25,7 +26,7 @@ const RotateIcon = () => (
 );
 
 const CloseIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
@@ -49,46 +50,153 @@ export function FullscreenViewer({
 }: {
   initialRotation?: number;
   onClose: () => void;
-  /** Receives the live transform state; the caller owns how it's applied. */
-  children: (state: { rotation: number; zoom: number }) => ReactNode;
+  /** Receives the live rotation. Zoom and pan are applied by the viewer itself,
+   *  on a wrapper around whatever this returns — the caller only has to place
+   *  its own content (the ID card additionally fits itself to the stage). */
+  children: (state: { rotation: number }) => ReactNode;
 }) {
   const [rotation, setRotation] = useState(initialRotation);
-  const [zoom, setZoom] = useState(1);
+  /* One object, not three states: a wheel-zoom has to move the pan in the same
+     commit that changes the zoom (it zooms toward the pointer), and splitting
+     them would mean calling one setter inside another's updater. */
+  const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
+  const stageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  /** Active drag: pointer origin + the pan it started from. */
+  const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  /** Distinguishes a click (closes) from the end of a drag (must not). */
+  const movedRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
 
+  const rotate = () => setRotation((r) => (r + 90) % 360);
+
+  /* The overlay owns the keyboard while it's open — the console's own handler
+     early-returns for as long as it is — so R is free here for Rotate. */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      else if (e.key === "r" || e.key === "R") rotate();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  /** Re-anchors the pan so the point under (cx, cy) — measured from the stage
+   *  centre — stays put as the zoom changes. cx/cy of 0 zooms about the centre,
+   *  which is what the buttons and the slider want. */
+  function zoomTo(next: number, cx = 0, cy = 0) {
+    setView((v) => {
+      const z = clampZoom(next);
+      const k = z / v.zoom;
+      return { zoom: z, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+    });
+  }
+
+  /* Ctrl/⌘ + wheel zooms toward the pointer and a plain wheel pans, the way
+     Figma behaves — a trackpad pinch arrives as a ctrlKey wheel event, so the
+     same branch covers the gesture. The listener has to be registered manually
+     with `passive: false`: React's onWheel is passive, so preventDefault there
+     is ignored and the browser zooms the whole page instead. */
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      if (e.ctrlKey || e.metaKey) {
+        const cx = e.clientX - r.left - r.width / 2;
+        const cy = e.clientY - r.top - r.height / 2;
+        setView((v) => {
+          // Exponential so each notch is a constant ratio, not a constant step.
+          const z = clampZoom(v.zoom * Math.exp(-e.deltaY / 300));
+          const k = z / v.zoom;
+          return { zoom: z, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+        });
+      } else {
+        setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    dragRef.current = { sx: e.clientX, sy: e.clientY, px: view.x, py: view.y };
+    movedRef.current = false;
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    // A few pixels of slop so a click with a shaky hand still counts as a click.
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) movedRef.current = true;
+    setView((v) => ({ ...v, x: d.px + dx, y: d.py + dy }));
+  }
+
+  function endDrag(e: React.PointerEvent) {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDragging(false);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  }
+
+  /* The stage covers the whole overlay (the zoomed content is deliberately not
+     boxed in), so it — not a backdrop behind it — has to decide what "click
+     outside" means, and it can't just ask whether the carrier contains the
+     target: the carrier is stage-sized, so that answer is always yes. What
+     counts as empty space is a click that landed on the stage or the carrier
+     ITSELF rather than on anything rendered inside them. A drag never closes. */
+  function onStageClick(e: React.MouseEvent) {
+    if (movedRef.current) return;
+    if (e.target !== stageRef.current && e.target !== contentRef.current) return;
+    onClose();
+  }
+
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <div className="ncr-fs-overlay" onClick={onClose}>
+    <div className="ncr-fs-overlay idfs-overlay">
       <button className="idfs-close" onClick={onClose} aria-label="Close">
         <CloseIcon />
       </button>
 
-      <div className="ncr-fs-stage idfs-stage" onClick={stop}>
-        {children({ rotation, zoom })}
+      <div
+        ref={stageRef}
+        className={`idfs-stage ${dragging ? "is-dragging" : ""}`}
+        onClick={onStageClick}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
+        <div
+          ref={contentRef}
+          className="idfs-content"
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
+        >
+          {children({ rotation })}
+        </div>
       </div>
 
       <div className="idfs-toolbar" onClick={stop}>
-        <button
-          className="idfs-btn"
-          onClick={() => setRotation((r) => (r + 90) % 360)}
-          aria-label="Rotate"
-          title="Rotate"
-        >
-          <RotateIcon />
-        </button>
+        {/* The shared shortcut hint rather than a native title: it names the key
+            as well as the action, and it flips above the control — a tooltip
+            under a button this close to the bottom edge was being cropped. */}
+        <ShortcutHint label="Rotate" keyLabel="R">
+          <button className="idfs-btn" onClick={rotate} aria-label="Rotate">
+            <RotateIcon />
+          </button>
+        </ShortcutHint>
         <div className="idfs-zoom">
           <button
             className="idfs-btn"
-            onClick={() => setZoom((z) => clampZoom(z - ZOOM_STEP))}
-            disabled={zoom <= ZOOM_MIN}
+            onClick={() => zoomTo(view.zoom - ZOOM_STEP)}
+            disabled={view.zoom <= ZOOM_MIN}
             aria-label="Zoom out"
           >
             <ZoomOutGlyph />
@@ -99,14 +207,14 @@ export function FullscreenViewer({
             min={ZOOM_MIN}
             max={ZOOM_MAX}
             step={0.01}
-            value={zoom}
-            onChange={(e) => setZoom(clampZoom(Number(e.target.value)))}
+            value={view.zoom}
+            onChange={(e) => zoomTo(Number(e.target.value))}
             aria-label="Zoom"
           />
           <button
             className="idfs-btn"
-            onClick={() => setZoom((z) => clampZoom(z + ZOOM_STEP))}
-            disabled={zoom >= ZOOM_MAX}
+            onClick={() => zoomTo(view.zoom + ZOOM_STEP)}
+            disabled={view.zoom >= ZOOM_MAX}
             aria-label="Zoom in"
           >
             <ZoomInGlyph />
@@ -114,7 +222,9 @@ export function FullscreenViewer({
         </div>
       </div>
 
-      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
+      <div className="ncr-fs-hint idfs-hint">
+        Ctrl + Scroll to Zoom · Drag to Move · Esc or Click Outside to Close
+      </div>
     </div>
   );
 }

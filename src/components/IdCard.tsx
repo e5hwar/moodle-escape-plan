@@ -347,10 +347,10 @@ function IdFullView({
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBox({ w: r.width, h: r.height });
-    };
+    /* offsetWidth/Height, NOT getBoundingClientRect: the viewer now wraps this
+       box in a zoom/pan transform, and a measured rect would come back scaled —
+       feeding the fit calculation its own output and running away. */
+    const measure = () => setBox({ w: el.offsetWidth, h: el.offsetHeight });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -359,13 +359,13 @@ function IdFullView({
 
   return (
     <FullscreenViewer initialRotation={initial} onClose={onClose}>
-      {({ rotation, zoom }) => (
-        /* Measured on the untransformed box — reading the rect off the rotated
-           card itself would feed the fit calculation its own output. */
+      {({ rotation }) => (
+        /* Measured on the unrotated box — reading the size off the rotated card
+           itself would feed the fit calculation its own output. */
         <div ref={stageRef} className="idhz-fs-box">
           <div
             className="idhz-card"
-            style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box) * zoom})` }}
+            style={{ transform: `rotate(${rotation}deg) scale(${fitScale(rotation, box)})` }}
           >
             <IdCard data={data} />
           </div>

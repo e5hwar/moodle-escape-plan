@@ -10752,7 +10752,7 @@ button.breadcrumb-item:hover {
      0.5px border up to a full pixel AND adds it to the cell's width, which
      shifts every stat after the first. Same trick the Integrity Note and the
      stat cards use for their sub-pixel strokes. */
-  box-shadow: inset -0.5px 0 0 0 rgba(64, 64, 64, 0.5);
+  box-shadow: inset -0.5px 0 0 0 #404040;
   line-height: normal;
 }
 
@@ -10760,9 +10760,29 @@ button.breadcrumb-item:hover {
   box-shadow: none;
 }
 
+/* "AI Assist" leads the group as one centred row, not a label-over-value
+   stack — it labels where the numbers beside it came from. */
+.pr-hstat--assist {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.pr-hstat-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  color: #a8a8a8;
+  /* Default arrow, not `help`: the question-mark cursor isn't used anywhere the
+     app shows a tooltip. */
+  cursor: default;
+}
+
 .pr-hstat-label {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
   text-transform: uppercase;
   color: #a8a8a8;
@@ -11177,290 +11197,283 @@ button.breadcrumb-item:hover {
   padding: 24px;
 }
 
-.pr-confirm {
+/* ── Proctoring confirm modals (Figma 483:588 approve / 484:1779 reject) ──
+   One shell for all of them: gradient card, 28px title with a close glyph, and
+   a footer whose Cancel is plain text and whose CTA is the orange Primary CTA.
+   The old `.pr-confirm-*` / `.pr-reject-*` stack (icon badge, red/green CTAs,
+   multi-select reasons) is DELETED. `.pr-confirm-overlay` survives — both this
+   shell and the retired ProctoringDetailModal use it — but that modal's other
+   classes are now unstyled. It is never rendered (kept only for revert), so
+   this is cosmetic dead code, not a live regression. */
+.prm {
   width: 100%;
-  max-width: 420px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.7);
-  padding: 24px;
-}
-
-.pr-confirm-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-}
-
-.pr-confirm-icon--accept {
-  background: rgba(58, 163, 64, 0.15);
-  color: #4cc257;
-}
-
-.pr-confirm-icon--reject {
-  background: rgba(226, 85, 85, 0.15);
-  color: #e97373;
-}
-
-.pr-confirm-icon--request {
-  background: rgba(252, 211, 77, 0.15);
-  color: #f5d36b;
-}
-
-.pr-confirm-title {
-  font-family: var(--font-sans);
-  font-size: 14pt;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.pr-confirm-body {
-  margin-top: 8px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.pr-confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.pr-confirm-cancel {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 8px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-}
-
-.pr-confirm-cancel:hover {
-  background: var(--bg-pill-strong);
-}
-
-.pr-confirm-confirm {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 700;
-  border: 1px solid transparent;
-  color: #fff;
-}
-
-.pr-confirm-confirm:hover {
-  filter: brightness(1.1);
-}
-
-.pr-confirm-confirm--accept {
-  background: linear-gradient(180deg, #3aa340 0%, #277b2c 100%);
-}
-
-.pr-confirm-confirm--reject {
-  background: linear-gradient(180deg, #e25555 0%, #b03434 100%);
-}
-
-.pr-confirm-confirm--request {
-  background: rgba(252, 211, 77, 0.14);
-  color: #f5d36b;
-  border-color: rgba(252, 211, 77, 0.35);
-}
-
-/* Reject flow — reasons + image attachment */
-.pr-reject-modal {
-  width: 100%;
-  max-width: 640px;
-  max-height: calc(100vh - 80px);
+  max-width: 560px;
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.7);
-  overflow: hidden;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
-.pr-reject-head {
+/* The reject modal carries a form and a wrapped image grid. */
+.prm--wide {
+  max-width: 720px;
+}
+
+.prm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.prm-head {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 20px 22px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.pr-reject-head-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.pr-reject-head .pr-modal-close {
-  flex-shrink: 0;
-}
-
-.pr-reject-body {
-  padding: 18px 22px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.pr-reject-label {
+.prm-title {
+  margin: 0;
   font-family: var(--font-sans);
-  font-size: 11pt;
+  font-size: 28px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  line-height: normal;
+  color: #fff;
 }
 
-.pr-reject-hint {
-  font-size: 9.5pt;
-  font-weight: 400;
-  color: var(--text-faint);
-  letter-spacing: 0.01em;
-}
-
-.pr-reject-reasons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.pr-reason {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 9px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-pill);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text);
-  text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.pr-reason:hover {
-  background: var(--bg-pill-strong);
-}
-
-.pr-reason.is-on {
-  border-color: rgba(226, 85, 85, 0.55);
-  background: rgba(226, 85, 85, 0.08);
-}
-
-.pr-reason-check {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 1px solid var(--border-strong);
+.prm-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #fff;
-}
-
-.pr-reason.is-on .pr-reason-check {
-  background: #d94a4a;
-  border-color: #d94a4a;
-}
-
-.pr-reject-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 10px;
-}
-
-.pr-reject-frame {
-  position: relative;
-  aspect-ratio: 1 / 1;
-  border-radius: 9px;
-  overflow: hidden;
-  border: 2px solid transparent;
-  background: #15151a;
-  transition: border-color 0.12s ease;
-}
-
-.pr-reject-frame.is-flagged {
-  border-color: rgba(226, 85, 85, 0.4);
-}
-
-.pr-reject-frame.is-on {
-  border-color: #4cc257;
-}
-
-.pr-reject-frame .pr-frame-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.pr-reject-frame .pr-frame-tag {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background: #e25555;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 8pt;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-bottom-right-radius: 4px;
-}
-
-.pr-reject-frame-check {
-  position: absolute;
-  top: 5px;
-  right: 5px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7a7a7a;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.prm-close:hover {
+  color: #fff;
+}
+
+.prm-text {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+/* The approve copy emphasises what must have been checked. */
+.prm-text strong {
+  font-weight: 600;
+}
+
+.prm-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.prm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prm-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+.prm-req {
+  margin-left: 2px;
+  color: #f05523;
+}
+
+.prm-help {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+
+/* ── reason radios ── */
+.prm-radios {
+  display: flex;
+  flex-direction: column;
+}
+
+.prm-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 31px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.prm-radio-row:hover {
+  background: rgba(122, 122, 122, 0.12);
+}
+
+/* Figma draws a 16px rounded SQUARE at 0.8px — closer to the app's checkbox
+   than to a circle, despite the component being named "Radial Button". */
+.prm-radio {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: rgba(10, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.pr-reject-frame.is-on .pr-reject-frame-check {
-  background: #3aa340;
-  border-color: #3aa340;
-}
-
-.pr-reject-foot {
-  padding: 16px 22px;
-  border-top: 1px solid var(--border);
   flex-shrink: 0;
-  margin-top: 0;
+  width: 16px;
+  height: 16px;
+  border: 0.8px solid #737373;
+  border-radius: 3.2px;
+  color: #fff;
+}
+.prm-radio-row.is-on .prm-radio {
+  border-color: #f05523;
+  background: #f05523;
+}
+.prm-radio svg {
+  width: 10px;
+  height: 10px;
 }
 
-.pr-confirm-confirm:disabled {
+.prm-radio-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+
+.prm-other {
+  margin-top: 2px;
+}
+
+/* ── supporting images ── */
+.prm-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.prm-tile {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  padding: 0.776px;
+  border: 0.776px solid #2e2e33;
+  border-radius: 4.659px;
+  background: #15151a;
+  overflow: hidden;
+  cursor: pointer;
+}
+.prm-tile.is-on {
+  border-color: #f05523;
+}
+.prm-tile .pr-frame-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.prm-tile .pr-frame-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.prm-tile-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #f05523;
+  color: #fff;
+  opacity: 0;
+}
+.prm-tile.is-on .prm-tile-check {
+  opacity: 1;
+}
+
+/* ── footer ── */
+.prm-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-top: 1px solid rgba(122, 122, 122, 0.5);
+  border-radius: 0 0 8px 8px;
+}
+
+.prm-cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #a8a8a8;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.prm-cancel:hover {
+  color: #fff;
+}
+
+/* Primary CTA: the design's vertical orange gradient over #0d0d0d, ringed by
+   the accent at 15%. Side padding is Figma's 16 minus the 0.5px border. */
+.prm-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 15.5px;
+  border: 0.5px solid rgba(240, 85, 35, 0.15);
+  border-radius: 8px;
+  background:
+    linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.9%),
+    #0d0d0d;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 14px;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.prm-cta:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.prm-cta:disabled {
   opacity: 0.45;
-  cursor: not-allowed;
-  filter: none;
+  cursor: default;
 }
 
 /* =============================================================
@@ -12934,14 +12947,14 @@ a.rh-crumb-link:hover {
    just a bare close button and a bottom Rotate + zoom toolbar. */
 .idfs-close {
   position: absolute;
-  top: 24px;
-  right: 24px;
-  z-index: 2;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   /* No box: border/fill/radius all off, per the design. */
   border: none;
   background: none;
@@ -12953,21 +12966,66 @@ a.rh-crumb-link:hover {
   color: #fff;
 }
 
-/* Zoom is a transform, so a magnified card would otherwise paint straight over
-   the toolbar and the close button — and you could no longer zoom back out.
-   Scoped to the ID overlay: `.ncr-fs-stage` alone also dresses the webcam-frame
-   overlay, which must not clip. */
+/* The viewer reads as a modal: a near-full-screen rounded panel inset from the
+   window edges, over the overlay's existing (deliberately transparent) wash.
+   The panel is where the zoomed content lives — it still runs edge to edge of
+   that panel, it just doesn't spill onto the page behind it. The chrome sits
+   outside it: close top-right, tools bottom-left, hint bottom-centre. */
+.idfs-overlay {
+  padding: 0;
+}
+
 .idfs-stage {
+  position: absolute;
+  inset: 24px 24px 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
   overflow: hidden;
+  cursor: grab;
+  /* The drag is ours — don't let the browser pan/zoom the page on touch. */
+  touch-action: none;
+}
+.idfs-stage.is-dragging {
+  cursor: grabbing;
+}
+
+/* The pan/zoom carrier. It takes the stage's full size so children sized in %
+   (the ID card's `.idhz-fs-box` is `width:100%; max-width:900px`) still have
+   something to resolve against — as a shrink-to-fit flex item it collapsed them
+   to a fraction of their intended size. No transition: it has to track the
+   pointer exactly. */
+.idfs-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  will-change: transform;
 }
 
 .idfs-toolbar {
-  position: relative;
+  position: absolute;
+  bottom: 18px;
+  left: 24px;
   z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
+}
+
+/* Stays centred on the window even though the tools moved to the left. */
+.idfs-hint {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  margin-top: 0;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Both segments share the pill shell — a rotate button on its own, then the
@@ -14586,7 +14644,7 @@ a.rh-crumb-link:hover {
   margin-left: 8px;
   flex-shrink: 0;
   color: #a8a8a8;
-  cursor: help;
+  cursor: default;
 }
 
 .rail-info::after {
@@ -25708,7 +25766,12 @@ span.rvc-crumb--current { cursor: default; }
    Same shell as the user-details card, one row: what the key does + the cap. */
 .ksh-card {
   position: fixed;
-  z-index: 60;
+  /* Same ceiling as the shared `.hover-tip` (1000), not the 60 it used to sit
+     at: these hints hang off controls inside the fullscreen viewer, whose
+     overlay is z-index 300 — the card was painting behind it. The two tooltips
+     never coexist (HoverTooltip skips anything inside a [data-hover-card]), so
+     sharing the top of the stack is safe. */
+  z-index: 1000;
   display: flex;
   align-items: center;
   gap: 8px;

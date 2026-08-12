@@ -8,7 +8,6 @@ import {
   ArrowUpIcon,
   ChevronRightIcon,
   EnterKeyIcon,
-  SmallXIcon,
   SortIcon,
 } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
@@ -61,18 +60,7 @@ const CheckMarkIcon = () => (
   </svg>
 );
 
-const RejectXIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
 
-const RequestIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <path d="M3 8l9 6 9-6" />
-  </svg>
-);
 
 /* ── Integrity Note icons (Figma 457:583 / 457:586) ──
    Both transcribed from the exported assets. The note's 20px outline triangle
@@ -112,10 +100,15 @@ export type RejectDetails = {
   frameIndexes: number[];
 };
 
+/** Kept as its own constant because selecting it reveals the free-text field. */
+const OTHER_REASON = "Other";
+
+/* Wording per Figma 484:1779. */
 const REJECT_REASONS = [
-  "Eyes were not focused on camera",
+  "Eyes were not focused on the camera",
   "Camera was not clear",
-  "Camera wasn't recording",
+  "Camera was not recording",
+  OTHER_REASON,
 ];
 
 /* Queue popover columns — mirrors ReviewConsole's QUEUE_COLS, minus the
@@ -333,6 +326,7 @@ export function ProctoringConsole({
                 title="ID Verification"
                 meta={
                   <span className="pr-section-stats">
+                    <SectionAiAssist />
                     <SectionStat
                       label="Confidence"
                       value={`${submission.idConfidence}%`}
@@ -368,6 +362,7 @@ export function ProctoringConsole({
                     title="Complete Proctoring Footage"
                     meta={
                       <span className="pr-section-stats">
+                        <SectionAiAssist />
                         <SectionStat label="Frames" value={submission.webcamTotal} tone="is-muted" />
                         <SectionStat
                           label="Flagged"
@@ -579,7 +574,8 @@ export function ProctoringConsole({
       ) : confirmKind ? (
         <ConfirmActionModal
           kind={confirmKind}
-          candidateName={submission.candidateName}
+          submission={submission}
+          hasFootage={hasFootage}
           onCancel={() => setConfirmKind(null)}
           onConfirm={() => {
             setConfirmKind(null);
@@ -593,68 +589,152 @@ export function ProctoringConsole({
   );
 }
 
-const CONFIRM_COPY: Record<
-  ConfirmKind,
-  { title: string; body: (name: string) => string; confirmLabel: string; icon: () => JSX.Element }
-> = {
-  /* Wording follows the footer's CTAs (Figma 445:878), which renamed
-     Accept → Approve and Request ID → Request ID Again. */
-  accept: {
-    title: "Approve this submission?",
-    body: (name) => `${name}'s exam will be marked approved and removed from the review queue.`,
-    confirmLabel: "Approve",
-    icon: CheckMarkIcon,
-  },
-  reject: {
-    title: "Reject this submission?",
-    body: (name) => `${name}'s exam will be marked rejected and removed from the review queue.`,
-    confirmLabel: "Reject",
-    icon: RejectXIcon,
-  },
-  request: {
-    title: "Request a new ID upload?",
-    body: (name) =>
-      `${name} will be asked to re-upload a clearer ID. This submission moves to the ID Re-uploads tab until they do.`,
-    confirmLabel: "Request ID Again",
-    icon: RequestIcon,
-  },
-};
+/** Modal close glyph — the design's tdesign:close (20px, 2.42 square-capped). */
+const ModalCloseIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path
+      d="M15 5L10 10M10 10L5 15M10 10L15 15M10 10L5 5"
+      stroke="currentColor"
+      strokeWidth="2.42424"
+      strokeLinecap="square"
+    />
+  </svg>
+);
 
-function ConfirmActionModal({
-  kind,
-  candidateName,
+type ConfirmCopy = { title: string; body: ReactNode; confirmLabel: string };
+
+/* Every confirm reads differently for a proctored exam than for an ID-only one:
+   a proctored submission has an attempt to approve or reject, while an ID-only
+   one is purely the document. `hasFootage` is what splits them. */
+function confirmCopy(kind: ConfirmKind, s: Submission, hasFootage: boolean): ConfirmCopy {
+  const name = s.candidateName;
+  if (kind === "accept") {
+    return hasFootage
+      ? {
+          title: "Approve Attempt?",
+          body: (
+            <>
+              {name}&rsquo;s attempt for the {s.exam} Quiz will be approved. Only proceed if their{" "}
+              <strong>ID and their webcam footage</strong> for the exam have been validated.
+            </>
+          ),
+          confirmLabel: "Approve",
+        }
+      : {
+          title: "Approve ID?",
+          body: (
+            <>
+              {name}&rsquo;s ID will be marked as approved. This allows them to skip the
+              ID-verification step in all future exams which require this.
+            </>
+          ),
+          confirmLabel: "Approve",
+        };
+  }
+  if (kind === "request") {
+    return {
+      title: "Request Reupload",
+      body: hasFootage ? (
+        <>
+          {name} will be asked to reupload their ID. No certificates will be given out till the
+          proctoring footage and new ID are approved.
+        </>
+      ) : (
+        <>
+          {name} will be asked to reupload their ID. No certificates will be given out till the new
+          ID has been approved.
+        </>
+      ),
+      confirmLabel: "Send Request",
+    };
+  }
+  return {
+    title: "Reject Attempt?",
+    body: (
+      <>
+        {name}&rsquo;s attempt for the {s.exam} Quiz will be rejected and they will have to retake
+        the quiz.
+      </>
+    ),
+    confirmLabel: "Reject Attempt",
+  };
+}
+
+/** The shared modal shell for every confirm on this page (Figma 483:588):
+ *  gradient card, 28px title + close, 16px body, and a footer with a plain-text
+ *  Cancel on the left and the orange CTA on the right. */
+function ProctoringModal({
+  title,
+  confirmLabel,
+  confirmDisabled,
+  wide,
   onCancel,
   onConfirm,
+  children,
 }: {
-  kind: ConfirmKind;
-  candidateName: string;
+  title: string;
+  confirmLabel: string;
+  confirmDisabled?: boolean;
+  /** The reject modal carries a form and an image grid, so it runs wider. */
+  wide?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  children: ReactNode;
 }) {
-  const copy = CONFIRM_COPY[kind];
-  const Icon = copy.icon;
-
   return (
     <div className="pr-confirm-overlay" onClick={onCancel}>
-      <div className="pr-confirm" onClick={(e) => e.stopPropagation()}>
-        <div className={`pr-confirm-icon pr-confirm-icon--${kind}`}>
-          <Icon />
+      <div className={`prm ${wide ? "prm--wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="prm-body">
+          <div className="prm-head">
+            <h2 className="prm-title">{title}</h2>
+            <button className="prm-close" onClick={onCancel} aria-label="Close">
+              <ModalCloseIcon />
+            </button>
+          </div>
+          {children}
         </div>
-        <div className="pr-confirm-title">{copy.title}</div>
-        <div className="pr-confirm-body">{copy.body(candidateName)}</div>
-        <div className="pr-confirm-actions">
-          <button className="pr-confirm-cancel" onClick={onCancel}>
+        <div className="prm-foot">
+          <button className="prm-cancel" onClick={onCancel}>
             Cancel
           </button>
-          <button className={`pr-confirm-confirm pr-confirm-confirm--${kind}`} onClick={onConfirm}>
-            <Icon />
-            <span>{copy.confirmLabel}</span>
+          <button className="prm-cta" onClick={onConfirm} disabled={confirmDisabled}>
+            {confirmLabel}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+function ConfirmActionModal({
+  kind,
+  submission,
+  hasFootage,
+  onCancel,
+  onConfirm,
+}: {
+  kind: ConfirmKind;
+  submission: Submission;
+  hasFootage: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const copy = confirmCopy(kind, submission, hasFootage);
+  return (
+    <ProctoringModal
+      title={copy.title}
+      confirmLabel={copy.confirmLabel}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-text">{copy.body}</p>
+    </ProctoringModal>
+  );
+}
+
+/** Shared by both required fields in the reject modal. */
+const REJECT_FIELD_HELP =
+  "This reason for rejecting the attempt, along with any additional feedback is shared with the user";
 
 function RejectModal({
   submission,
@@ -665,18 +745,15 @@ function RejectModal({
   onCancel: () => void;
   onConfirm: (details: RejectDetails) => void;
 }) {
-  const [reasons, setReasons] = useState<Set<string>>(new Set());
+  /* Single-select now (Figma 484:1779 asks for "Select a Reason" with radios) —
+     it used to be a multi-select checkbox list. */
+  const [reason, setReason] = useState<string | null>(null);
+  const [otherText, setOtherText] = useState("");
   const [frames, setFrames] = useState<Set<number>>(new Set());
 
-  const canReject = reasons.size > 0 && frames.size > 0;
-
-  function toggleReason(r: string) {
-    setReasons((prev) => {
-      const next = new Set(prev);
-      next.has(r) ? next.delete(r) : next.add(r);
-      return next;
-    });
-  }
+  const isOther = reason === OTHER_REASON;
+  const canReject =
+    reason !== null && frames.size > 0 && (!isOther || otherText.trim().length > 0);
 
   function toggleFrame(i: number) {
     setFrames((prev) => {
@@ -686,93 +763,85 @@ function RejectModal({
     });
   }
 
+  const copy = confirmCopy("reject", submission, true);
+
   return (
-    <div className="pr-confirm-overlay" onClick={onCancel}>
-      <div className="pr-reject-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pr-reject-head">
-          <div className="pr-confirm-icon pr-confirm-icon--reject">
-            <RejectXIcon />
+    <ProctoringModal
+      title={copy.title}
+      confirmLabel={copy.confirmLabel}
+      confirmDisabled={!canReject}
+      wide
+      onCancel={onCancel}
+      onConfirm={() =>
+        canReject &&
+        onConfirm({
+          reasons: [isOther ? otherText.trim() : reason!],
+          frameIndexes: [...frames],
+        })
+      }
+    >
+      <div className="prm-stack">
+        <p className="prm-text">{copy.body}</p>
+
+        <div className="prm-field">
+          <span className="prm-label">
+            Select a Reason<span className="prm-req">*</span>
+          </span>
+          <div className="prm-radios">
+            {REJECT_REASONS.map((r) => (
+              <button
+                key={r}
+                className={`prm-radio-row ${reason === r ? "is-on" : ""}`}
+                onClick={() => setReason(r)}
+                role="radio"
+                aria-checked={reason === r}
+              >
+                <span className="prm-radio">{reason === r && <CheckMarkIcon />}</span>
+                <span className="prm-radio-label">{r}</span>
+              </button>
+            ))}
           </div>
-          <div className="pr-reject-head-text">
-            <div className="pr-confirm-title">Reject {submission.candidateName}&apos;s attempt?</div>
-            <div className="pr-confirm-body">
-              Select at least one reason and the images to attach to the proctoring report.
-            </div>
-          </div>
-          <button className="pr-modal-close" onClick={onCancel} aria-label="Close">
-            <SmallXIcon />
-          </button>
+          {/* Picking "Other" has to capture what the reason actually was — the
+              rejection reason is surfaced to the candidate and listed on their
+              record, so an unqualified "Other" would tell them nothing. */}
+          {isOther && (
+            <input
+              className="form-input prm-other"
+              placeholder="Describe the reason…"
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              autoFocus
+            />
+          )}
+          <p className="prm-help">{REJECT_FIELD_HELP}</p>
         </div>
 
-        <div className="pr-reject-body">
-          <div className="pr-reject-section">
-            <div className="pr-reject-label">
-              Reason for rejection <span className="pr-reject-hint">select all that apply</span>
-            </div>
-            <div className="pr-reject-reasons">
-              {REJECT_REASONS.map((r) => {
-                const on = reasons.has(r);
-                return (
-                  <button
-                    key={r}
-                    className={`pr-reason ${on ? "is-on" : ""}`}
-                    onClick={() => toggleReason(r)}
-                    aria-pressed={on}
-                  >
-                    <span className="pr-reason-check">{on && <CheckMarkIcon />}</span>
-                    <span>{r}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="prm-field">
+          <span className="prm-label">
+            Add Supporting Images<span className="prm-req">*</span>
+          </span>
+          <p className="prm-help">{REJECT_FIELD_HELP}</p>
+          <div className="prm-grid">
+            {submission.frames.map((f, i) => {
+              const on = frames.has(i);
+              return (
+                <button
+                  key={i}
+                  className={`prm-tile ${on ? "is-on" : ""}`}
+                  onClick={() => toggleFrame(i)}
+                  aria-pressed={on}
+                  aria-label={`Frame ${i + 1}${f.flag ? ` — ${f.flag}` : ""}`}
+                >
+                  <FrameAvatar tone={f.tone} flagged={!!f.flag} />
+                  {f.flag && <span className="pr-frame-tag">{f.flag}</span>}
+                  <span className="prm-tile-check">{on && <CheckMarkIcon />}</span>
+                </button>
+              );
+            })}
           </div>
-
-          <div className="pr-reject-section">
-            <div className="pr-reject-label">
-              Attach images to report{" "}
-              <span className="pr-reject-hint">
-                {frames.size > 0 ? `${frames.size} selected` : "select at least one"}
-              </span>
-            </div>
-            <div className="pr-reject-grid">
-              {submission.frames.map((f, i) => {
-                const on = frames.has(i);
-                return (
-                  <button
-                    key={i}
-                    className={`pr-reject-frame ${on ? "is-on" : ""} ${f.flag ? "is-flagged" : ""}`}
-                    onClick={() => toggleFrame(i)}
-                    aria-pressed={on}
-                    aria-label={`Frame ${i + 1}${f.flag ? ` — ${f.flag}` : ""}`}
-                  >
-                    <FrameAvatar tone={f.tone} flagged={!!f.flag} />
-                    {f.flag && <span className="pr-frame-tag">{f.flag}</span>}
-                    <span className="pr-reject-frame-check">{on && <CheckMarkIcon />}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="pr-confirm-actions pr-reject-foot">
-          <button className="pr-confirm-cancel" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className="pr-confirm-confirm pr-confirm-confirm--reject"
-            disabled={!canReject}
-            onClick={() =>
-              canReject &&
-              onConfirm({ reasons: [...reasons], frameIndexes: [...frames] })
-            }
-          >
-            <RejectXIcon />
-            <span>Reject</span>
-          </button>
         </div>
       </div>
-    </div>
+    </ProctoringModal>
   );
 }
 
@@ -815,8 +884,8 @@ function ImageZoomOverlay({
 }) {
   return (
     <FullscreenViewer onClose={onClose}>
-      {({ rotation, zoom }) => (
-        <div className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg) scale(${zoom})` }}>
+      {({ rotation }) => (
+        <div className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg)` }}>
           {children}
         </div>
       )}
@@ -830,6 +899,44 @@ function ImageZoomOverlay({
 /** One labelled stat column in a section header (Figma 302:104) — a small
  *  uppercase label stacked over its value. `tone` colours the value
  *  (is-strong / is-ok / is-weak / is-bad / is-muted). */
+/** 9.167px "info" circle from the header asset (482:560), centred in its 10px
+ *  box. Square caps and a 0.833 stroke — not the project's round-capped icons. */
+const AiAssistIcon = () => (
+  <svg width="9.16667" height="9.16667" viewBox="0 0 9.16667 9.16667" fill="none" aria-hidden="true">
+    <path
+      d="M0.416667 4.58333C0.416667 2.28208 2.28208 0.416667 4.58333 0.416667C6.88458 0.416667 8.75 2.28208 8.75 4.58333C8.75 6.88458 6.88458 8.75 4.58333 8.75C2.28208 8.75 0.416667 6.88458 0.416667 4.58333Z"
+      stroke="currentColor"
+      strokeWidth="0.833333"
+      strokeLinecap="square"
+    />
+    <path
+      d="M4.58333 6.45833V4.16667M4.58333 2.70833H4.58167V2.70667H4.58333V2.70833Z"
+      stroke="currentColor"
+      strokeWidth="0.833333"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
+/** Leads the stat group on any header whose numbers are AI-derived (Figma
+ *  444:825). One centred row rather than the label-over-value stack, with the
+ *  info icon carrying the caveat. */
+function SectionAiAssist() {
+  return (
+    <span className="pr-hstat pr-hstat--assist">
+      <span className="pr-hstat-label">AI Assist</span>
+      <span
+        className="pr-hstat-info"
+        data-tip="Generated by AI to speed up review. It can make mistakes. The final decision is yours"
+        aria-label="Generated by AI to speed up review. It can make mistakes. The final decision is yours"
+        role="img"
+      >
+        <AiAssistIcon />
+      </span>
+    </span>
+  );
+}
+
 function SectionStat({
   label,
   value,
