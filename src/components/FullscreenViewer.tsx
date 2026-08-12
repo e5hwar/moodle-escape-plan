@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ShortcutHint } from "./ShortcutHint";
 
 /* ── Fullscreen viewer shell ──────────────────────────────────────────────
@@ -62,6 +62,8 @@ export function FullscreenViewer({
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
   const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  /** The content's size at zoom 1 — the basis for how far it may be panned. */
+  const baseRef = useRef({ w: 0, h: 0 });
   /** Active drag: pointer origin + the pan it started from. */
   const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   /** Distinguishes a click (closes) from the end of a drag (must not). */
@@ -81,6 +83,47 @@ export function FullscreenViewer({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  /* A narrower window shrinks the stage, which can leave an existing pan past
+     the new limit — pull it back in. */
+  useEffect(() => {
+    const onResize = () => setView((v) => ({ ...v, ...clampPan(v.x, v.y, v.zoom) }));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* The carrier is stage-sized, so the thing actually on screen is the caller's
+     own root inside it — that is what the pan has to keep in view. Its rect
+     comes back scaled by the current zoom, so dividing it back out leaves a
+     zoom-independent base size. */
+  useLayoutEffect(() => {
+    const el = contentRef.current?.firstElementChild as HTMLElement | null;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height) baseRef.current = { w: r.width / view.zoom, h: r.height / view.zoom };
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rotation, view.zoom]);
+
+  /** Keeps the content anchored to the stage: it can be dragged until an edge
+   *  meets the matching stage edge and no further, whichever of the two is the
+   *  larger. Without this a zoomed-in card could be flung off screen entirely. */
+  function clampPan(x: number, y: number, zoom: number) {
+    const stage = stageRef.current?.getBoundingClientRect();
+    const base = baseRef.current;
+    if (!stage || !base.w || !base.h) return { x, y };
+    const limitX = Math.abs(base.w * zoom - stage.width) / 2;
+    const limitY = Math.abs(base.h * zoom - stage.height) / 2;
+    return {
+      x: Math.min(limitX, Math.max(-limitX, x)),
+      y: Math.min(limitY, Math.max(-limitY, y)),
+    };
+  }
+
   /** Re-anchors the pan so the point under (cx, cy) — measured from the stage
    *  centre — stays put as the zoom changes. cx/cy of 0 zooms about the centre,
    *  which is what the buttons and the slider want. */
@@ -88,7 +131,7 @@ export function FullscreenViewer({
     setView((v) => {
       const z = clampZoom(next);
       const k = z / v.zoom;
-      return { zoom: z, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+      return { zoom: z, ...clampPan(cx - (cx - v.x) * k, cy - (cy - v.y) * k, z) };
     });
   }
 
@@ -110,10 +153,10 @@ export function FullscreenViewer({
           // Exponential so each notch is a constant ratio, not a constant step.
           const z = clampZoom(v.zoom * Math.exp(-e.deltaY / 300));
           const k = z / v.zoom;
-          return { zoom: z, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+          return { zoom: z, ...clampPan(cx - (cx - v.x) * k, cy - (cy - v.y) * k, z) };
         });
       } else {
-        setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+        setView((v) => ({ ...v, ...clampPan(v.x - e.deltaX, v.y - e.deltaY, v.zoom) }));
       }
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -135,7 +178,7 @@ export function FullscreenViewer({
     const dy = e.clientY - d.sy;
     // A few pixels of slop so a click with a shaky hand still counts as a click.
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) movedRef.current = true;
-    setView((v) => ({ ...v, x: d.px + dx, y: d.py + dy }));
+    setView((v) => ({ ...v, ...clampPan(d.px + dx, d.py + dy, v.zoom) }));
   }
 
   function endDrag(e: React.PointerEvent) {

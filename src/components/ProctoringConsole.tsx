@@ -54,12 +54,6 @@ const SectionCaretIcon = () => (
   </svg>
 );
 
-const CheckMarkIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12l5 5L20 7" />
-  </svg>
-);
-
 
 
 /* ── Integrity Note icons (Figma 457:583 / 457:586) ──
@@ -601,6 +595,28 @@ const ModalCloseIcon = () => (
   </svg>
 );
 
+/** tdesign:check, 11.2px, drawn at the design's offset inside the 16px box. */
+const PrmCheckIcon = () => (
+  <svg width="11.2" height="11.2" viewBox="0 0 11.2 11.2" fill="none" aria-hidden="true">
+    <path
+      d="M9.39137 3.90014L4.91234 8.38014L2.50007 5.96787"
+      stroke="currentColor"
+      strokeWidth="1.12"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
+/** The modal's 16px checkbox (Figma 8:13495 / 8:13497) — used by the reason
+ *  rows and by the overlay on each supporting image. */
+function PrmCheck({ on }: { on: boolean }) {
+  return (
+    <span className={`prm-check ${on ? "is-on" : ""}`} aria-hidden>
+      {on && <PrmCheckIcon />}
+    </span>
+  );
+}
+
 type ConfirmCopy = { title: string; body: ReactNode; confirmLabel: string };
 
 /* Every confirm reads differently for a proctored exam than for an ID-only one:
@@ -734,7 +750,7 @@ function ConfirmActionModal({
 
 /** Shared by both required fields in the reject modal. */
 const REJECT_FIELD_HELP =
-  "This reason for rejecting the attempt, along with any additional feedback is shared with the user";
+  "The reason for rejecting the attempt, along with any additional feedback is shared with the user";
 
 function RejectModal({
   submission,
@@ -745,20 +761,20 @@ function RejectModal({
   onCancel: () => void;
   onConfirm: (details: RejectDetails) => void;
 }) {
-  /* Single-select now (Figma 484:1779 asks for "Select a Reason" with radios) —
-     it used to be a multi-select checkbox list. */
-  const [reason, setReason] = useState<string | null>(null);
+  /* Multi-select: an attempt can fail on more than one count, and every box can
+     be unticked again. */
+  const [reasons, setReasons] = useState<Set<string>>(new Set());
   const [otherText, setOtherText] = useState("");
   const [frames, setFrames] = useState<Set<number>>(new Set());
 
-  const isOther = reason === OTHER_REASON;
+  const isOther = reasons.has(OTHER_REASON);
   const canReject =
-    reason !== null && frames.size > 0 && (!isOther || otherText.trim().length > 0);
+    reasons.size > 0 && frames.size > 0 && (!isOther || otherText.trim().length > 0);
 
-  function toggleFrame(i: number) {
-    setFrames((prev) => {
+  function toggle<T>(set: React.Dispatch<React.SetStateAction<Set<T>>>, v: T) {
+    set((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      next.has(v) ? next.delete(v) : next.add(v);
       return next;
     });
   }
@@ -775,7 +791,8 @@ function RejectModal({
       onConfirm={() =>
         canReject &&
         onConfirm({
-          reasons: [isOther ? otherText.trim() : reason!],
+          // "Other" is stored as what was actually typed, not the literal word.
+          reasons: [...reasons].map((r) => (r === OTHER_REASON ? otherText.trim() : r)),
           frameIndexes: [...frames],
         })
       }
@@ -787,32 +804,39 @@ function RejectModal({
           <span className="prm-label">
             Select a Reason<span className="prm-req">*</span>
           </span>
-          <div className="prm-radios">
-            {REJECT_REASONS.map((r) => (
-              <button
-                key={r}
-                className={`prm-radio-row ${reason === r ? "is-on" : ""}`}
-                onClick={() => setReason(r)}
-                role="radio"
-                aria-checked={reason === r}
-              >
-                <span className="prm-radio">{reason === r && <CheckMarkIcon />}</span>
-                <span className="prm-radio-label">{r}</span>
-              </button>
-            ))}
+          <div className="prm-checklist">
+            {REJECT_REASONS.map((r) => {
+              const on = reasons.has(r);
+              return (
+                <div key={r}>
+                  <button
+                    className="prm-check-row"
+                    onClick={() => toggle(setReasons, r)}
+                    role="checkbox"
+                    aria-checked={on}
+                  >
+                    <PrmCheck on={on} />
+                    <span className="prm-check-label">{r}</span>
+                  </button>
+                  {/* Ticking "Other" has to capture what the reason actually was
+                      — it is surfaced to the candidate and listed on their
+                      record, so an unqualified "Other" would tell them nothing.
+                      Indented to line up with the labels above it. */}
+                  {r === OTHER_REASON && on && (
+                    <div className="prm-other-wrap">
+                      <input
+                        className="prm-other"
+                        placeholder="Enter your reason here..."
+                        value={otherText}
+                        onChange={(e) => setOtherText(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          {/* Picking "Other" has to capture what the reason actually was — the
-              rejection reason is surfaced to the candidate and listed on their
-              record, so an unqualified "Other" would tell them nothing. */}
-          {isOther && (
-            <input
-              className="form-input prm-other"
-              placeholder="Describe the reason…"
-              value={otherText}
-              onChange={(e) => setOtherText(e.target.value)}
-              autoFocus
-            />
-          )}
           <p className="prm-help">{REJECT_FIELD_HELP}</p>
         </div>
 
@@ -820,7 +844,6 @@ function RejectModal({
           <span className="prm-label">
             Add Supporting Images<span className="prm-req">*</span>
           </span>
-          <p className="prm-help">{REJECT_FIELD_HELP}</p>
           <div className="prm-grid">
             {submission.frames.map((f, i) => {
               const on = frames.has(i);
@@ -828,13 +851,18 @@ function RejectModal({
                 <button
                   key={i}
                   className={`prm-tile ${on ? "is-on" : ""}`}
-                  onClick={() => toggleFrame(i)}
-                  aria-pressed={on}
+                  onClick={() => toggle(setFrames, i)}
+                  role="checkbox"
+                  aria-checked={on}
                   aria-label={`Frame ${i + 1}${f.flag ? ` — ${f.flag}` : ""}`}
                 >
                   <FrameAvatar tone={f.tone} flagged={!!f.flag} />
                   {f.flag && <span className="pr-frame-tag">{f.flag}</span>}
-                  <span className="prm-tile-check">{on && <CheckMarkIcon />}</span>
+                  {/* The box shows in both states — it reads as selectable even
+                      before anything is picked. */}
+                  <span className="prm-tile-check">
+                    <PrmCheck on={on} />
+                  </span>
                 </button>
               );
             })}

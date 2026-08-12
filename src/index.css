@@ -11220,17 +11220,22 @@ button.breadcrumb-item:hover {
 
 /* The reject modal carries a form and a wrapped image grid, so it runs to 80%
    of the window instead of the confirm shell's 560px — the frames are the point
-   of the screen and 720px only fitted five per row. */
+   of the screen and 720px only fitted five per row. Its height is FIXED, not
+   content-driven: revealing the "Other" text box must scroll the body rather
+   than resize the whole modal under the pointer. */
 .prm--wide {
   max-width: 80vw;
+  height: min(860px, calc(100vh - 48px));
 }
 
 .prm-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 20px;
   padding: 24px;
   min-height: 0;
+  /* Scrolls on its own; `.prm-foot` is a sibling, so the footer stays put. */
   overflow: auto;
 }
 
@@ -11314,16 +11319,18 @@ button.breadcrumb-item:hover {
   color: #a8a8a8;
 }
 
-/* ── reason radios ── */
-.prm-radios {
+/* ── reason checklist ──
+   Multi-select: an attempt can fail on more than one count. */
+.prm-checklist {
   display: flex;
   flex-direction: column;
 }
 
-.prm-radio-row {
+.prm-check-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   height: 31px;
   padding: 6px 8px;
   border: none;
@@ -11332,13 +11339,15 @@ button.breadcrumb-item:hover {
   text-align: left;
   cursor: pointer;
 }
-.prm-radio-row:hover {
+.prm-check-row:hover {
   background: rgba(122, 122, 122, 0.12);
 }
 
-/* Figma draws a 16px rounded SQUARE at 0.8px — closer to the app's checkbox
-   than to a circle, despite the component being named "Radial Button". */
-.prm-radio {
+/* Figma 8:13495 / 8:13497 — a 16px rounded SQUARE at 0.8px, and when ticked the
+   accent at 20% over a 75%-opaque page fill with a 0.75-alpha accent ring. NOT
+   a solid accent fill. Shared with the image tiles' overlay. */
+.prm-check {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11349,16 +11358,14 @@ button.breadcrumb-item:hover {
   border-radius: 3.2px;
   color: #fff;
 }
-.prm-radio-row.is-on .prm-radio {
-  border-color: #f05523;
-  background: #f05523;
-}
-.prm-radio svg {
-  width: 10px;
-  height: 10px;
+.prm-check.is-on {
+  border-color: rgba(240, 85, 35, 0.75);
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    rgba(13, 13, 13, 0.75);
 }
 
-.prm-radio-label {
+.prm-check-label {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
@@ -11366,8 +11373,29 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
+/* Indented to the label column: 8px row padding + 16px box + 10px gap. */
+.prm-other-wrap {
+  padding-left: 34px;
+}
+
 .prm-other {
-  margin-top: 2px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+}
+.prm-other::placeholder {
+  color: #404040;
+}
+.prm-other:focus {
+  outline: none;
+  border-color: #7a7a7a;
 }
 
 /* ── supporting images ──
@@ -11407,22 +11435,13 @@ button.breadcrumb-item:hover {
   left: 6px;
 }
 
+/* Always visible, in both states — the tile has to read as selectable before
+   anything has been picked. */
 .prm-tile-check {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4.22px;
+  right: 4.21px;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: #f05523;
-  color: #fff;
-  opacity: 0;
-}
-.prm-tile.is-on .prm-tile-check {
-  opacity: 1;
 }
 
 /* ── footer ── */
@@ -12989,8 +13008,10 @@ a.rh-crumb-link:hover {
   border-radius: 12px;
   overflow: hidden;
   cursor: grab;
-  /* The drag is ours — don't let the browser pan/zoom the page on touch. */
+  /* The drag is ours — don't let the browser pan/zoom the page on touch, and
+     don't let a pan turn into a text selection across the card. */
   touch-action: none;
+  user-select: none;
 }
 .idfs-stage.is-dragging {
   cursor: grabbing;
@@ -24092,16 +24113,21 @@ span.rvc-crumb--current { cursor: default; }
     linear-gradient(rgba(255, 197, 36, 0.75), rgba(255, 197, 36, 0.75)),
     #0d0d0d;
 }
+/* Green (495:2242) and red (495:2247) are two-stop VERTICAL gradients, the same
+   construction as the orange CTA — they were flat 75% tints. Both nodes ring the
+   button in the ACCENT at 15%, which the component appears to have inherited
+   from the orange variant; each keeps its own hue at 15% here, confirmed with
+   the designer. */
 .prc-cta--danger {
   border-color: rgba(255, 31, 49, 0.15);
   background:
-    linear-gradient(rgba(255, 31, 49, 0.75), rgba(255, 31, 49, 0.75)),
+    linear-gradient(0deg, rgba(112, 0, 9, 0.75) 0%, rgba(255, 31, 49, 0.75) 70.905%),
     #0d0d0d;
 }
 .prc-cta--ok {
-  border-color: rgba(20, 184, 103, 0.15);
+  border-color: rgba(41, 182, 115, 0.15);
   background:
-    linear-gradient(rgba(20, 184, 103, 0.75), rgba(20, 184, 103, 0.75)),
+    linear-gradient(0deg, rgba(0, 87, 43, 0.75) 0%, rgba(41, 182, 115, 0.75) 70.905%),
     #0d0d0d;
 }
 
