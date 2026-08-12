@@ -69,6 +69,11 @@ export type Submission = {
   webcamFlaggedCount: number;
   webcamTotal: number;
   frames: WebcamFrame[];
+  /** Set when this candidate's ID was already accepted on an earlier
+   *  submission, so the reviewer needn't verify the document again. Proctored
+   *  exams only — an ID-only submission IS the ID check. `at` uses the same
+   *  display format as `submittedAt`. */
+  idPreviouslyVerified?: { at: string; by: string };
   /** Freeform note an admin has attached to this candidate's integrity record. */
   integrityNote?: string;
   /** Why this attempt was rejected — the reasons picked in the reject dialog.
@@ -182,6 +187,7 @@ type SeedRow = {
   idConfidence: number;
   idType: string;
   idDetectedName?: string;
+  idPreviouslyVerified?: { at: string; by: string };
   webcamFlaggedCount: number;
   frames: WebcamFrame[];
   integrityNote?: string;
@@ -213,6 +219,7 @@ const seedRows: SeedRow[] = [
     status: "pending",
     idConfidence: 99,
     idType: "US Passport",
+    idPreviouslyVerified: { at: "June 23rd, 2026, 10:15 AM", by: "Maxwell Wesonga" },
     webcamFlaggedCount: 0,
     frames: makeFrames(24, []),
   },
@@ -323,11 +330,30 @@ const seedRows: SeedRow[] = [
     frames: makeFrames(24, [{ at: 7, reason: "Looking Away" }]),
   },
   {
+    /* A re-upload still waiting on the candidate ("Requested") whose exam WAS
+       proctored — so the review page shows its footage alongside the ID. Pairs
+       with PR-1043 below, the same case in the "To Review" state. */
+    id: "PR-1044",
+    userId: "U-10537", // Ezekiel Adeoye — z.adeoye@deltaelectrical.com
+    exam: "EPA 608 Universal Certificate",
+    grade: "8.6",
+    submittedAt: "February 2nd, 2026, 4:20 PM",
+    kind: "id-reupload",
+    status: "id-requested",
+    idConfidence: 58,
+    idType: "US State ID",
+    webcamFlaggedCount: 2,
+    frames: makeFrames(24, [
+      { at: 5, reason: "Looking Away" },
+      { at: 17, reason: "Face Not Visible" },
+    ]),
+  },
+  {
     /* An ID re-upload the candidate has already sent back — it's waiting on an
        admin, so it's `pending` (counts in the tiles, shows under All) and the
        ID Re-uploads tab renders it as "To Review". Contrast PR-1037 above, which
        is still `id-requested`: waiting on the candidate, ID Re-uploads tab only. */
-    id: "PR-1038",
+    id: "PR-1043",
     userId: "U-10248", // Sophia Andersson — sophia.a@brennanhvac.com
     exam: "EPA 608 Type 2 Certificate",
     grade: "8.8",
@@ -349,6 +375,7 @@ const seedRows: SeedRow[] = [
     status: "pending",
     idConfidence: 97,
     idType: "US Driver's License",
+    idPreviouslyVerified: { at: "January 14th, 2025, 4:40 PM", by: "Priyanka Rao" },
     webcamFlaggedCount: 1,
     frames: makeFrames(24, [{ at: 6, reason: "Looking Away" }]),
   },
@@ -415,6 +442,7 @@ export const submissions: Submission[] = seedRows.map((r) => ({
   idConfidence: r.idConfidence,
   idType: r.idType,
   idDetectedName: r.idDetectedName,
+  idPreviouslyVerified: r.idPreviouslyVerified,
   webcamFlaggedCount: r.webcamFlaggedCount,
   webcamTotal: 180,
   frames: r.frames,
@@ -442,4 +470,14 @@ export type ReuploadStatus = "Requested" | "To Review";
 
 export function reuploadStatusOf(s: Submission): ReuploadStatus {
   return s.status === "id-requested" ? "Requested" : "To Review";
+}
+
+/** Whether webcam footage was captured for a submission.
+ *
+ *  Keyed on the EXAM, not on `kind`: the camera runs during a proctored exam,
+ *  so the footage exists for the whole life of that submission — including
+ *  after it moves to the ID Re-uploads queue because the ID needed re-sending.
+ *  Only exams in ID_ONLY_EXAMS never have any. */
+export function hasProctoringFootage(s: Submission): boolean {
+  return (PROCTORED_EXAMS as readonly string[]).includes(s.exam);
 }

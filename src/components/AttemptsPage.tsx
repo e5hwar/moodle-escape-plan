@@ -3,7 +3,9 @@ import {
   attempts as seed,
   attemptDuration,
   ATTEMPT_QUIZ_NAMES,
+  ATTEMPT_STATUSES,
   type Attempt,
+  type AttemptStatus,
 } from "../data/attempts";
 import { Dropdown } from "./Dropdown";
 import {
@@ -50,6 +52,7 @@ type Filters = {
   email: string;
   phone: string;
   quiz: string | null;
+  status: AttemptStatus | null;
 };
 
 export function AttemptsPage({
@@ -58,6 +61,7 @@ export function AttemptsPage({
   onViewAttempt,
   initialNameFilter,
   extraAttempts,
+  initialStatusFilter,
 }: {
   /** The Task selected on the Tasks page — pre-fills the Quiz filter. */
   quizName: string;
@@ -68,6 +72,8 @@ export function AttemptsPage({
   initialNameFilter?: string;
   /** Real attempt rows for the pre-filled employee/quiz — shown ahead of the mock seed data. */
   extraAttempts?: Attempt[];
+  /** Pre-fills the Status filter — used to land straight on rejected attempts. */
+  initialStatusFilter?: AttemptStatus;
 }) {
   const [list, setList] = useState<Attempt[]>(() => [...(extraAttempts ?? []), ...seed]);
   const [filters, setFilters] = useState<Filters>({
@@ -75,6 +81,7 @@ export function AttemptsPage({
     email: "",
     phone: "",
     quiz: quizName,
+    status: initialStatusFilter ?? null,
   });
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
@@ -91,6 +98,7 @@ export function AttemptsPage({
     const fp = filters.phone.replace(/\D/g, "");
     return list.filter((a) => {
       if (filters.quiz && a.quizName !== filters.quiz) return false;
+      if (filters.status && a.status !== filters.status) return false;
       if (fn && !a.name.toLowerCase().includes(fn)) return false;
       if (fe && !a.email.toLowerCase().includes(fe)) return false;
       if (fp && !a.phone.replace(/\D/g, "").includes(fp)) return false;
@@ -142,10 +150,10 @@ export function AttemptsPage({
   }
 
   const hasFilters =
-    !!filters.name || !!filters.email || !!filters.phone || !!filters.quiz;
+    !!filters.name || !!filters.email || !!filters.phone || !!filters.quiz || !!filters.status;
 
   function clearFilters() {
-    setFilters({ name: "", email: "", phone: "", quiz: null });
+    setFilters({ name: "", email: "", phone: "", quiz: null, status: null });
   }
 
   return (
@@ -206,6 +214,10 @@ export function AttemptsPage({
                   value={filters.phone}
                   placeholder="Filter by phone…"
                   onApply={(v) => setFilters((f) => ({ ...f, phone: v }))}
+                />
+                <StatusFilterPill
+                  value={filters.status}
+                  onApply={(v) => setFilters((f) => ({ ...f, status: v }))}
                 />
                 <QuizFilterPill
                   value={filters.quiz}
@@ -518,6 +530,61 @@ function TextFilterBody({
         <button className="btn-apply" onClick={() => onApply(draft.trim())}>Apply</button>
       </div>
     </div>
+  );
+}
+
+/** Status is a small fixed set, so it's a plain single-select list — the same
+ *  pill chrome as Quiz Name, without the search box. */
+function StatusFilterPill({
+  value,
+  onApply,
+}: {
+  value: AttemptStatus | null;
+  onApply: (v: AttemptStatus | null) => void;
+}) {
+  return (
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) =>
+        value ? (
+          <span className={`filter-applied ${open ? "open" : ""}`}>
+            <button className="filter-applied-clear" aria-label="Clear Status" onClick={() => onApply(null)}>
+              <XCircleIcon />
+            </button>
+            <button className="filter-applied-main" onClick={toggle}>
+              <span className="label">Status</span>
+              <span className="sep" />
+              <span className="value">{value}</span>
+              <span className="caret"><ChevronDownIcon /></span>
+            </button>
+          </span>
+        ) : (
+          <button className={`filter-pill-dashed ${open ? "open" : ""}`} onClick={toggle}>
+            <span className="icon"><PlusCircleIcon /></span>
+            Status
+          </button>
+        )
+      }
+    >
+      {({ close }) => (
+        <div className="dropdown-list">
+          <div className="dropdown-section">
+            {ATTEMPT_STATUSES.map((o) => (
+              <button
+                key={o}
+                className="dropdown-item cols-row"
+                onClick={() => { onApply(o); close(); }}
+              >
+                <span className={`checkbox att-radio ${value === o ? "checked" : ""}`}>
+                  {value === o && <CheckIcon />}
+                </span>
+                <span className="cols-row-label">{o}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </Dropdown>
   );
 }
 

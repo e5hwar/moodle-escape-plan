@@ -242,7 +242,6 @@ export function UsersPage({
                   onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
-                  onOpenProfile={openProfile}
                 />
               </div>
 

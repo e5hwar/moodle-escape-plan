@@ -275,3 +275,12 @@ export function attemptDuration(a: Attempt): string {
 
 /** Distinct quiz names present in the attempt set, for the Quiz filter. */
 export const ATTEMPT_QUIZ_NAMES: string[] = [...new Set(attempts.map((a) => a.quizName))].sort();
+
+/** Filter options for the Status pill — the full union, in lifecycle order
+ *  rather than alphabetical, so the list reads as a progression. */
+export const ATTEMPT_STATUSES: AttemptStatus[] = [
+  "In Progress",
+  "Completed",
+  "In Review",
+  "Rejected",
+];

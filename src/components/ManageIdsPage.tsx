@@ -1,75 +1,142 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  idDocOf,
   idRecords as seedRecords,
+  matchesIdQuery,
   type IdRecord,
   type IdStatus,
 } from "../data/manageIds";
-import { SearchIcon, ChevronLeftIcon, SmallXIcon, CheckIcon } from "./icons";
-import { Dropdown } from "./Dropdown";
-import { PillTrigger, summarize, SectionedMultiSelect } from "./Filters";
+import { ChevronRightIcon, SmallXIcon, SortIcon } from "./icons";
+import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
+import { ZoomableIdCard, type IdCardData } from "./IdCard";
+import { UserDetailsHover } from "./UserDetailsHover";
 
-/** Filter labels shown in the Status pill, mapped to underlying IdStatus values. */
-const STATUS_OPTIONS: { label: string; value: IdStatus }[] = [
-  { label: "Approved", value: "approved" },
-  { label: "In Review", value: "in-review" },
-  { label: "Reupload Requested", value: "reupload-requested" },
-];
-const STATUS_LABELS = STATUS_OPTIONS.map((o) => o.label);
+/** Profiles open in their own tab, matching the Users table's `?profile=` pattern. */
+function openInNewTab(query: string) {
+  window.open(`${window.location.origin}${window.location.pathname}?${query}`, "_blank", "noopener");
+}
 
-const EyeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-    <circle cx="12" cy="12" r="2.6" />
-  </svg>
-);
+const PAGE_SIZE = 50;
 
-const ReplaceIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12a9 9 0 1 1-3.3-6.96" />
-    <path d="M21 4v5h-5" />
-  </svg>
-);
+type SortKey = "name" | "email" | "phone" | "status" | "uploadedAt";
+type SortDir = "asc" | "desc";
+
+/** uploadedAt is a display string like "Nov 5th, 2025, 2:30 PM" — strip the
+ *  ordinal suffix so Date.parse can read it. */
+function parseUploadedAt(s: string): number {
+  return Date.parse(s.replace(/(\d+)(st|nd|rd|th)/, "$1")) || 0;
+}
+
+/** The seed data's display format — "Nov 5th, 2025, 2:30 PM". */
+function nowStamp(): string {
+  const d = new Date();
+  const day = d.getDate();
+  const suffix =
+    day % 10 === 1 && day !== 11
+      ? "st"
+      : day % 10 === 2 && day !== 12
+      ? "nd"
+      : day % 10 === 3 && day !== 13
+      ? "rd"
+      : "th";
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${month} ${day}${suffix}, ${d.getFullYear()}, ${time}`;
+}
+
+const SORT_FIELD: Record<Exclude<SortKey, "uploadedAt">, (r: IdRecord) => string> = {
+  name: (r) => r.name,
+  email: (r) => r.email,
+  phone: (r) => r.phone,
+  status: (r) => STATUS_LABEL[r.status],
+};
+
+function compareRows(a: IdRecord, b: IdRecord, key: SortKey): number {
+  if (key === "uploadedAt") return parseUploadedAt(a.uploadedAt) - parseUploadedAt(b.uploadedAt);
+  const field = SORT_FIELD[key];
+  const va = field(a).toLowerCase();
+  const vb = field(b).toLowerCase();
+  if (va < vb) return -1;
+  if (va > vb) return 1;
+  return 0;
+}
+
+/** Maps a record onto the shared ID card's shape. The card's header band shows
+ *  the issuing region beside the document, so the "US " prefix is dropped —
+ *  same adaptation the Proctoring console makes. */
+function idCardOf(record: IdRecord): IdCardData {
+  const doc = idDocOf(record);
+  return {
+    name: record.name,
+    idType: record.idType.replace(/^US\s+/i, ""),
+    idNumber: doc.idNumber,
+    dob: doc.dob,
+    expires: doc.expires,
+    region: doc.region,
+    photoSeed: doc.photoSeed,
+  };
+}
 
 const UploadIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 16V4M7 9l5-5 5 5" />
     <path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
   </svg>
 );
 
-function initialsOf(name: string): string {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-}
-
 export function ManageIdsPage({ onBack }: { onBack: () => void }) {
   const [records, setRecords] = useState<IdRecord[]>(seedRecords);
   const [query, setQuery] = useState("");
-  const [focused, setFocused] = useState(false);
+  // Both filters are applied from inside the search bar — this page has no pills.
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [viewing, setViewing] = useState<IdRecord | null>(null);
-  const [replacing, setReplacing] = useState<IdRecord | null>(null);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+    key: "uploadedAt",
+    dir: "desc",
+  });
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const statuses = STATUS_OPTIONS.filter((o) =>
-      statusFilter.includes(o.label),
-    ).map((o) => o.value);
     return records.filter((r) => {
-      if (statuses.length > 0 && !statuses.includes(r.status)) return false;
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        r.email.toLowerCase().includes(q) ||
-        r.phone.toLowerCase().includes(q)
-      );
+      if (statusFilter.length > 0 && !statusFilter.includes(STATUS_LABEL[r.status])) return false;
+      if (q && !matchesIdQuery(r, q)) return false;
+      return true;
     });
   }, [records, query, statusFilter]);
 
-  function applyReplace(record: IdRecord, status: IdStatus) {
+  const sorted = useMemo(() => {
+    const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
+    return sort.dir === "desc" ? arr.reverse() : arr;
+  }, [filtered, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  useEffect(() => setPage(1), [query, statusFilter, sort]);
+  const visiblePage = Math.min(page, totalPages);
+  const start = (visiblePage - 1) * PAGE_SIZE;
+  const paged = sorted.slice(start, start + PAGE_SIZE);
+
+  const active = activeId ? records.find((r) => r.id === activeId) ?? null : null;
+
+  /* Replacing an ID keeps the popup open on the (new) document and moves the
+     record to whichever status the reviewer picked. The upload stamp follows
+     the new file, so the popup's subtitle isn't left describing the old one. */
+  function applyReplace(id: string, status: IdStatus) {
     setRecords((prev) =>
-      prev.map((r) => (r.id === record.id ? { ...r, status } : r)),
+      prev.map((r) => (r.id === id ? { ...r, status, uploadedAt: nowStamp() } : r)),
     );
-    setReplacing(null);
+  }
+
+  /* Approving from the popup decides the ID that is already on file, so unlike
+     a replace it leaves the upload stamp alone. */
+  function setStatus(id: string, status: IdStatus) {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
   }
 
   return (
@@ -77,352 +144,379 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
       <div className="workspace">
         <div className="tasks pr-page">
           <header className="tasks-header">
-            <div>
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                Proctoring &amp; ID Review
-              </button>
+            {/* Breadcrumb over the title — the same .rvc-crumbs chrome the
+                Proctoring and Hands-On consoles use. This page is reached from
+                Proctoring Review's "View All IDs", so the trail names both, and
+                the Proctoring Review crumb is the way back out. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Home</span>
+                <ChevronRightIcon />
+                <span className="rvc-crumb">Operations</span>
+                <ChevronRightIcon />
+                <button
+                  className="rvc-crumb"
+                  onClick={onBack}
+                  title="Back to Proctoring & ID Review"
+                >
+                  Proctoring Review
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">View All IDs</span>
+              </nav>
               <h1 className="tasks-title">Manage IDs</h1>
-              <div className="tasks-subtitle">
-                <span>{records.length} verified identities</span>
-                <span className="tasks-subtitle-dot" />
-                <span>View or replace a candidate's uploaded ID</span>
-              </div>
             </div>
           </header>
 
-          {/* Search — same styling as Tasks / Users pages */}
-          <div className="mid-controls">
-            <div className="usearch">
-              <div className={`usearch-bar ${focused ? "open" : ""}`}>
-                <span className="usearch-icon">
-                  <SearchIcon />
-                </span>
-                <input
-                  className="usearch-input"
-                  placeholder="Search by name, email, or phone…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setFocused(false)}
+          {/* Same shell as the Proctoring queue (.tasks-row > .tasks-content):
+              it pins the pagination footer to the bottom of the page. */}
+          <div className="tasks-row">
+            <div className="tasks-content">
+              {/* Search — the Proctoring combobox with this page's one scope
+                  (ID Status) applied from inside the bar. There is no filter-pill
+                  row: the bar's chips are the applied-filter UI. */}
+              <div className="toolbar">
+                <ManageIdsSearch
+                  records={records}
+                  statuses={statusFilter}
+                  onStatusesChange={setStatusFilter}
+                  query={query}
+                  onCommit={setQuery}
                 />
-                <span className="usearch-kbd">
-                  <span className="kbd-cmd">⌘</span>
-                  <span className="kbd-letter">K</span>
-                </span>
               </div>
-            </div>
-          </div>
 
-          {/* Filters — same styling as other admin pages */}
-          <div className="filters">
-            <StatusPill value={statusFilter} onApply={setStatusFilter} />
-            {statusFilter.length > 0 && (
-              <button
-                className="filter-clear-link"
-                onClick={() => setStatusFilter([])}
+              {/* Table — the shared .table system the Proctoring queue uses. A
+                  row click opens the ID popup; there are no action buttons. */}
+              <div
+                className="table-xscroll"
+                style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
               >
-                Clear Filters
-              </button>
-            )}
-          </div>
+                <table className="table table-head">
+                  <MidColGroup />
+                  <thead>
+                    <tr>
+                      <SortableHeader col="name" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="uploadedAt" label="Uploaded On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                    </tr>
+                  </thead>
+                </table>
 
-          {/* Table */}
-          <div className="tasks-scroll pr-scroll">
-            <div className="mid-table">
-              <div className="mid-thead">
-                <div className="mid-th mid-col-user">User</div>
-                <div className="mid-th mid-col-phone">Phone</div>
-                <div className="mid-th mid-col-id">ID</div>
-                <div className="mid-th mid-col-status">Status</div>
-                <div className="mid-th mid-col-actions" aria-hidden />
+                <div className="tasks-scroll">
+                  <table className="table table-body">
+                    <MidColGroup />
+                    <tbody>
+                      {paged.map((r) => (
+                        <tr key={r.id} onClick={() => setActiveId(r.id)}>
+                          <td className="col-name">{r.name}</td>
+                          <td className="pr-col-email">{r.email}</td>
+                          <td className="pr-col-phone">{r.phone}</td>
+                          <td className="col-status">
+                            <StatusPill status={r.status} />
+                          </td>
+                          <td className="pr-col-date">{r.uploadedAt}</td>
+                        </tr>
+                      ))}
+                      {paged.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="u-empty">
+                            {query.trim()
+                              ? `No users match "${query.trim()}".`
+                              : "No users match these filters."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="mid-tbody">
-                {filtered.length === 0 ? (
-                  <div className="pr-empty">No users match your search.</div>
-                ) : (
-                  filtered.map((r) => (
-                    <div key={r.id} className="mid-row">
-                      <div className="mid-col-user">
-                        <span className="mid-avatar">{initialsOf(r.name)}</span>
-                        <div className="mid-user-text">
-                          <div className="mid-user-name">{r.name}</div>
-                          <div className="mid-user-email">{r.email}</div>
-                        </div>
-                      </div>
-                      <div className="mid-col-phone mid-cell-body">{r.phone}</div>
-                      <div className="mid-col-id mid-cell-body">{r.idType}</div>
-                      <div className="mid-col-status">
-                        <StatusBadge status={r.status} />
-                      </div>
-                      <div className="mid-col-actions">
-                        <button
-                          className="mid-action-btn"
-                          onClick={() => setViewing(r)}
-                        >
-                          <EyeIcon />
-                          <span>View ID</span>
-                        </button>
-                        <button
-                          className="mid-action-btn"
-                          onClick={() => setReplacing(r)}
-                        >
-                          <ReplaceIcon />
-                          <span>Replace ID</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
+
+              <div className="pagination">
+                <span>
+                  Showing {sorted.length === 0 ? 0 : start + 1}–
+                  {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                </span>
+                <div className="pagination-controls">
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {viewing && (
-        <ViewIdModal record={viewing} onClose={() => setViewing(null)} />
-      )}
-      {replacing && (
-        <ReplaceIdModal
-          record={replacing}
-          onClose={() => setReplacing(null)}
-          onApprove={() => applyReplace(replacing, "approved")}
-          onInReview={() => applyReplace(replacing, "in-review")}
-          onRequestReupload={() => applyReplace(replacing, "reupload-requested")}
+      {active && (
+        <IdModal
+          record={active}
+          onClose={() => setActiveId(null)}
+          onReplace={(status) => applyReplace(active.id, status)}
+          onApprove={() => setStatus(active.id, "approved")}
         />
       )}
     </div>
   );
 }
 
-function StatusPill({
-  value,
-  onApply,
-}: {
-  value: string[];
-  onApply: (v: string[]) => void;
-}) {
-  const summary = summarize(value, STATUS_LABELS);
+/* Column widths mirror the Proctoring queue's table: every column gets an
+   explicit width except Email, which is left auto and soaks up the leftover
+   space (.table is fixed-layout). */
+/* Status is sized for the "Reupload Requested" pill (133px) plus its sort
+   caret; Uploaded On matches the Proctoring table's Submitted On column, so
+   neither truncates. Both include the cell's 2×20px padding. The document type
+   is no longer a column — it only shows on the ID itself, in the popup. */
+const COL_WIDTHS = { name: 190, phone: 170, status: 175, date: 265 };
+const EMAIL_MIN = 250;
+const TABLE_MIN =
+  COL_WIDTHS.name + EMAIL_MIN + COL_WIDTHS.phone + COL_WIDTHS.status + COL_WIDTHS.date;
+
+function MidColGroup() {
   return (
-    <Dropdown
-      width={200}
-      trigger={({ open, toggle }) => (
-        <PillTrigger
-          label="ID Status"
-          value={summary}
-          open={open}
-          toggle={toggle}
-          onClear={() => onApply([])}
-        />
-      )}
-    >
-      {({ close }) => (
-        <SectionedMultiSelect
-          sections={[{ items: STATUS_LABELS }]}
-          value={value}
-          onApply={(v) => {
-            onApply(v);
-            close();
-          }}
-        />
-      )}
-    </Dropdown>
+    <colgroup>
+      <col style={{ width: COL_WIDTHS.name }} />
+      <col />
+      <col style={{ width: COL_WIDTHS.phone }} />
+      <col style={{ width: COL_WIDTHS.status }} />
+      <col style={{ width: COL_WIDTHS.date }} />
+    </colgroup>
   );
 }
 
-const STATUS_LABEL: Record<IdStatus, string> = {
-  approved: "Approved",
-  "in-review": "In Review",
-  "reupload-requested": "Reupload Requested",
+/* Figma "Table Pills" (109:1237) — the shared pill set the other tables use.
+   `.col-status` on the cell is what re-enables their chrome past the table's
+   strip-all-pills rule. */
+const STATUS_TONE: Record<IdStatus, string> = {
+  approved: "green",
+  "in-review": "yellow",
+  "reupload-requested": "grey",
 };
 
-function StatusBadge({ status }: { status: IdStatus }) {
+function StatusPill({ status }: { status: IdStatus }) {
   return (
-    <span className={`mid-badge mid-badge--${status}`}>
+    <span className={`co-status-pill co-status-pill--${STATUS_TONE[status]}`}>
       {STATUS_LABEL[status]}
     </span>
   );
 }
 
-function ViewIdModal({
-  record,
-  onClose,
+function SortableHeader({
+  col,
+  label,
+  className,
+  sort,
+  toggle,
 }: {
-  record: IdRecord;
-  onClose: () => void;
+  col: SortKey;
+  label: string;
+  className: string;
+  sort: { key: SortKey; dir: SortDir };
+  toggle: (k: SortKey) => void;
 }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+  const activeCol = sort.key === col;
   return (
-    <div className="pr-modal-overlay" onClick={onClose}>
-      <div
-        className="mid-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mid-modal-head">
-          <div>
-            <div className="mid-modal-title">{record.name}'s ID</div>
-            <div className="mid-modal-sub">
-              {record.idType}
-              <span className="pr-meta-dot" />
-              Uploaded {record.uploadedAt}
-            </div>
-          </div>
-          <button className="pr-modal-close" onClick={onClose} aria-label="Close">
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="mid-modal-body">
-          <IdCard name={record.name} idType={record.idType} />
-        </div>
-      </div>
-    </div>
+    <th className={className} onClick={() => toggle(col)}>
+      <span className="th-content">
+        {label}
+        <SortIcon active={activeCol} dir={activeCol ? sort.dir : undefined} />
+      </span>
+    </th>
   );
 }
 
-function ReplaceIdModal({
+/* ── ID popup ──────────────────────────────────────────────────────────────
+   One modal with two modes: the uploaded document (the old "View ID"), and the
+   replace flow that used to be a second modal opened from its own row button.
+   Replace is reached from the footer here, so a reviewer who opened the row to
+   look at the ID can act on it without going back to the table. */
+function IdModal({
   record,
   onClose,
+  onReplace,
   onApprove,
-  onInReview,
-  onRequestReupload,
 }: {
   record: IdRecord;
   onClose: () => void;
+  onReplace: (status: IdStatus) => void;
   onApprove: () => void;
-  onInReview: () => void;
-  onRequestReupload: () => void;
 }) {
+  /* The upload dialog stacks ON TOP of this one — the ID stays on screen behind
+     it, its ✕ drops back to the ID, and either upload action decides the record
+     and closes both. */
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  /* The card's full-view overlay owns Escape while it's open — without this the
+     same keypress would also close the modal underneath. */
+  const [idFullView, setIdFullView] = useState(false);
+
+  function closeUpload() {
+    setUploadOpen(false);
+    setFileName(null);
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (idFullView) return;
+      if (e.key !== "Escape") return;
+      if (uploadOpen) closeUpload();
+      else onClose();
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, uploadOpen, idFullView]);
+
+  /* An upload decides the ID outright, so it takes the whole stack down with it. */
+  function decide(status: IdStatus) {
+    onReplace(status);
+    setFileName(null);
+    setUploadOpen(false);
+    onClose();
+  }
 
   return (
-    <div className="pr-modal-overlay" onClick={onClose}>
-      <div className="mid-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="mid-modal-head">
-          <div>
-            <div className="mid-modal-title">Replace ID</div>
-            <div className="mid-modal-sub">
-              {record.name}
-              <span className="pr-meta-dot" />
-              {record.email}
+    <>
+      <div className="pm-overlay" onClick={onClose}>
+        <div
+          className="pm-modal mid-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${record.name}'s ID`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Figma 460:1792 (Approved), 460:2445 (Review Pending), 460:2546
+              (Reupload Requested) — one layout for all three: the name over an
+              "ID Status: …" line, the document, and a footer whose Approve
+              button is the only per-state difference. The document type and
+              upload stamp are gone; both read off the ID itself. */}
+          <div className="mid-head">
+            <div className="mid-head-left">
+              <h2 className="tasks-title mid-title">
+                {/* Same hover card as the Proctoring report (Figma 436:572):
+                    peek at the candidate's details without leaving the ID. */}
+                <UserDetailsHover
+                  user={{
+                    userId: record.id,
+                    userName: record.name,
+                    email: record.email,
+                    phone: record.phone,
+                  }}
+                  onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
+                >
+                  <button
+                    className="rvc-headlink"
+                    onClick={() => openInNewTab(`profile=${record.id}`)}
+                    title="Open this candidate's profile in a new tab"
+                  >
+                    {record.name}
+                  </button>
+                </UserDetailsHover>
+              </h2>
+              <div className="mid-head-sub">ID Status: {STATUS_LABEL[record.status]}</div>
             </div>
-          </div>
-          <button className="pr-modal-close" onClick={onClose} aria-label="Close">
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="mid-modal-body">
-          <label className="mid-upload">
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              className="mid-upload-input"
-              onChange={(e) =>
-                setFileName(e.target.files?.[0]?.name ?? null)
-              }
-            />
-            <span className="mid-upload-icon">
-              <UploadIcon />
-            </span>
-            {fileName ? (
-              <>
-                <span className="mid-upload-title">{fileName}</span>
-                <span className="mid-upload-hint">Click to choose a different file</span>
-              </>
-            ) : (
-              <>
-                <span className="mid-upload-title">Upload a new ID</span>
-                <span className="mid-upload-hint">
-                  Drag & drop or click to browse · PNG, JPG, or PDF
-                </span>
-              </>
-            )}
-          </label>
-
-          <div className="mid-decision">
-            <span className="mid-decision-label">
-              After uploading, set the ID status:
-            </span>
-            <div className="mid-decision-actions">
-              <button
-                className="mid-decide-btn mid-decide-btn--approve"
-                disabled={!fileName}
-                onClick={onApprove}
-              >
-                <CheckIcon />
-                Mark as Approved
-              </button>
-              <button
-                className="mid-decide-btn mid-decide-btn--review"
-                disabled={!fileName}
-                onClick={onInReview}
-              >
-                Leave as In-Review
-              </button>
-            </div>
-            <button
-              className="mid-decide-reupload"
-              onClick={onRequestReupload}
-            >
-              <ReplaceIcon />
-              Request new upload from candidate
+            <button className="mid-close" aria-label="Close" onClick={onClose}>
+              <SmallXIcon />
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-/** Stylized mock ID card — mirrors the proctoring detail card without external assets. */
-function IdCard({ name, idType }: { name: string; idType: string }) {
-  const upperName = name.toUpperCase();
-  const isPassport = idType.toLowerCase().includes("passport");
-  return (
-    <div className={`pr-id-card ${isPassport ? "pr-id-card--passport" : ""}`}>
-      <div className="pr-id-card-inner">
-        <div className="pr-id-card-header">
-          <span className="pr-id-card-title">
-            {isPassport ? "PASSPORT" : "DRIVER'S LICENSE"}
-          </span>
-          <span className="pr-id-card-star">★</span>
-        </div>
-        <div className="pr-id-card-row">
-          <div className="pr-id-card-photo mid-id-photo" aria-hidden>
-            {initialsOf(name)}
+          {/* The design shows the document alone — no full-view/rotate row under
+              it and no hover magnifier (the card still opens full view on
+              click). */}
+          <div className="mid-body">
+            <ZoomableIdCard
+              data={idCardOf(record)}
+              onFullViewChange={setIdFullView}
+              hideTools
+              noMagnify
+            />
+            {/* Plain caption, not a control — the card itself is the target. */}
+            <div className="mid-body-cap">Click for the Full-Screen View</div>
           </div>
-          <div className="pr-id-card-fields">
-            <div className="pr-id-field pr-id-field--name">{upperName}</div>
-            <div className="pr-id-field">123 ANYWHERE ST</div>
-            <div className="pr-id-field">CITY, STATE 12345</div>
-            <div className="pr-id-field pr-id-field--mono">D123-456-789-000</div>
-            <div className="pr-id-field-row">
-              <span>DOB 04/15/1993</span>
-              <span>ISS 09/12/2022</span>
-            </div>
-            <div className="pr-id-field-row">
-              <span>SEX M</span>
-              <span>EYES BRO</span>
-              <span>HGT 6-01</span>
-            </div>
+          <div className="mid-foot">
+            <button className="btn-save-draft" onClick={() => setUploadOpen(true)}>
+              Replace ID
+            </button>
+            {/* Only an ID that still needs a decision offers Approve. */}
+            {record.status !== "approved" && (
+              <button className="btn-primary" onClick={onApprove}>
+                Approve
+              </button>
+            )}
           </div>
         </div>
       </div>
-    </div>
+
+      {uploadOpen && (
+        /* Figma 467:673 / 467:950 — a narrower dialog (its document is 420px
+           where the ID view's is 640), layered over the ID rather than
+           replacing it. The drop zone fills the body until a file is chosen,
+           then the document itself takes its place. */
+        <div className="pm-overlay mid-upload-overlay" onClick={closeUpload}>
+          <div
+            className="pm-modal mid-modal mid-modal--upload"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Upload a new ID for ${record.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mid-head">
+              <div className="mid-head-left">
+                <h2 className="tasks-title mid-title">Upload ID</h2>
+              </div>
+              <button className="mid-close" aria-label="Close" onClick={closeUpload}>
+                <SmallXIcon />
+              </button>
+            </div>
+
+            <div className="mid-body mid-body--upload">
+              {fileName ? (
+                /* Stand-in for the file just chosen: the prototype has no real
+                   upload, so the record's own document stands in for it. */
+                <ZoomableIdCard
+                  data={idCardOf(record)}
+                  onFullViewChange={setIdFullView}
+                  hideTools
+                  noMagnify
+                />
+              ) : (
+                <label className="mid-drop">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/heic,image/heif,image/webp"
+                    className="mid-drop-input"
+                    onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+                  />
+                  <span className="mid-drop-icon">
+                    <UploadIcon />
+                  </span>
+                  <span className="mid-drop-title">Drag and drop, or click to upload</span>
+                  <span className="mid-drop-hint">
+                    Accepted File Types: PNG, JPG, HEIC, HEIF, WebP
+                    <br />
+                    Maximum File Size: 100MB
+                  </span>
+                </label>
+              )}
+            </div>
+            <div className="mid-foot">
+              <button
+                className="btn-save-draft"
+                disabled={!fileName}
+                onClick={() => decide("in-review")}
+              >
+                Upload Without Approval
+              </button>
+              <button
+                className="btn-primary"
+                disabled={!fileName}
+                onClick={() => decide("approved")}
+              >
+                Upload &amp; Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

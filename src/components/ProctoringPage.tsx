@@ -245,7 +245,6 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
                   onCompaniesChange={setCompanyFilter}
                   query={query}
                   onCommit={setQuery}
-                  onOpenSubmission={(s) => openSubmission(s.id)}
                 />
               </div>
 

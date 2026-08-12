@@ -316,7 +316,6 @@ export function QuizPurchasersPage({
                   onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
-                  onOpenProfile={(u) => setSelectedId(u.id)}
                 />
               </div>
 

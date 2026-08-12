@@ -727,7 +727,8 @@ button.breadcrumb-item:hover {
 .search-input {
   width: 100%;
   height: 40px;
-  padding: 0 56px 0 44px;
+  /* 43 + the 1px border = the 44px text inset of Figma 11:15130. */
+  padding: 0 55px 0 43px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -2369,19 +2370,10 @@ button.breadcrumb-item:hover {
   gap: 10px;
 }
 
-.btn-primary {
-  padding: 9px 18px;
-  background: #fff;
-  color: #111;
-  border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-}
-
-.btn-primary:hover {
-  background: #ebebeb;
-}
+/* .btn-primary is the orange Primary CTA — see the shared block below. It used
+   to be declared white here as well, and while that base was fully overridden
+   there, its :hover (background: #ebebeb) was not: the CTA's own hover only
+   sets `filter`, so every orange button in the app turned white on hover. */
 
 .btn-ghost {
   padding: 9px 14px;
@@ -8404,7 +8396,8 @@ button.breadcrumb-item:hover {
 .qb-search-input {
   width: 100%;
   height: 40px;
-  padding: 0 56px 0 44px;
+  /* Same 44px text inset as .search-input, less the 1px border. */
+  padding: 0 55px 0 43px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -16491,7 +16484,11 @@ button.breadcrumb-item:hover {
   align-items: center;
   gap: 12px;
   height: 40px;
-  padding: 0 16px;
+  /* Figma 11:15130 pads 16px from the OUTER edge and this shell has a 1px
+     border, so the CSS padding is 15 — see the padding-minus-border rule. The
+     placeholder then starts at 44px (15 + 1 + 16px icon + 12px gap), matching
+     .search-input's 44px. */
+  padding: 0 15px;
   background: #1e1e20;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -16570,7 +16567,10 @@ button.breadcrumb-item:hover {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  padding: 5px 9px;
+  /* Figma 17:15914 "Search Bar - Text Entered + Filter" pads 5px / 9px left /
+     5px right around a 1px border — minus the border, per the bordered-shell
+     rule. The ✕ side is the tight one. */
+  padding: 4px 4px 4px 8px;
   border-radius: 6px;
   background: transparent;
   border: 1px solid #3d3d43;
@@ -16588,6 +16588,14 @@ button.breadcrumb-item:hover {
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+/* With no chips in it the wrapper still counted as a flex item, so the bar's
+   12px gap applied twice and pushed the placeholder to 56px from the edge —
+   Figma 11:15130 puts it at 44px (16px padding + 16px icon + 12px gap), which
+   is what every non-scoped bar (.search-input's 44px padding-left) already
+   uses. */
+.usearch-scopes:empty {
+  display: none;
 }
 .usearch-scopes .usearch-scope {
   flex-shrink: 1;
@@ -16612,8 +16620,9 @@ button.breadcrumb-item:hover {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
+  /* 12px icon box (Figma 465:545). */
+  width: 12px;
+  height: 12px;
   padding: 0;
   border: 0;
   background: none;
@@ -16624,8 +16633,8 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 .usearch-scope-x svg {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 
 /* Dropdown panel */
@@ -21420,307 +21429,177 @@ button.breadcrumb-item:hover {
 .aw-swatch.is-active { border-color: var(--accent); }
 
 /* ============== Manage IDs page ============== */
-.mid-controls {
-  margin: 4px 0 14px;
-  max-width: 520px;
-}
+/* The table is the shared `.table` system (same columns/paging chrome as the
+   Proctoring queue), so all this page adds is its one extra column class and
+   the ID popup's chrome. */
+.mid-col-idtype { white-space: nowrap; }
 
-.mid-table {
-  display: flex;
-  flex-direction: column;
-  min-width: 760px;
-}
-
-.mid-thead,
-.mid-row {
-  display: grid;
-  grid-template-columns: 2.2fr 1.4fr 1.4fr 1fr 2.1fr;
-  align-items: center;
-  gap: 12px;
-  padding: 0 14px;
-}
-
-/* Header row follows the shared large-table style (Figma 190:285). */
-.mid-thead {
-  padding-top: 8px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid rgba(122, 122, 122, 0.5);
-}
-
-.mid-th {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-}
-
-.mid-col-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* Body rows follow the shared large-table row style (Figma 190:309). */
-.mid-row {
-  min-height: 64px;
-  padding-top: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(122, 122, 122, 0.5);
-}
-.mid-row:hover {
-  background: var(--bg-row-hover);
-}
-
-.mid-col-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.mid-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 10.5pt;
-  font-weight: 600;
-}
-
-.mid-user-text {
-  min-width: 0;
-}
-.mid-user-name {
-  font-size: 16px;
-  font-weight: 500;
-  color: #e7e7e8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mid-user-email {
-  font-size: 14px;
-  color: #7a7a7a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mid-cell-body {
-  font-size: 16px;
-  color: #a8a8a8;
-}
-
-.mid-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 10pt;
-  font-weight: 600;
-  border: 1px solid transparent;
-}
-.mid-badge--approved {
-  color: #5fd0a3;
-  background: rgba(95, 208, 163, 0.1);
-  border-color: rgba(95, 208, 163, 0.28);
-}
-.mid-badge--in-review {
-  color: var(--skill-yellow);
-  background: rgba(245, 211, 107, 0.1);
-  border-color: rgba(245, 211, 107, 0.28);
-}
-.mid-badge--reupload-requested {
-  color: #e8905a;
-  background: rgba(232, 144, 90, 0.1);
-  border-color: rgba(232, 144, 90, 0.3);
-}
-
-.mid-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.mid-action-btn:hover {
-  background: var(--bg-pill-strong);
-  border-color: var(--text-faint);
-}
-
-/* Modals */
-.mid-modal {
-  width: min(560px, calc(100vw - 48px));
+/* ── ID popup (view + replace in one modal) ──
+   Figma 11:15114 (Approved) / 460:2445 (Review Pending) / 460:2546 (Reupload
+   Requested): a 640px-wide ID inside 24px padding, the name + status pill as
+   the heading, and a bordered footer strip holding Replace ID (+ Approve while
+   the ID still needs a decision). */
+.pm-modal.mid-modal {
+  /* 640px card + 2×24px padding. */
+  max-width: 688px;
   max-height: calc(100vh - 80px);
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
 }
 
-.mid-modal-head {
+.mid-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  padding: 24px 24px 0;
 }
-.mid-modal-title {
-  font-size: 14pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.mid-modal-sub {
+.mid-head-left { min-width: 0; }
+/* .tasks-title carries the 28px/600; the pill sits beside the name on its
+   baseline row, 4px away (Figma 460:2448). */
+.mid-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 10.5pt;
-  color: var(--text-muted);
+  gap: 4px;
+  margin: 0;
 }
-
-.mid-modal-body {
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
+/* "ID Status: Approved" under the name (Figma 471:557) — the status used to be
+   a pill beside the title; the updated frame spells it out instead. */
+.mid-head-sub {
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: #a8a8a8;
 }
-
-.mid-id-photo {
+/* Bare 20px ✕ — the design has no button chrome around it. */
+.mid-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  font-size: 22pt;
-  font-weight: 600;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #a8a8a8;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mid-close:hover { color: #fff; }
+/* The design's ✕ mark fills ~12px of its 20px box; SmallXIcon draws at half
+   its own box, so it needs the full 20 to land there. */
+.mid-close svg { width: 20px; height: 20px; }
+
+.mid-body {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+/* Caption 8px under the document (Figma 470:553). */
+.mid-body-cap {
+  margin-top: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  text-align: center;
+}
+.mid-body--replace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-/* Upload dropzone */
-.mid-upload {
-  position: relative;
+.mid-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 12px 24px;
+  border-top: 1px solid rgba(122, 122, 122, 0.5);
+}
+
+/* The shared Secondary Button paints its grey over an opaque #0d0d0d, which is
+   exactly the composite this modal's own surface has — so on the footer it came
+   out the same value as the panel behind it and read as flat. Figma 460:2440
+   layers the grey ON the panel instead: sampled off the frame it runs
+   rgba(122,122,122,0.4) → 0.2 top-to-bottom, i.e. #464648 → #343535 here. */
+.mid-foot .btn-save-draft {
+  background: linear-gradient(rgba(122, 122, 122, 0.4), rgba(122, 122, 122, 0.2));
+}
+
+/* ── Upload step (Figma 467:673 empty / 467:950 file added) ──
+   A narrower dialog than the ID view: 420px of document inside the same 24px
+   padding. Until a file is picked the drop zone stands in for the document at
+   the same size, so the dialog does not resize when one is chosen. */
+.pm-modal.mid-modal--upload {
+  max-width: 468px;
+}
+
+/* The upload dialog opens over the ID rather than replacing it, so it needs its
+   own scrim above .pm-overlay's 200. */
+.mid-upload-overlay {
+  z-index: 210;
+}
+
+.mid-body--upload {
   width: 100%;
+}
+
+.mid-drop {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 20px;
-  border: 1.5px dashed var(--border-strong);
-  border-radius: 12px;
-  background: var(--bg-pill);
+  justify-content: center;
+  gap: 9px;
+  /* The document the drop zone stands in for is 420 × 265. */
+  min-height: 265px;
+  padding: 0 40px;
+  /* Figma's 1px dashed #7a7a7a. */
+  border: 1px dashed #7a7a7a;
+  border-radius: 8px;
   cursor: pointer;
   text-align: center;
   transition: border-color 0.12s, background 0.12s;
 }
-.mid-upload:hover {
+.mid-drop:hover {
   border-color: var(--accent);
-  background: var(--bg-pill-strong);
+  background: rgba(122, 122, 122, 0.06);
 }
-.mid-upload-input {
+.mid-drop-input {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
 }
-.mid-upload-icon {
-  color: var(--text-muted);
+.mid-drop-icon {
+  color: #a8a8a8;
+  line-height: 0;
 }
-.mid-upload-title {
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+.mid-drop-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
 }
-.mid-upload-hint {
-  font-size: 10.5pt;
-  color: var(--text-faint);
+.mid-drop-hint {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #7a7a7a;
 }
 
-.mid-decision {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.mid-decision-label {
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-.mid-decision-actions {
-  display: flex;
-  gap: 10px;
-}
-.mid-decide-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 14px;
-  border-radius: 9px;
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border-strong);
-}
-.mid-decide-btn:disabled {
-  opacity: 0.45;
+/* Both upload actions are dead until a file is chosen (Figma 467:686/467:688:
+   the grey drops to 15% and the label to #404040). */
+.mid-foot .btn-save-draft:disabled,
+.mid-foot .btn-primary:disabled {
+  background: rgba(122, 122, 122, 0.15);
+  border-color: rgba(122, 122, 122, 0.05);
+  color: #404040;
   cursor: not-allowed;
 }
-.mid-decide-btn--approve {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #1a0f08;
-}
-.mid-decide-btn--approve:not(:disabled):hover {
-  background: var(--accent-strong);
-}
-.mid-decide-btn--review {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-.mid-decide-btn--review:not(:disabled):hover {
-  background: var(--bg-pill-strong);
-}
-.mid-decide-reupload {
-  margin-top: 10px;
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 9px 14px;
-  border-radius: 9px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  cursor: pointer;
-  color: #e8905a;
-  background: rgba(232, 144, 90, 0.09);
-  border: 1px solid rgba(232, 144, 90, 0.3);
-}
-.mid-decide-reupload:hover {
-  background: rgba(232, 144, 90, 0.16);
+.mid-foot .btn-save-draft:disabled:hover,
+.mid-foot .btn-primary:disabled:hover {
+  filter: none;
 }
 
 /* ============== Attempt Viewer (View Attempt page) ============== */
@@ -23359,8 +23238,12 @@ button.breadcrumb-item:hover {
   white-space: nowrap;
   padding: 0;
 }
-.rvc-crumb--current { color: #fff; cursor: pointer; }
-.rvc-crumb--current:hover { text-decoration: underline; }
+.rvc-crumb--current { color: #fff; }
+/* A crumb that navigates is a <button>; a plain span is just a label. On the
+   consoles the current crumb IS the way back out, so it stays clickable there. */
+button.rvc-crumb { cursor: pointer; }
+button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
+span.rvc-crumb--current { cursor: default; }
 .rvc-crumbs svg { width: 12px; height: 12px; color: #a8a8a8; flex: none; }
 /* .tasks-title already carries the 2px gap down to .tasks-subtitle. */
 .rvc-pagehead-id { min-width: 0; }
@@ -23989,6 +23872,63 @@ button.breadcrumb-item:hover {
    runs full width and the integrity note is a full-width card heading it,
    above the ID. Only the footer's right-hand button group and the narrower
    queue panel (4 columns, not 5) are specific to this page. */
+/* ── "ID Previously Verified" banner (Figma 456:563) ──
+   Green-at-20% over a 75%-opaque page fill, ringed by the same green at 10%.
+   Padding is Figma's 8/16 minus the 0.5px border (bordered-shell rule). The
+   design's "Glass Effect" is carried as a backdrop blur — a no-op over the
+   opaque page, kept for fidelity, same as the Integrity Note. */
+.prc-idverified {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7.5px 11.5px;
+  /* No margin: the section is a flex column with its own 14px row-gap, and a
+     margin here stacked on top of it — 30px below the banner against 14px above. */
+  border: 0.5px solid rgba(20, 184, 103, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(20, 184, 103, 0.2), rgba(20, 184, 103, 0.2)),
+    rgba(13, 13, 13, 0.75);
+  backdrop-filter: blur(100px);
+}
+
+/* Both banners group their title + detail at gap 4 inside the row's 12px gap
+   (Figma 458:589 / 458:590), so the icon sits apart from the pair. */
+.prc-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.prc-idverified-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: #fff;
+}
+
+.prc-idverified-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.prc-idverified-detail {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+}
+
 /* ── "View Quiz Attempt" hover (Figma 451:545) ──
    A one-item popover off the header's exam + date line, portalled to <body>
    like the other hover cards. */
@@ -24268,127 +24208,84 @@ button.breadcrumb-item:hover {
 .prc-mismatch-use:hover {
   color: #f5875f;
 }
-/* ── Integrity Note (Figma 302:883 collapsed 52px / 303:905 expanded 135px) ──
-   A collapsible red-tinted card heading the column. The old `.pr-integrity`
-   stack is left alone — the kept-for-revert ProctoringDetailModal still uses it.
-   Shell is shared by both states; only the row gap and the detail block differ. */
+/* ── Integrity Note (Figma 457:577) ──
+   One row, no expand/collapse: the whole banner is a link to the candidate's
+   rejected attempts. Same construction as the "ID Previously Verified" banner
+   (point 19) with the red tint — 20% over a 75%-opaque page fill, ringed by the
+   same red at 10%, padding = Figma's 8/12 minus the 0.5px border. The old
+   `.pr-integrity` stack is left alone: the kept-for-revert ProctoringDetailModal
+   still uses it. "Glass Effect" carried as a backdrop blur (a no-op over the
+   opaque page, kept for fidelity). */
 .prc-inote {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  justify-content: center;
-  padding: 16px;
-  border-radius: 8px;
-  background:
-    linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)),
-    linear-gradient(rgba(13, 13, 13, 0.75), rgba(13, 13, 13, 0.75));
-  /* Figma's 0.5px stroke is drawn INSIDE the frame, so it must not grow the box:
-     as a real border Chrome rounds 0.5px up to 1px per side and the card came out
-     137px instead of the design's 135px. An inset ring costs no layout. */
-  box-shadow: inset 0 0 0 0.5px rgba(255, 31, 49, 0.1);
-  /* Figma "Glass Effect" on the card — no-op over an opaque page, kept for fidelity. */
-  backdrop-filter: blur(20px);
-  flex: none;
-}
-/* Collapsed puts a fixed 40px between the text row and the chevron; expanded
-   lets the lead fill and pushes the chevron out with space-between. */
-.prc-inote-head {
   display: flex;
   align-items: center;
   gap: 40px;
   width: 100%;
+  padding: 7.5px 11.5px;
+  border: 0.5px solid rgba(255, 31, 49, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(255, 31, 49, 0.2), rgba(255, 31, 49, 0.2)),
+    rgba(13, 13, 13, 0.75);
+  backdrop-filter: blur(100px);
+  text-align: left;
 }
-.prc-inote.is-open .prc-inote-head {
-  gap: 0;
-  justify-content: space-between;
+
+.prc-inote--link {
+  cursor: pointer;
+  transition: filter 0.12s ease;
 }
+.prc-inote--link:hover {
+  filter: brightness(1.15);
+}
+
 .prc-inote-lead {
   display: flex;
+  flex: 1 0 0;
   align-items: center;
   gap: 12px;
-  flex: 1 0 0;
   min-width: 0;
 }
-/* Both glyphs are #a8a8a8 in the design — NOT the red the card's tint suggests. */
+
 .prc-inote-icon {
   display: inline-flex;
-  flex: none;
-  width: 20px;
-  height: 20px;
-  color: #a8a8a8;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: #fff;
 }
+
 .prc-inote-title {
   font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   line-height: normal;
-  color: #d9d9d9;
+  color: #fff;
   white-space: nowrap;
-  flex: none;
 }
-/* Truncates rather than wrapping — the design keeps this on one line. */
+
+/* The note is free text — it truncates rather than wrapping the row to two lines. */
 .prc-inote-sub {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 400;
   line-height: normal;
-  color: #d9d9d9;
-  min-width: 0;
+  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Expanding dims the inline note — the detail below carries the weight now. */
-.prc-inote.is-open .prc-inote-sub {
-  color: #a8a8a8;
-}
-.prc-inote-toggle {
+
+.prc-inote-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  flex: none;
-  color: #a8a8a8;
-  cursor: pointer;
-  transition: transform 0.15s ease, color 0.12s ease;
-}
-.prc-inote-toggle:hover {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
   color: #fff;
-}
-.prc-inote.is-open .prc-inote-toggle {
-  transform: rotate(180deg);
-}
-/* 32px inset lines the detail up with the title (20px icon + 12px gap). */
-.prc-inote-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  padding: 0 32px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: #d9d9d9;
-}
-.prc-inote-detail-label {
-  font-weight: 500;
-  line-height: normal;
-  white-space: nowrap;
-}
-.prc-inote-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-.prc-inote-item {
-  margin: 0;
-  font-weight: 400;
-  line-height: normal;
-}
-.prc-inote-item strong {
-  font-weight: 600;
 }
 
 /* =============================================================
@@ -25743,7 +25640,9 @@ button.breadcrumb-item:hover {
 }
 .udh-card {
   position: fixed;
-  z-index: 60;
+  /* Above .pm-overlay (200): the card also hangs off the name in the Manage IDs
+     popup, and at 60 it rendered behind that overlay. */
+  z-index: 300;
   width: 260px;
   display: flex;
   flex-direction: column;

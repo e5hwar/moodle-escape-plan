@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
+import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
 import type { SortKey, SortDir } from "./ProctoringPage";
 import {
@@ -75,22 +76,28 @@ const RequestIcon = () => (
   </svg>
 );
 
-/* ── Integrity Note icons ──
-   Transcribed from the exported Figma assets (error-triangle 303:895, chevron
-   303:901) rather than reusing WarningIcon/ChevronDownIcon above: the design's
-   glyphs have SHARP corners, 1.667 strokes and SQUARE caps, where the project
-   icons are round-cornered/round-capped. Colour comes from currentColor. */
-const NoteTriangleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <path d="M10.0003 2.5L18.5162 17.25H1.48438L10.0003 2.5Z" stroke="currentColor" strokeWidth="1.66667" strokeLinecap="square" />
-    <path d="M10 8.75V11.6667M10 14.5833H10.0033V14.5866H10V14.5833Z" stroke="currentColor" strokeWidth="1.66667" strokeLinecap="square" />
+/* ── Integrity Note icons (Figma 457:583 / 457:586) ──
+   Both transcribed from the exported assets. The note's 20px outline triangle
+   and chevron are gone with the expand/collapse: it now carries an 11px FILLED
+   alert circle and, on the right, the 10.5px open-in-new glyph. Each is drawn
+   at its own natural size and centred by its wrapper span. */
+const NoteAlertIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+    <path
+      d="M5.5 0C8.5375 0 11 2.4625 11 5.5C11 8.5375 8.5375 11 5.5 11C2.4625 11 0 8.5375 0 5.5C0 2.4625 2.4625 0 5.5 0ZM5 6.5H6V2.75H5V6.5ZM6.002 7.25H5V8.252H6.002V7.25Z"
+      fill="currentColor"
+    />
   </svg>
 );
 
-/** The asset's 9.17×4.58 centreline placed at the design's offset in the 20px box. */
-const NoteChevronIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <path d="M5.4167 7.9167L10 12.5L14.5833 7.9167" stroke="currentColor" strokeWidth="1.66667" strokeLinecap="square" />
+const NoteOpenIcon = () => (
+  <svg width="10.5" height="10.5" viewBox="0 0 10.5 10.5" fill="none" aria-hidden="true">
+    <path
+      d="M3.5 0.583333H0.583333V9.91667H9.91667V7M9.47917 1.02083L5.25 5.25M6.41667 0.583333H9.91667V4.08333"
+      stroke="currentColor"
+      strokeWidth="1.16667"
+      strokeLinecap="square"
+    />
   </svg>
 );
 
@@ -188,8 +195,9 @@ export function ProctoringConsole({
     setQueueOpen(false);
   }
 
-  // ID reviews and reupload requests only involve the ID — no exam was proctored.
-  const hasFootage = submission.kind === "proctoring";
+  /* Footage follows the EXAM, not the queue the submission currently sits in —
+     a proctored exam whose ID needs re-sending still has its recording. */
+  const hasFootage = hasProctoringFootage(submission);
   /* Already asked for a new ID and still waiting on the candidate (the "Requested"
      state on the ID Re-uploads tab) — there's nothing to ask again for yet. */
   const idAlreadyRequested = submission.status === "id-requested";
@@ -334,6 +342,12 @@ export function ProctoringConsole({
                   </span>
                 }
               >
+                {/* Shown above the card when this candidate's ID was already
+                    accepted on an earlier submission. */}
+                {hasFootage && submission.idPreviouslyVerified && (
+                  <IdPreviouslyVerifiedBanner detail={submission.idPreviouslyVerified} />
+                )}
+
                 {/* Card on the left, the name-mismatch prompt beside it on the
                     right. Shared card: hover magnifies, click opens full view,
                     and it rotates — the same component the Name Change Requests
@@ -949,6 +963,36 @@ function QuizAttemptHover({
   );
 }
 
+/** The asset (456:574) is an 11px filled check-circle centred in a 12px box. */
+const VerifiedCheckIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+    <path
+      d="M5.5 11C8.5375 11 11 8.5375 11 5.5C11 2.4625 8.5375 0 5.5 0C2.4625 0 0 2.4625 0 5.5C0 8.5375 2.4625 11 5.5 11ZM3.25 4.793L4.75 6.293L7.75 3.293L8.457 4L4.75 7.707L2.543 5.5L3.25 4.793Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+/** "ID Previously Verified" banner (Figma 456:563). Proctored exams only — on
+ *  an ID-only submission the ID check IS the review, so there is nothing to
+ *  skip. The date reuses longDateOf, which is why `at` is stored in the same
+ *  display format as `submittedAt`. */
+function IdPreviouslyVerifiedBanner({ detail }: { detail: { at: string; by: string } }) {
+  return (
+    <div className="prc-idverified">
+      <span className="prc-idverified-icon">
+        <VerifiedCheckIcon />
+      </span>
+      <span className="prc-banner-text">
+        <span className="prc-idverified-title">ID Previously Verified</span>
+        <span className="prc-idverified-detail">
+          · Approved on {longDateOf(detail.at)} by {detail.by}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function IntegrityNoteBanner({
   submission,
   previousRejected,
@@ -956,54 +1000,54 @@ function IntegrityNoteBanner({
   submission: Submission;
   previousRejected: Submission[];
 }) {
-  const [open, setOpen] = useState(false);
-
   if (!submission.integrityNote && previousRejected.length === 0) return null;
-  const expandable = previousRejected.length > 0;
 
-  return (
-    <div className={`prc-inote ${open && expandable ? "is-open" : ""}`}>
-      <div className="prc-inote-head">
-        <div className="prc-inote-lead">
-          <span className="prc-inote-icon" aria-hidden>
-            <NoteTriangleIcon />
-          </span>
+  /* The note used to expand to list the rejected attempts inline. It doesn't any
+     more (Figma 457:577): the whole banner is a link to the Attempts page for
+     this candidate + exam, pre-filtered to Status "Rejected", which is the real
+     record. Without a resolvable task there is nothing to open, so it falls back
+     to a plain, non-interactive banner. */
+  const taskId = attemptTaskIdForExam(submission.exam);
+  const openRejected = taskId
+    ? () =>
+        openInNewTab(
+          `attemptsUid=${encodeURIComponent(submission.userId)}` +
+            `&attemptsTaskId=${encodeURIComponent(taskId)}` +
+            `&attemptsStatus=${encodeURIComponent("Rejected")}`,
+        )
+    : undefined;
+
+  const body = (
+    <>
+      <span className="prc-inote-lead">
+        <span className="prc-inote-icon" aria-hidden>
+          <NoteAlertIcon />
+        </span>
+        <span className="prc-banner-text">
           <span className="prc-inote-title">Past Attempt Flagged By Proctor</span>
           {submission.integrityNote && (
             <span className="prc-inote-sub">· {submission.integrityNote}</span>
           )}
-        </div>
-        {expandable && (
-          <button
-            className="prc-inote-toggle"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            aria-label={open ? "Hide rejected attempts" : "Show rejected attempts"}
-          >
-            <NoteChevronIcon />
-          </button>
-        )}
-      </div>
-
-      {open && expandable && (
-        <div className="prc-inote-detail">
-          <div className="prc-inote-detail-label">Rejected Attempts:</div>
-          <div className="prc-inote-list">
-            {previousRejected.map((r) => (
-              <p key={r.id} className="prc-inote-item">
-                {longDateOf(r.submittedAt)} · {r.exam}
-                {r.rejectionReasons?.length ? (
-                  <>
-                    {" - "}
-                    <strong>{r.rejectionReasons.join(", ")}</strong>
-                  </>
-                ) : null}
-              </p>
-            ))}
-          </div>
-        </div>
+        </span>
+      </span>
+      {openRejected && (
+        <span className="prc-inote-open" aria-hidden>
+          <NoteOpenIcon />
+        </span>
       )}
-    </div>
+    </>
+  );
+
+  return openRejected ? (
+    <button
+      className="prc-inote prc-inote--link"
+      onClick={openRejected}
+      title="Open this candidate's rejected attempts in a new tab"
+    >
+      {body}
+    </button>
+  ) : (
+    <div className="prc-inote">{body}</div>
   );
 }
 

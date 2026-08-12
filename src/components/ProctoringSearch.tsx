@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { matchesQuery, type Submission } from "../data/proctoring";
+import { type Submission } from "../data/proctoring";
 import { SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
@@ -7,14 +7,9 @@ const MAX_RESULTS = 6;
 /** Per scope kind (Quiz / Company) in "Suggested filters". */
 const MAX_SUGGESTED_PER_KIND = 2;
 
-function initialsOf(name: string): string {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-}
-
 type Opt =
   | { kind: "exam-filter" }
   | { kind: "company-filter" }
-  | { kind: "submission"; submission: Submission }
   | { kind: "exam"; name: string }
   | { kind: "company"; name: string };
 
@@ -24,6 +19,10 @@ type Opt =
  * this page, so unlike ReviewSearch the applied scopes stay in the bar as chips
  * after Enter and are removed from there; that bar is the only place an applied
  * filter is visible.
+ *
+ * The panel offers filters only — no live result rows. The table filters on the
+ * COMMITTED query, so a list that updated per keystroke would be showing results
+ * the table below it does not have yet.
  */
 export function ProctoringSearch({
   submissions,
@@ -33,7 +32,6 @@ export function ProctoringSearch({
   onCompaniesChange,
   query,
   onCommit,
-  onOpenSubmission,
 }: {
   submissions: Submission[];
   exams: string[];
@@ -42,7 +40,6 @@ export function ProctoringSearch({
   onCompaniesChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
-  onOpenSubmission: (s: Submission) => void;
 }) {
   const [text, setText] = useState(query);
   // Scopes picked in THIS search session — not yet applied to the table.
@@ -91,16 +88,6 @@ export function ProctoringSearch({
     [appliedCompanies, draftCompanies],
   );
 
-  const submissionResults = useMemo(() => {
-    let base = submissions;
-    if (scopedExams.length) base = base.filter((s) => scopedExams.includes(s.exam));
-    if (scopedCompanies.length)
-      base = base.filter((s) => s.companyName && scopedCompanies.includes(s.companyName));
-    const q = freeQuery.trim().toLowerCase();
-    const matched = q ? base.filter((s) => matchesQuery(s, q)) : base;
-    return matched.slice(0, MAX_RESULTS);
-  }, [submissions, scopedExams, scopedCompanies, freeQuery]);
-
   const examResults = useMemo(() => {
     const q = examQuery.trim().toLowerCase();
     return allExams.names
@@ -114,10 +101,6 @@ export function ProctoringSearch({
       .filter((c) => !scopedCompanies.includes(c) && c.toLowerCase().includes(q))
       .slice(0, MAX_RESULTS);
   }, [allCompanies, companyQuery, scopedCompanies]);
-
-  const showDefaultResults =
-    !inScopeMode &&
-    (scopedExams.length > 0 || scopedCompanies.length > 0 || freeQuery.trim().length > 0);
 
   /* "Suggested filters" follows what's typed: with an empty box it teaches the
      two scope prefixes, and as soon as there is text it offers the Quizzes and
@@ -138,14 +121,12 @@ export function ProctoringSearch({
     ? examResults.length
     : inCompanyMode
     ? companyResults.length
-    : suggestions.length + (showDefaultResults ? submissionResults.length : 0);
+    : suggestions.length;
 
   function optionAt(i: number): Opt | null {
     if (inExamMode) return examResults[i] ? { kind: "exam", name: examResults[i] } : null;
     if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
-    if (suggestions[i]) return suggestions[i];
-    const s = submissionResults[i - suggestions.length];
-    return s ? { kind: "submission", submission: s } : null;
+    return suggestions[i] ?? null;
   }
 
   useEffect(() => setActive(-1), [text, draftExams.length, draftCompanies.length]);
@@ -222,11 +203,8 @@ export function ProctoringSearch({
       inputRef.current?.focus();
     } else if (opt.kind === "exam") {
       addExam(opt.name);
-    } else if (opt.kind === "company") {
-      addCompany(opt.name);
     } else {
-      onOpenSubmission(opt.submission);
-      setOpen(false);
+      addCompany(opt.name);
     }
   }
 
@@ -359,22 +337,6 @@ export function ProctoringSearch({
                 );
               })}
 
-              {showDefaultResults && <div className="usearch-head">Submissions</div>}
-              {showDefaultResults && submissionResults.length === 0 && (
-                <div className="usearch-empty">
-                  No matching submissions{freeQuery.trim() ? ` for “${freeQuery.trim()}”` : ""}.
-                </div>
-              )}
-              {showDefaultResults &&
-                submissionResults.map((s, i) => (
-                  <SubmissionOption
-                    key={s.id}
-                    submission={s}
-                    active={active === i + suggestions.length}
-                    onHover={() => setActive(i + suggestions.length)}
-                    onClick={() => activate({ kind: "submission", submission: s })}
-                  />
-                ))}
             </>
           )}
 
@@ -469,34 +431,6 @@ function OptionRow({
       onClick={onClick}
     >
       {children}
-    </button>
-  );
-}
-
-function SubmissionOption({
-  submission,
-  active,
-  onHover,
-  onClick,
-}: {
-  submission: Submission;
-  active: boolean;
-  onHover: () => void;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`usearch-row usearch-user ${active ? "active" : ""}`}
-      onMouseEnter={onHover}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-    >
-      <span className="usearch-avatar">{initialsOf(submission.candidateName)}</span>
-      <span className="usearch-user-text">
-        <span className="usearch-user-name">{submission.candidateName}</span>
-        <span className="usearch-user-sub">{submission.exam}</span>
-      </span>
-      <span className="usearch-row-desc">{submission.companyName ?? "B2C"}</span>
     </button>
   );
 }

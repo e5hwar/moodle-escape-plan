@@ -79,6 +79,12 @@ export const tasks: Task[] = [
       requirements: "Project Title (required, 60 char) · Project Description (required, 500 char) · up to 5 images or videos. Reviewed manually with a 7/10 passing score.",
       skills: [{ icon: "🟨", name: "Soldering & Brazing" }],
     }),
+  /* EPA 609 (MVAC) — the certification's four tasks. Its final exam is what the
+     Proctoring queue's "EPA 609 Certificate" submissions are attempts at. */
+  T("T-1407", "EPA 609 Final Exam", "Quiz", ["EPA 609"], "SkillCat", ["HVACR"], "Mar 06, 2024", "Apr 22, 2026", { finalExam: true }),
+  T("T-1385", "MVAC Refrigerant Handling", "xAPI", ["EPA 609"], "SkillCat", ["HVACR"], "Mar 08, 2024", "Apr 10, 2026"),
+  T("T-1362", "Automotive A/C Recovery", "Hands-On Task", ["EPA 609"], "SkillCat", ["HVAC", "Refrigerant"], "Mar 12, 2024", "Apr 16, 2026"),
+  T("T-1344", "R-1234yf Safety Overview", "Resource", ["EPA 609"], "SkillCat", [], "Mar 15, 2024", "Mar 30, 2026"),
   T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B-Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
   T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", [], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
   T("T-1198", "EPA 608 Universal Final Exam", "Quiz", ["EPA 608 Universal"], "SkillCat", [], "Feb 14, 2024", "Apr 20, 2026", {

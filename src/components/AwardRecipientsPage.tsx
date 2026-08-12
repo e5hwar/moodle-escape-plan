@@ -152,14 +152,6 @@ function downloadAllCsv(award: Award, rows: Row[]) {
   downloadFile(`${award.id}-recipients.csv`, [header.join(","), ...lines].join("\n"), "text/csv");
 }
 
-function openProfile(user: User) {
-  window.open(
-    `${window.location.origin}${window.location.pathname}?profile=${user.id}`,
-    "_blank",
-    "noopener",
-  );
-}
-
 export function AwardRecipientsPage({
   award,
   onBack,
@@ -307,7 +299,6 @@ export function AwardRecipientsPage({
                   onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
-                  onOpenProfile={openProfile}
                 />
               </div>
 

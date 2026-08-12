@@ -6,14 +6,7 @@ import { SearchHints, SearchForRow } from "./SearchPanelParts";
 const MAX_RESULTS = 6;
 const COMPANY_PREFIX = "COMPANY:";
 
-function initialsOf(name: string): string {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-}
-
-type Opt =
-  | { kind: "company-filter" }
-  | { kind: "user"; user: User }
-  | { kind: "company"; name: string };
+type Opt = { kind: "company-filter" } | { kind: "company"; name: string };
 
 export function UsersSearch({
   users,
@@ -21,7 +14,6 @@ export function UsersSearch({
   onCompaniesChange,
   query,
   onCommit,
-  onOpenProfile,
 }: {
   users: User[];
   /** Company filter currently applied to the table (shared with the Filters row). */
@@ -29,7 +21,6 @@ export function UsersSearch({
   onCompaniesChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
-  onOpenProfile: (u: User) => void;
 }) {
   const [text, setText] = useState(query);
   // The search bar builds a *pending* search; nothing hits the table until Enter.
@@ -62,20 +53,6 @@ export function UsersSearch({
   const companyQuery = companyMatch ? companyMatch[1] : "";
   const userQuery = inCompanyMode ? "" : text;
 
-  const userResults = useMemo(() => {
-    const base = scoped ? users.filter((u) => u.companyName && draft.includes(u.companyName)) : users;
-    const q = userQuery.trim().toLowerCase();
-    const matched = q
-      ? base.filter(
-          (u) =>
-            u.name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.phone.toLowerCase().includes(q),
-        )
-      : base;
-    return matched.slice(0, MAX_RESULTS);
-  }, [users, scoped, draft, userQuery]);
-
   const companyResults = useMemo(() => {
     const q = companyQuery.trim().toLowerCase();
     return allCompanies.names
@@ -83,16 +60,11 @@ export function UsersSearch({
       .slice(0, MAX_RESULTS);
   }, [allCompanies, companyQuery, draft, applied]);
 
-  const showDefaultUsers = !inCompanyMode && (scoped || userQuery.trim().length > 0);
-
-  const optionCount = inCompanyMode
-    ? companyResults.length
-    : 1 + (showDefaultUsers ? userResults.length : 0);
+  const optionCount = inCompanyMode ? companyResults.length : 1;
 
   function optionAt(i: number): Opt | null {
     if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
-    if (i === 0) return { kind: "company-filter" };
-    return userResults[i - 1] ? { kind: "user", user: userResults[i - 1] } : null;
+    return i === 0 ? { kind: "company-filter" } : null;
   }
 
   useEffect(() => setActive(-1), [text, draft.length]);
@@ -141,11 +113,8 @@ export function UsersSearch({
       setText(COMPANY_PREFIX);
       setActive(-1);
       inputRef.current?.focus();
-    } else if (opt.kind === "company") {
-      addCompany(opt.name);
     } else {
-      onOpenProfile(opt.user);
-      setOpen(false);
+      addCompany(opt.name);
     }
   }
 
@@ -244,25 +213,6 @@ export function UsersSearch({
                 <span className="usearch-row-desc">Filter users by company</span>
               </OptionRow>
 
-              {showDefaultUsers && (
-                <div className="usearch-head">{scoped ? `Users in ${scopeLabel}` : "Users"}</div>
-              )}
-              {showDefaultUsers && userResults.length === 0 && (
-                <div className="usearch-empty">
-                  No matching users{scoped ? ` in ${scopeLabel}` : ""}
-                  {userQuery.trim() ? ` for “${userQuery.trim()}”` : ""}.
-                </div>
-              )}
-              {showDefaultUsers &&
-                userResults.map((u, i) => (
-                  <UserOption
-                    key={u.id}
-                    user={u}
-                    active={active === i + 1}
-                    onHover={() => setActive(i + 1)}
-                    onClick={() => activate({ kind: "user", user: u })}
-                  />
-                ))}
             </>
           )}
 
@@ -315,38 +265,6 @@ function OptionRow({
       onClick={onClick}
     >
       {children}
-    </button>
-  );
-}
-
-function UserOption({
-  user,
-  active,
-  onHover,
-  onClick,
-}: {
-  user: User;
-  active: boolean;
-  onHover: () => void;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`usearch-row usearch-user ${active ? "active" : ""}`}
-      onMouseEnter={onHover}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-    >
-      <span className="usearch-avatar">{initialsOf(user.name)}</span>
-      <span className="usearch-user-text">
-        <span className="usearch-user-name">{user.name}</span>
-        <span className="usearch-user-sub">
-          {user.email} · {user.phone}
-        </span>
-      </span>
-      <span className="usearch-row-desc">
-        {user.userType === "B2B" && user.companyName ? user.companyName : "B2C"}
-      </span>
     </button>
   );
 }

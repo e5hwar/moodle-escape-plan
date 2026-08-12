@@ -108,6 +108,7 @@ const USEDIN_TO_CERT: Record<string, string> = {
   "EPA 608 Type II": "C-0419",
   "EPA 608 Type III": "C-0418",
   "EPA 608 Universal": "C-0421",
+  "EPA 609": "C-0417",
   "NATE RTW": "C-0410",
   "Safety Bundle": "C-0405",
   "HVAC Field Skills": "C-0398",
@@ -643,13 +644,15 @@ export function applyClearCert(certManual: CertManual, uid: string, certId: stri
    attempt viewer is addressed by a TASK id. These are explicit rather than
    fuzzy-matched: the two data sets spell the same certification differently
    (roman numerals vs digits, a "Certificate" suffix), so a normalising match
-   would be guesswork. EPA 609 has no certification here and stays unmapped. */
+   would be guesswork. All six proctored exams map; an unmapped one would simply
+   get no attempt link. */
 const PROCTORED_EXAM_TO_CERT: Record<string, string> = {
   "EPA 608 Universal Certificate": "C-0421",
   "EPA 608 Type 1 Certificate": "C-0420",
   "EPA 608 Type 2 Certificate": "C-0419",
   "EPA 608 Type 3 Certificate": "C-0418",
   "NATE Ready To Work": "C-0410",
+  "EPA 609 Certificate": "C-0417",
 };
 
 /** buildData() rebuilds the whole seeded data set; this only needs to read it. */

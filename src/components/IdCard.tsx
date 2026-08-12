@@ -181,6 +181,7 @@ export function ZoomableIdCard({
   data,
   onFullViewChange,
   hideTools,
+  noMagnify,
 }: {
   data: IdCardData;
   /** Fires when the full-view overlay opens/closes. Host pages that bind their
@@ -193,16 +194,27 @@ export function ZoomableIdCard({
    *  overlay still rotates. Set on the Proctoring report; Name Change Requests
    *  keeps the row. */
   hideTools?: boolean;
+  /** Drops the hover magnifier (the lens over the card and the panel beside it).
+   *  Set on the Manage IDs popup, where the card sits in a modal that has no
+   *  room beside it for the panel — clicking still opens full view. */
+  noMagnify?: boolean;
 }) {
   const [rotation, setRotation] = useState(0);
   const [fullView, setFullViewState] = useState(false);
   const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const stageRef = useRef<HTMLDivElement>(null);
+  /* How full view was opened. Closing the overlay leaves the stage focused, and
+     because the overlay is dismissed with Escape or a click on its own button,
+     Chrome's focus-visible heuristic then paints the stage's focus ring over a
+     card the user only ever clicked. Pointer-opened views drop the focus on the
+     way out; keyboard-opened ones keep it, so Tab order survives. */
+  const openedByKey = useRef(false);
 
   const setFullView = (open: boolean) => {
     setFullViewState(open);
     onFullViewChange?.(open);
+    if (!open && !openedByKey.current) stageRef.current?.blur();
   };
 
   // The stage keeps its natural (unrotated) size, so one measurement covers both
@@ -221,6 +233,7 @@ export function ZoomableIdCard({
   }, []);
 
   function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (noMagnify) return;
     const r = e.currentTarget.getBoundingClientRect();
     // Keep the lens fully inside the card — the panel never shows dead space.
     const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), Math.max(0, max));
@@ -241,13 +254,17 @@ export function ZoomableIdCard({
           className="idhz-stage"
           onMouseMove={onMove}
           onMouseLeave={() => setLens(null)}
-          onClick={() => setFullView(true)}
+          onClick={() => {
+            openedByKey.current = false;
+            setFullView(true);
+          }}
           role="button"
           tabIndex={0}
           aria-label="Open ID in full view"
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
+              openedByKey.current = true;
               setFullView(true);
             }
           }}

@@ -307,7 +307,6 @@ export function ReviewHandsOnPage() {
                   onCertificationsChange={setCerts}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
-                  onOpenSubmission={(s) => setOpenId(s.id)}
                 />
               </div>
 

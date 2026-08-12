@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { matchesQuery, type TaskSubmission } from "../data/reviewSubmissions";
+import { type TaskSubmission } from "../data/reviewSubmissions";
 import { SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
@@ -7,15 +7,10 @@ const MAX_RESULTS = 6;
 /** Per scope kind (Task / Certification / Company) in "Suggested filters". */
 const MAX_SUGGESTED_PER_KIND = 2;
 
-function initialsOf(name: string): string {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-}
-
 type Opt =
   | { kind: "company-filter" }
   | { kind: "task-filter" }
   | { kind: "certification-filter" }
-  | { kind: "submission"; submission: TaskSubmission }
   | { kind: "company"; name: string }
   | { kind: "task"; name: string }
   | { kind: "certification"; name: string };
@@ -30,7 +25,6 @@ export function ReviewSearch({
   onCertificationsChange,
   query,
   onCommit,
-  onOpenSubmission,
 }: {
   submissions: TaskSubmission[];
   companies: string[];
@@ -42,7 +36,6 @@ export function ReviewSearch({
   onCertificationsChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
-  onOpenSubmission: (s: TaskSubmission) => void;
 }) {
   const [text, setText] = useState(query);
   // Pending scopes selected in THIS search session (not yet applied to the table).
@@ -97,18 +90,6 @@ export function ReviewSearch({
   const certQuery = certMatch ? certMatch[1] : "";
   const freeQuery = inScopeMode ? "" : text;
 
-  const submissionResults = useMemo(() => {
-    let base = submissions;
-    if (draftCompanies.length)
-      base = base.filter((s) => s.companyName && draftCompanies.includes(s.companyName));
-    if (draftTasks.length) base = base.filter((s) => draftTasks.includes(s.taskName));
-    if (draftCerts.length)
-      base = base.filter((s) => s.certifications.some((c) => draftCerts.includes(c)));
-    const q = freeQuery.trim().toLowerCase();
-    const matched = q ? base.filter((s) => matchesQuery(s, q)) : base;
-    return matched.slice(0, MAX_RESULTS);
-  }, [submissions, draftCompanies, draftTasks, draftCerts, freeQuery]);
-
   const companyResults = useMemo(() => {
     const q = companyQuery.trim().toLowerCase();
     return allCompanies.names
@@ -129,10 +110,6 @@ export function ReviewSearch({
       .filter((c) => !draftCerts.includes(c) && !appliedCerts.includes(c) && c.toLowerCase().includes(q))
       .slice(0, MAX_RESULTS);
   }, [allCerts, certQuery, draftCerts, appliedCerts]);
-
-  const showDefaultResults =
-    !inScopeMode &&
-    (scopedCompany || scopedTask || scopedCert || freeQuery.trim().length > 0);
 
   /* "Suggested filters" follows what's typed: with an empty box it teaches the
      three scope prefixes, and as soon as there is text it offers the Tasks,
@@ -171,15 +148,13 @@ export function ReviewSearch({
     ? taskResults.length
     : inCertMode
     ? certResults.length
-    : suggestions.length + (showDefaultResults ? submissionResults.length : 0);
+    : suggestions.length;
 
   function optionAt(i: number): Opt | null {
     if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
     if (inTaskMode) return taskResults[i] ? { kind: "task", name: taskResults[i] } : null;
     if (inCertMode) return certResults[i] ? { kind: "certification", name: certResults[i] } : null;
-    if (suggestions[i]) return suggestions[i];
-    const s = submissionResults[i - suggestions.length];
-    return s ? { kind: "submission", submission: s } : null;
+    return suggestions[i] ?? null;
   }
 
   useEffect(() => setActive(-1), [text, draftCompanies.length, draftTasks.length, draftCerts.length]);
@@ -257,11 +232,8 @@ export function ReviewSearch({
       addCompany(opt.name);
     } else if (opt.kind === "task") {
       addTask(opt.name);
-    } else if (opt.kind === "certification") {
-      addCert(opt.name);
     } else {
-      onOpenSubmission(opt.submission);
-      setOpen(false);
+      addCert(opt.name);
     }
   }
 
@@ -389,22 +361,6 @@ export function ReviewSearch({
                 );
               })}
 
-              {showDefaultResults && <div className="usearch-head">Submissions</div>}
-              {showDefaultResults && submissionResults.length === 0 && (
-                <div className="usearch-empty">
-                  No matching submissions{freeQuery.trim() ? ` for “${freeQuery.trim()}”` : ""}.
-                </div>
-              )}
-              {showDefaultResults &&
-                submissionResults.map((s, i) => (
-                  <SubmissionOption
-                    key={s.id}
-                    submission={s}
-                    active={active === i + suggestions.length}
-                    onHover={() => setActive(i + suggestions.length)}
-                    onClick={() => activate({ kind: "submission", submission: s })}
-                  />
-                ))}
             </>
           )}
 
@@ -527,36 +483,6 @@ function OptionRow({
       onClick={onClick}
     >
       {children}
-    </button>
-  );
-}
-
-function SubmissionOption({
-  submission,
-  active,
-  onHover,
-  onClick,
-}: {
-  submission: TaskSubmission;
-  active: boolean;
-  onHover: () => void;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`usearch-row usearch-user ${active ? "active" : ""}`}
-      onMouseEnter={onHover}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-    >
-      <span className="usearch-avatar">{initialsOf(submission.userName)}</span>
-      <span className="usearch-user-text">
-        <span className="usearch-user-name">{submission.userName}</span>
-        <span className="usearch-user-sub">{submission.taskName}</span>
-      </span>
-      <span className="usearch-row-desc">
-        {submission.userType === "B2B" && submission.companyName ? submission.companyName : "B2C"}
-      </span>
     </button>
   );
 }

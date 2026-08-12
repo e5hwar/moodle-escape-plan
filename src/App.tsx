@@ -6,7 +6,7 @@ import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
 import { AttemptsPage } from "./components/AttemptsPage";
 import { AttemptViewerPage } from "./components/AttemptViewerPage";
-import { type Attempt } from "./data/attempts";
+import { type Attempt, type AttemptStatus } from "./data/attempts";
 import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
 import { tasks, type Task } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
@@ -201,9 +201,17 @@ export default function App() {
   const loginAsCompany = params.get("loginAs");
   const attemptsUid = params.get("attemptsUid");
   const attemptsTaskId = params.get("attemptsTaskId");
+  /** Optional: lands the Attempts page with its Status filter already applied. */
+  const attemptsStatus = params.get("attemptsStatus") as AttemptStatus | null;
   const editTaskId = params.get("editTask");
   if (attemptsUid && attemptsTaskId) {
-    return <StandaloneAttemptsPage uid={attemptsUid} taskId={attemptsTaskId} />;
+    return (
+      <StandaloneAttemptsPage
+        uid={attemptsUid}
+        taskId={attemptsTaskId}
+        status={attemptsStatus ?? undefined}
+      />
+    );
   }
   // Task editor in its own tab — opened from the Hands-On review screen.
   if (editTaskId) {
@@ -245,7 +253,15 @@ export default function App() {
  * instead of relying on the unrelated Attempts mock dataset. Keeps its own
  * tiny attempts ⇄ attempt-viewer state since there's no Tasks page to return
  * to in this tab. */
-function StandaloneAttemptsPage({ uid, taskId }: { uid: string; taskId: string }) {
+function StandaloneAttemptsPage({
+  uid,
+  taskId,
+  status,
+}: {
+  uid: string;
+  taskId: string;
+  status?: AttemptStatus;
+}) {
   const [viewer, setViewer] = useState<Attempt | null>(null);
 
   const data = useMemo(() => buildData(), []);
@@ -262,6 +278,7 @@ function StandaloneAttemptsPage({ uid, taskId }: { uid: string; taskId: string }
     <AttemptsPage
       quizName={task.name}
       initialNameFilter={employee.name}
+      initialStatusFilter={status}
       extraAttempts={history}
       onViewAttempt={setViewer}
     />
