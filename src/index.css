@@ -30,6 +30,16 @@
   --accent: #e97237;
   --accent-strong: #f08043;
   --skill-yellow: #f5d36b;
+
+  /* Tooltip — one look app-wide, Figma 451:545 "Hover State/Tooltip - Plain
+     Text": #1e1e20 fill, 8px radius, 6px/12px padding, Fira Sans Regular 14px
+     white, no border (140×29 for a single line). Every tooltip — the JS-driven
+     `.hover-tip` and the few CSS ::after ones — uses these. The shadow is the
+     one addition: the fill matches the search bars, so a floating tooltip needs
+     an edge when it lands on one. */
+  --tip-bg: #1e1e20;
+  --tip-text: #fff;
+  --tip-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
 }
 
 * {
@@ -659,8 +669,10 @@ a {
   transition: color 0.12s ease;
 }
 
+/* Same hover as every other crumb: brighten + underline (see button.rvc-crumb). */
 button.breadcrumb-item:hover {
   color: #fff;
+  text-decoration: underline;
 }
 
 .breadcrumb-current {
@@ -1003,19 +1015,19 @@ button.breadcrumb-item:hover {
   color: var(--text);
 }
 
-/* Hover tooltip */
+/* Hover tooltip — same card as .hover-tip, anchored to the button. */
 .edit-columns-btn::after {
   content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  color: #fff;
+  padding: 6px 12px;
+  background: var(--tip-bg);
+  border-radius: 8px;
+  box-shadow: var(--tip-shadow);
+  color: var(--tip-text);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   white-space: nowrap;
   pointer-events: none;
@@ -1030,24 +1042,25 @@ button.breadcrumb-item:hover {
   transform: translateY(0);
 }
 
-/* Fast global hover tooltip (see HoverTooltip.tsx). Fixed-position so it escapes
-   table cells' overflow:hidden clipping; `\n` in the text renders as line breaks. */
+/* Fast global hover tooltip (see HoverTooltip.tsx) — the one tooltip in the app.
+   Anything with `data-tip`, plus any leftover native `title`, renders here.
+   Fixed-position so it escapes table cells' overflow:hidden clipping; `\n` in
+   the text renders as line breaks. */
 .hover-tip {
   position: fixed;
   z-index: 1000;
   max-width: 320px;
-  padding: 6px 9px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  color: #fff;
+  padding: 6px 12px;
+  background: var(--tip-bg);
+  border-radius: 8px;
+  color: var(--tip-text);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: normal;
   white-space: pre-line;
   pointer-events: none;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--tip-shadow);
 }
 
 /* ===== Dropdown popover ===== */
@@ -2905,13 +2918,13 @@ button.breadcrumb-item:hover {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%) translateY(4px);
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: #fff;
+  padding: 6px 12px;
+  background: var(--tip-bg);
+  border-radius: 8px;
+  box-shadow: var(--tip-shadow);
+  color: var(--tip-text);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   white-space: nowrap;
   pointer-events: none;
@@ -12036,8 +12049,12 @@ button.breadcrumb-item:hover {
   color: var(--text-muted);
   font-weight: 600;
 }
-.rh-crumb-link:hover {
-  color: var(--text);
+/* Only the crumbs that navigate get the hover — a plain <span> crumb is a
+   label, not a link. Brighten + underline, same as button.rvc-crumb. */
+button.rh-crumb-link:hover,
+a.rh-crumb-link:hover {
+  color: #fff;
+  text-decoration: underline;
 }
 .rh-crumb-sep {
   color: var(--text-faint);
@@ -14579,15 +14596,15 @@ button.breadcrumb-item:hover {
   left: 0;
   right: 0;
   margin-top: 8px;
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: #fff;
+  padding: 6px 12px;
+  background: var(--tip-bg);
+  border-radius: 8px;
+  box-shadow: var(--tip-shadow);
+  color: var(--tip-text);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: normal;
   white-space: normal;
   text-align: left;
   pointer-events: none;
@@ -23929,47 +23946,22 @@ span.rvc-crumb--current { cursor: default; }
   white-space: nowrap;
 }
 
-/* ── "View Quiz Attempt" hover (Figma 451:545) ──
-   A one-item popover off the header's exam + date line, portalled to <body>
-   like the other hover cards. */
-.prc-quizhover-anchor {
-  display: inline-block;
-}
-
+/* ── The header's exam + date line ──
+   Plain text when there's no attempt to open; a link to the quiz attempt when
+   there is, in the same "plain until hovered" style as the candidate's name
+   above it (.rvc-headlink). What it opens is in its tooltip (Figma 451:545). */
 .prc-subtitle {
   cursor: default;
 }
 
-.prc-quizhover {
-  position: fixed;
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: #1e1e20;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
-}
-
-.prc-quizhover-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 6px 0;
-  border: none;
-  background: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: normal;
-  color: #fff;
-  white-space: nowrap;
+.prc-subtitle--link {
+  padding: 0;
   text-align: left;
   cursor: pointer;
 }
-.prc-quizhover-item:hover {
-  color: var(--accent-strong);
+.prc-subtitle--link:hover {
+  color: #f05523;
+  text-decoration: underline;
 }
 
 /* ── Review footer (Figma 445:878) ──
@@ -24208,6 +24200,15 @@ span.rvc-crumb--current { cursor: default; }
 .prc-mismatch-use:hover {
   color: #f5875f;
 }
+/* Empty state inside a review section ("no flagged frames"). Lost its rule when
+   the old `.pr-table` block was deleted, so it was rendering on inherited
+   styles. Also used by the kept-for-revert ProctoringDetailModal. */
+.pr-empty {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
 /* ── Integrity Note (Figma 457:577) ──
    One row, no expand/collapse: the whole banner is a link to the candidate's
    rejected attempts. Same construction as the "ID Previously Verified" banner

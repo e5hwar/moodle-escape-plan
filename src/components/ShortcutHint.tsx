@@ -30,7 +30,13 @@ export function ShortcutHint({
 
   return (
     <>
-      <span ref={anchorRef} className="udh-anchor" onMouseEnter={open} onMouseLeave={close}>
+      <span
+        ref={anchorRef}
+        className="udh-anchor"
+        data-hover-card
+        onMouseEnter={open}
+        onMouseLeave={close}
+      >
         {children}
       </span>
       {pos &&

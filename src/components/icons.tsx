@@ -37,6 +37,15 @@ export const AddIcon = () => (
   </svg>
 );
 
+/* Pencil (Figma 7:3612) — "edit this in place": the Certification tree's node
+   editor and the user-details card's name row. The 11.48px stroke path Figma
+   exports, offset into a 14px slot. */
+export const PencilIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
+    <path d="M8.228 3.502L2.793 8.938L2.333 11.667L5.062 11.206L10.497 5.771L12.28 3.988L10.012 1.719L8.228 3.502ZM8.228 3.502L10.497 5.771" />
+  </svg>
+);
+
 /* Thin plus — the "Add X" card's glyph (Figma 341:2764). */
 export const PlusThinIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">

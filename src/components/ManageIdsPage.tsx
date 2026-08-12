@@ -139,6 +139,12 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
   }
 
+  /* Renamed from the user-details card in the popup — the table behind it shows
+     the same name, so it re-renders too. */
+  function rename(id: string, name: string) {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r)));
+  }
+
   return (
     <div className="main">
       <div className="workspace">
@@ -254,6 +260,7 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
           onClose={() => setActiveId(null)}
           onReplace={(status) => applyReplace(active.id, status)}
           onApprove={() => setStatus(active.id, "approved")}
+          onRename={(name) => rename(active.id, name)}
         />
       )}
     </div>
@@ -335,11 +342,13 @@ function IdModal({
   onClose,
   onReplace,
   onApprove,
+  onRename,
 }: {
   record: IdRecord;
   onClose: () => void;
   onReplace: (status: IdStatus) => void;
   onApprove: () => void;
+  onRename: (name: string) => void;
 }) {
   /* The upload dialog stacks ON TOP of this one — the ID stays on screen behind
      it, its ✕ drops back to the ID, and either upload action decides the record
@@ -402,11 +411,11 @@ function IdModal({
                     phone: record.phone,
                   }}
                   onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
+                  onRenameUser={(_id, name) => onRename(name)}
                 >
                   <button
                     className="rvc-headlink"
                     onClick={() => openInNewTab(`profile=${record.id}`)}
-                    title="Open this candidate's profile in a new tab"
                   >
                     {record.name}
                   </button>

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
@@ -15,7 +14,6 @@ import {
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { FullscreenViewer } from "./FullscreenViewer";
-import { useHoverCard } from "../hooks/useHoverCard";
 import { attemptTaskIdForExam } from "../data/certLookup";
 
 /** Maps a submission's ID fields onto the shared card's shape. The "US " prefix
@@ -142,6 +140,7 @@ export function ProctoringConsole({
   onReject,
   onRequestId,
   onUpdateName,
+  onRenameUser,
 }: {
   submission: Submission;
   /** The table's filtered + sorted pending submissions — becomes the queue. */
@@ -156,7 +155,10 @@ export function ProctoringConsole({
   onAccept: () => void;
   onReject: (details?: RejectDetails) => void;
   onRequestId: () => void;
+  /** The Name Mismatch banner's commit — resolves the mismatch. */
   onUpdateName: (name: string) => void;
+  /** A plain rename from the candidate's user-details card. */
+  onRenameUser?: (userId: string, name: string) => void;
 }) {
   /* The frame viewer shows no title (same chrome as the ID full view), so the
      state is just the node to display. */
@@ -300,25 +302,23 @@ export function ProctoringConsole({
                       phone: submission.candidatePhone,
                     }}
                     onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
+                    onRenameUser={onRenameUser}
                   >
                     <button
                       className="rvc-headlink"
                       onClick={() => openInNewTab(`profile=${submission.userId}`)}
-                      title="Open this candidate's profile in a new tab"
                     >
                       {submission.candidateName}
                     </button>
                   </UserDetailsHover>
                 </h1>
-                {/* Hovering the exam + date offers the quiz attempt behind this
-                    submission (Figma 451:545). */}
-                <QuizAttemptHover submission={submission}>
-                  <div className="tasks-subtitle prc-subtitle">
-                    <span>{submission.examShort}</span>
-                    <span className="tasks-subtitle-dot" />
-                    <span>{submission.submittedAt}</span>
-                  </div>
-                </QuizAttemptHover>
+                {/* The exam + date line opens the quiz attempt behind this
+                    submission; the tooltip says so (Figma 451:545). */}
+                <QuizAttemptLink submission={submission}>
+                  <span>{submission.examShort}</span>
+                  <span className="tasks-subtitle-dot" />
+                  <span>{submission.submittedAt}</span>
+                </QuizAttemptLink>
               </div>
             </div>
           </div>
@@ -392,8 +392,8 @@ export function ProctoringConsole({
                   <CollapsibleSection title="Flagged Images">
                     {flaggedFrames.length === 0 ? (
                       <div className="pr-empty">
-                        No flagged frames. The candidate maintained good camera presence
-                        throughout the exam.
+                        No flagged frames found. AI can make mistakes. Review the footage
+                        and decide yourself.
                       </div>
                     ) : (
                       <div className="pr-frame-grid">
@@ -905,61 +905,35 @@ function longDateOf(submittedAt: string): string {
  *  surface. Collapsed shows the flag + admin note on one line; expanding
  *  reveals the candidate's rejected attempts with the reason each was rejected.
  *  The chevron only appears when there's something to expand. */
-/* ── "View Quiz Attempt" hover (Figma 451:545) ──
-   A one-item popover hanging off the header's exam + date line. Clicking opens
-   the attempt viewer for this candidate + exam in a new tab, the same
-   `?attemptsUid=&attemptsTaskId=` deep link the Certification Lookup uses.
-   The exam has to resolve to a task id first — EPA 609 has no certification in
-   the data set, so there the line stays plain text with no hover. */
-const QUIZ_HOVER_WIDTH = 168;
-
-function QuizAttemptHover({
+/* ── The header's exam + date line ──
+   The line itself opens the attempt viewer for this candidate + exam in a new
+   tab — the same `?attemptsUid=&attemptsTaskId=` deep link the Certification
+   Lookup uses — and says so in the plain tooltip (Figma 451:545). The exam has
+   to resolve to a task id first: EPA 609 has no certification in the data set,
+   so there the line stays plain text with nothing to hover. */
+function QuizAttemptLink({
   submission,
   children,
 }: {
   submission: Submission;
   children: ReactNode;
 }) {
-  const { anchorRef, pos, open, close, hold } = useHoverCard({ width: QUIZ_HOVER_WIDTH });
   const taskId = attemptTaskIdForExam(submission.exam);
 
-  if (!taskId) return <>{children}</>;
-
-  const openAttempt = () =>
-    openInNewTab(
-      `attemptsUid=${encodeURIComponent(submission.userId)}&attemptsTaskId=${encodeURIComponent(taskId)}`,
-    );
+  if (!taskId) return <div className="tasks-subtitle prc-subtitle">{children}</div>;
 
   return (
-    <>
-      <span
-        ref={anchorRef}
-        className="prc-quizhover-anchor"
-        onMouseEnter={open}
-        onMouseLeave={close}
-      >
-        {children}
-      </span>
-      {pos &&
-        createPortal(
-          <div
-            className="prc-quizhover"
-            style={{
-              top: pos.top,
-              left: pos.left,
-              transform: pos.flip ? "translateY(-100%)" : undefined,
-              width: QUIZ_HOVER_WIDTH,
-            }}
-            onMouseEnter={hold}
-            onMouseLeave={close}
-          >
-            <button className="prc-quizhover-item" onClick={openAttempt}>
-              View Quiz Attempt
-            </button>
-          </div>,
-          document.body,
-        )}
-    </>
+    <button
+      className="tasks-subtitle prc-subtitle prc-subtitle--link"
+      data-tip="View Quiz Attempt"
+      onClick={() =>
+        openInNewTab(
+          `attemptsUid=${encodeURIComponent(submission.userId)}&attemptsTaskId=${encodeURIComponent(taskId)}`,
+        )
+      }
+    >
+      {children}
+    </button>
   );
 }
 

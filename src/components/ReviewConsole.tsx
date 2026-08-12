@@ -126,6 +126,7 @@ export function ReviewConsole({
   sort,
   onSort,
   onExit,
+  onRenameUser,
 }: {
   /** The table's filtered + sorted submissions — becomes the review queue. */
   queue: TaskSubmission[];
@@ -139,6 +140,9 @@ export function ReviewConsole({
   /** Back to the table. Reviewed ids + results are handed up so the table can
    * drop them from the pending list. */
   onExit: (reviewed: Record<string, Reviewed>) => void;
+  /** Renamed from the submitter's user-details card — the queue owns the list,
+   * so the new name comes back down through `queue`. */
+  onRenameUser?: (userId: string, name: string) => void;
 }) {
   const [currentId, setCurrentId] = useState(initialId);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -392,6 +396,7 @@ export function ReviewConsole({
                   <UserDetailsHover
                     user={sub}
                     onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
+                    onRenameUser={onRenameUser}
                   >
                     <button
                       className="rvc-headlink"

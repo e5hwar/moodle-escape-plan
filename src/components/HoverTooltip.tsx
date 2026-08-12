@@ -4,6 +4,45 @@ import { useEffect, useRef, useState } from "react";
 // non-empty `data-tip` attribute gets this tooltip; `\n` renders as line breaks.
 const DELAY = 300;
 
+// One tooltip in the app: a native `title` is folded into this one the first
+// time it is hovered, so pages that still use `title` get the same card without
+// a per-call-site edit. The attribute is *moved*, not copied, so the browser's
+// own slow, unstyled bubble never fires on top of it; the text stays reachable
+// for screen readers via aria-label when the element has no text of its own
+// (icon-only buttons).
+function adopt(el: HTMLElement) {
+  const native = el.getAttribute("title");
+  if (!native) return;
+  el.removeAttribute("title");
+  if (!el.getAttribute("data-tip")) el.setAttribute("data-tip", native);
+  if (!el.getAttribute("aria-label") && !el.textContent?.trim()) {
+    el.setAttribute("aria-label", native);
+  }
+}
+
+// Nearest ancestor (self included) that actually has tooltip text. Elements
+// carrying an empty tip are skipped rather than swallowing an outer one.
+function resolve(target: EventTarget | null): HTMLElement | null {
+  // A trigger that already opens a hover card doesn't also get a tooltip: the
+  // card says more than the tip could, and the tip lands on top of it. Titles
+  // inside the trigger are still adopted — that strips them, so the browser's
+  // own bubble can't show up in the tooltip's place either.
+  const card = (target as HTMLElement)?.closest?.("[data-hover-card]") as HTMLElement | null;
+  if (card) {
+    adopt(card);
+    card.querySelectorAll<HTMLElement>("[title]").forEach(adopt);
+    return null;
+  }
+
+  let el = (target as HTMLElement)?.closest?.("[data-tip],[title]") as HTMLElement | null;
+  while (el) {
+    adopt(el);
+    if (el.getAttribute("data-tip")) return el;
+    el = (el.parentElement?.closest("[data-tip],[title]") as HTMLElement | null) ?? null;
+  }
+  return null;
+}
+
 type TipState = { text: string; anchor: number; top: number; align: "left" | "right" };
 
 export function HoverTooltip() {
@@ -37,9 +76,8 @@ export function HoverTooltip() {
       });
     }
     function onOver(e: MouseEvent) {
-      const el = (e.target as HTMLElement)?.closest?.("[data-tip]") as HTMLElement | null;
+      const el = resolve(e.target);
       if (!el || el === current.current) return;
-      if (!el.getAttribute("data-tip")) return;
       current.current = el;
       clearTimer();
       timer.current = window.setTimeout(() => show(el), DELAY);

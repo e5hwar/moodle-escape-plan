@@ -8,7 +8,7 @@ import { RteToolbar } from "./RteToolbar";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
-import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon } from "./icons";
+import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { type Certification, certifications } from "../data/certifications";
@@ -169,12 +169,7 @@ const LayersIcon = () => (
 );
 
 // Pencil (Figma I340:1516;7:3612) — opens a node's inline name/description
-// editor. The 11.48px stroke path, offset into a 14px slot.
-const PencilIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
-    <path d="M8.228 3.502L2.793 8.938L2.333 11.667L5.062 11.206L10.497 5.771L12.28 3.988L10.012 1.719L8.228 3.502ZM8.228 3.502L10.497 5.771" />
-  </svg>
-);
+// editor. Now shared: see PencilIcon in icons.tsx.
 /* Task glyphs — one per Task type, each a stroked 1.333 path offset into a 16px
    slot. Replaced the single play-in-circle: the tree now names the type twice,
    once by glyph and once in the mono suffix. */

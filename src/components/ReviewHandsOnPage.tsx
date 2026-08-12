@@ -277,6 +277,9 @@ export function ReviewHandsOnPage() {
           if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));
           setOpenId(null);
         }}
+        onRenameUser={(userId, userName) =>
+          setList((prev) => prev.map((s) => (s.userId === userId ? { ...s, userName } : s)))
+        }
       />
     );
   }

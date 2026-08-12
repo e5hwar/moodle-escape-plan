@@ -165,12 +165,23 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
     setActiveId(next ? next.id : null);
   }
 
+  /* The Name Mismatch banner's commit: the reviewer has decided which name to
+     keep, so the ID's detected name matches it from here on and the mismatch is
+     resolved. */
   function updateCandidateName(id: string, name: string) {
     setList((prev) =>
       prev.map((s) =>
         s.id === id ? { ...s, candidateName: name, idDetectedName: name } : s,
       ),
     );
+  }
+
+  /* A plain rename from the user-details card. Unlike the banner it leaves the
+     name read off the ID alone — renaming the user doesn't change what the
+     document says, so a rename that disagrees with it raises the mismatch
+     rather than silently clearing it. */
+  function renameCandidate(id: string, name: string) {
+    setList((prev) => prev.map((s) => (s.id === id ? { ...s, candidateName: name } : s)));
   }
 
   if (active) {
@@ -188,6 +199,7 @@ export function ProctoringPage({ onManageIds }: { onManageIds?: () => void }) {
         onReject={(details) => decide(active.id, "rejected", details?.reasons)}
         onRequestId={() => requestReupload(active.id)}
         onUpdateName={(name) => updateCandidateName(active.id, name)}
+        onRenameUser={(_userId, name) => renameCandidate(active.id, name)}
       />
     );
   }
