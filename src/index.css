@@ -11218,9 +11218,11 @@ button.breadcrumb-item:hover {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
-/* The reject modal carries a form and a wrapped image grid. */
+/* The reject modal carries a form and a wrapped image grid, so it runs to 80%
+   of the window instead of the confirm shell's 560px — the frames are the point
+   of the screen and 720px only fitted five per row. */
 .prm--wide {
-  max-width: 720px;
+  max-width: 80vw;
 }
 
 .prm-body {
@@ -11368,19 +11370,22 @@ button.breadcrumb-item:hover {
   margin-top: 2px;
 }
 
-/* ── supporting images ── */
+/* ── supporting images ──
+   A GRID, not wrapped flex: fixed-width tiles left-aligned in a flex row dump
+   all the leftover width on the right, which read as a lopsided margin. Columns
+   auto-fill at a 120px minimum and share the remainder, so the row always ends
+   flush and the only side margins are the modal body's own 24px. No padding on
+   the container (updated Figma 484:1779). */
 .prm-grid {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px;
-  padding: 8px;
 }
 
 .prm-tile {
   position: relative;
-  width: 120px;
-  height: 120px;
+  /* Square whatever width the column resolves to. */
+  aspect-ratio: 1 / 1;
   padding: 0.776px;
   border: 0.776px solid #2e2e33;
   border-radius: 4.659px;
