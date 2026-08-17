@@ -175,10 +175,24 @@ export const RowArrowIcon = () => (
   </svg>
 );
 
+/* Calendar — Figma "Icon Library" (7:891), the exported glyph: square corners,
+   square caps, a header band with two hangers, and six day marks. The glyph is
+   11.67×12.25 inside a 14px box, so it is translated by its Figma insets rather
+   than redrawn. */
 export const CalendarIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="5" width="18" height="16" rx="2.5" />
-    <path d="M3 9.5h18M8 3v4M16 3v4" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <g transform="translate(1.1667 0.5833)">
+      <path d="M11.0833 5.25V11.6667H0.583333V5.25M11.0833 5.25H0.583333M11.0833 5.25V2.33333H0.583333V5.25M2.91667 2.33333V0.583333M8.75 2.33333V0.583333" />
+      <path d="M3.5 7.58333H3.50233V7.58567H3.5V7.58333ZM5.83333 7.58333H5.83567V7.58567H5.83333V7.58333ZM8.16667 7.58333H8.169V7.58567H8.16667V7.58333ZM8.16667 9.33333H8.169V9.33567H8.16667V9.33333ZM3.5 9.33333H3.50233V9.33567H3.5V9.33333ZM5.83333 9.33333H5.83567V9.33567H5.83333V9.33333Z" />
+    </g>
+  </svg>
+);
+
+/* Close — Figma "tdesign:close" (1570:45011): a square-capped X on a 25.6 grid,
+   noticeably heavier than SmallXIcon. Used on the Spotlight preview card. */
+export const CloseXIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 25.6 25.6" fill="none" stroke="currentColor" strokeWidth="3.10303" strokeLinecap="square">
+    <path d="M19.4 6.6L6.6 19.4M6.6 6.6L19.4 19.4" />
   </svg>
 );
 
@@ -591,6 +605,42 @@ export const RowKebabIcon = () => (
     <rect x="2" y="7" width="2" height="2" />
     <rect x="7" y="7" width="2" height="2" />
     <rect x="12" y="7" width="2" height="2" />
+  </svg>
+);
+
+/* Chevron down (568:4382) on the icon library's 16px / 1.3333 / square-cap
+   grid — the disclosure glyph for the archived-Spotlights row. Distinct from
+   the older `ChevronDownIcon`, which is a rounded-cap 24-box glyph. */
+export const ChevronDownSquareIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M11.667 6.333L8 10L4.333 6.333" />
+  </svg>
+);
+
+/* Info (566:2277) — the ringed "i". Path data is the Figma export verbatim, on
+   its own 11-unit box rather than re-centred on the icon frame's 12: the 0.5
+   coordinates put every 1px stroke on the pixel grid, and a centred vertical
+   stroke only lands cleanly in an odd-width box. Re-centring it on 12 splits
+   each stroke across two pixel columns and the glyph turns to mush at this
+   size. */
+export const InfoIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeLinecap="square">
+    <path d="M0.5 5.5C0.5 2.7385 2.7385 0.5 5.5 0.5C8.2615 0.5 10.5 2.7385 10.5 5.5C10.5 8.2615 8.2615 10.5 5.5 10.5C2.7385 10.5 0.5 8.2615 0.5 5.5Z" />
+    <path d="M5.5 7.75V5M5.5 3.25H5.498V3.248H5.5V3.25Z" />
+  </svg>
+);
+
+/* move (558:2075) — the large-table drag handle: a 2×4 grid of 2.5px square
+   dots on a 20px box. Same construction as RowKebabIcon: Figma strokes a 0.833
+   square with a 1.6667 square cap, which resolves to these filled rects. */
+export const RowDragIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+    {[1.875, 6.458, 11.042, 15.625].map((y) => (
+      <g key={y}>
+        <rect x="5.625" y={y} width="2.5" height="2.5" />
+        <rect x="11.875" y={y} width="2.5" height="2.5" />
+      </g>
+    ))}
   </svg>
 );
 

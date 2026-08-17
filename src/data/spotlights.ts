@@ -1,8 +1,6 @@
-export type SpotlightStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "deactivated";
+/* Deactivating a Spotlight is not a status of its own: it stays `approved` and
+   its end date is stamped with the current date, so it reads as Ended. */
+export type SpotlightStatus = "pending" | "approved" | "rejected";
 
 export type Spotlight = {
   id: string;
@@ -140,10 +138,12 @@ export const spotlights: Spotlight[] = [
       "We tested peer study groups with a small cohort. Pulled from the queue while we rework the feature.",
     ctaTextEn: "Learn More",
     ctaUrl: "skillcat://feature/study-groups",
-    endDate: "2026-07-20",
+    /* Deactivated before its original 20th July end date, so it carries the
+       date it was pulled — today — and reads as Ended. */
+    endDate: "2026-05-15",
     submittedBy: "Diego Ramos",
     submittedAt: "2026-04-22",
     approvedBy: "Akash Patel",
-    status: "deactivated",
+    status: "approved",
   },
 ];

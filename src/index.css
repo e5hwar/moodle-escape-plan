@@ -604,6 +604,9 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* Most call sites are a <div>, but a <p> would otherwise pick up the UA's
+     1em block margin and blow the 2px title gap out to ~18px. */
+  margin: 0;
   color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -1087,6 +1090,13 @@ button.breadcrumb-item:hover {
 .dropdown.up {
   top: auto;
   bottom: calc(100% + 8px);
+}
+
+/* Overlay mode: portalled to the body and positioned by the Dropdown against
+   the trigger, so the panel floats over the page instead of extending the
+   scroll container it was opened from. */
+.dropdown--overlay {
+  position: fixed;
 }
 
 /* ===== Generic vertical menu inside dropdown ===== */
@@ -2446,6 +2456,22 @@ button.breadcrumb-item:hover {
   filter: brightness(1.08);
 }
 
+/* Matches .btn-publish:disabled, so a disabled create CTA reads the same as a
+   disabled wizard CTA. The :not() keeps the hover/active effects off it. */
+.new-task:disabled {
+  background: var(--bg-pill-strong);
+  color: var(--text-faint);
+  border-color: var(--border);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.new-task:disabled:hover,
+.new-task:disabled:active {
+  filter: none;
+  transform: none;
+}
+
 .cta-primary:active,
 .new-task:active,
 .btn-primary:active,
@@ -2503,7 +2529,9 @@ button.breadcrumb-item:hover {
 .wizard-nav {
   width: 360px;
   flex-shrink: 0;
-  padding: 46px 40px;
+  /* Even 40px, matching .wizard-content — the old 46px top was paired with the
+     content column's 54px. */
+  padding: 40px;
   border-right: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
@@ -2796,12 +2824,21 @@ button.breadcrumb-item:hover {
   position: relative;
 }
 
+/* One even 40px gutter on every side, for every wizard and anything else built
+   on this form (user rule 2026-08-17 — was 54px/64px/40px). */
 .wizard-content {
   flex: 1;
   overflow-y: auto;
-  padding: 54px 64px 40px;
+  padding: 40px;
   min-width: 0;
   min-height: 0;
+}
+
+/* A field's own 32px bottom margin would stack on the 40px padding and read as
+   72px, so the last one in the column gives it up. */
+.wizard-content > .form-group:last-child,
+.wizard-content > .form-row-2:last-child {
+  margin-bottom: 0;
 }
 
 /* Wizard content header — mirrors the shared page header (.tasks-title): 28px
@@ -3328,14 +3365,6 @@ button.breadcrumb-item:hover {
 }
 .company-wizard .form-select {
   width: 100%;
-}
-
-/* Inset the fields 8px on each side so they sit just inside the full-width
-   page-break dividers. */
-.company-wizard .wizard-content > .form-group,
-.company-wizard .wizard-content > .form-row-2 {
-  padding-left: 8px;
-  padding-right: 8px;
 }
 
 /* Every row after the first is divided by a horizontal hairline. Selectors are
@@ -3900,10 +3929,17 @@ button.breadcrumb-item:hover {
 .drop-big {
   width: 100%;
   height: 160px;
-  padding: 0 39px;
-  border: 1px dashed #7a7a7a;
+  /* No border: a 1px dashed CSS border on this box loses its TOP edge (the same
+     hairline-rounding bug that .drop-primary hit). The outline is an SVG rect
+     stroked at 2 with its outer half clipped by the background box, which
+     leaves a crisp 1px dash on all four sides at any DPR. Padding therefore
+     keeps the node's full 40px, with no border to subtract. */
+  padding: 0 40px;
+  border: 0;
   border-radius: 8px;
-  background: transparent;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%237a7a7a' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
   color: #7a7a7a;
   display: flex;
   flex-direction: column;
@@ -3914,8 +3950,14 @@ button.breadcrumb-item:hover {
 }
 
 .drop-big:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--text-faint);
+  background-color: rgba(255, 255, 255, 0.02);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23a8a8a8' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+}
+
+/* Tall variant — Create Spotlight's background-image zone (Figma 552:1155,
+   140px as of the latest 555:1803). Identical otherwise. */
+.drop-big--tall {
+  height: 140px;
 }
 
 .drop-big-icon {
@@ -5353,7 +5395,9 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
-  line-height: 17px;
+  /* 19px, so a segment is 35px and the control 45px — the height every current
+     node shows (555:1803's Single-Select, 552:1127). */
+  line-height: 19px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -5790,12 +5834,13 @@ button.breadcrumb-item:hover {
   min-width: 0;
 }
 
-/* ===== Course tree (Figma "Course Card" 340:2346) =====
-   A hairline card per Course: header (drag · eyebrow/name/description · pencil ·
-   kebab) over a body of Lesson blocks. A Lesson is a "page break" rule with its
-   name inline; its Tasks are 33px cards indented 24px beneath it. Drag grips sit
-   in the card's left gutter and fade in on row hover — the Figma rows carry no
-   grip at rest. */
+/* ===== Course tree (Figma "Course Card" 513:2586) =====
+   A card per Course: header (drag · eyebrow/name/description · kebab) over a
+   body of Lesson blocks. A Lesson is a "page break" rule with its name inline;
+   its Tasks are 43px cards indented 32px beneath it, closed by an add row that
+   names the destination Lesson. Drag grips sit in the card's left gutter and
+   fade in on row hover — the Figma rows carry no grip at rest. Editing a node's
+   name/description moved into its kebab; the design has no pencil. */
 .cert-courses {
   display: flex;
   flex-direction: column;
@@ -5805,8 +5850,8 @@ button.breadcrumb-item:hover {
 
 /* Drag handle — inline on a Course header, gutter-parked on Lesson/Task rows */
 .cert-grip {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -5816,8 +5861,8 @@ button.breadcrumb-item:hover {
   transition: color 0.12s ease, opacity 0.12s ease;
 }
 .cert-grip svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 .cert-grip:hover {
   color: var(--text);
@@ -5838,24 +5883,26 @@ button.breadcrumb-item:hover {
 }
 
 .cert-course {
-  border: 2px solid var(--bg-pill-strong);
+  border: 2px solid #404040;
   border-radius: 10px;
   background: transparent;
   /* visible (not hidden) so a row menu can escape the card */
   overflow: visible;
 }
 
-/* ── Course header ── */
+/* ── Course header ──
+   Figma nests the titles+kebab in a 4px-padded block beside the grip, so the
+   grip sits 4px off the card edge and the kebab 8px off it. */
 .cert-course-header {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 12px 8px;
+  gap: 4px;
+  padding: 12px 4px;
   cursor: pointer;
-  background: rgba(29, 29, 32, 0.2);
+  background: rgba(64, 64, 64, 0.2);
   /* inner radius = the card's 10px less its 2px border */
   border-radius: 8px 8px 0 0;
-  border-bottom: 2px solid var(--bg-pill-strong);
+  border-bottom: 2px solid #404040;
 }
 .cert-course:not(.expanded) .cert-course-header {
   border-radius: 8px;
@@ -5867,9 +5914,9 @@ button.breadcrumb-item:hover {
 }
 .cert-course-eyebrow {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 13px;
+  line-height: 15px;
   text-transform: uppercase;
   color: #7a7a7a;
   white-space: nowrap;
@@ -5893,8 +5940,8 @@ button.breadcrumb-item:hover {
 }
 .cert-course-desc {
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 17px;
+  font-size: 16px;
+  line-height: 19px;
   color: #a8a8a8;
   white-space: nowrap;
   overflow: hidden;
@@ -5913,17 +5960,21 @@ button.breadcrumb-item:hover {
   padding: 0 5px;
 }
 
-/* Pencil + kebab, on Course and Lesson headers alike */
+/* Kebab, on Course and Lesson headers alike */
 .cert-hdr-acts,
 .cert-lesson-acts {
   display: flex;
   align-items: center;
-  gap: 2px;
   flex: none;
 }
+/* The header's inner block is 4px-padded in Figma — the grip picks that up from
+   the row gap, the kebab needs it here. */
+.cert-hdr-acts {
+  padding-right: 4px;
+}
 .cert-hdr-btn {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -5936,11 +5987,15 @@ button.breadcrumb-item:hover {
 .cert-hdr-btn:hover {
   color: #fff;
 }
-/* The kebab lives in a Dropdown wrapper — keep the wrapper out of the way so
-   the row's own 2px gap is the only spacing between pencil and kebab. */
+/* The kebab lives in a Dropdown wrapper — keep the wrapper from adding a line
+   box of its own around the 16px trigger. */
 .cert-hdr-acts .dropdown-wrap,
 .cert-lesson-acts .dropdown-wrap {
   display: inline-flex;
+}
+.cert-hdr-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Course body ── */
@@ -5972,12 +6027,12 @@ button.breadcrumb-item:hover {
 }
 .cert-lesson-stub,
 .cert-lesson-rule {
-  height: 1px;
+  height: 2px;
   background: #404040;
   flex: none;
 }
 .cert-lesson-stub {
-  width: 8px;
+  width: 20px;
 }
 .cert-lesson-rule {
   flex: 1;
@@ -6000,9 +6055,9 @@ button.breadcrumb-item:hover {
 }
 .cert-lesson-name {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 19px;
+  line-height: 24px;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -6011,8 +6066,8 @@ button.breadcrumb-item:hover {
 }
 .cert-lesson-desc {
   font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 14px;
+  font-size: 16px;
+  line-height: 19px;
   color: #a8a8a8;
   white-space: nowrap;
   overflow: hidden;
@@ -6022,8 +6077,8 @@ button.breadcrumb-item:hover {
 .cert-lesson-eyebrow {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 13px;
+  font-size: 12px;
+  line-height: 15px;
   text-transform: uppercase;
   color: #7a7a7a;
   white-space: nowrap;
@@ -6049,13 +6104,84 @@ button.breadcrumb-item:hover {
 .cert-task-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 .cert-lesson-tasks {
-  padding-left: 24px;
+  padding-left: 32px;
 }
 .cert-lesson-tasks > .dropdown-wrap {
   display: block;
+}
+
+/* ── Lesson add row ── the page break that closes a Lesson's task list:
+   two accent actions between hairlines, with the destination Lesson named in
+   mono at the far right. Both rules flex equally, so the actions sit centred. */
+.cert-addrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 19px;
+}
+.cert-addrow-rule {
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: #404040;
+}
+.cert-addrow-acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cert-addrow-acts .dropdown-wrap {
+  display: inline-flex;
+}
+.cert-addrow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #f05523;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+.cert-addrow-btn:hover {
+  color: var(--accent-strong, #f05523);
+  text-decoration: underline;
+}
+.cert-addrow-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+.cert-addrow-icon svg {
+  width: 14px;
+  height: 14px;
+}
+/* Hairline between the two actions. */
+.cert-addrow-sep {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  background: #404040;
+}
+.cert-addrow-tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 15px;
+  text-transform: uppercase;
+  color: #7a7a7a;
+  white-space: nowrap;
 }
 
 /* ── Task card ── 43px: 12px padding around a 19px row */
@@ -6069,7 +6195,7 @@ button.breadcrumb-item:hover {
   border: 0.5px solid rgba(122, 122, 122, 0.1);
   border-radius: 8px;
   background:
-    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
     #0d0d0d;
   text-align: left;
 }
@@ -6113,30 +6239,16 @@ button.breadcrumb-item:hover {
 .cert-task-gate-text strong {
   font-weight: 500;
 }
-/* Under a gate the card gives up its top corners and takes a dimmer fill —
-   it reads as unavailable rather than as another live row. */
+/* Under a gate the card gives up its top corners so the banner and the row read
+   as one block. The radius is split across the two halves rather than clipped,
+   so the gutter drag grip can still overhang the card's left edge. */
 .cert-task-wrap.has-gate > .cert-task {
   border-radius: 0 0 8px 8px;
-  background:
-    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
-    #0d0d0d;
 }
 .cert-task-wrap:hover .cert-grip--gutter {
   opacity: 1;
 }
 
-/* The dashed "Add Task" row matches a Task card exactly — same 43px box, same
-   16px glyph and label — and differs only in its border and fill. */
-.cert-task--add {
-  border: 0.5px dashed rgba(122, 122, 122, 0.5);
-  background: transparent;
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
-}
-.cert-task--add:hover {
-  border-color: rgba(240, 85, 35, 0.5);
-  background: rgba(240, 85, 35, 0.05);
-}
 .cert-task-icon {
   flex: none;
   display: inline-flex;
@@ -6147,19 +6259,10 @@ button.breadcrumb-item:hover {
   font-size: 16px;
   font-weight: 500;
   line-height: 19px;
-  color: #d9d9d9;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.cert-task-meta {
-  flex: none;
-  margin-left: -4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #7a7a7a;
-  white-space: nowrap;
 }
 .cert-task-spacer {
   flex: 1;
@@ -6354,13 +6457,13 @@ button.breadcrumb-item:hover {
   line-height: 1.45;
 }
 
-/* Course footer (Figma 344:194) — two equal accent cards: "Add Lesson" and
-   "Add Task". "Add Task" is a dropdown (library picker vs. create-new-by-type),
-   which is what its trailing ⋮ opens; "Add Lesson" acts on click, so it has no ⋮. */
+/* Course footer (Figma 513:3038) — two equal dashed cards: "Add Lesson" and
+   "Add Task". "Add Task" opens the same library-vs-create menu the Lesson add
+   row does; "Add Lesson" acts on click. */
 .cert-course-foot {
   display: flex;
   align-items: stretch;
-  gap: 20px;
+  gap: 12px;
 }
 /* Halve on flex-basis, not on `flex: 1 1 0` — with border-box the bordered
    button's base size floors at its own padding+border, so a 0 basis would hand
@@ -6405,6 +6508,29 @@ button.breadcrumb-item:hover {
 .add-card--dashed .add-card-label {
   color: #d9d9d9;
 }
+
+/* Certification-tree variant (Figma 513:3039) — the roomier dashed card that
+   pairs "Add Lesson" with "Add Task" under a Course. Centred, 20px plus, and
+   neutral rather than accent-coloured; the accent belongs to the Lesson add
+   row's inline actions. */
+.add-card--tree {
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 8px;
+  border: 1px dashed #7a7a7a;
+  border-radius: 10px;
+}
+.add-card--tree .add-card-icon,
+.add-card--tree .add-card-label {
+  color: #fff;
+}
+.add-card--tree .add-card-label {
+  flex: none;
+  font-weight: 600;
+}
+.add-card--tree:hover:not(:disabled) {
+  border-color: rgba(240, 85, 35, 0.6);
+}
 .add-card:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -6424,29 +6550,45 @@ button.breadcrumb-item:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.add-card-more {
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
-  color: #a8a8a8;
-}
-
-/* "Add Course" closes the tree — the footer card treatment, full width. */
+/* "Add Course" (Figma 341:2764) closes the tree — a full-width dashed card at
+   Course-header scale, so it reads as the slot the next Course will fill. */
 .cert-add-course {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  border: 0.5px dashed rgba(122, 122, 122, 0.5);
+  gap: 12px;
+  padding: 12px 8px;
+  border: 2px dashed #404040;
   border-radius: 10px;
-  background: transparent;
+  background: rgba(64, 64, 64, 0.2);
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease;
 }
 .cert-add-course:hover {
-  background: rgba(240, 85, 35, 0.06);
-  border-color: rgba(240, 85, 35, 0.4);
+  border-color: rgba(240, 85, 35, 0.5);
+}
+.cert-add-course .add-card-icon,
+.cert-add-course .add-card-label {
+  color: #fff;
+}
+.cert-add-course .add-card-label {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+/* The Access Restriction editor reuses this button for "Add Condition Set" — a
+   nested control, so it keeps the old compact text-only treatment. */
+.cert-add-course.inline {
+  width: auto;
+  gap: 8px;
+  padding: 6px 10px;
+  border-width: 1px;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #f05523;
 }
 
 /* "Hidden" indicator on a hidden Course / Lesson */
@@ -8922,6 +9064,83 @@ button.breadcrumb-item:hover {
   /* slightly tighter padding-top so the position banner fits */
 }
 
+/* Page subtext + its info affordance (Figma 566:2265): 4px between the line and
+   the 12px glyph. Relative so the hover card below can anchor to the start of
+   the line rather than to the icon — the card is far wider than the space left
+   of the viewport edge at the icon's position. */
+.sp-subtitle {
+  position: relative;
+  gap: 4px;
+}
+
+.sp-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #a8a8a8;
+  cursor: default;
+  transition: color 0.12s ease;
+}
+
+.sp-subtitle:hover .sp-info,
+.sp-info:focus-visible {
+  color: #fff;
+}
+
+/* Figma 566:2284 "Spotlight Tooltip" — copy column beside a preview of the app
+   home screen with the banner in focus. Shown on hover/focus of the whole
+   subtitle line; `pointer-events: none` keeps it from trapping the cursor. */
+.sp-infotip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 300;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--tip-bg);
+  box-shadow: var(--tip-shadow);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.sp-subtitle:hover .sp-infotip,
+.sp-subtitle:focus-within .sp-infotip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sp-infotip-text {
+  width: 250px;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--tip-text);
+}
+
+.sp-infotip-text p {
+  margin: 0;
+}
+
+/* The design separates the paragraphs with an empty line, not a tighter gap. */
+.sp-infotip-text p + p {
+  margin-top: 1.35em;
+}
+
+.sp-infotip-img {
+  display: block;
+  flex-shrink: 0;
+  width: 157px;
+  height: 341px;
+  border-radius: 4px;
+}
+
 .sp-position-banner {
   display: flex;
   align-items: flex-start;
@@ -9022,10 +9241,9 @@ button.breadcrumb-item:hover {
   color: var(--accent-strong);
 }
 
-/* List */
-.sp-scroll {
-  padding-bottom: 80px;
-}
+/* List. No bottom padding: it used to reserve room for the save footer back
+   when that was fixed to the viewport; the footer now takes its own space in
+   the column, so the padding was just dead gap under the last row. */
 
 .sp-list {
   display: flex;
@@ -9362,43 +9580,8 @@ button.breadcrumb-item:hover {
   opacity: 0.85;
 }
 
-/* Status pills */
-.sp-status {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.sp-status--approved,
-.sp-status--active {
-  background: rgba(95, 208, 163, 0.16);
-  color: #6fdbb1;
-}
-
-.sp-status--ended {
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-}
-
-.sp-status--pending {
-  background: rgba(245, 211, 107, 0.18);
-  color: var(--skill-yellow);
-}
-
-.sp-status--rejected {
-  background: rgba(255, 107, 107, 0.16);
-  color: #ff8d8d;
-}
-
-.sp-status--deactivated {
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-}
+/* Status pills — the Spotlight table uses the shared Table Pills
+   (.co-status-pill--{green|yellow|red|grey}, Figma 109:1237). */
 
 /* Row actions */
 .sp-row-actions {
@@ -9459,29 +9642,6 @@ button.breadcrumb-item:hover {
 /* =============================================================
  * Create Spotlight side panel
  * ============================================================= */
-.sp-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 560px;
-  max-width: 92vw;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border-strong);
-  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.55);
-  display: flex;
-  flex-direction: column;
-  z-index: 200;
-}
-
-.sp-panel-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 24px 28px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
 .sp-panel-eyebrow {
   font-family: var(--font-sans);
   font-size: 10pt;
@@ -9528,15 +9688,6 @@ button.breadcrumb-item:hover {
   color: var(--text);
 }
 
-.sp-panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 28px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
 .sp-section {
   display: flex;
   flex-direction: column;
@@ -9579,69 +9730,20 @@ button.breadcrumb-item:hover {
   color: var(--text-faint);
 }
 
+/* Two lines on a 19px leading, so each dual-language row is 43+ tall and the
+   whole Description field lands on Figma 552:1107's 127px. */
 .sp-multiline {
   resize: vertical;
-  min-height: 70px;
+  /* 38px of text (2 lines at 19px) plus the input's own 12px top/bottom, since
+     box-sizing is border-box — that makes each row 62px and the whole field the
+     node's 127px. */
+  min-height: 62px;
+  height: 62px;
   font-family: var(--font-sans);
-  line-height: 1.45;
-}
-
-.sp-cta-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-}
-
-.sp-date-input {
-  max-width: 240px;
-  color-scheme: dark;
-}
-
-.sp-image-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
-}
-
-.sp-image-thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.sp-image-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.sp-image-name {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.sp-image-sub {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
+  line-height: 19px;
 }
 
 /* Position card */
-.sp-section--position {
-  padding-top: 4px;
-}
-
 .sp-position-card {
   display: flex;
   align-items: center;
@@ -9894,6 +9996,235 @@ button.breadcrumb-item:hover {
 }
 
 /* =============================================================
+ * Create Spotlight — full-screen page
+ * Same shell as the company wizard's Plan step (.wizard + .wizard-body):
+ * every field in the left .wizard-content column, a live preview of the
+ * Home-Screen card in the 420px .cw-impact rail on the right. Queue position
+ * is the last step and lives in a dialog (.sp-modal).
+ * ============================================================= */
+/* Every control runs the full content width — 777px inside the 857px column in
+   Figma 555:1803 — so the right gutter really is 40px and the fields line up
+   with the drop zone. The shared 920px caps are all lifted here; the End Date
+   trigger is the one deliberate exception (the node sizes it to its content). */
+.spc-form .form-group,
+.spc-form .lang-field,
+.spc-form .form-input,
+.spc-form .spc-url-field {
+  max-width: none;
+}
+/* Header → first field is 28px (Figma 552:997 root gap); the shared
+   .wizard-desc margin is 28px already, so this only pins the intent. */
+.spc-form .wizard-desc {
+  margin-bottom: 28px;
+}
+
+/* ── Preview rail (Figma 553:1580) ──
+   28px between the "Preview" header and the card, on #0d0d0d under a 15% grey
+   wash. Padding is the app's even 40px rather than the node's 20px, and the
+   column is 710px so the card still measures its Figma 630px inside it. */
+.spc-rail {
+  /* 441px = the card's 361 inside the 40px gutter (Figma 553:1580). */
+  width: 441px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 40px;
+  overflow-y: auto;
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.15) 0%, rgba(122, 122, 122, 0.15) 100%),
+    linear-gradient(90deg, #0d0d0d 0%, #0d0d0d 100%);
+}
+.spc-preview-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+
+/* ── Spotlight card (Figma 556:2026) ──
+   361×145 at the app's own scale: background image under a dark wash that fades
+   out to the right, the copy stack down the left, dismiss ✕ at the top right.
+   Padding is the node's 16px less the 1px border. */
+.spc-hero {
+  position: relative;
+  width: 361px;
+  max-width: 100%;
+  min-height: 145px;
+  padding: 15px;
+  border: 1px solid rgba(115, 115, 115, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.spc-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* One wash, 75% black at the left edge fading to clear at the right. */
+.spc-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(270deg, rgba(13, 13, 13, 0) 0%, rgba(13, 13, 13, 0.75) 100%);
+}
+.spc-hero-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 113px;
+}
+/* The copy column is a fixed 214px so the title wraps inside the washed side of
+   the card, and it stretches so the pill sits on the bottom edge. */
+.spc-hero-col {
+  flex: none;
+  width: 214px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.spc-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  color: #fff;
+}
+.spc-hero-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.spc-hero-desc {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+/* Re-direct pill: a 15% grey wash on the photo, no fill and no border. */
+.spc-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 33px;
+  max-width: 100%;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.15);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 15px box holding the 16px tdesign:close glyph, so it overhangs slightly the
+   way the node draws it. */
+.spc-hero-close {
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  color: #a8a8a8;
+}
+.spc-hero-close svg {
+  /* No shrinking — the glyph is meant to overhang its 15px box. */
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Button Destination field (Figma 552:1151 + 556:1989) ──
+   The plain single-language input box with a "Test It Out" link riding inside it
+   at the right, 11px from the URL text. */
+.spc-url-field {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 8px;
+}
+.spc-url-field:focus-within {
+  border-color: var(--border-strong);
+}
+.spc-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 19px;
+  outline: none;
+}
+.spc-url-input::placeholder {
+  color: #404040;
+}
+.spc-url-test {
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #f05523;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  text-decoration: underline;
+  text-decoration-skip-ink: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.spc-url-test:disabled {
+  color: #7a7a7a;
+  cursor: not-allowed;
+}
+
+/* Picked background image — the shared .file-row with an image thumbnail. */
+.spc-file-row {
+  border: 1px solid var(--border);
+}
+.spc-file-thumb {
+  width: 64px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-pill-strong);
+}
+.spc-file-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* =============================================================
  * Spotlight table
  * ============================================================= */
 .sp-table {
@@ -9909,16 +10240,13 @@ button.breadcrumb-item:hover {
   font-weight: 600;
   color: #fff;
   font-size: 16px;
-  padding: 8px 20px;
+  /* 12px sides so the header columns line up with the body's 12px cell padding
+     (the 24px gap between two cells in Figma 558:2082). */
+  padding: 8px 12px;
   border-bottom: 2px solid rgba(122, 122, 122, 0.5);
   white-space: nowrap;
   background: transparent;
   user-select: none;
-}
-
-.sp-table thead th.sp-th-pos,
-.sp-table td.sp-td-pos {
-  text-align: center;
 }
 
 .sp-table tbody tr {
@@ -9936,33 +10264,25 @@ button.breadcrumb-item:hover {
 }
 
 .sp-table tbody td {
-  /* Taller rows than the standard 40px tables so the preview image fits. */
-  height: 88px;
-  padding: 12px 20px;
+  /* 76px artwork tile + 12px padding top and bottom (558:2046). */
+  height: 100px;
+  padding: 12px;
   vertical-align: middle;
   font-family: var(--font-sans);
   font-size: 16px;
   color: #a8a8a8;
 }
 
-.sp-tr--rejected,
-.sp-tr--deactivated {
-  opacity: 0.6;
-}
+/* Rejected (558:2109) and Ended (558:2141) rows are NOT dimmed — the status
+   pill and the blank position column carry the out-of-queue state. */
 
-.sp-td-pos {
-  font-family: var(--font-mono);
-  font-size: 13pt;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
+/* Position — 20px drag handle, 8px gap, then the queue number in white. */
 .sp-table td.sp-td-pos {
   white-space: nowrap;
+  color: #fff;
 }
 
 .sp-pos-num {
-  font-family: var(--font-mono);
   vertical-align: middle;
 }
 
@@ -9972,7 +10292,7 @@ button.breadcrumb-item:hover {
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: 8px;
   color: var(--text-faint);
   cursor: grab;
   opacity: 0;
@@ -10004,21 +10324,36 @@ button.breadcrumb-item:hover {
   box-shadow: inset 0 2px 0 0 var(--accent);
 }
 
-/* Save-changes footer (queue reorder) */
+/* The Spotlight just created and dropped into the queue for placement: tinted
+   so it is findable among the rows it has to be dragged through, with an accent
+   edge marking where it currently sits. Painted on the cells, not the row, so
+   it survives the hover fill. */
+.sp-tr.is-new td {
+  background: rgba(240, 85, 39, 0.09);
+}
+
+.sp-tr.is-new td:first-child {
+  box-shadow: inset 3px 0 0 0 #f05527;
+}
+
+/* Save-changes footer (queue reorder) — Figma 561:2236 "Combination of
+   Components - Footer": 2px top rule, 20px/40px padding, label left, the
+   Secondary + Primary pair right with a 16px gap.
+
+   It is the last child of the page column rather than fixed to the viewport, so
+   it spans the content area only and stops at the left nav — the same placement
+   as the Create Spotlight page's .wizard-footer. The negative margins cancel
+   .tasks' 36px side padding so the rule runs the full width of the page. */
 .sp-save-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 28px;
-  background: var(--bg-panel);
-  border-top: 1px solid var(--border-strong);
-  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.4);
-  z-index: 150;
+  margin: 0 -36px;
+  padding: 20px 40px;
+  background: #0d0d0d;
+  border-top: 2px solid rgba(122, 122, 122, 0.5);
   animation: sp-footer-in 0.16s ease;
 }
 
@@ -10028,29 +10363,21 @@ button.breadcrumb-item:hover {
 }
 
 .sp-save-footer-text {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
   font-family: var(--font-sans);
-  font-size: 11.5pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.sp-save-footer-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(233, 114, 55, 0.15);
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
 }
 
 .sp-save-footer-actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
 }
 
+/* End Date (558:2184) — one line, no expiry sub-text: the status pill already
+   says whether a Spotlight has ended. */
 .sp-td-muted {
   color: #a8a8a8;
   white-space: nowrap;
@@ -10058,7 +10385,13 @@ button.breadcrumb-item:hover {
   text-overflow: ellipsis;
 }
 
-/* Text column — name + description subtext */
+/* Created By (558:2094) — wraps onto a second line rather than truncating. */
+.sp-td-by {
+  color: #a8a8a8;
+  line-height: 1.2;
+}
+
+/* Text column — name over description, flush (558:2089) */
 .sp-td-text {
   min-width: 0;
 }
@@ -10074,19 +10407,18 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
-  color: #e7e7e8;
-  line-height: 1.3;
+  color: #fff;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sp-cell-desc {
-  margin-top: 3px;
   font-family: var(--font-sans);
-  font-size: 14px;
-  color: #7a7a7a;
-  line-height: 1.4;
+  font-size: 16px;
+  color: #a8a8a8;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -10094,123 +10426,86 @@ button.breadcrumb-item:hover {
   -webkit-box-orient: vertical;
 }
 
-.sp-enddate.is-warning {
-  color: var(--skill-yellow);
+/* Archived-Spotlights disclosure row (Figma 564:2244) — a centred pill at the
+   foot of the table hiding the ended and rejected rows. Overrides the 111px
+   data-row height: it carries a control, not a Spotlight. */
+.sp-table tbody tr.sp-archive-row,
+.sp-table tbody tr.sp-archive-row:hover {
+  background: none;
 }
 
-.sp-enddate.is-expired {
-  color: #ff8d8d;
+.sp-table tbody tr.sp-archive-row td {
+  height: auto;
+  padding: 8px 12px;
+  text-align: center;
 }
 
-.sp-enddate-sub {
-  display: block;
-  margin-top: 2px;
+.sp-archive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-family: var(--font-sans);
   font-size: 14px;
-  color: #7a7a7a;
+  font-weight: 500;
+  color: #a8a8a8;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
-/* Preview thumbnail — compact mirror of the app's mobile Spotlight card */
+.sp-archive-toggle:hover {
+  background: var(--bg-pill);
+  color: #fff;
+}
+
+.sp-archive-toggle > svg {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.sp-archive-toggle.is-open > svg {
+  transform: rotate(180deg);
+}
+
+/* Preview artwork tile (558:2070) — a plain 144×76 image, object-cover. */
 .sp-thumb {
   position: relative;
-  width: 116px;
-  height: 64px;
-  border-radius: 8px;
+  width: 144px;
+  height: 76px;
   overflow: hidden;
-  background: linear-gradient(135deg, #1a1410 0%, #2a1a12 100%);
-  border: 1px solid #2a1f1a;
-  display: flex;
-  align-items: stretch;
+  background: #1a1410;
 }
 
 .sp-thumb-img {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 50%;
-  background: linear-gradient(135deg, #3a2a20 0%, #1a1410 100%);
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-.sp-thumb-img-tag {
-  margin: 4px;
-  padding: 1px 4px;
-  font-family: var(--font-mono);
-  font-size: 7pt;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 3px;
-}
-
-.sp-thumb-fallback {
-  position: absolute;
-  bottom: 4px;
-  right: 6px;
-  font-family: var(--font-mono);
-  font-size: 8pt;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
-  letter-spacing: 0.1em;
-}
-
-.sp-thumb-inner {
-  position: relative;
-  z-index: 1;
-  padding: 7px 8px 6px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 72%;
-  background: linear-gradient(90deg, rgba(15, 15, 16, 0.92) 60%, rgba(15, 15, 16, 0) 100%);
-}
-
-.sp-thumb-heading {
-  font-family: var(--font-sans);
-  font-size: 7.5pt;
-  font-weight: 700;
-  color: #f6f6f6;
-  line-height: 1.2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.sp-thumb-cta {
-  display: inline-block;
-  align-self: flex-start;
-  margin-top: 3px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 6.5pt;
-  font-weight: 600;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Kebab (3-dot) action button */
+/* Actions cell — the 88px decide block and the 16px kebab sit side by side,
+   12px apart, both right-aligned against the row's 12px end padding. The column
+   scrolls with the rest of the table; it is deliberately NOT pinned. */
 .sp-td-actions {
   position: relative;
-  text-align: right;
+}
+
+.sp-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .sp-kebab {
+  /* 16px glyph (558:2072) in a 30px hit target. */
   width: 30px;
   height: 30px;
   border-radius: 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #a8a8a8;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
@@ -10223,7 +10518,10 @@ button.breadcrumb-item:hover {
 .sp-decide {
   display: inline-flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  /* Back to the design's 88px: the re-specced buttons dropped to 8px side
+     padding, and Figma's own "Approve" now measures 53px — the same as the
+     browser renders it — so the label and icon fit without the earlier bump. */
   width: 88px;
 }
 
@@ -10232,15 +10530,25 @@ button.breadcrumb-item:hover {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  height: 26px;
   width: 100%;
-  padding: 0 12px;
+  /* 558:2056/2059 — padded rather than fixed-height (8 + 17 + 8 = the design's
+     33px), 14px label. */
+  padding: 8px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
+  /* The design's 33px is 8 + 17 + 8; the inherited line-height renders the
+     label 19px tall and the button 35. */
+  line-height: 17px;
   white-space: nowrap;
+}
+
+/* The glyph is a fixed 14px box — without this it is a shrinkable flex item and
+   a tight label squashes it into an unreadable sliver. */
+.sp-decide-btn > svg {
+  flex-shrink: 0;
 }
 
 .sp-decide-btn:hover {
@@ -10305,6 +10613,12 @@ button.breadcrumb-item:hover {
   flex: 1;
   overflow-y: auto;
   padding: 20px 26px 24px;
+}
+
+/* Preview dialog — the Spotlight card centred in the shared sp-modal shell. */
+.sp-preview-modal .sp-modal-body {
+  display: flex;
+  justify-content: center;
 }
 
 .sp-approve-confirm {
@@ -15946,9 +16260,9 @@ a.rh-crumb-link:hover {
   margin-top: 1px;
 }
 
-/* Menu row — Figma 388:354 "3-Dot Menu - Menu Clicked": 8px padding, 16px gap
-   to a 16px icon, 16px Fira Sans Regular. Icon and label are both pure white
-   here, unlike the action bar's #a8a8a8. */
+/* Menu row — Figma "3-Dot Menu - Menu Clicked" (388:354, re-synced to 559:2206):
+   8px padding, 16px gap to a 16px icon, 16px Fira Sans Medium. Icon and label
+   are both pure white here, unlike the action bar's #a8a8a8. */
 .u-menu-item {
   display: flex;
   align-items: center;
@@ -15959,7 +16273,7 @@ a.rh-crumb-link:hover {
   text-align: left;
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 500;
   color: #fff;
 }
 
@@ -15980,16 +16294,18 @@ a.rh-crumb-link:hover {
   height: 16px;
 }
 
+/* Destructive row — the design-system red (559:2215), same token as
+   .co-status-pill--red. */
 .u-menu-item--danger {
-  color: #f08a8a;
+  color: #ff1f31;
 }
 
 .u-menu-item--danger .u-menu-item-icon {
-  color: #f08a8a;
+  color: #ff1f31;
 }
 
 .u-menu-item--danger:hover {
-  background: rgba(240, 90, 90, 0.1);
+  background: rgba(255, 31, 49, 0.1);
 }
 
 /* No divider rules — Figma 388:354 groups menu rows by spacing alone. */
@@ -17969,6 +18285,8 @@ a.rh-crumb-link:hover {
 .co-status-pill {
   display: inline-flex;
   align-items: center;
+  /* Every pill in the set is 24px tall (109:1237), whatever its label. */
+  height: 24px;
   padding: 1px 9px;
   border: 1px solid;
   border-radius: 999px;
@@ -17992,6 +18310,7 @@ a.rh-crumb-link:hover {
 .table tbody td.col-status:not(.col-actions) .co-status-pill {
   display: inline-flex !important;
   align-items: center !important;
+  height: 24px !important;
   padding: 1px 9px !important;
   border: 1px solid !important;
   border-radius: 999px !important;
@@ -18196,11 +18515,6 @@ a.rh-crumb-link:hover {
   display: inline-flex;
   margin-top: 1px;
   color: #60a5fa;
-}
-
-/* Manage Subscription single page — no step rail, content stays readable */
-.company-wizard--sub .wizard-content {
-  padding-top: 46px;
 }
 
 /* Add Billing Emails modal */
@@ -19266,98 +19580,208 @@ a.rh-crumb-link:hover {
 
 /* ─────────────── Date field (calendar dropdown) ─────────────── */
 
+/* ===== Date field trigger (Figma 552:1173 filled / 556:1820 empty) =====
+   A 1px #404040 shell around a #1e1e20 block: 14px calendar glyph + the value,
+   on a 19px line so the control is 45px tall in BOTH states (43px inside the
+   border). Sized to its content, not the column. */
 .date-field-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  max-width: 280px;
-  padding: 12px;
+  max-width: 100%;
+  padding: 0;
   background: transparent;
   border: 1px solid #404040;
   border-radius: 8px;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
   text-align: left;
   cursor: pointer;
 }
-.date-field-trigger svg { flex-shrink: 0; color: #a8a8a8; }
+.date-field-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 7px;
+  background: #1e1e20;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.date-field-box svg { flex-shrink: 0; width: 14px; height: 14px; color: #a8a8a8; }
 .date-field-trigger:hover { border-color: var(--border-strong); }
 .date-field-trigger.is-open {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.14);
 }
 .date-field-trigger.has-error { border-color: var(--danger, #e5484d); }
-.date-field-placeholder { color: #404040; }
+/* No selection yet (Figma 556:1828): 16px Regular #a8a8a8 — lighter and a step
+   larger than the 14px Medium white value it is replaced by. */
+.date-field-placeholder {
+  color: #a8a8a8;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+/* ===== Date picker panel (Figma 552:1520 "Calendar Selection + Shortcuts") =====
+   The dropdown panel IS the picker's shell: #0d0d0d under a 20% grey wash, a
+   rgba(64,64,64,0.5) hairline, radius 8. 491px wide with the Shortcuts column,
+   306px without (280px grid + 12px padding + the border). */
+.dropdown--cal {
+  padding: 0;
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.2) 0%, rgba(122, 122, 122, 0.2) 100%),
+    linear-gradient(90deg, #0d0d0d 0%, #0d0d0d 100%);
+  max-height: none;
+}
+/* The two columns sit flush — the divider is the calendar's right border and the
+   Shortcuts column carries its own 20px inset. */
+.date-picker {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
 
 .date-cal {
   padding: 12px;
+  flex-shrink: 0;
+}
+/* The divider is the calendar's own right edge; the panel's 12px gap then sits
+   between it and the Shortcuts column. */
+.date-cal--divided {
+  border-right: 1px solid rgba(64, 64, 64, 0.5);
 }
 .date-cal-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  width: 280px;
+  height: 19px;
+  margin-bottom: 16px;
 }
 .date-cal-title {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: #fff;
+  line-height: normal;
 }
 .date-cal-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: #a8a8a8;
+  color: #fff;
   cursor: pointer;
 }
-.date-cal-nav:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.date-cal-nav svg { width: 16px; height: 16px; }
+.date-cal-nav:hover:not(:disabled) { color: #a8a8a8; }
+.date-cal-nav:disabled { color: #404040; cursor: default; }
 
 .date-cal-weekdays,
 .date-cal-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 40px);
 }
-.date-cal-weekdays {
-  margin-bottom: 4px;
-}
+/* Weekday heads: 40×20 cells, 14px Medium #a8a8a8, 8px above the day grid. */
 .date-cal-weekdays span {
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
-.date-cal-day {
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.date-cal-grid {
+  margin-top: 8px;
+}
+.date-cal-day {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  /* 40px cell, fully rounded — the selected day reads as a circle. */
+  border-radius: 20px;
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
   cursor: pointer;
 }
-.date-cal-day:hover { background: rgba(255, 255, 255, 0.08); }
-.date-cal-day--empty { cursor: default; }
-.date-cal-day--empty:hover { background: transparent; }
-.date-cal-day.is-today { color: var(--accent-strong); font-weight: 600; }
-.date-cal-day.is-selected {
-  background: var(--accent);
+.date-cal-day:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+.date-cal-day--empty,
+.date-cal-day--empty:hover { cursor: default; background: transparent; }
+/* Out of range — dimmed, not hidden (Figma dims the days before the bound). */
+.date-cal-day:disabled { color: #404040; cursor: default; }
+.date-cal-day.is-selected,
+.date-cal-day.is-selected:hover {
+  background: rgba(240, 85, 35, 0.2);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.5);
   color: #fff;
-  font-weight: 600;
 }
-.date-cal-day.is-selected:hover { background: var(--accent); }
+
+/* Shortcuts column — duration presets, each with the date it resolves to.
+   188px wide including its 20px side insets (Figma 552:1519). */
+.date-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 20px;
+  min-width: 188px;
+}
+.date-shortcuts-title {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+.date-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.date-shortcut {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.date-shortcut-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #f05523;
+}
+.date-shortcut-date {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.date-shortcut:hover .date-shortcut-label { text-decoration: underline; }
 
 /* ─────────────── Success screen ─────────────── */
 .wizard-body--success {
@@ -20122,6 +20546,11 @@ a.rh-crumb-link:hover {
    The only page-local idea is the pair of role accents — accent orange for the
    account that is kept, danger red for the one that loses something — and both
    are mixed from the global accent/danger tokens. */
+/* Merge & Transfer run on the .tasks shell rather than .wizard-content, but they
+   are wizards — so they take the same even 40px gutter. */
+.tasks.mg-page {
+  padding: 40px;
+}
 .mg-page {
   /* kept / receiving account */
   --mg-keep-soft: rgba(233, 114, 55, 0.09);
@@ -20701,10 +21130,10 @@ a.rh-crumb-link:hover {
 .mg-audit-v.is-mono { font-family: var(--font-mono); font-size: 10pt; }
 .mg-done-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
 
-/* ── Footer (shared wizard footer, full-bleed inside the page padding) ── */
+/* ── Footer (shared wizard footer, full-bleed inside the page's 40px) ── */
 .mg-footer {
-  margin: 0 -36px;
-  padding: 18px 36px;
+  margin: 0 -40px;
+  padding: 18px 40px;
 }
 .mg-footer .wizard-actions { align-items: center; }
 .mg-footer-hint { font-size: 10.5pt; color: var(--text-faint); }

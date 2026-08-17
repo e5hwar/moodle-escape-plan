@@ -207,11 +207,11 @@ const HandsOnTaskIcon = () => (
     <path d="M13.6667 10V13.3333H2.33333V10" />
   </svg>
 );
-// Plus, 16px slot (Figma I341:2722;7:30) — leads the dashed "Add Task" row,
-// which now sits at full Task-card scale.
-const PlusRowIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
-    <path d="M8 3.333V12.667M12.667 8H3.333" />
+// Plus, 20px slot (Figma I513:2738;7:30) — the "Add Course" / "Add Lesson" /
+// "Add Task" cards. Same glyph as PlusThinIcon, scaled 14 → 20.
+const PlusLgIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.667" strokeLinecap="square">
+    <path d="M10 4.167V15.833M15.833 10H4.167" />
   </svg>
 );
 // Padlock (Figma I356:1945;7:2434) — a filled 7.08×8.75 lock centred in a 10px
@@ -1586,7 +1586,7 @@ function TasksStep({
         ))}
 
         <button className="cert-add-course" onClick={addCourse}>
-          <span className="add-card-icon"><PlusThinIcon /></span>
+          <span className="add-card-icon"><PlusLgIcon /></span>
           <span className="add-card-label">Add Course</span>
         </button>
       </div>
@@ -1689,31 +1689,6 @@ function NodeEditor({
         <button className="cert-editor-save" disabled={!canSave} onClick={onSave}>Save</button>
       </div>
     </div>
-  );
-}
-
-// Small icon-button on a Course or Lesson header (pencil / kebab trigger).
-function NodeAction({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      className="cert-hdr-btn"
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1856,10 +1831,13 @@ function CourseCard({
           {course.descEn && <div className="cert-course-desc">{course.descEn}</div>}
         </div>
         <div className="cert-hdr-acts" onClick={(e) => e.stopPropagation()}>
-          <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
           <NodeMenu label="Course actions">
             {({ close }) => (
               <div className="menu">
+                <button className="menu-item" onClick={() => { onOpenEditor(); close(); }}>
+                  <span className="menu-item-icon"><PencilIcon /></span>
+                  Edit Course
+                </button>
                 <button className="menu-item" onClick={() => { onToggle(); close(); }}>
                   <span className={`menu-item-icon ${course.expanded ? "is-open" : ""}`}><CaretIcon /></span>
                   {course.expanded ? "Collapse Course" : "Expand Course"}
@@ -1948,12 +1926,11 @@ function CourseCard({
           )}
 
           <div className="cert-course-foot">
-            <button className="add-card" onClick={onAddLesson}>
-              <span className="add-card-icon"><PlusThinIcon /></span>
+            <button className="add-card add-card--tree" onClick={onAddLesson}>
+              <span className="add-card-icon"><PlusLgIcon /></span>
               <span className="add-card-label">Add Lesson</span>
             </button>
             <AddTaskMenu
-              variant="bigadd"
               label="Add Task"
               onCreateNew={onCreateTask}
               onAddExisting={onAddExistingTask}
@@ -2027,10 +2004,13 @@ function LessonCard({
         </div>
         <span className="cert-lesson-rule" />
         <div className="cert-lesson-acts" onClick={(e) => e.stopPropagation()}>
-          <NodeAction label="Edit name & description" onClick={onOpenEditor}><PencilIcon /></NodeAction>
           <NodeMenu label="Lesson actions">
             {({ close }) => (
               <div className="menu">
+                <button className="menu-item" onClick={() => { onOpenEditor(); close(); }}>
+                  <span className="menu-item-icon"><PencilIcon /></span>
+                  Edit Lesson
+                </button>
                 <button className="menu-item" onClick={() => { onToggle(); close(); }}>
                   <span className={`menu-item-icon ${lesson.expanded ? "is-open" : ""}`}><CaretIcon /></span>
                   {lesson.expanded ? "Collapse Lesson" : "Expand Lesson"}
@@ -2077,14 +2057,67 @@ function LessonCard({
               onRemove={() => onRemoveTask(t.id)}
             />
           ))}
-          <AddTaskMenu
-            variant="dashed"
-            label="Add Task"
+          <LessonAddRow
+            tag={`Add to Lesson ${courseIndex}.${num}`}
             onCreateNew={onCreateTask}
             onAddExisting={onAddExistingTask}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// The add row that closes a Lesson's task list (Figma "Course Card" 513:2586).
+// A page break split by two accent actions — "New Task" opens the type picker,
+// "Existing Task" opens the library — with the destination Lesson named in mono
+// at the far right, so the row says where the Task will land.
+function LessonAddRow({
+  tag,
+  onCreateNew,
+  onAddExisting,
+}: {
+  tag: string;
+  onCreateNew: (t: TaskTypeKey) => void;
+  onAddExisting: () => void;
+}) {
+  return (
+    <div className="cert-addrow">
+      <span className="cert-addrow-rule" />
+      <div className="cert-addrow-acts">
+        <Dropdown
+          width={260}
+          direction="up"
+          trigger={({ toggle }) => (
+            <button className="cert-addrow-btn" onClick={toggle}>
+              <span className="cert-addrow-icon"><PlusThinIcon /></span>
+              New Task
+            </button>
+          )}
+        >
+          {({ close }) => (
+            <div className="menu">
+              {TASK_TYPE_OPTIONS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  className="menu-item"
+                  onClick={() => { onCreateNew(key); close(); }}
+                >
+                  <span className="menu-item-icon"><Icon /></span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Dropdown>
+        <span className="cert-addrow-sep" />
+        <button className="cert-addrow-btn" onClick={onAddExisting}>
+          <span className="cert-addrow-icon"><SearchIcon /></span>
+          Existing Task
+        </button>
+      </div>
+      <span className="cert-addrow-rule" />
+      <span className="cert-addrow-tag">{tag}</span>
     </div>
   );
 }
@@ -2142,10 +2175,9 @@ function TaskRow({
       )}
       <div className="cert-task" {...dndRow.target}>
         <DragDots className="cert-grip--gutter" {...dndRow.handle} />
-        <span className="cert-task-icon"><Glyph /></span>
+        <span className="cert-task-icon" title={KIND_MONO[task.kind]}><Glyph /></span>
         <span className="cert-task-name">{task.name}</span>
-        <span className="cert-task-meta">{`·${KIND_MONO[task.kind]}`}</span>
-        {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
+        {finalExam &&<span className="cert-final-pill"><FlagIcon />Final Exam</span>}
         {/* Restriction switched on but no prerequisite picked yet — the gate has
             nothing to name, so flag the half-configured state instead. */}
         {restricted && prereqs.length === 0 && (
@@ -2285,33 +2317,21 @@ function AddTaskMenu({
   label,
   onCreateNew,
   onAddExisting,
-  variant,
 }: {
   label: string;
   onCreateNew: (t: TaskTypeKey) => void;
   onAddExisting: () => void;
-  // "dashed" — the trailing row inside a Lesson's task list.
-  // "bigadd"  — the half-width card in the Course footer.
-  variant: "dashed" | "bigadd";
 }) {
   return (
     <Dropdown
       width={300}
       direction="up"
-      trigger={({ toggle }) =>
-        variant === "dashed" ? (
-          <button className="cert-task cert-task--add" onClick={toggle}>
-            <span className="cert-task-icon"><PlusRowIcon /></span>
-            <span className="cert-task-name">{label}</span>
-          </button>
-        ) : (
-          <button className="add-card" onClick={toggle}>
-            <span className="add-card-icon"><PlusThinIcon /></span>
-            <span className="add-card-label">{label}</span>
-            <span className="add-card-more"><TreeKebabIcon /></span>
-          </button>
-        )
-      }
+      trigger={({ toggle }) => (
+        <button className="add-card add-card--tree" onClick={toggle}>
+          <span className="add-card-icon"><PlusLgIcon /></span>
+          <span className="add-card-label">{label}</span>
+        </button>
+      )}
     >
       {({ close }) => (
         <AddTaskMenuContent
