@@ -5,19 +5,7 @@ import {
   pastVersionOf,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CommandIcon,
-  DownloadIcon,
-  EditOffIcon,
-  EnterKeyIcon,
-  KeyArrowLeftIcon,
-  KeyArrowRightIcon,
-  SortIcon,
-} from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, CommandIcon, DownloadIcon, EditOffIcon, EnterKeyIcon, KeyArrowLeftIcon, KeyArrowRightIcon, SortIcon } from "./icons";
 import { tasks } from "../data/tasks";
 import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
 import { UserDetailsHover } from "./UserDetailsHover";

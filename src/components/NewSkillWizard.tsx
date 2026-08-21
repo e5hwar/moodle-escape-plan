@@ -1,10 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  CheckBoldIcon,
-  SmallXIcon,
-  SearchIcon,
-  UploadIcon,
-} from "./icons";
+import { CheckBoldIcon, SmallXIcon, SearchIcon, UploadIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";

@@ -6,20 +6,7 @@ import {
   type MergeUser,
   type ConflictDef,
 } from "../data/mergeAccounts";
-import {
-  AlertTriangleIcon,
-  ArrowRightIcon,
-  CheckBoldIcon,
-  ChevronDownIcon,
-  CreditCardIcon,
-  InfoCircleIcon,
-  LockIcon,
-  PlusCircleIcon,
-  SearchIcon,
-  SmallXIcon,
-  SwapIcon,
-  XCircleIcon,
-} from "./icons";
+import { AlertTriangleIcon, ArrowRightIcon, CheckBoldIcon, ChevronDownIcon, CreditCardIcon, InfoCircleIcon, LockIcon, PlusCircleIcon, SearchIcon, SmallXIcon, SwapIcon, XCircleIcon } from "./icons";
 import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
 
 /**

@@ -13,7 +13,9 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon, SearchIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { SelectField } from "./SelectField";
 import { WizardStepRail } from "./WizardStepRail";
 import { PageBreak } from "./PageBreak";
 import { DateField } from "./DateField";
@@ -1211,27 +1213,27 @@ function Step1Details({
         <input
           autoFocus
           className="form-input"
-          placeholder="e.g. Apex HVAC Solutions"
+          placeholder="Company Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+        <p className="form-help">This will be the name shown on Stripe's receipts</p>
       </div>
 
       <div className="form-group">
         <label className="form-label">Address <span className="req">*</span></label>
         <div className="address-field">
-          <div className="address-row">
-            <select
-              className="address-select"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-            >
-              {COUNTRY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <span className="address-chevron"><ChevronDownIcon /></span>
-          </div>
+          <SelectField
+            value={country}
+            options={COUNTRY_OPTIONS}
+            onChange={setCountry}
+            renderTrigger={({ toggle, label }) => (
+              <button type="button" className="address-row address-row-btn" onClick={toggle}>
+                <span className="address-select">{label}</span>
+                <span className="address-chevron"><ChevronDownIcon /></span>
+              </button>
+            )}
+          />
           <input
             className="address-input"
             placeholder="Address Line 1"
@@ -1258,34 +1260,25 @@ function Step1Details({
               onChange={(e) => setAddrPin(e.target.value)}
             />
           </div>
-          <div className="address-row">
-            <select
-              className={`address-select ${addrState ? "" : "is-placeholder"}`}
-              value={addrState}
-              onChange={(e) => setAddrState(e.target.value)}
-            >
-              <option value="">State</option>
-              {US_STATES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <span className="address-chevron"><ChevronDownIcon /></span>
-          </div>
+          <SelectField
+            value={addrState}
+            options={US_STATES}
+            onChange={setAddrState}
+            placeholder="State"
+            renderTrigger={({ toggle, label, isPlaceholder }) => (
+              <button type="button" className="address-row address-row-btn" onClick={toggle}>
+                <span className={`address-select ${isPlaceholder ? "is-placeholder" : ""}`}>{label}</span>
+                <span className="address-chevron"><ChevronDownIcon /></span>
+              </button>
+            )}
+          />
         </div>
         <p className="form-help">Country and Zipcode are mandatory</p>
       </div>
 
       <div className="form-group">
         <label className="form-label">Tax Status <span className="req">*</span></label>
-        <select
-          className="form-select"
-          value={taxStatus}
-          onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}
-        >
-          {TAX_STATUSES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} />
         <p className="form-help">
           Refer to{" "}
           <a
@@ -1300,32 +1293,25 @@ function Step1Details({
         </p>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Assigned CSM</label>
-        <select
-          className={`form-select ${assignedCsm ? "" : "is-placeholder"}`}
-          value={assignedCsm}
-          onChange={(e) => setAssignedCsm(e.target.value)}
-        >
-          <option value="">Unassigned</option>
-          {CSM_OPTIONS.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Assigned Sales Rep</label>
-        <select
-          className={`form-select ${assignedSalesRep ? "" : "is-placeholder"}`}
-          value={assignedSalesRep}
-          onChange={(e) => setAssignedSalesRep(e.target.value)}
-        >
-          <option value="">Unassigned</option>
-          {SALES_REP_OPTIONS.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
+      <div className="form-row-2">
+        <div className="form-group">
+          <label className="form-label">Assigned CSM</label>
+          <SelectField
+            value={assignedCsm}
+            options={CSM_OPTIONS}
+            onChange={setAssignedCsm}
+            placeholder="Unassigned"
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Assigned Sales Rep</label>
+          <SelectField
+            value={assignedSalesRep}
+            options={SALES_REP_OPTIONS}
+            onChange={setAssignedSalesRep}
+            placeholder="Unassigned"
+          />
+        </div>
       </div>
 
       <div className="form-row-2">
@@ -1335,7 +1321,8 @@ function Step1Details({
             options={INDUSTRY_OPTIONS}
             value={industries}
             onChange={setIndustries}
-            placeholder="Select industries…"
+            placeholder="Select Industries"
+            searchPlaceholder="Search Industries…"
           />
           <p className="form-help co-w-manage-link">
             Manage Industries on{" "}
@@ -1357,7 +1344,8 @@ function Step1Details({
             options={PARTNERSHIP_OPTIONS}
             value={partnerships}
             onChange={setPartnerships}
-            placeholder="Select partnerships…"
+            placeholder="Select Partnerships"
+            searchPlaceholder="Search Partnerships…"
           />
           <p className="form-help co-w-manage-link">
             Manage Partnerships on{" "}
@@ -2240,67 +2228,153 @@ function CreatePriceModal({
 
 /* ─────────────── Multi-select ─────────────── */
 
-export function MultiSelect({
-  options, value, onChange, placeholder,
-}: {
-  options: string[]; value: string[]; onChange: (v: string[]) => void; placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+/* Figma 147:1147 keeps the field one row tall: two pills, then a "+N" counter
+   for the rest. */
+const PILL_LIMIT = 2;
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+export function MultiSelect({
+  options, value, onChange, placeholder, searchPlaceholder,
+}: {
+  options: string[]; value: string[]; onChange: (v: string[]) => void;
+  placeholder: string;
+  /** Search box label, e.g. "Search Industries…" (Figma 591:1322). */
+  searchPlaceholder: string;
+}) {
+  const fieldRef = useRef<HTMLDivElement | null>(null);
+  const [query, setQuery] = useState("");
+  // The panel is portalled, so it can't inherit the field's width — it is
+  // measured and passed through instead.
+  const [fieldWidth, setFieldWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = fieldRef.current;
+    if (!el) return;
+    const measure = () => setFieldWidth(el.offsetWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+  }, [options, query]);
 
   function toggle(opt: string) {
     onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
   }
 
   return (
-    <div className="multiselect" ref={ref}>
-      <div className="multiselect-field" onClick={() => setOpen(!open)}>
-        {value.length === 0 ? (
-          <span className="multiselect-placeholder">{placeholder}</span>
-        ) : (
-          <div className="multiselect-tags">
-            {value.map((v) => (
-              <span key={v} className="multiselect-tag">
-                {v}
-                <button
-                  className="multiselect-tag-remove"
-                  onClick={(e) => { e.stopPropagation(); onChange(value.filter((x) => x !== v)); }}
-                  aria-label={`Remove ${v}`}
-                >
-                  <SmallXIcon />
-                </button>
-              </span>
-            ))}
+    <div className="multiselect">
+      <Dropdown
+        overlay
+        constrainHeight
+        width={fieldWidth || 300}
+        panelClass="ms-menu"
+        onOpenChange={(o) => { if (!o) setQuery(""); }}
+        trigger={({ open, toggle: toggleOpen }) => (
+          <div
+            ref={fieldRef}
+            className={`multiselect-field${open ? " is-open" : ""}`}
+            onClick={toggleOpen}
+          >
+            {value.length === 0 ? (
+              <span className="multiselect-placeholder">{placeholder}</span>
+            ) : (
+              <div className="multiselect-tags">
+                {value.slice(0, PILL_LIMIT).map((v) => (
+                  <span key={v} className="multiselect-tag">
+                    {v}
+                    <button
+                      className="multiselect-tag-remove"
+                      onClick={(e) => { e.stopPropagation(); onChange(value.filter((x) => x !== v)); }}
+                      aria-label={`Remove ${v}`}
+                    >
+                      <SmallXIcon />
+                    </button>
+                  </span>
+                ))}
+                {value.length > PILL_LIMIT && (
+                  <span className="multiselect-tag multiselect-tag-more">
+                    +{value.length - PILL_LIMIT}
+                  </span>
+                )}
+              </div>
+            )}
+            <span className="field-chevron"><ChevronDownIcon /></span>
           </div>
         )}
-        <span className="multiselect-chevron">▾</span>
-      </div>
-      {open && (
-        <div className="multiselect-dropdown">
-          {options.map((opt) => {
-            const selected = value.includes(opt);
-            return (
-              <button
-                key={opt}
-                className={`multiselect-opt${selected ? " is-selected" : ""}`}
-                onMouseDown={(e) => { e.preventDefault(); toggle(opt); }}
-              >
-                <span className="multiselect-check">{selected ? <CheckBoldIcon /> : null}</span>
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      >
+        {() => (
+          <MultiSelectMenu
+            options={filtered}
+            value={value}
+            toggle={toggle}
+            searchPlaceholder={searchPlaceholder}
+            query={query}
+            setQuery={setQuery}
+          />
+        )}
+      </Dropdown>
     </div>
+  );
+}
+
+/* The panel body. It focuses its own search box rather than relying on
+   `autoFocus`: the overlay Dropdown's first paint is the hidden one it measures,
+   and focusing a hidden element does nothing. */
+function MultiSelectMenu({
+  options, value, toggle, searchPlaceholder, query, setQuery,
+}: {
+  options: string[]; value: string[]; toggle: (opt: string) => void;
+  searchPlaceholder: string; query: string; setQuery: (v: string) => void;
+}) {
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <>
+      <div className="dropdown-search">
+        <span className="dropdown-search-icon">
+          <SearchIcon />
+        </span>
+        <input
+          ref={searchRef}
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="dropdown-list">
+        {options.map((opt) => {
+          const selected = value.includes(opt);
+          return (
+            <button
+              key={opt}
+              className="dropdown-item"
+              // Ticking an option must not pull focus out of the search — it
+              // stays live so the user can keep typing and filtering.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                toggle(opt);
+                searchRef.current?.focus();
+              }}
+            >
+              <span className={`checkbox ${selected ? "checked" : ""}`}>
+                {selected && <CheckIcon />}
+              </span>
+              <span className="ms-menu-label">{opt}</span>
+            </button>
+          );
+        })}
+        {options.length === 0 && <div className="ms-menu-empty">No matches</div>}
+      </div>
+    </>
   );
 }
 

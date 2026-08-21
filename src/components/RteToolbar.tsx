@@ -1,17 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  BoldIcon,
-  ItalicIcon,
-  UnderlineIcon,
-  BulletListIcon,
-  NumberListIcon,
-  LinkSmallIcon,
-  ImageAddIcon,
-  SuperscriptIcon,
-  SubscriptIcon,
-  CodeBlockIcon,
-  RteCaretIcon,
-} from "./icons";
+import { BoldIcon, ItalicIcon, UnderlineIcon, BulletListIcon, NumberListIcon, LinkSmallIcon, ImageAddIcon, SuperscriptIcon, SubscriptIcon, CodeBlockIcon, RteCaretIcon } from "./icons";
 
 /* ─── Rich-text toolbar — Figma 327:137 "Rich Text Input - Dual Language" ───
    Six groups split by hairlines: block format, inline format, lists, insert,

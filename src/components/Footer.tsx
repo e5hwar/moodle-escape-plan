@@ -1,11 +1,5 @@
 import { Dropdown } from "./Dropdown";
-import {
-  PackageIcon,
-  QuizIcon,
-  HandsOnIcon,
-  FileIcon,
-  AddIcon,
-} from "./icons";
+import { PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon } from "./icons";
 
 export type TaskTypeKey =
   | "xapi"

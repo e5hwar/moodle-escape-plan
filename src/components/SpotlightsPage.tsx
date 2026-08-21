@@ -9,18 +9,7 @@ import {
   type SpotlightDraft,
 } from "./CreateSpotlightPage";
 import { QueuePositionPicker } from "./QueuePositionPicker";
-import {
-  SearchIcon,
-  AddIcon,
-  SmallXIcon,
-  RowKebabIcon,
-  RowDragIcon,
-  RowEditIcon,
-  RowDeleteIcon,
-  MenuPreviewIcon,
-  InfoIcon,
-  ChevronDownSquareIcon,
-} from "./icons";
+import { SearchIcon, AddIcon, SmallXIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";

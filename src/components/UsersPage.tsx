@@ -16,7 +16,20 @@ import {
 } from "./UsersFilters";
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
-import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+
+/* Landing-morph columns — mirror the table's default visible columns (key,
+   label, width) so the p=1 hand-off to the real table lines up. */
+const LM_COLS: LandingCol[] = [
+  { key: "email", label: "Email", width: 190 },
+  { key: "phone", label: "Phone", width: 165 },
+  { key: "userType", label: "User Type", width: 96 },
+  { key: "company", label: "Company", width: 175 },
+  { key: "role", label: "Role", width: 130 },
+  { key: "subscription", label: "Subscription", width: 195, fixed: true },
+];
+import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -207,6 +220,64 @@ export function UsersPage({
   // scrolls horizontally rather than crushing columns on a narrow page.
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
+  // Landing morph — the page opens as the search-first landing and the wheel
+  // (or any search / pill / row interaction) morphs it into the table view.
+  // A company deep-link (View Employees) skips straight to the table.
+  const morph = useLandingMorph(Boolean(initialCompanyFilter));
+
+  const suggested = useMemo(() => {
+    const pills: LandingPill[] = [
+      {
+        key: "b2c",
+        label: "B2C",
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "B2C" as UserType])) }));
+          morph.showTable();
+        },
+      },
+      {
+        key: "b2b",
+        label: "B2B",
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "B2B" as UserType])) }));
+          morph.showTable();
+        },
+      },
+      {
+        key: "subscriber",
+        label: "Subscriber",
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, subscriptions: Array.from(new Set([...prev.subscriptions, "Subscriber" as SubscriptionStatus])) }));
+          morph.showTable();
+        },
+      },
+    ];
+    const company = topValues(list, (u) => u.companyName)[0];
+    if (company)
+      pills.push({
+        key: "company",
+        label: company,
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, companies: Array.from(new Set([...prev.companies, company])) }));
+          morph.showTable();
+        },
+      });
+    return pills;
+  }, [list, morph.showTable]);
+
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map(({ u }) => ({
+    key: u.id,
+    name: u.name,
+    cells: {
+      email: u.email,
+      phone: u.phone,
+      userType: u.userType,
+      company: u.userType === "B2B" && u.companyName ? u.companyName : "—",
+      role: u.role,
+      subscription: u.subscriptionStatus,
+    },
+  }));
+
   function toggleSort(key: SortKey) {
     // Sort is locked to role (Admin, Manager, Employee) while a company
     // filter is active — see effectiveSort above.
@@ -219,7 +290,7 @@ export function UsersPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks">
+        <div className="tasks lm" ref={morph.rootRef}>
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Manage Users</h1>
@@ -241,12 +312,28 @@ export function UsersPage({
                   companies={filters.companies}
                   onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
                   query={committedQuery}
-                  onCommit={setCommittedQuery}
+                  onCommit={(q) => {
+                    setCommittedQuery(q);
+                    morph.showTable();
+                  }}
                 />
               </div>
 
-              <UsersFilters filters={filters} setFilters={setFilters} />
+              <LandingFilterRow pills={suggested}>
+                  <UsersFilters filters={filters} setFilters={setFilters} />
+                </LandingFilterRow>
 
+              <div className="lm-stage">
+              <LandingOverlay
+                caption="Users A–Z"
+                total={sorted.length}
+                columns={LM_COLS}
+                nameWidth={200}
+                rows={landingRows}
+                onShowAll={morph.showTable}
+                onRowClick={() => morph.showTable()}
+              />
+              <div className="lm-table">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup cols={visibleCols} />
@@ -296,13 +383,16 @@ export function UsersPage({
               </div>
 
               <div className="pagination">
+                <BackToSearch onClick={morph.showLanding} />
                 <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
                 </div>
+              </div>
+              </div>
               </div>
             </div>
           </div>

@@ -13,10 +13,22 @@ import {
 } from "./Filters";
 import type { OptionalColumn } from "../data/filters";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+
+/* Landing-morph columns — mirror the table's default visible columns (key,
+   label, width) so the p=1 hand-off to the real table lines up. */
+const LM_COLS: LandingCol[] = [
+  { key: "id", label: "ID", width: 100 },
+  { key: "type", label: "Type", width: 160, fixed: true },
+  { key: "paid", label: "Paid", width: 110 },
+  { key: "used", label: "Used in", width: 180 },
+  { key: "creator", label: "Created By", width: 200 },
+];
 
 const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element; shortcut: string }[] = [
   { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon, shortcut: "X" },
@@ -274,6 +286,67 @@ export function TasksPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
+  // Landing morph — the page opens as the search-first landing and the wheel
+  // (or any search / pill / row interaction) morphs it into the table view.
+  const morph = useLandingMorph();
+
+  const topCert = useMemo(() => topValues(taskList, (t) => t.usedIn)[0], [taskList]);
+
+  const suggestedPills: LandingPill[] = [
+    {
+      key: "hands-on",
+      label: "Hands-On Task",
+      onPick: () => {
+        setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "Hands-On Task"])) }));
+        morph.showTable();
+      },
+    },
+    {
+      key: "quiz",
+      label: "Quiz",
+      onPick: () => {
+        setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "Quiz"])) }));
+        morph.showTable();
+      },
+    },
+    {
+      key: "final-exam",
+      label: "Final Exam",
+      onPick: () => {
+        setFilters((prev) => ({ ...prev, finalExam: ["Final Exam"] }));
+        morph.showTable();
+      },
+    },
+    ...(topCert
+      ? [{
+          key: "top-cert",
+          label: topCert,
+          onPick: () => {
+            setFilters((prev) => ({ ...prev, certifications: Array.from(new Set([...prev.certifications, topCert])) }));
+            morph.showTable();
+          },
+        }]
+      : []),
+  ];
+
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((t) => ({
+    key: t.id,
+    name: t.name,
+    dim: t.hidden || t.usedIn.length === 0,
+    cells: {
+      id: t.id,
+      type: t.type,
+      paid: isPaid(t) ? "Paid" : "Free",
+      used:
+        t.usedIn.length === 0
+          ? "—"
+          : t.usedIn.length === 1
+            ? t.usedIn[0]
+            : `${t.usedIn[0]} +${t.usedIn.length - 1}`,
+      creator: t.createdBy,
+    },
+  }));
+
   const selected = selectedId ? taskList.find((t) => t.id === selectedId) ?? null : null;
   const panelOpen = selected !== null;
 
@@ -343,7 +416,7 @@ export function TasksPage({
   }
 
   return (
-    <div className="tasks">
+    <div className="tasks lm" ref={morph.rootRef}>
       <header className="tasks-header">
         <div>
           <h1 className="tasks-title">Tasks</h1>
@@ -396,12 +469,30 @@ export function TasksPage({
               types={filters.types}
               onTypesChange={(t) => setFilters((prev) => ({ ...prev, types: t }))}
               query={committedQuery}
-              onCommit={setCommittedQuery}
+              onCommit={(q) => {
+                setCommittedQuery(q);
+                morph.showTable();
+              }}
             />
           </div>
 
-          <Filters filters={filters} setFilters={setFilters} />
+          <LandingFilterRow pills={suggestedPills}>
+              <Filters filters={filters} setFilters={setFilters} />
+            </LandingFilterRow>
 
+          <div className="lm-stage">
+          <LandingOverlay
+            caption="Recently created"
+            total={sorted.length}
+            columns={LM_COLS}
+            rows={landingRows}
+            onShowAll={morph.showTable}
+            onRowClick={(row) => {
+              setSelectedId(row.key);
+              morph.showTable();
+            }}
+          />
+          <div className="lm-table">
           <div className="co-table-row">
             <div className="co-table-col">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
@@ -456,24 +547,21 @@ export function TasksPage({
               </div>
 
               <div className="pagination">
+                <BackToSearch onClick={morph.showLanding} />
                 <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
                   <button
                     className="page-btn"
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    ‹
-                  </button>
+                  ><ChevronLeftIcon /></button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    ›
-                  </button>
+                  ><ChevronRightIcon /></button>
                 </div>
               </div>
             </div>
@@ -481,6 +569,8 @@ export function TasksPage({
             {selected && (
               <TaskPanel task={selected} onClose={() => setSelectedId(null)} />
             )}
+          </div>
+          </div>
           </div>
         </div>
       </div>

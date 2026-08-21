@@ -11,10 +11,24 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CertPreviewPanel } from "./CertPreviewPanel";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+
+/* Landing-morph columns — mirror the table's default visible columns (the
+   Certifications table leads with ID before Name) so the p=1 hand-off to the
+   real table lines up. */
+const LM_LEAD_COLS: LandingCol[] = [{ key: "id", label: "ID", width: 100 }];
+const LM_COLS: LandingCol[] = [
+  { key: "industry", label: "Industry", width: 190, fixed: true },
+  { key: "careerStage", label: "Career Stage", width: 140 },
+  { key: "payment", label: "Payment", width: 150 },
+  { key: "tasks", label: "Tasks", width: 90 },
+  { key: "creator", label: "Created By", width: 180 },
+];
 
 const PAGE_SIZE = 50;
 
@@ -197,6 +211,45 @@ export function CertificationsPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
+  // Landing morph — the page opens as the search-first landing and the wheel
+  // (or any search / pill / row interaction) morphs it into the table view.
+  const morph = useLandingMorph();
+
+  const suggested = useMemo(() => {
+    const pills: LandingPill[] = [];
+    const add = (key: string, label: string, patch: (prev: CertFilterState) => CertFilterState) =>
+      pills.push({
+        key,
+        label,
+        onPick: () => {
+          setFilters(patch(filters));
+          morph.showTable();
+        },
+      });
+    topValues(certList, (c) => c.industry, 2).forEach((ind) =>
+      add(`ind-${ind}`, ind, (prev) => ({ ...prev, industries: Array.from(new Set([...prev.industries, ind])) })),
+    );
+    const stage = topValues(certList, (c) => c.careerStage)[0];
+    if (stage) add("stage", stage, (prev) => ({ ...prev, careerStages: [stage] }));
+    const type = topValues(certList, (c) => c.type)[0];
+    if (type) add("type", type, (prev) => ({ ...prev, types: [type] }));
+    return pills;
+  }, [certList, filters, morph.showTable]);
+
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => ({
+    key: c.id,
+    name: c.name,
+    dim: (c.visibility ?? "Visible") !== "Visible" || c.draft,
+    cells: {
+      id: c.id,
+      industry: c.industry,
+      careerStage: c.careerStage ?? "—",
+      payment: c.payment ?? "Free",
+      tasks: c.tasks,
+      creator: c.createdBy,
+    },
+  }));
+
   const selected = selectedId ? certList.find((c) => c.id === selectedId) ?? null : null;
 
   // Natural table width so columns scroll horizontally instead of crushing —
@@ -255,7 +308,7 @@ export function CertificationsPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks">
+        <div className="tasks lm" ref={morph.rootRef}>
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Certifications</h1>
@@ -279,13 +332,32 @@ export function CertificationsPage({
                     placeholder="Search Certifications by name, ID, or industry…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") morph.showTable();
+                    }}
                   />
                   <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
                 </div>
               </div>
 
-              <CertFilters filters={filters} setFilters={setFilters} />
+              <LandingFilterRow pills={suggested}>
+                  <CertFilters filters={filters} setFilters={setFilters} />
+                </LandingFilterRow>
 
+              <div className="lm-stage">
+              <LandingOverlay
+                caption="Recently created"
+                total={sorted.length}
+                columns={LM_COLS}
+                leadColumns={LM_LEAD_COLS}
+                rows={landingRows}
+                onShowAll={morph.showTable}
+                onRowClick={(row) => {
+                  setSelectedId(row.key);
+                  morph.showTable();
+                }}
+              />
+              <div className="lm-table">
               <div className="co-table-row">
                 <div className="co-table-col">
                   <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
@@ -338,12 +410,13 @@ export function CertificationsPage({
                   </div>
 
                   <div className="pagination">
+                    <BackToSearch onClick={morph.showLanding} />
                     <span>
-                      Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                      Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
                     </div>
                   </div>
                 </div>
@@ -351,6 +424,8 @@ export function CertificationsPage({
                 {selected && (
                   <CertPreviewPanel cert={selected} onClose={() => setSelectedId(null)} />
                 )}
+              </div>
+              </div>
               </div>
             </div>
           </div>

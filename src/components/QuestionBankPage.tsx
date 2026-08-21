@@ -15,7 +15,7 @@ import {
   type QuestionVersion,
   type Subcategory,
 } from "../data/questionBank";
-import { ArrowRightUpIcon, ChevronLeftIcon, InfoFilledIcon, MenuArchiveIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeCaretIcon, TreeKebabIcon, UploadTrayIcon, RowDeleteIcon } from "./icons";
+import { ArrowRightUpIcon, ChevronLeftIcon, InfoFilledIcon, MenuArchiveIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeCaretIcon, TreeKebabIcon, UploadTrayIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { PageBreak } from "./PageBreak";
@@ -804,23 +804,19 @@ export function QuestionBankPage({
 
             <div className="pagination qb-pagination">
               <span>
-                Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
               </span>
               <div className="pagination-controls">
                 <button
                   className="page-btn"
                   disabled={visiblePage === 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  ‹
-                </button>
+                ><ChevronLeftIcon /></button>
                 <button
                   className="page-btn"
                   disabled={visiblePage === totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  ›
-                </button>
+                ><ChevronRightIcon /></button>
               </div>
             </div>
           </section>

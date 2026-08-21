@@ -3,17 +3,7 @@ import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
-import {
-  UploadIcon,
-  UploadTrayIcon,
-  DocumentIcon,
-  SmallXIcon,
-  DragHandleIcon,
-  GearIcon,
-  LockIcon,
-  SearchIcon,
-  CheckIcon,
-} from "./icons";
+import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, GearIcon, LockIcon, SearchIcon, CheckIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import {

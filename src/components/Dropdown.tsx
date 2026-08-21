@@ -27,6 +27,12 @@ type Props = {
    * when there isn't room below — so it can't run over a page footer.
    */
   overlay?: boolean;
+  /**
+   * Overlay only: cap the panel's height to the space left in its scrollport so
+   * it always fits on screen instead of forcing the page to grow or scroll.
+   * The panel's own list is what scrolls.
+   */
+  constrainHeight?: boolean;
 };
 
 const GAP = 8;
@@ -64,6 +70,7 @@ export function Dropdown({
   onOpenChange,
   panelClass,
   overlay = false,
+  constrainHeight = false,
 }: Props) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -74,7 +81,7 @@ export function Dropdown({
   };
   const wrapRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -103,8 +110,23 @@ export function Dropdown({
       if (!trig || !panel) return;
       const t = trig.getBoundingClientRect();
       const b = boundsFor(trig);
-      const h = panel.offsetHeight;
       const w = panel.offsetWidth;
+
+      // The taller side of the trigger is what a constrained panel may use, so
+      // measure the natural height against that before deciding where to open.
+      // The cap from the last pass has to come off first: the panel is a column
+      // flex whose list scrolls, so a constrained panel measures as its own cap
+      // and would otherwise ratchet itself shut.
+      const capped = panel.style.maxHeight;
+      if (constrainHeight) panel.style.maxHeight = "";
+      const natural = panel.offsetHeight;
+      if (constrainHeight) panel.style.maxHeight = capped;
+
+      const roomBelow = b.bottom - t.bottom - GAP - EDGE;
+      const roomAbove = t.top - b.top - GAP - EDGE;
+      const h = constrainHeight
+        ? Math.min(natural, Math.max(roomBelow, roomAbove))
+        : natural;
 
       const below = t.bottom + GAP;
       const above = t.top - GAP - h;
@@ -121,16 +143,27 @@ export function Dropdown({
       let left = align === "right" ? t.right - w : t.left;
       left = Math.max(b.left + EDGE, Math.min(left, b.right - w - EDGE));
 
-      setPos({ top, left });
+      const next = { top, left, maxHeight: constrainHeight ? h : undefined };
+      // Skipping no-op writes keeps the resize observer below from ping-ponging.
+      setPos((prev) =>
+        prev && prev.top === next.top && prev.left === next.left && prev.maxHeight === next.maxHeight
+          ? prev
+          : next,
+      );
     }
     place();
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
+    // A panel whose content changes size (a filtered list, say) has to be
+    // re-anchored to its trigger, or an upward-opening one drifts away from it.
+    const ro = new ResizeObserver(place);
+    if (panelRef.current) ro.observe(panelRef.current);
     return () => {
+      ro.disconnect();
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [open, overlay, align, direction]);
+  }, [open, overlay, align, direction, constrainHeight]);
 
   const widthStyle = width === "auto" ? null : { width };
 
@@ -146,6 +179,7 @@ export function Dropdown({
               ...widthStyle,
               top: pos?.top ?? 0,
               left: pos?.left ?? 0,
+              ...(constrainHeight && pos?.maxHeight ? { maxHeight: pos.maxHeight } : null),
               // Hidden for the first paint, which is the pass that measures it.
               visibility: pos ? "visible" : "hidden",
             }

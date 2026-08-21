@@ -1,9 +1,5 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  CheckBoldIcon,
-  ImageIcon,
-  SmallXIcon,
-} from "./icons";
+import { CheckBoldIcon, ImageIcon, SmallXIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";

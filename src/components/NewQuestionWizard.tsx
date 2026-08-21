@@ -7,13 +7,7 @@ import {
   type QuestionType,
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
-import {
-  ArrowRightIcon,
-  ChevronRightIcon,
-  SmallXIcon,
-  DragHandleIcon,
-  PlusThinIcon,
-} from "./icons";
+import { ArrowRightIcon, ChevronRightIcon, SmallXIcon, DragHandleIcon, PlusThinIcon } from "./icons";
 import { PageBreak } from "./PageBreak";
 import { RteToolbar } from "./RteToolbar";
 

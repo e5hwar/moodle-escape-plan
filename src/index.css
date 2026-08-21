@@ -1392,14 +1392,18 @@ button.breadcrumb-item:hover {
   margin-top: 0;
 }
 
+/* Header row — Figma 79:445 "Atomic - Header Row": 48px tall, 12px insets
+   (24px between columns), 1px #404040 rule below, Fira Sans SemiBold 16 white. */
 .table thead th {
   text-align: left;
   font-family: var(--font-sans);
   font-weight: 600;
   color: #fff;
   font-size: 16px;
-  padding: 8px 20px;
-  border-bottom: 2px solid rgba(122, 122, 122, 0.5);
+  height: 48px;
+  padding: 0 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #404040;
   white-space: nowrap;
   background: transparent;
   cursor: pointer;
@@ -1460,9 +1464,28 @@ button.breadcrumb-item:hover {
 }
 
 .table tbody tr {
-  border-bottom: 1px solid rgba(122, 122, 122, 0.5);
+  /* Figma 435:515 "Atomic - Complete Row" separator. */
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
   cursor: pointer;
   transition: background 0.1s ease;
+}
+
+/* Row-region wash (Figma 79:446 header / 435:516 row). In the atom the
+   gradient lives on the SCROLLABLE part of the row — a ~50px ramp to 2% grey
+   that completes just before the kebab region. Mapped here: the ramp ends at
+   the sticky actions column's left edge (100% − 40px) instead of the row end,
+   so the column's solid background never slices the fade mid-ramp into a
+   hard-edged band, and the ramp keeps the atom's ~50px pixel width rather
+   than scaling up with the row. background-image, so the hover/selected
+   background-color still composes underneath. */
+.table thead tr,
+.table tbody tr {
+  background-image: linear-gradient(
+    90deg,
+    rgba(122, 122, 122, 0) calc(100% - 90px),
+    rgba(122, 122, 122, 0.02) calc(100% - 40px),
+    rgba(122, 122, 122, 0) calc(100% - 40px)
+  );
 }
 
 /* The last row has no separator — the table edge / scrollbar reserve sits below it. */
@@ -1483,11 +1506,12 @@ button.breadcrumb-item:hover {
 }
 
 .table tbody td {
-  /* Row height is a fixed 40px (Figma row atomic 79:443). Vertical padding is 0
-     and content is centered via vertical-align, so the height is exact and
-     independent of the text's line height. */
-  height: 40px;
-  padding: 0 20px;
+  /* Row height is a fixed 48px (Figma row atomic 435:515, superseding the old
+     40px 79:443). Vertical padding is 0 and content is centered via
+     vertical-align, so the height is exact and independent of the text's line
+     height. 12px cell insets put 24px between adjacent columns' text. */
+  height: 48px;
+  padding: 0 12px;
   vertical-align: middle;
   font-family: var(--font-sans);
   font-size: 12pt;
@@ -1625,6 +1649,10 @@ button.breadcrumb-item:hover {
   color: var(--text-muted);
   width: 130px;
   white-space: nowrap;
+}
+/* Date values read one step smaller than other secondary cells (Figma 435:521). */
+.table tbody td.col-date {
+  font-size: 14px;
 }
 
 .col-actions {
@@ -2159,19 +2187,23 @@ button.breadcrumb-item:hover {
 /* ===== Pagination ===== */
 /* Pagination (Figma 77:264): right-aligned, 2px #3d3d43 top border, "Showing X
    of Y" (14px Regular #a8a8a8) + two chevron buttons, 20px gap / 16px between. */
+/* Footer — Figma 77:264 "Atomic Component - Pagination": 48px tall, 12px
+   insets, 1px #404040 rule above, Fira Sans Regular 16 #a8a8a8, 20px gap to
+   the 16px-gap chevron pair. */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 20px;
-  padding: 14px 0 12px;
+  height: 48px;
+  padding: 0 12px;
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   line-height: normal;
   text-transform: none;
-  border-top: 2px solid rgba(122, 122, 122, 0.5);
+  border-top: 1px solid #404040;
   background: transparent;
   flex-shrink: 0;
 }
@@ -3371,6 +3403,7 @@ button.breadcrumb-item:hover {
    kept at two-class specificity so they beat the `.address-input` border reset
    below; the first-child rule is ordered last to win for the top row. */
 .address-field > .address-row,
+.address-field > .selectfield,
 .address-field > .address-input,
 .address-field > .address-split {
   border-top: 1px solid #404040;
@@ -3385,6 +3418,16 @@ button.breadcrumb-item:hover {
   align-items: center;
   gap: 11px;
   padding: 12px;
+}
+
+/* The Country/State rows are single-select triggers (Figma 591:1382), so the
+   row itself is the button — the chevron has to be clickable too. */
+.address-row-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
 }
 
 .address-input {
@@ -10498,9 +10541,16 @@ button.breadcrumb-item:hover {
 }
 
 .sp-kebab {
-  /* 16px glyph (558:2072) in a 30px hit target. */
+  /* 16px glyph (558:2072) in a 30px hit target. The negative margins pull the
+     hit area back to the glyph's own 16px footprint for layout, so the actions
+     column keeps the design's width and the glyph lands in the same place
+     whether or not the row also carries Approve / Reject. Without this the
+     button is the flex item that shrinks when the pair is present, and its
+     glyph re-centres 7px off from the rows that have no buttons. */
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
+  margin: 0 -7px;
   border-radius: 7px;
   display: inline-flex;
   align-items: center;
@@ -19146,46 +19196,68 @@ a.rh-crumb-link:hover {
 .multiselect {
   position: relative;
 }
+/* The panel is the shared overlay Dropdown, whose wrapper is inline-block —
+   the field itself has to stay full width. */
+.multiselect > .dropdown-wrap {
+  display: block;
+  position: static;
+}
+/* Trigger — Figma 147:551 (no selection) / 147:1147 (selected). Same shell as
+   the single-select `.select-field`: 1px #404040, radius 8, transparent, 45px.
+   With pills the row is padded horizontally only; the pills set the height. */
 .multiselect-field {
   display: flex;
   align-items: center;
-  min-height: 44px;
-  padding: 6px 12px;
+  min-height: 45px;
+  padding: 0 12px;
   border-radius: 8px;
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg-pill);
+  border: 1px solid #404040;
+  background: transparent;
   cursor: pointer;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 11px;
+  overflow: hidden;
 }
-.multiselect-field:hover { border-color: var(--text-faint); }
 .multiselect-placeholder {
-  color: var(--text-faint);
-  font-size: 12pt;
   flex: 1;
+  min-width: 0;
+  color: #404040;
+  font-size: 16px;
+  font-weight: 400;
 }
 .multiselect-tags {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .multiselect-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px 3px 10px;
+  gap: 6px;
+  padding: 6px 8px;
+  /* The inherited 1.45 would make the pill 35px against Figma's 31px. */
+  line-height: normal;
   border-radius: 6px;
-  background: rgba(233, 114, 55, 0.15);
-  color: var(--accent-strong);
-  font-size: 11pt;
-  font-weight: 600;
+  background: #1e1e20;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
   white-space: nowrap;
+}
+/* The "+N" counter carries no remove control, so it has no inner gap. */
+.multiselect-tag-more {
+  gap: 0;
+  flex-shrink: 0;
 }
 .multiselect-tag-remove {
   display: inline-flex;
   align-items: center;
-  color: var(--accent-strong);
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: #fff;
   opacity: 0.7;
   padding: 0;
   background: none;
@@ -19193,47 +19265,124 @@ a.rh-crumb-link:hover {
   cursor: pointer;
 }
 .multiselect-tag-remove:hover { opacity: 1; }
-.multiselect-chevron {
-  color: var(--text-faint);
-  font-size: 10pt;
-  margin-left: auto;
+
+/* 16px box holding the 11px chevron glyph — the address rows' `.address-chevron`
+   under a name the plain fields can share. */
+.field-chevron {
   flex-shrink: 0;
-}
-.multiselect-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 300;
-  background: var(--bg-panel);
-  border: 1.5px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  max-height: 260px;
-  overflow-y: auto;
-}
-.multiselect-opt {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 12pt;
-  color: var(--text);
-  background: transparent;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-}
-.multiselect-opt:hover { background: var(--bg-row-hover); }
-.multiselect-opt.is-selected { color: var(--accent-strong); }
-.multiselect-check {
+  justify-content: center;
   width: 16px;
-  flex-shrink: 0;
-  color: var(--accent-strong);
-  display: flex;
+  height: 16px;
+  color: #a8a8a8;
+  pointer-events: none;
+}
+
+/* Search + multiselect menu — Figma 591:1322. Reuses the shared
+   `.dropdown-search` / `.dropdown-list` / `.checkbox` chrome; what differs from
+   the filter menus is the padding (16px search gutter, an even 8px list inset)
+   and the labels, which are white and regular here rather than muted medium.
+   Above `.cl-modal-overlay` (200) — the same field is in the Companies
+   edit-company modal. */
+.ms-menu { z-index: 300; }
+.ms-menu .dropdown-search { padding: 8px 16px 9px; }
+.ms-menu .dropdown-list { padding: 8px; }
+.ms-menu .dropdown-list .dropdown-item {
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+}
+.ms-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+.ms-menu-empty {
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-faint);
+}
+
+/* ─────────────── Single-select field & menu (Figma 591:1382) ───────────────
+   A styled stand-in for a native <select>. The trigger keeps `.form-select`
+   geometry exactly — it is the same control, just a button — so the two can sit
+   in one form without a seam. */
+.select-field {
+  /* Value and sizer share one grid cell, so the control takes the width of the
+     widest option — what the native select it replaces did — with the chevron
+     in a second 16px track. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
+  gap: 11px;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  text-align: left;
+  outline: none;
+  cursor: pointer;
+  min-width: 130px;
+}
+.select-field-value,
+.select-field-sizer {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.select-field-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Empty height has to match a filled one, or a placeholder-less field collapses. */
+.select-field-value:empty::before {
+  content: "\200b";
+}
+.select-field-sizer {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.select-field-sizer > span {
+  display: block;
+  white-space: nowrap;
+}
+.select-field.is-placeholder { color: #404040; }
+.select-field:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* The overlay Dropdown's wrapper is inline-block; the control owns the width. */
+.selectfield > .dropdown-wrap {
+  display: block;
+  position: static;
+}
+/* Same full-width override the wizard's native selects get. */
+.company-wizard .select-field { width: 100%; }
+
+/* The menu itself: an even 8px inset, no check glyph — the current value is the
+   SemiBold row — and a #2c2c2f fill on hover / keyboard focus. */
+.ss-menu { z-index: 300; }
+.ss-menu .dropdown-list { padding: 8px; }
+.ss-menu .dropdown-list .dropdown-item {
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+}
+.ss-menu .dropdown-list .dropdown-item.is-current { font-weight: 600; }
+/* The list takes focus so the arrow keys work; the row highlight is the visible
+   cursor, so the UA ring around the whole panel would only be noise. */
+.ss-menu .dropdown-list:focus { outline: none; }
+.ss-menu .dropdown-list .dropdown-item:hover,
+.ss-menu .dropdown-list .dropdown-item.is-active,
+.ms-menu .dropdown-list .dropdown-item:hover {
+  background: #2c2c2f;
 }
 
 /* ─────────────── Per-seat price indicator ─────────────── */
@@ -26302,5 +26451,369 @@ span.rvc-crumb--current { cursor: default; }
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
+  color: #fff;
+}
+
+/* ===== Landing morph — Claude Design "Tasks Landing 6B" =====
+   The list pages (Tasks / Certifications / Companies / Users) open as a
+   search-first landing: oversized centered search, "Suggested" quick-filter
+   pills, and a short name-only list. The wheel drives a 0→1 progress that
+   morphs the hero into the page's normal small-table view.
+
+   Driven by useLandingMorph, which sets on the `.tasks.lm` root:
+     --lm   raw progress 0…1
+     --lmf  ramp(.33…1)  — real filter row fade-in
+     --lmt  ramp(.55…1)  — table chrome fade-in / landing layer fade-out
+   plus data-lm="landing|morph|table" for the on/off bits.
+   Defaults are the table state, so anything unset renders exactly as before. */
+
+.tasks.lm {
+  --lm: 1;
+  --lmf: 1;
+  --lmt: 1;
+}
+
+/* Page title grows a step at the landing. */
+.tasks.lm .tasks-title {
+  font-size: calc(28px + 4px * (1 - var(--lm)));
+}
+
+/* Hero search: a centered 640px card that widens into the full-width toolbar. */
+.tasks.lm .toolbar {
+  width: calc(640px * (1 - var(--lm)) + 100% * var(--lm));
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: calc(56px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .usearch-bar,
+.tasks.lm .toolbar .search-input {
+  height: calc(40px + 14px * (1 - var(--lm)));
+  border-radius: calc(8px + 2px * (1 - var(--lm)));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--lm)));
+}
+
+/* ── Filter row: ONE row for both states. It widens from the centered 660px
+   landing width to full width (same motion as the search bar above it), the
+   "Suggested" label collapses, the suggested pills persist, and the real
+   Filters row unfolds after them (--lmf) — pills transition between states
+   rather than one set crossfading into another. ── */
+.tasks.lm .lm-filter-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  margin: 0 auto;
+  min-width: 0;
+  padding-bottom: 14px; /* matches .filters' bottom spacing */
+  overflow: hidden; /* clip the sliding pills mid-morph */
+}
+.tasks.lm[data-lm="table"] .lm-filter-slot {
+  overflow: visible; /* the filter pills' dropdown panels must escape */
+}
+/* The suggested pills persist through the morph, then compress away as the
+   table chrome forms (--lmt) — the real filter pills slide left into their
+   place, so the row reads as one set transitioning into the other. */
+.tasks.lm .lm-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  max-width: calc(600px * (1 - var(--lmt)));
+  opacity: calc(1 - var(--lmt));
+  margin-right: calc(-8px * var(--lmt));
+}
+.tasks.lm[data-lm="table"] .lm-pills {
+  display: none;
+}
+.lm-suggested-label {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: calc(70px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  /* At p=1 the zero-width label would still leave a stray flex gap — pull it in. */
+  margin-right: calc(2px - 10px * var(--lm));
+}
+/* The real Filters row unfolds after the suggested pills. */
+.tasks.lm .lm-filters-flow {
+  display: flex;
+  min-width: 0;
+  max-width: calc(2000px * var(--lmf));
+  opacity: var(--lmf);
+  overflow: hidden;
+  margin-left: calc(-8px * (1 - var(--lmf)));
+}
+.tasks.lm[data-lm="landing"] .lm-filters-flow {
+  pointer-events: none;
+}
+/* Fully unfolded: uncap and unclip so the filter pills' dropdown panels open. */
+.tasks.lm[data-lm="table"] .lm-filters-flow {
+  max-width: none;
+  overflow: visible;
+  margin-left: 0;
+}
+.tasks.lm .lm-filters-flow > .filters {
+  padding-bottom: 0;
+  flex-shrink: 0;
+}
+.lm-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #3b3b3f;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-pill svg {
+  color: #a8a8a8;
+}
+.lm-pill:hover {
+  border-color: rgba(233, 114, 55, 0.5);
+  color: var(--accent);
+}
+
+/* ── Stage: the landing layer sits over the real table block and they
+   crossfade over the last part of the gesture (--lmt). ── */
+.tasks.lm .lm-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tasks.lm .lm-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* One list, not two: the landing list IS the visible list for the whole
+   gesture (its columns grow into the table layout below), and the real table
+   only takes over at p=1 through a short crossfade — the two are column-
+   aligned by then, so it reads as the same list settling, not a swap. */
+.tasks.lm .lm-table .table-xscroll,
+.tasks.lm .lm-table .co-panel {
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.tasks.lm:not([data-lm="table"]) .lm-table .table-xscroll,
+.tasks.lm:not([data-lm="table"]) .lm-table .co-panel {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s 0.25s;
+}
+/* The footer fades in with the table chrome, like the reference. */
+.tasks.lm .lm-table .pagination {
+  opacity: var(--lmt);
+}
+
+.tasks.lm .lm-land {
+  position: absolute;
+  inset: 0;
+  /* Stop above the footer as it fades in, so late-morph rows never overlap it. */
+  bottom: calc(48px * var(--lmt));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.tasks.lm[data-lm="landing"] .lm-land {
+  pointer-events: auto;
+}
+.tasks.lm[data-lm="table"] .lm-land {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s 0.25s;
+}
+
+.lm-caption {
+  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  margin-top: calc(65px * (1 - var(--lm)));
+  height: calc(26px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.lm-caption-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.lm-caption-all {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-caption-all:hover {
+  color: var(--accent);
+}
+
+.lm-list {
+  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 calc(62% + 42% * var(--lm)),
+    transparent calc(98% + 42% * var(--lm))
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 calc(62% + 42% * var(--lm)),
+    transparent calc(98% + 42% * var(--lm))
+  );
+}
+/* Morphing header row — grows in with the table chrome (--lmt) and matches
+   the real thead's metrics at p=1 (Figma 79:445: 48px, 16px/600 white,
+   1px #404040 rule below). */
+.lm-head {
+  display: grid; /* template comes inline from LandingOverlay */
+  align-items: center;
+  height: calc(48px * var(--lmt));
+  opacity: var(--lmt);
+  overflow: hidden;
+  border-bottom: 1px solid rgba(64, 64, 64, var(--lmt));
+}
+.lm-head .lm-cell {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* The table rows' right-edge wash (Figma 79:446 / 435:516) fades in with the
+   table chrome — the collapsed row atom (600:1462) has no gradient. */
+.lm-head,
+.lm-row {
+  background-image: linear-gradient(
+    90deg,
+    rgba(122, 122, 122, 0) calc(100% - 90px),
+    rgba(122, 122, 122, calc(0.02 * var(--lmt))) calc(100% - 40px),
+    rgba(122, 122, 122, 0) calc(100% - 40px)
+  );
+}
+
+/* Rows are the table's exact 48px in both states (Figma 435:515 / 600:1461). */
+.lm-row {
+  display: grid; /* template comes inline from LandingOverlay */
+  position: relative; /* anchors the pinned ⋯ gutter */
+  align-items: center;
+  height: 48px;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  cursor: pointer;
+}
+.lm-head + .lm-row {
+  border-top-color: transparent;
+}
+.lm-row:hover {
+  background: var(--bg-row-hover);
+}
+
+/* Cells share the table's metrics in both states (Figma 600:1461: same 16px
+   type and 12px inset as the full row), so the p=1 hand-off lines up. */
+.lm-cell {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: #a8a8a8;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 12px;
+}
+.lm-cell--name {
+  font-weight: 500;
+  color: #fff;
+}
+/* Columns that grow in from zero width fade in with the filter chrome. */
+.lm-cell--grow {
+  opacity: var(--lmf);
+}
+/* The ⋯ gutter mirrors the real table's sticky actions column: pinned to the
+   row's visible right edge (the real .col-actions pins with sticky right:0
+   when the table overflows), so the kebab never jumps at the hand-off. The
+   grid template still reserves its track, keeping the width budget intact. */
+.lm-cell--dots {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Same stretch share as the real actions column (--lmtw = the page's table
+     width total, set inline by LandingOverlay). */
+  width: calc(max(40px, 40 * 100% / var(--lmtw, 1030)) * var(--lm));
+  color: #7a7a7a;
+  text-align: center;
+  padding: 0;
+}
+.lm-row--dim .lm-cell {
+  color: var(--text-faint);
+}
+
+.lm-hint-wrap {
+  height: calc(47px * (1 - var(--lm)));
+  opacity: calc(1 - 2.6 * var(--lm));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.lm-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  border: 1px solid #3b3b3f;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-hint:hover {
+  color: var(--accent);
+  border-color: rgba(233, 114, 55, 0.5);
+}
+
+/* "↑ Back to search" — first child of the page's .pagination row. */
+.lm-back {
+  margin-right: auto;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-back:hover {
   color: #fff;
 }

@@ -195,6 +195,7 @@ function IndustryMultiSelect({
           <SearchIcon />
         </span>
         <input
+          autoFocus
           placeholder="Search industries…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

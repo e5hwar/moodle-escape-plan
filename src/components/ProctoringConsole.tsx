@@ -3,13 +3,7 @@ import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
 import type { SortKey, SortDir } from "./ProctoringPage";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  ChevronRightIcon,
-  EnterKeyIcon,
-  SortIcon,
-} from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, EnterKeyIcon, SortIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { FullscreenViewer } from "./FullscreenViewer";

@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { transferUsers, findUser, type MergeUser } from "../data/transferSubscription";
 import { AccountPicker, Avatar, detailRows } from "./MergeAccountsPage";
-import {
-  AlertTriangleIcon,
-  ArrowRightIcon,
-  CheckBoldIcon,
-  CreditCardIcon,
-  InfoCircleIcon,
-  SwapIcon,
-  XCircleIcon,
-} from "./icons";
+import { AlertTriangleIcon, ArrowRightIcon, CheckBoldIcon, CreditCardIcon, InfoCircleIcon, SwapIcon, XCircleIcon } from "./icons";
 import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
 
 /**

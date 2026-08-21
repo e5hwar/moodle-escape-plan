@@ -16,7 +16,7 @@ import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
-import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
@@ -378,11 +378,11 @@ export function SkillsPage() {
 
                   <div className="pagination">
                     <span>
-                      Showing {rows.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}
+                      Showing {rows.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
                     </div>
                   </div>
                 </div>

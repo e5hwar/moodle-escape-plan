@@ -1,14 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
-import {
-  PlusCircleIcon,
-  XCircleIcon,
-  ChevronDownIcon,
-  SearchIcon,
-  CheckIcon,
-  EditColumnsIcon,
-  DragHandleIcon,
-} from "./icons";
+import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import {
   CREATED_BY_IN_HOUSE,
   CREATED_BY_B2B,
@@ -522,6 +514,7 @@ export function SectionedMultiSelect({
             <SearchIcon />
           </span>
           <input
+            autoFocus
             placeholder={searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -923,6 +916,10 @@ export function CheckRow({
         dropTarget ? "is-drop-target" : ""
       }`}
       onClick={onChange}
+      // Ticking a row must not pull focus off a search box above it — the
+      // search stays live so the user can keep typing. Draggable rows keep
+      // their default mousedown, which the HTML5 drag needs.
+      onMouseDown={draggable ? undefined : (e) => e.preventDefault()}
       draggable={draggable}
       onDragStart={(e) => {
         // Firefox needs payload set or the drag never starts.

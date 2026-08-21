@@ -5,7 +5,7 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
@@ -271,24 +271,19 @@ export function ScholarshipsPage() {
 
               <div className="pagination">
                 <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1}–
-                  {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
                   <button
                     className="page-btn"
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    ‹
-                  </button>
+                  ><ChevronLeftIcon /></button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    ›
-                  </button>
+                  ><ChevronRightIcon /></button>
                 </div>
               </div>
             </div>

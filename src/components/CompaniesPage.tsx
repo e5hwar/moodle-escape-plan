@@ -20,7 +20,7 @@ import {
   type SignUpChannel,
   type TaxStatus,
 } from "../data/companies";
-import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon, MenuPlaceholderIcon } from "./icons";
+import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
@@ -29,6 +29,21 @@ import {
   type CompanyColumnState,
 } from "./CompanyFilters";
 import { CompaniesSearch } from "./CompaniesSearch";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+
+/* Landing-morph columns — mirror the table's default visible columns (key,
+   label, width) so the p=1 hand-off to the real table lines up. */
+const LM_COLS: LandingCol[] = [
+  { key: "email", label: "Email", width: 195 },
+  { key: "tier", label: "Tier", width: 130, fixed: true },
+  { key: "status", label: "Status", width: 190 },
+  { key: "signUp", label: "Sign-Up", width: 130 },
+  { key: "cycle", label: "Billing Cycle", width: 140 },
+  { key: "seats", label: "Seats", width: 64 },
+  { key: "industry", label: "Industry", width: 145 },
+  { key: "partnership", label: "Partnership", width: 155 },
+];
 import {
   MultiSelect,
   INDUSTRY_OPTIONS,
@@ -39,6 +54,7 @@ import {
   COUNTRY_OPTIONS,
   US_STATES,
 } from "./NewCompanyWizard";
+import { SelectField } from "./SelectField";
 
 const PAGE_SIZE = 50;
 
@@ -170,6 +186,55 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
+  // Landing morph — the page opens as the search-first landing and the wheel
+  // (or any search / pill / row interaction) morphs it into the table view.
+  const morph = useLandingMorph(Boolean(initialQuery));
+
+  const suggested = useMemo(() => {
+    const pills: LandingPill[] = [];
+    topValues(companies, (c) => c.tier, 2).forEach((tier) =>
+      pills.push({
+        key: `tier-${tier}`,
+        label: tier,
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, tiers: Array.from(new Set([...prev.tiers, tier as Tier])) }));
+          morph.showTable();
+        },
+      }),
+    );
+    topValues(companies, (c) => c.industry, 2).forEach((ind) =>
+      pills.push({
+        key: `ind-${ind}`,
+        label: ind,
+        onPick: () => {
+          setFilters((prev) => ({ ...prev, industries: Array.from(new Set([...prev.industries, ind])) }));
+          morph.showTable();
+        },
+      }),
+    );
+    return pills;
+  }, [companies, morph.showTable]);
+
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => {
+    const billing = getCompanyBilling(c);
+    const status = getStatusPill(billing);
+    return {
+      key: c.id,
+      name: c.name,
+      dim: billing.status === "Canceled",
+      cells: {
+        email: c.email,
+        tier: c.tier,
+        status: <span className={`co-status-pill co-status-pill--${status.tone}`}>{status.label}</span>,
+        signUp: billing.signUp === "Self Sign-Up" ? "Self" : "Internal",
+        cycle: billingCycleLabel(c, billing),
+        seats: c.seats.toLocaleString(),
+        industry: c.industry || "—",
+        partnership: c.partnership || "—",
+      },
+    };
+  });
+
   function toggleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
@@ -199,7 +264,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks">
+        <div className="tasks lm" ref={morph.rootRef}>
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Companies</h1>
@@ -225,12 +290,29 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
                   industries={filters.industries}
                   onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
                   query={query}
-                  onCommit={setQuery}
+                  onCommit={(q) => {
+                    setQuery(q);
+                    morph.showTable();
+                  }}
                 />
               </div>
 
-              <CompanyFilters filters={filters} setFilters={setFilters} />
+              <LandingFilterRow pills={suggested}>
+                  <CompanyFilters filters={filters} setFilters={setFilters} />
+                </LandingFilterRow>
 
+              <div className="lm-stage">
+              <LandingOverlay
+                caption="Companies A–Z"
+                total={sorted.length}
+                columns={LM_COLS}
+                nameLabel="Company"
+                nameWidth={220}
+                rows={landingRows}
+                onShowAll={morph.showTable}
+                onRowClick={() => morph.showTable()}
+              />
+              <div className="lm-table">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup columns={columns} />
@@ -289,13 +371,16 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
               </div>
 
               <div className="pagination">
+                <BackToSearch onClick={morph.showLanding} />
                 <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>›</button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
                 </div>
+              </div>
+              </div>
               </div>
             </div>
           </div>
@@ -710,86 +795,81 @@ function EditCompanyModal({
             <input
               autoFocus
               className="form-input"
-              placeholder="e.g. Apex HVAC Solutions"
+              placeholder="Company Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            <p className="form-help">This will be the name shown on Stripe's receipts</p>
           </div>
 
           <div className="form-group">
             <label className="form-label">Address</label>
             <div className="address-field">
-              <div className="address-row">
-                <select className="address-select" value={country} onChange={(e) => setCountry(e.target.value)}>
-                  {COUNTRY_OPTIONS.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <span className="address-chevron"><ChevronDownIcon /></span>
-              </div>
+              <SelectField
+                value={country}
+                options={COUNTRY_OPTIONS}
+                onChange={setCountry}
+                renderTrigger={({ toggle, label }) => (
+                  <button type="button" className="address-row address-row-btn" onClick={toggle}>
+                    <span className="address-select">{label}</span>
+                    <span className="address-chevron"><ChevronDownIcon /></span>
+                  </button>
+                )}
+              />
               <input className="address-input" placeholder="Address Line 1 (Optional)" value={addrLine1} onChange={(e) => setAddrLine1(e.target.value)} />
               <input className="address-input" placeholder="Address Line 2 (Optional)" value={addrLine2} onChange={(e) => setAddrLine2(e.target.value)} />
               <div className="address-split">
                 <input className="address-input address-cell" placeholder="City (Optional)" value={addrCity} onChange={(e) => setAddrCity(e.target.value)} />
                 <input className="address-input address-cell" placeholder="Zipcode" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} />
               </div>
-              <div className="address-row">
-                <select className={`address-select ${addrState ? "" : "is-placeholder"}`} value={addrState} onChange={(e) => setAddrState(e.target.value)}>
-                  <option value="">State</option>
-                  {US_STATES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <span className="address-chevron"><ChevronDownIcon /></span>
-              </div>
+              <SelectField
+                value={addrState}
+                options={US_STATES}
+                onChange={setAddrState}
+                placeholder="State"
+                renderTrigger={({ toggle, label, isPlaceholder }) => (
+                  <button type="button" className="address-row address-row-btn" onClick={toggle}>
+                    <span className={`address-select ${isPlaceholder ? "is-placeholder" : ""}`}>{label}</span>
+                    <span className="address-chevron"><ChevronDownIcon /></span>
+                  </button>
+                )}
+              />
             </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Tax Status</label>
-            <select className="form-select" value={taxStatus} onChange={(e) => setTaxStatus(e.target.value as TaxStatus)}>
-              {TAX_STATUSES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+            <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Assigned CSM</label>
-            <select
-              className={`form-select ${assignedCsm ? "" : "is-placeholder"}`}
+            <SelectField
               value={assignedCsm}
-              onChange={(e) => setAssignedCsm(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {CSM_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              options={CSM_OPTIONS}
+              onChange={setAssignedCsm}
+              placeholder="Unassigned"
+            />
           </div>
 
           <div className="form-group">
             <label className="form-label">Assigned Sales Rep</label>
-            <select
-              className={`form-select ${assignedSalesRep ? "" : "is-placeholder"}`}
+            <SelectField
               value={assignedSalesRep}
-              onChange={(e) => setAssignedSalesRep(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {SALES_REP_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
+              options={SALES_REP_OPTIONS}
+              onChange={setAssignedSalesRep}
+              placeholder="Unassigned"
+            />
           </div>
 
           <div className="form-group">
             <label className="form-label">Industry</label>
-            <MultiSelect options={INDUSTRY_OPTIONS} value={industries} onChange={setIndustries} placeholder="Select industries…" />
+            <MultiSelect options={INDUSTRY_OPTIONS} value={industries} onChange={setIndustries} placeholder="Select Industries" searchPlaceholder="Search Industries…" />
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Partnership <span className="co-w-note">(optional)</span></label>
-            <MultiSelect options={PARTNERSHIP_OPTIONS} value={partnerships} onChange={setPartnerships} placeholder="Select partnerships…" />
+            <MultiSelect options={PARTNERSHIP_OPTIONS} value={partnerships} onChange={setPartnerships} placeholder="Select Partnerships" searchPlaceholder="Search Partnerships…" />
           </div>
         </div>
 

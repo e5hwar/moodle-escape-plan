@@ -31,20 +31,7 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { PageBreak } from "./PageBreak";
 import { SearchHints } from "./SearchPanelParts";
-import {
-  ArrowUpRightIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FileIcon,
-  HandsOnIcon,
-  PackageIcon,
-  PlusCircleIcon,
-  QuizIcon,
-  RowArrowIcon,
-  SearchIcon,
-  SmallXIcon,
-  XCircleIcon,
-} from "./icons";
+import { ArrowUpRightIcon, ChevronDownIcon, ChevronRightIcon, FileIcon, HandsOnIcon, PackageIcon, PlusCircleIcon, QuizIcon, RowArrowIcon, SearchIcon, SmallXIcon, XCircleIcon } from "./icons";
 
 /**
  * Manage Completions — search an employee or a cohort, then a certification

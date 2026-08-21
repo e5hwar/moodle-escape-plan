@@ -1,11 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import {
-  UploadIcon,
-  GlobeIcon,
-  LockIcon,
-} from "./icons";
+import { UploadIcon, GlobeIcon, LockIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
 
 /* ─── Icons ─── */
