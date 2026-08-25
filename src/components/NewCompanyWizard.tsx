@@ -13,11 +13,10 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon, SearchIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon, SearchIcon, StepperMinusIcon, StepperPlusIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
 import { WizardStepRail } from "./WizardStepRail";
-import { PageBreak } from "./PageBreak";
 import { DateField } from "./DateField";
 
 /* ─────────────── Constants ─────────────── */
@@ -108,12 +107,6 @@ const PRICE_CURRENCIES: { code: string; symbol: string; name: string }[] = [
   { code: "AUD", symbol: "A$",  name: "Australian Dollar" },
 ];
 
-const PAID_TIER_DESC: Record<PaidTier, string> = {
-  Essentials: "Core software features with standard CS support.",
-  Growth: "Expanded features and priority CS support for scaling teams.",
-  Pro: "Full feature set with dedicated CS and the highest level of support.",
-};
-
 /* ─────────────── Main wizard ─────────────── */
 
 type Props = {
@@ -126,6 +119,11 @@ type Props = {
   // Renders only the Plan step as a single page (no step rail / Company-details
   // step). Used by the "Manage Subscription" action on the Companies list.
   subscriptionOnly?: boolean;
+  // Renders only the Company-details step as a single page (no step rail).
+  // Used by the "Edit Company" action on the Companies list: saving patches the
+  // identity & segmentation fields only — plan, billing, and the admin account
+  // are untouched.
+  detailsOnly?: boolean;
   // Navigates to the B2B tab within Product Config, used by the Industry and
   // Partnership subtext links on the Company details step.
   onNavigateToProductConfig?: () => void;
@@ -137,7 +135,7 @@ function planFor(c: Company): Plan {
   return "subscription";
 }
 
-export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false, onNavigateToProductConfig }: Props) {
+export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false, detailsOnly = false, onNavigateToProductConfig }: Props) {
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
   // so the edit form starts populated either way.
@@ -330,6 +328,35 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   ];
 
 
+  // Details-only edit: patch the identity & segmentation fields onto the
+  // existing company, leaving plan, billing, status, and the admin account
+  // untouched — those live under Manage Subscription / Account Holder.
+  function handleSaveDetails() {
+    if (!editCompany) return;
+    onSave?.({
+      ...editCompany,
+      name: name.trim(),
+      taxStatus,
+      assignedCsm: assignedCsm || undefined,
+      assignedSalesRep: assignedSalesRep || undefined,
+      industry: industries.join(", "),
+      partnership: partnerships.join(", "),
+      address: [addrLine1, addrLine2, addrCity, addrState, addrPin, country]
+        .map((s) => s.trim()).filter(Boolean).join(", ") || undefined,
+      addressParts: [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
+        ? {
+            country: country.trim() || undefined,
+            line1: addrLine1.trim() || undefined,
+            line2: addrLine2.trim() || undefined,
+            city: addrCity.trim() || undefined,
+            pin: addrPin.trim() || undefined,
+            state: addrState.trim() || undefined,
+          }
+        : undefined,
+    });
+    onClose();
+  }
+
   function handleCreate() {
     const company: Omit<Company, "id"> = {
       name: name.trim(),
@@ -426,7 +453,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   return (
     <div className={`wizard company-wizard${subscriptionOnly ? " company-wizard--sub" : ""}`}>
       <div className="wizard-body">
-        {!subscriptionOnly && (
+        {!subscriptionOnly && !detailsOnly && (
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
@@ -532,9 +559,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!companyValid}
               data-tooltip={ctaTooltip}
-              onClick={() => setStep(1)}
+              onClick={detailsOnly ? handleSaveDetails : () => setStep(1)}
             >
-              Continue
+              {detailsOnly ? "Save changes" : "Continue"}
             </button>
           ) : step === 1 ? (
             <button
@@ -878,9 +905,8 @@ function BillingImpactRail({
   monthlyTotal: number;
   sym: string;
 }) {
-  // Every case renders the same subscription-preview design (Figma 107:1236):
-  // a top diff/summary card + a Billing Impact timeline. The three inputs are
-  // normalised into one PreviewModel so there is a single render path.
+  // The three wizard cases normalise into one PreviewModel, so the timeline has
+  // a single render path.
   const model: PreviewModel =
     change
       ? changeToModel(change)
@@ -890,9 +916,8 @@ function BillingImpactRail({
 
   return (
     <aside className="cw-impact">
-      <div className="cw-impact-card">
-        <SubPreview model={model} />
-      </div>
+      <h2 className="cw-impact-title">Preview</h2>
+      <SubPreview model={model} />
     </aside>
   );
 }
@@ -903,8 +928,6 @@ function BillingImpactRail({
 type PreviewRow = { label: string; oldStr?: string; newStr: string };
 type PreviewModel = {
   empty?: boolean;
-  topLabel: string;
-  pill: { text: string; muted: boolean } | null;
   rows: PreviewRow[];
   timeline: TimelineEntry[];
 };
@@ -912,11 +935,9 @@ type PreviewModel = {
 // Editing a running paid subscription (plan stays "subscription").
 function changeToModel(change: ChangePreview): PreviewModel {
   if (!change.anyChange) {
-    return { empty: true, topLabel: "What's Changing", pill: null, rows: [], timeline: [] };
+    return { empty: true, rows: [], timeline: [] };
   }
   return {
-    topLabel: "What's Changing",
-    pill: change.pill,
     rows: change.rows.map((r) => ({ label: r.label, oldStr: r.oldStr, newStr: r.newStr })),
     timeline: change.timeline,
   };
@@ -939,8 +960,6 @@ function planTypeChangeToModel(
     : new Date(APP_TODAY.getFullYear(), APP_TODAY.getMonth() + 1, 1);
   const renewStr = fmtFullDate(renewDate);
   return {
-    topLabel: "What's Changing",
-    pill: { text: "At Cycle End", muted: true },
     rows: [
       { label: "Plan", oldStr: `${cur.tier} Subscription`, newStr: ptc.target },
       { label: "Recurring", oldStr: totalDisplay(curTotal, cur.cycle, curSym), newStr: money(0, curSym) },
@@ -972,7 +991,7 @@ function planTypeChangeToModel(
 }
 
 // Creating a new company, or editing one without a running paid subscription.
-// No prior state to diff against, so the top card is a plain plan summary.
+// No prior state to diff against, so the timeline is built from the form alone.
 function createToModel({
   plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
 }: {
@@ -992,8 +1011,6 @@ function createToModel({
   if (plan === "free-trial") {
     const trialEnd = new Date(APP_TODAY.getTime() + TRIAL_DAYS * 86400000);
     return {
-      topLabel: "Plan Summary",
-      pill: { text: "No Charge", muted: true },
       rows: [{ label: "Plan", newStr: "Free Trial" }],
       timeline: [
         {
@@ -1013,8 +1030,6 @@ function createToModel({
 
   if (plan === "complimentary") {
     return {
-      topLabel: "Plan Summary",
-      pill: { text: "No Charge", muted: true },
       rows: [{ label: "Plan", newStr: "Free Access" }],
       timeline: [
         {
@@ -1094,16 +1109,12 @@ function createToModel({
     ];
   }
 
-  return {
-    topLabel: "Plan Summary",
-    pill: { text: "Effective Today", muted: false },
-    rows,
-    timeline,
-  };
+  return { rows, timeline };
 }
 
-// Subscription preview (Figma 107:1236): a "What's Changing" / "Plan Summary"
-// card + a "Billing Impact" timeline. One render path for every wizard case.
+// Subscription preview (Figma 616:969): a headerless summary card — old → new
+// where there is a prior value — over the billing timeline. Both sit directly in
+// the rail; there are no section headers between them.
 function SubPreview({ model }: { model: PreviewModel }) {
   if (model.empty) {
     return (
@@ -1114,59 +1125,43 @@ function SubPreview({ model }: { model: PreviewModel }) {
     );
   }
   return (
-    <div className="sub-preview">
-      <section className="sub-preview-sec">
-        <PageBreak
-          label={model.topLabel}
-          trailing={
-            model.pill && (
-              <span className={`sub-pill ${model.pill.muted ? "sub-pill--muted" : "sub-pill--accent"}`}>
-                {model.pill.text}
-              </span>
-            )
-          }
-        />
-        <div className="sub-changes-wrap">
-          <div className="sub-changes">
-            {model.rows.map((r) => (
-              <div className="sub-change-row" key={r.label}>
-                <span className="sub-change-label">{r.label}</span>
-                <span className="sub-change-val">
-                  {r.oldStr != null && (
-                    <>
-                      <span className="sub-change-old">{r.oldStr}</span>
-                      <span className="sub-change-arrow">→</span>
-                    </>
-                  )}
-                  <span className="sub-change-new">{r.newStr}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="sub-preview-sec">
-        <PageBreak label="Billing Impact" />
-        <div className="sub-timeline">
-          {model.timeline.map((t, i) => (
-            <div className="sub-timeline-item" key={i}>
-              <div className="sub-timeline-rail">
-                <span className={`sub-timeline-dot ${t.now ? "is-now" : ""}`} />
-                {i < model.timeline.length - 1 && <span className="sub-timeline-divider" />}
-              </div>
-              <div className="sub-timeline-body">
-                <p className="sub-timeline-date">{t.date}</p>
-                {t.amount != null && (
-                  <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+    <>
+      {model.rows.length > 0 && (
+        <div className="sub-summary">
+          {model.rows.map((r) => (
+            <div className="sub-summary-row" key={r.label}>
+              <span className="sub-summary-label">{r.label}</span>
+              <span className="sub-summary-val">
+                {r.oldStr != null && (
+                  <>
+                    <span className="sub-summary-old">{r.oldStr}</span>
+                    <span className="sub-summary-arrow">→</span>
+                  </>
                 )}
-                <p className="sub-timeline-desc">{t.desc}</p>
-              </div>
+                <span className="sub-summary-new">{r.newStr}</span>
+              </span>
             </div>
           ))}
         </div>
-      </section>
-    </div>
+      )}
+      <div className="sub-timeline">
+        {model.timeline.map((t, i) => (
+          <div className="sub-timeline-item" key={i}>
+            <div className="sub-timeline-rail">
+              <span className={`sub-timeline-dot ${t.now ? "is-now" : ""}`} />
+              {i < model.timeline.length - 1 && <span className="sub-timeline-divider" />}
+            </div>
+            <div className="sub-timeline-body">
+              <p className="sub-timeline-date">{t.date}</p>
+              {t.amount != null && (
+                <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+              )}
+              <p className="sub-timeline-desc">{t.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -1524,8 +1519,8 @@ function Step2Plan({
 
   return (
     <>
-      <h1 className="wizard-title">Plan selection</h1>
-      <p className="wizard-desc">Choose the access plan. Subscription plans require billing configuration.</p>
+      <h1 className="wizard-title">Plan Selection</h1>
+      <p className="wizard-desc">Set up the company's plan</p>
 
       <div className="form-group">
         <label className="form-label">Plan <span className="req">*</span></label>
@@ -1534,7 +1529,7 @@ function Step2Plan({
             selected={plan === "subscription"}
             onSelect={() => setPlan("subscription")}
             title="Subscription"
-            desc="Paid plan. Choose a tier, billing cycle, and rate. Stripe subscription is created on save."
+            desc="Paid plan. You can set the Tier, Price-Per Seat, and Payment Method"
           />
           <RadioCard
             selected={plan === "free-trial"}
@@ -1543,47 +1538,45 @@ function Step2Plan({
             title="Free Trial"
             desc={
               trialExpired
-                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Free Access."
-                : "No payment method required. Limited access for the configured trial window, then converts to paid."
+                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Complimentary Access."
+                : `${TRIAL_DAYS}-day free trial. No payment method required to start the trial.`
             }
           />
           <RadioCard
             selected={plan === "complimentary"}
             onSelect={() => setPlan("complimentary")}
-            title="Free Access"
-            desc="Admin-granted free access. No Stripe subscription is created."
+            title="Complimentary Access"
+            desc="Free access, with all the same features as that of the Pro Tier."
           />
         </div>
       </div>
 
       {isSubscription && (
         <>
-          <div className="form-divider" />
-
           <div className="form-group">
-            <label className="form-label">Tier <span className="req">*</span></label>
-            <div className="radio-card-group">
+            <label className="form-label">Subscription Tier <span className="req">*</span></label>
+            <div className="seg-control">
               {(["Essentials", "Growth", "Pro"] as PaidTier[]).map((t) => (
-                <RadioCard
+                <button
                   key={t}
-                  selected={tier === t}
-                  onSelect={() => setTier(t)}
-                  title={t}
-                  desc={PAID_TIER_DESC[t]}
-                />
+                  type="button"
+                  className={`seg-btn ${tier === t ? "active" : ""}`}
+                  onClick={() => setTier(t)}
+                >
+                  {t}
+                </button>
               ))}
             </div>
           </div>
 
-          <div className="form-divider" />
-
           <div className="form-group">
-            <label className="form-label">Billing cycle <span className="req">*</span></label>
-            <div className="tab-switch">
+            <label className="form-label">Billing Cycle <span className="req">*</span></label>
+            <div className="seg-control">
               {BILLING_CYCLES.map((c) => (
                 <button
                   key={c}
-                  className={`tab-switch-tab ${billingCycle === c ? "active" : ""}`}
+                  type="button"
+                  className={`seg-btn ${billingCycle === c ? "active" : ""}`}
                   onClick={() => setBillingCycle(c)}
                 >
                   {c === "Annual" ? "Yearly" : c}
@@ -1592,8 +1585,23 @@ function Step2Plan({
             </div>
           </div>
 
-          <div className="form-group" style={{ marginTop: 28 }}>
-            <label className="form-label">Per-seat price <span className="req">*</span></label>
+          <div className="form-group">
+            <label className="form-label">Seats <span className="req">*</span></label>
+            <Stepper
+              value={seats}
+              onChange={setSeats}
+              min={1}
+              disabled={seatsLocked}
+            />
+            <p className="form-help">
+              {seatsLocked
+                ? "Seat count is set when the company is created and can't be changed here."
+                : "Minimum 1. Number of seats to be billed for the company's first invoice."}
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Per-Seat Price <span className="req">*</span></label>
             <PerSeatPriceField
               currency={currency}
               setCurrency={setCurrency}
@@ -1608,41 +1616,20 @@ function Step2Plan({
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Seats <span className="req">*</span></label>
-            <input
-              className="form-input"
-              style={{ maxWidth: 160 }}
-              type="number"
-              min={1}
-              placeholder="1"
-              value={seats}
-              disabled={seatsLocked}
-              onChange={(e) => setSeats(e.target.value)}
-            />
-            <p className="form-help">
-              {seatsLocked
-                ? "Seat count is set when the company is created and can't be changed here."
-                : "Every seat is paid, including empty seats. Seats can be reassigned at no charge. Minimum 1 seat."}
-            </p>
-          </div>
-
-          <div className="form-divider" />
-
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Payment method <span className="req">*</span></label>
+            <label className="form-label">Payment Method <span className="req">*</span></label>
             <div className="radio-card-group">
               <RadioCard
                 selected={payment === "Automatic"}
                 onSelect={() => setPayment("Automatic")}
-                title="Automatic"
-                desc="Stripe charges the saved card or ACH on each billing date. A payment link is generated on save."
+                title="Automatically charge a payment method"
+                desc="Generates a unique payment link that must be shared with the company"
               />
               <RadioCard
                 selected={payment === "Manual"}
                 onSelect={() => setPayment("Manual")}
-                title="Manual (invoice)"
-                desc="Stripe issues an invoice paid within the payment window. For invoice or cheque accounts."
+                title="Email invoice to pay manually"
+                desc="Payment due 30 days after the invoice is sent"
               />
             </div>
           </div>
@@ -1677,16 +1664,59 @@ function Step2Plan({
       {plan === "complimentary" && (
         <>
           <div className="co-plan-note" style={{ marginTop: 8 }}>
-            <strong>Free access granted.</strong> No subscription is created in Stripe. Eligible only
-            for companies without an active or paused subscription.
+            <strong>Complimentary access granted.</strong> No subscription is created in Stripe.
+            Eligible only for companies without an active or paused subscription.
           </div>
           <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
-            <label className="form-label">Free Access End Date <span className="req">*</span></label>
+            <label className="form-label">Complimentary Access End Date <span className="req">*</span></label>
             <DateField value={freeAccessEndDate} onChange={setFreeAccessEndDate} />
           </div>
         </>
       )}
     </>
+  );
+}
+
+/* ─────────────── Stepper (Figma 618:1264) ─────────────── */
+
+function Stepper({
+  value, onChange, min = 0, disabled = false,
+}: {
+  value: string; onChange: (v: string) => void; min?: number; disabled?: boolean;
+}) {
+  const n = parseInt(value, 10);
+  const current = Number.isFinite(n) ? n : min;
+  const step = (d: number) => onChange(String(Math.max(min, current + d)));
+
+  return (
+    <div className={`stepper${disabled ? " is-disabled" : ""}`}>
+      <button
+        type="button"
+        className="stepper-btn"
+        aria-label="Decrease"
+        disabled={disabled || current <= min}
+        onClick={() => step(-1)}
+      >
+        <StepperMinusIcon />
+      </button>
+      <input
+        className="stepper-value"
+        type="number"
+        min={min}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="stepper-btn"
+        aria-label="Increase"
+        disabled={disabled}
+        onClick={() => step(1)}
+      >
+        <StepperPlusIcon />
+      </button>
+    </div>
   );
 }
 
@@ -1717,6 +1747,7 @@ function PerSeatPriceField({
   const [priceOpen, setPriceOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const priceInputRef = useRef<HTMLInputElement | null>(null);
 
   // Close both menus on any outside click.
   useEffect(() => {
@@ -1762,37 +1793,44 @@ function PerSeatPriceField({
           onClick={() => { setCurrencyOpen((o) => !o); setPriceOpen(false); }}
         >
           <span className="cw-price-cur-code">{currency}</span>
-          <span className="cw-price-caret">▾</span>
+          <span className="cw-price-caret"><ChevronDownIcon /></span>
         </button>
 
-        <span className="cw-price-sym">{sym}</span>
-
-        <input
-          className="cw-price-input"
-          type="text"
-          inputMode="decimal"
-          placeholder="Find or add a price…"
-          value={priceStr}
-          onFocus={() => { setPriceOpen(true); setCurrencyOpen(false); }}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) {
-              setPriceStr(v);
-              setPriceOpen(true);
+        {/* One cell: the value, the unit, and the menu caret — the node draws no
+            divider between them, only between currency and price. */}
+        <div
+          className="cw-price-cell"
+          onMouseDown={(e) => {
+            // Clicks anywhere in the cell (unit, caret, padding) open the menu
+            // and land the caret in the input, which is the only typable part.
+            if (e.target !== e.currentTarget.querySelector("input")) {
+              e.preventDefault();
+              setPriceOpen((o) => !o);
+              setCurrencyOpen(false);
+              priceInputRef.current?.focus();
             }
           }}
-        />
-
-        <span className="cw-price-unit">/ seat / {unitWord}</span>
-
-        <button
-          type="button"
-          className="cw-price-toggle"
-          aria-label="Saved prices"
-          onMouseDown={(e) => { e.preventDefault(); setPriceOpen((o) => !o); setCurrencyOpen(false); }}
         >
-          ▾
-        </button>
+          <span className="cw-price-sym">{sym}</span>
+          <input
+            ref={priceInputRef}
+            className="cw-price-input"
+            type="text"
+            inputMode="decimal"
+            placeholder="Find or add a price…"
+            value={priceStr}
+            onFocus={() => { setPriceOpen(true); setCurrencyOpen(false); }}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) {
+                setPriceStr(v);
+                setPriceOpen(true);
+              }
+            }}
+          />
+          <span className="cw-price-unit">/seat/{unitWordLong}</span>
+          <span className="cw-price-caret"><ChevronDownIcon /></span>
+        </div>
 
         {/* Currency dropdown */}
         {currencyOpen && (
@@ -1818,11 +1856,21 @@ function PerSeatPriceField({
               <button
                 key={p.id}
                 type="button"
-                className="cw-price-opt cw-price-opt--saved"
+                /* Marked against `exact`, not the rate — two saved prices can
+                   share one rate, and `exact` is the one the note below the
+                   field names as the current price. */
+                className={`cw-price-opt cw-price-opt--saved${p === exact ? " is-current" : ""}`}
                 onMouseDown={(e) => { e.preventDefault(); pick(p); }}
               >
-                <span className="cw-price-opt-label">{p.label || `${sym}${rateOf(p)}`}</span>
-                <span className="cw-price-opt-rate">{sym}{rateOf(p)}</span>
+                {/* Node 619:1332 writes the cycle into the row ("$56 USD/month"),
+                    but a SavedPrice stores only a rate — its cycle lives in the
+                    label, and the list is not filtered by the field's cycle, so
+                    taking the unit from the field labels Monthly prices "/year".
+                    The rate and currency are what the data can state. */}
+                <span className="cw-price-opt-rate">
+                  {sym}{rateOf(p)} {currency}
+                </span>
+                <span className="cw-price-opt-label">{p.label}</span>
               </button>
             ))}
 
@@ -1840,8 +1888,6 @@ function PerSeatPriceField({
                 Create new price · {sym}{entered} {currency}
               </button>
             )}
-
-            <div className="cw-price-foot">Filtered to {currency}.</div>
           </div>
         )}
       </div>
@@ -2380,7 +2426,7 @@ function MultiSelectMenu({
 
 /* ─────────────── Shared sub-components ─────────────── */
 
-function RadioCard({
+export function RadioCard({
   selected, onSelect, title, desc, disabled = false,
 }: {
   selected: boolean; onSelect: () => void; title: React.ReactNode; desc?: string; disabled?: boolean;

@@ -1,36 +1,45 @@
-/* ─────────────── Shared wizard step rail ("Quiet Rail") ───────────────
+/* ─────────────── Shared wizard step rail ───────────────
    The left-panel step marker used by every wizard (Company, Task, Certification,
-   Skill, Award, Design Template). The rail is monochrome: completed steps recede
-   to a quiet grey check, and the only colour is the orange number on the active
-   step. Each row shows just a glyph column + title — no per-step subtext. */
+   Skill, Award, Design Template). Figma 625:1459 "Wizard Left Panel": each row
+   is a 16px glyph column (mono number, grey check, or red error circle) + a
+   16px SemiBold title. The active step is white; done steps recede to #7a7a7a;
+   an error step goes red — glyph AND title. */
 
 export type WizardStepStatus = "active" | "done" | "upcoming" | "error";
 
-// Complete step: a quiet grey check — it recedes so the active orange number is
-// the only thing on the rail that carries colour.
+// Complete step: the 16px grey check (Figma 625:1557). The glyph sits in the
+// 16-unit box per the Figma insets via the offset viewBox; colour comes from
+// the rail's currentColor.
 export function StepCheckIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg width="16" height="16" viewBox="-3.62 -4.92 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path
-        d="M2.2 6.4L4.8 9L9.8 3.6"
-        stroke="rgba(255,255,255,0.34)"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M10.3701 0.942809L4.24281 7.07148L0.942809 3.77148"
+        stroke="currentColor"
+        strokeWidth="1.33333"
+        strokeLinecap="square"
       />
     </svg>
   );
 }
 
-// Error step ("needs input"): the quiet-rail warning glyph — an exclamation in a
-// circle. Only the glyph carries colour (via currentColor); the step title stays
-// neutral. Matches the "Quiz Wizard Quiet Rail" reference exactly.
+// Error step ("needs input"): the 16px error-circle (Figma 625:1551) — an
+// exclamation in a circle, coloured via currentColor.
 function StepAlertIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <circle cx="7" cy="7" r="5.9" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M7 3.9V7.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="7" cy="10.2" r="0.95" fill="currentColor" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        d="M14.6667 8C14.6667 11.6819 11.6819 14.6667 8 14.6667C4.3181 14.6667 1.33333 11.6819 1.33333 8C1.33333 4.3181 4.3181 1.33333 8 1.33333C11.6819 1.33333 14.6667 4.3181 14.6667 8Z"
+        stroke="currentColor"
+        strokeWidth="1.33333"
+        strokeLinecap="square"
+      />
+      <path
+        d="M8 5V8.66667M8 11H8.0026V11.0026H8V11Z"
+        stroke="currentColor"
+        strokeWidth="1.33333"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }

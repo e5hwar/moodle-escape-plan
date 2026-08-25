@@ -12,15 +12,15 @@ import {
   getStripeCustomerId,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
-  TAX_STATUSES,
   type Company,
   type CompanyBilling,
-  type CompanyUser,
   type Tier,
   type SignUpChannel,
-  type TaxStatus,
 } from "../data/companies";
-import { SortIcon, AddIcon, ChevronDownIcon, RowEditIcon, RowCardIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import {
+  SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
+  MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
+} from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
@@ -29,6 +29,7 @@ import {
   type CompanyColumnState,
 } from "./CompanyFilters";
 import { CompaniesSearch } from "./CompaniesSearch";
+import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
@@ -44,17 +45,10 @@ const LM_COLS: LandingCol[] = [
   { key: "industry", label: "Industry", width: 145 },
   { key: "partnership", label: "Partnership", width: 155 },
 ];
-import {
-  MultiSelect,
-  INDUSTRY_OPTIONS,
-  PARTNERSHIP_OPTIONS,
-  CSM_OPTIONS,
-  SALES_REP_OPTIONS,
-  CURRENT_SALES_REP,
-  COUNTRY_OPTIONS,
-  US_STATES,
-} from "./NewCompanyWizard";
+import { PrmModal } from "./PrmModal";
+import { RadioCard } from "./NewCompanyWizard";
 import { SelectField } from "./SelectField";
+import { UserDetailsHover } from "./UserDetailsHover";
 
 const PAGE_SIZE = 50;
 
@@ -94,12 +88,14 @@ type Props = {
   companies: Company[];
   initialQuery?: string;
   onNewCompany: () => void;
+  // Opens the full-page Edit Company view (the create wizard's details step).
+  onEditCompany: (company: Company) => void;
   onManageSubscription: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
   onViewEmployees: (company: Company) => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onManageSubscription, onUpdateCompany, onViewEmployees }: Props) {
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onViewEmployees }: Props) {
   useCreateShortcut(onNewCompany);
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<CompanyFilterState>({
@@ -111,6 +107,9 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
     billingCycles: [],
     paymentMethods: [],
   });
+  // Companies are filtered on Created On; the range always has a value
+  // (default Last 30 Days), so this is a standing filter, not an optional one.
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
   const [columns, setColumns] = useState<CompanyColumnState>({
     signUp: true,
     billingCycle: true,
@@ -128,7 +127,6 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [menu, setMenu] = useState<{ company: Company; rect: DOMRect } | null>(null);
-  const [editModal, setEditModal] = useState<Company | null>(null);
   const [holderModal, setHolderModal] = useState<Company | null>(null);
   const [billingModal, setBillingModal] = useState<Company | null>(null);
   const [invoicesModal, setInvoicesModal] = useState<Company | null>(null);
@@ -169,9 +167,10 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
             : getCompanyBilling(c).payment;
         if (!payment || !filters.paymentMethods.includes(payment)) return false;
       }
+      if (!dateRangeIncludes(dateRange, getCompanyBilling(c).createdOn)) return false;
       return true;
     });
-  }, [companies, query, filters]);
+  }, [companies, query, filters, dateRange]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -180,7 +179,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => setPage(1), [query, sort, filters]);
+  useEffect(() => setPage(1), [query, sort, filters, dateRange]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -298,7 +297,12 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
               </div>
 
               <LandingFilterRow pills={suggested}>
-                  <CompanyFilters filters={filters} setFilters={setFilters} />
+                  <CompanyFilters
+                    filters={filters}
+                    setFilters={setFilters}
+                    dateRange={dateRange}
+                    setDateRange={setDateRange}
+                  />
                 </LandingFilterRow>
 
               <div className="lm-stage">
@@ -359,7 +363,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
                         key={c.id}
                         company={c}
                         columns={columns}
-                        onEdit={() => setEditModal(c)}
+                        onEdit={() => onEditCompany(c)}
                         onManageSubscription={() => onManageSubscription(c)}
                         onOpenMenu={(rect) => setMenu({ company: c, rect })}
                         menuOpen={menu?.company.id === c.id}
@@ -392,24 +396,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onMa
           company={menu.company}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEditCompany={() => setEditModal(menu.company)}
+          onEditCompany={() => onEditCompany(menu.company)}
           onManageSubscription={() => onManageSubscription(menu.company)}
           onEditAccountHolder={() => setHolderModal(menu.company)}
           onAddBillingEmails={() => setBillingModal(menu.company)}
           onCancelSubscription={() => setCancelModal(menu.company)}
           onViewEmployees={() => onViewEmployees(menu.company)}
           onViewInvoices={() => setInvoicesModal(menu.company)}
-        />
-      )}
-
-      {editModal && (
-        <EditCompanyModal
-          company={editModal}
-          onClose={() => setEditModal(null)}
-          onSave={(patch) => {
-            onUpdateCompany({ ...editModal, ...patch });
-            setEditModal(null);
-          }}
         />
       )}
 
@@ -639,7 +632,7 @@ function CompanyActionsMenu({
 
   const item = (icon: JSX.Element, label: string, onPick: () => void, danger = false) => (
     <button
-      className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      className={`u-menu-item${danger ? " u-menu-item--danger" : ""}`}
       onClick={(e) => { e.stopPropagation(); onPick(); onClose(); }}
     >
       <span className="u-menu-item-icon">{icon}</span>
@@ -658,22 +651,16 @@ function CompanyActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{company.name}</div>
-        <div className="u-menu-head-id">{company.id} · {company.tier}</div>
-      </div>
-      {item(<RowEditIcon />, "Edit company details", onEditCompany)}
+      {/* Figma 670:1323 — items only, no company header. Cancel Subscription
+          is the design-system danger red (#ff1f31, text and icon). */}
+      {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
       {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
-      {item(<MenuPlaceholderIcon />, "Account Holder", onEditAccountHolder)}
-      {item(<MenuPlaceholderIcon />, "Add Billing Emails", onAddBillingEmails)}
-      {item(<MenuPlaceholderIcon />, "View Employees", onViewEmployees)}
-      {item(<MenuPlaceholderIcon />, "View Invoices", onViewInvoices)}
-      {item(<MenuPlaceholderIcon />, "View Dashboard", () => viewDashboard(company))}
-      {canCancel && (
-        <>
-          {item(<MenuPlaceholderIcon />, "Cancel Subscription", onCancelSubscription, true)}
-        </>
-      )}
+      {item(<MenuUserVipIcon />, "Change Account Holder", onEditAccountHolder)}
+      {item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
+      {item(<MenuUsersIcon />, "View All Employees", onViewEmployees)}
+      {item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
+      {item(<MenuEnterIcon />, "View Company Dashboard", () => viewDashboard(company))}
+      {canCancel && item(<MenuCancelSubIcon />, "Cancel Subscription", onCancelSubscription, true)}
     </div>
   );
 }
@@ -713,176 +700,7 @@ h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}
   win.document.close();
 }
 
-const ROLE_SLUG: Record<CompanyUser["role"], string> = {
-  "Account Holder": "account-holder",
-  Admin: "admin",
-  Member: "member",
-};
-
-/* ─────────────── Edit Company modal ─────────────── */
-
-// Mid-size modal that edits only the company's identity & segmentation fields
-// (name, address, tax status, industry, partnership). Plan/billing changes live
-// in "Manage Subscription"; the account holder has its own modal.
-function EditCompanyModal({
-  company, onClose, onSave,
-}: {
-  company: Company;
-  onClose: () => void;
-  onSave: (patch: Partial<Company>) => void;
-}) {
-  const [name, setName] = useState(company.name);
-  const [taxStatus, setTaxStatus] = useState<TaxStatus>(company.taxStatus ?? "Taxable");
-  const [assignedCsm, setAssignedCsm] = useState(company.assignedCsm ?? "");
-  const [assignedSalesRep, setAssignedSalesRep] = useState(
-    company.assignedSalesRep ?? CURRENT_SALES_REP,
-  );
-  const [country, setCountry] = useState(company.addressParts?.country ?? "United States");
-  const [addrLine1, setAddrLine1] = useState(company.addressParts?.line1 ?? "");
-  const [addrLine2, setAddrLine2] = useState(company.addressParts?.line2 ?? "");
-  const [addrCity, setAddrCity] = useState(company.addressParts?.city ?? "");
-  const [addrPin, setAddrPin] = useState(company.addressParts?.pin ?? "");
-  const [addrState, setAddrState] = useState(company.addressParts?.state ?? "");
-  const [industries, setIndustries] = useState<string[]>(
-    company.industry ? company.industry.split(",").map((s) => s.trim()).filter(Boolean) : [],
-  );
-  const [partnerships, setPartnerships] = useState<string[]>(
-    company.partnership ? company.partnership.split(",").map((s) => s.trim()).filter(Boolean) : [],
-  );
-
-  const valid = name.trim().length > 0;
-
-  function save() {
-    if (!valid) return;
-    const address =
-      [addrLine1, addrLine2, addrCity, addrState, addrPin, country].map((s) => s.trim()).filter(Boolean).join(", ") || undefined;
-    const addressParts =
-      [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
-        ? {
-            country: country.trim() || undefined,
-            line1: addrLine1.trim() || undefined,
-            line2: addrLine2.trim() || undefined,
-            city: addrCity.trim() || undefined,
-            pin: addrPin.trim() || undefined,
-            state: addrState.trim() || undefined,
-          }
-        : undefined;
-    onSave({
-      name: name.trim(),
-      taxStatus,
-      assignedCsm: assignedCsm || undefined,
-      assignedSalesRep: assignedSalesRep || undefined,
-      industry: industries.join(", "),
-      partnership: partnerships.join(", "),
-      address,
-      addressParts,
-    });
-  }
-
-  return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal sch-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Edit Company</h3>
-          <p className="cl-modal-sub">
-            Update {company.name}'s details. Plan, billing, and seats are managed under Manage Subscription.
-          </p>
-        </div>
-
-        <div className="sch-modal-body co-edit-body">
-          <div className="form-group">
-            <label className="form-label">Company Name <span className="req">*</span></label>
-            <input
-              autoFocus
-              className="form-input"
-              placeholder="Company Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <p className="form-help">This will be the name shown on Stripe's receipts</p>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Address</label>
-            <div className="address-field">
-              <SelectField
-                value={country}
-                options={COUNTRY_OPTIONS}
-                onChange={setCountry}
-                renderTrigger={({ toggle, label }) => (
-                  <button type="button" className="address-row address-row-btn" onClick={toggle}>
-                    <span className="address-select">{label}</span>
-                    <span className="address-chevron"><ChevronDownIcon /></span>
-                  </button>
-                )}
-              />
-              <input className="address-input" placeholder="Address Line 1 (Optional)" value={addrLine1} onChange={(e) => setAddrLine1(e.target.value)} />
-              <input className="address-input" placeholder="Address Line 2 (Optional)" value={addrLine2} onChange={(e) => setAddrLine2(e.target.value)} />
-              <div className="address-split">
-                <input className="address-input address-cell" placeholder="City (Optional)" value={addrCity} onChange={(e) => setAddrCity(e.target.value)} />
-                <input className="address-input address-cell" placeholder="Zipcode" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} />
-              </div>
-              <SelectField
-                value={addrState}
-                options={US_STATES}
-                onChange={setAddrState}
-                placeholder="State"
-                renderTrigger={({ toggle, label, isPlaceholder }) => (
-                  <button type="button" className="address-row address-row-btn" onClick={toggle}>
-                    <span className={`address-select ${isPlaceholder ? "is-placeholder" : ""}`}>{label}</span>
-                    <span className="address-chevron"><ChevronDownIcon /></span>
-                  </button>
-                )}
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Tax Status</label>
-            <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Assigned CSM</label>
-            <SelectField
-              value={assignedCsm}
-              options={CSM_OPTIONS}
-              onChange={setAssignedCsm}
-              placeholder="Unassigned"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Assigned Sales Rep</label>
-            <SelectField
-              value={assignedSalesRep}
-              options={SALES_REP_OPTIONS}
-              onChange={setAssignedSalesRep}
-              placeholder="Unassigned"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Industry</label>
-            <MultiSelect options={INDUSTRY_OPTIONS} value={industries} onChange={setIndustries} placeholder="Select Industries" searchPlaceholder="Search Industries…" />
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Partnership <span className="co-w-note">(optional)</span></label>
-            <MultiSelect options={PARTNERSHIP_OPTIONS} value={partnerships} onChange={setPartnerships} placeholder="Select Partnerships" searchPlaceholder="Search Partnerships…" />
-          </div>
-        </div>
-
-        <div className="cl-modal-foot sch-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>Cancel</button>
-          <button className="btn-publish sch-submit" disabled={!valid} onClick={save}>Save changes</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────── Edit Account Holder modal ─────────────── */
+/* ─────────────── Change Account Holder modal ─────────────── */
 
 type Holder = { name: string; email: string; phone: string };
 
@@ -895,27 +713,6 @@ function currentHolder(company: Company): Holder {
   };
 }
 
-function HolderCard({ holder, locked }: { holder: Holder; locked?: boolean }) {
-  const contact = [holder.email, holder.phone].filter(Boolean).join("  ·  ");
-  return (
-    <div className="co-holder-card">
-      <div className="co-drawer-avatar">{initials(holder.name)}</div>
-      <div className="co-holder-card-text">
-        <div className="co-holder-card-name">{holder.name}</div>
-        <div className="co-holder-card-contact">{contact || "—"}</div>
-      </div>
-      {locked && <span className="co-holder-lock" aria-hidden="true">🔒</span>}
-    </div>
-  );
-}
-
-const InfoIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 11v5M12 8h.01" />
-  </svg>
-);
-
 type HolderMode = "change" | "replace";
 
 function EditAccountHolderModal({
@@ -927,28 +724,28 @@ function EditAccountHolderModal({
 }) {
   const original = useMemo(() => currentHolder(company), [company]);
   // The company's employees — the pool the new account holder is chosen from.
-  // A holder must already belong to the cohort (see the note below).
+  // A holder must already belong to the company (see the field subtext).
   const employees = useMemo(() => getCompanyUsers(company), [company]);
   // Candidates exclude whoever currently holds the account.
   const candidates = useMemo(
     () => employees.filter((u) => u.email !== original.email),
     [employees, original.email],
   );
+  // SelectField options are plain strings; fall back to "name (email)" only if
+  // two employees share a name.
+  const optionLabels = useMemo(() => {
+    const names = candidates.map((u) => u.name);
+    const hasDup = new Set(names).size !== names.length;
+    return candidates.map((u) => (hasDup ? `${u.name} (${u.email})` : u.name));
+  }, [candidates]);
 
   const [mode, setMode] = useState<HolderMode>("change");
-  const [selectedEmail, setSelectedEmail] = useState<string>("");
-  const [open, setOpen] = useState(false);
-  const ddRef = useRef<HTMLDivElement | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const selected = candidates[optionLabels.indexOf(selectedLabel)] ?? null;
 
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!ddRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
-  const selected = candidates.find((u) => u.email === selectedEmail) ?? null;
+  // The holder's roster record — carries the id the hover card's profile
+  // link opens (company employees resolve via findCompanyUserProfile).
+  const holderUser = employees.find((u) => u.email === original.email);
 
   function save() {
     if (!selected) return;
@@ -956,123 +753,82 @@ function EditAccountHolderModal({
   }
 
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal sch-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Account Holder</h3>
-          <p className="cl-modal-sub">
-            The account holder owns {company.name}'s billing and admin access. Reassign it to another
-            employee in the cohort.
+    <PrmModal
+      title="Change Account Holder"
+      description={
+        <>
+          Current:{" "}
+          <UserDetailsHover
+            popup
+            user={{
+              userId: holderUser?.id,
+              userName: original.name,
+              email: original.email,
+              phone: original.phone,
+            }}
+            onOpenProfile={(id) =>
+              window.open(
+                `${window.location.origin}${window.location.pathname}?profile=${encodeURIComponent(id)}`,
+                "_blank",
+                "noopener",
+              )
+            }
+          >
+            <span className="co-holder-current">{original.name}</span>
+          </UserDetailsHover>
+        </>
+      }
+      confirmLabel="Save Changes"
+      confirmDisabled={!selected}
+      onCancel={onClose}
+      onConfirm={save}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">What would you like to do?</span>
+          <div className="radio-card-group">
+            <RadioCard
+              selected={mode === "change"}
+              onSelect={() => setMode("change")}
+              title="Change the Account Holder"
+              desc={`Hand ownership to another employee. ${original.name} stays in the cohort as an Admin.`}
+            />
+            <RadioCard
+              selected={mode === "replace"}
+              onSelect={() => setMode("replace")}
+              title="Remove from Company & Replace"
+              desc={`Remove ${original.name} from the company entirely and assign a new account holder.`}
+            />
+          </div>
+        </div>
+
+        <div className="prm-field">
+          <span className="prm-label">New Account Holder<span className="prm-req">*</span></span>
+          <SelectField
+            value={selectedLabel}
+            options={optionLabels}
+            onChange={setSelectedLabel}
+            placeholder="Choose an employee…"
+            searchPlaceholder="Search Employees..."
+            popupMenu
+            optionDetail={(label) => {
+              const role = candidates[optionLabels.indexOf(label)]?.role;
+              // Only Admins and Managers carry a role tag (Figma 668:943);
+              // plain employees show none.
+              return role === "Admin" || role === "Manager" ? role : null;
+            }}
+          />
+          <p className="form-help">
+            If the employee isn't in the company yet, they need to be added in before they can be
+            set as the Account Holder.
           </p>
         </div>
-
-        <div className="sch-modal-body co-edit-body">
-          <div className="form-group">
-            <label className="form-label">Current Account Holder</label>
-            <HolderCard holder={original} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">What would you like to do?</label>
-            <div className="co-holder-modes">
-              <button
-                type="button"
-                className={`co-holder-mode${mode === "change" ? " is-active" : ""}`}
-                onClick={() => setMode("change")}
-              >
-                <span className="co-holder-mode-dot" />
-                <span className="co-holder-mode-text">
-                  <span className="co-holder-mode-title">Change the Account Holder</span>
-                  <span className="co-holder-mode-desc">
-                    Hand ownership to another employee. {original.name} stays in the cohort as an Admin.
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`co-holder-mode${mode === "replace" ? " is-active" : ""}`}
-                onClick={() => setMode("replace")}
-              >
-                <span className="co-holder-mode-dot" />
-                <span className="co-holder-mode-text">
-                  <span className="co-holder-mode-title">Remove from cohort &amp; replace</span>
-                  <span className="co-holder-mode-desc">
-                    Remove {original.name} from the cohort entirely and assign a new account holder.
-                  </span>
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 14 }}>
-            <label className="form-label">New Account Holder</label>
-            <div className="co-holder-picker" ref={ddRef}>
-              <button
-                type="button"
-                className={`co-holder-select${open ? " is-open" : ""}`}
-                onClick={() => setOpen((o) => !o)}
-              >
-                {selected ? (
-                  <span className="co-holder-select-val">
-                    <span className="co-holder-select-name">{selected.name}</span>
-                    <span className="co-holder-select-email">{selected.email}</span>
-                  </span>
-                ) : (
-                  <span className="co-holder-select-placeholder">Choose an employee…</span>
-                )}
-                <span className="co-holder-select-caret"><ChevronDownIcon /></span>
-              </button>
-              {open && (
-                <div className="co-holder-dropdown">
-                  {candidates.length === 0 ? (
-                    <div className="sch-user-empty">No other employees in this cohort yet.</div>
-                  ) : (
-                    candidates.map((u) => (
-                      <button
-                        key={u.email}
-                        type="button"
-                        className={`co-holder-opt${u.email === selectedEmail ? " is-selected" : ""}`}
-                        onClick={() => { setSelectedEmail(u.email); setOpen(false); }}
-                      >
-                        <span className="co-userrow-avatar">{initials(u.name)}</span>
-                        <span className="co-holder-opt-text">
-                          <span className="co-holder-opt-name">{u.name}</span>
-                          <span className="co-holder-opt-email">{u.email}</span>
-                        </span>
-                        <span className={`co-role co-role--${ROLE_SLUG[u.role]}`}>{u.role}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="co-holder-note">
-            <span className="co-holder-note-icon"><InfoIcon /></span>
-            <span>
-              If the new Account Holder isn't in the cohort yet, they need to be added in before they
-              can be set as the Account Holder.
-            </span>
-          </div>
-        </div>
-
-        <div className="cl-modal-foot sch-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>Cancel</button>
-          <button
-            className={`btn-publish sch-submit${mode === "replace" ? " co-cancel-danger" : ""}`}
-            disabled={!selected}
-            onClick={save}
-          >
-            {mode === "replace" ? "Remove & replace" : "Save changes"}
-          </button>
-        </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
-/* ─────────────── Add Billing Emails modal ─────────────── */
+/* ─────────────── Manage Billing Emails modal ─────────────── */
 
 const ExternalLinkIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1087,48 +843,29 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
   const stripeUrl = `https://dashboard.stripe.com/search?query=${encodeURIComponent(company.email)}`;
 
   const steps = [
-    "Open the customer in Stripe using the button below.",
-    "On the customer page, click the “⋯” (overflow) menu and choose Edit.",
-    "Under Invoice settings, find Additional emails.",
-    "Add each billing email address, separated by commas, then Save.",
+    "Click on the “Go to Stripe” button",
+    "On the Stripe Customer Page, click on the 3-dot menu and select “Edit Information”",
+    "Navigate to the “Billing Email” option.",
+    "Here, you can choose the “Add More Recipients” option where you can add more emails",
   ];
 
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Add Billing Emails</h3>
-          <p className="cl-modal-sub">
-            Billing emails are managed in Stripe. Add the addresses that should receive invoices and
-            receipts for <strong>{company.name}</strong>.
-          </p>
-        </div>
-
-        <div style={{ padding: "4px 24px 8px" }}>
-          <ol className="co-billing-steps">
-            {steps.map((s, i) => (
-              <li key={i} className="co-billing-step">
-                <span className="co-billing-step-num">{i + 1}</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>Close</button>
-          <a
-            className="btn-publish co-billing-cta"
-            href={stripeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open customer in Stripe
-            <ExternalLinkIcon />
-          </a>
-        </div>
+    <PrmModal
+      title="Manage Billing Emails"
+      description="Add/Remove emails that receive invoices"
+      confirmLabel={<>Go to Stripe <ExternalLinkIcon /></>}
+      confirmHref={stripeUrl}
+      onCancel={onClose}
+    >
+      <div className="prm-content">
+        <p>Configure the emails on Stripe. Here are the steps -</p>
+        <ol>
+          {steps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
@@ -1141,37 +878,22 @@ function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: ()
   const stripeUrl = `${window.location.origin}${window.location.pathname}?stripeInvoices=${encodeURIComponent(customerId)}`;
 
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">View Invoices</h3>
-          <p className="cl-modal-sub">
-            Invoices for <strong>{company.name}</strong> are managed in Stripe. This needs to be
-            opened on Stripe to view or download them.
-          </p>
-        </div>
-
-        <div style={{ padding: "4px 24px 8px" }}>
-          <div className="co-billing-step" style={{ alignItems: "center" }}>
-            <span className="co-billing-step-num">i</span>
-            <span>Opening this will redirect to Stripe with the customer's Stripe ID.</span>
-          </div>
-        </div>
-
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>Close</button>
-          <a
-            className="btn-publish co-billing-cta"
-            href={stripeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open invoices in Stripe
-            <ExternalLinkIcon />
-          </a>
-        </div>
+    <PrmModal
+      title="View Invoices"
+      cancelLabel="Close"
+      confirmLabel={<>Open invoices in Stripe <ExternalLinkIcon /></>}
+      confirmHref={stripeUrl}
+      onCancel={onClose}
+    >
+      <p className="prm-text">
+        Invoices for <strong>{company.name}</strong> are managed in Stripe. This needs to be
+        opened on Stripe to view or download them.
+      </p>
+      <div className="co-billing-step" style={{ alignItems: "center" }}>
+        <span className="co-billing-step-num">i</span>
+        <span>Opening this will redirect to Stripe with the customer's Stripe ID.</span>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
@@ -1200,97 +922,81 @@ function CancelSubscriptionModal({
   const pendingSeats = billing.seatsAdded;
   const pendingCharge = pendingSeats * billing.ratePerSeat;
 
-  return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
-        {step === "form" ? (
-          <>
-            <div className="cl-modal-head">
-              <h3 className="cl-modal-title">Cancel Subscription</h3>
-              <p className="cl-modal-sub">
-                <strong>{company.name}</strong> keeps full access until the end of the current
-                billing cycle ({billing.nextBillingDate}), then the subscription cancels.
-              </p>
-            </div>
+  return step === "form" ? (
+    <PrmModal
+      title="Cancel Subscription"
+      cancelLabel="Keep subscription"
+      confirmLabel="Continue"
+      confirmDisabled={!reason}
+      onCancel={onClose}
+      onConfirm={() => setStep("confirm")}
+    >
+      <div className="prm-stack">
+        <p className="prm-text">
+          <strong>{company.name}</strong> keeps full access until the end of the current
+          billing cycle ({billing.nextBillingDate}), then the subscription cancels.
+        </p>
 
-            <div style={{ padding: "4px 24px 8px" }}>
-              <div className="form-group">
-                <label className="form-label">Cancellation reason <span className="req">*</span></label>
-                <select
-                  className="form-input co-select"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                >
-                  <option value="" disabled>Select a reason…</option>
-                  {CANCELLATION_REASONS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-                <p className="form-help">Reasons are managed under Product Config → B2B Management.</p>
-              </div>
+        <div className="prm-field">
+          <span className="prm-label">Cancellation reason<span className="prm-req">*</span></span>
+          <select
+            className="form-input co-select"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="" disabled>Select a reason…</option>
+            {CANCELLATION_REASONS.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <p className="form-help">Reasons are managed under Product Config → B2B Management.</p>
+        </div>
 
-              {pendingSeats > 0 && (
-                <div className="co-cancel-alert">
-                  <span className="co-cancel-alert-icon"><WarningIcon /></span>
-                  <div>
-                    <strong>Pending seat charges.</strong> {pendingSeats} seat{pendingSeats === 1 ? "" : "s"} added
-                    this cycle will be billed (~{sym}{pendingCharge.toLocaleString()}) on the upcoming
-                    invoice before cancellation takes effect.
-                  </div>
-                </div>
-              )}
+        {pendingSeats > 0 && (
+          <div className="co-cancel-alert">
+            <span className="co-cancel-alert-icon"><WarningIcon /></span>
+            <div>
+              <strong>Pending seat charges.</strong> {pendingSeats} seat{pendingSeats === 1 ? "" : "s"} added
+              this cycle will be billed (~{sym}{pendingCharge.toLocaleString()}) on the upcoming
+              invoice before cancellation takes effect.
             </div>
-
-            <div className="cl-modal-foot">
-              <button className="btn-save-draft" onClick={onClose}>Keep subscription</button>
-              <button
-                className="btn-publish co-cancel-danger"
-                disabled={!reason}
-                onClick={() => setStep("confirm")}
-              >
-                Continue
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="cl-modal-head">
-              <h3 className="cl-modal-title">Cancel {company.name}'s subscription?</h3>
-              <p className="cl-modal-sub">
-                This schedules cancellation for the end of the current billing cycle
-                ({billing.nextBillingDate}). The status changes to Canceled and the company is not
-                billed again after that date.
-              </p>
-            </div>
-
-            <div style={{ padding: "4px 24px 8px" }}>
-              <div className="co-cancel-summary">
-                <div className="co-cancel-summary-row">
-                  <span className="co-cancel-summary-label">Reason</span>
-                  <span>{reason}</span>
-                </div>
-                <div className="co-cancel-summary-row">
-                  <span className="co-cancel-summary-label">Effective</span>
-                  <span>End of cycle · {billing.nextBillingDate}</span>
-                </div>
-                {pendingSeats > 0 && (
-                  <div className="co-cancel-summary-row">
-                    <span className="co-cancel-summary-label">Final invoice</span>
-                    <span>Includes ~{sym}{pendingCharge.toLocaleString()} in pending seat charges</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="cl-modal-foot">
-              <button className="btn-save-draft" onClick={() => setStep("form")}>Go back</button>
-              <button className="btn-publish co-cancel-danger" onClick={() => onConfirm(reason)}>
-                Cancel subscription
-              </button>
-            </div>
-          </>
+          </div>
         )}
       </div>
-    </div>
+    </PrmModal>
+  ) : (
+    <PrmModal
+      title={`Cancel ${company.name}'s subscription?`}
+      cancelLabel="Go back"
+      onCancelButton={() => setStep("form")}
+      confirmLabel="Cancel subscription"
+      onCancel={onClose}
+      onConfirm={() => onConfirm(reason)}
+    >
+      <div className="prm-stack">
+        <p className="prm-text">
+          This schedules cancellation for the end of the current billing cycle
+          ({billing.nextBillingDate}). The status changes to Canceled and the company is not
+          billed again after that date.
+        </p>
+
+        <div className="co-cancel-summary">
+          <div className="co-cancel-summary-row">
+            <span className="co-cancel-summary-label">Reason</span>
+            <span>{reason}</span>
+          </div>
+          <div className="co-cancel-summary-row">
+            <span className="co-cancel-summary-label">Effective</span>
+            <span>End of cycle · {billing.nextBillingDate}</span>
+          </div>
+          {pendingSeats > 0 && (
+            <div className="co-cancel-summary-row">
+              <span className="co-cancel-summary-label">Final invoice</span>
+              <span>Includes ~{sym}{pendingCharge.toLocaleString()} in pending seat charges</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </PrmModal>
   );
 }

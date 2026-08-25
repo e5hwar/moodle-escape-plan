@@ -7,6 +7,7 @@ import {
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
+import { PrmModal } from "./PrmModal";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -17,6 +18,7 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
 import { useLandingMorph } from "../hooks/useLandingMorph";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's default visible columns (key,
@@ -29,7 +31,7 @@ const LM_COLS: LandingCol[] = [
   { key: "role", label: "Role", width: 130 },
   { key: "subscription", label: "Subscription", width: 195, fixed: true },
 ];
-import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -137,13 +139,24 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
 export function UsersPage({
   onViewCompany,
   onManageCompletions,
+  onOpenOfferCodes,
+  onOpenScholarships,
+  onOpenMergeAccounts,
+  onOpenTransferSubscription,
   initialCompanyFilter,
 }: {
   onViewCompany?: (companyName: string) => void;
   onManageCompletions: (userId: string) => void;
+  onOpenOfferCodes?: () => void;
+  onOpenScholarships?: () => void;
+  onOpenMergeAccounts?: () => void;
+  onOpenTransferSubscription?: () => void;
   initialCompanyFilter?: string;
 }) {
   const [list] = useState<User[]>(seedUsers);
+  // "O" / "S" open Offer Codes / Scholarships (badges shown on the buttons).
+  useCreateShortcut(() => onOpenOfferCodes?.(), !!onOpenOfferCodes, "o");
+  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships, "s");
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
@@ -160,6 +173,14 @@ export function UsersPage({
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [menu, setMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
+  // Page-level 3-dot menu (Figma 677:1956), anchored to the header kebab.
+  const [pageMenu, setPageMenu] = useState<DOMRect | null>(null);
+  // Cancel Subscription confirm — the Full Profile page's PrmModal, mirrored.
+  // Confirmed cancellations are session-local, like the profile's — the menu
+  // just stops offering Cancel for that user; the row's pill keeps its seeded
+  // status since access runs to the end of the billing period anyway.
+  const [cancelSub, setCancelSub] = useState<User | null>(null);
+  const [canceledSubs, setCanceledSubs] = useState<ReadonlySet<string>>(new Set());
 
   const counts = useMemo(() => {
     let b2c = 0;
@@ -302,6 +323,25 @@ export function UsersPage({
                 <span>{counts.b2b} B2B</span>
               </div>
             </div>
+            {/* Offer Codes and Scholarships used to live in the sidebar's Users
+                group; they are now reached from here, with O / S shortcuts. */}
+            <div className="tasks-header-actions">
+              <button className="cta-quiet" onClick={() => onOpenOfferCodes?.()}>
+                Offer Codes
+                <span className="cta-kbd">O</span>
+              </button>
+              <button className="cta-quiet" onClick={() => onOpenScholarships?.()}>
+                Scholarships
+                <span className="cta-kbd">S</span>
+              </button>
+              <button
+                className="cta-quiet cta-quiet--icon"
+                aria-label="More actions"
+                onClick={(e) => setPageMenu(e.currentTarget.getBoundingClientRect())}
+              >
+                <RowKebabIcon />
+              </button>
+            </div>
           </header>
 
           <div className="tasks-row">
@@ -404,7 +444,6 @@ export function UsersPage({
           user={menu.user}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onViewPortfolio={() => openPortfolio(menu.user)}
           onOpenProfile={() => openProfile(menu.user)}
           onViewCompany={
             menu.user.userType === "B2B" && menu.user.companyName && onViewCompany
@@ -417,6 +456,35 @@ export function UsersPage({
               : undefined
           }
           onManageCompletions={() => onManageCompletions(menu.user.id)}
+          onCancelSubscription={
+            /* Only subscribers billed through a platform we can cancel from
+               here — Apple subs are managed by Apple, and company-seat users
+               are billed through their company. */
+            menu.user.subscriptionStatus === "Subscriber" &&
+            !menu.user.companyName &&
+            (menu.user.platform === "Stripe" || menu.user.platform === "Google") &&
+            !canceledSubs.has(menu.user.id)
+              ? () => setCancelSub(menu.user)
+              : undefined
+          }
+        />
+      )}
+      {pageMenu && (
+        <PageActionsMenu
+          rect={pageMenu}
+          onClose={() => setPageMenu(null)}
+          onMergeAccounts={onOpenMergeAccounts}
+          onTransferSubscription={onOpenTransferSubscription}
+        />
+      )}
+      {cancelSub && (
+        <CancelSubscriptionConfirm
+          user={cancelSub}
+          onClose={() => setCancelSub(null)}
+          onConfirm={() => {
+            setCanceledSubs((prev) => new Set(prev).add(cancelSub.id));
+            setCancelSub(null);
+          }}
         />
       )}
     </div>
@@ -557,20 +625,21 @@ function UserActionsMenu({
   user,
   rect,
   onClose,
-  onViewPortfolio,
   onOpenProfile,
   onViewCompany,
   onViewAllEmployees,
   onManageCompletions,
+  onCancelSubscription,
 }: {
   user: User;
   rect: DOMRect;
   onClose: () => void;
-  onViewPortfolio: () => void;
   onOpenProfile: () => void;
   onViewCompany?: () => void;
   onViewAllEmployees?: () => void;
   onManageCompletions: () => void;
+  /** Omitted when the user can't be cancelled from here — the item is hidden. */
+  onCancelSubscription?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -643,31 +712,148 @@ function UserActionsMenu({
         <div className="u-menu-head-name">{user.name}</div>
         <div className="u-menu-head-id">{user.id}</div>
       </div>
-      {item(<MenuPlaceholderIcon />, "Login As", () => {})}
-      {item(<MenuPlaceholderIcon />, "View Portfolio", onViewPortfolio)}
-      {item(<RowExternalLinkIcon />, "Open Full Profile", onOpenProfile)}
-      {onViewCompany && item(<MenuPlaceholderIcon />, "View Company", onViewCompany)}
-      {onViewAllEmployees && item(<MenuPlaceholderIcon />, "View All Employees", onViewAllEmployees)}
-      {item(<MenuPlaceholderIcon />, "Manage Completions", onManageCompletions)}
+      {item(<RowEditIcon />, "Edit User Details", () => {})}
+      {item(<MenuEnterIcon />, "Login As", () => {})}
+      {item(<MenuProfileIcon />, "View Profile", onOpenProfile)}
+      {item(<MenuProgressIcon />, "Manage Training Progress", onManageCompletions)}
+      {onViewCompany && item(<MenuBankIcon />, "View User's Company", onViewCompany)}
+      {onViewAllEmployees && item(<MenuUsersIcon />, "View All Company Employees", onViewAllEmployees)}
+      {onCancelSubscription && item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription)}
       {item(<RowDeleteIcon />, "Remove User", () => {}, true)}
     </div>
   );
 }
 
-/* ─── Open the full profile / public portfolio in a new browser tab ─── */
-/* These open real in-app pages via URL params, rendered standalone by App. */
+/* ─── Page-level 3-dot menu — Figma 677:1956 "3-Dot Menu - Manage Users
+   Page". Same .u-menu chrome and close/positioning behavior as the row menu,
+   anchored under the header kebab; no head block — it isn't about a user. ─── */
+
+function PageActionsMenu({
+  rect,
+  onClose,
+  onMergeAccounts,
+  onTransferSubscription,
+}: {
+  rect: DOMRect;
+  onClose: () => void;
+  onMergeAccounts?: () => void;
+  onTransferSubscription?: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const h = el.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
+  }, [rect]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    }
+    function onScroll() {
+      onClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const item = (icon: JSX.Element, label: string, onPick?: () => void) => (
+    <button
+      className="u-menu-item"
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick?.();
+        onClose();
+      }}
+    >
+      <span className="u-menu-item-icon">{icon}</span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="u-menu"
+      style={{
+        top: pos ? pos.top : rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {item(<MenuMergeIcon />, "Merge Accounts", onMergeAccounts)}
+      {item(<MenuTransferIcon />, "Transfer Subscription", onTransferSubscription)}
+    </div>
+  );
+}
+
+/* ─── Cancel Subscription confirm — the Full Profile page's PrmModal, with
+   identical copy, so canceling from the row menu reads the same as canceling
+   from the profile's Subscription card. ─── */
+
+function CancelSubscriptionConfirm({
+  user,
+  onClose,
+  onConfirm,
+}: {
+  user: User;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Same deterministic subscription record the Full Profile shows.
+  const sub = buildUserProfile(user).subscription;
+  return (
+    <PrmModal
+      title="Cancel Subscription?"
+      cancelLabel="Keep Subscription"
+      confirmLabel="Cancel Subscription"
+      onCancel={onClose}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-text">
+        This cancels <strong>{user.name}</strong>&rsquo;s {sub.platform} subscription at the end of
+        the current billing period. No further charges will be made.
+      </p>
+      {sub.renewsOn && (
+        <p className="prm-text">
+          They keep full access until <strong>{formatDate(sub.renewsOn)}</strong>. No refund is
+          issued for the current period.
+        </p>
+      )}
+    </PrmModal>
+  );
+}
+
+/* ─── Open the full profile in a new browser tab ─── */
+/* Opens a real in-app page via URL params, rendered standalone by App. */
 
 function openProfile(user: User) {
   window.open(
     `${window.location.origin}${window.location.pathname}?profile=${user.id}`,
-    "_blank",
-    "noopener",
-  );
-}
-
-function openPortfolio(user: User) {
-  window.open(
-    `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`,
     "_blank",
     "noopener",
   );

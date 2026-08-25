@@ -1,3 +1,5 @@
+import type { User } from "./users";
+
 export type Tier =
   | "Free Trial"
   | "Essentials"
@@ -18,9 +20,14 @@ export type SubscriptionStatus =
   | "Free Access"
   | "Free Access Ended"
   | "Canceled";
-export type CompanyRole = "Account Holder" | "Admin" | "Member";
+// Mirrors the B2B roles used across the app (Manage Users): Admins and
+// Managers carry a role tag in pickers; plain Employees show none.
+export type CompanyRole = "Account Holder" | "Admin" | "Manager" | "Employee";
 
 export type CompanyUser = {
+  /** "U-9<company digits><index>" — resolvable via findCompanyUserProfile, so
+   *  a company employee's profile link works like a Manage Users one. */
+  id: string;
   name: string;
   email: string;
   role: CompanyRole;
@@ -551,11 +558,22 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Canceled"
       : `${MONTHS[h % 12]} 1`;
 
-  // Deterministic creation date: spread across 2021–2025.
-  const createdYear = 2021 + (h % 5);
-  const createdMonth = (h >> 3) % 12;
-  const createdDay = 1 + ((h >> 7) % 28);
-  const createdOn = `${MONTHS[createdMonth]} ${createdDay}, ${createdYear}`;
+  // Deterministic creation date, counted back from the REAL current date so the
+  // Companies page's Date Range presets (Last 7/30/90 days…) always have
+  // companies in range: about half land in the last 30 days, a quarter in the
+  // last 90, and the rest reach back ~3 years. Salted — the sequential CO-nnn
+  // ids leave `h` itself too correlated to spread these buckets.
+  const hc = hash(c.id + "age");
+  const createdBucket = hc % 4;
+  const createdDaysBack =
+    createdBucket <= 1
+      ? (hc >> 3) % 30
+      : createdBucket === 2
+      ? 30 + ((hc >> 3) % 60)
+      : 90 + ((hc >> 3) % 1000);
+  const now = new Date();
+  const created = new Date(now.getFullYear(), now.getMonth(), now.getDate() - createdDaysBack);
+  const createdOn = `${MONTHS[created.getMonth()]} ${created.getDate()}, ${created.getFullYear()}`;
 
   // Region split — distribute used seats across 1–3 regions deterministically.
   const regionCount = 1 + (h % 3);
@@ -696,6 +714,49 @@ export function getStripeCustomerId(company: Company): string {
 const FIRST =["James", "Maria", "David", "Sarah", "Michael", "Jessica", "Robert", "Linda", "Carlos", "Emily", "Daniel", "Ashley", "Kevin", "Tonya", "Brian", "Nicole"];
 const LAST = ["Rodriguez", "Thompson", "Nguyen", "Patel", "Johnson", "Martinez", "Williams", "Brown", "Garcia", "Davis", "Miller", "Wilson", "Anderson", "Lee", "Walker", "Hall"];
 
+/* "U-9" + the company's digits + the roster index — unique across companies
+   (index is a single digit; rosters cap at 8) and outside the hand-authored
+   users.ts id range, so the two namespaces never collide. */
+function companyUserId(c: Company, i: number): string {
+  return `U-9${c.id.replace(/\D/g, "").padStart(3, "0")}${i}`;
+}
+
+/* Company employees are generated, not part of the Manage Users roster, but
+   their profile links must still resolve. This finds the employee behind a
+   companyUserId and rebuilds them as a full User record for the standalone
+   `?profile=` page (deterministic, like everything else derived here). */
+export function findCompanyUserProfile(id: string): User | null {
+  if (!/^U-9\d{4}$/.test(id)) return null;
+  for (const c of companies) {
+    const u = getCompanyUsers(c).find((x) => x.id === id);
+    if (!u) continue;
+    const h = hash(u.id + u.email);
+    const isLead = u.role === "Account Holder" || u.role === "Admin" || u.role === "Manager";
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      phone:
+        u.email === c.email && c.phone
+          ? c.phone
+          : `+1 (${212 + (h % 700)}) 555-01${String(h % 100).padStart(2, "0")}`,
+      emailVerified: true,
+      phoneVerified: h % 3 !== 0,
+      userType: "B2B",
+      companyName: c.name,
+      role: u.role === "Account Holder" ? "Admin" : u.role,
+      subscriptionStatus: "Subscriber",
+      platform: "Stripe",
+      joinedOn: `202${4 + (h % 2)}-${String((h % 12) + 1).padStart(2, "0")}-${String((h % 27) + 1).padStart(2, "0")}`,
+      lastAccess: `2026-0${5 + (h % 2)}-${String((h % 22) + 1).padStart(2, "0")}`,
+      ...(isLead
+        ? { dashboardLastAccess: `2026-06-${String((h % 20) + 1).padStart(2, "0")}` }
+        : {}),
+    };
+  }
+  return null;
+}
+
 export function getCompanyUsers(c: Company): CompanyUser[] {
   const billing = getCompanyBilling(c);
   const h = hash(c.id);
@@ -705,9 +766,11 @@ export function getCompanyUsers(c: Company): CompanyUser[] {
   for (let i = 0; i < count; i++) {
     const fn = FIRST[(h + i * 5) % FIRST.length];
     const ln = LAST[(h + i * 7) % LAST.length];
-    const role: CompanyRole = i === 0 ? "Account Holder" : i <= 2 && count > 3 ? "Admin" : "Member";
+    const role: CompanyRole =
+      i === 0 ? "Account Holder" : i <= 2 && count > 3 ? (i === 1 ? "Admin" : "Manager") : "Employee";
     const status: CompanyUser["status"] = i === 0 ? "Active" : (h + i) % 9 === 0 ? "Invited" : (h + i) % 13 === 0 ? "Deactivated" : "Active";
     users.push({
+      id: companyUserId(c, i),
       name: `${fn} ${ln}`,
       email: i === 0 ? c.email : `${fn.toLowerCase()}.${ln.toLowerCase()}@${domain}`,
       role,

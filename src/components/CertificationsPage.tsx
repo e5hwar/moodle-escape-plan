@@ -120,12 +120,18 @@ export function CertificationsPage({
   onOpenCompanyDashboard,
   onViewPayers,
   onManageContentLinks,
+  onOpenIndustries,
+  onOpenAwards,
+  onOpenFeedback,
 }: {
   onNewCert: () => void;
   onEditCert: (cert: Certification) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
   onManageContentLinks: (cert: Certification) => void;
+  onOpenIndustries?: () => void;
+  onOpenAwards?: () => void;
+  onOpenFeedback?: () => void;
 }) {
   useCreateShortcut(onNewCert);
   // Local working copy so visibility/archive/delete persist in-session.
@@ -313,7 +319,19 @@ export function CertificationsPage({
             <div>
               <h1 className="tasks-title">Certifications</h1>
             </div>
+            {/* Figma 633:1865 — same move as the Tasks header: Industries,
+                Awards, and Feedback left the sidebar's Content group and are
+                now reached from here, left of the Create Certification CTA. */}
             <div className="tasks-header-actions">
+              <button className="cta-quiet" onClick={() => onOpenIndustries?.()}>
+                Industries
+              </button>
+              <button className="cta-quiet" onClick={() => onOpenAwards?.()}>
+                Awards
+              </button>
+              <button className="cta-quiet" onClick={() => onOpenFeedback?.()}>
+                Feedback
+              </button>
               <button className="new-task" onClick={onNewCert}>
                 <AddIcon />
                 Create Certification

@@ -4,8 +4,10 @@ import {
   matchesQuery,
   displayStatus,
   NO_ACTION_STATUS,
+  REVIEW_TODAY,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
+import { PageBreak } from "./PageBreak";
 import { ReviewSearch } from "./ReviewSearch";
 import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
@@ -62,6 +64,20 @@ const DEFAULT_COLUMNS: ColState = {
 
 /** The learner's current attempt number = how many submissions they've made. */
 const attemptNumber = (s: TaskSubmission) => s.versions.length;
+
+/** Whole days a submission has been waiting, against the dataset's fixed today. */
+const waitDays = (iso: string) =>
+  Math.max(1, Math.round((REVIEW_TODAY.getTime() - new Date(iso).getTime()) / 86_400_000));
+
+/** Pending-submission counts per key (certification / task name), largest first. */
+function rankedCounts(
+  pending: TaskSubmission[],
+  keysOf: (s: TaskSubmission) => string[],
+): [string, number][] {
+  const map = new Map<string, number>();
+  pending.forEach((s) => keysOf(s).forEach((k) => map.set(k, (map.get(k) ?? 0) + 1)));
+  return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -158,6 +174,43 @@ export function ReviewHandsOnPage() {
     list.forEach((s) => s.certifications.forEach((c) => set.add(c)));
     return [...set].sort();
   }, [list]);
+
+  /* ── "Start a review run" cards: the landing overview of everything a
+     SkillCat reviewer can act on. Computed from the full list, not the
+     filtered one — the cards describe the whole pending queue whatever the
+     filter row below is set to. ── */
+  const pending = useMemo(
+    () => list.filter((s) => displayStatus(s) === "Review Pending"),
+    [list],
+  );
+  const oldestPending = useMemo(
+    () => [...pending].sort((a, b) => a.submittedOn.localeCompare(b.submittedOn))[0],
+    [pending],
+  );
+  const certRanked = useMemo(() => rankedCounts(pending, (s) => s.certifications), [pending]);
+  const taskRanked = useMemo(() => rankedCounts(pending, (s) => [s.taskName]), [pending]);
+
+  /** Point the page at a run's scope and open the console on its oldest
+   * submission. The console's queue IS the table's filtered+sorted list, so a
+   * run is just: filters = the scope, sort = longest wait first. */
+  function startRun(scope: { certs?: string[]; tasks?: string[] }) {
+    const inScope = pending.filter(
+      (s) =>
+        (!scope.certs || s.certifications.some((c) => scope.certs!.includes(c))) &&
+        (!scope.tasks || scope.tasks.includes(s.taskName)),
+    );
+    const first = [...inScope].sort((a, b) => a.submittedOn.localeCompare(b.submittedOn))[0];
+    if (!first) return;
+    setStatuses(["Review Pending"]);
+    setCreators(["SkillCat"]);
+    setTypes([]);
+    setCompanies([]);
+    setCerts(scope.certs ?? []);
+    setTasks(scope.tasks ?? []);
+    setCommittedQuery("");
+    setSort({ key: "submittedOn", dir: "asc" });
+    setOpenId(first.id);
+  }
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -312,6 +365,78 @@ export function ReviewHandsOnPage() {
                   onCommit={setCommittedQuery}
                 />
               </div>
+
+              {pending.length > 0 && oldestPending && (
+                <section className="rh-runs">
+                  <PageBreak label={`Start a Review Run · ${pending.length} Pending`} />
+                  <div className="rh-run-cards">
+                    <div className="rh-run-card is-default">
+                      <div className="rh-run-head">
+                        <span className="rh-run-title">Oldest first</span>
+                        <span className="co-status-pill co-status-pill--accent">Default</span>
+                      </div>
+                      <p className="rh-run-desc">The whole queue, longest wait first.</p>
+                      <p className="rh-run-meta">
+                        Up first: <strong>{oldestPending.userName}</strong> · waited{" "}
+                        {waitDays(oldestPending.submittedOn)}d
+                      </p>
+                      <button className="btn-publish rh-run-cta" onClick={() => startRun({})}>
+                        <span className="rh-run-cta-label">Start Reviewing</span>
+                      </button>
+                    </div>
+
+                    <div className="rh-run-card">
+                      <div className="rh-run-head">
+                        <span className="rh-run-title">By certification</span>
+                      </div>
+                      <p className="rh-run-desc">Clear one certification at a time.</p>
+                      <div className="rh-run-list">
+                        {certRanked.slice(0, 2).map(([name, n]) => (
+                          <div key={name} className="rh-run-row">
+                            <span>{name}</span>
+                            <span className="rh-run-count">{n}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {certRanked.length > 2 && (
+                        <p className="rh-run-more">+ {certRanked.length - 2} more certifications</p>
+                      )}
+                      {certRanked.length > 0 && (
+                        <button
+                          className="btn-save-draft rh-run-cta"
+                          onClick={() => startRun({ certs: [certRanked[0][0]] })}
+                        >
+                          <span className="rh-run-cta-label">Start with {certRanked[0][0]}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="rh-run-card">
+                      <div className="rh-run-head">
+                        <span className="rh-run-title">By task</span>
+                      </div>
+                      <p className="rh-run-desc">Same task back-to-back, for consistent grading.</p>
+                      <div className="rh-run-list">
+                        {taskRanked.slice(0, 2).map(([name, n]) => (
+                          <div key={name} className="rh-run-row">
+                            <span>{name}</span>
+                            <span className="rh-run-count">{n}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {taskRanked.length > 2 && (
+                        <p className="rh-run-more">+ {taskRanked.length - 2} more tasks</p>
+                      )}
+                      <button
+                        className="btn-save-draft rh-run-cta"
+                        onClick={() => startRun({ tasks: [taskRanked[0][0]] })}
+                      >
+                        <span className="rh-run-cta-label">Start with {taskRanked[0][0]}</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               <div className="filters">
                 <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />

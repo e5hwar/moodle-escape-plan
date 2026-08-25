@@ -6,6 +6,7 @@ import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { type Certification, certifications } from "../data/certifications";
 import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
@@ -20,6 +21,19 @@ type AccessType = "open" | "non-consumable" | "consumable";
 // progress is wiped or kept when they buy the Certification again.
 type ConsumableProgress = "reset" | "preserve";
 type TimeUnit = "minutes" | "hours" | "days" | "weeks";
+
+/* Same design-system single-select as the Task wizard's unit picker
+   (Figma 101:281 trigger + 591:1382 menu). */
+const TIME_UNIT_LABEL: Record<TimeUnit, string> = {
+  minutes: "Minutes",
+  hours: "Hours",
+  days: "Days",
+  weeks: "Weeks",
+};
+const TIME_UNIT_OPTIONS = Object.values(TIME_UNIT_LABEL);
+const TIME_UNIT_BY_LABEL = Object.fromEntries(
+  (Object.keys(TIME_UNIT_LABEL) as TimeUnit[]).map((u) => [TIME_UNIT_LABEL[u], u]),
+) as Record<string, TimeUnit>;
 
 type TaskKind = "xapi" | "quiz" | "hands-on" | "file";
 
@@ -860,16 +874,11 @@ function DetailsStep({
               if (v === "" || /^\d+$/.test(v)) update({ timeValue: v });
             }}
           />
-          <select
-            className="form-select"
-            value={data.timeUnit}
-            onChange={(e) => update({ timeUnit: e.target.value as TimeUnit })}
-          >
-            <option value="minutes">minutes</option>
-            <option value="hours">hours</option>
-            <option value="days">days</option>
-            <option value="weeks">weeks</option>
-          </select>
+          <SelectField
+            value={TIME_UNIT_LABEL[data.timeUnit]}
+            options={TIME_UNIT_OPTIONS}
+            onChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
+          />
         </div>
         <p className="form-help">Helps learners plan. Set in minutes, hours, days, weeks, or months.</p>
       </div>
@@ -950,8 +959,8 @@ function AdditionalInfoStep({
 }) {
   return (
     <>
-      <section className="form-section">
-        <h2 className="form-section-title">Announcement</h2>
+      <div className="form-group">
+        <label className="form-label">Announcement</label>
         <RichTextField
           en={data.announceEn}
           es={data.announceEs}
@@ -959,12 +968,10 @@ function AdditionalInfoStep({
           onChangeEs={(v) => update({ announceEs: v })}
         />
         <p className="form-help">Shown to learners currently going through this Certification. Use for important updates.</p>
-      </section>
+      </div>
 
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h2 className="form-section-title">CEUs awarded</h2>
+      <div className="form-group">
+        <label className="form-label">CEUs Awarded</label>
         <div className="time-row">
           <input
             className="form-input no-spinner small"
@@ -980,38 +987,34 @@ function AdditionalInfoStep({
           <span className="form-suffix">CEUs upon completion</span>
         </div>
         <p className="form-help">Decimal values supported. Leave blank if no CEUs are issued.</p>
-      </section>
+      </div>
 
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h2 className="form-section-title">Keywords</h2>
-        <p className="form-section-desc">
-          Improve search and discovery. Add keywords in English and Spanish — separate each with a comma.
-        </p>
+      <div className="form-group">
+        <label className="form-label">Keywords</label>
         <KeywordsField
           valueEn={data.keywordsEn}
           valueEs={data.keywordsEs}
           onChangeEn={(v) => update({ keywordsEn: v })}
           onChangeEs={(v) => update({ keywordsEs: v })}
         />
-      </section>
-
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h2 className="form-section-title">Deep Link</h2>
-        <p className="form-section-desc">
-          A shareable link that opens this Certification's preview — in the SkillCat app if
-          installed, otherwise on the web. Every Certification has exactly one.
+        <p className="form-help">
+          Improve search and discovery. Add keywords in English and Spanish — separate each with a comma.
         </p>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Deep Link</label>
         <DeepLinkField
           data={data}
           update={update}
           isEditing={isEditing}
           editingName={editingName}
         />
-      </section>
+        <p className="form-help">
+          A shareable link that opens this Certification's preview — in the SkillCat app if
+          installed, otherwise on the web. Every Certification has exactly one.
+        </p>
+      </div>
     </>
   );
 }
@@ -2883,8 +2886,8 @@ function SettingsStep({
 }) {
   return (
     <>
-      <section className="form-section">
-        <h2 className="form-section-title">Visibility</h2>
+      <div className="form-group">
+        <label className="form-label">Visibility</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.visibility === "visible"}
@@ -2900,15 +2903,11 @@ function SettingsStep({
           />
         </div>
         <p className="form-help">To retire a Certification, use the Archiving step.</p>
-      </section>
+      </div>
 
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h2 className="form-section-title">Paywall</h2>
-        <div className="form-sub-group">
-          <label className="form-sub-label">Access type</label>
-          <div className="radio-card-group">
+      <div className="form-group">
+        <label className="form-label">Access Type</label>
+        <div className="radio-card-group">
             <RadioCard
               selected={data.accessType === "open"}
               onSelect={() => update({ accessType: "open" })}
@@ -2930,45 +2929,42 @@ function SettingsStep({
           </div>
         </div>
 
-        {data.accessType !== "open" && (
-          <div className="form-sub-group">
-            <label className="form-sub-label">Price IDs</label>
-            <PriceIdFields
-              value={data.priceIds}
-              onChange={(ids) => update({ priceIds: ids })}
+      {data.accessType !== "open" && (
+        <div className="form-group">
+          <label className="form-label">Price IDs</label>
+          <PriceIdFields
+            value={data.priceIds}
+            onChange={(ids) => update({ priceIds: ids })}
+          />
+          <p className="form-help">
+            Enter the Price ID for each — Google, Apple, Stripe (B2C), and Stripe (B2B).
+          </p>
+        </div>
+      )}
+
+      {/* Repurchase behaviour applies only to Consumable paywalls. */}
+      {data.accessType === "consumable" && (
+        <div className="form-group">
+          <label className="form-label">Progress on Repurchase</label>
+          <div className="radio-card-group">
+            <RadioCard
+              selected={data.consumableProgress === "reset"}
+              onSelect={() => update({ consumableProgress: "reset" })}
+              title="Reset Progress"
+              desc="All Task completions, Quiz attempts, and Quiz-Section completions for Tasks within the Certification are cleared for that user. On repurchase, the user starts fresh."
             />
-            <p className="form-help">
-              Enter the Price ID for each — Google, Apple, Stripe (B2C), and Stripe (B2B).
-            </p>
+            <RadioCard
+              selected={data.consumableProgress === "preserve"}
+              onSelect={() => update({ consumableProgress: "preserve" })}
+              title="Preserve Progress"
+              desc="Completions and attempts are preserved. On repurchase, the user picks up where they left off."
+            />
           </div>
-        )}
-
-        {/* Repurchase behaviour applies only to Consumable paywalls. */}
-        {data.accessType === "consumable" && (
-          <div className="form-sub-group">
-            <label className="form-sub-label">Progress on repurchase</label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={data.consumableProgress === "reset"}
-                onSelect={() => update({ consumableProgress: "reset" })}
-                title="Reset Progress"
-                desc="All Task completions, Quiz attempts, and Quiz-Section completions for Tasks within the Certification are cleared for that user. On repurchase, the user starts fresh."
-              />
-              <RadioCard
-                selected={data.consumableProgress === "preserve"}
-                onSelect={() => update({ consumableProgress: "preserve" })}
-                title="Preserve Progress"
-                desc="Completions and attempts are preserved. On repurchase, the user picks up where they left off."
-              />
-            </div>
-            <p className="form-help">
-              Only applies to Consumable Certifications. Reset will be required if and when we are allowed to offer OSHA ourselves.
-            </p>
-          </div>
-        )}
-      </section>
-
-      <div className="form-divider" />
+          <p className="form-help">
+            Only applies to Consumable Certifications. Reset will be required if and when we are allowed to offer OSHA ourselves.
+          </p>
+        </div>
+      )}
 
       <ContentTagsSection data={data} update={update} />
     </>
@@ -3126,9 +3122,9 @@ function ContentTagsSection({
         : "Hidden from B2C (Trade/Partnership scoped). Visible to B2B Tenants matching the filters below.";
 
   return (
-    <section className="form-section">
+    <div className="form-group">
       <div className="cv-section-head">
-        <h2 className="form-section-title">Content Tags for Visibility</h2>
+        <label className="form-label">Content Tags for Visibility</label>
         <button
           type="button"
           className="cv-help-toggle"
@@ -3139,11 +3135,6 @@ function ContentTagsSection({
           {showHelp ? "Hide details" : "How visibility works"}
         </button>
       </div>
-      <p className="form-section-desc">
-        Tag this Certification to control which Tenants can see it. Trade and Partnership values come
-        from the B2B Management fields in Product Config, and a Tenant must match every tag type you
-        set (within a type, matching any one value is enough). Add as many tags of each type as you need.
-      </p>
 
       {showHelp && <VisibilityHelpPanel />}
 
@@ -3192,11 +3183,19 @@ function ContentTagsSection({
         );
       })}
 
+      <p className="form-help">
+        Tag this Certification to control which Tenants can see it. Trade and
+        Partnership values come from the B2B Management fields in Product
+        Config, and a Tenant must match every tag type you set (within a type,
+        matching any one value is enough). Add as many tags of each type as you
+        need.
+      </p>
+
       <div className="cv-scope-note">
         <span className="cv-scope-dot" />
         {scopeNote}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -3218,7 +3217,7 @@ function ArchivingStep({
 }) {
   return (
     <>
-      <section className="form-section">
+      <div className="form-group">
         <div className="form-warning">
           <span className="form-warning-icon"><WarnIcon /></span>
           <div>
@@ -3227,7 +3226,9 @@ function ArchivingStep({
             completion record and are pointed to the replacement Certification(s) below.
           </div>
         </div>
+      </div>
 
+      <div className="form-group">
         <div className="toggle-field">
           <span className="form-label">Archive this Certification</span>
           <div className="toggle-switch-row">
@@ -3245,19 +3246,11 @@ function ArchivingStep({
             permanent and cannot be undone.
           </p>
         </div>
-      </section>
+      </div>
 
-      <div className="form-divider" />
-
-      <section className="form-section">
-        <h2 className="form-section-title">Replacement &amp; alert</h2>
-        <p className="form-section-desc">
-          Configure what enrolled learners see once this Certification is archived.
-        </p>
-
-        <div className="form-sub-group">
-          <label className="form-sub-label">Replacement Certifications</label>
-          <div className="replace-list">
+      <div className="form-group">
+        <label className="form-label">Replacement Certifications</label>
+        <div className="replace-list">
             {data.replacementCerts.map((c) => (
               <div key={c.id} className="replace-row">
                 <span className="task-kind-badge cert">C</span>
@@ -3296,22 +3289,21 @@ function ArchivingStep({
               )}
             </Dropdown>
           </div>
-          <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
-        </div>
+        <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
+      </div>
 
-        <div className="form-sub-group">
-          <label className="form-sub-label">Replacement alert</label>
-          <RichTextField
-            en={data.replaceAlertEn}
-            es={data.replaceAlertEs}
-            onChangeEn={(v) => update({ replaceAlertEn: v })}
-            onChangeEs={(v) => update({ replaceAlertEs: v })}
-          />
-          <p className="form-help">
-            Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
-          </p>
-        </div>
-      </section>
+      <div className="form-group">
+        <label className="form-label">Replacement Alert</label>
+        <RichTextField
+          en={data.replaceAlertEn}
+          es={data.replaceAlertEs}
+          onChangeEn={(v) => update({ replaceAlertEn: v })}
+          onChangeEs={(v) => update({ replaceAlertEs: v })}
+        />
+        <p className="form-help">
+          Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
+        </p>
+      </div>
     </>
   );
 }

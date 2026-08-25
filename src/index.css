@@ -420,7 +420,7 @@ a {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 32px 36px 0 36px;
+  padding: 32px 32px 0 32px;
   position: relative;
 }
 
@@ -541,11 +541,12 @@ a {
   margin-bottom: 22px;
 }
 
-/* Right-aligned action cluster sitting alongside the page title */
+/* Right-aligned action cluster sitting alongside the page title.
+   12px between buttons (Figma 633:1865). */
 .tasks-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -583,6 +584,46 @@ a {
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 12px;
+}
+
+/* Quiet header action = the "Secondary Button" of Figma 633:1865 — same 32px
+   geometry as the Primary CTA but neutral, for header buttons that navigate
+   rather than create (Tasks → Skills / Question Bank, Manage Users → Offer
+   Codes / Scholarships). Its keycap inherits the .tasks-header .cta-kbd
+   override above. The fill is the node's rgba(122,122,122,0.2) wash over
+   #0d0d0d and the stroke its 0.5px rgba(122,122,122,0.1) hairline. */
+.tasks-header .cta-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 32px;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.2) 0%, rgba(122, 122, 122, 0.2) 100%),
+    #0d0d0d;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tasks-header .cta-quiet:hover {
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.3) 0%, rgba(122, 122, 122, 0.3) 100%),
+    #0d0d0d;
+}
+
+/* Icon-only quiet button — the page-level 3-dot trigger next to the header's
+   labelled actions. Square at the shared 32px height; the glyph tints like the
+   labels. */
+.tasks-header .cta-quiet--icon {
+  width: 32px;
+  padding: 0;
 }
 
 .tasks-title {
@@ -831,6 +872,8 @@ button.breadcrumb-item:hover {
   flex-shrink: 0;
 }
 
+/* Figma 12:15164 "Filters - Unapplied": 32px, r20, 1px dashed #404040, 12px
+   insets, 6px gap to the 16px add-circle, Fira Sans Medium 16 #a8a8a8. */
 .filter-pill-dashed {
   display: inline-flex;
   align-items: center;
@@ -838,10 +881,10 @@ button.breadcrumb-item:hover {
   height: 32px;
   padding: 0 12px;
   background: transparent;
-  border: 1px dashed #3b3b3f;
+  border: 1px dashed #404040;
   border-radius: 20px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   color: #a8a8a8;
   white-space: nowrap;
@@ -864,12 +907,14 @@ button.breadcrumb-item:hover {
   height: 16px;
 }
 
+/* Figma 12:15221 "Filters - Applied": same shell but a SOLID #404040 border;
+   close-circle 16px, label Medium 16 #a8a8a8, 20px divider, value #f05523. */
 .filter-applied {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
-  border: 1px solid #3b3b3f;
+  border: 1px solid #404040;
   border-radius: 20px;
   background: transparent;
   overflow: hidden;
@@ -902,7 +947,7 @@ button.breadcrumb-item:hover {
   gap: 6px;
   padding: 0 12px 0 0;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .filter-applied-main .label {
@@ -913,7 +958,7 @@ button.breadcrumb-item:hover {
 .filter-applied-main .sep {
   width: 1px;
   height: 20px;
-  background: #3b3b3f;
+  background: #404040;
 }
 
 .filter-applied-main .value {
@@ -979,10 +1024,11 @@ button.breadcrumb-item:hover {
   line-height: 1.35;
 }
 
+/* Figma 32:16835 "Clear Filters" — Fira Sans Medium 14 #7a7a7a. */
 .filter-clear-link {
   color: #7a7a7a;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   padding: 4px 8px;
   margin-left: 2px;
@@ -1076,7 +1122,8 @@ button.breadcrumb-item:hover {
   position: absolute;
   top: calc(100% + 8px);
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  /* Figma 24:16115 / 28:16530 / 28:16625 panel shell: 1px #404040, r10. */
+  border: 1px solid #404040;
   border-radius: 10px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   z-index: 100;
@@ -1094,9 +1141,12 @@ button.breadcrumb-item:hover {
 
 /* Overlay mode: portalled to the body and positioned by the Dropdown against
    the trigger, so the panel floats over the page instead of extending the
-   scroll container it was opened from. */
+   scroll container it was opened from. Above .pr-confirm-overlay (400) — the
+   Change Account Holder modal opens a SelectField, and at the base 100 the
+   panel's top half hid behind the modal card. */
 .dropdown--overlay {
   position: fixed;
+  z-index: 500;
 }
 
 /* ===== Generic vertical menu inside dropdown ===== */
@@ -1154,7 +1204,8 @@ button.breadcrumb-item:hover {
   align-items: center;
   gap: 8px;
   padding: 8px 12px 9px;
-  border-bottom: 1px solid var(--border);
+  /* 0.5px hairline under the search header (Figma 24:16116). */
+  border-bottom: 0.5px solid #404040;
   flex-shrink: 0;
 }
 
@@ -1200,7 +1251,8 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
-  color: #a8a8a8;
+  /* Medium 16 white like every option row (Figma 28:16682). */
+  color: #ffffff;
   text-align: left;
 }
 
@@ -1216,10 +1268,16 @@ button.breadcrumb-item:hover {
 }
 
 .cols-menu .cols-drag-handle {
-  color: var(--text-faint);
+  /* Figma 28:16683 "move": 16px, #a8a8a8 (the shared 12px DragHandleIcon
+     scales up here — wizards/Industries keep it at 12). */
+  color: #a8a8a8;
   display: inline-flex;
   align-items: center;
   cursor: grab;
+}
+.cols-menu .cols-drag-handle svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Drag-to-reorder feedback: the row being dragged fades, and the row it would
@@ -1244,13 +1302,14 @@ button.breadcrumb-item:hover {
   font-style: italic;
 }
 
+/* Section headings — Figma 24:16126/28:16632: Regular 14 uppercase #a8a8a8,
+   no tracking. */
 .dropdown-section-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #7a7a7a;
+  color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
@@ -1262,8 +1321,7 @@ button.breadcrumb-item:hover {
   align-items: center;
   justify-content: space-between;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #7a7a7a;
+  color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
@@ -1301,11 +1359,12 @@ button.breadcrumb-item:hover {
   color: var(--text);
   text-align: left;
 }
-/* Filter / column option rows — muted, medium-weight labels (Figma). */
+/* Filter / column option rows — Figma 24:16130/28:16647: Medium 16 WHITE.
+   (More-filters rows stay muted — they use .dropdown-submenu-row, 28:16541.) */
 .dropdown-list .dropdown-item {
   font-size: 16px;
   font-weight: 500;
-  color: #a8a8a8;
+  color: #ffffff;
 }
 
 .dropdown-item:hover {
@@ -1330,19 +1389,26 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-/* Filter / column checkboxes — Figma orange-tint selected state. */
+/* Filter / column checkboxes — Figma "Radial Button" 8:13495/8:13497: 16px,
+   0.8px border, r3.2 (the 20px master at 0.8 scale); selected = 20% orange
+   over 75% black with a WHITE check. */
 .dropdown-list .checkbox {
+  border-width: 0.8px;
   border-color: #737373;
+  border-radius: 3.2px;
 }
 .dropdown-list .checkbox.checked {
-  background: rgba(240, 85, 35, 0.2);
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    rgba(13, 13, 13, 0.75);
   border-color: rgba(240, 85, 35, 0.75);
-  color: #f05523;
+  color: #ffffff;
 }
 
 .dropdown-footer {
   padding: 9px 12px 8px;
-  border-top: 1px solid var(--border);
+  /* 0.5px hairline over the Apply footer (Figma 24:16150 / 28:16569). */
+  border-top: 0.5px solid #404040;
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -1392,15 +1458,16 @@ button.breadcrumb-item:hover {
   margin-top: 0;
 }
 
-/* Header row — Figma 79:445 "Atomic - Header Row": 48px tall, 12px insets
-   (24px between columns), 1px #404040 rule below, Fira Sans SemiBold 16 white. */
+/* Header row — Figma 79:445 "Atomic - Header Row" (Table Components 652:925):
+   40px tall, 12px insets (24px between columns), 1px #404040 rule below,
+   Fira Sans SemiBold 16 white. */
 .table thead th {
   text-align: left;
   font-family: var(--font-sans);
   font-weight: 600;
   color: #fff;
   font-size: 16px;
-  height: 48px;
+  height: 40px;
   padding: 0 12px;
   vertical-align: middle;
   border-bottom: 1px solid #404040;
@@ -1470,23 +1537,15 @@ button.breadcrumb-item:hover {
   transition: background 0.1s ease;
 }
 
-/* Row-region wash (Figma 79:446 header / 435:516 row). In the atom the
-   gradient lives on the SCROLLABLE part of the row — a ~50px ramp to 2% grey
-   that completes just before the kebab region. Mapped here: the ramp ends at
-   the sticky actions column's left edge (100% − 40px) instead of the row end,
-   so the column's solid background never slices the fade mid-ramp into a
-   hard-edged band, and the ramp keeps the atom's ~50px pixel width rather
-   than scaling up with the row. background-image, so the hover/selected
-   background-color still composes underneath. */
-.table thead tr,
-.table tbody tr {
-  background-image: linear-gradient(
-    90deg,
-    rgba(122, 122, 122, 0) calc(100% - 90px),
-    rgba(122, 122, 122, 0.02) calc(100% - 40px),
-    rgba(122, 122, 122, 0) calc(100% - 40px)
-  );
-}
+/* Row-region wash (Figma 79:446 header / 435:516 row): a ~50px ramp to 2% grey
+   completing just before the kebab region. It lives on `.col-actions::before`
+   (one paint, anchored to the sticky column so it sits at the visible right
+   edge in every scroll state) — NOT here on the tr, where a second copy at the
+   row's true right edge would stack with it whenever the table fits the
+   viewport and read ~3× as strong as the atom. Tables without a col-actions
+   cell (Proctoring, Manage IDs, Award Recipients, Name Change Requests, the
+   Add Existing Tasks modal) deliberately carry no wash: the ramp belongs to
+   the kebab-gutter atoms, and the minimal row atom (600:1461) has none. */
 
 /* The last row has no separator — the table edge / scrollbar reserve sits below it. */
 .table tbody tr:last-child {
@@ -1506,11 +1565,11 @@ button.breadcrumb-item:hover {
 }
 
 .table tbody td {
-  /* Row height is a fixed 48px (Figma row atomic 435:515, superseding the old
-     40px 79:443). Vertical padding is 0 and content is centered via
-     vertical-align, so the height is exact and independent of the text's line
-     height. 12px cell insets put 24px between adjacent columns' text. */
-  height: 48px;
+  /* Row height is a fixed 40px (Figma row atomic 435:515, re-synced 2026-08-22
+     to Table Components 652:925). Vertical padding is 0 and content is centered
+     via vertical-align, so the height is exact and independent of the text's
+     line height. 12px cell insets put 24px between adjacent columns' text. */
+  height: 40px;
   padding: 0 12px;
   vertical-align: middle;
   font-family: var(--font-sans);
@@ -1668,14 +1727,18 @@ button.breadcrumb-item:hover {
   vertical-align: middle;
   background: var(--actions-bg);
 }
+/* The atom's row wash (79:446 / 435:516) — the ONLY copy of it: a 50px ramp
+   peaking at the atom's exact 2% grey against the sticky column's left edge.
+   Anchored here (not on the tr) so it stays at the visible right edge while
+   content scrolls beneath, and never stacks with a second row-level ramp. */
 .col-actions::before {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
   right: 100%;
-  width: 72px;
-  background: linear-gradient(to right, rgba(122, 122, 122, 0), rgba(122, 122, 122, 0.04));
+  width: 50px;
+  background: linear-gradient(to right, rgba(122, 122, 122, 0), rgba(122, 122, 122, 0.02));
   pointer-events: none;
 }
 .table tbody tr:hover .col-actions { --actions-bg: var(--bg-row-hover); }
@@ -2038,12 +2101,25 @@ button.breadcrumb-item:hover {
    16px icon in 8px/6px padding — 33px wide, 29px tall, borders included. */
 .row-action-bar {
   position: absolute;
-  right: 12px;
+  /* Placed so the bar's kebab lands EXACTLY on the resting `.lone-dots` glyph.
+     The lone kebab is CENTRED in the actions cell (inline button in a
+     text-align:center td), and the cell's rendered width varies: a table wider
+     than its container keeps the colgroup's 40px, but a narrower one stretches
+     every fixed-layout column. So anchor to the cell's centre, not its edge:
+     the bar kebab's centre sits 19px from the bar's right edge (10px cell
+     padding + 0.5px border as the browser lays it out + 8px half-icon —
+     measured, not summed: half-pixel borders round). 50% of the cell minus
+     that puts the two glyphs on the same centre at ANY cell width. */
+  right: calc(50% - 19px);
   top: 50%;
   transform: translateY(-50%);
   display: none;
   align-items: stretch;
-  background: #1e1e20;
+  /* Figma 386:269 re-issue — the bar sits on the same 115-grey 15% wash as
+     the 3-dot menu panel (was a flat #1e1e20). */
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
+    #0d0d0d;
   border-radius: 8px;
   overflow: hidden;
   white-space: nowrap;
@@ -2187,15 +2263,15 @@ button.breadcrumb-item:hover {
 /* ===== Pagination ===== */
 /* Pagination (Figma 77:264): right-aligned, 2px #3d3d43 top border, "Showing X
    of Y" (14px Regular #a8a8a8) + two chevron buttons, 20px gap / 16px between. */
-/* Footer — Figma 77:264 "Atomic Component - Pagination": 48px tall, 12px
-   insets, 1px #404040 rule above, Fira Sans Regular 16 #a8a8a8, 20px gap to
-   the 16px-gap chevron pair. */
+/* Footer — Figma 77:264 "Atomic Component - Pagination" (652:925): 40px tall,
+   12px insets, 1px #404040 rule above, Fira Sans Regular 16 #a8a8a8, 20px gap
+   to the 16px-gap chevron pair. */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 20px;
-  height: 48px;
+  height: 40px;
   padding: 0 12px;
   color: #a8a8a8;
   font-family: var(--font-sans);
@@ -2474,6 +2550,13 @@ button.breadcrumb-item:hover {
   transition: filter 0.12s ease, transform 0.05s ease;
 }
 
+/* Destructive primary (Figma 495:2247) — the red two-stop gradient built on the
+   same construction as the orange CTA above, ringed in its own hue at 15%. */
+.btn-publish--danger {
+  background: linear-gradient(0deg, rgba(112, 0, 9, 0.75) 0%, rgba(255, 31, 49, 0.75) 70.905%), #0d0d0d;
+  border-color: rgba(255, 31, 49, 0.15);
+}
+
 /* Tasks-page New Task CTA — full width, centered content */
 .new-task {
   display: flex;
@@ -2558,25 +2641,23 @@ button.breadcrumb-item:hover {
   min-height: 0;
 }
 
+/* Wizard left panel (Figma 625:1459): 338px wide at the shared 32px gutter. */
 .wizard-nav {
-  width: 360px;
+  width: 338px;
   flex-shrink: 0;
-  /* Even 40px, matching .wizard-content — the old 46px top was paired with the
-     content column's 54px. */
-  padding: 40px;
+  padding: 32px;
   border-right: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
-/* New-design rail header (Figma atomic 78:395): an orange "CREATING"/"EDITING"
-   eyebrow stacked above the wizard's name. */
+/* Rail header (Figma 625:1546): an orange "CREATING"/"EDITING" eyebrow sitting
+   flush above the wizard's name; 28px to the step list below. */
 .wizard-brand {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .wizard-brand-eyebrow {
@@ -2653,22 +2734,23 @@ button.breadcrumb-item:hover {
   margin-bottom: 36px;
 }
 
-/* "Quiet Rail": monochrome step list. Each row is a glyph column (number or a
-   quiet check) + a title — no per-step subtext, no vertical connector. */
+/* Step list (Figma 625:1549): 19px rows 16px apart. Each row is a glyph column
+   (mono number, grey check, or red error circle) + a 16px SemiBold title — no
+   per-step subtext, no vertical connector. The rows' own 8px padding supplies
+   the 16px between adjacent rows. */
 .wizard-steps {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
 }
 
 .wizard-step {
   display: flex;
-  gap: 13px;
-  align-items: flex-start;
-  padding: 6px 8px;
+  gap: 15px;
+  align-items: center;
+  padding: 8px;
   margin: 0 -8px;
   border-radius: 8px;
   cursor: pointer;
@@ -2679,15 +2761,25 @@ button.breadcrumb-item:hover {
   background: rgba(255, 255, 255, 0.028);
 }
 
-/* Glyph column: an active/upcoming step shows its zero-padded number; a completed
-   step shows a quiet grey check. */
+/* A step the flow has not reached yet is not a navigation target — used by the
+   gated admin flows (Merge Accounts, Transfer Subscription), where jumping
+   ahead would skip a required decision. */
+.wizard-step.is-locked {
+  cursor: default;
+}
+.wizard-step.is-locked:hover {
+  background: transparent;
+}
+
+/* Glyph column: an active/upcoming step shows its zero-padded number; a
+   completed step a grey check; an error step the red circle. 17px — the width
+   of the two mono digits; the 16px icons start flush inside it. */
 .wizard-step-rail {
-  width: 20px;
+  width: 17px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  padding-top: 1px;
 }
 
 .wizard-step-rail svg {
@@ -2696,14 +2788,13 @@ button.breadcrumb-item:hover {
 
 .wizard-step-num {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #454549; /* upcoming: dim grey */
+  font-size: 14px;
+  font-weight: 500;
+  color: #404040; /* upcoming */
 }
 
 .wizard-step.active .wizard-step-num {
-  color: #f05523; /* active: the rail's one spot of colour */
+  color: #fff;
 }
 
 .wizard-step-text {
@@ -2713,35 +2804,47 @@ button.breadcrumb-item:hover {
 
 .wizard-step-title {
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  color: #5d5d61; /* upcoming */
-  line-height: 1.35;
+  font-size: 16px;
+  font-weight: 600;
+  color: #404040; /* upcoming */
+  line-height: 19px;
+}
+
+.wizard-step.done .wizard-step-rail {
+  color: #7a7a7a;
 }
 
 .wizard-step.done .wizard-step-title {
-  color: #9a9a9e;
+  color: #7a7a7a;
 }
 
 .wizard-step.active .wizard-step-title {
-  font-weight: 600;
   color: #fff;
 }
 
-/* Error / "needs input" step: a required field is missing. Quiet rail — only the
-   glyph carries colour; the title stays neutral (never red/bold). Matches the
-   "Quiz Wizard Quiet Rail" reference. */
+/* Error / "needs input" step: a required field is missing. Both the glyph and
+   the title go red (Figma 625:1550). */
 .wizard-step.error .wizard-step-rail {
   color: #ff1f31;
 }
 
 .wizard-step.error .wizard-step-title {
-  color: #b6b6ba;
-  font-weight: 400;
+  color: #ff1f31;
 }
 
 /* Missing required text field inside a wizard step. */
-.lang-field.has-error {
+.lang-field.has-error,
+.form-input.has-error {
+  border-color: #ff1f31;
+}
+
+/* Same flag on the two non-text required controls: the dual-language upload
+   shell and a radio-card group with nothing chosen. */
+.upload-2lang.has-error {
+  border-color: #ff1f31;
+}
+
+.radio-card-group.has-error .radio-card {
   border-color: #ff1f31;
 }
 
@@ -2856,12 +2959,12 @@ button.breadcrumb-item:hover {
   position: relative;
 }
 
-/* One even 40px gutter on every side, for every wizard and anything else built
-   on this form (user rule 2026-08-17 — was 54px/64px/40px). */
+/* One even 32px gutter on every side, for every wizard and anything else built
+   on this form (user rule 2026-08-21 — was 40px). */
 .wizard-content {
   flex: 1;
   overflow-y: auto;
-  padding: 40px;
+  padding: 32px;
   min-width: 0;
   min-height: 0;
 }
@@ -2903,7 +3006,7 @@ button.breadcrumb-item:hover {
   align-items: center;
   justify-content: space-between;
   min-height: 72px;
-  padding: 20px 40px;
+  padding: 20px 32px;
   border-top: 1px solid rgba(122, 122, 122, 0.5);
   background: var(--bg);
   flex-shrink: 0;
@@ -2944,6 +3047,9 @@ button.breadcrumb-item:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Matches .btn-publish — a leading icon otherwise sits flush against the
+     label, since the flex box eats the whitespace between them. */
+  gap: 8px;
   height: 32px;
   padding: 0 16px;
   background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
@@ -3012,7 +3118,7 @@ button.breadcrumb-item:hover {
 }
 .cw-topbar {
   flex-shrink: 0;
-  padding: 22px 40px 0;
+  padding: 22px 32px 0;
 }
 .cw-split {
   flex: 1;
@@ -3035,28 +3141,35 @@ button.breadcrumb-item:hover {
 .cw-form-col .co-cost-summary,
 .cw-form-col .co-plan-note { max-width: none; }
 
+/* The Plan step's right rail, on the Create Spotlight preview pattern
+   (`.spc-rail`): a 28px title over the content, 32px gutter, grey wash on
+   #0d0d0d. It holds the billing timeline alone — the plan-summary card and the
+   two page-break headers it sat under were dropped. */
 .cw-impact {
   width: 420px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 28px 28px 24px;
+  gap: 28px;
+  padding: 32px;
   overflow-y: auto;
-  background: var(--bg-panel);
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.15) 0%, rgba(122, 122, 122, 0.15) 100%),
+    linear-gradient(90deg, #0d0d0d 0%, #0d0d0d 100%);
 }
-.cw-impact-card {
-  flex: 1;
+.cw-impact-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
 }
 
-/* ===== Subscription preview (Figma 107:1236) =====
+/* ===== Subscription preview =====
    The billing-impact rail for every wizard case (creating a company, changing a
-   running subscription, or switching plan type): a "What's Changing" / "Plan
-   Summary" card + a "Billing Impact" timeline. */
-.sub-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
+   running subscription, or switching plan type). It is the timeline alone now;
+   the summary card and its page-break headers were removed. */
 /* No-change-yet state when editing a running subscription. */
 .sub-preview-empty {
   border: 1px dashed var(--border-strong);
@@ -3066,95 +3179,63 @@ button.breadcrumb-item:hover {
 }
 .sub-preview-empty-title { font-size: 12.5pt; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
 .sub-preview-empty-sub { font-size: 11pt; color: var(--text-faint); line-height: 1.5; }
-.sub-preview-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-/* The shared page break carries its own 28px margins for wizard steps; reset
-   them here since the section already spaces via gap. */
-.sub-preview .page-break {
-  margin: 0;
-}
-/* Sub-preview section labels are 12px (Figma 107:1130/1183), vs 14px elsewhere. */
-.sub-preview .page-break-label {
-  font-size: 12px;
-}
-
-/* "Effective Today" pill on the What's-Changing header (Figma 107:1143). */
-.sub-pill {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 1px 9px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.sub-pill--accent {
-  color: #f05527;
-  background: rgba(240, 85, 39, 0.1);
-  border: 1px solid #f05527;
-}
-.sub-pill--muted {
-  color: #a8a8a8;
-  background: transparent;
-  border: 1px solid rgba(122, 122, 122, 0.5);
-}
-
-/* What's-Changing diff card (Figma 107:1179): inset 8px, #1e1e20 fill, rows
-   split by #404040/50% hairlines. Old value grey, new value white. */
-.sub-changes-wrap {
-  padding: 0 8px;
-}
-.sub-changes {
-  background: #1e1e20;
-  border: 1px solid rgba(122, 122, 122, 0.5);
+/* Summary card (Figma 616:1111): headerless — no page break, no pill. A tinted
+   fill with one row per value, hairline-split, old value struck through where
+   there is a prior one. */
+.sub-summary {
+  background: rgba(122, 122, 122, 0.1);
   border-radius: 8px;
-  padding: 4px 12px;
+  padding: 0 12px;
+  overflow: hidden;
 }
-.sub-change-row {
+.sub-summary-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 34px;
-  padding: 8px 0 9px;
+  padding: 12px 0 13px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
-}
-.sub-change-row:last-child {
-  border-bottom: none;
-}
-.sub-change-label {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
+  line-height: normal;
+}
+.sub-summary-row:last-child {
+  border-bottom: none;
+  padding-bottom: 12px;
+}
+.sub-summary-label {
+  flex-shrink: 0;
   font-weight: 600;
   color: #a8a8a8;
 }
-.sub-change-val {
+/* The node's values are short USD ones and set nowrap. Real CAD rates
+   ("CA$127.00/seat/mo → CA$84.00/seat/mo") are wider than the 420px rail, and
+   the card clips, so the old → new run wraps instead of losing a price. */
+.sub-summary-val {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-size: 14px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
   text-align: right;
 }
-.sub-change-old {
-  color: #a8a8a8;
+.sub-summary-old {
   font-weight: 400;
+  color: #a8a8a8;
+  text-decoration: line-through;
 }
-.sub-change-arrow {
+.sub-summary-arrow {
+  font-weight: 400;
   color: #a8a8a8;
 }
-.sub-change-new {
-  color: #fff;
+.sub-summary-new {
   font-weight: 600;
+  color: #fff;
 }
 
-/* Billing Impact timeline (Figma 107:1233): a dotted rail + dated amounts. */
+/* Billing timeline (Figma 616:1045): a dotted rail + dated amounts, inset 8px
+   from the summary card above it. */
 .sub-timeline {
   display: flex;
   flex-direction: column;
@@ -3205,8 +3286,8 @@ button.breadcrumb-item:hover {
 }
 .sub-timeline-date {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   font-weight: 500;
   color: #a8a8a8;
 }
@@ -3228,14 +3309,74 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  color: #7a7a7a;
+  color: #a8a8a8;
 }
 
 
+/* ===== Stepper (Figma 618:1264) =====
+   A bordered group of three cells: [−][value][+]. The 1px shell padding is the
+   node's own; the value cell carries the two inner hairlines. */
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  width: max-content;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  /* The node's 1px shell padding sits on top of its 1px border — the
+     padding-minus-border rule — so it lands at 0 here, and the control at the
+     app's 45px field height. */
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+.stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+.stepper-btn:hover:not(:disabled) { background: #1e1e20; }
+.stepper-btn:disabled {
+  color: #404040;
+  cursor: not-allowed;
+}
+.stepper-value {
+  width: 64px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #404040;
+  border-right: 1px solid #404040;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  text-align: center;
+  outline: none;
+  /* The +/− buttons are the affordance; the native spinners would double it. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.stepper-value::-webkit-outer-spin-button,
+.stepper-value::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.stepper.is-disabled {
+  opacity: 0.55;
+}
+
 /* ===== Form primitives ===== */
+/* Fields are uncapped (user rule 2026-08-21 — the old 920px form cap was
+   dropped app-wide); every field stretches to the space its column gives it. */
 .form-group {
   margin-bottom: 32px;
-  max-width: 920px;
+  max-width: none;
 }
 
 /* Field name label (Figma 49:367): 16px Fira Sans SemiBold white, accent-orange
@@ -3517,7 +3658,7 @@ button.breadcrumb-item:hover {
   display: flex;
   align-items: stretch;
   gap: 10px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .deeplink-row .form-input {
@@ -3537,7 +3678,7 @@ button.breadcrumb-item:hover {
 .form-divider {
   border-top: 1px solid var(--border);
   margin: 32px 0;
-  max-width: 920px;
+  max-width: none;
 }
 
 /* Wizard section divider (Figma 104:376 "Page Break"): a short 4px lead line,
@@ -3582,7 +3723,7 @@ button.breadcrumb-item:hover {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .wizard-fields .form-group,
@@ -3597,7 +3738,7 @@ button.breadcrumb-item:hover {
   display: flex;
   align-items: flex-start;
   gap: 11px;
-  max-width: 920px;
+  max-width: none;
   padding: 13px 15px;
   margin-bottom: 20px;
   border: 1px solid rgba(229, 72, 77, 0.45);
@@ -3742,7 +3883,7 @@ button.breadcrumb-item:hover {
 
 /* Keywords field — parsed chip preview under each comma-separated input */
 .kw-field {
-  max-width: 920px;
+  max-width: none;
 }
 
 .kw-chips {
@@ -3772,12 +3913,13 @@ button.breadcrumb-item:hover {
   letter-spacing: 0.1em;
 }
 
-/* Plain-text dual-language tag (Figma 49:348): IBM Plex Mono Bold, 10px,
+/* Plain-text dual-language tag (Figma 49:348): IBM Plex Mono Bold, 12px,
    uppercase, #a8a8a8. Scoped to .lang-field so the rich-text editor's tag is
-   untouched. */
+   untouched. (The node moved 10px → 12px on 2026-08-21; the rich-text tag
+   below moved with it.) */
 .lang-field .lang-tag {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   color: #a8a8a8;
@@ -3792,7 +3934,7 @@ button.breadcrumb-item:hover {
   border-radius: 8px;
   background: transparent;
   overflow: hidden;
-  max-width: 920px;
+  max-width: none;
 }
 
 .lang-field-input::placeholder {
@@ -3857,8 +3999,13 @@ button.breadcrumb-item:hover {
   width: 81px;
 }
 
-.time-row .form-select {
+/* The unit picker keeps the 140px the native select had (Figma 101:281 says
+   the trigger stretches; here the field's own width is what's wanted). */
+.time-row .form-select,
+.time-row .selectfield,
+.time-row .select-field {
   width: 140px;
+  min-width: 0;
 }
 
 .no-spinner {
@@ -3885,7 +4032,7 @@ button.breadcrumb-item:hover {
   border: 1px solid #404040;
   border-radius: 9px;
   background: transparent;
-  max-width: 920px;
+  max-width: none;
 }
 
 .upload-lang-col {
@@ -4159,28 +4306,29 @@ button.breadcrumb-item:hover {
   border-radius: 8px;
   background: transparent;
   overflow: hidden;
-  max-width: 920px;
+  max-width: none;
 }
 
-/* Toolbar strip: 12px above/below the glyph row and NO side padding — the first
-   group's own 12px inset is what sets the left edge. 42px tall with the border. */
+/* Toolbar strip: 8px above/below the control row and NO side padding — the
+   first group's own inset is what sets the left edge. 42px tall with the
+   border. The fill is rgba(122,122,122,0.2) over #0d0d0d (Figma 640:917). */
 .rte-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   row-gap: 8px;
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #404040;
-  background: #1e1e20;
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
 }
 
-/* Each tool group is padded 12px a side and closed by a hairline; the trailing
+/* Each tool group is padded 8px a side and closed by a hairline; the trailing
    group has no divider. */
 .rte-group {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
+  gap: 4px;
+  padding: 0 8px;
   border-right: 0.5px solid #404040;
 }
 
@@ -4188,10 +4336,12 @@ button.breadcrumb-item:hover {
   border-right: none;
 }
 
-/* Bare 16px glyphs — the design gives the buttons no hit-box chrome. */
+/* 24px hit box around the 16px glyph. A toggled-on control keeps the soft fill
+   and a white glyph (Figma 640:922 selected state). */
 .rte-btn {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4202,12 +4352,20 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-/* Block-format picker: 14px label + 14px caret, 4px apart. Its 17px line is the
-   tallest thing in the strip, so it sets the toolbar's content height. */
+.rte-btn.is-active {
+  background: rgba(115, 115, 115, 0.2);
+  color: #fff;
+}
+
+/* Block-format picker: 14px label + 14px caret, 4px apart, in its own 4px
+   inset. Its 25px box is the tallest thing in the strip, so it sets the
+   toolbar's content height. */
 .rte-heading {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
   color: #a8a8a8;
 }
 
@@ -4223,6 +4381,21 @@ button.breadcrumb-item:hover {
 .rte-heading:hover {
   color: #fff;
 }
+
+/* Block-format menu — Figma 640:1005 "Dropdown Menu - Reduced Size": the
+   single-select menu tightened to a 4px inset and 14px rows. Same rules as
+   .ss-menu otherwise — current value is the SemiBold row, hover fills #2c2c2f. */
+.rte-para-menu { z-index: 300; }
+.rte-para-menu .dropdown-list { padding: 4px; }
+.rte-para-menu .dropdown-list .dropdown-item {
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #fff;
+  white-space: nowrap;
+}
+.rte-para-menu .dropdown-list .dropdown-item.is-current { font-weight: 600; }
+.rte-para-menu .dropdown-list .dropdown-item:hover { background: #2c2c2f; }
 
 /* Text body. Standalone (single-language) areas carry the full 12px inset;
    inside a language row the row owns the horizontal half. */
@@ -4267,7 +4440,8 @@ button.breadcrumb-item:hover {
 .rte-lang-row .lang-tag {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  /* 12px, matching the plain-text tag (Figma 327:137 / 49:348). */
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4291,7 +4465,7 @@ button.breadcrumb-item:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 920px;
+  max-width: none;
 }
 
 /* Locked wizard step: a grey overlay + explanation card sits over the greyed-out
@@ -4450,7 +4624,7 @@ button.breadcrumb-item:hover {
 }
 
 .radio-card.selected {
-  border-color: #d4632c;
+  border-color: #f05523;
 }
 
 .radio-card:disabled {
@@ -4475,7 +4649,7 @@ button.breadcrumb-item:hover {
 }
 
 .radio-card.selected .radio-dot {
-  border-color: #d4632c;
+  border-color: #f05523;
 }
 
 .radio-card.selected .radio-dot::after {
@@ -4483,12 +4657,12 @@ button.breadcrumb-item:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d4632c;
+  background: #f05523;
 }
 
 /* The same dot used on its own, outside a card (question editor option rows). */
 .radio-dot.is-on {
-  border-color: #d4632c;
+  border-color: #f05523;
 }
 
 .radio-dot.is-on::after {
@@ -4496,7 +4670,7 @@ button.breadcrumb-item:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d4632c;
+  background: #f05523;
 }
 
 /* Title over description, 4px apart (Figma 134:1790). */
@@ -4513,14 +4687,18 @@ button.breadcrumb-item:hover {
   font-size: 16px;
   font-weight: 600;
   line-height: 19px;
-  color: var(--text);
+  /* Pure white per the 2026-08-22 re-pull of 134:1790, not --text. */
+  color: #fff;
 }
 
 .radio-card-desc {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  color: var(--text-muted);
+  /* #a8a8a8, not --text-muted (#8b8b8f) — Figma 616:886's Plan group. Its
+     Payment Method group still shows the darker grey; the lighter one is the
+     component's colour everywhere. */
+  color: #a8a8a8;
   line-height: 17px;
 }
 
@@ -4732,7 +4910,7 @@ button.breadcrumb-item:hover {
 /* ============== Section heading inside wizard step ============== */
 .form-section {
   margin-bottom: 32px;
-  max-width: 920px;
+  max-width: none;
 }
 
 /* The section supplies the 32px gap; its last field must not add a second one,
@@ -4780,7 +4958,7 @@ button.breadcrumb-item:hover {
 
 .form-select.wide {
   width: 100%;
-  max-width: 920px;
+  max-width: none;
 }
 
 /* ============== Inline number (inside radio card text, etc.) ============== */
@@ -4965,6 +5143,39 @@ button.breadcrumb-item:hover {
 .tab-switch-tab.active {
   background: #fff;
   color: #111;
+}
+
+/* ============== Tabs (Figma 659:896) ============== */
+/* Shared underline tab row — Skills/Awards pages, the profile Purchases
+   card, Product Config, and the cert preview panel. 40px-tall tabs with
+   20px side insets on a 1px #404040 hairline; Fira Sans Medium 16px.
+   Active = #f05523 label + a 1px underline sitting on the hairline;
+   inactive = white. Labels only — no counters. Pages add a placement
+   class next to .tabbar for margins; the component owns everything else. */
+.tabbar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #404040;
+}
+.tabbar .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 20px;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+.tabbar .tab:hover { color: #f05523; }
+.tabbar .tab.is-active {
+  color: #f05523;
+  border-bottom-color: #f05523;
 }
 
 /* ============== Secondary button ============== */
@@ -5445,9 +5656,18 @@ button.breadcrumb-item:hover {
   cursor: pointer;
 }
 .seg-btn.active {
-  background: #1e1e20;
+  /* rgba(122,122,122,0.2) over #0d0d0d, ringed by a 0.5px hairline (Figma
+     359:2373). The ring is a box-shadow so the segment's box doesn't shift. */
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  box-shadow: inset 0 0 0 0.5px rgba(122, 122, 122, 0.1);
   color: #fff;
   font-weight: 500;
+}
+/* Accent-active variant (Figma 639:895) — opt-in per segment, for choices whose
+   chosen value should read as the brand "on" state (Task visibility's Visible). */
+.seg-btn.active.accent {
+  background: linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)), rgba(13, 13, 13, 0.75);
+  box-shadow: inset 0 0 0 0.5px #f05523;
 }
 .seg-btn:hover:not(.active) {
   color: #fff;
@@ -5462,7 +5682,7 @@ button.breadcrumb-item:hover {
   background: var(--bg-pill);
   border: 1px solid var(--border);
   border-radius: 10px;
-  max-width: 920px;
+  max-width: none;
 }
 .cert-thumb-preview {
   width: 56px;
@@ -5495,7 +5715,7 @@ button.breadcrumb-item:hover {
   align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
-  max-width: 920px;
+  max-width: none;
   margin-bottom: 16px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
@@ -5552,7 +5772,7 @@ button.breadcrumb-item:hover {
   align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
-  max-width: 920px;
+  max-width: none;
   margin-bottom: 16px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
@@ -6832,7 +7052,7 @@ button.breadcrumb-item:hover {
   border-radius: 12px;
   background: var(--bg-pill);
   padding: 18px 20px;
-  max-width: 920px;
+  max-width: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -6962,12 +7182,12 @@ button.breadcrumb-item:hover {
 .cond-add:hover { color: #a9d3ff; }
 
 /* Completion — Condition Sets (spec 7.3.7.1) */
-.cond-intro { margin-top: 0; margin-bottom: 14px; max-width: 920px; }
+.cond-intro { margin-top: 0; margin-bottom: 14px; max-width: none; }
 
 .cond-sets {
   display: flex;
   flex-direction: column;
-  max-width: 920px;
+  max-width: none;
   margin-bottom: 14px;
 }
 /* Raise the cards off the page so the OR separators read clearly */
@@ -7116,9 +7336,9 @@ button.breadcrumb-item:hover {
   background: var(--bg);
 }
 .cert-start-inner {
-  max-width: 920px;
+  max-width: none;
   margin: 0 auto;
-  padding: 48px 40px 64px;
+  padding: 48px 32px 64px;
 }
 .cert-start-head {
   display: flex;
@@ -7553,10 +7773,16 @@ button.breadcrumb-item:hover {
   border-radius: 999px;
   padding: 1px 8px;
 }
+/* More-filters row chevron — 16px stroke icon (Figma 28:16610). */
 .dropdown-submenu-chevron {
   color: #a8a8a8;
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
   margin-left: 2px;
+}
+.dropdown-submenu-chevron svg {
+  width: 16px;
+  height: 16px;
 }
 
 .dropdown-submenu-header {
@@ -10063,7 +10289,7 @@ button.breadcrumb-item:hover {
 
 /* ── Preview rail (Figma 553:1580) ──
    28px between the "Preview" header and the card, on #0d0d0d under a 15% grey
-   wash. Padding is the app's even 40px rather than the node's 20px, and the
+   wash. Padding is the app's even 32px rather than the node's 20px, and the
    column is 710px so the card still measures its Figma 630px inside it. */
 .spc-rail {
   /* 441px = the card's 361 inside the 40px gutter (Figma 553:1580). */
@@ -10072,7 +10298,7 @@ button.breadcrumb-item:hover {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding: 40px;
+  padding: 32px;
   overflow-y: auto;
   background:
     linear-gradient(90deg, rgba(122, 122, 122, 0.15) 0%, rgba(122, 122, 122, 0.15) 100%),
@@ -10394,7 +10620,7 @@ button.breadcrumb-item:hover {
   justify-content: space-between;
   gap: 16px;
   margin: 0 -36px;
-  padding: 20px 40px;
+  padding: 20px 32px;
   background: #0d0d0d;
   border-top: 2px solid rgba(122, 122, 122, 0.5);
   animation: sp-footer-in 0.16s ease;
@@ -11576,8 +11802,10 @@ button.breadcrumb-item:hover {
   display: flex;
   flex-direction: column;
   border-radius: 8px;
+  /* Figma 667:884 "General Modal" — grey wash at 15% (re-issued down from
+     the original 20%) over #0d0d0d. */
   background:
-    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
     #0d0d0d;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
@@ -11592,15 +11820,30 @@ button.breadcrumb-item:hover {
   height: min(860px, calc(100vh - 48px));
 }
 
+/* Table-picker shell — Figma 682:2321 "Select Tasks Modal": a fixed 884px card
+   (836px of content inside .prm-body's 24px gutters). Unlike .prm--wide it has
+   no fixed height — the table is paginated, so the card sizes to its rows. */
+.prm--pick {
+  max-width: 884px;
+}
+
 .prm-body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px; /* Figma 667:884 re-issue — was 20px */
   padding: 24px;
   min-height: 0;
   /* Scrolls on its own; `.prm-foot` is a sibling, so the footer stays put. */
   overflow: auto;
+}
+
+/* Title + optional description read as one group (Figma 667:884 — 2px gap,
+   tighter than the 20px body gap around them). */
+.prm-headgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .prm-head {
@@ -11650,10 +11893,34 @@ button.breadcrumb-item:hover {
   font-weight: 600;
 }
 
+/* Body copy in the content slot — plain white text, unlike the grey
+   description (Figma 667:884's "Pop-up content" text). Nested lists render
+   as plain numbered lines, no decoration. */
+.prm-content {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #fff;
+}
+.prm-content p {
+  margin: 0;
+}
+.prm-content ol {
+  margin: 12px 0 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Figma 667:884 "General Modal": 32px between content items, the same rhythm
+   as the wizard screens (was 28px before that component landed). */
 .prm-stack {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 32px;
 }
 
 .prm-field {
@@ -11681,6 +11948,18 @@ button.breadcrumb-item:hover {
   font-weight: 400;
   line-height: normal;
   color: #a8a8a8;
+}
+
+/* Selects in a modal field fill the column, same as the wizard's forms —
+   the default .select-field trigger is shrink-to-fit. */
+.prm-field .select-field {
+  width: 100%;
+}
+
+/* Modal fields use the app's standard field subtext (.form-help). Its own
+   8px top margin would stack on the field's 8px gap, so it zeroes here. */
+.prm-field .form-help {
+  margin: 0;
 }
 
 /* ── reason checklist ──
@@ -11840,6 +12119,7 @@ button.breadcrumb-item:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px; /* only in play when the CTA carries an icon (Stripe links) */
   height: 32px;
   padding: 0 15.5px;
   border: 0.5px solid rgba(240, 85, 35, 0.15);
@@ -11862,6 +12142,18 @@ button.breadcrumb-item:hover {
 .prm-cta:disabled {
   opacity: 0.45;
   cursor: default;
+}
+/* Destructive confirm (Figma 495:2247) — the red variant of the same recipe,
+   for the merge / transfer / delete dialogs. */
+.prm-cta--danger {
+  border-color: rgba(255, 31, 49, 0.15);
+  background:
+    linear-gradient(0deg, rgba(112, 0, 9, 0.75) 0%, rgba(255, 31, 49, 0.75) 70.905%),
+    #0d0d0d;
+}
+/* The Companies page's Stripe CTAs render as external links. */
+a.prm-cta {
+  text-decoration: none;
 }
 
 /* =============================================================
@@ -12579,6 +12871,114 @@ a.rh-crumb-link:hover {
    pill stays neutral instead of competing with the actionable states. */
 .rh-status--no-action-required { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
 .rh-status--no-action-required .rh-status-dot { background: var(--text-muted); }
+
+/* ── "Start a review run" cards ("Submissions Landing 1c" reference) ──
+   The landing section between the search bar and the filter row: a PageBreak
+   eyebrow, then three entry points into the review console. The reference's
+   literal palette is mapped onto the app system — card shell = the
+   Secondary-Button fill at 10% over #0d0d0d (the console rail-card
+   construction), the highlighted default card = the accent at 10→4%; CTAs are
+   the shared .btn-publish / .btn-save-draft. */
+.rh-runs .page-break {
+  margin: 0 0 12px;
+}
+.rh-run-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.rh-run-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+}
+.rh-run-card.is-default {
+  border: 1px solid rgba(240, 85, 35, 0.4);
+  background:
+    linear-gradient(180deg, rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.04)),
+    #0d0d0d;
+  /* Border eats 1px per edge — pull the padding in so the three cards'
+     content boxes stay aligned across the row. */
+  padding: 15px;
+}
+.rh-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.rh-run-title {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.rh-run-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #a8a8a8;
+}
+.rh-run-meta {
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: #7a7a7a;
+}
+.rh-run-meta strong {
+  font-weight: 600;
+  color: #fff;
+}
+.rh-run-list {
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rh-run-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #d9d9d9;
+}
+.rh-run-row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rh-run-count {
+  color: #7a7a7a;
+}
+.rh-run-more {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #7a7a7a;
+}
+/* CTAs sit on the card floor so all three stay aligned however tall the
+   content above them runs; the :nth-last-child(2) rule guarantees at least
+   16px between a card's last content block and its button. */
+.rh-run-cta {
+  margin-top: auto;
+  max-width: 100%;
+}
+.rh-run-card > :nth-last-child(2) {
+  margin-bottom: 16px;
+}
+.rh-run-cta-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Split layout */
 .rh-split {
@@ -15015,6 +15415,12 @@ a.rh-crumb-link:hover {
   margin-bottom: 24px;
 }
 
+/* Breadcrumb over the rail title — same 12px crumb→title gap as .rvc-pagehead.
+   The way back to Certifications now that Industries left the sidebar. */
+.ind-crumbs {
+  margin-bottom: 12px;
+}
+
 /* Inline flow (not flex) so the glyph follows the last word when the copy
    wraps in a narrower rail than the 462px Figma frame. */
 .rail-desc {
@@ -16275,17 +16681,22 @@ a.rh-crumb-link:hover {
 }
 
 /* Three-dot row actions menu (fixed-positioned) */
+/* Re-synced to Figma 670:1323 "3-Dot Menu - B2B Companies" — the shared shell
+   for every row 3-dot menu: 8px padding, 0.5px #404040 ring, and the
+   115-grey wash at 15% over #0d0d0d (was a flat #1e1e20). */
 .u-menu {
   position: fixed;
   z-index: 200;
   min-width: 210px;
-  background: #1e1e20;
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
+    #0d0d0d;
   border: 0.5px solid #404040;
   border-radius: 8px;
   /* Not in the Figma frame, which sits on a flat canvas — but this popover
      floats over table rows and needs the separation. */
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  padding: 4px;
+  padding: 8px;
   font-family: var(--font-sans);
 }
 
@@ -16310,25 +16721,27 @@ a.rh-crumb-link:hover {
   margin-top: 1px;
 }
 
-/* Menu row — Figma "3-Dot Menu - Menu Clicked" (388:354, re-synced to 559:2206):
-   8px padding, 16px gap to a 16px icon, 16px Fira Sans Medium. Icon and label
-   are both pure white here, unlike the action bar's #a8a8a8. */
+/* Menu row — Figma 670:1323 (superseding 388:354/559:2206): 8px padding, 12px
+   gap to a 16px icon, 16px Fira Sans Regular. Icon and label are both pure
+   white here, unlike the action bar's #a8a8a8. */
 .u-menu-item {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   padding: 8px;
   border-radius: 6px;
   text-align: left;
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 400;
   color: #fff;
 }
 
+/* Same soft row fill as the popup-surface dropdowns (668:972) — the menu sits
+   on the identical 115-grey wash. */
 .u-menu-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(115, 115, 115, 0.1);
 }
 
 .u-menu-item-icon {
@@ -16405,164 +16818,64 @@ a.rh-crumb-link:hover {
   font-size: 11pt;
 }
 
-/* ============== Full Profile page (standalone tab) ============== */
+/* =============================================================
+ * Full Profile page (standalone tab, ?profile=U-XXXXX)
+ * =============================================================
+ * Rebuilt 2026-08-24 onto the shared design system — these rules are layout
+ * only. The vocabulary maps:
+ *   header    -> .tasks-header + .rvc-crumbs breadcrumb + .tasks-title/.tasks-subtitle
+ *   buttons   -> .cta-quiet / .cta-primary headers, .btn-save-draft (+ .mc-btn-sm rows)
+ *   sections  -> PageBreak (.page-break)
+ *   fields    -> .co-detail-grid + .co-dt-label/.co-dt-value (cert preview panel)
+ *   pills     -> .u-pill type tag, .co-pill-muted skills, .co-status-pill--{tone}
+ *   tables    -> the shared .table.sch-table single-table architecture
+ *   modals    -> PrmModal (.prm-*) with .form-input / .form-error-text fields
+ */
 .prof {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
 }
 
-.prof-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 32px;
-  background: #0e0e10;
-  border-bottom: 1px solid var(--border);
-  font-size: 11pt;
+/* The sections scroll as one column under the fixed header; margins restore
+   the .tasks gutter inside the scroller so nothing clips at the edges. */
+.prof-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -32px;
+  padding: 0 32px 64px;
 }
 
-.prof-topbar-brand { font-weight: 700; }
-.prof-topbar-sep { color: var(--text-faint); }
-.prof-topbar-label { color: var(--text-muted); }
-
-.prof-loginas {
-  margin-left: auto;
+/* Identity row in the header — the shared avatar scaled up beside the standard
+   page title. */
+.prof-headrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.mc-avatar.prof-avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+.prof-contact {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 11pt;
-  font-weight: 600;
-  color: #fff;
-  background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.85) 29.09%, rgba(138, 49, 20, 0.85) 100%), rgba(13, 13, 13, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 8px 22px rgba(228, 69, 21, 0.25);
-}
-.prof-loginas:hover { filter: brightness(1.08); }
-
-.prof-body {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 32px 32px 80px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  gap: 5px;
 }
 
-.prof-hero {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 8px 4px 18px;
+/* The detail grid runs page-wide here, so it breathes more than the cert
+   preview panel's copy of .co-detail-grid. */
+.prof-grid {
+  gap: 24px 40px;
 }
 
-.prof-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.prof-badges {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  font-weight: 800;
-  color: #fff;
-  background: radial-gradient(70% 70% at 50% 40%, #e97237, #8a3114);
-}
-
-.prof-name { font-size: 24pt; font-weight: 800; margin: 0 0 6px; }
-
-.prof-hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
-  color: var(--text-muted);
-  font-size: 11pt;
-}
-.prof-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
-.prof-muted { color: var(--text-faint); }
-.prof-contact { display: inline-flex; align-items: center; gap: 5px; }
-.prof-verified { color: #6ee7a3; flex-shrink: 0; }
-
-.prof-card {
-  background: var(--bg-panel, #131315);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 22px 24px;
-}
-
-.prof-card-head {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
-}
-.prof-card-title { font-size: 14pt; font-weight: 700; margin: 0; }
-.prof-card-count {
-  font-size: 10pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-pill);
-  border-radius: 999px;
-  padding: 2px 9px;
-}
-
-.prof-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 32px;
-}
-.prof-field--wide { grid-column: 1 / -1; }
-.prof-field-label {
-  font-size: 10pt;
-  color: var(--text-faint);
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.prof-field-value { font-size: 12pt; color: var(--text); }
-.prof-link, .prof-portfolio-url { color: var(--accent); text-decoration: none; }
-.prof-link:hover, .prof-portfolio-url:hover { text-decoration: underline; }
-
-.prof-badges { display: flex; flex-wrap: wrap; gap: 10px; }
-.prof-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border-radius: 999px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  font-size: 11pt;
-  color: var(--text);
-}
-.prof-badge svg { color: var(--text-muted); }
-.prof-badge--mastery {
-  background: rgba(233, 185, 73, 0.12);
-  border-color: rgba(233, 185, 73, 0.4);
-  color: #e9b949;
-}
-.prof-badge--mastery svg { color: #e9b949; }
-.prof-badge-tag {
-  font-size: 8.5pt;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: rgba(233, 185, 73, 0.25);
-  border-radius: 4px;
-  padding: 1px 5px;
 }
 
 .prof-portfolio {
@@ -16571,160 +16884,36 @@ a.rh-crumb-link:hover {
   justify-content: space-between;
   gap: 16px;
 }
-.prof-portfolio-label { font-size: 10pt; color: var(--text-faint); margin-bottom: 4px; }
-.prof-portfolio-url { font-size: 11.5pt; }
 
-.prof-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  font-size: 10.5pt;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.prof-btn:hover { background: var(--bg-pill-strong); }
-.prof-btn--sm { padding: 5px 10px; font-size: 10pt; }
-.prof-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.prof-btn:disabled:hover { background: var(--bg-pill); }
-
-.prof-table { width: 100%; border-collapse: collapse; font-size: 11pt; }
-.prof-table thead th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-strong);
-  font-size: 10pt;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.prof-table tbody td {
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.prof-table tbody tr:last-child td { border-bottom: none; }
-.prof-td-strong { color: var(--text); font-weight: 600; }
-.prof-table-actions { text-align: right; white-space: nowrap; }
-.prof-table-actions button + button { margin-left: 6px; }
-.prof-table-num { text-align: right; font-variant-numeric: tabular-nums; }
-
-.prof-tier {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid;
-  font-size: 9.5pt;
-  font-weight: 700;
-}
-
-.prof-kind {
-  display: inline-flex;
-  padding: 2px 9px;
-  border-radius: 6px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  font-size: 9.5pt;
-  color: var(--text-muted);
-}
-
-.prof-empty { color: var(--text-faint); font-size: 11pt; padding: 6px 2px; }
-.prof-foot { color: var(--text-faint); font-size: 10pt; text-align: center; padding-top: 8px; }
-
-/* Purchases & Bills — category tabs */
+/* Placement-only: the shared .tabbar between the section break and the
+   purchases table. */
 .prof-tabs {
-  display: flex;
   flex-wrap: wrap;
-  gap: 4px;
   margin-bottom: 16px;
-  border-bottom: 1px solid var(--border-strong);
 }
-.prof-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  color: var(--text-muted);
-  font-size: 11pt;
-  font-weight: 600;
-  cursor: pointer;
-}
-.prof-tab:hover { color: var(--text); }
-.prof-tab--active { color: var(--text); border-bottom-color: var(--accent); }
-.prof-tab-count {
-  font-size: 9pt;
-  font-weight: 700;
-  color: var(--text-muted);
-  background: var(--bg-pill);
-  border-radius: 999px;
-  padding: 1px 7px;
-}
-.prof-tab--active .prof-tab-count { background: var(--bg-pill-strong); color: var(--text); }
 
-/* Consumable / non-consumable flag */
-.prof-flag {
-  display: inline-flex;
-  padding: 2px 9px;
-  border-radius: 6px;
-  font-size: 9.5pt;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  background: var(--bg-pill);
-  color: var(--text-muted);
+/* Quiet buttons on this page carry a label next to the glyph. */
+.prof .btn-save-draft {
+  gap: 8px;
 }
-.prof-flag--warn { border-color: rgba(233, 185, 73, 0.4); color: #e9b949; background: rgba(233, 185, 73, 0.1); }
-.prof-flag--ok { border-color: rgba(127, 215, 210, 0.4); color: #7fd7d2; background: rgba(127, 215, 210, 0.1); }
-
-/* Access / attempt status pills */
-.prof-status {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10pt;
-  font-weight: 600;
+.prof .btn-save-draft:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
-.prof-status--ok { color: #57c98a; }
-.prof-status--warn { color: #e9b949; }
-.prof-status--bad { color: #e8675f; }
-.prof-status--muted { color: var(--text-muted); }
+.prof .table .mc-btn-sm + .mc-btn-sm {
+  margin-left: 8px;
+}
 
-/* Identity hero — name + inline Edit button */
-.prof-name-row {
+/* Unselect-all links under the Download All Awards checklist. */
+.prof-unselect-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 4px;
+  margin-top: 4px;
 }
-.prof-name-row .prof-name { margin: 0; }
-.prof-name-row .prof-btn { margin-bottom: 4px; }
 
-/* Card head action (right-aligned button) */
-.prof-card-action { margin-left: auto; }
-
-/* Button variants for the edit modals */
-.prof-btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.prof-btn--primary:hover { background: var(--accent); filter: brightness(1.1); }
-.prof-btn--danger {
-  border-color: rgba(232, 103, 95, 0.45);
-  color: #e8675f;
-  background: rgba(232, 103, 95, 0.08);
-}
-.prof-btn--danger:hover { background: rgba(232, 103, 95, 0.16); }
-
-/* ── Profile edit modals (Edit User / NATE Details / Cancel Subscription) ── */
+/* ── Legacy pm- modal shell — still used by Merge Accounts, Manage
+   Completions, Industries and Question Bank; the Full Profile moved to the
+   shared PrmModal. ── */
 .pm-overlay {
   position: fixed;
   inset: 0;
@@ -16779,80 +16968,6 @@ a.rh-crumb-link:hover {
   gap: 10px;
   padding: 18px 22px 20px;
 }
-
-/* ── Download All Awards modal ── */
-.dlall-modal { max-width: 620px; }
-.dlall-body {
-  padding: 16px 22px 2px;
-  max-height: 50vh;
-  overflow-y: auto;
-}
-.dlall-table { width: 100%; border-collapse: collapse; }
-.dlall-table thead th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 6px 10px 10px;
-  border-bottom: 1px solid var(--border-strong);
-  font-size: 9.5pt;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.dlall-table thead th:not(:first-child) { text-align: center; }
-.dlall-table tbody td {
-  padding: 10px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.dlall-table tbody tr:last-child td { border-bottom: none; }
-.dlall-award-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.dlall-check-cell { text-align: center; }
-.dlall-check-cell input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.dlall-col-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-.dlall-unselect {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: 9pt;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: normal;
-  cursor: pointer;
-}
-.dlall-unselect:hover { text-decoration: underline; }
-.dlall-foot { justify-content: space-between; align-items: center; }
-.dlall-count { font-size: 10.5pt; color: var(--text-muted); }
-.dlall-foot-actions { display: flex; gap: 10px; }
-
-/* EPA status pills */
-.epa-status {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 10pt;
-  font-weight: 600;
-}
-.epa-status--order-received { background: rgba(120,120,130,.16); color: #bdbdc2; }
-.epa-status--accepted { background: rgba(59,130,246,.15); color: #7ab8ff; }
-.epa-status--in-production { background: rgba(233,185,73,.16); color: #e9b949; }
-.epa-status--shipped { background: rgba(124,215,210,.16); color: #7fd7d2; }
-.epa-status--delivered { background: rgba(34,197,94,.14); color: #6ee7a3; }
-.epa-status--action-needed { background: rgba(240,90,90,.15); color: #f08a8a; }
-.epa-status--canceled { background: rgba(120,120,130,.16); color: #9a9aa0; }
-.epa-status--refunded { background: rgba(167,139,250,.15); color: #c4b5fd; }
 
 /* ============== Public Portfolio page (standalone tab) ============== */
 .pf {
@@ -17303,7 +17418,7 @@ a.rh-crumb-link:hover {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .section-row {
@@ -17467,7 +17582,7 @@ a.rh-crumb-link:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .grade-row {
@@ -17504,7 +17619,7 @@ a.rh-crumb-link:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .trigger-row {
@@ -17529,7 +17644,7 @@ a.rh-crumb-link:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .resource-edit-row {
@@ -17547,7 +17662,7 @@ a.rh-crumb-link:hover {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  max-width: 920px;
+  max-width: none;
 }
 
 .review-list .toggle-row {
@@ -18262,9 +18377,11 @@ a.rh-crumb-link:hover {
 .form-row-2 {
   display: flex;
   gap: 32px;
-  max-width: 920px;
+  max-width: none;
 }
-.form-row-2 > .form-group {
+.form-row-2 > .form-group,
+/* Modal fields (PrmModal) split the same way — e.g. the NATE first/last pair. */
+.form-row-2 > .prm-field {
   flex: 1;
   min-width: 0;
 }
@@ -18290,7 +18407,7 @@ a.rh-crumb-link:hover {
 
 .co-cost-summary {
   margin-top: 28px;
-  max-width: 920px;
+  max-width: none;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-pill);
@@ -18315,7 +18432,7 @@ a.rh-crumb-link:hover {
 }
 
 .co-plan-note {
-  max-width: 920px;
+  max-width: none;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-pill);
@@ -18390,184 +18507,21 @@ a.rh-crumb-link:hover {
 .co-signup--self { background: rgba(122, 184, 255, 0.12); color: #9cc6ff; border-color: transparent; }
 .co-signup--internal { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
 
-/* Edit Account Holder modal */
-.co-holder-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
+/* Change Account Holder modal — the "Current: {name}" hover trigger in the
+   modal description. The name reads white so it registers as the live part of
+   the line; hovering it opens the shared UserDetailsHover card. The rest of
+   the old bespoke holder UI (cards, mode buttons, employee picker, info note)
+   was replaced by the shared RadioCard / SelectField / .prm-field atoms and
+   its CSS is deleted. */
+.co-holder-current {
+  font-weight: 500; /* Medium — same #a8a8a8 as the rest of the description */
 }
-.co-holder-card-text { flex: 1; min-width: 0; }
-.co-holder-card-name { font-weight: 600; color: var(--text); }
-.co-holder-card-contact { font-size: 10.5pt; color: var(--text-muted); margin-top: 2px; }
-.co-holder-lock { font-size: 11pt; opacity: 0.5; }
-.co-holder-change-btn {
-  margin-top: 12px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 8px 14px;
-  color: var(--text);
-  font-size: 10.5pt;
-  font-weight: 600;
-  cursor: pointer;
-}
-.co-holder-change-btn:hover { background: rgba(255, 255, 255, 0.06); }
-.co-holder-results { position: static; margin-bottom: 12px; max-height: 240px; }
-.co-holder-create-prompt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10.5pt;
-  color: var(--text-muted);
-}
-.co-holder-create-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--skill-orange, #ff7a45);
-  font-size: 10.5pt;
-  font-weight: 600;
-  cursor: pointer;
+.co-holder-current:hover {
   text-decoration: underline;
 }
-.co-holder-create-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-}
 
-/* Edit Company / Account Holder modals — scrollable body */
-.co-edit-body {
-  overflow-y: auto;
-}
-
-/* Account-holder mode picker (Change vs Remove & replace) */
-.co-holder-modes {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.co-holder-mode {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-.co-holder-mode:hover { background: rgba(255, 255, 255, 0.04); }
-.co-holder-mode.is-active {
-  border-color: #f05523;
-  background: rgba(240, 85, 35, 0.08);
-}
-.co-holder-mode-dot {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  position: relative;
-}
-.co-holder-mode.is-active .co-holder-mode-dot {
-  border-color: #f05523;
-}
-.co-holder-mode.is-active .co-holder-mode-dot::after {
-  content: "";
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  background: #f05523;
-}
-.co-holder-mode-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.co-holder-mode-title { font-weight: 600; color: var(--text); font-size: 11.5pt; }
-.co-holder-mode-desc { font-size: 10.5pt; color: var(--text-muted); line-height: 1.4; }
-
-/* New-account-holder employee picker */
-.co-holder-picker { position: relative; }
-.co-holder-select {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-.co-holder-select.is-open { border-color: #f05523; }
-.co-holder-select-val { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
-.co-holder-select-name { font-weight: 600; }
-.co-holder-select-email { font-size: 10pt; color: var(--text-muted); }
-.co-holder-select-placeholder { color: var(--text-faint); }
-.co-holder-select-caret { flex-shrink: 0; display: inline-flex; color: var(--text-muted); }
-
-.co-holder-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  z-index: 50;
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 6px;
-}
-.co-holder-opt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: 8px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.co-holder-opt:hover { background: var(--bg-pill); }
-.co-holder-opt.is-selected { background: rgba(240, 85, 35, 0.1); }
-.co-holder-opt-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.co-holder-opt-name { font-weight: 600; color: var(--text); }
-.co-holder-opt-email { font-size: 10pt; color: var(--text-muted); }
-
-/* Account-holder info note */
-.co-holder-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(96, 165, 250, 0.1);
-  border: 1px solid rgba(96, 165, 250, 0.28);
-  color: var(--text-muted);
-  font-size: 10.5pt;
-  line-height: 1.45;
-}
-.co-holder-note-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  margin-top: 1px;
-  color: #60a5fa;
-}
-
-/* Add Billing Emails modal */
+/* View Invoices modal info row (the Billing Emails modal is now plain
+   `.prm-content` text per Figma 667:884). */
 .co-billing-steps {
   list-style: none;
   margin: 0;
@@ -19007,33 +18961,9 @@ a.rh-crumb-link:hover {
   flex: none;
 }
 
+/* Preview-panel tabs use the shared .tabbar; keep the row from flexing */
 .co-panel-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
   flex: none;
-  padding: 0 20px;
-}
-
-.co-panel-tab {
-  position: relative;
-  padding: 10px 14px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.12s;
-}
-.co-panel-tab:hover { color: var(--text); }
-.co-panel-tab.is-active {
-  color: var(--accent-strong);
-  border-bottom-color: var(--accent);
 }
 
 .co-panel-body {
@@ -19368,7 +19298,9 @@ a.rh-crumb-link:hover {
 
 /* The menu itself: an even 8px inset, no check glyph — the current value is the
    SemiBold row — and a #2c2c2f fill on hover / keyboard focus. */
-.ss-menu { z-index: 300; }
+/* Above .pr-confirm-overlay (400): the Change Account Holder modal opens a
+   SelectField, and at 300 the panel's top half hid behind the modal card. */
+.ss-menu { z-index: 500; }
 .ss-menu .dropdown-list { padding: 8px; }
 .ss-menu .dropdown-list .dropdown-item {
   font-size: 16px;
@@ -19376,6 +19308,22 @@ a.rh-crumb-link:hover {
   color: #fff;
 }
 .ss-menu .dropdown-list .dropdown-item.is-current { font-weight: 600; }
+/* Figma 668:943 — an option row's right-aligned muted detail (e.g. an
+   employee's Admin/Manager role). Weight pinned so the current row's SemiBold
+   stays on the name alone. */
+.ss-menu .dropdown-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ss-menu .dropdown-item-detail {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
 /* The list takes focus so the arrow keys work; the row highlight is the visible
    cursor, so the UA ring around the whole panel would only be noise. */
 .ss-menu .dropdown-list:focus { outline: none; }
@@ -19383,6 +19331,20 @@ a.rh-crumb-link:hover {
 .ss-menu .dropdown-list .dropdown-item.is-active,
 .ms-menu .dropdown-list .dropdown-item:hover {
   background: #2c2c2f;
+}
+
+/* Figma 668:972 "Dropdown Menu - Popups and Modals" — opened over a modal
+   card the panel takes a lighter wash (and a softer row hover) so it still
+   separates from the popup behind it. Only for menus on a popup surface. */
+.ss-menu--popup {
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)),
+    #0d0d0d;
+  box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
+}
+.ss-menu--popup .dropdown-list .dropdown-item:hover,
+.ss-menu--popup .dropdown-list .dropdown-item.is-active {
+  background: rgba(115, 115, 115, 0.1);
 }
 
 /* ─────────────── Per-seat price indicator ─────────────── */
@@ -19540,81 +19502,87 @@ a.rh-crumb-link:hover {
   position: relative;
   max-width: 460px;
 }
+/* Currency + seat price (Figma 618:1248): two cells inside one #404040 shell,
+   split by a single hairline. The value cell holds the amount, the unit and the
+   menu caret together — there is no divider before the caret. Transparent, and
+   45px like every other control on the form. */
 .cw-price-field {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  background: var(--bg-pill);
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
   overflow: visible;
 }
 .cw-price-field.is-open {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.14);
 }
 .cw-price-field.has-error {
   border-color: var(--danger, #e5484d);
 }
-.cw-price-cur {
+.cw-price-cur,
+.cw-price-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border-right: 1px solid var(--border-strong);
-  background: var(--bg-pill-strong);
-  border-radius: 9px 0 0 9px;
+  gap: 11px;
+  padding: 12px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+}
+.cw-price-cur {
+  border-right: 1px solid #404040;
+  border-radius: 8px 0 0 8px;
   cursor: pointer;
   white-space: nowrap;
 }
-.cw-price-cur:hover { background: var(--bg-row-selected); }
-.cw-price-cur-code {
-  font-family: var(--font-mono);
-  font-size: 12pt;
-  font-weight: 500;
-  color: var(--text);
+.cw-price-cell {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
 }
-.cw-price-caret { color: var(--text-faint); font-size: 8pt; }
-.cw-price-sym {
-  display: flex;
+.cw-price-cur-code { color: #fff; }
+.cw-price-caret {
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
-  padding: 0 2px 0 12px;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: 13pt;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: #a8a8a8;
+}
+.cw-price-sym {
+  flex-shrink: 0;
+  color: #fff;
 }
 .cw-price-input {
   flex: 1;
   min-width: 0;
   border: none;
   background: transparent;
-  padding: 11px 8px 11px 4px;
-  font-family: var(--font-mono);
-  font-size: 13pt;
-  font-weight: 500;
-  color: var(--text);
+  /* Cancels the cell's 11px gap so the symbol and amount read as one "$55". */
+  padding: 0;
+  margin-left: -11px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: #fff;
 }
-.cw-price-input::placeholder { color: var(--text-faint); font-family: var(--font-sans); font-weight: 400; }
+.cw-price-input::placeholder { color: #404040; }
 .cw-price-input:focus { outline: none; }
 .cw-price-unit {
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  color: var(--text-faint);
-  font-size: 10.5pt;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #404040;
   white-space: nowrap;
 }
-.cw-price-toggle {
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  color: var(--text-muted);
-  font-size: 9pt;
-  cursor: pointer;
-  border-left: 1px solid var(--border);
-  border-radius: 0 9px 9px 0;
-}
-.cw-price-toggle:hover { color: var(--text); background: var(--bg-pill-strong); }
 
+/* Prices menu (Figma 619:1332) — the same shell as the app's other dropdowns:
+   #0f0f10 on a #404040 hairline, radius 10, an even 8px list inset. */
 .cw-price-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -19622,8 +19590,8 @@ a.rh-crumb-link:hover {
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-  padding: 5px;
+  box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
+  padding: 8px;
   max-height: 280px;
   overflow-y: auto;
 }
@@ -19635,79 +19603,90 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 11px;
-  border-radius: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
   cursor: pointer;
   background: transparent;
   text-align: left;
 }
-.cw-price-opt:hover { background: var(--bg-row-hover); }
-.cw-price-opt.is-active { background: var(--bg-row-selected); }
+.cw-price-opt:hover,
+.cw-price-opt.is-active { background: #2c2c2f; }
+/* The currency menu shares the prices menu's shell, so its rows read the same
+   way: 16px white code, 14px grey name. */
 .cw-price-opt-code {
-  font-family: var(--font-mono);
-  font-size: 12pt;
-  font-weight: 500;
-  color: var(--text);
-  width: 44px;
   flex: none;
+  width: 44px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
 }
-.cw-price-opt-name { font-size: 11pt; color: var(--text-muted); }
+.cw-price-opt.is-active .cw-price-opt-code { font-weight: 600; }
+.cw-price-opt-name {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+}
+/* Saved-price rows read price-first, with the price's own name as a trailing
+   note (Figma 619:1332). The row for the price currently in the field is
+   SemiBold, the same way the single-select marks its current value. */
+.cw-price-opt--saved {
+  justify-content: space-between;
+}
+.cw-price-opt-rate {
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  white-space: nowrap;
+}
+.cw-price-opt--saved.is-current .cw-price-opt-rate {
+  font-weight: 600;
+}
 .cw-price-opt-label {
-  font-size: 11.5pt;
-  color: var(--text);
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cw-price-opt-rate {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 11.5pt;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
 .cw-price-empty {
-  padding: 8px 11px;
-  font-size: 11pt;
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
   color: var(--text-faint);
 }
+/* Not in node 619:1332 — that sample is three plain rows — but the only way to
+   save an unlisted price, so it sits in the list as one more row of it. */
 .cw-price-create {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 11px;
-  margin-top: 2px;
-  border-top: 1px solid var(--border);
-  border-radius: 0 0 7px 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
   text-align: left;
   color: var(--accent-strong);
-  font-size: 11.5pt;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
 }
-.cw-price-create:hover { background: rgba(233, 114, 55, 0.08); }
+.cw-price-create:hover { background: #2c2c2f; }
 .cw-price-create-plus {
   flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: rgba(233, 114, 55, 0.16);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13pt;
+  width: 16px;
+  font-size: 16px;
   line-height: 1;
 }
-.cw-price-foot {
-  padding: 8px 11px 4px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  font-size: 10.5pt;
-  color: var(--text-faint);
-}
-
 .cw-price-note {
   display: flex;
   align-items: center;
@@ -19932,6 +19911,297 @@ a.rh-crumb-link:hover {
 }
 .date-shortcut:hover .date-shortcut-label { text-decoration: underline; }
 
+/* ===== Date Range filter (Figma 673:1409/1421 pill · 606:1688 panel) =====
+   The pill wears the shared applied-filter chrome but keeps the 16px chevron
+   the other applied pills hide — it has no unapplied state, so the caret is
+   its only "this opens something" affordance. */
+/* No ⊗ on this pill (the range cannot be removed), so the main button carries
+   the shell's 12px left inset itself. */
+.drp-pill .filter-applied-main {
+  padding-left: 12px;
+}
+.drp-pill .caret {
+  display: inline-flex;
+  align-items: center;
+  color: #a8a8a8;
+}
+.drp-pill .caret svg {
+  width: 16px;
+  height: 16px;
+}
+/* Custom-range value: date → date around the 14px arrow (673:1435). */
+.drp-pill-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.drp-pill-range svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Panel shell rides .dropdown--cal (wash/border); the node draws radius 10. */
+.drp-panel {
+  border-radius: 10px;
+}
+.drp-body {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Presets rail (606:1931): 12/20 insets, 16px to the list, 12px between items. */
+.drp-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 20px;
+  border-right: 1px solid rgba(64, 64, 64, 0.5);
+}
+.drp-presets-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  text-transform: uppercase;
+}
+.drp-presets-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.drp-preset {
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.drp-preset:hover { color: #f05523; }
+.drp-preset.is-active {
+  font-weight: 600;
+  color: #f05523;
+}
+
+/* Calendar columns (606:1745 / 610:2009): 12px insets, 20px field→calendar. */
+.drp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 12px;
+}
+.drp-col--end {
+  border-left: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+/* Start/End fields (610:2133): label 4px over a 252px input (the grid width). */
+.drp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 252px;
+}
+.drp-field-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.drp-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  outline: none;
+}
+.drp-input::placeholder { color: #404040; }
+.drp-input:focus { border-color: var(--border-strong); }
+
+.drp-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Month selector (606:1746): the outer chevrons page BOTH calendars — the left
+   calendar carries prev, the right one next; the unused slot keeps its 14px. */
+.drp-monthrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 19px;
+}
+.drp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+.drp-nav svg { width: 14px; height: 14px; }
+.drp-nav:hover:not(:disabled) { color: #a8a8a8; }
+.drp-nav--hidden { visibility: hidden; }
+.drp-my {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.drp-my-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+.drp-my-btn svg { width: 10px; height: 10px; }
+.drp-my-btn:hover { color: #a8a8a8; }
+/* The month/year list under the selector labels. */
+.drp-my-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  max-height: 244px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+.drp-my-item {
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+}
+.drp-my-item:hover { background: rgba(255, 255, 255, 0.06); }
+.drp-my-item.is-active { color: #f05523; font-weight: 600; }
+
+/* 36px cells, columns flush so the range band runs unbroken; 4px between rows,
+   8px under the single-letter weekday heads (606:1750). */
+.drp-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.drp-weekdays,
+.drp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+}
+.drp-grid { row-gap: 4px; }
+.drp-weekdays span {
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+.drp-day {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #fff;
+  cursor: pointer;
+}
+.drp-day:hover:not(:disabled):not(.in-range):not(.drp-day--empty) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+}
+.drp-day--empty,
+.drp-day--empty:hover { cursor: default; background: transparent; }
+/* Days past today — dimmed, per the greyed tail of 610:2073. */
+.drp-day:disabled { color: #404040; cursor: default; }
+/* The band: 20% orange with 0.5px hairlines top and bottom (606:1810). */
+.drp-day.in-range {
+  background: rgba(240, 85, 35, 0.2);
+  box-shadow:
+    0 -0.5px 0 rgba(240, 85, 35, 0.2),
+    0 0.5px 0 rgba(240, 85, 35, 0.2);
+}
+.drp-day.is-start,
+.drp-day.is-end { font-weight: 600; }
+.drp-day.is-start { border-radius: 20px 0 0 20px; }
+.drp-day.is-end { border-radius: 0 20px 20px 0; }
+.drp-day.is-start.is-end { border-radius: 20px; }
+/* Start picked, end still pending — a lone selected circle. */
+.drp-day.is-solo {
+  border-radius: 20px;
+  background: rgba(240, 85, 35, 0.2);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.5);
+}
+
+/* Footer rides the shared .dropdown-footer/.btn-apply; Clear is the Secondary
+   Button (607:1955): 32px, 20% grey wash over #0d0d0d, 0.5px 10% border. */
+.drp-footer { gap: 8px; }
+.drp-footer .btn-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.drp-footer .btn-apply:disabled:hover { filter: none; }
+.drp-btn-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+}
+.drp-btn-clear:hover { filter: brightness(1.2); }
+
 /* ─────────────── Success screen ─────────────── */
 .wizard-body--success {
   justify-content: center;
@@ -19982,6 +20252,12 @@ a.rh-crumb-link:hover {
   color: var(--text);
   text-align: right;
   word-break: break-all;
+}
+/* Identifier values in an audit-log summary (account ids, emails) read as data,
+   not prose — the mono family the tables already use for ids. */
+.success-detail-value.is-mono {
+  font-family: var(--font-mono);
+  font-size: 11pt;
 }
 .success-divider {
   height: 1px;
@@ -20125,7 +20401,6 @@ a.rh-crumb-link:hover {
 
 .pc-header {
   padding: 28px 32px 0;
-  border-bottom: 1px solid var(--border);
   flex: none;
 }
 
@@ -20144,31 +20419,11 @@ a.rh-crumb-link:hover {
   margin: 0;
 }
 
-/* Tabs */
+/* Tabs — shared .tabbar; stretch across the header padding so the
+   hairline stays full-bleed (the header's own border moved here) */
 .pc-tabs {
-  display: flex;
-  gap: 0;
-}
-
-.pc-tab {
-  position: relative;
-  padding: 10px 18px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.12s;
-}
-.pc-tab:hover { color: var(--text); }
-.pc-tab.is-active {
-  color: var(--accent-strong);
-  border-bottom-color: var(--accent);
+  margin: 0 -32px;
+  padding: 0 32px;
 }
 
 /* Body */
@@ -20686,634 +20941,221 @@ a.rh-crumb-link:hover {
   color: var(--text-muted);
   font-size: 11pt;
 }
-
 /* ═══════════ Merge Accounts / Transfer Subscription ═══════════
-   Both admin flows share this chrome. Everything is built from the shared
-   design system: the page header (.tasks-header), the quiet step rail
-   (.wizard-step*), radio cards (.radio-card), the Manage-Users search combobox
-   (.usearch-*), the wizard footer (.wizard-footer) and the shared modal (.pm-*).
-   The only page-local idea is the pair of role accents — accent orange for the
-   account that is kept, danger red for the one that loses something — and both
-   are mixed from the global accent/danger tokens. */
-/* Merge & Transfer run on the .tasks shell rather than .wizard-content, but they
-   are wizards — so they take the same even 40px gutter. */
-.tasks.mg-page {
-  padding: 40px;
-}
-.mg-page {
-  /* kept / receiving account */
-  --mg-keep-soft: rgba(233, 114, 55, 0.09);
-  --mg-keep-line: rgba(233, 114, 55, 0.38);
-  /* removed / outgoing account */
-  --mg-drop: #e8675f;
-  --mg-drop-soft: rgba(232, 103, 95, 0.08);
-  --mg-drop-line: rgba(232, 103, 95, 0.38);
-  --mg-ok: #6ee7a3;
-  --mg-warn: #e9b949;
-  --mg-card: rgba(255, 255, 255, 0.015);
-  overflow: hidden;
-}
+   Both admin flows are assembled entirely from shared design-system parts —
+   the wizard shell (.wizard / .wizard-nav / .wizard-content / .wizard-footer,
+   Figma 625:1459 + 73:515), PageBreak (104:376), the shared .table (79:443),
+   .mc-notice, the .mc-acc accordion, .radio-card (134:1790), .seg-control
+   (359:2373), .co-status-pill (109:1237) and PrmModal (483:588).
 
-/* ── Step rail (the wizard "quiet rail", laid out horizontally) ── */
-.mg-steps {
+   The page root is `.wizard .mc-root`: .mc-root restates .wizard's flex box and
+   adds the --mc-* tokens that .mc-notice and .mc-acc read, so those components
+   work outside the Certification-lookup page.
+
+   What is left below is layout only — a picked-account row, a from → to strip
+   and a handful of alignment helpers. No colours of its own, no type scale. */
+
+/* ── Picked account ──
+   The search combobox collapses to this row once an account is chosen: the
+   .form-input shell (8px radius, #404040 hairline, Figma 49:343) holding the
+   table's user cell. 12px Figma inset minus the 1px border. */
+.mgf-picked {
   display: flex;
   align-items: center;
-  gap: 28px;
-  flex: none;
-  padding-bottom: 16px;
-  margin-bottom: 26px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #404040;
+  border-radius: 8px;
 }
-.mg-steps .wizard-step {
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  padding: 2px 0;
-  cursor: default;
-}
-.mg-steps .wizard-step:hover {
-  background: transparent;
-}
-.mg-steps .wizard-step-rail {
-  width: 16px;
-  padding-top: 0;
-}
-
-/* ── Scroller + pane ── */
-.mg-scroll {
+.mgf-picked .mc-cell-user {
   flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.mg-pane {
-  max-width: 980px;
-  padding-bottom: 32px;
-  animation: mgIn 0.2s ease;
-}
-@keyframes mgIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-@keyframes mgSpin { to { transform: rotate(360deg); } }
-@keyframes mgPop { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
-
-.mg-pane .form-section-title { font-size: 16pt; }
-.mg-pane .form-section-desc { max-width: 760px; }
-
-.mg-section-label {
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-.mg-sublead {
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  line-height: 1.55;
-  margin: 0 0 14px;
-  max-width: 760px;
 }
 
-.mg-grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-/* ── Shared bits: avatar, small tag ── */
-.mg-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+/* ── Account combobox ──
+   The type pill closes each result row, on the panel's own margin-left:auto
+   idiom (.usearch-row-desc). The panel is pointer-driven here rather than
+   keyboard-driven, so hover takes the row's own active fill. */
+.mgf-row-pill {
+  margin-left: auto;
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(70% 70% at 50% 40%, #e97237, #8a3114);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 700;
 }
-.mg-avatar--sm { width: 26px; height: 26px; font-size: 10px; }
-
-.mg-tag {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-family: var(--font-sans);
-  font-size: 8.5pt;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.mgf-usearch .usearch-row:hover {
+  background: #2c2c2f;
 }
-.mg-tag--drop { background: rgba(232, 103, 95, 0.14); color: var(--mg-drop); }
-.mg-tag--warn { background: rgba(233, 185, 73, 0.14); color: var(--mg-warn); }
-.mg-tag--ok { background: rgba(110, 231, 163, 0.13); color: var(--mg-ok); }
 
-/* ── Account card (step 1) ── */
-/* No overflow clipping — the search combobox drops its panel out of the card. */
-.mg-acct {
+/* Empty and filled are one 68px control slot, so the two side-by-side pickers
+   keep their labels and subtexts level whichever one is filled first. Both
+   states start at the slot's top edge, and the panel re-anchors to the bar. */
+.mgf-picked,
+.mgf-usearch {
+  min-height: 68px;
+}
+.mgf-usearch {
+  display: flex;
+  align-items: flex-start;
+}
+/* Inside a wizard this is a form field, not the Manage-Users search bar, so it
+   takes the field chrome (Figma 49:343): 45px, transparent, #404040 hairline —
+   the same shell .mgf-picked uses once an account is chosen. */
+.mgf-usearch .usearch-bar {
+  flex: 1;
+  height: 45px;
+  background: transparent;
+  border-color: #404040;
+}
+.mgf-usearch .usearch-panel {
+  top: 53px;
+}
+
+/* The picked account's email is the value being confirmed — it wraps rather
+   than taking the table cell's ellipsis. An address has no space to break at,
+   so it needs `anywhere`: without it the text just runs over the type pill. */
+.mgf-picked .mc-cell-user-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+/* Once one side wraps its row is taller than the other's, so both controls
+   stretch to the row's height and the two subtexts stay level. */
+.mc-root .form-row-2 .form-group {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
 }
-.mg-acct--keep { border-color: var(--mg-keep-line); }
-.mg-acct--drop { border-color: var(--mg-drop-line); }
-.mg-acct-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--border);
-  border-radius: 9px 9px 0 0;
+.mc-root .form-row-2 .mgf-picked,
+.mc-root .form-row-2 .mgf-usearch {
+  flex: 1;
 }
-.mg-acct--keep .mg-acct-head { background: var(--mg-keep-soft); border-bottom-color: var(--mg-keep-line); }
-.mg-acct--drop .mg-acct-head { background: var(--mg-drop-soft); border-bottom-color: var(--mg-drop-line); }
-.mg-role {
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+
+/* ── from → to strip, on the .mc-notice shell ──
+   .mc-notice's own gap is declared later in the file, so the override has to
+   carry both classes. */
+.mc-notice.mgf-flow {
+  gap: 20px;
 }
-.mg-role--keep { color: var(--accent-strong); }
-.mg-role--drop { color: var(--mg-drop); }
-.mg-acct-note {
+.mgf-flow .mc-cell-user {
+  flex: 1;
+  min-width: 0;
+}
+.mgf-flow-arrow {
+  flex: none;
+  display: inline-flex;
+  color: #7a7a7a;
+}
+
+/* ── Notice leading glyph ──
+   Tinted from the status-pill hues (Figma 109:1237) so a notice and the pill
+   beside it never disagree. */
+.mgf-lead {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+}
+.mgf-lead svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.mgf-lead--info { color: #f05523; }
+.mgf-lead--warn { color: #ffc524; }
+.mgf-lead--danger { color: #ff1f31; }
+.mgf-lead--ok { color: #14b867; }
+
+/* .mc-notice pins its trailing button; the segmented control and the status
+   pill are trailing controls on the same row. */
+.mc-notice > .seg-control,
+.mc-notice > .co-status-pill {
   flex: none;
-  font-size: 9.5pt;
-  color: var(--text-muted);
 }
-.mg-acct-note svg { width: 13px; height: 13px; }
-.mg-acct-body { padding: 14px 16px 16px; }
 
-/* Search combobox — the shared .usearch chrome, dropped into the card. */
-.mg-usearch .usearch-user-text { flex: 1; }
-.mg-usearch .usearch-row { padding: 7px 10px; }
-.mg-usearch .usearch-row:hover { background: #2c2c2f; }
-.mg-usearch .u-pill { margin-left: auto; flex: none; }
-.mg-usearch .usearch-panel { max-height: 320px; }
-
-.mg-selected {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-pill);
-}
-.mg-selected-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.mg-selected-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11.5pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.mg-selected-email {
-  font-size: 10pt;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mg-clear {
-  display: inline-flex;
-  flex: none;
-  padding: 5px;
-  border-radius: 6px;
-  color: var(--text-faint);
-}
-.mg-clear:hover { color: var(--text); background: var(--bg-pill-strong); }
-
-/* Details block under a picked account */
-.mg-details { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-.mg-sublabel {
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 8px;
-}
-.mg-kv { margin-bottom: 16px; }
-.mg-kv-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 10.5pt;
-}
-.mg-kv-row:last-child { border-bottom: none; }
-.mg-kv-k { color: var(--text-muted); flex: none; }
-.mg-kv-v { color: var(--text); text-align: right; }
-.mg-kv-v.is-company { color: var(--accent-strong); font-weight: 600; }
-.mg-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 20px;
-  margin-bottom: 4px;
-}
-.mg-stat { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 10pt; }
-.mg-stat-k { color: var(--text-muted); }
-.mg-stat-v { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-.mg-acct-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 10pt;
-  color: var(--text-muted);
-}
-.mg-acct-foot svg { flex: none; width: 14px; height: 14px; }
-/* The glyph carries the outcome, not the card's role: a Source account with an
-   active plan is a green tick even though the card itself is the "loses" side. */
-.mg-acct-foot.is-ok svg { color: var(--mg-ok); }
-.mg-acct-foot.is-bad svg { color: var(--mg-drop); }
-
-.mg-swap-row { display: flex; justify-content: center; margin-top: 16px; }
-.mg-swap-row .btn-save-draft { display: inline-flex; gap: 8px; }
-.mg-swap-row .btn-save-draft svg { opacity: 0.75; }
-
-/* ── Inline notices ── */
-.mg-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  margin-top: 18px;
-  padding: 13px 15px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  line-height: 1.5;
-  color: var(--text);
-}
-.mg-note-icon { display: inline-flex; flex: none; margin-top: 1px; }
-.mg-note-text { flex: 1; }
-.mg-note strong { font-weight: 600; color: var(--text); }
-.mg-note--warn { background: rgba(233, 185, 73, 0.09); border-color: rgba(233, 185, 73, 0.35); }
-.mg-note--warn .mg-note-icon { color: var(--mg-warn); }
-.mg-note--warn strong { color: var(--mg-warn); }
-.mg-note--info { background: rgba(233, 114, 55, 0.08); border-color: rgba(233, 114, 55, 0.3); }
-.mg-note--info .mg-note-icon { color: var(--accent-strong); }
-.mg-note--info strong { color: var(--accent-strong); }
-.mg-note--ok { background: rgba(110, 231, 163, 0.08); border-color: rgba(110, 231, 163, 0.3); }
-.mg-note--ok .mg-note-icon { color: var(--mg-ok); }
-.mg-note .btn-save-draft { flex: none; }
-
-/* ── Transfer flow bar ── */
-.mg-flow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
+/* ── Comparison tables ──
+   A list table is a fixed-height scanning grid: 40px rows, nowrap, ellipsis.
+   These are DETAIL tables in a ~684px wizard column, and the values are the
+   whole point of the screen — so the rows here grow instead of truncating.
+   The list rule carries three :not()s, hence the !important (same escape hatch
+   as .att-col-grade). */
+.mgf-table {
+  min-width: 0;
+  /* Collapses against a following PageBreak's 32px, so it only shows up before
+     a notice or a paragraph. */
   margin-bottom: 24px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
 }
-.mg-flow-acct { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mg-flow-acct.is-out { opacity: 0.6; }
-.mg-flow-email { font-size: 11pt; font-weight: 600; color: var(--text); }
-.mg-flow-sub { font-size: 9.5pt; }
-.mg-flow-sub--keep { color: var(--accent-strong); }
-.mg-flow-sub--drop { color: var(--mg-drop); }
-.mg-flow-arrow { display: inline-flex; color: var(--text-faint); }
-
-/* ── Plan cards ── */
-.mg-plans { margin-bottom: 20px; }
-.mg-plan {
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
+.mgf-table thead th,
+.mgf-table tbody td {
+  height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  /* Emails and ids offer no space to wrap at, so a fixed-width column would let
+     them spill into the page gutter instead of breaking. */
+  overflow-wrap: anywhere;
+  vertical-align: top;
 }
-.mg-plan--keep { border-color: var(--mg-keep-line); background: var(--mg-keep-soft); }
-.mg-plan--drop { opacity: 0.65; }
-.mg-plan-tag {
-  font-size: 9pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
+/* Nothing here sorts, so the header does not offer the sort affordance. */
+.mgf-table thead th {
+  cursor: default;
+  user-select: auto;
 }
-.mg-plan-tag--keep { color: var(--accent-strong); }
-.mg-plan-tag--drop { color: var(--mg-drop); }
-.mg-plan-name { font-size: 12pt; font-weight: 600; color: var(--text); margin-bottom: 2px; }
-.mg-plan-detail { font-size: 10pt; color: var(--text-muted); }
-
-/* ── Option cards (two-up conflict choices) ── */
-.mg-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.radio-card.mg-opt { align-items: flex-start; padding: 12px 14px; }
-.mg-opt .radio-dot { margin-top: 2px; }
-.mg-opt-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.mg-opt-tag {
-  font-size: 9pt;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.radio-card.selected .mg-opt-tag { color: var(--accent-strong); }
-.mg-opt-strong { font-size: 11pt; font-weight: 600; color: var(--text); }
-.mg-opt-detail { font-size: 10.5pt; color: var(--text-muted); }
-.mg-opt-meta { font-size: 9.5pt; color: var(--text-faint); }
-
-/* ── Duplicate add-on block ── */
-.mg-dups { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-.mg-dup {
-  padding: 14px 16px;
-  border: 1px solid rgba(233, 185, 73, 0.35);
-  border-radius: 10px;
-  background: rgba(233, 185, 73, 0.05);
-}
-.mg-dup-head { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
-.mg-dup-name { font-size: 11.5pt; font-weight: 600; color: var(--text); }
-.mg-dup-note { font-size: 10.5pt; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px; }
-
-/* ── "Always preserved" list ── */
-.mg-keeplist {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
-  overflow: hidden;
-}
-.mg-keeplist-head {
+/* Account name + role pill; the pill drops to its own line before either
+   truncates. */
+.mgf-th {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-pill);
-  font-size: 10.5pt;
-  font-weight: 600;
-  color: var(--text);
+  min-width: 0;
 }
-.mg-keeplist-head svg { flex: none; width: 14px; height: 14px; color: var(--text-muted); }
-.mg-keeprow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.mg-keeprow:last-child { border-bottom: none; }
-.mg-keeprow-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mg-keeprow-l svg { flex: none; color: var(--mg-ok); }
-.mg-keeprow-name { font-size: 10.5pt; color: var(--text); }
-.mg-keeprow-type { font-size: 9.5pt; color: var(--text-faint); }
-.mg-keeprow-src { font-size: 9.5pt; color: var(--text-muted); flex: none; }
-.mg-keeplist-empty { padding: 14px 16px; font-size: 10.5pt; color: var(--text-faint); }
 
-/* ── Record rows (step 3) ── */
-.mg-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-.mg-row {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
-  overflow: hidden;
+/* A lede paragraph directly under a PageBreak owns the gap the break leaves:
+   32 − 20 = 12px. Inside an accordion the break is tighter (16px), so the pull
+   is too — see .mc-acc-body .page-break. .form-help has no bottom margin, so
+   the lede supplies its own gap to whatever follows. */
+.mgf-lede {
+  margin-top: -20px;
+  margin-bottom: 16px;
 }
-.mg-row-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
-  text-align: left;
+.mc-acc-body .mgf-lede {
+  margin-top: -4px;
 }
-.mg-row-head:hover { background: var(--bg-row-hover); }
-.mg-row-l { display: flex; align-items: center; gap: 11px; }
-.mg-chevron {
-  display: inline-flex;
-  color: var(--text-faint);
-  transition: transform 0.15s ease;
-}
-.mg-chevron.is-open { transform: rotate(180deg); }
-.mg-row-label { font-size: 11pt; color: var(--text); }
-.mg-row-count {
-  font-size: 10.5pt;
-  font-weight: 600;
-  color: var(--accent-strong);
-  font-variant-numeric: tabular-nums;
-}
-.mg-row-detail { padding: 2px 16px 14px; border-top: 1px solid var(--border); animation: mgIn 0.18s ease; }
-.mg-conflict-box {
-  margin-top: 12px;
-  padding: 13px 15px;
-  border: 1px solid rgba(233, 185, 73, 0.32);
-  border-radius: 10px;
-  background: rgba(233, 185, 73, 0.05);
-}
-.mg-conflict-note { font-size: 10.5pt; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px; }
-.mg-conflict-note strong { color: var(--text); font-weight: 600; }
-.mg-samples { margin-top: 12px; }
-.mg-sample {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-}
-.mg-sample:last-child { border-bottom: none; }
-.mg-sample-name { font-size: 10.5pt; color: var(--text-muted); }
-.mg-sample-meta { font-size: 9.5pt; color: var(--text-faint); }
-.mg-sample-more { padding-top: 10px; font-size: 9.5pt; color: var(--text-faint); }
 
-/* ── Review (final step) ── */
-.mg-outcomes { margin-bottom: 16px; }
-.mg-outcome {
-  padding: 15px 17px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
+/* Third line on a conflict radio card — the record's supporting metadata,
+   under .radio-card-desc. */
+.mgf-meta {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #7a7a7a;
 }
-.mg-outcome--keep { border-color: var(--mg-keep-line); background: var(--mg-keep-soft); }
-.mg-outcome--drop { border-color: var(--mg-drop-line); background: var(--mg-drop-soft); }
-.mg-outcome-tag {
-  font-size: 9pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-.mg-outcome-tag--keep { color: var(--accent-strong); }
-.mg-outcome-tag--drop { color: var(--mg-drop); }
-.mg-outcome-name { font-size: 12pt; font-weight: 600; color: var(--text); }
-.mg-outcome-email { font-size: 10.5pt; color: var(--text-muted); margin-bottom: 10px; }
-.mg-outcome-note { display: flex; align-items: center; gap: 7px; font-size: 10pt; color: var(--text-muted); }
-.mg-outcome-note svg { flex: none; width: 14px; height: 14px; }
-.mg-outcome--keep .mg-outcome-note svg { color: var(--accent-strong); }
-.mg-outcome--drop .mg-outcome-note svg { color: var(--mg-drop); }
 
-.mg-review {
-  padding: 0 18px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--mg-card);
+/* The choice group under a comparison table keeps the 32px form rhythm — it
+   collapses with the table's own 24px, so it has to name the larger value. */
+.mgf-choices {
+  margin-top: 32px;
 }
-.mg-review-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-.mg-review-row:last-child { border-bottom: none; }
-.mg-review-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-}
-.mg-review-icon--accent { background: rgba(233, 114, 55, 0.13); color: var(--accent-strong); }
-.mg-review-icon--ok { background: rgba(110, 231, 163, 0.12); color: var(--mg-ok); }
-.mg-review-icon--drop { background: rgba(232, 103, 95, 0.12); color: var(--mg-drop); }
-.mg-review-title { font-size: 11pt; font-weight: 600; color: var(--text); margin-bottom: 3px; }
-.mg-review-detail { font-size: 10.5pt; color: var(--text-muted); line-height: 1.5; }
 
-/* ── Processing / done ── */
-.mg-processing { text-align: center; padding-top: 72px; }
-.mg-spinner {
-  display: inline-block;
+/* ── Running state ──
+   The app's only loader. It takes .wizard-success-icon's 52px slot and 20px
+   gap (11 + 30 + 11 + 20) so the title does not jump when the running screen
+   hands over to the done screen. */
+.mgf-spinner {
+  display: block;
   width: 30px;
   height: 30px;
+  margin: 11px 0 31px;
   border: 2.5px solid var(--border-strong);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: mgSpin 0.7s linear infinite;
+  animation: mgfSpin 0.7s linear infinite;
 }
-.mg-processing-title { font-size: 12pt; color: var(--text); margin-top: 18px; }
-.mg-processing-sub { font-size: 10.5pt; color: var(--text-muted); margin-top: 6px; }
+@keyframes mgfSpin {
+  to { transform: rotate(360deg); }
+}
 
-.mg-done { text-align: center; padding-top: 10px; }
-.mg-done-check {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 60px;
-  height: 60px;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  background: rgba(110, 231, 163, 0.12);
-  border: 1px solid rgba(110, 231, 163, 0.4);
-  color: var(--mg-ok);
-  animation: mgPop 0.45s ease;
+/* The audit log's key/value rows run wider than the 560px success column. */
+.wizard-success-content.mgf-done {
+  max-width: 720px;
 }
-.mg-done-check svg { width: 24px; height: 24px; }
-.mg-done-title {
-  font-family: var(--font-sans);
-  font-size: 16pt;
-  font-weight: 700;
-  color: var(--text);
-  margin: 0 0 8px;
-}
-.mg-done-lead {
-  font-size: 11.5pt;
-  color: var(--text-muted);
-  line-height: 1.55;
-  max-width: 580px;
-  margin: 0 auto 26px;
-}
-.mg-done-lead strong { color: var(--text); font-weight: 600; }
-.mg-audit {
-  text-align: left;
-  max-width: 660px;
-  margin: 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-panel);
-  overflow: hidden;
-}
-.mg-audit-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-pill);
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.mg-audit-id {
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--text-faint);
-}
-.mg-audit-row { display: flex; gap: 16px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
-.mg-audit-row:last-child { border-bottom: none; }
-.mg-audit-k { width: 152px; flex: none; font-size: 10pt; color: var(--text-muted); }
-.mg-audit-v { font-size: 10.5pt; color: var(--text); }
-.mg-audit-v.is-mono { font-family: var(--font-mono); font-size: 10pt; }
-.mg-done-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
-
-/* ── Footer (shared wizard footer, full-bleed inside the page's 40px) ── */
-.mg-footer {
-  margin: 0 -40px;
-  padding: 18px 40px;
-}
-.mg-footer .wizard-actions { align-items: center; }
-.mg-footer-hint { font-size: 10.5pt; color: var(--text-faint); }
-.btn-publish.mg-btn-danger { background: #d8413a; border-color: rgba(216, 65, 58, 0.5); }
-.btn-publish.mg-btn-danger:hover:not(:disabled) { background: #c2352f; filter: none; }
-
-/* ── Confirmation modal (shared .pm-* chrome) ── */
-.mg-modal { max-width: 520px; }
-.mg-modal-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 14px;
-  border-radius: 50%;
-  background: rgba(232, 103, 95, 0.12);
-  border: 1px solid rgba(232, 103, 95, 0.4);
-  color: var(--mg-drop);
-}
-.mg-modal-points {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-pill);
-}
-.mg-modal-point { display: flex; gap: 10px; font-size: 10.5pt; color: var(--text-muted); line-height: 1.45; }
-.mg-modal-point svg { flex: none; margin-top: 2px; color: var(--text-faint); }
 
 /* ─────────────────  Question editor leftovers  ───────────────── */
 /* The question editor itself is assembled from the shared design system — see
@@ -21563,46 +21405,11 @@ a.rh-crumb-link:hover {
 /* Skills & Mastery Skills (spec §11)                                    */
 /* ===================================================================== */
 
-/* Tab bar — switches the list between Skills and Mastery Skills */
+/* Tab bar placement — the shared .tabbar switches the list between Skills
+   and Mastery Skills (Awards reuses it too) */
 .sk-tabbar {
-  display: flex;
-  gap: 4px;
-  padding: 0 28px;
   margin-top: 14px;
-  border-bottom: 1px solid var(--border);
 }
-.sk-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 4px 12px;
-  margin-right: 18px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 12pt;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.sk-tab:hover { color: var(--text); }
-.sk-tab.is-active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.sk-tab-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-  font-size: 9.5pt;
-  font-weight: 600;
-}
-.sk-tab.is-active .sk-tab-count { background: var(--accent); color: #1a0f08; }
 
 /* Badge artwork — complete + auto-greyed states */
 .sk-badge {
@@ -21663,114 +21470,13 @@ a.rh-crumb-link:hover {
   font-weight: 600;
 }
 
-/* Image picker (wizard) */
-.sk-image-picker {
-  display: flex;
-  gap: 22px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-.sk-image-preview { display: flex; gap: 14px; }
-.sk-image-preview-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.sk-image-preview-label {
-  font-size: 9.5pt;
-  color: var(--text-faint);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.sk-image-pick-side { flex: 1; min-width: 240px; }
-.sk-image-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 148px;
-  padding: 22px;
-  border: 1.5px dashed var(--border-strong);
-  border-radius: 12px;
-  background: var(--bg-pill);
-  color: var(--text-faint);
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s, color 0.12s;
-}
-.sk-image-dropzone:hover {
-  border-color: var(--accent);
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-}
-.sk-image-dropzone.is-dragging {
-  border-color: var(--accent);
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-.sk-image-dropzone svg { width: 22px; height: 22px; }
-.sk-image-dropzone-title { font-size: 10.5pt; font-weight: 600; color: var(--text-muted); }
-.sk-image-dropzone-hint { font-size: 9pt; color: var(--text-faint); }
-
 /* Task / Skill pickers (wizard) */
-.sk-picker-wrap { display: flex; flex-direction: column; }
 .sk-picker {
   position: relative;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-panel);
 }
-.sk-picker.is-open { border-color: var(--border-strong); }
-.sk-picker-chosen {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-/* Selected items rendered as cards above the search bar */
-.sk-picker-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.sk-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 12px 11px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
-}
-.sk-card-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.sk-card-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-  font-weight: 600;
-  font-size: 11.5pt;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sk-card-meta { color: var(--text-faint); font-size: 9.5pt; }
-.sk-card-x {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  color: var(--text-muted);
-}
-.sk-card-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .sk-picker-search {
   display: flex;
   align-items: center;
@@ -21814,7 +21520,6 @@ a.rh-crumb-link:hover {
 .sk-picker-row:hover { background: var(--bg-row-hover); }
 .sk-picker-row.is-selected { background: var(--bg-row-selected); }
 .sk-picker-row-name { color: var(--text); }
-.sk-picker-row-type { color: var(--text-faint); font-size: 10.5pt; }
 .sk-picker-row-id { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: 10pt; }
 .sk-picker-empty { padding: 18px 14px; color: var(--text-faint); }
 .sk-picker-note { padding: 8px 14px; color: var(--text-faint); font-size: 10.5pt; border-bottom: 1px solid var(--border); }
@@ -21845,16 +21550,6 @@ a.rh-crumb-link:hover {
   color: var(--text-muted);
 }
 .sk-chip-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
-.sk-chip-tag {
-  font-size: 8.5pt;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--bg-pill-strong);
-  padding: 2px 6px;
-  border-radius: 6px;
-}
 .sk-warn-chips {
   display: flex;
   flex-wrap: wrap;
@@ -22152,6 +21847,17 @@ a.rh-crumb-link:hover {
   font-size: 16px;
   color: #a8a8a8;
 }
+/* The status value is the hover target for the ID timeline card (Figma
+   679:2039). Styled like the name link: plain until hovered, so the line still
+   reads as a subtitle rather than a control. */
+.mid-head-status {
+  color: #fff;
+  font-weight: 500;
+}
+.udh-anchor:hover > .mid-head-status {
+  color: #f05523;
+  text-decoration: underline;
+}
 /* Bare 20px ✕ — the design has no button chrome around it. */
 .mid-close {
   display: inline-flex;
@@ -22340,7 +22046,7 @@ a.rh-crumb-link:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 920px;
+  max-width: none;
   flex: none;
 }
 
@@ -22365,7 +22071,7 @@ a.rh-crumb-link:hover {
 .qed-main {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 920px;
+  max-width: none;
   overflow-y: auto;
   padding-bottom: 24px;
 }
@@ -22431,7 +22137,7 @@ a.rh-crumb-link:hover {
   .qed-side {
     flex: none;
     width: 100%;
-    max-width: 920px;
+    max-width: none;
     margin-bottom: 0;
   }
 }
@@ -22620,7 +22326,7 @@ a.rh-crumb-link:hover {
 
 /* ─── Grading toggles ─── */
 .qed-toggles {
-  max-width: 920px;
+  max-width: none;
 }
 
 /* ─── Version history modal ─── */
@@ -23280,7 +22986,7 @@ a.rh-crumb-link:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 920px;
+  max-width: none;
 }
 
 .fb-link-row {
@@ -23631,15 +23337,6 @@ a.rh-crumb-link:hover {
 }
 
 /* ─── Feedback Form wizard (rail + footer shell) ─── */
-.wizard-step.is-disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
-
-.wizard-step.is-disabled:hover {
-  background: transparent;
-}
-
 /* Status pill pinned under the step rail (Form ID · status). */
 .wizard-progress .wizard-fb-status {
   margin-left: 10px;
@@ -23862,7 +23559,7 @@ a.rh-crumb-link:hover {
    system has no component for yet: the media stage + thumbnail strip, the
    queue strip and progress meter, the attempt switcher, the 1–10 score pad,
    the read-only banner/callout, and the toast. Those are built on design
-   system tokens (40px gutters, 32px controls, 8px radius, the 12/14/16/28
+   system tokens (32px gutters, 32px controls, 8px radius, the 12/14/16/28
    type ramp, rgba(122,122,122,.5) dividers, #404040 control borders and the
    Table Pill palette) so they drop in cleanly once components exist. */
 
@@ -24221,7 +23918,7 @@ span.rvc-crumb--current { cursor: default; }
 .rvc-stagecol {
   flex: 1;
   min-width: 0;
-  padding: 0 40px 24px;
+  padding: 0 32px 24px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -25276,7 +24973,7 @@ span.rvc-crumb--current { cursor: default; }
 
 .mc-header {
   flex: none;
-  padding: 32px 36px 0;
+  padding: 32px 32px 0;
 }
 
 /* ── scope pickers ── */
@@ -25472,7 +25169,7 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 36px;
+  padding: 32px 32px;
 }
 
 .mc-empty-inner {
@@ -26308,9 +26005,10 @@ span.rvc-crumb--current { cursor: default; }
 }
 .udh-card {
   position: fixed;
-  /* Above .pm-overlay (200): the card also hangs off the name in the Manage IDs
-     popup, and at 60 it rendered behind that overlay. */
-  z-index: 300;
+  /* Above .pm-overlay (200) and .pr-confirm-overlay (400): the card hangs off
+     names inside the Manage IDs popup AND the Change Account Holder modal's
+     "Current:" line, so it must clear both shells. */
+  z-index: 500;
   width: 260px;
   display: flex;
   flex-direction: column;
@@ -26320,6 +26018,21 @@ span.rvc-crumb--current { cursor: default; }
   border: 1px solid rgba(122, 122, 122, 0.5);
   border-radius: 8px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+/* ID details variant (Figma 679:2039) — the same card carrying the document's
+   timeline rows. It hugs its rows rather than taking the user card's fixed
+   260px, because the label column runs from "Uploaded:" to the much wider
+   "Reupload Requested:". */
+.udh-card--auto {
+  width: auto;
+  max-width: 340px;
+}
+/* Figma 668:972 surface rule — floated over a modal card the hover card takes
+   the popup-context wash instead, so it separates from the popup behind it. */
+.udh-card--popup {
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)),
+    #0d0d0d;
   cursor: default;
 }
 .udh-row {
@@ -26552,15 +26265,19 @@ span.rvc-crumb--current { cursor: default; }
 .tasks.lm[data-lm="landing"] .lm-filters-flow {
   pointer-events: none;
 }
-/* Fully unfolded: uncap and unclip so the filter pills' dropdown panels open. */
+/* Fully unfolded: uncap and unclip so the filter pills' dropdown panels open.
+   The flow also takes the row's remaining width, so a .filters-end element
+   (the Companies Date Range pill) can hold the right edge. */
 .tasks.lm[data-lm="table"] .lm-filters-flow {
   max-width: none;
   overflow: visible;
   margin-left: 0;
+  flex: 1;
 }
 .tasks.lm .lm-filters-flow > .filters {
   padding-bottom: 0;
   flex-shrink: 0;
+  flex-grow: 1;
 }
 .lm-pill {
   display: inline-flex;
@@ -26625,7 +26342,7 @@ span.rvc-crumb--current { cursor: default; }
   position: absolute;
   inset: 0;
   /* Stop above the footer as it fades in, so late-morph rows never overlap it. */
-  bottom: calc(48px * var(--lmt));
+  bottom: calc(40px * var(--lmt));
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -26691,12 +26408,12 @@ span.rvc-crumb--current { cursor: default; }
   );
 }
 /* Morphing header row — grows in with the table chrome (--lmt) and matches
-   the real thead's metrics at p=1 (Figma 79:445: 48px, 16px/600 white,
+   the real thead's metrics at p=1 (Figma 79:445: 40px, 16px/600 white,
    1px #404040 rule below). */
 .lm-head {
   display: grid; /* template comes inline from LandingOverlay */
   align-items: center;
-  height: calc(48px * var(--lmt));
+  height: calc(40px * var(--lmt));
   opacity: var(--lmt);
   overflow: hidden;
   border-bottom: 1px solid rgba(64, 64, 64, var(--lmt));
@@ -26708,7 +26425,11 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* The table rows' right-edge wash (Figma 79:446 / 435:516) fades in with the
-   table chrome — the collapsed row atom (600:1462) has no gradient. */
+   table chrome — the collapsed row atom (600:1462) has no gradient. The
+   100%−40px peak assumes a 40px ⋯ gutter, exact only when the table sits at
+   --table-min; on stretched tables the real table's `.col-actions::before`
+   ramp lands at the stretched column's left edge instead. The hand-off offset
+   is invisible at 2% alpha, so this keeps the simple stops. */
 .lm-head,
 .lm-row {
   background-image: linear-gradient(
@@ -26719,12 +26440,12 @@ span.rvc-crumb--current { cursor: default; }
   );
 }
 
-/* Rows are the table's exact 48px in both states (Figma 435:515 / 600:1461). */
+/* Rows are the table's exact 40px in both states (Figma 435:515 / 600:1461). */
 .lm-row {
   display: grid; /* template comes inline from LandingOverlay */
   position: relative; /* anchors the pinned ⋯ gutter */
   align-items: center;
-  height: 48px;
+  height: 40px;
   border-top: 1px solid rgba(64, 64, 64, 0.5);
   cursor: pointer;
 }
@@ -26816,4 +26537,129 @@ span.rvc-crumb--current { cursor: default; }
 }
 .lm-back:hover {
   color: #fff;
+}
+
+/* ═══════════ Select Tasks modal (Figma 682:2321) ═══════════
+   A compact Tasks table inside the shared PrmModal shell. The chrome is all
+   borrowed: `.prm*` for the card/header/footer, `.table` for the 40px rows and
+   their hairlines, `.filters`/`PillTrigger` for the pills, `.pagination` for
+   the footer row — every one of those already matches this node's spec. What
+   follows is only the column geometry plus the two colours the node states
+   differently from the app-wide search bar. */
+.stm {
+  display: flex;
+  flex-direction: column;
+  /* Figma 682:2495 — 20px between the search block and the table. The 24px
+     above it comes from .prm-body's own gap. */
+  gap: 20px;
+  min-width: 0;
+}
+
+.stm-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Figma 682:2496 */
+}
+
+/* The node fills this bar with the design-system card wash rather than the
+   app-wide `#1e1e20`: inside a card that is itself a grey wash over #0d0d0d, a
+   flat dark well would read as a hole. Geometry and type stay `.search-input`'s. */
+.stm-search {
+  margin-bottom: 0;
+}
+
+.stm-search-input {
+  padding-right: 16px;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+  border-color: rgba(64, 64, 64, 0.5);
+}
+
+.stm-search-input:focus {
+  border-color: var(--border-strong);
+}
+
+.stm-filters {
+  padding-bottom: 0;
+}
+
+.stm-table-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The row area is FIXED, not a cap: filtering down to three results must not
+   make the card jump shorter. Short lists leave the rest of the space empty;
+   long ones scroll inside it.
+   Its height is whatever puts the whole card at ~80% of the viewport. 323px is
+   the card's chrome — footer 57 + body padding 48 + heading 55 + gap 24 +
+   search block 80 + gap 20 + pagination 40 — so the table gets the rest. The
+   floor keeps four rows visible on a very short viewport, where `.prm`'s own
+   max-height takes over. */
+.stm-table-wrap > .table-xscroll {
+  /* `flex: none` is load-bearing: the shared rule sets `flex: 1`, whose
+     `flex-basis: 0` + grow beats a plain `height` in this column flex parent,
+     so the area would stretch to fit every row instead of holding. */
+  flex: none;
+  height: max(200px, calc(80vh - 323px));
+}
+
+/* The shared sticky header paints itself #0d0d0d so body rows can't bleed under
+   it. Inside this card — a grey wash OVER #0d0d0d — that reads as a darker band
+   across the header, which the node doesn't have. Repaint it with the card's own
+   composite: still opaque, but invisible against it. */
+.stm-table-wrap > .table-xscroll > .table-head {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    #0d0d0d;
+}
+
+.stm-pagination {
+  padding-right: 12px;
+}
+
+/* Row checkboxes take the "Radial Button" skin (8:13495/8:13497) the filter
+   menus already use — 0.8px #737373, r3.2, 20% orange over 75% black when on —
+   rather than the table's default 4px accent-filled box. */
+.stm-table .checkbox {
+  border-width: 0.8px;
+  border-color: #737373;
+  border-radius: 3.2px;
+}
+
+.stm-table .checkbox.checked {
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    rgba(13, 13, 13, 0.75);
+  border-color: rgba(240, 85, 35, 0.75);
+  color: #fff;
+}
+
+.stm-table .checkbox:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stm-col-check {
+  padding-right: 0 !important;
+}
+
+.stm-table .stm-col-certs,
+.stm-table .stm-col-edited {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stm-empty-row td {
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.stm-empty-row {
+  cursor: default;
+}
+
+.stm-empty-row:hover {
+  background: transparent !important;
 }

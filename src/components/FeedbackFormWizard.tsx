@@ -108,14 +108,17 @@ export function FeedbackFormWizard({
             {STEPS.map((s, i) => {
               const status =
                 i === step ? "active" : i < step ? "done" : "upcoming";
-              const disabled = s.id === "triggers" && triggersLocked;
+              /* Triggers stays reachable while the form is a draft — the step
+                 itself explains that activation comes first, which is more use
+                 than a dead rail item. */
+              const locked = s.id === "triggers" && triggersLocked;
               return (
                 <li
                   key={s.id}
-                  className={`wizard-step ${status} ${disabled ? "is-disabled" : ""}`}
-                  onClick={() => !disabled && setStep(i)}
+                  className={`wizard-step ${status}`}
+                  onClick={() => setStep(i)}
                   title={
-                    disabled ? "Activate the form before adding triggers" : undefined
+                    locked ? "Activate the form before adding triggers" : undefined
                   }
                 >
                   <WizardStepRail status={status} num={i + 1} />
@@ -254,8 +257,6 @@ function DetailsStep({
         </p>
       </div>
 
-      <div className="form-divider" />
-
       <div className="form-group">
         <label className="form-label">Status</label>
         <div className="fb-details-status">
@@ -271,8 +272,6 @@ function DetailsStep({
           </p>
         </div>
       </div>
-
-      <div className="form-divider" />
 
       <dl className="fb-details-meta">
         <div className="fb-details-meta-row">

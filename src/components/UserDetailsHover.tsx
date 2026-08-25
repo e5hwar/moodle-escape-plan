@@ -18,13 +18,101 @@ import { useHoverCard, type HoverPos } from "../hooks/useHoverCard";
    their aria-labels. ── */
 
 const CARD_WIDTH = 260;
+/* The ID card hugs its rows (Figma 679:2039 is 241px around short dates), but
+   our stamps carry a time too — this is only the right-edge clamp. */
+const ID_CARD_WIDTH = 340;
 
 export type HoverUser = {
-  userId: string;
+  /** Omitted for people who have no Manage Users record (e.g. a company's
+   *  account holder, who lives only in the company's data). */
+  userId?: string;
   userName: string;
   email: string;
+  /** Empty when unknown — the Phone row is dropped, not dashed (Figma 436:572). */
   phone: string;
 };
+
+/** When an ID document was uploaded and what has happened to it since. Only
+ *  the stamps that exist are shown, so the rows differ per ID status. */
+export type IdTimeline = {
+  uploadedAt: string;
+  reuploadRequestedAt?: string;
+  approvedAt?: string;
+};
+
+/** ID timeline rows (Figma 679:2039) — the same `.udh-row` label/value pairs
+ *  the user-details card is built from, so this is that card with different
+ *  contents rather than a second popover component. */
+function IdTimelineRows({ timeline }: { timeline: IdTimeline }) {
+  const rows: { label: string; value: string }[] = [
+    { label: "Uploaded:", value: timeline.uploadedAt },
+  ];
+  if (timeline.reuploadRequestedAt) {
+    rows.push({ label: "Reupload Requested:", value: timeline.reuploadRequestedAt });
+  }
+  if (timeline.approvedAt) rows.push({ label: "Approved:", value: timeline.approvedAt });
+
+  return (
+    <>
+      {rows.map((r, i) => (
+        <div
+          key={r.label}
+          className={`udh-row ${i === rows.length - 1 ? "udh-row--last" : ""}`}
+        >
+          <span className="udh-label">{r.label}</span>
+          <span className="udh-value">{r.value}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Hovering an ID's status peeks at its timeline (Figma 679:2039). Same shell,
+ *  positioning and portal rules as [UserDetailsHover]; it just carries the
+ *  stamp rows on their own. */
+export function IdDetailsHover({
+  timeline,
+  popup = false,
+  children,
+}: {
+  timeline: IdTimeline;
+  popup?: boolean;
+  children: React.ReactNode;
+}) {
+  const { anchorRef, pos, open, close, hold } = useHoverCard({ width: ID_CARD_WIDTH });
+
+  return (
+    <>
+      <span
+        ref={anchorRef}
+        className="udh-anchor"
+        data-hover-card
+        onMouseEnter={open}
+        onMouseLeave={close}
+      >
+        {children}
+      </span>
+      {pos && createPortal(
+        <div
+          className={`udh-card udh-card--auto${popup ? " udh-card--popup" : ""}`}
+          data-hover-card
+          role="tooltip"
+          style={{
+            top: pos.top,
+            left: pos.left,
+            transform: pos.flip ? "translateY(-100%)" : undefined,
+          }}
+          onMouseEnter={hold}
+          onMouseLeave={close}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IdTimelineRows timeline={timeline} />
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
 
 /** Wraps whatever renders the user's name (text, a link button) as the hover
  *  trigger — the card is the same wherever it's used. */
@@ -32,13 +120,19 @@ export function UserDetailsHover({
   user,
   onOpenProfile,
   onRenameUser,
+  popup = false,
   children,
 }: {
   user: HoverUser;
-  onOpenProfile: (userId: string) => void;
+  /** Opens the full profile from the card's external-link. Omit (or omit
+   *  user.userId) and the button isn't shown — same convention as the pencil. */
+  onOpenProfile?: (userId: string) => void;
   /** Renames the user from the card's pencil. Omit and the pencil isn't shown —
    *  a screen with nowhere to put the new name shouldn't offer the edit. */
   onRenameUser?: (userId: string, name: string) => void;
+  /** Set when the trigger sits on a modal/popup — the card takes the
+   *  popup-context surface wash (Figma 668:972) so it still separates. */
+  popup?: boolean;
   children: React.ReactNode;
 }) {
   const { anchorRef, pos, open, close, hold } = useHoverCard({ width: CARD_WIDTH });
@@ -62,6 +156,7 @@ export function UserDetailsHover({
         <UserDetailsCard
           user={user}
           pos={pos}
+          popup={popup}
           onOpenProfile={onOpenProfile}
           onEditName={onRenameUser && (() => { setEditing(true); close(); })}
           onMouseEnter={hold}
@@ -74,7 +169,7 @@ export function UserDetailsHover({
           initial={user.userName}
           onCancel={() => setEditing(false)}
           onSave={(name) => {
-            onRenameUser?.(user.userId, name);
+            if (user.userId != null) onRenameUser?.(user.userId, name);
             setEditing(false);
           }}
         />,
@@ -87,6 +182,7 @@ export function UserDetailsHover({
 function UserDetailsCard({
   user,
   pos,
+  popup,
   onOpenProfile,
   onEditName,
   onMouseEnter,
@@ -94,14 +190,15 @@ function UserDetailsCard({
 }: {
   user: HoverUser;
   pos: HoverPos;
-  onOpenProfile: (userId: string) => void;
+  popup?: boolean;
+  onOpenProfile?: (userId: string) => void;
   onEditName?: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
   return (
     <div
-      className="udh-card"
+      className={`udh-card${popup ? " udh-card--popup" : ""}`}
       data-hover-card
       role="tooltip"
       style={{
@@ -117,14 +214,16 @@ function UserDetailsCard({
     >
       <div className="udh-row udh-row--head">
         <span className="udh-label">User Details</span>
-        <button
-          className="udh-icon-btn"
-          title="Open full profile in a new tab"
-          aria-label="Open full profile in a new tab"
-          onClick={() => onOpenProfile(user.userId)}
-        >
-          <RowExternalLinkIcon />
-        </button>
+        {onOpenProfile && user.userId != null && (
+          <button
+            className="udh-icon-btn"
+            title="Open full profile in a new tab"
+            aria-label="Open full profile in a new tab"
+            onClick={() => onOpenProfile(user.userId!)}
+          >
+            <RowExternalLinkIcon />
+          </button>
+        )}
       </div>
       <div className="udh-row">
         <span className="udh-label">Name:</span>
@@ -135,8 +234,8 @@ function UserDetailsCard({
           </button>
         )}
       </div>
-      <CopyRow label="Email:" value={user.email} />
-      <CopyRow label="Phone:" value={user.phone} last />
+      <CopyRow label="Email:" value={user.email} last={!user.phone} />
+      {user.phone && <CopyRow label="Phone:" value={user.phone} last />}
     </div>
   );
 }

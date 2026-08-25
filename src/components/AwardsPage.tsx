@@ -54,7 +54,7 @@ type Modal =
   | { kind: "delete-template-blocked"; template: AwardDesignTemplate; linked: Award[] }
   | { kind: "delete-template"; template: AwardDesignTemplate };
 
-export function AwardsPage() {
+export function AwardsPage({ onBackToCerts }: { onBackToCerts?: () => void }) {
   const [tab, setTab] = useState<Tab>("awards");
   const [awards, setAwards] = useState<Award[]>(seedAwards);
   const [templates, setTemplates] = useState<AwardDesignTemplate[]>(seedTemplates);
@@ -206,7 +206,18 @@ export function AwardsPage() {
       <div className="workspace">
         <div className="tasks">
           <header className="tasks-header">
-            <div>
+            {/* This page is reached from the Certifications header button (it
+                no longer has its own sidebar entry), so the crumb is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Content</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+                  Certifications
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Awards</span>
+              </nav>
               <h1 className="tasks-title">Awards</h1>
               <div className="tasks-subtitle">
                 {tab === "awards"
@@ -226,12 +237,12 @@ export function AwardsPage() {
             </div>
           </header>
 
-          <div className="sk-tabbar">
-            <button className={`sk-tab ${tab === "awards" ? "is-active" : ""}`} onClick={() => setTab("awards")}>
-              Awards <span className="sk-tab-count">{awards.length}</span>
+          <div className="tabbar sk-tabbar">
+            <button className={`tab ${tab === "awards" ? "is-active" : ""}`} onClick={() => setTab("awards")}>
+              Awards
             </button>
-            <button className={`sk-tab ${tab === "templates" ? "is-active" : ""}`} onClick={() => setTab("templates")}>
-              Design Templates <span className="sk-tab-count">{templates.length}</span>
+            <button className={`tab ${tab === "templates" ? "is-active" : ""}`} onClick={() => setTab("templates")}>
+              Design Templates
             </button>
           </div>
 

@@ -7,7 +7,7 @@ import {
   type CareerStage,
   type IndustryCert,
 } from "../data/industries";
-import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon } from "./icons";
+import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { PageBreak } from "./PageBreak";
@@ -39,7 +39,7 @@ const RowCloseIcon = () => (
 
 const CAREER_STAGES: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
 
-export function IndustriesPage() {
+export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }) {
   const [industries, setIndustries] = useState<Industry[]>(seedIndustries);
   const [scope, setScope] = useState<Scope>({ kind: "industry", industryKey: "hvac" });
   const [openIds, setOpenIds] = useState<Set<string>>(new Set(["hvac"]));
@@ -356,6 +356,17 @@ export function IndustriesPage() {
           {/* ─── Left rail ─── */}
           <aside className="rail">
             <div className="rail-head">
+              {/* This page is reached from the Certifications header button (it
+                  no longer has its own sidebar entry), so the crumb is the way back. */}
+              <nav className="rvc-crumbs ind-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Content</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+                  Certifications
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Industries</span>
+              </nav>
               <h1 className="tasks-title">Industries</h1>
               <div className="rail-desc">
                 Learners and Companies browse content by Industry
@@ -1193,7 +1204,7 @@ function DeleteConfirm({
         </div>
         <div className="pm-foot">
           <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className="btn-publish mg-btn-danger" onClick={onConfirm}>
+          <button className="btn-publish btn-publish--danger" onClick={onConfirm}>
             Delete {isIndustry ? "Industry" : "Sub-Industry"}
           </button>
         </div>

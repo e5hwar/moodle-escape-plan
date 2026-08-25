@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { ColumnsBody } from "./Filters";
-import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import { companies } from "../data/companies";
 
 /* ── Columns: every profile field is an optional column. Name is fixed. ── */
@@ -156,7 +156,7 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
 }) {
   return (
     <Dropdown
-      width={240}
+      width={300}
       align="right"
       trigger={({ toggle }) => (
         <button
@@ -480,7 +480,7 @@ function SubmenuRow({
     <button className={`dropdown-submenu-row ${active ? "active" : ""}`} onMouseEnter={handle} onFocus={handle}>
       <span className="dropdown-submenu-label">{label}</span>
       {count > 0 && <span className="dropdown-submenu-count">{count}</span>}
-      <span className="dropdown-submenu-chevron">›</span>
+      <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>
     </button>
   );
 }

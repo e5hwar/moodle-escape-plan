@@ -5,13 +5,29 @@ import {
   ZIP_LOCATIONS,
   type AwardRecord,
   type EpaCardOrder,
+  type EpaStatus,
   type MeritTier,
   type NateDetail,
   type Purchase,
   type PurchaseKind,
 } from "../data/userProfile";
 import type { User } from "../data/users";
+import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
+import { PageBreak } from "./PageBreak";
+import { PrmModal } from "./PrmModal";
+import { PrmCheck } from "./ProctoringConsole";
+import { IdModal } from "./IdModal";
+import {
+  ArrowUpRightIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  IdCardIcon,
+  MenuEnterIcon,
+  PencilIcon,
+} from "./icons";
 
+/* Award-tier colors survive only in the generated SVG downloads — on the page
+   itself the tier renders as plain table text like every other column. */
 const TIER_HEX: Record<MeritTier, string> = {
   Bronze: "#cd7f32",
   Silver: "#c4c7cc",
@@ -115,6 +131,45 @@ function isEpaOrderCancelable(order: EpaCardOrder): boolean {
   return ageDays <= EPA_CANCEL_WINDOW_DAYS;
 }
 
+/* PrmModal (unlike the old pm- shell) has no key handling of its own, so the
+   modal owner closes whatever is open on Escape. */
+function useEscape(active: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [active, onClose]);
+}
+
+/* The Manage Users table's verified check (u-verified). */
+const VerifiedIcon = () => (
+  <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
+  </svg>
+);
+
+const Verified = () => (
+  <span className="u-verified" title="Verified">
+    <VerifiedIcon />
+  </span>
+);
+
+/* Companies-pill tone (Figma 109:1237) per physical-card status. */
+const EPA_TONE: Record<EpaStatus, string> = {
+  "Order received": "yellow",
+  Accepted: "yellow",
+  "In production": "yellow",
+  Shipped: "purple",
+  Delivered: "green",
+  "Action needed": "red",
+  Canceled: "grey",
+  Refunded: "secondary",
+};
+
 export function UserProfilePage({ user: seedUser }: { user: User }) {
   const base = useMemo(() => buildUserProfile(seedUser), [seedUser]);
 
@@ -131,6 +186,15 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
   const [downloadAllOpen, setDownloadAllOpen] = useState(false);
+  /* This user's ID document, for the header's "View ID". Approve/Replace edit
+     it in place the same way the Manage IDs table does. */
+  const [idOpen, setIdOpen] = useState(false);
+  const [idRecord, setIdRecord] = useState<IdRecord>(() => idRecordForUser(seedUser));
+
+  useEscape(modal !== null || downloadAllOpen, () => {
+    setModal(null);
+    setDownloadAllOpen(false);
+  });
 
   const user: User = { ...seedUser, ...identity };
   const epaCard: EpaCardOrder | undefined =
@@ -159,6 +223,25 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
     setModal(null);
   }
 
+  /* Same two transitions the Manage IDs table applies: a replacement re-takes
+     the upload stamp (and the approval stamp, or drops it — it described the
+     document that was just replaced); an approval only records the decision. */
+  function replaceId(status: IdStatus) {
+    const now = nowIdStamp();
+    setIdRecord((r) => ({
+      ...r,
+      status,
+      uploadedAt: now,
+      approvedAt: status === "approved" ? now : undefined,
+    }));
+  }
+
+  /* Approving leaves the popup open on the document it just decided — the
+     Approve button drops out of the footer, same as on the Manage IDs table. */
+  function approveId() {
+    setIdRecord((r) => ({ ...r, status: "approved", approvedAt: nowIdStamp() }));
+  }
+
   function openPortfolio() {
     window.open(
       `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`,
@@ -167,260 +250,283 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
     );
   }
 
-  return (
-    <div className="prof">
-      <div className="prof-topbar">
-        <span className="prof-topbar-brand">SkillCat Admin</span>
-        <span className="prof-topbar-sep">/</span>
-        <span className="prof-topbar-label">Full Profile</span>
-        <button className="prof-loginas" onClick={() => loginAs(user)}>
-          <PowerIcon /> Login As
-        </button>
-      </div>
+  /* The profile always opens in its own tab from Manage Users, so the crumb
+     back is the same path with the ?profile= query dropped. */
+  function backToUsers() {
+    window.location.href = window.location.pathname;
+  }
 
-      <div className="prof-body">
-        {/* Identity header */}
-        <section className="prof-hero">
-          <div className="prof-avatar">{initialsOf(user.name)}</div>
-          <div className="prof-hero-text">
-            <div className="prof-name-row">
-              <h1 className="prof-name">{user.name}</h1>
-              <button className="prof-btn prof-btn--sm" onClick={() => setModal("edit-user")}>
+  return (
+    <div className="main prof">
+      <div className="workspace">
+        <div className="tasks pr-page">
+          {/* ── header — breadcrumb over the identity row, actions on the right ── */}
+          <header className="tasks-header">
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Home</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={backToUsers} title="Back to Manage Users">
+                  Manage Users
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Full Profile</span>
+              </nav>
+              <div className="prof-headrow">
+                <span className="mc-avatar prof-avatar">{initialsOf(user.name)}</span>
+                <div className="rvc-pagehead-id">
+                  <h1 className="tasks-title">{user.name}</h1>
+                  <div className="tasks-subtitle">
+                    <span className={`u-pill u-type--${user.userType.toLowerCase()}`}>{user.userType}</span>
+                    <span className="prof-contact">
+                      {user.email}
+                      {user.emailVerified && <Verified />}
+                    </span>
+                    <span className="tasks-subtitle-dot" />
+                    <span className="prof-contact">
+                      {user.phone}
+                      {user.phoneVerified && <Verified />}
+                    </span>
+                    <span className="tasks-subtitle-dot" />
+                    <span>{user.id}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="tasks-header-actions">
+              {/* The Manage IDs popup, opened on this user's own document —
+                  same modal, same Replace / Approve flows. */}
+              <button className="cta-quiet" onClick={() => setIdOpen(true)}>
+                <IdCardIcon /> View ID
+              </button>
+              <button className="cta-quiet" onClick={() => setModal("edit-user")}>
                 <PencilIcon /> Edit
               </button>
-            </div>
-            <div className="prof-hero-meta">
-              <span className={`u-pill u-type--${user.userType.toLowerCase()}`}>{user.userType}</span>
-              <span className="prof-contact">
-                {user.email}
-                {user.emailVerified && <VerifiedBadge />}
-              </span>
-              <span className="prof-dot" />
-              <span className="prof-contact">
-                {user.phone}
-                {user.phoneVerified && <VerifiedBadge />}
-              </span>
-              <span className="prof-dot" />
-              <span className="prof-muted">{user.id}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Profile fields */}
-        <Card title="Profile">
-          <div className="prof-fields">
-            <Field label="Language" value={p.fields.language} />
-            <Field label="Goal" value={p.fields.goal} />
-            <Field label="Industry Preference" value={p.fields.industryPreference} />
-            <Field label="Current Company" value={p.fields.currentCompany ?? "—"} />
-            <Field
-              label="Zip Code"
-              value={
-                ZIP_LOCATIONS[p.fields.zipCode]
-                  ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
-                  : p.fields.zipCode
-              }
-            />
-            <Field label="Attribution" value={p.fields.attribution} />
-            <Field label="Notification Preference" value={p.fields.notificationPreference} />
-            <Field label="Role" value={user.role} />
-            <Field label="Joined SkillCat" value={formatDate(user.joinedOn)} />
-            <Field label="Last Access" value={formatDate(user.lastAccess)} />
-            <Field label="Profile Photo" value="Initials avatar (no photo uploaded)" />
-          </div>
-        </Card>
-
-        {/* Skills */}
-        <Card title="Skills" count={p.skills.length}>
-          <div className="prof-badges">
-            {p.skills.map((s) => (
-              <span key={s.name} className={`prof-badge ${s.mastery ? "prof-badge--mastery" : ""}`}>
-                <MedalIcon />
-                {s.name}
-                {s.mastery && <span className="prof-badge-tag">Mastery</span>}
-              </span>
-            ))}
-          </div>
-        </Card>
-
-        {/* Portfolio */}
-        <Card title="Portfolio">
-          <div className="prof-portfolio">
-            <div>
-              <div className="prof-portfolio-label">Public portfolio link</div>
-              <a className="prof-portfolio-url" href={p.portfolioUrl} target="_blank" rel="noreferrer">
-                {p.portfolioUrl}
-              </a>
-            </div>
-            <button className="prof-btn" onClick={openPortfolio}>
-              <ExternalLinkIcon /> Open in new tab
-            </button>
-          </div>
-        </Card>
-
-        {/* Awards */}
-        <Card
-          title="Awards"
-          count={p.awards.length}
-          action={
-            p.awards.length > 0 && (
-              <button className="prof-btn prof-btn--sm" onClick={() => setDownloadAllOpen(true)}>
-                <DownloadIcon /> Download All
+              <button className="cta-primary" onClick={() => loginAs(user)}>
+                <MenuEnterIcon /> Login As
               </button>
-            )
-          }
-        >
-          <table className="prof-table">
-            <thead>
-              <tr>
-                <th>Certification</th>
-                <th>Merit Tier</th>
-                <th>Award Number</th>
-                <th>Date Awarded</th>
-                <th>Appearances</th>
-                <th className="prof-table-actions">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.awards.map((a) => (
-                <tr key={a.id}>
-                  <td className="prof-td-strong">{a.certification}</td>
-                  <td>
-                    <span className="prof-tier" style={{ color: TIER_HEX[a.meritTier], borderColor: TIER_HEX[a.meritTier] }}>
-                      {a.meritTier}
-                    </span>
-                  </td>
-                  <td className="prof-muted">{a.awardNumber}</td>
-                  <td>{formatDate(a.dateAwarded)}</td>
-                  <td className="prof-muted">{a.hasCertificate ? "Card · Certificate" : "Card only"}</td>
-                  <td className="prof-table-actions">
-                    <button
-                      className="prof-btn prof-btn--sm"
-                      onClick={() => downloadFile(`${a.awardNumber}-card.svg`, awardCardSvg(user.name, a), "image/svg+xml")}
-                    >
-                      <DownloadIcon /> Card
-                    </button>
-                    <button
-                      className="prof-btn prof-btn--sm"
-                      disabled={!a.hasCertificate}
-                      title={a.hasCertificate ? "Download Certificate" : "This Award has no Certificate"}
-                      onClick={() => downloadFile(`${a.awardNumber}-certificate.svg`, awardCertSvg(user.name, a), "image/svg+xml")}
-                    >
-                      <DownloadIcon /> Certificate
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+            </div>
+          </header>
 
-        {/* Subscription */}
-        <Card
-          title="Subscription"
-          action={
-            canCancelSub && (
-              <button
-                className="prof-btn prof-btn--sm prof-btn--danger"
-                onClick={() => setModal("cancel-sub")}
-              >
-                Cancel Subscription
-              </button>
-            )
-          }
-        >
-          <div className="prof-fields">
-            <Field
-              label="Status"
-              value={
-                subCanceled ? (
-                  <span className="prof-status prof-status--bad">Canceled</span>
+          <div className="prof-scroll">
+            {/* Profile fields */}
+            <PageBreak label="Profile" />
+            <div className="co-detail-grid prof-grid">
+              <Field label="Language" value={p.fields.language} />
+              <Field label="Goal" value={p.fields.goal} />
+              <Field label="Industry Preference" value={p.fields.industryPreference} />
+              <Field label="Current Company" value={p.fields.currentCompany ?? "—"} />
+              <Field
+                label="Zip Code"
+                value={
+                  ZIP_LOCATIONS[p.fields.zipCode]
+                    ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
+                    : p.fields.zipCode
+                }
+              />
+              <Field label="Attribution" value={p.fields.attribution} />
+              <Field label="Notification Preference" value={p.fields.notificationPreference} />
+              <Field label="Role" value={user.role} />
+              <Field label="Joined SkillCat" value={formatDate(user.joinedOn)} />
+              <Field label="Last Access" value={formatDate(user.lastAccess)} />
+              <Field label="Profile Photo" value="Initials avatar (no photo uploaded)" />
+            </div>
+
+            {/* Skills */}
+            <PageBreak label={`Skills · ${p.skills.length}`} />
+            <div className="prof-badges">
+              {p.skills.map((s) =>
+                s.mastery ? (
+                  <span key={s.name} className="co-status-pill co-status-pill--yellow">
+                    {s.name} · Mastery
+                  </span>
                 ) : (
-                  p.subscription.status
+                  <span key={s.name} className="co-pill-muted">{s.name}</span>
+                ),
+              )}
+            </div>
+
+            {/* Portfolio */}
+            <PageBreak label="Portfolio" />
+            <div className="prof-portfolio">
+              <div className="co-dt-item">
+                <div className="co-dt-label">Public portfolio link</div>
+                <div className="co-dt-value">
+                  <a className="rvc-headlink" href={p.portfolioUrl} target="_blank" rel="noreferrer">
+                    {p.portfolioUrl}
+                  </a>
+                </div>
+              </div>
+              <button className="btn-save-draft" onClick={openPortfolio}>
+                <ArrowUpRightIcon /> Open in New Tab
+              </button>
+            </div>
+
+            {/* Awards */}
+            <PageBreak
+              label={`Awards · ${p.awards.length}`}
+              trailing={
+                p.awards.length > 0 && (
+                  <button className="btn-save-draft mc-btn-sm" onClick={() => setDownloadAllOpen(true)}>
+                    <DownloadIcon /> Download All
+                  </button>
                 )
               }
             />
-            <Field label="Platform" value={p.subscription.platform ?? "—"} />
-            <Field label="Started" value={formatDate(p.subscription.startedOn)} />
-            <Field
-              label={subCanceled ? "Access Until" : "Renews"}
-              value={formatDate(p.subscription.renewsOn)}
+            <table className="table sch-table" style={{ width: 1140 }}>
+              <colgroup>
+                <col />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 160 }} />
+                <col style={{ width: 160 }} />
+                <col style={{ width: 170 }} />
+                <col style={{ width: 250 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Certification</th>
+                  <th>Merit Tier</th>
+                  <th>Award Number</th>
+                  <th>Date Awarded</th>
+                  <th>Appearances</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {p.awards.map((a) => (
+                  <tr key={a.id}>
+                    <td className="col-name">{a.certification}</td>
+                    <td>{a.meritTier}</td>
+                    <td>{a.awardNumber}</td>
+                    <td className="col-date">{formatDate(a.dateAwarded)}</td>
+                    <td>{a.hasCertificate ? "Card · Certificate" : "Card only"}</td>
+                    <td>
+                      <button
+                        className="btn-save-draft mc-btn-sm"
+                        onClick={() => downloadFile(`${a.awardNumber}-card.svg`, awardCardSvg(user.name, a), "image/svg+xml")}
+                      >
+                        <DownloadIcon /> Card
+                      </button>
+                      <button
+                        className="btn-save-draft mc-btn-sm"
+                        disabled={!a.hasCertificate}
+                        title={a.hasCertificate ? "Download Certificate" : "This Award has no Certificate"}
+                        onClick={() => downloadFile(`${a.awardNumber}-certificate.svg`, awardCertSvg(user.name, a), "image/svg+xml")}
+                      >
+                        <DownloadIcon /> Certificate
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {p.awards.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="sch-empty">No awards yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Subscription */}
+            <PageBreak
+              label="Subscription"
+              trailing={
+                canCancelSub && (
+                  <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-sub")}>
+                    Cancel Subscription
+                  </button>
+                )
+              }
             />
-            <Field label="Offer Code" value={p.subscription.offerCode ?? "None"} />
-          </div>
-        </Card>
-
-        {/* Purchases / bills */}
-        <PurchasesCard
-          purchases={p.purchases}
-          epaCancelable={canCancelEpa}
-          epaCanceled={epaCanceled}
-          onCancelEpa={() => setModal("cancel-epa")}
-        />
-
-        {/* EPA Card */}
-        <Card
-          title="EPA Card Order"
-          action={
-            canCancelEpa && (
-              <button
-                className="prof-btn prof-btn--sm prof-btn--danger"
-                onClick={() => setModal("cancel-epa")}
-              >
-                Cancel Order
-              </button>
-            )
-          }
-        >
-          {p.epaCard ? (
-            <div className="prof-fields">
-              <Field label="Card" value={p.epaCard.certification} />
+            <div className="co-detail-grid prof-grid">
               <Field
                 label="Status"
-                value={<span className={`epa-status epa-status--${p.epaCard.status.toLowerCase().replace(/\s+/g, "-")}`}>{p.epaCard.status}</span>}
+                value={
+                  subCanceled ? (
+                    <span className="co-status-pill co-status-pill--grey">Canceled</span>
+                  ) : (
+                    p.subscription.status
+                  )
+                }
               />
-              <Field label="Ordered" value={formatDate(p.epaCard.orderedOn)} />
-              <Field label="Recipient" value={p.epaCard.recipient} />
-              <Field label="Shipping Address" value={p.epaCard.shippingAddress} wide />
-              {p.epaCard.tracking && (
+              <Field label="Platform" value={p.subscription.platform ?? "—"} />
+              <Field label="Started" value={formatDate(p.subscription.startedOn)} />
+              <Field
+                label={subCanceled ? "Access Until" : "Renews"}
+                value={formatDate(p.subscription.renewsOn)}
+              />
+              <Field label="Offer Code" value={p.subscription.offerCode ?? "None"} />
+            </div>
+
+            {/* Purchases / bills */}
+            <PurchasesSection
+              purchases={p.purchases}
+              epaCancelable={canCancelEpa}
+              epaCanceled={epaCanceled}
+              onCancelEpa={() => setModal("cancel-epa")}
+            />
+
+            {/* EPA Card */}
+            <PageBreak
+              label="EPA Card Order"
+              trailing={
+                canCancelEpa && (
+                  <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-epa")}>
+                    Cancel Order
+                  </button>
+                )
+              }
+            />
+            {p.epaCard ? (
+              <div className="co-detail-grid prof-grid">
+                <Field label="Card" value={p.epaCard.certification} />
                 <Field
-                  label="Tracking"
-                  wide
+                  label="Status"
                   value={
-                    <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="prof-link">
-                      {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
-                    </a>
+                    <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
+                      {p.epaCard.status}
+                    </span>
                   }
                 />
-              )}
-            </div>
-          ) : (
-            <div className="prof-empty">No EPA card ordered.</div>
-          )}
-        </Card>
+                <Field label="Ordered" value={formatDate(p.epaCard.orderedOn)} />
+                <Field label="Recipient" value={p.epaCard.recipient} />
+                <Field label="Shipping Address" value={p.epaCard.shippingAddress} wide />
+                {p.epaCard.tracking && (
+                  <Field
+                    label="Tracking"
+                    wide
+                    value={
+                      <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
+                        {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
+                      </a>
+                    }
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="form-help">No EPA card ordered.</p>
+            )}
 
-        {/* NATE details */}
-        <Card
-          title="NATE Details"
-          action={
-            <button className="prof-btn prof-btn--sm" onClick={() => setModal("edit-nate")}>
-              <PencilIcon /> {p.nate ? "Edit" : "Add"}
-            </button>
-          }
-        >
-          {p.nate ? (
-            <div className="prof-fields">
-              <Field label="First Name" value={p.nate.firstName} />
-              <Field label="Last Name" value={p.nate.lastName} />
-              <Field label="Email" value={p.nate.email} />
-              <Field label="NATE Connect ID" value={p.nate.connectId} />
-            </div>
-          ) : (
-            <div className="prof-empty">No NATE registration on record.</div>
-          )}
-        </Card>
-
-        <div className="prof-foot">SkillCat Admin · Full Profile · {user.id}</div>
+            {/* NATE details */}
+            <PageBreak
+              label="NATE Details"
+              trailing={
+                <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("edit-nate")}>
+                  <PencilIcon /> {p.nate ? "Edit" : "Add"}
+                </button>
+              }
+            />
+            {p.nate ? (
+              <div className="co-detail-grid prof-grid">
+                <Field label="First Name" value={p.nate.firstName} />
+                <Field label="Last Name" value={p.nate.lastName} />
+                <Field label="Email" value={p.nate.email} />
+                <Field label="NATE Connect ID" value={p.nate.connectId} />
+              </div>
+            ) : (
+              <p className="form-help">No NATE registration on record.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {modal === "edit-user" && (
@@ -441,15 +547,28 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
         />
       )}
       {modal === "cancel-epa" && base.epaCard && (
-        <CancelEpaOrderModal
-          order={base.epaCard}
-          purchase={epaPurchase}
-          onClose={() => setModal(null)}
+        <PrmModal
+          title="Cancel EPA Card Order?"
+          cancelLabel="Keep Order"
+          confirmLabel="Cancel Order"
+          onCancel={() => setModal(null)}
           onConfirm={() => {
             setEpaCanceled(true);
             setModal(null);
           }}
-        />
+        >
+          <p className="prm-text">
+            This cancels the <strong>{base.epaCard.certification} Physical Card</strong> ordered on{" "}
+            <strong>{formatDate(base.epaCard.orderedOn)}</strong>. The card will not be produced or
+            shipped.
+          </p>
+          {epaPurchase && (
+            <p className="prm-text">
+              The <strong>{money(epaPurchase.amount)}</strong> charge ({epaPurchase.receiptId}) is
+              refunded to the original {epaPurchase.platform} payment method.
+            </p>
+          )}
+        </PrmModal>
       )}
       {modal === "cancel-sub" && (
         <CancelSubscriptionModal
@@ -470,76 +589,32 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onClose={() => setDownloadAllOpen(false)}
         />
       )}
+      {idOpen && (
+        <IdModal
+          /* The identity fields come off the (possibly edited) profile so the
+             popup never shows a name the page has already renamed. */
+          record={{ ...idRecord, name: user.name, email: user.email, phone: user.phone }}
+          onClose={() => setIdOpen(false)}
+          onReplace={replaceId}
+          onApprove={() => approveId()}
+        />
+      )}
     </div>
   );
 }
 
-function Card({
-  title,
-  count,
-  action,
-  children,
-}: {
-  title: string;
-  count?: number;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+/* Label-over-value cell — the cert preview panel's detail item, laid out on
+   the page-wide .prof-grid. */
+function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
   return (
-    <section className="prof-card">
-      <div className="prof-card-head">
-        <h2 className="prof-card-title">{title}</h2>
-        {count !== undefined && <span className="prof-card-count">{count}</span>}
-        {action && <span className="prof-card-action">{action}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/* ── Edit modals — session-local admin edits over the seeded record ── */
-
-function Modal({
-  title,
-  sub,
-  onClose,
-  footer,
-  children,
-}: {
-  title: string;
-  sub?: string;
-  onClose: () => void;
-  footer: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="pm-overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="pm-modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="pm-head">
-          <h2 className="pm-title">{title}</h2>
-          {sub && <div className="pm-sub">{sub}</div>}
-        </div>
-        <div className="pm-body">{children}</div>
-        <div className="pm-foot">{footer}</div>
-      </div>
+    <div className="co-dt-item" style={wide ? { gridColumn: "1 / -1" } : undefined}>
+      <div className="co-dt-label">{label}</div>
+      <div className="co-dt-value">{value}</div>
     </div>
   );
 }
 
-/* ── Download All Awards — grid of every Card/Certificate, all selected by default ── */
+/* ── Download All Awards — every Card/Certificate as a check row, all selected ── */
 function DownloadAllAwardsModal({
   userName,
   awards,
@@ -557,14 +632,6 @@ function DownloadAllAwardsModal({
     });
     return init;
   });
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   function toggle(key: string) {
     setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -596,87 +663,63 @@ function DownloadAllAwardsModal({
   }
 
   return (
-    <div
-      className="pm-overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <PrmModal
+      title="Download All Awards"
+      description={`Choose which Cards and Certificates to download for ${userName}.`}
+      wide
+      confirmLabel={
+        <>
+          <DownloadIcon /> Download{count > 0 ? ` (${count})` : ""}
+        </>
+      }
+      confirmDisabled={count === 0}
+      onCancel={onClose}
+      onConfirm={downloadSelected}
     >
-      <div className="pm-modal dlall-modal" role="dialog" aria-modal="true" aria-label="Download All Awards">
-        <div className="pm-head">
-          <h2 className="pm-title">Download All Awards</h2>
-          <div className="pm-sub">Choose which Cards and Certificates to download for {userName}.</div>
+      <div className="prm-field">
+        <div className="prm-checklist">
+          {awards.map((a) => (
+            <div key={a.id}>
+              <CheckRow
+                on={!!selected[`${a.id}-card`]}
+                label={`${a.certification} — Card`}
+                onToggle={() => toggle(`${a.id}-card`)}
+              />
+              {a.hasCertificate && (
+                <CheckRow
+                  on={!!selected[`${a.id}-cert`]}
+                  label={`${a.certification} — Certificate`}
+                  onToggle={() => toggle(`${a.id}-cert`)}
+                />
+              )}
+            </div>
+          ))}
         </div>
-        <div className="dlall-body">
-          <table className="dlall-table">
-            <thead>
-              <tr>
-                <th>Award</th>
-                <th>
-                  <div className="dlall-col-head">
-                    Card
-                    <button type="button" className="dlall-unselect" onClick={() => unselectAll("card")}>
-                      Unselect all
-                    </button>
-                  </div>
-                </th>
-                <th>
-                  <div className="dlall-col-head">
-                    Certificate
-                    <button type="button" className="dlall-unselect" onClick={() => unselectAll("cert")}>
-                      Unselect all
-                    </button>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {awards.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <div className="dlall-award-name">{a.certification}</div>
-                    <span className="prof-tier" style={{ color: TIER_HEX[a.meritTier], borderColor: TIER_HEX[a.meritTier] }}>
-                      {a.meritTier}
-                    </span>
-                  </td>
-                  <td className="dlall-check-cell">
-                    <input
-                      type="checkbox"
-                      checked={!!selected[`${a.id}-card`]}
-                      onChange={() => toggle(`${a.id}-card`)}
-                    />
-                  </td>
-                  <td className="dlall-check-cell">
-                    {a.hasCertificate ? (
-                      <input
-                        type="checkbox"
-                        checked={!!selected[`${a.id}-cert`]}
-                        onChange={() => toggle(`${a.id}-cert`)}
-                      />
-                    ) : (
-                      <span className="prof-muted">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="pm-foot dlall-foot">
-          <span className="dlall-count">{count} selected</span>
-          <div className="dlall-foot-actions">
-            <button className="prof-btn" onClick={onClose}>Cancel</button>
-            <button className="prof-btn prof-btn--primary" disabled={count === 0} onClick={downloadSelected}>
-              <DownloadIcon /> Download{count > 0 ? ` (${count})` : ""}
-            </button>
-          </div>
+        <div className="prof-unselect-row">
+          <button className="filter-clear-link" onClick={() => unselectAll("card")}>
+            Unselect all Cards
+          </button>
+          <button className="filter-clear-link" onClick={() => unselectAll("cert")}>
+            Unselect all Certificates
+          </button>
         </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
-function ModalField({
+function CheckRow({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button className="prm-check-row" onClick={onToggle} role="checkbox" aria-checked={on}>
+      <PrmCheck on={on} />
+      <span className="prm-check-label">{label}</span>
+    </button>
+  );
+}
+
+/* ── Edit modals — session-local admin edits over the seeded record ── */
+
+function PrmField({
   label,
   value,
   onChange,
@@ -692,16 +735,19 @@ function ModalField({
   autoFocus?: boolean;
 }) {
   return (
-    <div className="pm-field">
-      <label className="form-label">{label}</label>
+    <div className="prm-field">
+      <label className="prm-label">
+        {label}
+        <span className="prm-req">*</span>
+      </label>
       <input
-        className="form-input"
+        className={`form-input ${error ? "has-error" : ""}`}
         value={value}
         placeholder={placeholder}
         autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
       />
-      {error && <div className="pm-error">{error}</div>}
+      {error && <p className="form-error-text">{error}</p>}
     </div>
   );
 }
@@ -738,37 +784,36 @@ function EditUserModal({
   }
 
   return (
-    <Modal
+    <PrmModal
       title="Edit User"
-      sub="Changing the email or phone resets its verified status."
-      onClose={onClose}
-      footer={
-        <>
-          <button className="prof-btn" onClick={onClose}>Cancel</button>
-          <button className="prof-btn prof-btn--primary" onClick={submit}>Save Changes</button>
-        </>
-      }
+      description="Changing the email or phone resets its verified status."
+      wide
+      confirmLabel="Save Changes"
+      onCancel={onClose}
+      onConfirm={submit}
     >
-      <ModalField
-        label="Name"
-        value={form.name}
-        autoFocus
-        onChange={(v) => setForm((f) => ({ ...f, name: v }))}
-        error={submitted ? errors.name : undefined}
-      />
-      <ModalField
-        label="Email"
-        value={form.email}
-        onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-        error={submitted ? errors.email : undefined}
-      />
-      <ModalField
-        label="Phone"
-        value={form.phone}
-        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
-        error={submitted ? errors.phone : undefined}
-      />
-    </Modal>
+      <div className="prm-stack">
+        <PrmField
+          label="Name"
+          value={form.name}
+          autoFocus
+          onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+          error={submitted ? errors.name : undefined}
+        />
+        <PrmField
+          label="Email"
+          value={form.email}
+          onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+          error={submitted ? errors.email : undefined}
+        />
+        <PrmField
+          label="Phone"
+          value={form.phone}
+          onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+          error={submitted ? errors.phone : undefined}
+        />
+      </div>
+    </PrmModal>
   );
 }
 
@@ -814,90 +859,50 @@ function EditNateModal({
   }
 
   return (
-    <Modal
+    <PrmModal
       title={initial ? "Edit NATE Details" : "Add NATE Details"}
-      sub="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
-      onClose={onClose}
-      footer={
-        <>
-          <button className="prof-btn" onClick={onClose}>Cancel</button>
-          <button className="prof-btn prof-btn--primary" onClick={submit}>
-            {initial ? "Save Changes" : "Add Details"}
-          </button>
-        </>
-      }
+      description="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
+      wide
+      confirmLabel={initial ? "Save Changes" : "Add Details"}
+      onCancel={onClose}
+      onConfirm={submit}
     >
-      <div className="pm-row2">
-        <ModalField
-          label="First Name"
-          value={form.firstName}
-          autoFocus
-          onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
-          error={submitted ? errors.firstName : undefined}
+      <div className="prm-stack">
+        <div className="form-row-2">
+          <PrmField
+            label="First Name"
+            value={form.firstName}
+            autoFocus
+            onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
+            error={submitted ? errors.firstName : undefined}
+          />
+          <PrmField
+            label="Last Name"
+            value={form.lastName}
+            onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
+            error={submitted ? errors.lastName : undefined}
+          />
+        </div>
+        <PrmField
+          label="Email"
+          value={form.email}
+          onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+          error={submitted ? errors.email : undefined}
         />
-        <ModalField
-          label="Last Name"
-          value={form.lastName}
-          onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
-          error={submitted ? errors.lastName : undefined}
+        <PrmField
+          label="NATE Connect ID"
+          value={form.connectId}
+          placeholder="e.g. 483920"
+          onChange={(v) => setForm((f) => ({ ...f, connectId: v }))}
+          error={submitted ? errors.connectId : undefined}
         />
       </div>
-      <ModalField
-        label="Email"
-        value={form.email}
-        onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-        error={submitted ? errors.email : undefined}
-      />
-      <ModalField
-        label="NATE Connect ID"
-        value={form.connectId}
-        placeholder="e.g. 483920"
-        onChange={(v) => setForm((f) => ({ ...f, connectId: v }))}
-        error={submitted ? errors.connectId : undefined}
-      />
-    </Modal>
+    </PrmModal>
   );
 }
 
-function CancelEpaOrderModal({
-  order,
-  purchase,
-  onClose,
-  onConfirm,
-}: {
-  order: EpaCardOrder;
-  purchase?: Purchase;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Modal
-      title="Cancel EPA Card Order?"
-      onClose={onClose}
-      footer={
-        <>
-          <button className="prof-btn" onClick={onClose}>Keep Order</button>
-          <button className="prof-btn prof-btn--danger" onClick={onConfirm}>
-            Cancel Order
-          </button>
-        </>
-      }
-    >
-      <p className="pm-text">
-        This cancels the <strong>{order.certification} Physical Card</strong> ordered on{" "}
-        <strong>{formatDate(order.orderedOn)}</strong>. The card will not be produced or shipped.
-      </p>
-      {purchase && (
-        <p className="pm-text">
-          The <strong>{money(purchase.amount)}</strong> charge ({purchase.receiptId}) is refunded to
-          the original {purchase.platform} payment method.
-        </p>
-      )}
-    </Modal>
-  );
-}
-
-function CancelSubscriptionModal({
+/* Also used by Manage Users' row-menu Cancel Subscription action. */
+export function CancelSubscriptionModal({
   user,
   platform,
   renewsOn,
@@ -910,30 +915,26 @@ function CancelSubscriptionModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  useEscape(true, onClose);
   return (
-    <Modal
+    <PrmModal
       title="Cancel Subscription?"
-      onClose={onClose}
-      footer={
-        <>
-          <button className="prof-btn" onClick={onClose}>Keep Subscription</button>
-          <button className="prof-btn prof-btn--danger" onClick={onConfirm}>
-            Cancel Subscription
-          </button>
-        </>
-      }
+      cancelLabel="Keep Subscription"
+      confirmLabel="Cancel Subscription"
+      onCancel={onClose}
+      onConfirm={onConfirm}
     >
-      <p className="pm-text">
+      <p className="prm-text">
         This cancels <strong>{user.name}</strong>&rsquo;s {platform} subscription at the end of the
         current billing period. No further charges will be made.
       </p>
       {renewsOn && (
-        <p className="pm-text">
+        <p className="prm-text">
           They keep full access until <strong>{formatDate(renewsOn)}</strong>. No refund is issued
           for the current period.
         </p>
       )}
-    </Modal>
+    </PrmModal>
   );
 }
 
@@ -956,7 +957,16 @@ function isRefundable(pu: Purchase): boolean {
   );
 }
 
-function PurchasesCard({
+/* Definite table widths per tab — the shared .table is fixed-layout, and the
+   Item column absorbs whatever these totals leave over. */
+const TAB_WIDTH: Record<PurchaseKind, number> = {
+  Subscription: 940,
+  Certification: 1420,
+  "Quiz Attempt": 1230,
+  "EPA Card": 1090,
+};
+
+function PurchasesSection({
   purchases,
   epaCancelable,
   epaCanceled,
@@ -971,6 +981,9 @@ function PurchasesCard({
   // Track refunds applied in this session. Keyed by the purchase's index in the
   // original array — receiptIds aren't unique across purchases, so they can't key this.
   const [refunded, setRefunded] = useState<Record<number, boolean>>({});
+  const [refundTarget, setRefundTarget] = useState<(Purchase & { idx: number }) | null>(null);
+
+  useEscape(refundTarget !== null, () => setRefundTarget(null));
 
   // Tag each purchase with its stable index, then filter to the active tab.
   const rows = useMemo(
@@ -981,188 +994,178 @@ function PurchasesCard({
     [purchases, active, refunded],
   );
 
-  function refund(pu: Purchase & { idx: number }) {
-    if (!window.confirm(`Refund ${money(pu.amount)} for "${pu.item}"?\nReceipt ${pu.receiptId} · ${pu.platform}`)) return;
-    setRefunded((r) => ({ ...r, [pu.idx]: true }));
-  }
+  const withActions = active !== "Subscription";
+  const withType = active === "Certification";
+  const withStatus = active === "Certification" || active === "Quiz Attempt";
 
   return (
-    <section className="prof-card">
-      <div className="prof-card-head">
-        <h2 className="prof-card-title">Purchases & Bills</h2>
-        <span className="prof-card-count">{purchases.length}</span>
+    <>
+      <PageBreak label={`Purchases & Bills · ${purchases.length}`} />
+
+      <div className="tabbar prof-tabs" role="tablist">
+        {PURCHASE_TABS.map((t) => (
+          <button
+            key={t.kind}
+            role="tab"
+            aria-selected={active === t.kind}
+            className={`tab ${active === t.kind ? "is-active" : ""}`}
+            onClick={() => setActive(t.kind)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="prof-tabs" role="tablist">
-        {PURCHASE_TABS.map((t) => {
-          const n = purchases.filter((pu) => pu.kind === t.kind).length;
-          return (
-            <button
-              key={t.kind}
-              role="tab"
-              aria-selected={active === t.kind}
-              className={`prof-tab ${active === t.kind ? "prof-tab--active" : ""}`}
-              onClick={() => setActive(t.kind)}
-            >
-              {t.label}
-              <span className="prof-tab-count">{n}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="prof-empty">No {active.toLowerCase()} purchases on record.</div>
-      ) : (
-        <table className="prof-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Item</th>
-              {active === "Certification" && <th>Type</th>}
-              {(active === "Certification" || active === "Quiz Attempt") && <th>Status</th>}
-              <th>Platform</th>
-              <th>Receipt</th>
-              <th className="prof-table-num">Amount</th>
-              {(active === "Certification" || active === "Quiz Attempt" || active === "EPA Card") && (
-                <th className="prof-table-actions">Actions</th>
+      <table className="table sch-table" style={{ width: TAB_WIDTH[active] }}>
+        <colgroup>
+          <col style={{ width: 150 }} />
+          <col />
+          {withType && <col style={{ width: 170 }} />}
+          {withStatus && <col style={{ width: 230 }} />}
+          <col style={{ width: 130 }} />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 120 }} />
+          {withActions && <col style={{ width: 170 }} />}
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Item</th>
+            {withType && <th>Type</th>}
+            {withStatus && <th>Status</th>}
+            <th>Platform</th>
+            <th>Receipt</th>
+            <th>Amount</th>
+            {withActions && <th aria-label="Actions" />}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((pu) => (
+            <tr key={pu.idx}>
+              <td className="col-date">{formatDate(pu.date)}</td>
+              <td className="col-name">{pu.item}</td>
+              {withType && <td>{pu.consumable ? "Consumable" : "Non-Consumable"}</td>}
+              {active === "Certification" && <td className="col-status">{certStatusPill(pu)}</td>}
+              {active === "Quiz Attempt" && <td className="col-status">{attemptStatusPill(pu)}</td>}
+              <td>{pu.platform}</td>
+              <td>{pu.receiptId}</td>
+              <td>{money(pu.amount)}</td>
+              {(active === "Certification" || active === "Quiz Attempt") && (
+                <td>
+                  {pu.refunded ? (
+                    <span>Refunded</span>
+                  ) : (
+                    <button
+                      className="btn-save-draft mc-btn-sm"
+                      disabled={!isRefundable(pu)}
+                      title={
+                        isRefundable(pu)
+                          ? "Issue a refund"
+                          : `${pu.platform} purchases are not refundable here`
+                      }
+                      onClick={() => setRefundTarget(pu)}
+                    >
+                      Refund
+                    </button>
+                  )}
+                </td>
+              )}
+              {active === "EPA Card" && (
+                <td>
+                  {epaCanceled ? (
+                    <span>Canceled · Refunded</span>
+                  ) : (
+                    <button
+                      className="btn-save-draft mc-btn-sm"
+                      disabled={!epaCancelable}
+                      title={
+                        epaCancelable
+                          ? "Cancel this order and refund the charge"
+                          : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`
+                      }
+                      onClick={onCancelEpa}
+                    >
+                      Cancel Order
+                    </button>
+                  )}
+                </td>
               )}
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((pu) => (
-              <tr key={pu.idx}>
-                <td>{formatDate(pu.date)}</td>
-                <td className="prof-td-strong">{pu.item}</td>
-                {active === "Certification" && (
-                  <td>
-                    <span className={`prof-flag ${pu.consumable ? "prof-flag--warn" : "prof-flag--ok"}`}>
-                      {pu.consumable ? "Consumable" : "Non-Consumable"}
-                    </span>
-                  </td>
-                )}
-                {active === "Certification" && (
-                  <td>{certStatusCell(pu)}</td>
-                )}
-                {active === "Quiz Attempt" && (
-                  <td>{attemptStatusCell(pu)}</td>
-                )}
-                <td className="prof-muted">{pu.platform}</td>
-                <td className="prof-muted">{pu.receiptId}</td>
-                <td className="prof-table-num">{money(pu.amount)}</td>
-                {(active === "Certification" || active === "Quiz Attempt") && (
-                  <td className="prof-table-actions">
-                    {pu.refunded ? (
-                      <span className="prof-status prof-status--muted">Refunded</span>
-                    ) : (
-                      <button
-                        className="prof-btn prof-btn--sm"
-                        disabled={!isRefundable(pu)}
-                        title={
-                          isRefundable(pu)
-                            ? "Issue a refund"
-                            : `${pu.platform} purchases are not refundable here`
-                        }
-                        onClick={() => refund(pu)}
-                      >
-                        Refund
-                      </button>
-                    )}
-                  </td>
-                )}
-                {active === "EPA Card" && (
-                  <td className="prof-table-actions">
-                    {epaCanceled ? (
-                      <span className="prof-status prof-status--muted">Canceled · Refunded</span>
-                    ) : (
-                      <button
-                        className="prof-btn prof-btn--sm"
-                        disabled={!epaCancelable}
-                        title={
-                          epaCancelable
-                            ? "Cancel this order and refund the charge"
-                            : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`
-                        }
-                        onClick={onCancelEpa}
-                      >
-                        Cancel Order
-                      </button>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td
+                colSpan={5 + (withType ? 1 : 0) + (withStatus ? 1 : 0) + (withActions ? 1 : 0)}
+                className="sch-empty"
+              >
+                No {active.toLowerCase()} purchases on record.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {refundTarget && (
+        <PrmModal
+          title="Refund Purchase?"
+          cancelLabel="Keep Charge"
+          confirmLabel={`Refund ${money(refundTarget.amount)}`}
+          onCancel={() => setRefundTarget(null)}
+          onConfirm={() => {
+            setRefunded((r) => ({ ...r, [refundTarget.idx]: true }));
+            setRefundTarget(null);
+          }}
+        >
+          <p className="prm-text">
+            This refunds <strong>{money(refundTarget.amount)}</strong> for{" "}
+            <strong>{refundTarget.item}</strong>.
+          </p>
+          <p className="prm-text">
+            The {refundTarget.receiptId} charge is returned to the original {refundTarget.platform}{" "}
+            payment method.
+          </p>
+        </PrmModal>
       )}
-    </section>
+    </>
   );
 }
 
-function certStatusCell(pu: Purchase) {
-  if (!pu.consumable) return <span className="prof-status prof-status--ok">Lifetime access</span>;
+/* Status cells use the shared table pill set (Figma 109:1237) — the td's
+   .col-status class is what re-enables their chrome past the plain-text rule. */
+function certStatusPill(pu: Purchase) {
+  if (!pu.consumable)
+    return <span className="co-status-pill co-status-pill--green">Lifetime Access</span>;
   const when = pu.expiresOn ? formatDate(pu.expiresOn) : "";
   if (pu.certAccess === "Active")
-    return <span className="prof-status prof-status--ok">Active{when && ` · expires ${when}`}</span>;
+    return (
+      <span className="co-status-pill co-status-pill--green">
+        {when ? `Active · Expires ${when}` : "Active"}
+      </span>
+    );
   if (pu.certAccess === "Expired")
-    return <span className="prof-status prof-status--warn">Expired{when && ` · ${when}`}</span>;
+    return (
+      <span className="co-status-pill co-status-pill--yellow">
+        {when ? `Expired · ${when}` : "Expired"}
+      </span>
+    );
   if (pu.certAccess === "Revoked")
-    return <span className="prof-status prof-status--bad">Revoked{when && ` · ${when}`}</span>;
-  return <span className="prof-muted">—</span>;
+    return (
+      <span className="co-status-pill co-status-pill--red">
+        {when ? `Revoked · ${when}` : "Revoked"}
+      </span>
+    );
+  return <span>—</span>;
 }
 
-function attemptStatusCell(pu: Purchase) {
+function attemptStatusPill(pu: Purchase) {
   switch (pu.attemptState) {
     case "Available":
-      return <span className="prof-status prof-status--ok">Available</span>;
+      return <span className="co-status-pill co-status-pill--green">Available</span>;
     case "In Progress":
-      return <span className="prof-status prof-status--warn">In Progress</span>;
+      return <span className="co-status-pill co-status-pill--yellow">In Progress</span>;
     case "Completed":
-      return <span className="prof-status prof-status--muted">Used · Completed</span>;
+      return <span className="co-status-pill co-status-pill--grey">Used · Completed</span>;
     default:
-      return <span className="prof-muted">—</span>;
+      return <span>—</span>;
   }
 }
-
-function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className={`prof-field ${wide ? "prof-field--wide" : ""}`}>
-      <div className="prof-field-label">{label}</div>
-      <div className="prof-field-value">{value}</div>
-    </div>
-  );
-}
-
-/* ── icons ── */
-const PencilIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5l5 5L8 21l-5 1 1-5L14.5 4.5z" />
-  </svg>
-);
-const PowerIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3v9M6.4 7a8 8 0 1011.2 0" />
-  </svg>
-);
-const ExternalLinkIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 4h6v6M20 4l-9 9" />
-    <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
-  </svg>
-);
-const DownloadIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3v12M7 11l5 5 5-5M5 21h14" />
-  </svg>
-);
-const MedalIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2a5 5 0 00-2.2 9.5L8.3 21 12 18.8 15.7 21l-1.5-9.5A5 5 0 0012 2z" />
-  </svg>
-);
-const VerifiedBadge = () => (
-  <svg className="prof-verified" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-label="Verified">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);

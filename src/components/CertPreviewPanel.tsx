@@ -72,14 +72,14 @@ export function CertPreviewPanel({ cert, onClose }: { cert: Certification; onClo
         <span className="co-pill-muted">{cert.createdBy}</span>
       </div>
 
-      <div className="co-panel-tabs">
-        <button className={`co-panel-tab ${tab === "details" ? "is-active" : ""}`} onClick={() => setTab("details")}>
+      <div className="tabbar co-panel-tabs">
+        <button className={`tab ${tab === "details" ? "is-active" : ""}`} onClick={() => setTab("details")}>
           Details
         </button>
-        <button className={`co-panel-tab ${tab === "content" ? "is-active" : ""}`} onClick={() => setTab("content")}>
+        <button className={`tab ${tab === "content" ? "is-active" : ""}`} onClick={() => setTab("content")}>
           Content
         </button>
-        <button className={`co-panel-tab ${tab === "more" ? "is-active" : ""}`} onClick={() => setTab("more")}>
+        <button className={`tab ${tab === "more" ? "is-active" : ""}`} onClick={() => setTab("more")}>
           More
         </button>
       </div>

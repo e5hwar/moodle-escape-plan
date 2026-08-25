@@ -1,8 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { transferUsers, findUser, type MergeUser } from "../data/transferSubscription";
-import { AccountPicker, Avatar, detailRows } from "./MergeAccountsPage";
-import { AlertTriangleIcon, ArrowRightIcon, CheckBoldIcon, CreditCardIcon, InfoCircleIcon, SwapIcon, XCircleIcon } from "./icons";
+import { transferUsers, findUser } from "../data/transferSubscription";
+import {
+  AccountPicker,
+  CompareTable,
+  FlowDone,
+  FlowProcessing,
+  FlowStrip,
+  Notice,
+  accountCompareRows,
+  useEscape,
+  type AuditLog,
+} from "./MergeAccountsPage";
+import {
+  AlertTriangleIcon,
+  CheckBoldIcon,
+  CreditCardIcon,
+  InfoCircleIcon,
+  SwapIcon,
+  XCircleIcon,
+} from "./icons";
 import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
+import { PageBreak } from "./PageBreak";
+import { PrmModal } from "./PrmModal";
 
 /**
  * Transfer Subscription — a two-step wizard for moving an active subscription
@@ -13,24 +32,40 @@ import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
  * Step 2 is a read-only review, gated behind a final confirmation modal, after
  * which the transfer "runs" and an audit-log entry is shown.
  *
- * Reuses the Merge Accounts chrome (.mg-* over the shared design system) and its
- * account primitives + fixtures. Unlike a merge, neither account is deleted —
- * only the subscription moves. All data is demo data; nothing is persisted.
+ * Built from the same shared design-system parts as Merge Accounts, and reusing
+ * that flow's account primitives + fixtures (see MergeAccountsPage for the
+ * inventory). Unlike a merge, neither account is deleted — only the
+ * subscription moves. All data is demo data; nothing is persisted.
  */
 
+type Phase = "idle" | "processing" | "done";
+
 const STEPS = [
-  { n: 1, label: "Accounts" },
-  { n: 2, label: "Review" },
+  {
+    id: "accounts",
+    label: "Accounts",
+    title: "Choose the accounts",
+    desc: "Pick the Source account that currently holds the subscription and the Destination account that should receive it. Only the subscription moves — both accounts and their records stay intact.",
+  },
+  {
+    id: "review",
+    label: "Review",
+    title: "Review the transfer",
+    desc: "A preview of everything that will happen. Nothing has changed yet — confirm on the next step to run the transfer.",
+  },
 ];
 
-export function TransferSubscriptionPage() {
-  const [step, setStep] = useState(1);
+export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) {
+  const [step, setStep] = useState(0);
+  // Furthest step cleared — the rail is navigable up to here, so stepping Back
+  // does not re-lock the step already answered.
+  const [maxStep, setMaxStep] = useState(0);
   const [qSrc, setQSrc] = useState("");
   const [qDst, setQDst] = useState("");
   const [srcId, setSrcId] = useState<string | null>(null);
   const [dstId, setDstId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [phase, setPhase] = useState<"idle" | "processing" | "done">("idle");
+  const [phase, setPhase] = useState<Phase>("idle");
   const [transferredAt, setTransferredAt] = useState<Date | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -38,6 +73,7 @@ export function TransferSubscriptionPage() {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   // Each step starts at its own top, not wherever the previous one was scrolled.
   useEffect(() => { scroller.current?.scrollTo({ top: 0 }); }, [step]);
+  useEscape(showModal, () => setShowModal(false));
 
   const src = findUser(srcId);
   const dst = findUser(dstId);
@@ -79,30 +115,37 @@ export function TransferSubscriptionPage() {
   const srcOnlyB2B = resSrc.length === 0 && matchesOnlyB2B(qSrc, dstId);
   const dstOnlyB2B = resDst.length === 0 && matchesOnlyB2B(qDst, srcId);
   const b2bEmpty = (q: string) =>
-    `"${q}" is a B2B account — B2B accounts aren't eligible for subscription transfer`;
+    `"${q}" only matches B2B accounts — B2B accounts aren't eligible for subscription transfer`;
 
   function canContinue() {
-    if (step === 1) return both && !noSubToMove;
-    if (step === 2) return true;
-    return false;
+    if (step === 0) return both && !noSubToMove;
+    return true;
   }
 
   function back() {
-    if (step > 1 && step <= 2) setStep(step - 1);
+    if (step > 0) setStep(step - 1);
   }
   function advance() {
     if (!canContinue()) return;
-    if (step < 2) setStep(step + 1);
-    else setShowModal(true);
+    if (step < STEPS.length - 1) {
+      setStep(step + 1);
+      setMaxStep((m) => Math.max(m, step + 1));
+    } else setShowModal(true);
+  }
+  /* Changing either account invalidates the review downstream, so the rail's
+     reach collapses back to this step. */
+  function pickAccount(set: (id: string | null) => void, id: string | null) {
+    set(id);
+    setMaxStep(0);
   }
   function swapRoles() {
     setSrcId(dstId);
     setDstId(srcId);
+    setMaxStep(0);
   }
   function confirmTransfer() {
     if (timer.current) clearTimeout(timer.current);
     setShowModal(false);
-    setStep(3);
     setPhase("processing");
     setTransferredAt(new Date());
     timer.current = setTimeout(() => {
@@ -112,7 +155,8 @@ export function TransferSubscriptionPage() {
   }
   function restart() {
     if (timer.current) clearTimeout(timer.current);
-    setStep(1);
+    setStep(0);
+    setMaxStep(0);
     setQSrc("");
     setQDst("");
     setSrcId(null);
@@ -127,13 +171,13 @@ export function TransferSubscriptionPage() {
       ? [
           {
             icon: <CreditCardIcon />,
-            tone: "accent",
+            tone: "info" as const,
             title: `${src.sub.plan} moves to ${dst.name}`,
             detail: `${src.sub.detail} · ${src.sub.price}. Billing, renewal date and remaining term transfer unchanged to ${dst.email}.`,
           },
           {
             icon: <XCircleIcon />,
-            tone: "drop",
+            tone: "danger" as const,
             title: dstHasActive ? `${dst.name}'s current plan is cancelled` : "No plan replaced",
             detail: dstHasActive
               ? `${dst.sub.plan} (${dst.sub.price}) on the destination is cancelled & refunded pro-rata before the transfer applies.`
@@ -141,7 +185,7 @@ export function TransferSubscriptionPage() {
           },
           {
             icon: <CheckBoldIcon />,
-            tone: "ok",
+            tone: "ok" as const,
             title: `${src.name} drops to Free`,
             detail: `The source account keeps its learning records, add-ons and login — it simply no longer holds the subscription.`,
           },
@@ -159,8 +203,8 @@ export function TransferSubscriptionPage() {
         ]
       : [];
 
-  const audit =
-    step === 3 && transferredAt && src && dst
+  const audit: AuditLog | null =
+    phase === "done" && transferredAt && src && dst
       ? {
           id: "XFER-" + transferredAt.getTime().toString(36).toUpperCase(),
           rows: [
@@ -187,325 +231,288 @@ export function TransferSubscriptionPage() {
       : null;
 
   const cont = canContinue();
-  const showFooter = step <= 2;
-  const footerHint =
-    step === 2
-      ? "This opens a final confirmation"
-      : noSubToMove
-      ? "The source has no active subscription to move"
-      : both
-      ? "Accounts set — continue"
-      : "Select both accounts";
+  const isLast = step === STEPS.length - 1;
+  const footerHint = isLast
+    ? "This opens a final confirmation"
+    : noSubToMove
+    ? "The source has no active subscription to move"
+    : both
+    ? "Accounts set — continue"
+    : "Select both accounts";
+
+  if (phase === "processing") {
+    return (
+      <FlowProcessing
+        title="Transferring subscription…"
+        sub="Cancelling any replaced plan, moving billing and renewal to the destination account."
+      />
+    );
+  }
+  if (phase === "done" && src && dst && audit) {
+    return (
+      <FlowDone
+        title="Subscription transferred successfully"
+        lead={
+          <>
+            <strong>{src.sub.plan}</strong> moved from {src.email} to {dst.name}'s account. {src.name} is now on
+            the Free plan.
+          </>
+        }
+        audit={audit}
+        primaryLabel="Transfer another"
+        onPrimary={restart}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
-    <div className="main">
-      <div className="workspace">
-        <div className="tasks mg-page">
-          <header className="tasks-header">
-            <div>
-              <h1 className="tasks-title">Transfer Subscription</h1>
-              <div className="tasks-subtitle">
-                <span>Admin</span>
-                <span className="tasks-subtitle-dot" />
-                <span>Operations</span>
-                <span className="tasks-subtitle-dot" />
-                <span>Move a subscription from one account to another</span>
-              </div>
-            </div>
-          </header>
+    <div className="wizard mc-root">
+      <div className="wizard-body">
+        {/* ── left rail (Figma 625:1459) ── */}
+        <aside className="wizard-nav">
+          <div className="wizard-brand">
+            <span className="wizard-brand-eyebrow">Admin</span>
+            <span className="wizard-brand-name">Transfer Subscription</span>
+          </div>
 
-          {/* step rail */}
-          <div className="mg-steps">
-            {STEPS.map((x) => {
-              const status: WizardStepStatus = step === x.n ? "active" : step > x.n ? "done" : "upcoming";
+          <ol className="wizard-steps">
+            {STEPS.map((x, i) => {
+              // A step already cleared keeps its check when you step back to an
+              // earlier one — otherwise it reads identical to a locked step.
+              const status: WizardStepStatus =
+                i === step ? "active" : i < step || i <= maxStep ? "done" : "upcoming";
+              const locked = i > maxStep;
               return (
-                <div className={`wizard-step ${status}`} key={x.n}>
-                  <WizardStepRail status={status} num={x.n} />
+                <li
+                  key={x.id}
+                  className={`wizard-step ${status}${locked ? " is-locked" : ""}`}
+                  onClick={locked ? undefined : () => setStep(i)}
+                >
+                  <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{x.label}</div>
                   </div>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
 
-          <div className="mg-scroll" ref={scroller}>
-            {/* ───────────── STEP 1 ───────────── */}
-            {step === 1 && (
-              <div className="mg-pane">
-                <h2 className="form-section-title">Choose the accounts</h2>
-                <p className="form-section-desc">
-                  Pick the Source account that currently holds the subscription and the Destination account that should
-                  receive it. Only the subscription moves — both accounts and their records stay intact.
-                </p>
+          <div className="wizard-progress">Step {step + 1} of {STEPS.length}</div>
+        </aside>
 
-                <div className="mg-grid2">
-                  {/* SOURCE */}
-                  <div className="mg-acct mg-acct--drop">
-                    <div className="mg-acct-head">
-                      <span className="mg-role mg-role--drop">Source · loses plan</span>
-                      <span className="mg-acct-note">Subscription moves out</span>
-                    </div>
-                    <div className="mg-acct-body">
-                      <AccountPicker
-                        user={src}
-                        query={qSrc}
-                        results={resSrc}
-                        placeholder="Search the account to move from…"
-                        emptyText={srcOnlyB2B ? b2bEmpty(qSrc) : undefined}
-                        onQuery={setQSrc}
-                        onPick={(id) => { setSrcId(id); setQSrc(""); }}
-                        onClear={() => setSrcId(null)}
-                      />
-                      {src && <AccountSub user={src} tone="source" />}
-                    </div>
+        {/* ── content ── */}
+        <div className="wizard-content" ref={scroller}>
+          <h1 className="wizard-title">{STEPS[step].title}</h1>
+          <p className="wizard-desc">{STEPS[step].desc}</p>
+
+          {/* ───────────── STEP 1 — Accounts ───────────── */}
+          {step === 0 && (
+            <>
+              <div className="form-row-2">
+                <div className="form-group">
+                  <div className="form-label-row">
+                    <label className="form-label">Source account</label>
+                    <span className="co-status-pill co-status-pill--red">Loses plan</span>
                   </div>
-
-                  {/* DESTINATION */}
-                  <div className="mg-acct mg-acct--keep">
-                    <div className="mg-acct-head">
-                      <span className="mg-role mg-role--keep">Destination · gains plan</span>
-                      <span className="mg-acct-note">Subscription moves in</span>
-                    </div>
-                    <div className="mg-acct-body">
-                      <AccountPicker
-                        user={dst}
-                        query={qDst}
-                        results={resDst}
-                        placeholder="Search the account to move to…"
-                        emptyText={dstOnlyB2B ? b2bEmpty(qDst) : undefined}
-                        onQuery={setQDst}
-                        onPick={(id) => { setDstId(id); setQDst(""); }}
-                        onClear={() => setDstId(null)}
-                      />
-                      {dst && <AccountSub user={dst} tone="destination" />}
-                    </div>
-                  </div>
+                  <AccountPicker
+                    user={src}
+                    query={qSrc}
+                    results={resSrc}
+                    placeholder="Search the account to move from…"
+                    emptyText={srcOnlyB2B ? b2bEmpty(qSrc) : undefined}
+                    onQuery={setQSrc}
+                    onPick={(id) => { pickAccount(setSrcId, id); setQSrc(""); }}
+                    onClear={() => pickAccount(setSrcId, null)}
+                  />
+                  <p className="form-help">
+                    Holds the subscription today. Its records, add-ons and login are untouched.
+                  </p>
                 </div>
 
-                <div className="mg-swap-row">
-                  <button className="btn-save-draft" onClick={swapRoles}>
-                    <SwapIcon /> Swap direction
-                  </button>
-                </div>
-
-                {noSubToMove && src && (
-                  <div className="mg-note mg-note--warn">
-                    <span className="mg-note-icon"><AlertTriangleIcon /></span>
-                    <div className="mg-note-text">
-                      <strong>{src.name}</strong> has no active subscription, so there is nothing to transfer. Pick a
-                      source on a paid plan, or swap the direction.
-                    </div>
-                    <button className="btn-save-draft" onClick={swapRoles}>Swap direction</button>
+                <div className="form-group">
+                  <div className="form-label-row">
+                    <label className="form-label">Destination account</label>
+                    <span className="co-status-pill co-status-pill--accent">Gains plan</span>
                   </div>
-                )}
-                {both && !noSubToMove && dstHasActive && dst && (
-                  <div className="mg-note mg-note--info">
-                    <span className="mg-note-icon"><InfoCircleIcon /></span>
-                    <div className="mg-note-text">
-                      <strong>{dst.name}</strong> already has an active plan (<strong>{dst.sub.plan}</strong>). It will
-                      be cancelled and refunded pro-rata when the transferred subscription is applied.
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ───────────── STEP 2 ───────────── */}
-            {step === 2 && src && dst && (
-              <div className="mg-pane">
-                <h2 className="form-section-title">Review the transfer</h2>
-                <p className="form-section-desc">
-                  A preview of everything that will happen. Nothing has changed yet — confirm on the next step to run the
-                  transfer.
-                </p>
-
-                <div className="mg-flow">
-                  <div className="mg-flow-acct is-out">
-                    <Avatar user={src} small />
-                    <div>
-                      <div className="mg-flow-email">{src.email}</div>
-                      <div className="mg-flow-sub mg-flow-sub--drop">Source · loses {src.sub.plan}</div>
-                    </div>
-                  </div>
-                  <span className="mg-flow-arrow"><ArrowRightIcon /></span>
-                  <div className="mg-flow-acct">
-                    <Avatar user={dst} small />
-                    <div>
-                      <div className="mg-flow-email">{dst.email}</div>
-                      <div className="mg-flow-sub mg-flow-sub--keep">Destination · gains {src.sub.plan}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mg-section-label">Subscription being moved</div>
-                <div className="mg-grid2 mg-plans">
-                  <div className="mg-plan mg-plan--drop">
-                    <div className="mg-plan-tag mg-plan-tag--drop">Source — before</div>
-                    <div className="mg-plan-name">{src.sub.plan}</div>
-                    <div className="mg-plan-detail">{src.sub.detail} · {src.sub.price}</div>
-                  </div>
-                  <div className="mg-plan mg-plan--keep">
-                    <div className="mg-plan-tag mg-plan-tag--keep">Destination — after</div>
-                    <div className="mg-plan-name">{src.sub.plan}</div>
-                    <div className="mg-plan-detail">{src.sub.detail} · {src.sub.price}</div>
-                  </div>
-                </div>
-
-                <div className="mg-review">
-                  {reviewRows.map((r, i) => (
-                    <div key={i} className="mg-review-row">
-                      <span className={`mg-review-icon mg-review-icon--${r.tone}`}>{r.icon}</span>
-                      <div>
-                        <div className="mg-review-title">{r.title}</div>
-                        <div className="mg-review-detail">{r.detail}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <AccountPicker
+                    user={dst}
+                    query={qDst}
+                    results={resDst}
+                    placeholder="Search the account to move to…"
+                    emptyText={dstOnlyB2B ? b2bEmpty(qDst) : undefined}
+                    onQuery={setQDst}
+                    onPick={(id) => { pickAccount(setDstId, id); setQDst(""); }}
+                    onClear={() => pickAccount(setDstId, null)}
+                  />
+                  <p className="form-help">
+                    Receives the plan with its billing, renewal date and remaining term unchanged.
+                  </p>
                 </div>
               </div>
-            )}
 
-            {/* ───────────── DONE ───────────── */}
-            {step === 3 && phase === "processing" && (
-              <div className="mg-processing">
-                <span className="mg-spinner" />
-                <div className="mg-processing-title">Transferring subscription…</div>
-                <div className="mg-processing-sub">Cancelling any replaced plan, moving billing and renewal to the destination account.</div>
-              </div>
-            )}
-            {step === 3 && phase === "done" && src && dst && audit && (
-              <div className="mg-pane mg-done">
-                <div className="mg-done-check"><CheckBoldIcon /></div>
-                <h2 className="mg-done-title">Subscription transferred successfully</h2>
-                <p className="mg-done-lead">
-                  <strong>{src.sub.plan}</strong> moved from {src.email} to {dst.name}'s account. {src.name} is now on
-                  the Free plan.
-                </p>
-                <div className="mg-audit">
-                  <div className="mg-audit-head">
-                    <span>Audit log entry</span>
-                    <span className="mg-audit-id">{audit.id}</span>
-                  </div>
-                  {audit.rows.map((r, i) => (
-                    <div key={i} className="mg-audit-row">
-                      <span className="mg-audit-k">{r.k}</span>
-                      <span className={`mg-audit-v ${r.mono ? "is-mono" : ""}`}>{r.v}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mg-done-actions">
-                  <button className="btn-publish" onClick={restart}>Transfer another</button>
-                  <button className="btn-save-draft">View full audit log</button>
-                </div>
-              </div>
-            )}
-          </div>
+              {noSubToMove && src && (
+                <Notice
+                  tone="danger"
+                  icon={<AlertTriangleIcon />}
+                  pill="Action required"
+                  pillTone="red"
+                  title={
+                    <>
+                      <strong>{src.name}</strong> has no active subscription
+                    </>
+                  }
+                  sub="There is nothing to transfer. Pick a source on a paid plan, or swap the direction."
+                  action={
+                    <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
+                      Swap direction
+                    </button>
+                  }
+                />
+              )}
 
-          {/* footer */}
-          {showFooter && (
-            <footer className="wizard-footer mg-footer">
-              <div className="wizard-footer-left">
-                {step > 1 && (
-                  <button className="btn-save-draft" onClick={back}>Back</button>
-                )}
-              </div>
-              <div className="wizard-actions">
-                <span className="mg-footer-hint">{footerHint}</span>
-                <button
-                  className={`btn-publish ${step === 2 ? "mg-btn-danger" : ""}`}
-                  disabled={!cont}
-                  onClick={advance}
-                >
-                  {step === 2 ? "Transfer subscription" : "Continue"}
-                </button>
-              </div>
-            </footer>
+              {both && !noSubToMove && dstHasActive && dst && (
+                <Notice
+                  tone="info"
+                  icon={<InfoCircleIcon />}
+                  pill="Plan replaced"
+                  pillTone="accent"
+                  title={
+                    <>
+                      <strong>{dst.name}</strong> already has an active plan ({dst.sub.plan})
+                    </>
+                  }
+                  sub="It will be cancelled and refunded pro-rata when the transferred subscription is applied."
+                />
+              )}
+
+              {(src || dst) && (
+                <>
+                  <PageBreak
+                    label="Account details"
+                    trailing={
+                      <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
+                        <SwapIcon /> Swap direction
+                      </button>
+                    }
+                  />
+                  <CompareTable
+                    leftLabel={src ? src.name : "Source"}
+                    leftPill={src ? "Source · loses plan" : "Not selected"}
+                    leftTone={src ? "red" : "grey"}
+                    rightLabel={dst ? dst.name : "Destination"}
+                    rightPill={dst ? "Destination · gains plan" : "Not selected"}
+                    rightTone={dst ? "accent" : "grey"}
+                    rows={accountCompareRows(src, dst)}
+                  />
+
+                  <PageBreak label="Current subscription" />
+                  <CompareTable
+                    leftLabel={src ? src.name : "Source"}
+                    leftPill={
+                      src ? (src.sub.active ? "Eligible to transfer out" : "No active plan") : "Not selected"
+                    }
+                    leftTone={src ? (src.sub.active ? "green" : "red") : "grey"}
+                    rightLabel={dst ? dst.name : "Destination"}
+                    rightPill={
+                      dst ? (dst.sub.active ? "Existing plan cancelled" : "Ready to receive") : "Not selected"
+                    }
+                    rightTone={dst ? (dst.sub.active ? "yellow" : "green") : "grey"}
+                    rows={[
+                      { k: "Plan", a: src ? src.sub.plan : "—", b: dst ? dst.sub.plan : "—" },
+                      { k: "Status", a: src ? src.sub.detail : "—", b: dst ? dst.sub.detail : "—" },
+                      { k: "Price", a: src ? src.sub.price : "—", b: dst ? dst.sub.price : "—" },
+                    ]}
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {/* ───────────── STEP 2 — Review ───────────── */}
+          {step === 1 && src && dst && (
+            <>
+              <FlowStrip
+                from={src}
+                fromNote={`Source · loses ${src.sub.plan}`}
+                to={dst}
+                toNote={`Destination · gains ${src.sub.plan}`}
+              />
+
+              <PageBreak label="Subscription being moved" />
+              <CompareTable
+                leftLabel={src.name}
+                leftPill="Source — before"
+                leftTone="red"
+                rightLabel={dst.name}
+                rightPill="Destination — after"
+                rightTone="accent"
+                rows={[
+                  { k: "Plan", a: src.sub.plan, b: src.sub.plan },
+                  { k: "Status", a: src.sub.detail, b: src.sub.detail },
+                  { k: "Price", a: src.sub.price, b: src.sub.price },
+                  {
+                    k: "After transfer",
+                    a: "Free — no active plan",
+                    b: dstHasActive ? `Replaces ${dst.sub.plan}` : "First active plan",
+                  },
+                ]}
+              />
+
+              <PageBreak label="What will happen" />
+              {reviewRows.map((r, i) => (
+                <Notice key={i} tone={r.tone} icon={r.icon} title={r.title} sub={r.detail} />
+              ))}
+            </>
           )}
         </div>
       </div>
 
-      {/* confirm modal */}
-      {showModal && src && dst && (
-        <div className="pm-overlay" onClick={() => setShowModal(false)}>
-          <div
-            className="pm-modal mg-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Confirm transfer"
-            onClick={(e) => e.stopPropagation()}
+      {/* ── footer (Figma 73:515) ── */}
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left">
+          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <span className="wizard-saved">{footerHint}</span>
+        </div>
+        <div className="wizard-actions">
+          {step > 0 && (
+            <button className="btn-save-draft" onClick={back}>Back</button>
+          )}
+          <button
+            className={`btn-publish${isLast ? " btn-publish--danger" : ""}`}
+            disabled={!cont}
+            onClick={advance}
           >
-            <div className="pm-head">
-              <div className="mg-modal-icon"><AlertTriangleIcon /></div>
-              <h3 className="pm-title">Transfer this subscription?</h3>
-              <p className="pm-sub">
-                The <strong>{src.sub.plan}</strong> subscription will move from <strong>{src.email}</strong> to{" "}
-                <strong>{dst.email}</strong>.
-                {dstHasActive ? " The destination's current plan is cancelled and refunded pro-rata." : ""}
-              </p>
-            </div>
-            <div className="pm-body">
-              <div className="mg-modal-points">
-                {modalPoints.map((m, i) => (
-                  <div key={i} className="mg-modal-point">
-                    <ArrowRightIcon />
-                    <span>{m}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="pm-foot">
-              <button className="btn-save-draft" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-publish mg-btn-danger" onClick={confirmTransfer}>Yes, transfer subscription</button>
-            </div>
-          </div>
+            {isLast ? "Transfer subscription" : "Continue"}
+          </button>
         </div>
-      )}
-    </div>
-  );
-}
+      </footer>
 
-function AccountSub({ user, tone }: { user: MergeUser; tone: "source" | "destination" }) {
-  return (
-    <div className="mg-details">
-      <div className="mg-sublabel">User details</div>
-      <div className="mg-kv">
-        {detailRows(user).map((d) => (
-          <div key={d.k} className="mg-kv-row">
-            <span className="mg-kv-k">{d.k}</span>
-            <span className={`mg-kv-v ${d.company ? "is-company" : ""}`}>{d.v}</span>
+      {/* ── confirm (Figma 483:588 + the destructive CTA 495:2247) ── */}
+      {showModal && src && dst && (
+        <PrmModal
+          title="Transfer this subscription?"
+          description={
+            <>
+              The <strong>{src.sub.plan}</strong> subscription will move from <strong>{src.email}</strong> to{" "}
+              <strong>{dst.email}</strong>.
+              {dstHasActive ? " The destination's current plan is cancelled and refunded pro-rata." : ""}
+            </>
+          }
+          confirmLabel="Yes, transfer subscription"
+          danger
+          onCancel={() => setShowModal(false)}
+          onConfirm={confirmTransfer}
+        >
+          <div className="co-cancel-summary">
+            {modalPoints.map((m, i) => (
+              <div className="co-cancel-summary-row" key={i}>
+                <span>{m}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="mg-sublabel">Current subscription</div>
-      <div className="mg-kv">
-        <div className="mg-kv-row">
-          <span className="mg-kv-k">Plan</span>
-          <span className="mg-kv-v">{user.sub.plan}</span>
-        </div>
-        <div className="mg-kv-row">
-          <span className="mg-kv-k">Status</span>
-          <span className="mg-kv-v">{user.sub.detail}</span>
-        </div>
-        <div className="mg-kv-row">
-          <span className="mg-kv-k">Price</span>
-          <span className="mg-kv-v">{user.sub.price}</span>
-        </div>
-      </div>
-      {/* The tick/cross reflects the outcome for this account, not its role. */}
-      <div className={`mg-acct-foot ${(tone === "source") === user.sub.active ? "is-ok" : "is-bad"}`}>
-        {tone === "source" ? (
-          user.sub.active ? (
-            <><CheckBoldIcon /> Active plan — eligible to transfer out</>
-          ) : (
-            <><XCircleIcon /> No active plan to transfer</>
-          )
-        ) : user.sub.active ? (
-          <><XCircleIcon /> Existing plan will be cancelled &amp; refunded</>
-        ) : (
-          <><CheckBoldIcon /> No plan — ready to receive the subscription</>
-        )}
-      </div>
+        </PrmModal>
+      )}
     </div>
   );
 }

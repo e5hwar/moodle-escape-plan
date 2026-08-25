@@ -484,7 +484,7 @@ export function CertEditColumnsButton({
 }) {
   return (
     <Dropdown
-      width={240}
+      width={300}
       align="right"
       trigger={({ toggle }) => (
         <button

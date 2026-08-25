@@ -65,9 +65,10 @@ type Props = {
   onOpen: (id: string) => void;
   onViewResponses: (id: string) => void;
   onCreate: (form: FeedbackForm) => void;
+  onBackToCerts?: () => void;
 };
 
-export function FeedbackFormsPage({ forms, onOpen, onViewResponses, onCreate }: Props) {
+export function FeedbackFormsPage({ forms, onOpen, onViewResponses, onCreate, onBackToCerts }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [creating, setCreating] = useState(false);
@@ -130,7 +131,18 @@ export function FeedbackFormsPage({ forms, onOpen, onViewResponses, onCreate }: 
       <div className="workspace">
         <div className="tasks fb-page">
           <header className="tasks-header">
-            <div>
+            {/* This page is reached from the Certifications header button (it
+                no longer has its own sidebar entry), so the crumb is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Content</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+                  Certifications
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Feedback</span>
+              </nav>
               <h1 className="tasks-title">Feedback Forms</h1>
               <div className="tasks-subtitle">
                 <span>{counts.active} active</span>

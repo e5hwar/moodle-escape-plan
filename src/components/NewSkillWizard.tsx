@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CheckBoldIcon, SmallXIcon, SearchIcon, UploadIcon } from "./icons";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { SmallXIcon, ChevronDownIcon, DocumentIcon, UploadTrayIcon } from "./icons";
+import { MultiSelect } from "./NewCompanyWizard";
+import { SelectTasksModal } from "./SelectTasksModal";
 import { RteToolbar } from "./RteToolbar";
 import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";
@@ -173,7 +175,7 @@ export function NewSkillWizard(props: Props) {
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => (i === 0 || nameValid ? setStep(i) : undefined)}
+                  onClick={() => setStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -211,7 +213,7 @@ export function NewSkillWizard(props: Props) {
             <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
           )}
           {step === 0 ? (
-            <button className="btn-publish" disabled={!nameValid} onClick={() => setStep(1)}>
+            <button className="btn-publish" onClick={() => setStep(1)}>
               Next: {STEPS[1].label}
             </button>
           ) : (
@@ -242,7 +244,7 @@ function DetailsStep({
     <>
       <div className="form-group">
         <label className="form-label">
-          {noun} name <span className="req">*</span>
+          Name <span className="req">*</span>
         </label>
         <LangField
           en={data.nameEn}
@@ -252,7 +254,6 @@ function DetailsStep({
           placeholderEn={`${noun} name`}
           placeholderEs={isMastery ? "Nombre de la habilidad de maestría" : "Nombre de la habilidad"}
         />
-        <p className="form-help">Shown to learners on their earned-{noun.toLowerCase()} badge. Required in English; Spanish is translated for Spanish-locale learners.</p>
       </div>
 
       <div className="form-group">
@@ -263,52 +264,88 @@ function DetailsStep({
           onChangeEn={(v) => update({ descEn: v })}
           onChangeEs={(v) => update({ descEs: v })}
         />
-        <p className="form-help">Optional. Explains what real-world competency this {noun.toLowerCase()} represents.</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Image <span className="req">*</span></label>
+        <label className="form-label">{noun} Icon <span className="req">*</span></label>
         <ImagePicker />
         <p className="form-help">
-          The badge artwork shown to learners on their earned-{noun.toLowerCase()} badge.
+          This is how the {noun} appears to users when previewing Certifications and on their Portfolio
         </p>
       </div>
     </>
   );
 }
 
+/* Single-language file upload — Figma 678:2012 "File Upload - Single Language":
+   the same .drop-big zone as the dual-language columns, minus the bordered
+   shell and language tag, at full width. One image only, so a picked file
+   swaps the zone for its row rather than stacking an "add more" strip. */
 function ImagePicker() {
-  const [dragging, setDragging] = useState(false);
+  const [file, setFile] = useState<{ name: string; size: number; ext: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  return (
-    <div className="sk-image-picker">
-      <div className="sk-image-pick-side">
-        <button
-          type="button"
-          className={`sk-image-dropzone ${dragging ? "is-dragging" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-          }}
-        >
-          <UploadIcon />
-          <span className="sk-image-dropzone-title">
-            Drag &amp; drop an image, or click to browse
-          </span>
-          <span className="sk-image-dropzone-hint">PNG, JPG or SVG · up to 2&nbsp;MB</span>
-          <input ref={inputRef} type="file" accept="image/*" hidden />
-        </button>
+  function pick(list: FileList | null) {
+    const f = list?.[0];
+    if (!f) return;
+    setFile({
+      name: f.name,
+      size: f.size,
+      ext: (f.name.split(".").pop() ?? "").toUpperCase(),
+    });
+  }
+
+  if (file) {
+    return (
+      <div className="file-list">
+        <div className="file-row">
+          <span className="file-icon"><DocumentIcon /></span>
+          <div className="file-meta">
+            <div className="file-name">{file.name}</div>
+            <div className="file-sub">
+              {(file.size / 1024 / 1024).toFixed(1)} MB · {file.ext}
+            </div>
+          </div>
+          <button className="file-remove" onClick={() => setFile(null)} aria-label="Remove file">
+            <SmallXIcon />
+          </button>
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="drop-big"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          pick(e.dataTransfer.files);
+        }}
+      >
+        <span className="drop-big-icon"><UploadTrayIcon /></span>
+        <div className="drop-big-title">Drag and drop, or click to upload</div>
+        <div className="drop-big-hint">
+          <div>Accepted File Types: JPEG, PNG, GIF</div>
+          <div>Maximum File Size: 20MB</div>
+        </div>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif"
+        hidden
+        onChange={(e) => pick(e.target.files)}
+      />
+    </>
   );
 }
+
+/* Matches MultiSelect's own cap so the two fields wrap identically. */
+const PILL_LIMIT = 2;
 
 /* ─────────────── Step 2 — Skill awarding criteria ─────────────── */
 
@@ -316,19 +353,13 @@ function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>)
   const selected = data.taskIds;
   const multi = selected.length > 1;
 
-  function toggle(id: string) {
-    update({
-      taskIds: selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id],
-    });
-  }
-
   return (
     <>
       <div className="form-group">
         <label className="form-label">
           Awarding Tasks <span className="req">*</span>
         </label>
-        <TaskPicker selected={selected} onToggle={toggle} />
+        <TaskPicker selected={selected} onChange={(ids) => update({ taskIds: ids })} />
         <p className="form-help">
           Awarding is based on binary Task completion only — a Task counts once it is marked complete per its completion criteria. The same Task can award multiple Skills.
         </p>
@@ -366,101 +397,76 @@ function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>)
   );
 }
 
+/* The same design-system dropdown field as everywhere else (Figma 101:272), but
+   clicking it opens the Select Tasks table modal (682:2321) instead of a menu —
+   picking an awarding Task wants the Task's type, Certifications and edit date
+   in view, which a one-line menu row can't carry. The trigger markup mirrors
+   `MultiSelect`'s so the two fields read as one control. */
 function TaskPicker({
   selected,
-  onToggle,
+  onChange,
 }: {
   selected: string[];
-  onToggle: (id: string) => void;
+  onChange: (ids: string[]) => void;
 }) {
-  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const q = query.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (!q) return [];
-    const pool = tasks.filter((t) => !t.draft);
-    return pool.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
-    );
-  }, [q]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  const selectedTasks = selected
-    .map((id) => tasks.find((t) => t.id === id))
+  const pool = useMemo(() => tasks.filter((t) => !t.draft), []);
+  const chosen = selected
+    .map((id) => pool.find((t) => t.id === id))
     .filter((t): t is Task => !!t);
 
-  const showList = open && !!q;
-
   return (
-    <div className="sk-picker-wrap">
-      {selectedTasks.length > 0 && (
-        <div className="sk-picker-cards">
-          {selectedTasks.map((t) => (
-            <div key={t.id} className="sk-card">
-              <div className="sk-card-main">
-                <span className="sk-card-name">{t.name}</span>
-                <span className="sk-card-meta">{t.type} · {t.id}</span>
-              </div>
-              <button className="sk-card-x" onClick={() => onToggle(t.id)} aria-label={`Remove ${t.name}`}>
-                <SmallXIcon />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className={`sk-picker ${showList ? "is-open" : ""}`} ref={pickerRef}>
-        <div className="sk-picker-search">
-          <span className="search-icon"><SearchIcon /></span>
-          <input
-            className="sk-picker-search-input"
-            placeholder="Search Tasks by name or ID…"
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-          />
-        </div>
-        {showList && (
-          <div className="sk-picker-list">
-            {filtered.length === 0 ? (
-              <div className="sk-picker-empty">No Tasks match “{query}”.</div>
-            ) : (
-              filtered.slice(0, 60).map((t) => {
-                const on = selected.includes(t.id);
-                return (
+    <>
+      <div className="multiselect">
+        <div className="multiselect-field" onClick={() => setOpen(true)}>
+          {chosen.length === 0 ? (
+            <span className="multiselect-placeholder">Select Tasks</span>
+          ) : (
+            <div className="multiselect-tags">
+              {chosen.slice(0, PILL_LIMIT).map((t) => (
+                <span key={t.id} className="multiselect-tag">
+                  {t.name}
                   <button
-                    key={t.id}
-                    className={`sk-picker-row ${on ? "is-selected" : ""}`}
-                    onClick={() => onToggle(t.id)}
+                    className="multiselect-tag-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChange(selected.filter((x) => x !== t.id));
+                    }}
+                    aria-label={`Remove ${t.name}`}
                   >
-                    <span className={`checkbox ${on ? "checked" : ""}`}>
-                      {on && <CheckBoldIcon />}
-                    </span>
-                    <span className="sk-picker-row-name">{t.name}</span>
-                    <span className="sk-picker-row-type">· {t.type}</span>
-                    <span className="sk-picker-row-id">{t.id}</span>
+                    <SmallXIcon />
                   </button>
-                );
-              })
-            )}
-          </div>
-        )}
+                </span>
+              ))}
+              {chosen.length > PILL_LIMIT && (
+                <span className="multiselect-tag multiselect-tag-more">
+                  +{chosen.length - PILL_LIMIT}
+                </span>
+              )}
+            </div>
+          )}
+          <span className="field-chevron"><ChevronDownIcon /></span>
+        </div>
       </div>
-    </div>
+
+      {open && (
+        <SelectTasksModal
+          value={selected}
+          onCancel={() => setOpen(false)}
+          onConfirm={(ids) => {
+            onChange(ids);
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 }
 
 /* ─────────────── Step 2 — Mastery linked Skills ─────────────── */
 
+/* Linked Skills uses the plain dropdown field (Figma 101:272 + 591:1322) — a
+   Skill has no table's worth of metadata to weigh up, so the menu is enough. */
 function LinkedSkillsStep({
   data,
   update,
@@ -470,33 +476,12 @@ function LinkedSkillsStep({
   update: (p: Partial<Data>) => void;
   allSkills: Skill[];
 }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const selected = data.skillIds;
 
-  function toggle(id: string) {
-    update({
-      skillIds: selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id],
-    });
-  }
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return allSkills;
-    return allSkills.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q),
-    );
-  }, [query, allSkills]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const byName = useMemo(
+    () => new Map(allSkills.map((s) => [s.name, s.id])),
+    [allSkills],
+  );
 
   const chosen = selected
     .map((id) => allSkills.find((s) => s.id === id))
@@ -509,66 +494,19 @@ function LinkedSkillsStep({
         <label className="form-label">
           Linked Skills <span className="req">*</span>
         </label>
-
-        {chosen.length > 0 && (
-          <div className="sk-picker-cards">
-            {chosen.map((s) => (
-              <div key={s.id} className="sk-card">
-                <SkillBadge emoji={s.image} size={30} />
-                <div className="sk-card-main">
-                  <span className="sk-card-name">
-                    {s.name}
-                    {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
-                  </span>
-                  <span className="sk-card-meta">{s.id}</span>
-                </div>
-                <button className="sk-card-x" onClick={() => toggle(s.id)} aria-label={`Remove ${s.name}`}>
-                  <SmallXIcon />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className={`sk-picker ${open ? "is-open" : ""}`} ref={pickerRef}>
-          <div className="sk-picker-search">
-            <span className="search-icon"><SearchIcon /></span>
-            <input
-              className="sk-picker-search-input"
-              placeholder="Search Skills by name or ID…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-              onFocus={() => setOpen(true)}
-              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-            />
-          </div>
-          {open && (
-            <div className="sk-picker-list">
-              {filtered.length === 0 ? (
-                <div className="sk-picker-empty">No Skills match “{query}”.</div>
-              ) : (
-                filtered.map((s) => {
-                  const on = selected.includes(s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      className={`sk-picker-row ${on ? "is-selected" : ""}`}
-                      onClick={() => toggle(s.id)}
-                    >
-                      <span className={`checkbox ${on ? "checked" : ""}`}>
-                        {on && <CheckBoldIcon />}
-                      </span>
-                      <SkillBadge emoji={s.image} size={22} incomplete={s.status === "Archived"} />
-                      <span className="sk-picker-row-name">{s.name}</span>
-                      {s.status === "Archived" && <span className="sk-chip-tag">Archived</span>}
-                      <span className="sk-picker-row-id">{s.id}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
+        <MultiSelect
+          options={allSkills.map((s) => s.name)}
+          value={chosen.map((s) => s.name)}
+          onChange={(names) =>
+            update({
+              skillIds: names
+                .map((n) => byName.get(n))
+                .filter((id): id is string => !!id),
+            })
+          }
+          placeholder="Select Skills"
+          searchPlaceholder="Search Skills…"
+        />
         <p className="form-help">
           The Mastery Skill is awarded automatically the moment a user holds <strong>all</strong> linked Skills.
         </p>

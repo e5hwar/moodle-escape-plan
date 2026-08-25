@@ -53,6 +53,21 @@ export const PlusThinIcon = () => (
   </svg>
 );
 
+/* Stepper glyphs (Figma 618:1266 / 618:1270): a 16px box holding a 9.33px
+   stroke. The node draws its minus shorter than its plus bar; they are matched
+   here so the two ends of one control balance. */
+export const StepperMinusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round">
+    <path d="M3.333 8h9.334" />
+  </svg>
+);
+
+export const StepperPlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round">
+    <path d="M8 3.333v9.334M3.333 8h9.334" />
+  </svg>
+);
+
 export const EditColumnsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 14.5813 14.6667" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -70,9 +85,11 @@ export const EditColumnsIcon = () => (
   </svg>
 );
 
+/* Figma "Radial Button" check (8:13497 → tdesign:check): thin square-cap
+   stroke, 11.2px glyph. */
 export const CheckIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12l5 5L20 7" />
+  <svg width="11.2" height="11.2" viewBox="0 0 11.2 11.2" fill="none" stroke="currentColor" strokeWidth="1.12" strokeLinecap="square">
+    <path d="M9.39 3.9L4.91 8.38L2.5 5.97" />
   </svg>
 );
 
@@ -590,6 +607,113 @@ export const MenuPlaceholderIcon = () => (
   </svg>
 );
 
+/* ── Companies 3-dot menu glyphs — Figma 670:1323 "3-Dot Menu - B2B
+   Companies". Transcribed from the exported assets (16px box, 1.33333
+   square-capped strokes, drawn at each asset's own inset offsets). ── */
+
+/* user-vip — Change Account Holder. The crown-tag path is square-cornered
+   but butt-capped in the asset, so it carries no linecap of its own. */
+export const MenuUserVipIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333">
+    <path strokeLinecap="square" d="M6.667 10H5.333C3.492 10 2 11.493 2 13.333V14H6.7M10.667 5C10.667 6.657 9.324 8 7.667 8C6.01 8 4.667 6.657 4.667 5C4.667 3.343 6.01 2 7.667 2C9.324 2 10.667 3.343 10.667 5Z" />
+    <path d="M14 9.667H10L9 11.667L12 15L15 11.667L14 9.667Z" />
+  </svg>
+);
+
+/* Envelope — Manage Billing Emails. */
+export const MenuMailIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M15.333 3.333V5.629L8.667 9L2 5.629V3.333H15.333V14H2V3.333" />
+  </svg>
+);
+
+/* usergroup — View All Employees. */
+export const MenuUsersIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M10.667 5.333C10.667 6.806 9.473 8 8 8C6.527 8 5.333 6.806 5.333 5.333C5.333 3.861 6.527 2.667 8 2.667C9.473 2.667 10.667 3.861 10.667 5.333Z" />
+    <path d="M3.333 12.667C3.333 11.194 4.527 10 6 10H10C11.473 10 12.667 11.194 12.667 12.667V14H3.333V12.667Z" />
+    <path d="M4.667 2.667C3.194 2.667 2 3.861 2 5.333C2 6.806 3.194 8 4.667 8C2.458 8 0.667 9.791 0.667 12V14M15.333 14V12C15.333 9.791 13.543 8 11.333 8C12.806 8 14 6.806 14 5.333C14 3.861 12.806 2.667 11.333 2.667" />
+  </svg>
+);
+
+/* Receipt with a torn bottom edge — View Invoices. */
+export const MenuInvoiceIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M4 2.667H13.333M4 2.667V14L5.667 12.667L7.167 14L8.667 12.667L10.167 14L11.667 12.667L13.333 14V2.667M4 2.667H2.667M13.333 2.667H14.667M6.667 6H10.667M7.333 8.667H10" />
+  </svg>
+);
+
+/* Arrow into a frame — View Company Dashboard, and Login As on the Users
+   menu (673:1437 ships the identical asset). */
+export const MenuEnterIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M7 5L10 8L7 11M9.167 8H2.667M10 2.333H13.333V13.667H10" />
+  </svg>
+);
+
+/* Price tag with an ✕ — Cancel Subscription. */
+export const MenuCancelSubIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M4 4H13.333M4 4L4.333 15.333H13L13.333 4M4 4H2.667M13.333 4H14.667M10.553 7.781L8.667 9.667M8.667 9.667L6.781 11.552M8.667 9.667L6.781 7.781M8.667 9.667L10.553 11.552M6.333 2H11V4H6.333V2Z" />
+  </svg>
+);
+
+/* ── Users 3-dot menu glyphs — Figma 673:1437 "3-Dot Menu - B2C User". Same
+   transcription rules as the Companies set above. Edit User Details, Login As,
+   View All Company Employees and Remove User reuse RowEditIcon / MenuEnterIcon
+   / MenuUsersIcon / RowDeleteIcon — those assets are byte-identical. ── */
+
+/* Badge with a person — View Profile. */
+export const MenuProfileIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.472 1.668C6.602 1.37 6.815 1.117 7.087 0.939C7.358 0.761 7.676 0.667 8 0.667C8.325 0.667 8.642 0.761 8.913 0.939C9.185 1.117 9.398 1.37 9.528 1.668H13.667V14.334H2.333V1.668H6.472Z" />
+    <path d="M11.333 12.001C11.333 11.471 11.123 10.962 10.748 10.587C10.373 10.212 9.864 10.001 9.333 10.001H6.667C6.136 10.001 5.628 10.212 5.253 10.587C4.877 10.962 4.667 11.471 4.667 12.001M9.667 6.334C9.667 6.776 9.491 7.2 9.179 7.513C8.866 7.825 8.442 8.001 8 8.001C7.558 8.001 7.134 7.825 6.822 7.513C6.509 7.2 6.333 6.776 6.333 6.334C6.333 5.892 6.509 5.468 6.822 5.156C7.134 4.843 7.558 4.668 8 4.668C8.442 4.668 8.866 4.843 9.179 5.156C9.491 5.468 9.667 5.892 9.667 6.334Z" />
+  </svg>
+);
+
+/* Same badge with a check — Manage Training Progress. */
+export const MenuProgressIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.472 1.668C6.602 1.37 6.815 1.117 7.087 0.939C7.358 0.761 7.676 0.667 8 0.667C8.325 0.667 8.642 0.761 8.913 0.939C9.185 1.117 9.398 1.37 9.528 1.668H13.667V14.334H2.333V1.668H6.472Z" />
+    <path d="M5.172 8.277L7.057 10.163L10.829 6.392" />
+  </svg>
+);
+
+/* Bank building — View User's Company. */
+export const MenuBankIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M14 14.667H2M4 8V12M8 8V12M12 8V12M2 4.667V5.333H14V4.667L8 1.333L2 4.667Z" />
+  </svg>
+);
+
+/* Card struck through — Cancel Subscription on the Users menu. The Companies
+   menu keeps its own price-tag glyph (MenuCancelSubIcon); 673:1941 ships this
+   card instead. The outline's gaps are the asset's — the lines break where the
+   slash crosses them. */
+export const MenuCardOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M10.667 6.667H14.667M14.667 6.667V2.667H6.667M14.667 6.667V10.667M4 10H6M1.333 6.667H6M14.667 14.667L1.333 1.333M2.667 2.667H1.333V13.333H13.333L2.667 2.667Z" />
+  </svg>
+);
+
+/* ── Manage Users PAGE-level 3-dot menu — Figma 677:1956. The sidebar draws
+   its own off-family merge/transfer glyphs (24-unit, round caps); these are
+   the Icon Library's 16px square-cap versions. ── */
+
+/* Git-merge nodes — Merge Accounts. */
+export const MenuMergeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M12.333 10.333V9.667C12.333 9.136 12.123 8.628 11.748 8.253C11.372 7.877 10.864 7.667 10.333 7.667H5.667C5.136 7.667 4.628 7.456 4.252 7.081C3.877 6.706 3.667 6.197 3.667 5.667M12.333 10.333C11.891 10.333 11.467 10.509 11.155 10.822C10.842 11.134 10.667 11.558 10.667 12C10.667 12.442 10.842 12.866 11.155 13.179C11.467 13.491 11.891 13.667 12.333 13.667C12.775 13.667 13.199 13.491 13.512 13.179C13.824 12.866 14 12.442 14 12C14 11.558 13.824 11.134 13.512 10.822C13.199 10.509 12.775 10.333 12.333 10.333ZM3.667 5.667C4.109 5.667 4.533 5.491 4.845 5.179C5.158 4.866 5.333 4.442 5.333 4C5.333 3.558 5.158 3.134 4.845 2.821C4.533 2.509 4.109 2.333 3.667 2.333C3.225 2.333 2.801 2.509 2.488 2.821C2.176 3.134 2 3.558 2 4C2 4.442 2.176 4.866 2.488 5.179C2.801 5.491 3.225 5.667 3.667 5.667ZM3.667 6V10M5.333 12C5.333 12.442 5.158 12.866 4.845 13.179C4.533 13.491 4.109 13.667 3.667 13.667C3.225 13.667 2.801 13.491 2.488 13.179C2.176 12.866 2 12.442 2 12C2 11.558 2.176 11.134 2.488 10.822C2.801 10.509 3.225 10.333 3.667 10.333C4.109 10.333 4.533 10.509 4.845 10.822C5.158 11.134 5.333 11.558 5.333 12Z" />
+  </svg>
+);
+
+/* Opposed horizontal arrows — Transfer Subscription. */
+export const MenuTransferIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M14 9.667H2.667L6 13M2 6.333H13.333L10 3" />
+  </svg>
+);
+
 /* Octagon with an ✕ — the archive/deactivate glyph (Figma node 7:1812). */
 export const MenuArchiveIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
@@ -614,6 +738,15 @@ export const RowKebabIcon = () => (
 export const ChevronDownSquareIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
     <path d="M11.667 6.333L8 10L4.333 6.333" />
+  </svg>
+);
+
+/* Arrow right (673:1432, "Icon Library") — the between-dates glyph on the Date
+   Range pill's custom-range value. 14px box, square caps, 1.1667 stroke; path
+   is the Figma export verbatim. */
+export const RangeArrowIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M7.58333 10.2083L10.7917 7L7.58333 3.79167M10.0625 7H2.47917" />
   </svg>
 );
 

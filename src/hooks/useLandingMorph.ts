@@ -104,6 +104,9 @@ export function useLandingMorph(startAtTable = false) {
     const scroller = () => el!.querySelector<HTMLElement>(".table-xscroll, .tasks-scroll");
 
     function onWheel(e: WheelEvent) {
+      // Wheel inside an open overlay (a filter/date-range dropdown, the search
+      // suggestion panel) scrolls that surface — it never drives the morph.
+      if ((e.target as Element | null)?.closest?.(".dropdown, .usearch-panel")) return;
       const dy = e.deltaY;
       if (dy === 0) return;
       const p = current.current;
@@ -146,6 +149,8 @@ export function useLandingMorph(startAtTable = false) {
       ) {
         return;
       }
+      // Same overlay guard as the wheel — arrows inside an open panel are its.
+      if (t?.closest?.(".dropdown, .usearch-panel")) return;
       // Same "committed to the table" notion as the wheel lock.
       if (!(target.current === 1 && current.current >= 0.85)) return;
       const sc = scroller();

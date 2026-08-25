@@ -51,7 +51,7 @@ import {
   inactiveLinks,
   type FeedbackForm,
 } from "./data/feedbackForms";
-import { companies as seedCompanies, type Company } from "./data/companies";
+import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
 
 // Map a certification onto a content-graph focus node. If the certification
 // already exists in the mock graph (matched by name) we use that node — so its
@@ -105,6 +105,7 @@ type View =
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
+  | { name: "edit-company"; company: Company }
   | { name: "manage-subscription"; company: Company }
   | { name: "users"; companyFilter?: string }
   | { name: "offer-codes" }
@@ -227,7 +228,9 @@ export default function App() {
     );
   }
   if (profileId) {
-    const u = allUsers.find((x) => x.id === profileId);
+    // Company employees live outside the Manage Users roster but their profile
+    // links resolve too — see findCompanyUserProfile.
+    const u = allUsers.find((x) => x.id === profileId) ?? findCompanyUserProfile(profileId);
     return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
   }
   if (portfolioId) {
@@ -347,6 +350,16 @@ function AdminApp() {
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
+  // Tasks published from the wizard this session. They sit on top of the seed
+  // list; TasksPage re-seeds from this every time it mounts.
+  const [createdTasks, setCreatedTasks] = useState<Task[]>([]);
+
+  function addTask(task: Omit<Task, "id">) {
+    setCreatedTasks((prev) => [
+      { id: `T-${9000 + prev.length + 1}`, ...task },
+      ...prev,
+    ]);
+  }
 
   // Each question's `forms` usage list is derived from live form state, so
   // linking/unlinking/duplicating keeps the bank's "used in" view honest.
@@ -405,10 +418,12 @@ function AdminApp() {
       ? "certs"
       : view.name === "skills"
       ? "skills"
-      : view.name === "awards"
-      ? "awards"
+      : // Industries, Awards, and Feedback are reached from the Certifications
+        // header (their sidebar entries are gone), so Certifications stays lit.
+      view.name === "awards"
+      ? "certs"
       : view.name === "new-question" && view.forFormId
-      ? "feedback"
+      ? "certs"
       : view.name === "question-bank" ||
         view.name === "new-question" ||
         view.name === "edit-question"
@@ -418,17 +433,17 @@ function AdminApp() {
       : view.name === "proctoring" || view.name === "manage-ids"
       ? "proctoring-review"
       : view.name === "scholarship"
-      ? "scholarship"
+      ? "manage-users"
       : view.name === "feedback" || view.name === "feedback-detail" || view.name === "feedback-responses"
-      ? "feedback"
+      ? "certs"
       : view.name === "industries"
-      ? "industries"
-      : view.name === "companies" || view.name === "new-company" || view.name === "manage-subscription"
+      ? "certs"
+      : view.name === "companies" || view.name === "new-company" || view.name === "edit-company" || view.name === "manage-subscription"
       ? "manage-companies"
       : view.name === "users"
       ? "manage-users"
       : view.name === "offer-codes"
-      ? "offer-codes"
+      ? "manage-users"
       : view.name === "review-hands-on"
       ? "review-hands-on"
       : view.name === "name-change-requests"
@@ -513,6 +528,9 @@ function AdminApp() {
               onOpenCompanyDashboard={openLoginAsLibrary}
               onViewAttempts={(task) => setView({ name: "attempts", quizName: task.name })}
               onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
+              onOpenQuestionBank={() => navigate("question-bank")}
+              onOpenSkills={() => navigate("skills")}
+              extraTasks={createdTasks}
             />
           </div>
         </div>
@@ -538,6 +556,9 @@ function AdminApp() {
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
           onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
+          onOpenIndustries={() => navigate("industries")}
+          onOpenAwards={() => navigate("awards")}
+          onOpenFeedback={() => navigate("feedback")}
         />
       ) : view.name === "cert-purchasers" ? (
         <CertPurchasersPage cert={view.cert} onBack={() => setView({ name: "certs" })} />
@@ -550,7 +571,7 @@ function AdminApp() {
       ) : view.name === "skills" ? (
         <SkillsPage />
       ) : view.name === "awards" ? (
-        <AwardsPage />
+        <AwardsPage onBackToCerts={() => navigate("certs")} />
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
           key={bank.length}
@@ -584,14 +605,15 @@ function AdminApp() {
       ) : view.name === "manage-ids" ? (
         <ManageIdsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "scholarship" ? (
-        <ScholarshipsPage />
+        <ScholarshipsPage onBack={() => navigate("manage-users")} />
       ) : view.name === "industries" ? (
-        <IndustriesPage />
+        <IndustriesPage onBackToCerts={() => navigate("certs")} />
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}
           initialQuery={view.query}
           onNewCompany={() => setView({ name: "new-company" })}
+          onEditCompany={(company) => setView({ name: "edit-company", company })}
           onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
           onUpdateCompany={updateCompany}
           onViewEmployees={(company) => setView({ name: "users", companyFilter: company.name })}
@@ -600,6 +622,14 @@ function AdminApp() {
         <NewCompanyWizard
           onClose={() => setView({ name: "companies" })}
           onCreate={addCompany}
+          onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
+        />
+      ) : view.name === "edit-company" ? (
+        <NewCompanyWizard
+          editCompany={view.company}
+          detailsOnly
+          onClose={() => setView({ name: "companies" })}
+          onSave={updateCompany}
           onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
       ) : view.name === "manage-subscription" ? (
@@ -613,10 +643,14 @@ function AdminApp() {
         <UsersPage
           onViewCompany={(name) => setView({ name: "companies", query: name })}
           onManageCompletions={(userId) => setView({ name: "content-overrides", userId })}
+          onOpenOfferCodes={() => navigate("offer-codes")}
+          onOpenScholarships={() => navigate("scholarship")}
+          onOpenMergeAccounts={() => navigate("merge-accounts")}
+          onOpenTransferSubscription={() => navigate("transfer-subscription")}
           initialCompanyFilter={view.companyFilter}
         />
       ) : view.name === "offer-codes" ? (
-        <OfferCodesPage />
+        <OfferCodesPage onBack={() => navigate("manage-users")} />
       ) : view.name === "review-hands-on" ? (
         <ReviewHandsOnPage />
       ) : view.name === "name-change-requests" ? (
@@ -626,9 +660,9 @@ function AdminApp() {
       ) : view.name === "product-config" ? (
         <ProductConfigPage initialTab={view.tab} />
       ) : view.name === "merge-accounts" ? (
-        <MergeAccountsPage />
+        <MergeAccountsPage onClose={() => navigate("manage-users")} />
       ) : view.name === "transfer-subscription" ? (
-        <TransferSubscriptionPage />
+        <TransferSubscriptionPage onClose={() => navigate("manage-users")} />
       ) : view.name === "permissions" ? (
         <PermissionsPage />
       ) : view.name === "feedback" ? (
@@ -637,6 +671,7 @@ function AdminApp() {
           onOpen={(id) => setView({ name: "feedback-detail", formId: id })}
           onViewResponses={(id) => setView({ name: "feedback-responses", formId: id })}
           onCreate={(form) => upsertForm(form)}
+          onBackToCerts={() => navigate("certs")}
         />
       ) : view.name === "feedback-responses" && activeForm ? (
         <FeedbackFormResponsesPage
@@ -663,6 +698,10 @@ function AdminApp() {
         <NewTaskWizard
           taskType={view.taskType}
           onClose={() => setView({ name: "tasks" })}
+          onCreate={(task) => {
+            addTask(task);
+            setView({ name: "tasks" });
+          }}
         />
       ) : view.name === "edit-task" ? (
         <NewTaskWizard

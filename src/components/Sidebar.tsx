@@ -117,17 +117,16 @@ type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; ba
 // labels, not collapsible groups.
 type NavSection = { label?: string; items: LinkItem[] };
 
+// Question Bank and Skills are deliberately absent — Figma 633:1865 moved them
+// into the Tasks page header (same move Offer Codes / Scholarships made).
+// Industries, Awards, and Feedback made the same move onto the Certifications
+// page header; the crumb on each page is the way back.
 const sections: NavSection[] = [
   {
     label: "Content",
     items: [
       { key: "tasks", label: "Tasks", icon: "book", navKey: "tasks" },
-      { key: "question-bank", label: "Question Bank", icon: "layers", navKey: "question-bank" },
       { key: "certifications", label: "Certifications", icon: "award", navKey: "certs" },
-      { key: "industries", label: "Industries", icon: "companies", navKey: "industries" },
-      { key: "skills", label: "Skills", icon: "scholarship", navKey: "skills" },
-      { key: "awards", label: "Awards", icon: "award", navKey: "awards" },
-      { key: "feedback", label: "Feedback", icon: "message", navKey: "feedback" },
     ],
   },
   {
@@ -145,8 +144,6 @@ const sections: NavSection[] = [
     label: "Users",
     items: [
       { key: "manage-users", label: "Manage Users", icon: "users", navKey: "manage-users" },
-      { key: "scholarship", label: "Scholarship", icon: "scholarship", navKey: "scholarship" },
-      { key: "offer-codes", label: "Offer Codes", icon: "trialExtension", navKey: "offer-codes" },
       { key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
     ],
   },
@@ -167,8 +164,6 @@ const ACTIVE_MAP: Record<string, string> = {
   "content-links": "content-links",
   "question-bank": "question-bank",
   spotlight: "spotlight",
-  scholarship: "scholarship",
-  "offer-codes": "offer-codes",
   feedback: "feedback",
   industries: "industries",
 };

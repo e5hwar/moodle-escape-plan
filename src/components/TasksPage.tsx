@@ -167,15 +167,22 @@ export function TasksPage({
   onOpenCompanyDashboard,
   onViewAttempts,
   onViewPayers,
+  onOpenQuestionBank,
+  onOpenSkills,
+  extraTasks,
 }: {
   onNewTask: (t: TaskTypeKey) => void;
   onEditTask: (task: Task) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewAttempts: (task: Task) => void;
   onViewPayers: (task: Task) => void;
+  onOpenQuestionBank?: () => void;
+  onOpenSkills?: () => void;
+  /** Tasks published from the wizard this session, newest first. */
+  extraTasks?: Task[];
 }) {
   // Local working copy so visibility toggles and deletes persist in-session.
-  const [taskList, setTaskList] = useState<Task[]>(allTasks);
+  const [taskList, setTaskList] = useState<Task[]>(() => [...(extraTasks ?? []), ...allTasks]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -421,7 +428,16 @@ export function TasksPage({
         <div>
           <h1 className="tasks-title">Tasks</h1>
         </div>
+        {/* Figma 633:1865 — Skills and Question Bank used to live in the
+            sidebar's Content group; they are now reached from here, left of the
+            Create Task CTA. */}
         <div className="tasks-header-actions">
+          <button className="cta-quiet" onClick={() => onOpenSkills?.()}>
+            Skills
+          </button>
+          <button className="cta-quiet" onClick={() => onOpenQuestionBank?.()}>
+            Question Bank
+          </button>
           <Dropdown
             align="right"
             width={220}

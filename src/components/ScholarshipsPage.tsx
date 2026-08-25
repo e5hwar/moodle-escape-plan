@@ -49,7 +49,7 @@ function compare(a: Scholarship, b: Scholarship, key: SortKey): number {
   }
 }
 
-export function ScholarshipsPage() {
+export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   const [list, setList] = useState<Scholarship[]>(seedScholarships);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ScholarshipStatus>("all");
@@ -147,7 +147,18 @@ export function ScholarshipsPage() {
       <div className="workspace">
         <div className="tasks sch-page">
           <header className="tasks-header">
-            <div>
+            {/* This page is reached from Manage Users' header button (it no
+                longer has its own sidebar entry), so the crumb is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Users</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
+                  Manage Users
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Scholarships</span>
+              </nav>
               <h1 className="tasks-title">Scholarship</h1>
               <div className="tasks-subtitle">
                 <span>{counts.active} active</span>

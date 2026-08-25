@@ -108,7 +108,7 @@ export function NewAwardWizard(props: Props) {
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => (i === 0 || certValid ? setStep(i) : undefined)}
+                  onClick={() => setStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -155,7 +155,7 @@ export function NewAwardWizard(props: Props) {
             <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
           )}
           {step === 0 ? (
-            <button className="btn-publish" disabled={!certValid} onClick={() => setStep(1)}>
+            <button className="btn-publish" onClick={() => setStep(1)}>
               Next: {STEPS[1].label}
             </button>
           ) : (
@@ -277,8 +277,6 @@ function LinkStep({
         </p>
       </div>
 
-      <div className="form-divider" />
-
       <div className="form-group">
         <label className="form-label">Merit Tier <span className="req">*</span></label>
         <div className="aw-tier-grid">
@@ -301,8 +299,6 @@ function LinkStep({
           Platinum at the top, Bronze at the bottom.
         </p>
       </div>
-
-      <div className="form-divider" />
 
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label className="form-label">Status</label>
@@ -349,8 +345,6 @@ function AppearanceStep({
         onSelect={(id) => update({ cardTemplateId: id })}
         onCreateTemplate={onCreateTemplate}
       />
-
-      <div className="form-divider" />
 
       <AppearanceSlot
         title="Certificate"

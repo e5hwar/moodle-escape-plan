@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
-import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import {
   CREATED_BY_IN_HOUSE,
   CREATED_BY_B2B,
@@ -429,7 +429,7 @@ export function EditColumnsButton<C extends Record<string, boolean>>({
 }) {
   return (
     <Dropdown
-      width={240}
+      width={300}
       align="right"
       trigger={({ toggle }) => (
         <button
@@ -748,7 +748,7 @@ function SubmenuRow({
       onFocus={handle}
     >
       <span className="dropdown-submenu-label">{label}</span>
-      <span className="dropdown-submenu-chevron">›</span>
+      <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>
     </button>
   );
 }

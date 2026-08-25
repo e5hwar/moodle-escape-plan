@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { EditColumnsIcon } from "./icons";
+import { ChevronRightIcon, EditColumnsIcon } from "./icons";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
+import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
 import {
   TIERS,
   SUBSCRIPTION_STATUSES,
@@ -30,9 +31,11 @@ export type CompanyColumnState = Record<CompanyColumn, boolean>;
 type Props = {
   filters: CompanyFilterState;
   setFilters: (next: CompanyFilterState) => void;
+  dateRange: DateRangeState;
+  setDateRange: (next: DateRangeState) => void;
 };
 
-export function CompanyFilters({ filters, setFilters }: Props) {
+export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }: Props) {
   const hasFilters =
     filters.tiers.length +
       filters.industries.length +
@@ -91,6 +94,11 @@ export function CompanyFilters({ filters, setFilters }: Props) {
           Clear Filters
         </button>
       )}
+      {/* Date Range holds the row's right edge (Figma 673:1409). It always has
+          a value and cannot be removed — Clear Filters leaves it alone. */}
+      <span className="filters-end">
+        <DateRangePill value={dateRange} onChange={setDateRange} />
+      </span>
     </div>
   );
 }
@@ -421,7 +429,7 @@ function SubmenuRow({
       onFocus={handle}
     >
       <span className="dropdown-submenu-label">{label}</span>
-      <span className="dropdown-submenu-chevron">›</span>
+      <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>
     </button>
   );
 }
@@ -437,7 +445,7 @@ export function CompanyEditColumnsButton({
 }) {
   return (
     <Dropdown
-      width={240}
+      width={300}
       align="right"
       trigger={({ toggle }) => (
         <button

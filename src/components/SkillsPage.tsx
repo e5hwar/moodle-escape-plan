@@ -252,12 +252,12 @@ export function SkillsPage() {
             </div>
           </header>
 
-          <div className="sk-tabbar">
-            <button className={`sk-tab ${tab === "skills" ? "is-active" : ""}`} onClick={() => setTab("skills")}>
-              Skills <span className="sk-tab-count">{skills.length}</span>
+          <div className="tabbar sk-tabbar">
+            <button className={`tab ${tab === "skills" ? "is-active" : ""}`} onClick={() => setTab("skills")}>
+              Skills
             </button>
-            <button className={`sk-tab ${tab === "mastery" ? "is-active" : ""}`} onClick={() => setTab("mastery")}>
-              Mastery Skills <span className="sk-tab-count">{mastery.length}</span>
+            <button className={`tab ${tab === "mastery" ? "is-active" : ""}`} onClick={() => setTab("mastery")}>
+              Mastery Skills
             </button>
           </div>
 

@@ -996,13 +996,13 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
             </div>
 
             {/* Tabs */}
-            <nav className="pc-tabs">
+            <nav className="tabbar pc-tabs">
               {(["general", "display", "b2c", "b2b", "legal"] as Tab[]).map((t) => {
                 const label = TAB_LABELS[t];
                 return (
                   <button
                     key={t}
-                    className={`pc-tab${tab === t ? " is-active" : ""}`}
+                    className={`tab${tab === t ? " is-active" : ""}`}
                     onClick={() => setTab(t)}
                   >
                     {label}

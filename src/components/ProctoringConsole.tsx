@@ -5,6 +5,7 @@ import type { Submission, WebcamFrame } from "../data/proctoring";
 import type { SortKey, SortDir } from "./ProctoringPage";
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, EnterKeyIcon, SortIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
+import { PrmModal } from "./PrmModal";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { FullscreenViewer } from "./FullscreenViewer";
 import { attemptTaskIdForExam } from "../data/certLookup";
@@ -577,18 +578,6 @@ export function ProctoringConsole({
   );
 }
 
-/** Modal close glyph — the design's tdesign:close (20px, 2.42 square-capped). */
-const ModalCloseIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <path
-      d="M15 5L10 10M10 10L5 15M10 10L15 15M10 10L5 5"
-      stroke="currentColor"
-      strokeWidth="2.42424"
-      strokeLinecap="square"
-    />
-  </svg>
-);
-
 /** tdesign:check, 11.2px, drawn at the design's offset inside the 16px box. */
 const PrmCheckIcon = () => (
   <svg width="11.2" height="11.2" viewBox="0 0 11.2 11.2" fill="none" aria-hidden="true">
@@ -602,8 +591,9 @@ const PrmCheckIcon = () => (
 );
 
 /** The modal's 16px checkbox (Figma 8:13495 / 8:13497) — used by the reason
- *  rows and by the overlay on each supporting image. */
-function PrmCheck({ on }: { on: boolean }) {
+ *  rows, the overlay on each supporting image, and the Full Profile's
+ *  Download All Awards checklist. */
+export function PrmCheck({ on }: { on: boolean }) {
   return (
     <span className={`prm-check ${on ? "is-on" : ""}`} aria-hidden>
       {on && <PrmCheckIcon />}
@@ -670,52 +660,6 @@ function confirmCopy(kind: ConfirmKind, s: Submission, hasFootage: boolean): Con
   };
 }
 
-/** The shared modal shell for every confirm on this page (Figma 483:588):
- *  gradient card, 28px title + close, 16px body, and a footer with a plain-text
- *  Cancel on the left and the orange CTA on the right. */
-function ProctoringModal({
-  title,
-  confirmLabel,
-  confirmDisabled,
-  wide,
-  onCancel,
-  onConfirm,
-  children,
-}: {
-  title: string;
-  confirmLabel: string;
-  confirmDisabled?: boolean;
-  /** The reject modal carries a form and an image grid, so it runs wider. */
-  wide?: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="pr-confirm-overlay" onClick={onCancel}>
-      <div className={`prm ${wide ? "prm--wide" : ""}`} onClick={(e) => e.stopPropagation()}>
-        <div className="prm-body">
-          <div className="prm-head">
-            <h2 className="prm-title">{title}</h2>
-            <button className="prm-close" onClick={onCancel} aria-label="Close">
-              <ModalCloseIcon />
-            </button>
-          </div>
-          {children}
-        </div>
-        <div className="prm-foot">
-          <button className="prm-cancel" onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="prm-cta" onClick={onConfirm} disabled={confirmDisabled}>
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ConfirmActionModal({
   kind,
   submission,
@@ -731,14 +675,14 @@ function ConfirmActionModal({
 }) {
   const copy = confirmCopy(kind, submission, hasFootage);
   return (
-    <ProctoringModal
+    <PrmModal
       title={copy.title}
       confirmLabel={copy.confirmLabel}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
       <p className="prm-text">{copy.body}</p>
-    </ProctoringModal>
+    </PrmModal>
   );
 }
 
@@ -776,7 +720,7 @@ function RejectModal({
   const copy = confirmCopy("reject", submission, true);
 
   return (
-    <ProctoringModal
+    <PrmModal
       title={copy.title}
       confirmLabel={copy.confirmLabel}
       confirmDisabled={!canReject}
@@ -863,7 +807,7 @@ function RejectModal({
           </div>
         </div>
       </div>
-    </ProctoringModal>
+    </PrmModal>
   );
 }
 

@@ -1094,7 +1094,7 @@ function CatDeleteConfirm({
         </div>
         <div className="pm-foot">
           <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className="btn-publish mg-btn-danger" onClick={onConfirm}>
+          <button className="btn-publish btn-publish--danger" onClick={onConfirm}>
             Delete {isCategory ? "Category" : "Subcategory"}
           </button>
         </div>

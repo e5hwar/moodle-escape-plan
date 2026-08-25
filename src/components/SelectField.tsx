@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
-import { ChevronDownIcon } from "./icons";
+import { ChevronDownIcon, SearchIcon } from "./icons";
 
 /**
  * Single-select menu — Figma 591:1382 "Dropdown Menu - Single-Select".
@@ -9,6 +9,11 @@ import { ChevronDownIcon } from "./icons";
  * the list, there is no check glyph, and the hovered row fills #2c2c2f. The
  * panel goes through the overlay `Dropdown` with `constrainHeight`, so opening
  * one near the bottom of a scrolling form never grows the page.
+ *
+ * `searchPlaceholder` upgrades the panel to Figma 668:943 "Dropdown Menu - With
+ * Search": the MultiSelect's search header on top, filtering the list as you
+ * type. `optionDetail` adds that node's right-aligned muted detail per row
+ * (e.g. an employee's Admin/Manager role); return null for a plain row.
  *
  * `renderTrigger` exists for the composite address box, whose rows are their own
  * chrome; every other caller gets the default `.select-field` control.
@@ -21,6 +26,9 @@ export function SelectField<T extends string>({
   className,
   disabled = false,
   renderTrigger,
+  searchPlaceholder,
+  optionDetail,
+  popupMenu = false,
 }: {
   value: T | "";
   options: readonly T[];
@@ -36,6 +44,13 @@ export function SelectField<T extends string>({
     label: ReactNode;
     isPlaceholder: boolean;
   }) => ReactNode;
+  /** When set, the panel opens with a search header that filters the options. */
+  searchPlaceholder?: string;
+  /** Right-aligned muted text on an option's row (Figma 668:943). */
+  optionDetail?: (option: T) => ReactNode;
+  /** Set when the field sits on a modal/popup — the panel takes the
+   *  popup-context surface (Figma 668:972) so it separates from the card. */
+  popupMenu?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
@@ -61,7 +76,7 @@ export function SelectField<T extends string>({
         overlay
         constrainHeight
         width={width || 220}
-        panelClass="ss-menu"
+        panelClass={`ss-menu${popupMenu ? " ss-menu--popup" : ""}`}
         trigger={({ open, toggle }) =>
           renderTrigger ? (
             renderTrigger({ open, toggle, label, isPlaceholder })
@@ -96,6 +111,8 @@ export function SelectField<T extends string>({
             value={value}
             options={options}
             onChange={onChange}
+            searchPlaceholder={searchPlaceholder}
+            optionDetail={optionDetail}
             // Hand the keyboard back to the trigger, the way a native select does.
             close={() => {
               close();
@@ -113,85 +130,143 @@ function SelectMenu<T extends string>({
   options,
   onChange,
   close,
+  searchPlaceholder,
+  optionDetail,
 }: {
   value: T | "";
   options: readonly T[];
   onChange: (v: T) => void;
   close: () => void;
+  searchPlaceholder?: string;
+  optionDetail?: (option: T) => ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [query, setQuery] = useState("");
   // Keyboard/hover cursor. It stays at -1 until the pointer or a key moves it:
   // the menu's rest state (Figma 591:1382) fills no row and marks the current
   // value with weight alone.
   const [active, setActive] = useState(-1);
 
-  // React only honours `autoFocus` on form elements, so the list takes focus
-  // itself — otherwise the keys go to the trigger and the menu is mouse-only.
-  // It waits a frame because the overlay panel's first paint is the hidden one
-  // the Dropdown measures, and `focus()` on a hidden element does nothing.
+  const shown = searchPlaceholder
+    ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  // React only honours `autoFocus` on form elements, so the menu takes focus
+  // itself — the search box when there is one, the list otherwise (a plain
+  // list is not focusable-by-default, and without this the keys stay on the
+  // trigger and the menu is mouse-only). It waits a frame because the overlay
+  // panel's first paint is the hidden one the Dropdown measures, and `focus()`
+  // on a hidden element does nothing.
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      listRef.current?.focus({ preventScroll: true });
-      const i = options.indexOf(value as T);
+      if (searchRef.current) searchRef.current.focus({ preventScroll: true });
+      else listRef.current?.focus({ preventScroll: true });
+      const i = shown.indexOf(value as T);
       if (i >= 0) rowAt(listRef.current, i)?.scrollIntoView({ block: "nearest" });
     });
     return () => cancelAnimationFrame(id);
   }, []);
 
   function move(step: number) {
+    if (!shown.length) return;
     setActive((i) => {
       // The first arrow press starts from whatever the field shows.
-      const from = i < 0 ? options.indexOf(value as T) : i;
-      const next = (from + step + options.length) % options.length;
+      const from = i < 0 ? shown.indexOf(value as T) : i;
+      const next = (from + step + shown.length) % shown.length;
       rowAt(listRef.current, next)?.scrollIntoView({ block: "nearest" });
       return next;
     });
   }
 
-  return (
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      move(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Home" || e.key === "End") {
+      // Home/End move the caret while typing in the search box.
+      if (searchPlaceholder) return;
+      e.preventDefault();
+      const next = e.key === "Home" ? 0 : shown.length - 1;
+      setActive(next);
+      rowAt(listRef.current, next)?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter" || (e.key === " " && !searchPlaceholder)) {
+      e.preventDefault();
+      if (active >= 0 && shown[active] != null) {
+        onChange(shown[active]);
+        close();
+      } else if (!searchPlaceholder) {
+        close();
+      }
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      e.preventDefault();
+      close();
+    }
+  }
+
+  const list = (
     <div
       className="dropdown-list"
       role="listbox"
       ref={listRef}
-      tabIndex={-1}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          move(e.key === "ArrowDown" ? 1 : -1);
-        } else if (e.key === "Home" || e.key === "End") {
-          e.preventDefault();
-          const next = e.key === "Home" ? 0 : options.length - 1;
-          setActive(next);
-          rowAt(listRef.current, next)?.scrollIntoView({ block: "nearest" });
-        } else if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          if (active >= 0) onChange(options[active]);
-          close();
-        } else if (e.key === "Escape" || e.key === "Tab") {
-          e.preventDefault();
-          close();
-        }
-      }}
+      tabIndex={searchPlaceholder ? undefined : -1}
+      onKeyDown={searchPlaceholder ? undefined : onKeyDown}
     >
-      {options.map((opt, i) => (
-        <button
-          type="button"
-          key={opt}
-          role="option"
-          aria-selected={opt === value}
-          className={`dropdown-item${opt === value ? " is-current" : ""}${
-            i === active ? " is-active" : ""
-          }`}
-          onMouseEnter={() => setActive(i)}
-          onClick={() => {
-            onChange(opt);
-            close();
-          }}
-        >
-          {opt}
-        </button>
-      ))}
+      {shown.map((opt, i) => {
+        const detail = optionDetail?.(opt);
+        return (
+          <button
+            type="button"
+            key={opt}
+            role="option"
+            aria-selected={opt === value}
+            className={`dropdown-item${opt === value ? " is-current" : ""}${
+              i === active ? " is-active" : ""
+            }`}
+            onMouseEnter={() => setActive(i)}
+            // Picking with the mouse must not blur the search box mid-close.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange(opt);
+              close();
+            }}
+          >
+            {detail != null ? (
+              <>
+                <span className="dropdown-item-name">{opt}</span>
+                <span className="dropdown-item-detail">{detail}</span>
+              </>
+            ) : (
+              opt
+            )}
+          </button>
+        );
+      })}
+      {shown.length === 0 && <div className="ms-menu-empty">No matches</div>}
     </div>
+  );
+
+  if (!searchPlaceholder) return list;
+
+  return (
+    <>
+      <div className="dropdown-search">
+        <span className="dropdown-search-icon">
+          <SearchIcon />
+        </span>
+        <input
+          ref={searchRef}
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(-1);
+          }}
+          onKeyDown={onKeyDown}
+        />
+      </div>
+      {list}
+    </>
   );
 }
 
