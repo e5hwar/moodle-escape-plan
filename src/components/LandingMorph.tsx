@@ -44,12 +44,16 @@ export function topValues<T>(
 /** One data column of the morphing list (Name is built in). `fixed` columns are
  * visible in the landing state (the design's "Type" slot); the rest grow in
  * from zero width as the list becomes the table. `width` is the matching real
- * table column's px width so the p=1 hand-off to the real table lines up. */
+ * table column's px width so the p=1 hand-off to the real table lines up.
+ * `landingWidth` sizes a fixed column's LANDING track when its collapsed
+ * content is narrower than the table column it becomes (Exam Reviews'
+ * "Waiting 4 days" → "November 5th, 2025, 2:30 PM"); it morphs to `width`. */
 export type LandingCol = {
   key: string;
   label: string;
   width: number;
   fixed?: boolean;
+  landingWidth?: number;
 };
 
 export type LandingRow = {
@@ -143,7 +147,7 @@ export function LandingOverlay({
   const share = (w: number) => `max(${w}px, ${w} * 100% / ${totalWidth})`;
   const track = (c: LandingCol) =>
     c.fixed
-      ? `calc(${c.width}px * (1 - var(--lm)) + ${share(c.width)} * var(--lm))`
+      ? `calc(${c.landingWidth ?? c.width}px * (1 - var(--lm)) + ${share(c.width)} * var(--lm))`
       : `calc(${share(c.width)} * var(--lm))`;
   const template = [
     ...leadColumns.map(track),

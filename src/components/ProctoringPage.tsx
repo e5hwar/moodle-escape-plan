@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   submissions as seedSubmissions,
   matchesQuery,
@@ -26,7 +26,7 @@ const PAGE_SIZE = 50;
 
 type FilterKey = "all" | ProctoringKind;
 
-export type SortKey = "candidate" | "type" | "email" | "exam" | "submittedAt";
+export type SortKey = "candidate" | "email" | "exam" | "submittedAt";
 export type SortDir = "asc" | "desc";
 
 // submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
@@ -35,14 +35,8 @@ function parseSubmittedAt(s: string): number {
   return Date.parse(s.replace(/(\d+)(st|nd|rd|th)/, "$1")) || 0;
 }
 
-const KIND_LABEL: Record<ProctoringKind, string> = {
-  proctoring: "Proctoring",
-  "id-review": "ID Review",
-  "id-reupload": "ID Re-upload",
-};
-
 /* The run card names the types the way Figma 300:363 does — "Proctored Exams",
-   not the table/pill wording above. */
+   not the filter pills' wording. */
 const RUN_TYPE_LABEL: Record<ProctoringKind, string> = {
   proctoring: "Proctored Exams",
   "id-review": "ID Reviews",
@@ -68,7 +62,6 @@ function rankOf(s: Submission, order: RunOrder): number {
 
 const SORT_FIELD: Record<Exclude<SortKey, "submittedAt">, (s: Submission) => string> = {
   candidate: (s) => s.candidateName,
-  type: (s) => KIND_LABEL[s.kind],
   email: (s) => s.candidateEmail,
   exam: (s) => s.exam,
 };
@@ -93,20 +86,28 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   "id-reupload": "ID Re-uploads",
 };
 
-function waitDaysOf(s: Submission): number {
+/** The landing's wait column: "Waiting 20 hours" under a day, "Waiting 4 days"
+ *  from there up. */
+function waitingLabelOf(s: Submission): string {
   const t = parseSubmittedAt(s.submittedAt);
-  return t ? Math.max(0, Math.floor((Date.now() - t) / 86_400_000)) : 0;
+  if (!t) return "";
+  const hours = Math.max(1, Math.floor((Date.now() - t) / 3_600_000));
+  if (hours < 24) return `Waiting ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.floor(hours / 24);
+  return `Waiting ${days} day${days === 1 ? "" : "s"}`;
 }
 
 /* Landing-morph columns — mirror the table's columns (key, label, width) so
-   the p=1 hand-off to the real table lines up. Type and Email are visible in
-   the landing state; Email's cell crossfades from "N days waiting" to the
-   address as the table forms. */
+   the p=1 hand-off to the real table lines up. The minimal view is Name plus
+   the right-aligned wait column (the Tasks landing's Name + Type shape); the
+   wait column IS the Submitted On column — its cell crossfades from
+   "Waiting N days" to the full timestamp as the track widens from the label's
+   snug 170px to the table column's 265. Email and Quiz grow in between. */
+const WAIT_LANDING_WIDTH = 170;
 const LM_COLS: LandingCol[] = [
-  { key: "type", label: "Type", width: 140, fixed: true },
-  { key: "email", label: "Email", width: 310, fixed: true },
+  { key: "email", label: "Email", width: 310 },
   { key: "quiz", label: "Quiz", width: 316 },
-  { key: "date", label: "Submitted On", width: 265 },
+  { key: "date", label: "Submitted On", width: 265, fixed: true, landingWidth: WAIT_LANDING_WIDTH },
 ];
 
 export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }) {
@@ -138,7 +139,23 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
     );
   }
 
+  /* FLIP the By Type LABELS on reorder: capture each label's position before
+     the state change, then (in the layout effect below) start every displaced
+     label at its old position and release it — the two swapped labels visibly
+     slide into each other's slots. Deliberately the label spans, NOT the rows:
+     the arrow clusters are per-slot fixtures (slot 0 always shows ↓, the last
+     always ↑), so animating whole rows made static controls appear to move.
+     The rows still swap in the DOM instantly (keyed by kind), which is what
+     keeps each slot's arrows and hairline in place. */
+  const typeLabelRefs = useRef(new Map<ProctoringKind, HTMLSpanElement | null>());
+  const typeLabelTopsBefore = useRef<Map<ProctoringKind, number> | null>(null);
+
   function moveType(from: number, to: number) {
+    const tops = new Map<ProctoringKind, number>();
+    typeLabelRefs.current.forEach((el, kind) => {
+      if (el) tops.set(kind, el.getBoundingClientRect().top);
+    });
+    typeLabelTopsBefore.current = tops;
     setTypeOrder((prev) => {
       const next = [...prev];
       const [moved] = next.splice(from, 1);
@@ -146,6 +163,29 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
       return next;
     });
   }
+
+  useLayoutEffect(() => {
+    const before = typeLabelTopsBefore.current;
+    if (!before) return;
+    typeLabelTopsBefore.current = null;
+    const displaced: HTMLSpanElement[] = [];
+    typeLabelRefs.current.forEach((el, kind) => {
+      const prevTop = before.get(kind);
+      if (!el || prevTop === undefined) return;
+      const delta = prevTop - el.getBoundingClientRect().top;
+      if (delta === 0) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${delta}px)`;
+      displaced.push(el);
+    });
+    if (displaced.length === 0) return;
+    // Commit the inverted positions before releasing them into the transition.
+    void displaced[0].offsetHeight;
+    displaced.forEach((el) => {
+      el.style.transition = "transform 0.18s ease";
+      el.style.transform = "";
+    });
+  }, [typeOrder]);
 
   // Once a submission is accepted/rejected it's off the review queue entirely. A
   // requested reupload doesn't count toward the pill counts — only true "pending"
@@ -319,32 +359,27 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   }
 
   // The Status column exists only on the ID Re-uploads tab — insert it into the
-  // landing columns there too so the p=1 hand-off stays column-aligned.
+  // landing columns there too (between Quiz and Submitted On, the real table's
+  // order) so the p=1 hand-off stays column-aligned.
   const lmCols = showStatus
-    ? [...LM_COLS.slice(0, 3), { key: "status", label: "Status", width: STATUS_WIDTH }, LM_COLS[3]]
+    ? [...LM_COLS.slice(0, 2), { key: "status", label: "Status", width: STATUS_WIDTH }, LM_COLS[2]]
     : LM_COLS;
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => {
-    const days = waitDaysOf(s);
-    return {
-      key: s.id,
-      name: s.candidateName,
-      cells: {
-        type: KIND_LABEL[s.kind],
-        email: (
-          <span className="prl-swap">
-            <span className="prl-swap-real">{s.candidateEmail}</span>
-            <span className="prl-swap-wait">
-              {days} day{days === 1 ? "" : "s"} waiting
-            </span>
-          </span>
-        ),
-        quiz: s.exam,
-        ...(showStatus ? { status: <ReuploadStatusPill submission={s} /> } : null),
-        date: s.submittedAt,
-      },
-    };
-  });
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => ({
+    key: s.id,
+    name: s.candidateName,
+    cells: {
+      email: s.candidateEmail,
+      quiz: s.exam,
+      ...(showStatus ? { status: <ReuploadStatusPill submission={s} /> } : null),
+      date: (
+        <span className="prl-swap">
+          <span className="prl-swap-real">{s.submittedAt}</span>
+          <span className="prl-swap-wait">{waitingLabelOf(s)}</span>
+        </span>
+      ),
+    },
+  }));
 
   if (active) {
     return (
@@ -401,7 +436,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                   <div className="run-head">
                     <div className="run-headtext">
                       <span className="run-title">Oldest first</span>
-                      <span className="run-sub">Longest wait first</span>
+                      <span className="run-sub">Longest Wait First</span>
                     </div>
                     <span className="run-badge">Recommended</span>
                   </div>
@@ -420,13 +455,18 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                 <div className="run-card">
                   <div className="run-headtext">
                     <span className="run-title">By type</span>
-                    <span className="run-sub">One review type at a time</span>
+                    <span className="run-sub">One Review Type at a time</span>
                   </div>
                   <div className="run-list">
                     <div className="run-items">
                       {typeOrder.map((kind, i) => (
                         <div key={kind} className="run-item">
-                          <span className="run-item-label">
+                          <span
+                            className="run-item-label"
+                            ref={(el) => {
+                              typeLabelRefs.current.set(kind, el);
+                            }}
+                          >
                             {RUN_TYPE_LABEL[kind]}
                             <span className="run-item-count">· {counts[kind]}</span>
                           </span>
@@ -458,7 +498,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                     className="btn-save-draft run-cta"
                     onClick={() => startRun({ field: "kind", sequence: typeOrder })}
                   >
-                    Review by type
+                    Review By Type
                     <span className="run-kbd">T</span>
                   </button>
                 </div>
@@ -467,7 +507,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                 <div className="run-card">
                   <div className="run-headtext">
                     <span className="run-title">By quiz</span>
-                    <span className="run-sub">One quiz back-to-back</span>
+                    <span className="run-sub">One Quiz back-to-back</span>
                   </div>
                   <div className="run-list">
                     <div className="run-items">
@@ -490,7 +530,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                       startRun({ field: "exam", sequence: quizRanked.map(([name]) => name) })
                     }
                   >
-                    Review by quiz
+                    Review By Quiz
                     <span className="run-kbd">Q</span>
                   </button>
                 </div>
@@ -561,7 +601,6 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                       <thead>
                         <tr>
                           <SortableHeader col="candidate" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
-                          <SortableHeader col="type" label="Type" className="pr-col-type" sort={sort} toggle={toggleSort} />
                           <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
                           <SortableHeader col="exam" label="Quiz" className="pr-col-exam" sort={sort} toggle={toggleSort} />
                           {showStatus && (
@@ -581,7 +620,6 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                           {paged.map((s) => (
                             <tr key={s.id} onClick={() => openSubmission(s.id)}>
                               <td className="col-name">{s.candidateName}</td>
-                              <td className="pr-col-type">{KIND_LABEL[s.kind]}</td>
                               <td className="pr-col-email">{s.candidateEmail}</td>
                               <td className="pr-col-exam">{s.exam}</td>
                               {showStatus && (
@@ -594,7 +632,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                           ))}
                           {paged.length === 0 && (
                             <tr>
-                              <td colSpan={showStatus ? 6 : 5} className="u-empty">
+                              <td colSpan={showStatus ? 5 : 4} className="u-empty">
                                 {query.trim()
                                   ? `No submissions match "${query.trim()}".`
                                   : "No submissions match these filters."}
@@ -636,9 +674,8 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
    padding); Quiz at its longest value ("Building Science Principles
    Certificate", 274px) the same way. */
 const NAME_MIN = 240;
-const COL_WIDTHS = { type: 140, email: 310, quiz: 316, date: 265 };
-const TABLE_MIN =
-  NAME_MIN + COL_WIDTHS.type + COL_WIDTHS.email + COL_WIDTHS.quiz + COL_WIDTHS.date;
+const COL_WIDTHS = { email: 310, quiz: 316, date: 265 };
+const TABLE_MIN = NAME_MIN + COL_WIDTHS.email + COL_WIDTHS.quiz + COL_WIDTHS.date;
 
 /** Wide enough for the "To Review" pill plus the cell's 2×20px padding. */
 const STATUS_WIDTH = 130;
@@ -652,7 +689,6 @@ function ProctoringColGroup({ showStatus }: { showStatus: boolean }) {
           column would swallow the slack alone and bump every column at the
           morph hand-off. */}
       <col style={{ width: NAME_MIN }} />
-      <col style={{ width: COL_WIDTHS.type }} />
       <col style={{ width: COL_WIDTHS.email }} />
       <col style={{ width: COL_WIDTHS.quiz }} />
       {showStatus && <col style={{ width: STATUS_WIDTH }} />}

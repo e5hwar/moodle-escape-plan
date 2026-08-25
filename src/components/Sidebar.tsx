@@ -1,5 +1,6 @@
 import { useState } from "react";
 import skillcatLogo from "../assets/SkillCat-Logo.png";
+import { submissions } from "../data/proctoring";
 
 type IconProps = { className?: string };
 
@@ -112,6 +113,10 @@ const I = {
 
 type IconKey = keyof typeof I;
 
+/* The Exam Reviews badge counts the real queue rather than a hardcoded number,
+   so it can't drift from the page's own "Pending:" figure when seed data changes. */
+const pendingExamReviews = submissions.filter((s) => s.status === "pending").length;
+
 type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 // Figma 421:1419 — every destination is a top-level entry; sections are plain
 // labels, not collapsible groups.
@@ -136,7 +141,7 @@ const sections: NavSection[] = [
       { key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
       // Name Change Requests left this group 2026-08-25 — it's reached from the
       // Proctoring Review header's "Name Changes" button now (the route stays).
-      { key: "proctoring-review", label: "Exam Reviews", icon: "shield", navKey: "proctoring-review", badge: 8 },
+      { key: "proctoring-review", label: "Exam Reviews", icon: "shield", navKey: "proctoring-review", badge: pendingExamReviews },
     ],
   },
   {

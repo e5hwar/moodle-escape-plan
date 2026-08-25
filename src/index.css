@@ -10899,12 +10899,6 @@ button.breadcrumb-item:hover {
   white-space: nowrap;
 }
 
-/* Proctoring's Type column (Proctoring / ID Review / ID Re-upload). */
-.table .pr-col-type {
-  width: 140px;
-  white-space: nowrap;
-}
-
 /* Manage IDs only since 2026-08-25 — the Proctoring table dropped Phone for
    Type ("User Reviews 6B"). */
 .table .pr-col-phone {
@@ -25990,14 +25984,17 @@ span.rvc-crumb--current { cursor: default; }
    list: a #404040 top rule, then a 16px double chevron and the label, centred.
    (It replaced a pill, so there is no border/radius/fill any more.) */
 .lm-hint-wrap {
+  /* The bar is exactly the node's 40px tall, and exactly as wide as the list
+     rows above it — same width expression as .lm-list, so it lines up with the
+     row edges in both states instead of running the full page width. */
   height: calc(40px * (1 - var(--lm)));
+  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   flex-shrink: 0;
-  width: 100%;
 }
 .lm-hint {
   display: flex;
@@ -26005,7 +26002,8 @@ span.rvc-crumb--current { cursor: default; }
   justify-content: center;
   gap: 4px;
   width: 100%;
-  margin-top: 8px;
+  /* 40px including the 1px rule; Figma's pt-px sits inside it. */
+  height: 40px;
   border-top: 1px solid #404040;
   padding: 1px 12px 0;
   font-family: var(--font-sans);
@@ -26196,31 +26194,37 @@ span.rvc-crumb--current { cursor: default; }
    Unlike the other landing pages, the search bar and the filter row are NOT
    part of this page's minimal state — the cards are its hero, so both rows
    belong to the expanded table and fade in with the table chrome (--lmt).
-   They keep full width throughout (no 640px hero treatment) because they are
-   only ever seen in the table state. */
-.tasks.lm.pr-page .toolbar {
-  width: 100%;
-  margin-top: 0;
-}
-.tasks.lm.pr-page .toolbar .usearch-bar {
-  height: 40px;
-  border-radius: 8px;
-  box-shadow: none;
-}
+   Everything else — the search's width/height treatment, the caption, the list
+   and the hint bar — is the shared `.tasks.lm` chrome untouched, so this page
+   measures identically to Tasks in both states. */
+/* HEIGHT rides --lm, VISIBILITY rides --lmt — deliberately split. The cards
+   above shrink at a constant 332px per unit of --lm; if these rows also grew
+   on --lmt (a steep late ramp), their growth briefly outran the cards' shrink
+   around p≈0.8 and everything below dipped a few px before rising again — a
+   visible wobble. On --lm the sum is strictly monotonic (−332 + ~108 < 0
+   everywhere), so the rows quietly reserve their space across the whole
+   gesture and only FADE in with the table chrome. */
 .tasks.lm.pr-page:not([data-lm="table"]) .toolbar,
 .tasks.lm.pr-page:not([data-lm="table"]) .filters {
-  max-height: calc(40px * var(--lmt));
+  max-height: calc(40px * var(--lm));
   opacity: var(--lmt);
   overflow: hidden;
   pointer-events: none;
-  margin-bottom: calc(14px * var(--lmt));
+  margin-bottom: calc(14px * var(--lm));
   padding-bottom: 0;
 }
-/* The caption follows the cards directly once the search is gone. */
-.tasks.lm.pr-page .lm-caption,
-.tasks.lm.pr-page .lm-list {
-  width: 100%;
+/* The hero's 56px top margin belongs to a search that is hidden here — a flat
+   0 in every state. (This MUST stay constant: an earlier version animated it
+   as 56px × (1−lm) × lmt, and the product of a falling and a rising ramp is
+   non-monotonic — zero at both ends, bulging ~6px around p≈0.8 — which read
+   as a jerk near the end of the gesture. The toolbar only becomes visible as
+   --lmt approaches 1, where the shared rule's margin is 0 anyway, so nothing
+   is lost by pinning it.) */
+.tasks.lm.pr-page .toolbar {
+  margin-top: 0;
 }
+/* The caption follows the cards directly, rather than the 65px the other pages
+   leave under their suggested-pill row. */
 .tasks.lm.pr-page .lm-caption {
   margin-top: calc(24px * (1 - var(--lm)));
 }
@@ -26253,8 +26257,11 @@ span.rvc-crumb--current { cursor: default; }
   background: rgba(240, 85, 39, 0.1);
 }
 
-/* Landing Email cell: "N days waiting" ↔ the address crossfade as the table
-   forms (the reference swaps the third column's content mid-morph). */
+/* The wait ↔ Submitted On cell: at the landing the column shows a right-
+   aligned "Waiting 4 days" (the minimal view's second column, sitting at the
+   row's right edge the way Tasks' Type column does); as the track widens into
+   the real Submitted On column, the timestamp fades in left-aligned underneath
+   while the wait label — pinned to the track's right edge — rides it out. */
 .tasks.lm .prl-swap {
   position: relative;
   display: block;
@@ -26265,10 +26272,11 @@ span.rvc-crumb--current { cursor: default; }
 }
 .tasks.lm .prl-swap-wait {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   opacity: calc(1 - 2.4 * var(--lm));
   color: var(--text-faint);
+  white-space: nowrap;
 }
 
 /* ═══════════ Review-run cards — Figma 685:2654 "Cards" ═══════════
@@ -26407,7 +26415,10 @@ span.rvc-crumb--current { cursor: default; }
   padding: 4px;
   /* The 0.5px hairline is an INSET SHADOW, not a border — Chrome rounds a
      0.5px border up to 1px and adds it to the row, taking each row from the
-     node's 25px to 26px. The last row closes the list without one. */
+     node's 25px to 26px. The last row closes the list without one. No
+     transition on it: the reorder FLIP slides only the LABELS, so rows (and
+     their per-slot hairlines/arrows) must read as fixed — a shadow fade here
+     would draw a phantom line under the bottom row after every swap. */
   box-shadow: inset 0 -0.5px 0 rgba(115, 115, 115, 0.5);
 }
 .run-item:last-child {
