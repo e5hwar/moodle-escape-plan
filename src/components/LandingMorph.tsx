@@ -17,6 +17,8 @@
  *   </div>
  */
 
+import { KeepScrollingIcon } from "./icons";
+
 export type LandingPill = { key: string; label: string; onPick: () => void };
 
 /** Most frequent values of a field across the page's rows — used to pick the
@@ -107,6 +109,7 @@ export function LandingOverlay({
   leadColumns = [],
   nameLabel = "Name",
   nameWidth = 240,
+  actionsWidth = 40,
   onShowAll,
   onRowClick,
 }: {
@@ -122,6 +125,9 @@ export function LandingOverlay({
    * (landing) to this minimum, so when the table overflows at its --table-min
    * the p=1 hand-off is pixel-exact. */
   nameWidth?: number;
+  /** The real table's ⋯ actions gutter. Pass 0 for tables with no actions
+   * column (Proctoring) so no gutter track is reserved or drawn. */
+  actionsWidth?: number;
   onShowAll: () => void;
   onRowClick?: (row: LandingRow) => void;
 }) {
@@ -132,7 +138,8 @@ export function LandingOverlay({
   // specified width (verified: td = W × container/total to 0.1px), and below
   // that sum the table overflows at exact pixel widths — `max(Wpx, W×100%/total)`
   // reproduces both regimes, so the hand-off never bumps at any viewport.
-  const totalWidth = nameWidth + [...leadColumns, ...columns].reduce((s, c) => s + c.width, 0) + 40;
+  const totalWidth =
+    nameWidth + [...leadColumns, ...columns].reduce((s, c) => s + c.width, 0) + actionsWidth;
   const share = (w: number) => `max(${w}px, ${w} * 100% / ${totalWidth})`;
   const track = (c: LandingCol) =>
     c.fixed
@@ -145,7 +152,7 @@ export function LandingOverlay({
     // at the minimum — both match the real table's Name column.
     `minmax(calc(${nameWidth}px * var(--lm)), 1fr)`,
     ...columns.map(track),
-    `calc(${share(40)} * var(--lm))`,
+    ...(actionsWidth > 0 ? [`calc(${share(actionsWidth)} * var(--lm))`] : []),
   ].join(" ");
 
   const cells = (r: LandingRow) => (
@@ -159,7 +166,7 @@ export function LandingOverlay({
           {r.cells[c.key]}
         </span>
       ))}
-      <span className="lm-cell lm-cell--grow lm-cell--dots">⋯</span>
+      {actionsWidth > 0 && <span className="lm-cell lm-cell--grow lm-cell--dots">⋯</span>}
     </>
   );
 
@@ -182,7 +189,7 @@ export function LandingOverlay({
               {c.label}
             </span>
           ))}
-          <span className="lm-cell" />
+          {actionsWidth > 0 && <span className="lm-cell" />}
         </div>
         {rows.map((r) => (
           <div
@@ -196,8 +203,11 @@ export function LandingOverlay({
         ))}
       </div>
       <div className="lm-hint-wrap">
+        {/* Figma 716:1648 "Minimal State - Keep Scrolling" — a full-width bar
+            with a top rule, not the pill it replaced. */}
         <button className="lm-hint" onClick={onShowAll}>
-          ↓&nbsp;keep scrolling — the list becomes the table
+          <KeepScrollingIcon />
+          Keep scrolling to see the table
         </button>
       </div>
     </div>

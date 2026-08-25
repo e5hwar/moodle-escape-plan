@@ -5,15 +5,34 @@ import {
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
-import { SearchIcon, SortIcon, AddIcon, RowDeleteIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import {
+  SearchIcon,
+  SortIcon,
+  AddIcon,
+  CalendarIcon,
+  MenuMailIcon,
+  RowDeleteIcon,
+  RowKebabIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "./icons";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { PrmModal } from "./PrmModal";
+import { SelectField } from "./SelectField";
+import { DateField } from "./DateField";
+import { UserDetailsHover } from "./UserDetailsHover";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
+const TODAY_ISO = TODAY.toISOString().slice(0, 10);
+/** Inside this many days an active scholarship reads as "expiring soon". */
+const EXPIRING_SOON_DAYS = 14;
 
 type ScholarshipStatus = "active" | "expired";
 
-type SortKey = "user" | "status" | "expiresOn" | "assignedOn";
+type SortKey = "user" | "status" | "expiresOn" | "assignedOn" | "assignedBy";
 type SortDir = "asc" | "desc";
 
 function statusOf(s: Scholarship): ScholarshipStatus {
@@ -26,6 +45,10 @@ function daysFromToday(iso: string): number {
   );
 }
 
+function contactOf(user: ScholarshipUser): string {
+  return user.email ?? user.phone ?? "—";
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -35,6 +58,16 @@ function formatDate(iso: string): string {
     year: "numeric",
   });
 }
+
+/** TODAY + n months, as "YYYY-MM-DD". */
+function monthsOut(n: number): string {
+  const d = new Date(TODAY);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Everyone who has handed out a scholarship — the Assigned By filter's options. */
+const ASSIGNERS = [...new Set(seedScholarships.map((s) => s.assignedBy))].sort();
 
 function compare(a: Scholarship, b: Scholarship, key: SortKey): number {
   switch (key) {
@@ -46,6 +79,8 @@ function compare(a: Scholarship, b: Scholarship, key: SortKey): number {
       return new Date(a.expiresOn).getTime() - new Date(b.expiresOn).getTime();
     case "assignedOn":
       return new Date(a.assignedOn).getTime() - new Date(b.assignedOn).getTime();
+    case "assignedBy":
+      return a.assignedBy.localeCompare(b.assignedBy);
   }
 }
 
@@ -53,6 +88,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   const [list, setList] = useState<Scholarship[]>(seedScholarships);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ScholarshipStatus>("all");
+  const [assignerFilter, setAssignerFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "assignedOn",
     dir: "desc",
@@ -73,6 +109,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
     const q = query.trim().toLowerCase();
     return list.filter((s) => {
       if (statusFilter !== "all" && statusOf(s) !== statusFilter) return false;
+      if (assignerFilter.length && !assignerFilter.includes(s.assignedBy)) return false;
       if (!q) return true;
       return (
         s.user.name.toLowerCase().includes(q) ||
@@ -81,7 +118,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
         s.id.toLowerCase().includes(q)
       );
     });
-  }, [list, query, statusFilter]);
+  }, [list, query, statusFilter, assignerFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -89,10 +126,12 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, statusFilter, sort]);
+  useEffect(() => setPage(1), [query, statusFilter, assignerFilter, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
+
+  const hasFilters = assignerFilter.length > 0;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -107,7 +146,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
     const newScholarship: Scholarship = {
       id,
       user,
-      assignedOn: "2026-05-15",
+      assignedOn: TODAY_ISO,
       expiresOn,
       assignedBy: "You",
     };
@@ -212,40 +251,78 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                     </button>
                   ))}
                 </div>
+
+                {/* The shared filter pill (Filters.tsx) — same menu chrome as
+                    Tasks / Certifications / Offer Codes. */}
+                <Dropdown
+                  width={260}
+                  trigger={({ open, toggle }) => (
+                    <PillTrigger
+                      label="Assigned By"
+                      value={summarize(assignerFilter, ASSIGNERS)}
+                      open={open}
+                      toggle={toggle}
+                      onClear={() => setAssignerFilter([])}
+                    />
+                  )}
+                >
+                  {({ close }) => (
+                    <SectionedMultiSelect
+                      sections={[{ items: ASSIGNERS }]}
+                      value={assignerFilter}
+                      onApply={(v) => {
+                        setAssignerFilter(v);
+                        close();
+                      }}
+                      searchable
+                      searchPlaceholder="Search assigners…"
+                    />
+                  )}
+                </Dropdown>
+
+                {hasFilters && (
+                  <button
+                    className="filter-clear-link"
+                    onClick={() => setAssignerFilter([])}
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table" style={{ width: 820 }}>
+                <table className="table sch-table" style={{ width: 1070 }}>
                   <colgroup>
-                    <col style={{ width: 280 }} />
+                    <col style={{ width: 200 }} />
+                    <col style={{ width: 220 }} />
+                    <col style={{ width: 170 }} />
                     <col style={{ width: 140 }} />
-                    <col style={{ width: 180 }} />
-                    <col style={{ width: 180 }} />
+                    <col style={{ width: 140 }} />
+                    <col style={{ width: 160 }} />
                     <col style={{ width: 40 }} />
                   </colgroup>
                   <thead>
                     <tr>
+                      <SortableHeader col="user" label="User" sort={sort} toggle={toggleSort} />
                       <SortableHeader
-                        col="user"
-                        label="User"
+                        label="Contact"
                         sort={sort}
                         toggle={toggleSort}
+                        sortable={false}
                       />
                       <SortableHeader
                         col="status"
                         label="Status"
+                        className="col-status"
                         sort={sort}
                         toggle={toggleSort}
                       />
+                      <SortableHeader col="expiresOn" label="Expires On" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="assignedOn" label="Assigned On" sort={sort} toggle={toggleSort} />
                       <SortableHeader
-                        col="expiresOn"
-                        label="Expires On"
-                        sort={sort}
-                        toggle={toggleSort}
-                      />
-                      <SortableHeader
-                        col="assignedOn"
-                        label="Assigned On"
+                        col="assignedBy"
+                        label="Assigned By"
+                        className="col-creator"
                         sort={sort}
                         toggle={toggleSort}
                       />
@@ -257,7 +334,6 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                       <ScholarshipRow
                         key={s.id}
                         scholarship={s}
-                        selected={menu?.scholarship.id === s.id}
                         onRevoke={() => handleRevoke(s.id)}
                         onOpenMenu={(rect) => setMenu({ scholarship: s, rect })}
                         menuOpen={menu?.scholarship.id === s.id}
@@ -265,14 +341,16 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                     ))}
                     {paged.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="sch-empty">
+                        <td colSpan={7} className="sch-empty">
                           {query.trim()
                             ? `No scholarships match "${query.trim()}".`
+                            : hasFilters
+                            ? "No scholarships match these filters."
                             : statusFilter === "expired"
                             ? "No expired scholarships."
                             : statusFilter === "active"
                             ? "No active scholarships."
-                            : "No scholarships yet. Click \"Add Scholarship\" to assign one."}
+                            : 'No scholarships yet. Click "Create Scholarship" to assign one.'}
                         </td>
                       </tr>
                     )}
@@ -331,14 +409,15 @@ function SortableHeader({
   sortable = true,
   className,
 }: {
-  col: SortKey;
+  /** Omitted on a display-only column (`sortable={false}`). */
+  col?: SortKey;
   label: string;
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
   sortable?: boolean;
   className?: string;
 }) {
-  if (!sortable) {
+  if (!sortable || !col) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
         <span className="th-content">{label}</span>
@@ -347,7 +426,7 @@ function SortableHeader({
   }
   const active = sort.key === col;
   return (
-    <th onClick={() => toggle(col)}>
+    <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
         {label}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
@@ -356,76 +435,59 @@ function SortableHeader({
   );
 }
 
-function UserCell({ user }: { user: ScholarshipUser }) {
-  const contact = user.email ?? user.phone ?? "";
-  return (
-    <div className="user-cell">
-      <div className="user-cell-text">
-        <div className="user-cell-name">{user.name}</div>
-        <div className="user-cell-contact">{contact || "—"}</div>
-      </div>
-    </div>
-  );
-}
+/** The shared status pill (Figma 109:1237) — the same one Companies and Offer
+ *  Codes use. An active scholarship inside the warning window borrows the
+ *  yellow "ends soon" tone and says when, the way Companies' trial pill does. */
+function StatusPill({ scholarship }: { scholarship: Scholarship }) {
+  const status = statusOf(scholarship);
+  const days = daysFromToday(scholarship.expiresOn);
 
-function StatusPill({ status }: { status: ScholarshipStatus }) {
-  return (
-    <span className={`sch-status sch-status--${status}`}>
-      <span className="sch-status-dot" />
-      {status === "active" ? "Active" : "Expired"}
-    </span>
-  );
+  if (status === "expired") {
+    return <span className="co-status-pill co-status-pill--grey">Expired</span>;
+  }
+  if (days <= EXPIRING_SOON_DAYS) {
+    return (
+      <span className="co-status-pill co-status-pill--yellow">
+        {days === 0 ? "Expires Today" : `Expires in ${days} Days`}
+      </span>
+    );
+  }
+  return <span className="co-status-pill co-status-pill--green">Active</span>;
 }
 
 function ScholarshipRow({
   scholarship,
-  selected,
   onRevoke,
   onOpenMenu,
   menuOpen,
 }: {
   scholarship: Scholarship;
-  selected: boolean;
   onRevoke: () => void;
   onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
-  const status = statusOf(scholarship);
-  const days = daysFromToday(scholarship.expiresOn);
-  const expiringSoon = status === "active" && days >= 0 && days <= 14;
+  const { user } = scholarship;
 
   return (
-    <tr className={`${selected ? "selected" : ""} ${menuOpen ? "menu-open" : ""}`}>
-      <td>
-        <UserCell user={scholarship.user} />
+    <tr className={menuOpen ? "menu-open" : ""}>
+      <td className="col-name">
+        {/* The shared hover card (Figma 436:572), as on Proctoring and
+            Companies. No userId — these recipients have no Manage Users
+            record — so the card shows no open-profile button. */}
+        <UserDetailsHover
+          user={{ userName: user.name, email: user.email ?? "", phone: user.phone ?? "" }}
+        >
+          {user.name}
+        </UserDetailsHover>
       </td>
-      <td>
-        <StatusPill status={status} />
+      <td>{contactOf(user)}</td>
+      <td className="col-status">
+        <StatusPill scholarship={scholarship} />
       </td>
-      <td>
-        <div className="sch-date">
-          {formatDate(scholarship.expiresOn)}
-          {expiringSoon && (
-            <span className="sch-date-sub sch-date-sub--warning">
-              {days === 0 ? "expires today" : `${days}d left`}
-            </span>
-          )}
-          {status === "expired" && (
-            <span className="sch-date-sub sch-date-sub--muted">
-              expired {Math.abs(days)}d ago
-            </span>
-          )}
-        </div>
-      </td>
-      <td>
-        <div className="sch-date">
-          {formatDate(scholarship.assignedOn)}
-          <span className="sch-date-sub sch-date-sub--muted">
-            by {scholarship.assignedBy}
-          </span>
-        </div>
-      </td>
+      <td className="col-date">{formatDate(scholarship.expiresOn)}</td>
+      <td className="col-date">{formatDate(scholarship.assignedOn)}</td>
+      <td className="col-creator">{scholarship.assignedBy}</td>
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -542,17 +604,17 @@ function ScholarshipActionsMenu({
           {scholarship.id} · {status === "active" ? "Active" : "Expired"}
         </div>
       </div>
-      {item(<MenuPlaceholderIcon />, "Extend 6 months", onExtend)}
+      {item(<CalendarIcon />, "Extend 6 Months", onExtend)}
       {email &&
-        item(<MenuPlaceholderIcon />, "Copy user email", () => {
+        item(<MenuMailIcon />, "Copy User Email", () => {
           navigator.clipboard?.writeText(email);
         })}
-      {item(<MenuPlaceholderIcon />, "Revoke scholarship", onRevoke, true)}
+      {item(<RowDeleteIcon />, "Revoke Scholarship", onRevoke, true)}
     </div>
   );
 }
 
-/* ───────────────── Add Scholarship modal ───────────────── */
+/* ───────────────── Create Scholarship modal ───────────────── */
 
 function AddScholarshipModal({
   excludeUserIds,
@@ -563,44 +625,19 @@ function AddScholarshipModal({
   onClose: () => void;
   onAdd: (user: ScholarshipUser, expiresOn: string) => void;
 }) {
-  const [userQuery, setUserQuery] = useState("");
-  const [selected, setSelected] = useState<ScholarshipUser | null>(null);
-  const [expiresOn, setExpiresOn] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [selectedName, setSelectedName] = useState("");
+  const [expiresOn, setExpiresOn] = useState(() => monthsOut(6));
 
-  // Default expiry: today + 6 months
-  useEffect(() => {
-    const d = new Date(TODAY);
-    d.setMonth(d.getMonth() + 6);
-    setExpiresOn(d.toISOString().slice(0, 10));
-  }, []);
+  // SelectField works in display strings, so names are the option labels and
+  // this maps the choice back to the record. Names in the bank are unique.
+  const candidates = useMemo(
+    () => userBank.filter((u) => !excludeUserIds.has(u.id)),
+    [excludeUserIds],
+  );
+  const candidateNames = useMemo(() => candidates.map((u) => u.name), [candidates]);
+  const selected = candidates.find((u) => u.name === selectedName) ?? null;
 
-  // Close picker on outside click
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) setPickerOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const results = useMemo(() => {
-    const q = userQuery.trim().toLowerCase();
-    return userBank
-      .filter((u) => !excludeUserIds.has(u.id))
-      .filter((u) =>
-        q
-          ? u.name.toLowerCase().includes(q) ||
-            (u.email ?? "").toLowerCase().includes(q) ||
-            (u.phone ?? "").toLowerCase().includes(q)
-          : true,
-      )
-      .slice(0, 10);
-  }, [userQuery, excludeUserIds]);
-
-  const todayStr = TODAY.toISOString().slice(0, 10);
-  const valid = selected && expiresOn && new Date(expiresOn) > TODAY;
+  const valid = !!selected && !!expiresOn && new Date(expiresOn) > TODAY;
 
   function submit() {
     if (!valid || !selected) return;
@@ -608,141 +645,58 @@ function AddScholarshipModal({
   }
 
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div
-        className="cl-modal sch-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Add Scholarship</h3>
-          <p className="cl-modal-sub">
-            Select a user and choose how long their scholarship lasts. The user
-            gets full Pro access until the expiry date.
+    <PrmModal
+      title="Create Scholarship"
+      description="Select a user and choose how long their scholarship lasts. They get full Pro access until it expires."
+      confirmLabel="Create Scholarship"
+      confirmDisabled={!valid}
+      onCancel={onClose}
+      onConfirm={submit}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            User<span className="prm-req">*</span>
+          </span>
+          <SelectField
+            value={selectedName}
+            options={candidateNames}
+            onChange={setSelectedName}
+            placeholder="Choose a user…"
+            searchPlaceholder="Search Users..."
+            popupMenu
+            optionDetail={(name) =>
+              candidates.find((u) => u.name === name)?.email ??
+              candidates.find((u) => u.name === name)?.phone ??
+              null
+            }
+          />
+          <p className="form-help">
+            Users with an active scholarship are hidden from this list.
           </p>
         </div>
 
-        <div className="sch-modal-body">
-          <div className="form-group" style={{ marginBottom: 24 }}>
-            <label className="form-label">
-              User <span className="req">*</span>
-            </label>
-
-            {selected ? (
-              <div className="sch-selected-user">
-                <UserCell user={selected} />
-                <button
-                  className="sch-selected-clear"
-                  aria-label="Change user"
-                  onClick={() => {
-                    setSelected(null);
-                    setPickerOpen(true);
-                  }}
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div className="sch-user-picker" ref={wrapRef}>
-                <div className="search-wrap" style={{ marginBottom: 0 }}>
-                  <span className="search-icon">
-                    <SearchIcon />
-                  </span>
-                  <input
-                    autoFocus
-                    className="search-input"
-                    placeholder="Search by name, email, or phone…"
-                    value={userQuery}
-                    onChange={(e) => {
-                      setUserQuery(e.target.value);
-                      setPickerOpen(true);
-                    }}
-                    onFocus={() => setPickerOpen(true)}
-                  />
-                </div>
-                {pickerOpen && (
-                  <div className="sch-user-dropdown">
-                    {results.length === 0 ? (
-                      <div className="sch-user-empty">
-                        {userQuery.trim()
-                          ? `No users match "${userQuery.trim()}".`
-                          : "No more eligible users."}
-                      </div>
-                    ) : (
-                      results.map((u) => (
-                        <button
-                          key={u.id}
-                          className="sch-user-option"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setSelected(u);
-                            setPickerOpen(false);
-                            setUserQuery("");
-                          }}
-                        >
-                          <UserCell user={u} />
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            <p className="form-help">
-              Users with an active scholarship are hidden from this list.
-            </p>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">
-              Expires on <span className="req">*</span>
-            </label>
-            <input
-              className="form-input sch-date-input"
-              type="date"
-              min={todayStr}
-              value={expiresOn}
-              onChange={(e) => setExpiresOn(e.target.value)}
-            />
-            <div className="sch-quick-row">
-              <span className="sch-quick-label">Quick set:</span>
-              {[
-                { label: "3 months", months: 3 },
-                { label: "6 months", months: 6 },
-                { label: "1 year", months: 12 },
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  className="sch-quick-btn"
-                  onClick={() => {
-                    const d = new Date(TODAY);
-                    d.setMonth(d.getMonth() + opt.months);
-                    setExpiresOn(d.toISOString().slice(0, 10));
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="form-help">
-              Scholarship is automatically revoked after this date. The user
-              keeps any awards they've already earned.
-            </p>
-          </div>
-        </div>
-
-        <div className="cl-modal-foot sch-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-publish sch-submit"
-            disabled={!valid}
-            onClick={submit}
-          >
-            Add Scholarship
-          </button>
+        <div className="prm-field">
+          <span className="prm-label">
+            Expires On<span className="prm-req">*</span>
+          </span>
+          <DateField
+            value={expiresOn}
+            onChange={setExpiresOn}
+            min={TODAY_ISO}
+            placeholder="Select an expiry date"
+            shortcuts={[
+              { label: "3 months", value: monthsOut(3) },
+              { label: "6 months", value: monthsOut(6) },
+              { label: "1 year", value: monthsOut(12) },
+            ]}
+          />
+          <p className="form-help">
+            The scholarship is automatically revoked after this date. The user keeps any awards
+            they've already earned.
+          </p>
         </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }

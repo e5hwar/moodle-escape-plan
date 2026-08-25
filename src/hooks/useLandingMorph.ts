@@ -33,6 +33,15 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 
 export function useLandingMorph(startAtTable = false) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // The root element also lives in state so the effects below re-bind when the
+  // page's DOM is unmounted and remounted around a full-screen sub-view (the
+  // Proctoring console replaces its page entirely) — a plain RefObject would
+  // leave the fresh element with no listeners and no CSS vars.
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const setRootRef = useCallback((el: HTMLDivElement | null) => {
+    rootRef.current = el;
+    setRootEl(el);
+  }, []);
   // Deep-linked entries (a preset filter/query passed in) skip the landing.
   const current = useRef(startAtTable ? 1 : 0);
   const target = useRef(startAtTable ? 1 : 0);
@@ -93,12 +102,14 @@ export function useLandingMorph(startAtTable = false) {
   );
 
   // Paint the landing state before first paint so the table never flashes.
+  // (setRootRef's setState flushes before paint, so a remounted root is
+  // re-painted with the current progress just as invisibly.)
   useLayoutEffect(() => {
     apply();
-  }, [apply]);
+  }, [rootEl, apply]);
 
   useEffect(() => {
-    const el = rootRef.current;
+    const el = rootEl;
     if (!el) return;
 
     const scroller = () => el!.querySelector<HTMLElement>(".table-xscroll, .tasks-scroll");
@@ -167,7 +178,7 @@ export function useLandingMorph(startAtTable = false) {
       document.removeEventListener("keydown", onKey);
       if (raf.current != null) cancelAnimationFrame(raf.current);
     };
-  }, [apply, kick]);
+  }, [rootEl, apply, kick]);
 
   const showTable = useCallback(() => snapTo(1), [snapTo]);
   const showLanding = useCallback(() => {
@@ -177,5 +188,5 @@ export function useLandingMorph(startAtTable = false) {
     snapTo(0);
   }, [snapTo]);
 
-  return { rootRef, atTable, showTable, showLanding };
+  return { rootRef: setRootRef, atTable, showTable, showLanding };
 }

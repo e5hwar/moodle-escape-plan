@@ -10,7 +10,7 @@ import {
 import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type Scope =
@@ -392,7 +392,7 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
               />
             </div>
 
-            <PageBreak
+            <SectionHeading
               label={`${industries.length} Industries · ${totalSubIndustries} Sub-Industries`}
             />
 

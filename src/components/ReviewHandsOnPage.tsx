@@ -7,7 +7,7 @@ import {
   REVIEW_TODAY,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { ReviewSearch } from "./ReviewSearch";
 import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
@@ -368,7 +368,7 @@ export function ReviewHandsOnPage() {
 
               {pending.length > 0 && oldestPending && (
                 <section className="rh-runs">
-                  <PageBreak label={`Start a Review Run · ${pending.length} Pending`} />
+                  <SectionHeading label={`Start a Review Run · ${pending.length} Pending`} />
                   <div className="rh-run-cards">
                     <div className="rh-run-card is-default">
                       <div className="rh-run-head">

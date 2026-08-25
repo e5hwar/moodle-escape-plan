@@ -18,7 +18,7 @@ import {
 import { ArrowRightUpIcon, ChevronLeftIcon, InfoFilledIcon, MenuArchiveIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeCaretIcon, TreeKebabIcon, UploadTrayIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -526,7 +526,7 @@ export function QuestionBankPage({
               />
             </div>
 
-            <PageBreak
+            <SectionHeading
               label={`${categories.length} Categories · ${totalSubcategories} Subcategories`}
             />
 

@@ -1642,13 +1642,6 @@ button.breadcrumb-item:hover {
   overflow: hidden;
 }
 
-/* Same exception, for Scholarships' name-equivalent cell (UserCell, no
-   .col-name class on its <td>) — its own color rule is a plain div selector
-   the strip rule above always wins against without this. */
-.table tbody td:not(.col-actions):not(.col-checkbox) div.user-cell-name {
-  color: #ffffff !important;
-}
-
 /* Separate adjacent inline labels (e.g. a list of tags) with a small gap. */
 .table tbody td:not(.col-actions):not(.col-checkbox) span + span,
 .table tbody td:not(.col-actions):not(.col-checkbox) span + a,
@@ -2848,6 +2841,10 @@ button.breadcrumb-item:hover {
   border-color: #ff1f31;
 }
 
+.cert-empty-hint.has-error {
+  border-color: #ff1f31;
+}
+
 .form-error-text {
   margin: 7px 0 0;
   font-family: var(--font-sans);
@@ -2969,10 +2966,15 @@ button.breadcrumb-item:hover {
   min-height: 0;
 }
 
-/* A field's own 32px bottom margin would stack on the 40px padding and read as
-   72px, so the last one in the column gives it up. */
+/* A field's own 32px bottom margin would stack on the 32px padding and read as
+   64px, so the last one in the column gives it up. The Task wizard nests its
+   steps one level deeper (.wizard-paneout > .wizard-pane, for the edge-line
+   gate), so the pane's last child gives it up the same way — otherwise every
+   fragment-rooted step sat 64px off the footer while the .wizard-fields ones
+   sat at 32px. */
 .wizard-content > .form-group:last-child,
-.wizard-content > .form-row-2:last-child {
+.wizard-content > .form-row-2:last-child,
+.wizard-pane > :last-child {
   margin-bottom: 0;
 }
 
@@ -3502,6 +3504,29 @@ button.breadcrumb-item:hover {
   overflow: hidden;
 }
 
+/* Subtext + tooltip glyph (Figma 696:1224 "Input Field + Subtext Tooltip") —
+   the pattern for a field whose full explanation is too long to sit in the
+   subtext: the line stays short and the 16px glyph after it carries the rest in
+   the shared hover tooltip (451:545). One centred row at a 4px gap; the glyph
+   inherits the subtext's own #a8a8a8 and brightens on hover like every other
+   tooltip trigger. Keep these subtexts to one line — the node only specifies
+   the single-line case, and a wrapped one would centre the glyph on the block. */
+.form-help--tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.form-help-info {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.form-help-info:hover {
+  color: #fff;
+}
+
 /* Accent hyperlink inside helper text (e.g. Tax status → Stripe docs). */
 .form-help-link {
   color: #f05523;
@@ -3681,37 +3706,25 @@ button.breadcrumb-item:hover {
   max-width: none;
 }
 
-/* Wizard section divider (Figma 104:376 "Page Break"): a short 4px lead line,
-   then an uppercase IBM Plex Mono Medium 14px #a8a8a8 label, then a #404040
-   hairline filling the rest. 4px gaps. */
-.page-break {
+/* Mid-page section heading — Figma 715:1575. A plain uppercase label and
+   nothing else: 16px Fira Sans Medium #a8a8a8, no tracking, NO rule line.
+   This replaced the old "Page Break" divider (104:376), which was retired from
+   the design system on 2026-08-25 — the hairline (and its 4px lead segment) is
+   gone app-wide, so `.section-heading-line*` no longer exists. The uppercase is
+   a transform, so callers pass normal-case labels. */
+.section-heading {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   margin: 32px 0;
 }
-/* Figma 104:376: 14px Fira Sans Medium #a8a8a8 — the sans family, not mono, and
-   no tracking. The uppercase is a transform so callers pass normal-case labels. */
-.page-break-label {
+.section-heading-label {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   text-transform: uppercase;
   color: #a8a8a8;
   white-space: nowrap;
-}
-/* 0.5px hairline, same weight as the rest of the Figma chrome. */
-.page-break-line {
-  flex: 1 0 0;
-  min-width: 0;
-  height: 0.5px;
-  background: #404040;
-}
-/* Short fixed segment to the left of the label. */
-.page-break-line-lead {
-  flex: 0 0 4px;
-  width: 4px;
-  min-width: 4px;
 }
 
 /* ===== Flat wizard step (Figma 366:6266) =====
@@ -3764,133 +3777,87 @@ button.breadcrumb-item:hover {
 }
 
 /* Deep Link editor (spec §19) — base-URL prefix + slug input + copy */
-.deeplink {
-  max-width: 640px;
-}
+/* ===== Deep Link field (Figma 699:1071 "Prefix + Plain Text - DeepLink") =====
+   One 45px shell — 1px #404040, radius 8 — split by a hairline into a read-only
+   host prefix and the slug cell. Both cells carry Figma's 12px padding minus the
+   shell's 1px border on the vertical axis, which is what lands the 45px total
+   (1 + 11 + 19 + 12 + 1... the browser rounds the 16px Fira Sans line box to
+   19px, same as every other 45px control in the app). */
 .deeplink-input {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  background: var(--bg-pill-strong);
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
   overflow: hidden;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.deeplink-input:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.18);
-}
+
 .deeplink-input.invalid {
-  border-color: rgba(229, 72, 77, 0.7);
+  border-color: #ff1f31;
 }
-.deeplink-input.invalid:focus-within {
-  box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.18);
-}
+
 .deeplink-base {
   display: inline-flex;
   align-items: center;
-  padding: 0 4px 0 12px;
-  font-family: var(--font-mono, monospace);
-  font-size: 11pt;
-  color: var(--text-faint);
+  flex-shrink: 0;
+  padding: 12px;
+  border-right: 1px solid #404040;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
   white-space: nowrap;
   user-select: none;
 }
+
+/* The slug and its Copy link share one cell, so Copy sits inside the field
+   rather than reading as a third segment. */
+.deeplink-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
 .deeplink-slug {
   flex: 1;
   min-width: 0;
   border: none;
   background: transparent;
-  padding: 10px 8px 10px 0;
-  font-family: var(--font-mono, monospace);
-  font-size: 11pt;
-  color: var(--text);
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
   outline: none;
 }
+
+.deeplink-slug::placeholder {
+  color: #404040;
+}
+
+/* An underlined orange text link, not a button — 14px Medium per the node. */
 .deeplink-copy {
   flex: none;
-  padding: 0 14px;
+  padding: 0;
   border: none;
-  border-left: 1px solid var(--border);
-  background: var(--bg-pill);
-  color: var(--text-muted);
+  background: none;
   font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #f05523;
+  text-decoration: underline;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
 }
-.deeplink-copy:hover:not(:disabled) {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
+
 .deeplink-copy:disabled {
   opacity: 0.4;
   cursor: default;
-}
-.deeplink-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-}
-.deeplink-ok {
-  color: var(--text-muted);
-}
-.deeplink-url {
-  color: var(--text-faint);
-  font-family: var(--font-mono, monospace);
-}
-.deeplink-error {
-  color: #f2777a;
-  font-weight: 500;
-}
-.deeplink-reset {
-  margin-left: auto;
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--accent-strong);
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  cursor: pointer;
-}
-.deeplink-reset:hover {
-  text-decoration: underline;
-}
-.deeplink-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin-top: 12px;
-  padding: 11px 13px;
-  border: 1px solid rgba(229, 72, 77, 0.4);
-  background: rgba(229, 72, 77, 0.09);
-  border-radius: 9px;
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-.deeplink-warn-icon {
-  color: var(--danger, #e5484d);
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-/* Keywords field — parsed chip preview under each comma-separated input */
-.kw-field {
-  max-width: none;
-}
-
-.kw-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
 }
 
 /* Empty-state hint for the Add Tasks step */
@@ -5671,42 +5638,6 @@ button.breadcrumb-item:hover {
 }
 .seg-btn:hover:not(.active) {
   color: #fff;
-}
-
-/* Cert thumbnail row */
-.cert-thumb-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  max-width: none;
-}
-.cert-thumb-preview {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #2a201a 0%, #3a2a20 100%);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.cert-thumb-meta {
-  flex: 1;
-  min-width: 0;
-}
-.cert-thumb-name {
-  font-weight: 600;
-  color: var(--text);
-}
-.cert-thumb-sub {
-  font-size: 12pt;
-  color: var(--text-muted);
-  margin-top: 2px;
 }
 
 /* ── Create as Learning Plan ── */
@@ -10943,78 +10874,10 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-/* Stat cards row — Figma 300:311 selected (120×98) / 300:363 unselected (103×96).
-   Equal width via the grid's repeat(4, 1fr).
-
-   Both states use raw values from the design rather than app tokens, because the
-   nearest tokens are all slightly off: the design's base is #0d0d0d (not
-   --bg-panel #0f0f10) and BOTH the label and the value are pure #fff (not
-   --text #e7e7e8 / --text-muted #8b8b8f).
-
-   Padding is 24px in both states. Figma shows the selected card at p-25 with a
-   1px stroke, but Figma strokes don't offset auto-layout children, so 1px border
-   + 24px padding reproduces the same 25px content inset — and the two borders
-   are exactly what takes the card from 96px to 98px. */
-.pr-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.pr-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  padding: 24px;
-  /* 10% grey wash over #0d0d0d. */
-  background:
-    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1)),
-    #0d0d0d;
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: left;
-  transition: filter 0.12s ease;
-}
-
-/* Brightness rather than a swapped fill, so hover can't drift from the spec. */
-.pr-stat:hover {
-  filter: brightness(1.25);
-}
-
-.pr-stat.is-active {
-  border: 1px solid #8a3114;
-  /* The design has NO opaque base here — the accent gradient and grey wash
-     composite straight over the page background. */
-  background:
-    linear-gradient(180deg, rgba(138, 49, 20, 0) 0%, rgba(240, 85, 35, 0.3) 100%),
-    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1));
-  box-shadow: inset 0 0 19.9px rgba(240, 85, 35, 0.5);
-}
-
-/* Figma 300:311 / 300:363 — both text nodes are `leading-normal`, so the line
-   box is left to the font rather than pinned to a measured height. */
-.pr-stat-label {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: normal;
-  color: #fff;
-}
-
-/* The label goes Regular → Medium when the card is selected. */
-.pr-stat.is-active .pr-stat-label {
-  font-weight: 500;
-}
-
-.pr-stat-value {
-  font-family: var(--font-sans);
-  font-size: 28px;
-  font-weight: 600;
-  line-height: normal;
-  color: #fff;
-}
+/* The stat-card tiles (Figma 300:311/300:363) were retired 2026-08-25: the
+   kind filter is the pill row beside the search bar now ("User Reviews 6B"
+   landing — see the Proctoring Review landing section at the end of this
+   file). */
 
 /* The old hand-rolled `.pr-table` flex grid (`.pr-thead` / `.pr-row` /
    `.pr-col-candidate` …) was retired 2026-08-10: the queue now renders on the
@@ -11028,12 +10891,22 @@ button.breadcrumb-item:hover {
    these are in its exclusion list — which is also why Quiz correctly stays a
    plain data column instead of taking `.col-rh-task`'s white/500 emphasis. */
 
-/* No width: this is the table's one auto column, so it takes the slack (the
-   shared .col-email carries a fixed 185px, which would override the <col />). */
+/* No width here (the shared .col-email carries a fixed 185px, which would
+   override the <col />): Manage IDs uses this as its one auto column, while
+   the Proctoring table sizes it from its own <colgroup> — Name is that
+   table's auto column now, like every other list page. */
 .table .pr-col-email {
   white-space: nowrap;
 }
 
+/* Proctoring's Type column (Proctoring / ID Review / ID Re-upload). */
+.table .pr-col-type {
+  width: 140px;
+  white-space: nowrap;
+}
+
+/* Manage IDs only since 2026-08-25 — the Proctoring table dropped Phone for
+   Type ("User Reviews 6B"). */
 .table .pr-col-phone {
   width: 170px;
   white-space: nowrap;
@@ -11956,6 +11829,14 @@ button.breadcrumb-item:hover {
   width: 100%;
 }
 
+/* A segmented single-select sizes to its segments, as it does on the wizards'
+   forms. .prm-field is a column flex, so without this it stretches to the
+   field's full width — the wizards' .form-group is a block, which lets the
+   control's own inline-flex shrink it. */
+.prm-field > .seg-control {
+  align-self: flex-start;
+}
+
 /* Modal fields use the app's standard field subtext (.form-help). Its own
    8px top margin would stack on the field's 8px gap, so it zeroes here. */
 .prm-field .form-help {
@@ -12158,44 +12039,14 @@ a.prm-cta {
 
 /* =============================================================
  * Scholarships
- * ============================================================= */
+ * =============================================================
+ * Nothing here is Scholarships-specific any more — the page's cells are plain
+ * text on the shared .table, its status uses .co-status-pill, and its create
+ * flow is PrmModal + SelectField + DateField. What's left is the single-table
+ * page shell that Offer Codes, Name Change Requests, the user profile and
+ * Merge Accounts all borrow. */
 
-/* User cell — matches Proctoring's candidate column */
-.user-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.user-cell-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.user-cell-name {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  /* #FFFFFF per Figma 79:443 — this is Scholarships' row-name equivalent. */
-  color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-cell-contact {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Scholarships table layout */
+/* Single-table page layout */
 .sch-page {
   padding-bottom: 0;
 }
@@ -12214,66 +12065,6 @@ a.prm-cta {
 
 .sch-table tbody tr:hover {
   background: var(--bg-row-hover);
-}
-
-/* Status pill (Active / Expired) */
-.sch-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 8px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.sch-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.sch-status--active {
-  background: rgba(95, 208, 163, 0.14);
-  color: #6fdbb1;
-}
-
-.sch-status--active .sch-status-dot {
-  background: #6fdbb1;
-  box-shadow: 0 0 0 3px rgba(95, 208, 163, 0.2);
-}
-
-.sch-status--expired {
-  background: rgba(140, 140, 145, 0.14);
-  color: var(--text-muted);
-}
-
-.sch-status--expired .sch-status-dot {
-  background: var(--text-faint);
-}
-
-/* Date cell with optional sub-text */
-.sch-date {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sch-date-sub {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-}
-
-.sch-date-sub--muted {
-  color: var(--text-faint);
-}
-
-.sch-date-sub--warning {
-  color: var(--skill-yellow);
-  font-weight: 600;
 }
 
 /* Status filter tabs */
@@ -12337,371 +12128,15 @@ a.prm-cta {
   font-weight: 400 !important;
 }
 
-/* Add Scholarship modal — extends the .cl-modal pattern */
-.sch-modal {
-  max-width: 560px;
-  width: 92vw;
-}
-
-.sch-modal-body {
-  padding: 8px 28px 28px;
-}
-
-.sch-modal-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-/* User picker */
-.sch-user-picker {
-  position: relative;
-}
-
-.sch-user-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  z-index: 50;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 6px;
-}
-
-.sch-user-option {
-  display: flex;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.sch-user-option:hover {
-  background: var(--bg-pill);
-}
-
-.sch-user-empty {
-  padding: 20px 12px;
-  text-align: center;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-}
-
-.sch-selected-user {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.sch-selected-user .user-cell {
-  flex: 1;
-  min-width: 0;
-}
-
-.sch-selected-clear {
-  padding: 6px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-}
-
-.sch-selected-clear:hover {
-  background: var(--bg-pill-strong);
-}
-
-/* Date picker + quick-set */
-.sch-date-input {
-  max-width: 240px;
-  color-scheme: dark;
-}
-
-.sch-quick-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-
-.sch-quick-label {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-
-.sch-quick-btn {
-  padding: 5px 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 999px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
-}
-
-.sch-quick-btn:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-  border-color: var(--text-faint);
-}
-
-.sch-submit {
-  background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.75) 29.09%, rgba(138, 49, 20, 0.75) 100%), rgba(13, 13, 13, 0.75);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 8px 22px rgba(228, 69, 21, 0.28);
-}
-
-.sch-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.4);
-}
-
-.sch-submit:not(:disabled):hover {
-  filter: brightness(1.08);
-}
-
 /* =============================================================
  * Offer Codes
  * ============================================================= */
 
-/* Offer Code cell — code + plan tag, with platform badges underneath */
-.oc-code-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.oc-code-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.oc-code {
-  font-family: var(--font-mono);
-  font-size: 12pt;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text);
-}
-
-.oc-plan {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.oc-plan--monthly {
-  background: rgba(120, 170, 255, 0.14);
-  color: #8fb6ff;
-}
-
-.oc-plan--annual {
-  background: rgba(233, 114, 55, 0.16);
-  color: var(--accent-strong);
-}
-
-/* Platform badges (Apple / Google / Stripe) */
-.oc-platforms {
-  display: inline-flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.oc-platform {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--bg-pill);
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.oc-platform--apple { color: #d6d6da; }
-.oc-platform--google { color: #8ab4f8; }
-.oc-platform--stripe { color: #b39dff; }
-
-/* Countries/Regions cell */
-.oc-regions {
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  color: var(--text);
-}
-
-.oc-regions--all {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-/* Plan toggle (modal) */
-.oc-plan-toggle {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.oc-plan-option {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
-  text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.oc-plan-option:hover {
-  border-color: var(--border-strong);
-}
-
-.oc-plan-option.is-active {
-  border-color: var(--accent-strong);
-  background: rgba(233, 114, 55, 0.1);
-}
-
-.oc-plan-option-title {
-  font-family: var(--font-sans);
-  font-size: 12.5pt;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.oc-plan-option-sub {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-muted);
-}
-
-/* Code input — uppercase, mono */
-.oc-code-input {
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.oc-code-input::placeholder {
-  font-family: var(--font-mono);
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
+/* The table cells are plain text per the shared table conventions, and the
+   Create modal is built from PrmModal + .seg-control + MultiSelect + DateField,
+   so the only rule this page still owns is the modal's inline error colour. */
 .oc-error {
   color: #ff6b6b !important;
-}
-
-/* Region chips (modal) */
-.oc-region-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 184px;
-  overflow-y: auto;
-  padding: 2px;
-}
-
-.oc-region-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-pill);
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 500;
-  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
-}
-
-.oc-region-chip:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.oc-region-chip.is-active {
-  border-color: var(--accent-strong);
-  background: rgba(233, 114, 55, 0.12);
-  color: var(--text);
-}
-
-.oc-region-check {
-  display: inline-flex;
-  align-items: center;
-  color: var(--accent-strong);
-}
-
-/* Platform sync notice (modal) */
-.oc-platform-notice {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
-}
-
-.oc-platform-notice-label {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.oc-platform-notice-badges {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.oc-platform-notice-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 7px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border);
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.oc-platform-notice-check {
-  display: inline-flex;
-  align-items: center;
-  color: #6fdbb1;
 }
 
 /* =============================================================
@@ -12879,7 +12314,7 @@ a.rh-crumb-link:hover {
    Secondary-Button fill at 10% over #0d0d0d (the console rail-card
    construction), the highlighted default card = the accent at 10→4%; CTAs are
    the shared .btn-publish / .btn-save-draft. */
-.rh-runs .page-break {
+.rh-runs .section-heading {
   margin: 0 0 12px;
 }
 .rh-run-cards {
@@ -15527,14 +14962,14 @@ a.rh-crumb-link:hover {
   color: #a8a8a8;
 }
 
-/* Count divider above the tree (323:1760) — the shared PageBreak with its
-   label one size down (12px mono). */
-.rail .page-break {
+/* Count heading above the tree (323:1760) — the shared SectionHeading, one
+   size down to fit the narrow rail. */
+.rail .section-heading {
   margin: 0 0 12px;
 }
 
-.rail .page-break-label {
-  font-size: 12px;
+.rail .section-heading-label {
+  font-size: 14px;
 }
 
 /* Inline "Add Sub-Industry" — Figma's dashed Secondary Button (314:2121). */
@@ -16825,7 +16260,7 @@ a.rh-crumb-link:hover {
  * only. The vocabulary maps:
  *   header    -> .tasks-header + .rvc-crumbs breadcrumb + .tasks-title/.tasks-subtitle
  *   buttons   -> .cta-quiet / .cta-primary headers, .btn-save-draft (+ .mc-btn-sm rows)
- *   sections  -> PageBreak (.page-break)
+ *   sections  -> PageBreak (.section-heading)
  *   fields    -> .co-detail-grid + .co-dt-label/.co-dt-value (cert preview panel)
  *   pills     -> .u-pill type tag, .co-pill-muted skills, .co-status-pill--{tone}
  *   tables    -> the shared .table.sch-table single-table architecture
@@ -19213,9 +18648,11 @@ a.rh-crumb-link:hover {
    `.dropdown-search` / `.dropdown-list` / `.checkbox` chrome; what differs from
    the filter menus is the padding (16px search gutter, an even 8px list inset)
    and the labels, which are white and regular here rather than muted medium.
-   Above `.cl-modal-overlay` (200) — the same field is in the Companies
-   edit-company modal. */
-.ms-menu { z-index: 300; }
+   500 for the same reason `.ss-menu` is: it must clear `.pr-confirm-overlay`
+   (400), or a MultiSelect opened inside a `PrmModal` (Offer Codes' regions
+   field) paints its top half behind the modal card. A bare 300 here would
+   *lower* the panel — this rule comes after `.dropdown--overlay`'s 500. */
+.ms-menu { z-index: 500; }
 .ms-menu .dropdown-search { padding: 8px 16px 9px; }
 .ms-menu .dropdown-list { padding: 8px; }
 .ms-menu .dropdown-list .dropdown-item {
@@ -19336,14 +18773,16 @@ a.rh-crumb-link:hover {
 /* Figma 668:972 "Dropdown Menu - Popups and Modals" — opened over a modal
    card the panel takes a lighter wash (and a softer row hover) so it still
    separates from the popup behind it. Only for menus on a popup surface. */
-.ss-menu--popup {
+.ss-menu--popup,
+.ms-menu--popup {
   background:
     linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)),
     #0d0d0d;
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
 }
 .ss-menu--popup .dropdown-list .dropdown-item:hover,
-.ss-menu--popup .dropdown-list .dropdown-item.is-active {
+.ss-menu--popup .dropdown-list .dropdown-item.is-active,
+.ms-menu--popup .dropdown-list .dropdown-item:hover {
   background: rgba(115, 115, 115, 0.1);
 }
 
@@ -20970,6 +20409,13 @@ a.rh-crumb-link:hover {
 .mgf-picked .mc-cell-user {
   flex: 1;
 }
+/* On Merge Accounts the row re-opens the Select Users picker. */
+.mgf-picked--clickable {
+  cursor: pointer;
+}
+.mgf-picked--clickable:hover {
+  border-color: #737373;
+}
 
 /* ── Account combobox ──
    The type pill closes each result row, on the panel's own margin-left:auto
@@ -20983,28 +20429,51 @@ a.rh-crumb-link:hover {
   background: #2c2c2f;
 }
 
-/* Empty and filled are one 68px control slot, so the two side-by-side pickers
-   keep their labels and subtexts level whichever one is filled first. Both
-   states start at the slot's top edge, and the panel re-anchors to the bar. */
-.mgf-picked,
-.mgf-usearch {
-  min-height: 68px;
-}
+/* The two side-by-side pickers share one control slot so their labels and
+   subtexts stay level whichever side is filled first. The slot used to be a
+   fixed 68px with the 45px bar pinned to its top, which left the field subtext
+   floating well below the input it describes; instead the bar now stretches to
+   fill the slot, so the subtext lands the standard 8px under a real control
+   (Figma 49:370) on both sides. */
 .mgf-usearch {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
 }
 /* Inside a wizard this is a form field, not the Manage-Users search bar, so it
    takes the field chrome (Figma 49:343): 45px, transparent, #404040 hairline —
    the same shell .mgf-picked uses once an account is chosen. */
 .mgf-usearch .usearch-bar {
   flex: 1;
-  height: 45px;
+  height: auto;
+  min-height: 45px;
   background: transparent;
   border-color: #404040;
 }
+/* The bar is the full slot now, so the panel hangs off the slot's bottom. */
 .mgf-usearch .usearch-panel {
-  top: 53px;
+  top: calc(100% + 8px);
+}
+
+/* Merge Accounts' fields open the Select Users table picker instead of an
+   inline combobox, so the bar is a <button>. It keeps every one of the bar's
+   own values — the button reset only strips what a button brings with it. */
+.mgf-usearch-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.mgf-usearch-trigger:hover {
+  border-color: #404040;
+}
+/* Reads as the input's placeholder, because that is what it stands in for. */
+.mgf-usearch-placeholder {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #a8a8a8;
 }
 
 /* The picked account's email is the value being confirmed — it wraps rather
@@ -21025,6 +20494,14 @@ a.rh-crumb-link:hover {
 .mc-root .form-row-2 .mgf-picked,
 .mc-root .form-row-2 .mgf-usearch {
   flex: 1;
+}
+
+/* The step-1 comparison placeholder sits in the page flow, not a flex column,
+   so it takes an explicit height instead of .co-empty-state's flex:1. */
+.mgf-empty {
+  flex: none;
+  min-height: 220px;
+  padding: 32px;
 }
 
 /* ── from → to strip, on the .mc-notice shell ──
@@ -21110,7 +20587,7 @@ a.rh-crumb-link:hover {
 
 /* A lede paragraph directly under a PageBreak owns the gap the break leaves:
    32 − 20 = 12px. Inside an accordion the break is tighter (16px), so the pull
-   is too — see .mc-acc-body .page-break. .form-help has no bottom margin, so
+   is too — see .mc-acc-body .section-heading. .form-help has no bottom margin, so
    the lede supplies its own gap to whatever follows. */
 .mgf-lede {
   margin-top: -20px;
@@ -22099,11 +21576,11 @@ a.rh-crumb-link:hover {
   margin-bottom: 24px;
 }
 
-.qed-side > .page-break {
+.qed-side > .section-heading {
   margin: 24px 0 12px;
 }
 
-.qed-side > .page-break:first-child {
+.qed-side > .section-heading:first-child {
   margin-top: 0;
 }
 
@@ -24073,7 +23550,7 @@ span.rvc-crumb--current { cursor: default; }
   flex-direction: column;
   overflow-y: auto;
 }
-.rvc-rail .page-break { margin: 0 0 12px; }
+.rvc-rail .section-heading { margin: 0 0 12px; }
 
 /* Field group — label + subtext, then 8px to the control (Figma 263:1015,
    263:865, 263:1045). Label and subtext sit flush against each other. */
@@ -25235,7 +24712,7 @@ span.rvc-crumb--current { cursor: default; }
   color: #e7e7e8;
 }
 
-.mc-empty-inner .page-break {
+.mc-empty-inner .section-heading {
   margin: 28px 0 12px;
 }
 
@@ -25707,7 +25184,7 @@ span.rvc-crumb--current { cursor: default; }
   border-top: 0.5px solid var(--mc-hairline);
 }
 
-.mc-acc-body .page-break {
+.mc-acc-body .section-heading {
   margin: 24px 0 16px;
 }
 
@@ -25756,7 +25233,7 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* ── quiz attempts block ── */
-.mc-quizbox .page-break {
+.mc-quizbox .section-heading {
   margin: 24px 0 12px;
 }
 
@@ -25916,7 +25393,7 @@ span.rvc-crumb--current { cursor: default; }
   padding: 16px;
 }
 
-.mc-taskcard-body .page-break {
+.mc-taskcard-body .section-heading {
   margin: 24px 0 16px;
 }
 
@@ -26338,6 +25815,15 @@ span.rvc-crumb--current { cursor: default; }
   opacity: var(--lmt);
 }
 
+/* No horizontal scrollbar while the list is collapsed: the real table is still
+   laid out at its full --table-min behind the landing layer, so the scrollport
+   would show a bar for columns nobody can see yet. Switching overflow-x off
+   also hides the custom bar — customScrollbars only draws one for a scrollport
+   whose computed overflow-x is auto/scroll. The expanded table keeps its bar. */
+.tasks.lm:not([data-lm="table"]) .lm-table .table-xscroll {
+  overflow-x: hidden;
+}
+
 .tasks.lm .lm-land {
   position: absolute;
   inset: 0;
@@ -26372,13 +25858,14 @@ span.rvc-crumb--current { cursor: default; }
   padding: 0 2px;
   flex-shrink: 0;
 }
+/* Same atom as the mid-page section heading (Figma 715:1575) — the landing's
+   "RECENTLY CREATED" / "LONGEST WAITING" caption is one of its uses. */
 .lm-caption-label {
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-size: 16px;
+  font-weight: 500;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: #a8a8a8;
   white-space: nowrap;
 }
 .lm-caption-all {
@@ -26499,32 +25986,37 @@ span.rvc-crumb--current { cursor: default; }
   color: var(--text-faint);
 }
 
+/* "Keep scrolling" — Figma 716:1648. A full-width bar closing the collapsed
+   list: a #404040 top rule, then a 16px double chevron and the label, centred.
+   (It replaced a pill, so there is no border/radius/fill any more.) */
 .lm-hint-wrap {
-  height: calc(47px * (1 - var(--lm)));
+  height: calc(40px * (1 - var(--lm)));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   flex-shrink: 0;
+  width: 100%;
 }
 .lm-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
   margin-top: 8px;
-  border: 1px solid #3b3b3f;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 999px;
-  padding: 7px 14px;
+  border-top: 1px solid #404040;
+  padding: 1px 12px 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 400;
   color: #a8a8a8;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .lm-hint:hover {
   color: var(--accent);
-  border-color: rgba(233, 114, 55, 0.5);
 }
 
 /* "↑ Back to search" — first child of the page's .pagination row. */
@@ -26539,8 +26031,9 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
 }
 
-/* ═══════════ Select Tasks modal (Figma 682:2321) ═══════════
-   A compact Tasks table inside the shared PrmModal shell. The chrome is all
+/* ═══════════ Table-picker modals (Figma 682:2321) ═══════════
+   A compact list table inside the shared PrmModal shell — the Skill wizard's
+   Select Tasks and Merge Accounts' Select Users both run on this. The chrome is all
    borrowed: `.prm*` for the card/header/footer, `.table` for the 40px rows and
    their hairlines, `.filters`/`PillTrigger` for the pills, `.pagination` for
    the footer row — every one of those already matches this node's spec. What
@@ -26660,6 +26153,330 @@ span.rvc-crumb--current { cursor: default; }
   cursor: default;
 }
 
+/* ── Select Users (Merge Accounts) ──
+   Same chrome, its own columns. Email, Company and Role all ellipsise rather
+   than wrap, so every row stays one 40px line like the node's. */
+.sum-table .sum-col-email,
+.sum-table .sum-col-company,
+.sum-table .sum-col-role,
+.sum-table .sum-col-plan {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A merge involves exactly two accounts, so once both are ticked the remaining
+   rows go quiet instead of silently evicting one of the pair. */
+.sum-table tbody tr.is-locked {
+  opacity: 0.45;
+  cursor: default;
+}
+.sum-table tbody tr.is-locked:hover {
+  background: transparent;
+}
+
+/* The pagination row is justify-end, so the count takes the left edge. */
+.sum-picked {
+  margin-right: auto;
+  color: var(--text-muted);
+}
+
 .stm-empty-row:hover {
   background: transparent !important;
+}
+
+/* ═══════════ Proctoring Review landing — Claude Design "User Reviews 6B" ═══════════
+   The Proctoring page runs on the same landing morph as Tasks (useLandingMorph
+   + LandingOverlay + the .tasks.lm rules above), but its hero is the
+   Start-a-Review-Run cards rather than the oversized search — so the toolbar
+   and the morphing list keep full width in both states, and the cards are what
+   collapse away as the wheel forms the table. */
+
+/* ── Collapsed view = the run cards + the list. Nothing else. ──
+   Unlike the other landing pages, the search bar and the filter row are NOT
+   part of this page's minimal state — the cards are its hero, so both rows
+   belong to the expanded table and fade in with the table chrome (--lmt).
+   They keep full width throughout (no 640px hero treatment) because they are
+   only ever seen in the table state. */
+.tasks.lm.pr-page .toolbar {
+  width: 100%;
+  margin-top: 0;
+}
+.tasks.lm.pr-page .toolbar .usearch-bar {
+  height: 40px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.tasks.lm.pr-page:not([data-lm="table"]) .toolbar,
+.tasks.lm.pr-page:not([data-lm="table"]) .filters {
+  max-height: calc(40px * var(--lmt));
+  opacity: var(--lmt);
+  overflow: hidden;
+  pointer-events: none;
+  margin-bottom: calc(14px * var(--lmt));
+  padding-bottom: 0;
+}
+/* The caption follows the cards directly once the search is gone. */
+.tasks.lm.pr-page .lm-caption,
+.tasks.lm.pr-page .lm-list {
+  width: 100%;
+}
+.tasks.lm.pr-page .lm-caption {
+  margin-top: calc(24px * (1 - var(--lm)));
+}
+
+/* The run cards collapse as the landing morphs into the table (the reference
+   collapses their max-height while fading and sliding them up 14px). The cap
+   must sit at the section's natural height so the gesture starts moving
+   immediately — tune it if the cards change shape. */
+.tasks.lm .run-section {
+  /* = the eyebrow (20 + 12 margin) + the 280px cards + their 20px bottom margin. */
+  max-height: calc(332px * (1 - var(--lm)));
+  opacity: calc(1 - 1.8 * var(--lm));
+  transform: translateY(calc(-14px * var(--lm)));
+  overflow: hidden;
+}
+.tasks.lm[data-lm="table"] .run-section {
+  display: none;
+}
+
+/* The kind filter is this page's entire pill row, so it rides in the persistent
+   `.lm-filters-flow` slot where other pages put their <Filters/> row. */
+.prl-kinds {
+  gap: 8px;
+}
+/* Active kind — the pill keeps its chrome in both states; colorway is the
+   shared .co-status-pill--accent trio. */
+.lm-pill.is-active {
+  border-color: #f05527;
+  color: #f05527;
+  background: rgba(240, 85, 39, 0.1);
+}
+
+/* Landing Email cell: "N days waiting" ↔ the address crossfade as the table
+   forms (the reference swaps the third column's content mid-morph). */
+.tasks.lm .prl-swap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.tasks.lm .prl-swap-real {
+  opacity: var(--lmf);
+}
+.tasks.lm .prl-swap-wait {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: calc(1 - 2.4 * var(--lm));
+  color: var(--text-faint);
+}
+
+/* ═══════════ Review-run cards — Figma 685:2654 "Cards" ═══════════
+   The three entry points into the review console on the Proctoring landing:
+   Oldest first (300:311, the "Recommended" accent card), By type (300:363) and
+   By quiz (714:1515). Every card is a fixed 280px square in the node, laid out
+   `space-between` so the CTA sits on the floor whatever the middle block runs
+   to. The CTAs are the shared .btn-publish / .btn-save-draft unchanged — they
+   already match the node's Primary/Secondary Button exactly — so only the card
+   chrome lives here.
+
+   NOTE these are deliberately NOT the Hands-On page's `.rh-run-*` cards: that
+   page still runs the older "Submissions Landing 1c" design and was not part
+   of this sync. */
+.run-section .section-heading {
+  margin: 0 0 12px;
+}
+.run-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.run-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 280px;
+  padding: 24px;
+  border-radius: 8px;
+  /* 10% grey wash over #0d0d0d — the node's two stacked fills. */
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1)),
+    #0d0d0d;
+}
+/* The recommended card (300:311): accent ring + the vertical accent gradient
+   and inner glow, over the same grey wash with NO opaque base — exactly the
+   old stat-card selected treatment these nodes replaced. Figma's p-25 is 24px
+   padding plus the 1px border (the Figma-padding-minus-border rule), so the
+   three cards' content boxes stay aligned across the row. */
+.run-card--rec {
+  border: 1px solid #8a3114;
+  background:
+    linear-gradient(180deg, rgba(138, 49, 20, 0) 0%, rgba(240, 85, 35, 0.3) 100%),
+    linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1));
+  box-shadow: inset 0 0 19.9px rgba(240, 85, 35, 0.5);
+}
+.run-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 30px;
+  width: 100%;
+}
+.run-headtext {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+/* Titles are cased in CSS, not in the JSX (the wizard-eyebrow convention). */
+.run-title {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+  text-transform: uppercase;
+}
+/* 14px #a8a8a8 on all three cards (715:1577 / 715:1579 — the 2026-08-25 pass
+   normalised what had been 12px white on the two plain cards). */
+.run-sub {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+/* "Recommended" (714:1565) — an accent-tinted 4px chip, NOT the app's
+   `.co-status-pill--accent` (24px, fully round, orange label). */
+.run-badge {
+  flex: none;
+  /* Figma's 4/8 minus the border: Chrome rounds a 0.5px border up to 1px per
+     side, which would take the chip from the node's 101×24 to 102.5×26. */
+  padding: 3px 7px;
+  border: 0.5px solid rgba(240, 85, 35, 0.5);
+  border-radius: 4px;
+  background: rgba(240, 85, 35, 0.2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.3px;
+  color: #fff;
+  white-space: nowrap;
+}
+/* The recommended card's middle block: label over an oversized count. */
+.run-countblock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.run-countlabel {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+.run-count {
+  font-family: var(--font-sans);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+/* The list block (714:1489 / 714:1519): rows, then an optional "+ N more". */
+.run-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+.run-items {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.run-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 4px;
+  /* The 0.5px hairline is an INSET SHADOW, not a border — Chrome rounds a
+     0.5px border up to 1px and adds it to the row, taking each row from the
+     node's 25px to 26px. The last row closes the list without one. */
+  box-shadow: inset 0 -0.5px 0 rgba(115, 115, 115, 0.5);
+}
+.run-item:last-child {
+  box-shadow: none;
+}
+.run-item-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-item-count {
+  flex: none;
+  font-size: 12px;
+  color: #a8a8a8;
+}
+.run-item-arrows {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.run-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.run-arrow:hover {
+  color: var(--accent);
+}
+/* Aligns with the rows' 4px inset, 3px under the last row (714:1559). */
+.run-more {
+  margin: 3px 0 0;
+  padding-left: 4px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  color: #7a7a7a;
+  text-transform: uppercase;
+}
+/* The CTA keeps its shared button style; only the keycap is added. Same atom
+   as the header CTA's (.tasks-header .cta-kbd), which isn't global. */
+.run-cta {
+  max-width: 100%;
+}
+.run-kbd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
 }

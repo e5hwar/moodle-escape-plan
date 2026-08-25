@@ -5,6 +5,7 @@ import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
 import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, GearIcon, LockIcon, SearchIcon, CheckIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
+import { AutoTextarea } from "./AutoTextarea";
 import { WizardStepRail } from "./WizardStepRail";
 import { SelectField } from "./SelectField";
 import {
@@ -209,7 +210,8 @@ type WizardData = {
   hoInstrEs: string;
   hoToolsEn: string;
   hoToolsEs: string;
-  hoReviewerChecklist: string;
+  hoReviewerChecklistEn: string;
+  hoReviewerChecklistEs: string;
   hoProjectDescLimit: string;
   hoMediaMax: string;
   hoMediaTypes: MediaTypes;
@@ -432,7 +434,8 @@ const INITIAL_DATA: WizardData = {
   hoInstrEs: "",
   hoToolsEn: "",
   hoToolsEs: "",
-  hoReviewerChecklist: "",
+  hoReviewerChecklistEn: "",
+  hoReviewerChecklistEs: "",
   hoProjectDescLimit: "500",
   hoMediaMax: "3",
   hoMediaTypes: { images: true, videos: true, audio: false },
@@ -1535,9 +1538,11 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
 
       <div className="form-group">
         <label className="form-label">Reviewer Checklist</label>
-        <SingleRichText
-          value={data.hoReviewerChecklist}
-          onChange={(v) => update({ hoReviewerChecklist: v })}
+        <RichTextField
+          en={data.hoReviewerChecklistEn}
+          es={data.hoReviewerChecklistEs}
+          onChangeEn={(v) => update({ hoReviewerChecklistEn: v })}
+          onChangeEs={(v) => update({ hoReviewerChecklistEs: v })}
         />
         <p className="form-help">
           Only the reviewer sees this while grading a submission — learners
@@ -3923,63 +3928,6 @@ function RichTextField({
         <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
       </div>
     </div>
-  );
-}
-
-function SingleRichText({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [focused, setFocused] = useState(false);
-
-  return (
-    <div className="rte-field">
-      {focused && <RteToolbar />}
-      <AutoTextarea
-        className="rte-area"
-        value={value}
-        onChange={onChange}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
-    </div>
-  );
-}
-
-function AutoTextarea({
-  value,
-  onChange,
-  className,
-  onFocus,
-  onBlur,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-  onFocus?: () => void;
-  onBlur?: () => void;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = "auto";
-    ref.current.style.height = ref.current.scrollHeight + "px";
-  }, [value]);
-
-  return (
-    <textarea
-      ref={ref}
-      className={className}
-      value={value}
-      rows={1}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      onChange={(e) => onChange(e.target.value)}
-    />
   );
 }
 

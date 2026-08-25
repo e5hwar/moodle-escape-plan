@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -8,8 +8,9 @@ import {
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import { ArrowRightIcon, ChevronRightIcon, SmallXIcon, DragHandleIcon, PlusThinIcon } from "./icons";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { RteToolbar } from "./RteToolbar";
+import { AutoTextarea } from "./AutoTextarea";
 
 /* ─────────────────  Types  ───────────────── */
 
@@ -536,7 +537,7 @@ function SetupSection({
 
   return (
     <>
-      <PageBreak label="Question setup" />
+      <SectionHeading label="Question setup" />
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">Status</label>
@@ -891,7 +892,7 @@ function MatchScoringSection({
 }) {
   return (
     <>
-      <PageBreak label="Scoring" />
+      <SectionHeading label="Scoring" />
       <div className="wizard-fields">
         <div className="form-group">
           <div className="radio-card-group">
@@ -959,7 +960,7 @@ function FileRulesSection({
 }) {
   return (
     <>
-      <PageBreak label="File limits" />
+      <SectionHeading label="File limits" />
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">Maximum files</label>
@@ -1006,7 +1007,7 @@ function ScaleRangeSection({
 }) {
   return (
     <>
-      <PageBreak label="Scale" />
+      <SectionHeading label="Scale" />
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">Scale range</label>
@@ -1119,7 +1120,7 @@ function GradingSection({
 
   return (
     <>
-      <PageBreak label="Grading" />
+      <SectionHeading label="Grading" />
       <div className="qed-toggles">
         <ToggleRow
           checked={grading}
@@ -1508,43 +1509,5 @@ function RichTextField({
         />
       </div>
     </div>
-  );
-}
-
-function AutoTextarea({
-  value,
-  onChange,
-  className,
-  placeholder,
-  onFocus,
-  onBlur,
-  disabled,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-  placeholder?: string;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  disabled?: boolean;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = "auto";
-    ref.current.style.height = ref.current.scrollHeight + "px";
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      className={className}
-      value={value}
-      rows={2}
-      placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      disabled={disabled}
-    />
   );
 }

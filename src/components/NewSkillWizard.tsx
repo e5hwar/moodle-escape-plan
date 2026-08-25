@@ -1,8 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { SmallXIcon, ChevronDownIcon, DocumentIcon, UploadTrayIcon } from "./icons";
+import { useMemo, useState } from "react";
+import { SmallXIcon, ChevronDownIcon } from "./icons";
 import { MultiSelect } from "./NewCompanyWizard";
+import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
 import { RteToolbar } from "./RteToolbar";
+import { AutoTextarea } from "./AutoTextarea";
 import { WizardStepRail } from "./WizardStepRail";
 import { tasks, type Task } from "../data/tasks";
 import {
@@ -277,73 +279,6 @@ function DetailsStep({
   );
 }
 
-/* Single-language file upload — Figma 678:2012 "File Upload - Single Language":
-   the same .drop-big zone as the dual-language columns, minus the bordered
-   shell and language tag, at full width. One image only, so a picked file
-   swaps the zone for its row rather than stacking an "add more" strip. */
-function ImagePicker() {
-  const [file, setFile] = useState<{ name: string; size: number; ext: string } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function pick(list: FileList | null) {
-    const f = list?.[0];
-    if (!f) return;
-    setFile({
-      name: f.name,
-      size: f.size,
-      ext: (f.name.split(".").pop() ?? "").toUpperCase(),
-    });
-  }
-
-  if (file) {
-    return (
-      <div className="file-list">
-        <div className="file-row">
-          <span className="file-icon"><DocumentIcon /></span>
-          <div className="file-meta">
-            <div className="file-name">{file.name}</div>
-            <div className="file-sub">
-              {(file.size / 1024 / 1024).toFixed(1)} MB · {file.ext}
-            </div>
-          </div>
-          <button className="file-remove" onClick={() => setFile(null)} aria-label="Remove file">
-            <SmallXIcon />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className="drop-big"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          pick(e.dataTransfer.files);
-        }}
-      >
-        <span className="drop-big-icon"><UploadTrayIcon /></span>
-        <div className="drop-big-title">Drag and drop, or click to upload</div>
-        <div className="drop-big-hint">
-          <div>Accepted File Types: JPEG, PNG, GIF</div>
-          <div>Maximum File Size: 20MB</div>
-        </div>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/gif"
-        hidden
-        onChange={(e) => pick(e.target.files)}
-      />
-    </>
-  );
-}
-
 /* Matches MultiSelect's own cap so the two fields wrap identically. */
 const PILL_LIMIT = 2;
 
@@ -610,34 +545,5 @@ function RichTextField({
         <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
       </div>
     </div>
-  );
-}
-
-function AutoTextarea({
-  value,
-  onChange,
-  className,
-  onFocus,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-  onFocus?: () => void;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = "auto";
-    ref.current.style.height = ref.current.scrollHeight + "px";
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      className={className}
-      value={value}
-      rows={1}
-      onFocus={onFocus}
-      onChange={(e) => onChange(e.target.value)}
-    />
   );
 }

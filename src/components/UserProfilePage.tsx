@@ -13,7 +13,7 @@ import {
 } from "../data/userProfile";
 import type { User } from "../data/users";
 import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { PrmModal } from "./PrmModal";
 import { PrmCheck } from "./ProctoringConsole";
 import { IdModal } from "./IdModal";
@@ -310,7 +310,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
 
           <div className="prof-scroll">
             {/* Profile fields */}
-            <PageBreak label="Profile" />
+            <SectionHeading label="Profile" />
             <div className="co-detail-grid prof-grid">
               <Field label="Language" value={p.fields.language} />
               <Field label="Goal" value={p.fields.goal} />
@@ -333,7 +333,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             </div>
 
             {/* Skills */}
-            <PageBreak label={`Skills · ${p.skills.length}`} />
+            <SectionHeading label={`Skills · ${p.skills.length}`} />
             <div className="prof-badges">
               {p.skills.map((s) =>
                 s.mastery ? (
@@ -347,7 +347,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             </div>
 
             {/* Portfolio */}
-            <PageBreak label="Portfolio" />
+            <SectionHeading label="Portfolio" />
             <div className="prof-portfolio">
               <div className="co-dt-item">
                 <div className="co-dt-label">Public portfolio link</div>
@@ -363,7 +363,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             </div>
 
             {/* Awards */}
-            <PageBreak
+            <SectionHeading
               label={`Awards · ${p.awards.length}`}
               trailing={
                 p.awards.length > 0 && (
@@ -427,7 +427,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             </table>
 
             {/* Subscription */}
-            <PageBreak
+            <SectionHeading
               label="Subscription"
               trailing={
                 canCancelSub && (
@@ -466,7 +466,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             />
 
             {/* EPA Card */}
-            <PageBreak
+            <SectionHeading
               label="EPA Card Order"
               trailing={
                 canCancelEpa && (
@@ -507,7 +507,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             )}
 
             {/* NATE details */}
-            <PageBreak
+            <SectionHeading
               label="NATE Details"
               trailing={
                 <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("edit-nate")}>
@@ -1000,7 +1000,7 @@ function PurchasesSection({
 
   return (
     <>
-      <PageBreak label={`Purchases & Bills · ${purchases.length}`} />
+      <SectionHeading label={`Purchases & Bills · ${purchases.length}`} />
 
       <div className="tabbar prof-tabs" role="tablist">
         {PURCHASE_TABS.map((t) => (

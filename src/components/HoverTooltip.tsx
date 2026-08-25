@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // Faster than the browser's native `title` delay (~500ms). Any element with a
 // non-empty `data-tip` attribute gets this tooltip; `\n` renders as line breaks.
@@ -43,12 +43,36 @@ function resolve(target: EventTarget | null): HTMLElement | null {
   return null;
 }
 
-type TipState = { text: string; anchor: number; top: number; align: "left" | "right" };
+/* `below`/`above` are the two candidate y positions — which one is used is
+   settled after the card is measured, since a long tip near the bottom of the
+   window would otherwise run off it. */
+type TipState = {
+  text: string;
+  anchor: number;
+  below: number;
+  above: number;
+  align: "left" | "right";
+};
 
 export function HoverTooltip() {
   const [tip, setTip] = useState<TipState | null>(null);
   const timer = useRef<number | null>(null);
   const current = useRef<Element | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  /* Flip above the anchor when the card doesn't fit below it. Measured rather
+     than estimated — tips run from one word to a full paragraph. Runs before
+     paint, so the card never shows in the wrong place first. */
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el || !tip) return;
+    const h = el.offsetHeight;
+    const top =
+      tip.below + h <= window.innerHeight - 8
+        ? tip.below
+        : Math.max(8, tip.above - h);
+    el.style.top = `${top}px`;
+  }, [tip]);
 
   useEffect(() => {
     function clearTimer() {
@@ -71,7 +95,8 @@ export function HoverTooltip() {
       setTip({
         text,
         anchor: nearRight ? window.innerWidth - r.right : r.left,
-        top: r.bottom + 6,
+        below: r.bottom + 6,
+        above: r.top - 6,
         align: nearRight ? "right" : "left",
       });
     }
@@ -103,9 +128,10 @@ export function HoverTooltip() {
   if (!tip) return null;
   return (
     <div
+      ref={cardRef}
       className="hover-tip"
       style={{
-        top: tip.top,
+        top: tip.below,
         [tip.align]: tip.anchor,
       }}
     >

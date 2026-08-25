@@ -20,8 +20,9 @@ import {
   XCircleIcon,
 } from "./icons";
 import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { PrmModal } from "./PrmModal";
+import { SelectUsersModal } from "./SelectUsersModal";
 
 /**
  * Merge Accounts — a four-step wizard for collapsing two learner accounts into
@@ -36,7 +37,7 @@ import { PrmModal } from "./PrmModal";
  * no visual language of its own:
  *   shell        -> .wizard / .wizard-nav / .wizard-content / .wizard-footer
  *                   (Figma 625:1459 rail, 73:515 footer), WizardStepRail
- *   sections     -> PageBreak (Figma 104:376)
+ *   sections     -> SectionHeading (Figma 104:376)
  *   comparisons  -> the shared .table (Figma 79:443/79:445) + .co-status-pill
  *   callouts     -> .mc-notice (neutral notice with a trailing action slot)
  *   disclosure   -> the .mc-acc accordion
@@ -58,8 +59,8 @@ const STEPS = [
   {
     id: "accounts",
     label: "Accounts",
-    title: "Choose which account to keep",
-    desc: "Assign each account a role. Everything from the Secondary is merged into the Primary, then the Secondary is permanently deleted.",
+    title: "Choose Accounts to Merge",
+    desc: "Choose two accounts. One account remains and the other is permanently deleted at the end of this process.",
   },
   {
     id: "billing",
@@ -282,6 +283,7 @@ export function AccountPicker({
   onQuery,
   onPick,
   onClear,
+  onOpenPicker,
 }: {
   user: MergeUser | null;
   query: string;
@@ -292,10 +294,20 @@ export function AccountPicker({
   onQuery: (q: string) => void;
   onPick: (id: string) => void;
   onClear: () => void;
+  /** When set, the empty field is a trigger for a table picker instead of an
+   *  inline combobox — Merge Accounts opens SelectUsersModal this way, Transfer
+   *  keeps the combobox. The bar keeps its search chrome either way, so the two
+   *  flows still read as the same control. */
+  onOpenPicker?: () => void;
 }) {
   if (user) {
+    // With a table picker the filled row is a second way back into it, opening
+    // pre-ticked; the ✕ still clears just this side.
     return (
-      <div className="mgf-picked">
+      <div
+        className={`mgf-picked${onOpenPicker ? " mgf-picked--clickable" : ""}`}
+        onClick={onOpenPicker}
+      >
         <span className="mc-cell-user">
           <Avatar user={user} />
           <span className="mc-cell-user-text">
@@ -304,8 +316,28 @@ export function AccountPicker({
           </span>
         </span>
         <TypePill user={user} />
-        <button className="mc-iconbtn" aria-label="Clear" onClick={onClear}>
+        <button
+          className="mc-iconbtn"
+          aria-label="Clear"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+        >
           <SmallXIcon />
+        </button>
+      </div>
+    );
+  }
+
+  if (onOpenPicker) {
+    return (
+      <div className="usearch mgf-usearch">
+        <button className="usearch-bar mgf-usearch-trigger" onClick={onOpenPicker}>
+          <span className="usearch-icon">
+            <SearchIcon />
+          </span>
+          <span className="mgf-usearch-placeholder">{placeholder}</span>
         </button>
       </div>
     );
@@ -401,7 +433,7 @@ export function FlowDone({
           <h1 className="wizard-title">{title}</h1>
           <p className="wizard-desc">{lead}</p>
 
-          <PageBreak
+          <SectionHeading
             label="Audit log entry"
             trailing={<span className="co-status-pill co-status-pill--secondary">{audit.id}</span>}
           />
@@ -461,6 +493,8 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
   const [conflictChoices, setConflictChoices] = useState<Record<string, Side>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ Skills: true, "Path entries": true });
   const [showModal, setShowModal] = useState(false);
+  // Both account fields open the same Select Users picker (Figma 682:2321).
+  const [showPicker, setShowPicker] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [mergedAt, setMergedAt] = useState<Date | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -545,6 +579,15 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
   function pickAccount(set: (id: string | null) => void, id: string | null) {
     set(id);
     setMaxStep(0);
+  }
+  /* The picker returns the ticked accounts in tick order: first is kept,
+     second is deleted. One tick fills the kept side and leaves the other empty,
+     which is exactly the half-picked state the step already handles. */
+  function applyPicked(ids: string[]) {
+    setPrimId(ids[0] ?? null);
+    setSecId(ids[1] ?? null);
+    setMaxStep(0);
+    setShowPicker(false);
   }
   function swapRoles() {
     setPrimId(secId);
@@ -631,19 +674,6 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
 
   const cont = canContinue();
   const isLast = step === STEPS.length - 1;
-  const footerHint = isLast
-    ? "This opens a final confirmation"
-    : step === 0
-    ? b2bViolation
-      ? "Resolve the B2B requirement to continue"
-      : both
-      ? "Roles set — continue"
-      : "Select both accounts"
-    : step === 1
-    ? "Confirm billing to continue"
-    : allResolved
-    ? "All conflicts resolved"
-    : `${openConflicts} conflict(s) need a decision`;
 
   if (phase === "processing") {
     return (
@@ -703,7 +733,6 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
             })}
           </ol>
 
-          <div className="wizard-progress">Step {step + 1} of {STEPS.length}</div>
         </aside>
 
         {/* ── content ── */}
@@ -717,7 +746,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
               <div className="form-row-2">
                 <div className="form-group">
                   <div className="form-label-row">
-                    <label className="form-label">Primary account</label>
+                    <label className="form-label">Account to Keep</label>
                     <span className="co-status-pill co-status-pill--accent">Kept</span>
                   </div>
                   <AccountPicker
@@ -728,6 +757,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                     onQuery={setQPrim}
                     onPick={(id) => { pickAccount(setPrimId, id); setQPrim(""); }}
                     onClear={() => pickAccount(setPrimId, null)}
+                    onOpenPicker={() => setShowPicker(true)}
                   />
                   <p className="form-help">
                     Everything merges into this account. Its login, password and auth methods are preserved.
@@ -736,7 +766,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
 
                 <div className="form-group">
                   <div className="form-label-row">
-                    <label className="form-label">Secondary account</label>
+                    <label className="form-label">Account to Delete</label>
                     <span className="co-status-pill co-status-pill--red">Deleted</span>
                   </div>
                   <AccountPicker
@@ -747,9 +777,10 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                     onQuery={setQSec}
                     onPick={(id) => { pickAccount(setSecId, id); setQSec(""); }}
                     onClear={() => pickAccount(setSecId, null)}
+                    onOpenPicker={() => setShowPicker(true)}
                   />
                   <p className="form-help">
-                    This account and its login are permanently removed once the merge runs.
+                    All data from this account is transferred and the account is permanently deleted.
                   </p>
                 </div>
               </div>
@@ -785,9 +816,12 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                 />
               )}
 
-              {(p || s) && (
+              {/* The comparison only means anything once both sides are picked —
+                  until then the section holds the shared empty state rather
+                  than a table of em-dashes. */}
+              {both && p && s ? (
                 <>
-                  <PageBreak
+                  <SectionHeading
                     label="Account details"
                     trailing={
                       <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
@@ -796,34 +830,48 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                     }
                   />
                   <CompareTable
-                    leftLabel={p ? p.name : "Primary"}
-                    leftPill={p ? "Primary · kept" : "Not selected"}
-                    leftTone={p ? "accent" : "grey"}
-                    rightLabel={s ? s.name : "Secondary"}
-                    rightPill={s ? "Secondary · deleted" : "Not selected"}
-                    rightTone={s ? "red" : "grey"}
+                    leftLabel={p.name}
+                    leftPill="Account to keep"
+                    leftTone="accent"
+                    rightLabel={s.name}
+                    rightPill="Account to delete"
+                    rightTone="red"
                     rows={accountCompareRows(p, s)}
                   />
 
-                  <PageBreak label="Completion records" />
+                  <SectionHeading label="Completion records" />
                   <CompareTable
-                    leftLabel={p ? p.name : "Primary"}
-                    leftPill={p ? "Kept" : "Not selected"}
-                    leftTone={p ? "accent" : "grey"}
-                    rightLabel={s ? s.name : "Secondary"}
-                    rightPill={s ? "Moves into the Primary" : "Not selected"}
-                    rightTone={s ? "secondary" : "grey"}
+                    leftLabel={p.name}
+                    leftPill="Kept"
+                    leftTone="accent"
+                    rightLabel={s.name}
+                    rightPill="Moves into the kept account"
+                    rightTone="secondary"
                     rows={recordCompareRows(p, s)}
                   />
 
-                  {both && p && s && (
-                    <Notice
-                      tone="ok"
-                      icon={<LockIcon />}
-                      title={`${p.name}'s login is preserved`}
-                      sub={`${s.name}'s login (${s.login}) is deleted with the secondary account.`}
-                    />
-                  )}
+                  <Notice
+                    tone="ok"
+                    icon={<LockIcon />}
+                    title={`${p.name}'s login is preserved`}
+                    sub={`${s.name}'s login (${s.login}) is deleted with the account to delete.`}
+                  />
+                </>
+              ) : (
+                <>
+                  <SectionHeading label="Account details" />
+                  <div className="co-empty-state mgf-empty">
+                    <span className="co-empty-glyph">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 8h13M14 5l3 3-3 3" />
+                        <path d="M20 16H7M10 13l-3 3 3 3" />
+                      </svg>
+                    </span>
+                    <div className="co-empty-title">Nothing to compare yet</div>
+                    <div className="co-empty-sub">
+                      Select both accounts to see their details and completion records side by side.
+                    </div>
+                  </div>
                 </>
               )}
             </>
@@ -839,7 +887,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                 toNote="Merged account (kept)"
               />
 
-              <PageBreak label="Subscription" />
+              <SectionHeading label="Subscription" />
               <CompareTable
                 leftLabel={p.name}
                 leftPill="Primary"
@@ -874,7 +922,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                 ))}
               </div>
 
-              <PageBreak label="Add-ons & one-time purchases" />
+              <SectionHeading label="Add-ons & one-time purchases" />
               <p className="form-help mgf-lede">
                 Permanent purchases (paid certifications, quiz-attempt packs). Always kept on the merged account —
                 except where the same item was bought on both.
@@ -909,7 +957,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                 );
               })}
 
-              <PageBreak label="Always preserved on the merged account" />
+              <SectionHeading label="Always preserved on the merged account" />
               {preservedAddons.length === 0 ? (
                 <p className="form-help mgf-lede">No one-time purchases on either account.</p>
               ) : (
@@ -996,7 +1044,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                       <div className="mc-acc-body">
                         {row.def && (
                           <>
-                            <PageBreak label="Resolve conflict" />
+                            <SectionHeading label="Resolve conflict" />
                             <p className="form-help mgf-lede">
                               <strong>{row.def.title}</strong> — {row.def.note}
                             </p>
@@ -1025,7 +1073,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                           </>
                         )}
 
-                        <PageBreak label="Sample records" />
+                        <SectionHeading label="Sample records" />
                         <table className="table sch-table mgf-table">
                           <colgroup>
                             <col />
@@ -1079,7 +1127,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                 ]}
               />
 
-              <PageBreak label="What will happen" />
+              <SectionHeading label="What will happen" />
               {reviewRows.map((r, i) => (
                 <Notice key={i} tone={r.tone} icon={r.icon} title={r.title} sub={r.detail} />
               ))}
@@ -1092,7 +1140,6 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
-          <span className="wizard-saved">{footerHint}</span>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
@@ -1107,6 +1154,14 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
           </button>
         </div>
       </footer>
+
+      {showPicker && (
+        <SelectUsersModal
+          value={[primId, secId].filter((id): id is string => !!id)}
+          onCancel={() => setShowPicker(false)}
+          onConfirm={applyPicked}
+        />
+      )}
 
       {/* ── confirm (Figma 483:588 + the destructive CTA 495:2247) ── */}
       {showModal && p && s && (

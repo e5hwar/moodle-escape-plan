@@ -20,7 +20,7 @@ import {
   XCircleIcon,
 } from "./icons";
 import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { PrmModal } from "./PrmModal";
 
 /**
@@ -388,7 +388,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
 
               {(src || dst) && (
                 <>
-                  <PageBreak
+                  <SectionHeading
                     label="Account details"
                     trailing={
                       <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
@@ -406,7 +406,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                     rows={accountCompareRows(src, dst)}
                   />
 
-                  <PageBreak label="Current subscription" />
+                  <SectionHeading label="Current subscription" />
                   <CompareTable
                     leftLabel={src ? src.name : "Source"}
                     leftPill={
@@ -439,7 +439,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                 toNote={`Destination · gains ${src.sub.plan}`}
               />
 
-              <PageBreak label="Subscription being moved" />
+              <SectionHeading label="Subscription being moved" />
               <CompareTable
                 leftLabel={src.name}
                 leftPill="Source — before"
@@ -459,7 +459,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                 ]}
               />
 
-              <PageBreak label="What will happen" />
+              <SectionHeading label="What will happen" />
               {reviewRows.map((r, i) => (
                 <Notice key={i} tone={r.tone} icon={r.icon} title={r.title} sub={r.detail} />
               ))}

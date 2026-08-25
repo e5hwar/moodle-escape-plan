@@ -118,8 +118,8 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
           <header className="tasks-header">
             {/* Breadcrumb over the title — the same .rvc-crumbs chrome the
                 Proctoring and Hands-On consoles use. This page is reached from
-                Proctoring Review's "View All IDs", so the trail names both, and
-                the Proctoring Review crumb is the way back out. */}
+                Exam Reviews' "View All IDs", so the trail names both, and
+                the Exam Reviews crumb is the way back out. */}
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Home</span>
@@ -129,9 +129,9 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                 <button
                   className="rvc-crumb"
                   onClick={onBack}
-                  title="Back to Proctoring & ID Review"
+                  title="Back to Exam Reviews"
                 >
-                  Proctoring Review
+                  Exam Reviews
                 </button>
                 <ChevronRightIcon />
                 <span className="rvc-crumb rvc-crumb--current">View All IDs</span>

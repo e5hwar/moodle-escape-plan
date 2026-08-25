@@ -2279,12 +2279,15 @@ function CreatePriceModal({
 const PILL_LIMIT = 2;
 
 export function MultiSelect({
-  options, value, onChange, placeholder, searchPlaceholder,
+  options, value, onChange, placeholder, searchPlaceholder, popupMenu = false,
 }: {
   options: string[]; value: string[]; onChange: (v: string[]) => void;
   placeholder: string;
   /** Search box label, e.g. "Search Industries…" (Figma 591:1322). */
   searchPlaceholder: string;
+  /** Set when the field sits on a modal/popup — the panel takes the
+   *  popup-context surface (Figma 668:972), same as SelectField's. */
+  popupMenu?: boolean;
 }) {
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
@@ -2317,7 +2320,7 @@ export function MultiSelect({
         overlay
         constrainHeight
         width={fieldWidth || 300}
-        panelClass="ms-menu"
+        panelClass={`ms-menu${popupMenu ? " ms-menu--popup" : ""}`}
         onOpenChange={(o) => { if (!o) setQuery(""); }}
         trigger={({ open, toggle: toggleOpen }) => (
           <div

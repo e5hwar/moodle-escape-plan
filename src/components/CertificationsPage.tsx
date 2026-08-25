@@ -75,9 +75,10 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 const STAGE_RANK: Record<string, number> = {
-  Apprentice: 0,
-  Journeyman: 1,
-  Master: 2,
+  "Pre-Apprentice": 0,
+  Apprentice: 1,
+  Journeyman: 2,
+  Master: 3,
 };
 
 function compare(a: Certification, b: Certification, key: SortKey): number {

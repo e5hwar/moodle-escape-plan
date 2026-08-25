@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   mediaUrl,
   pastReviewOf,
@@ -8,6 +8,7 @@ import {
 } from "../data/reviewSubmissions";
 import { ChevronLeftIcon, LockIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
+import { AutoTextarea } from "./AutoTextarea";
 
 function formatDate(iso: string): string {
   if (!iso || iso === "—") return "—";
@@ -342,26 +343,17 @@ function ReviewerChecklistField({
   onChange: (v: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = "auto";
-    ref.current.style.height = ref.current.scrollHeight + "px";
-  }, [value]);
 
   return (
     <div className={`rte-field ${focused ? "is-focused" : ""}`}>
       {focused && <RteToolbar />}
-      <textarea
-        ref={ref}
+      <AutoTextarea
         className="rte-area"
         value={value}
-        rows={1}
+        onChange={onChange}
         placeholder="Note what you checked while reviewing this submission…"
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );

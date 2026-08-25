@@ -45,7 +45,7 @@ function compare(a: NameChangeRequest, b: NameChangeRequest, key: SortKey): numb
   }
 }
 
-export function NameChangeRequestsPage() {
+export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
   const [list, setList] = useState<NameChangeRequest[]>(seed);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "desc" });
@@ -98,7 +98,19 @@ export function NameChangeRequestsPage() {
       <div className="workspace">
         <div className="tasks sch-page">
           <header className="tasks-header">
-            <div>
+            {/* This page is reached from the Proctoring Review header's Name
+                Changes button (it no longer has its own sidebar entry), so the
+                crumb is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Operations</span>
+                <ChevronRightIcon />
+                <button className="rvc-crumb" onClick={onBack} title="Back to Exam Reviews">
+                  Exam Reviews
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Name Changes</span>
+              </nav>
               <h1 className="tasks-title">Name Change Requests</h1>
               <div className="tasks-subtitle">
                 <span>

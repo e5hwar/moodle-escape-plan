@@ -29,7 +29,7 @@ import {
 } from "../data/certLookup";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
-import { PageBreak } from "./PageBreak";
+import { SectionHeading } from "./SectionHeading";
 import { SearchHints } from "./SearchPanelParts";
 import { ArrowUpRightIcon, ChevronDownIcon, ChevronRightIcon, FileIcon, HandsOnIcon, PackageIcon, PlusCircleIcon, QuizIcon, RowArrowIcon, SearchIcon, SmallXIcon, XCircleIcon } from "./icons";
 
@@ -154,7 +154,7 @@ function QuizAttemptBox({
 }) {
   return (
     <div className="mc-quizbox">
-      <PageBreak label="Quiz attempts" />
+      <SectionHeading label="Quiz attempts" />
       <div className="mc-quizbox-row">
         <span className="mc-quizbox-text">{d.attemptsRemainingStr}</span>
         <div className="mc-quizbox-actions">
@@ -624,7 +624,7 @@ export function ContentOverridesPage({
                   </div>
                   {examples.length > 0 && (
                     <>
-                      <PageBreak label="Jump to an example" />
+                      <SectionHeading label="Jump to an example" />
                       <div className="mc-examples">
                         {examples.map((ex, i) => (
                           <button key={i} className="btn-save-draft mc-example" onClick={() => setScope(ex.w, ex.x)}>
@@ -1025,7 +1025,7 @@ function Matrix({
         {/* header */}
         <div className="mc-matrix-head">
           <div className="mc-matrix-namecell mc-matrix-headcell">
-            <span className="page-break-label">Employee · {members.length}</span>
+            <span className="section-heading-label">Employee · {members.length}</span>
           </div>
           {columns.map((t) => (
             <div
@@ -1038,7 +1038,7 @@ function Matrix({
             </div>
           ))}
           <div className="mc-matrix-certcell mc-matrix-headcell">
-            <span className="page-break-label">Certification</span>
+            <span className="section-heading-label">Certification</span>
           </div>
         </div>
 
@@ -1367,7 +1367,7 @@ function AccordionCard({
           {detail.isQuizLimited && (
             <QuizAttemptBox d={detail} onGrant={onGrant} onViewAttempts={onViewAttempts} />
           )}
-          <PageBreak label="Status timeline" />
+          <SectionHeading label="Status timeline" />
           <Timeline events={detail.timeline} />
           {cl.status !== "complete" && (
             <button
@@ -1433,7 +1433,7 @@ function TaskDetailPanel({
             onViewAttempts={() => onViewAttempts(uid, task.id)}
           />
         )}
-        <PageBreak label="Status timeline" />
+        <SectionHeading label="Status timeline" />
         <Timeline events={detail.timeline} />
       </div>
 

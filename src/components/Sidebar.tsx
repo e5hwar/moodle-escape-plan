@@ -134,10 +134,9 @@ const sections: NavSection[] = [
     items: [
       { key: "content-overrides", label: "Manage Completions", icon: "edit", navKey: "content-overrides" },
       { key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
-      { key: "proctoring-review", label: "Proctoring Review", icon: "shield", navKey: "proctoring-review", badge: 8 },
-      { key: "name-change-requests", label: "Name Change Requests", icon: "idCard", navKey: "name-change-requests" },
-      { key: "merge-accounts", label: "Merge Accounts", icon: "merge", navKey: "merge-accounts" },
-      { key: "transfer-subscription", label: "Transfer Subscription", icon: "transfer", navKey: "transfer-subscription" },
+      // Name Change Requests left this group 2026-08-25 — it's reached from the
+      // Proctoring Review header's "Name Changes" button now (the route stays).
+      { key: "proctoring-review", label: "Exam Reviews", icon: "shield", navKey: "proctoring-review", badge: 8 },
     ],
   },
   {

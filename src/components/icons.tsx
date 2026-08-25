@@ -278,6 +278,30 @@ export const ArrowDownIcon = () => (
   </svg>
 );
 
+/* Reorder arrows for the review-run cards (Figma 714:1496 down / 714:1502 up).
+   Transcribed from the exported assets — a 16px box, 1.33333 stroke, SQUARE
+   caps. Deliberately NOT the ArrowUp/ArrowDownIcon pair above, which is a
+   rounded 12px keycap glyph on a 24px viewBox. */
+export const RunMoveUpIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.6667 7L8 3.33333L4.33333 7M8 4.16667V12.8333" />
+  </svg>
+);
+
+export const RunMoveDownIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.6667 9.06667L8 12.7333L4.33333 9.06667M8 11.9V3.23333" />
+  </svg>
+);
+
+/* Double chevron for the landing's "keep scrolling" bar (Figma 716:1656) —
+   transcribed from the exported asset: 16px box, 1.33333 stroke, square caps. */
+export const KeepScrollingIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11 4.66667L8 7.66667L5 4.66667M11 9L8 12L5 9" />
+  </svg>
+);
+
 /* edit-off — marks a read-only review rail (Figma 298:1886). */
 export const EditOffIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -355,6 +379,27 @@ export const InfoCircleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9.3" />
     <path d="M12 11v5.4M12 7.5h.01" />
+  </svg>
+);
+
+/* Info glyph for a field subtext (Figma 696:1237, inside "Input Field + Subtext
+   Tooltip" 696:1224). Traced exactly: a 16px box holding a 14.667 glyph, 1.333
+   stroke with SQUARE caps — which is what turns the degenerate dot path into a
+   crisp square pip. The other info glyphs in this file are round-capped
+   approximations; this one is the design-system icon. */
+export const InfoTipIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.33333"
+    strokeLinecap="square"
+    aria-hidden="true"
+  >
+    <path d="M1.33333 8C1.33333 4.31800 4.31800 1.33333 8 1.33333C11.68200 1.33333 14.66667 4.31800 14.66667 8C14.66667 11.68200 11.68200 14.66667 8 14.66667C4.31800 14.66667 1.33333 11.68200 1.33333 8Z" />
+    <path d="M8 11V7.33333M8 5H7.99733V4.99733H8V5Z" />
   </svg>
 );
 

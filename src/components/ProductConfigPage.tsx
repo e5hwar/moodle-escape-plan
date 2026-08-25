@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { UploadIcon, GlobeIcon, LockIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
+import { AutoTextarea } from "./AutoTextarea";
 
 /* ─── Icons ─── */
 const TrashIcon = () => (
@@ -644,38 +645,6 @@ function ForceAppUpdate({
 }
 
 /* ─── Legal (rich text, EN + ES) ─── */
-function LegalAutoTextarea({
-  value,
-  onChange,
-  onFocus,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onFocus?: () => void;
-  placeholder?: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = "auto";
-    ref.current.style.height = ref.current.scrollHeight + "px";
-  }, [value]);
-
-  return (
-    <textarea
-      ref={ref}
-      className="rte-area"
-      value={value}
-      rows={3}
-      placeholder={placeholder}
-      onFocus={onFocus}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
-
 function LegalRichTextField({
   en,
   es,
@@ -692,12 +661,22 @@ function LegalRichTextField({
       <RteToolbar />
       <div className="rte-lang-row">
         <span className="lang-tag">EN</span>
-        <LegalAutoTextarea value={en} onChange={onChangeEn} placeholder="Enter the English text…" />
+        <AutoTextarea
+          className="rte-area"
+          value={en}
+          onChange={onChangeEn}
+          placeholder="Enter the English text…"
+        />
       </div>
       <div className="rte-field-divider" />
       <div className="rte-lang-row">
         <span className="lang-tag">ES</span>
-        <LegalAutoTextarea value={es} onChange={onChangeEs} placeholder="Introduce el texto en español…" />
+        <AutoTextarea
+          className="rte-area"
+          value={es}
+          onChange={onChangeEs}
+          placeholder="Introduce el texto en español…"
+        />
       </div>
     </div>
   );

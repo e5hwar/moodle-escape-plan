@@ -1,4 +1,4 @@
-export type CareerStage = "Apprentice" | "Journeyman" | "Master";
+export type CareerStage = "Pre-Apprentice" | "Apprentice" | "Journeyman" | "Master";
 export type CertType = "Unit" | "Credential" | "Program" | "Bundle";
 export type CertVisibility = "Visible" | "Hidden" | "Archived";
 // Paid certifications are either consumable (a credit/seat is spent on use) or
@@ -84,7 +84,7 @@ export const certifications: Certification[] = [
 ];
 
 // ─── Filter option constants ──────────────────────────────────────────────────
-export const CAREER_STAGES: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
+export const CAREER_STAGES: CareerStage[] = ["Pre-Apprentice", "Apprentice", "Journeyman", "Master"];
 export const CERT_TYPES: CertType[] = ["Unit", "Credential", "Program", "Bundle"];
 export const CERT_VISIBILITIES: CertVisibility[] = ["Visible", "Hidden", "Archived"];
 

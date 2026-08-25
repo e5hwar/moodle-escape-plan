@@ -430,7 +430,9 @@ function AdminApp() {
       ? "question-bank"
       : view.name === "spotlight"
       ? "spotlight"
-      : view.name === "proctoring" || view.name === "manage-ids"
+      : view.name === "proctoring" ||
+        view.name === "manage-ids" ||
+        view.name === "name-change-requests"
       ? "proctoring-review"
       : view.name === "scholarship"
       ? "manage-users"
@@ -446,8 +448,6 @@ function AdminApp() {
       ? "manage-users"
       : view.name === "review-hands-on"
       ? "review-hands-on"
-      : view.name === "name-change-requests"
-      ? "name-change-requests"
       : view.name === "content-overrides"
       ? "content-overrides"
       : view.name === "product-config"
@@ -601,8 +601,11 @@ function AdminApp() {
       ) : view.name === "spotlight" ? (
         <SpotlightsPage />
       ) : view.name === "proctoring" ? (
-        <ProctoringPage onManageIds={() => setView({ name: "manage-ids" })} />
-      ) : view.name === "manage-ids" ? (
+        <ProctoringPage onNameChanges={() => setView({ name: "name-change-requests" })} />
+      ) : /* Currently unreachable: the Proctoring header's "View All IDs" button was
+             removed 2026-08-25 and this view has no nav key. Kept wired so restoring
+             an entry point is a one-liner. */
+      view.name === "manage-ids" ? (
         <ManageIdsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "scholarship" ? (
         <ScholarshipsPage onBack={() => navigate("manage-users")} />
@@ -654,7 +657,7 @@ function AdminApp() {
       ) : view.name === "review-hands-on" ? (
         <ReviewHandsOnPage />
       ) : view.name === "name-change-requests" ? (
-        <NameChangeRequestsPage />
+        <NameChangeRequestsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "content-overrides" ? (
         <ContentOverridesPage onViewAttempts={openAttemptsForUser} initialUserId={view.userId} />
       ) : view.name === "product-config" ? (

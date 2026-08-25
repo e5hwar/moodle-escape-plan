@@ -26,7 +26,7 @@ function idCardOf(s: Submission): IdCardData {
 }
 
 /* ── Proctoring console ───────────────────────────────────────────────────
-   Full-page, queue-driven review screen for Proctoring & ID Review
+   Full-page, queue-driven review screen for Exam Reviews
    submissions — modeled on ReviewConsole.tsx (the Hands-On review console):
    same page header/breadcrumb, footer and "View Queue" popover chrome
    (.rvc-* — shared with ReviewConsole rather than duplicated). The actual
@@ -267,8 +267,8 @@ export function ProctoringConsole({
                 <ChevronRightIcon />
                 <span className="rvc-crumb">Operations</span>
                 <ChevronRightIcon />
-                <button className="rvc-crumb rvc-crumb--current" onClick={onExit} title="Back to Proctoring & ID Review">
-                  Proctoring & ID Review
+                <button className="rvc-crumb rvc-crumb--current" onClick={onExit} title="Back to Exam Reviews">
+                  Exam Reviews
                 </button>
               </nav>
               <div className="rvc-pagehead-id">
