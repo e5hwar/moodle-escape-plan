@@ -13,10 +13,12 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon, SearchIcon, StepperMinusIcon, StepperPlusIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon, SearchIcon } from "./icons";
+import { Stepper } from "./Stepper";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 
 /* ─────────────── Constants ─────────────── */
@@ -326,7 +328,18 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       desc: "Choose the access plan. Subscription plans require billing configuration.",
     },
   ];
-
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = STEPS.length - 1;
+  const gate = useEdgeLineGate({
+    step,
+    setStep,
+    lastStep,
+    // detailsOnly / subscriptionOnly lock the wizard to a single step.
+    enabled: !detailsOnly && !subscriptionOnly,
+    // Same guards the footer's Continue button enforces — the wheel must not
+    // walk past a step the button won't leave.
+    canGoNext: step === 0 ? companyValid : step === 1 ? adminValid : true,
+  });
 
   // Details-only edit: patch the identity & segmentation fields onto the
   // existing company, leaving plan, billing, status, and the admin account
@@ -471,7 +484,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                 <li
                   key={s.id}
                   className={`wizard-step ${status}`}
-                  onClick={() => setStep(i)}
+                  onClick={() => gate.goStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -485,48 +498,60 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         </aside>
         )}
 
-        <div className="wizard-content">
-          {step === 0 ? (
-            <Step1Details
-              name={name} setName={setName}
-              taxStatus={taxStatus} setTaxStatus={setTaxStatus}
-              assignedCsm={assignedCsm} setAssignedCsm={setAssignedCsm}
-              assignedSalesRep={assignedSalesRep} setAssignedSalesRep={setAssignedSalesRep}
-              country={country} setCountry={setCountry}
-              addrLine1={addrLine1} setAddrLine1={setAddrLine1}
-              addrLine2={addrLine2} setAddrLine2={setAddrLine2}
-              addrCity={addrCity} setAddrCity={setAddrCity}
-              addrPin={addrPin} setAddrPin={setAddrPin}
-              addrState={addrState} setAddrState={setAddrState}
-              industries={industries} setIndustries={setIndustries}
-              partnerships={partnerships} setPartnerships={setPartnerships}
-              onNavigateToProductConfig={onNavigateToProductConfig}
-            />
-          ) : step === 1 ? (
-            <StepAdminAccount
-              contactName={contactName} setContactName={setContactName}
-              email={email} setEmail={setEmail}
-              phone={phone} setPhone={setPhone}
-            />
-          ) : (
-            <Step2Plan
-              plan={plan} setPlan={setPlan}
-              tier={tier} setTier={setTier}
-              billingCycle={billingCycle} setBillingCycle={setBillingCycle}
-              currency={currency} setCurrency={setCurrency}
-              priceStr={priceStr} setPriceStr={setPriceStr}
-              seats={seats} setSeats={setSeats}
-              payment={payment} setPayment={setPayment}
-              baseRate={baseRate} effectiveRate={effectiveRate}
-              monthlyTotal={monthlyTotal} seatCount={seatCount} sym={sym}
-              savedPrices={savedPrices}
-              onCreatePrice={() => setShowNewPriceModal(true)}
-              trialExpired={trialExpired}
-              freeAccessEndDate={freeAccessEndDate} setFreeAccessEndDate={setFreeAccessEndDate}
-              seatsLocked={isEdit}
-              hideSummary
-            />
-          )}
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              {step === 0 ? (
+                <Step1Details
+                  name={name} setName={setName}
+                  taxStatus={taxStatus} setTaxStatus={setTaxStatus}
+                  assignedCsm={assignedCsm} setAssignedCsm={setAssignedCsm}
+                  assignedSalesRep={assignedSalesRep} setAssignedSalesRep={setAssignedSalesRep}
+                  country={country} setCountry={setCountry}
+                  addrLine1={addrLine1} setAddrLine1={setAddrLine1}
+                  addrLine2={addrLine2} setAddrLine2={setAddrLine2}
+                  addrCity={addrCity} setAddrCity={setAddrCity}
+                  addrPin={addrPin} setAddrPin={setAddrPin}
+                  addrState={addrState} setAddrState={setAddrState}
+                  industries={industries} setIndustries={setIndustries}
+                  partnerships={partnerships} setPartnerships={setPartnerships}
+                  onNavigateToProductConfig={onNavigateToProductConfig}
+                />
+              ) : step === 1 ? (
+                <StepAdminAccount
+                  contactName={contactName} setContactName={setContactName}
+                  email={email} setEmail={setEmail}
+                  phone={phone} setPhone={setPhone}
+                />
+              ) : (
+                <Step2Plan
+                  plan={plan} setPlan={setPlan}
+                  tier={tier} setTier={setTier}
+                  billingCycle={billingCycle} setBillingCycle={setBillingCycle}
+                  currency={currency} setCurrency={setCurrency}
+                  priceStr={priceStr} setPriceStr={setPriceStr}
+                  seats={seats} setSeats={setSeats}
+                  payment={payment} setPayment={setPayment}
+                  baseRate={baseRate} effectiveRate={effectiveRate}
+                  monthlyTotal={monthlyTotal} seatCount={seatCount} sym={sym}
+                  savedPrices={savedPrices}
+                  onCreatePrice={() => setShowNewPriceModal(true)}
+                  trialExpired={trialExpired}
+                  freeAccessEndDate={freeAccessEndDate} setFreeAccessEndDate={setFreeAccessEndDate}
+                  seatsLocked={isEdit}
+                  hideSummary
+                />
+              )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {step === 2 && (
@@ -552,14 +577,17 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         </div>
         <div className="wizard-actions">
           {step > 0 && !subscriptionOnly && (
-            <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
           )}
           {step === 0 ? (
             <button
               className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!companyValid}
               data-tooltip={ctaTooltip}
-              onClick={detailsOnly ? handleSaveDetails : () => setStep(1)}
+              onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
             >
               {detailsOnly ? "Save changes" : "Continue"}
             </button>
@@ -568,7 +596,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!adminValid}
               data-tooltip={ctaTooltip}
-              onClick={() => setStep(2)}
+              onClick={() => gate.goStep(2)}
             >
               Continue
             </button>
@@ -1674,49 +1702,6 @@ function Step2Plan({
         </>
       )}
     </>
-  );
-}
-
-/* ─────────────── Stepper (Figma 618:1264) ─────────────── */
-
-function Stepper({
-  value, onChange, min = 0, disabled = false,
-}: {
-  value: string; onChange: (v: string) => void; min?: number; disabled?: boolean;
-}) {
-  const n = parseInt(value, 10);
-  const current = Number.isFinite(n) ? n : min;
-  const step = (d: number) => onChange(String(Math.max(min, current + d)));
-
-  return (
-    <div className={`stepper${disabled ? " is-disabled" : ""}`}>
-      <button
-        type="button"
-        className="stepper-btn"
-        aria-label="Decrease"
-        disabled={disabled || current <= min}
-        onClick={() => step(-1)}
-      >
-        <StepperMinusIcon />
-      </button>
-      <input
-        className="stepper-value"
-        type="number"
-        min={min}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <button
-        type="button"
-        className="stepper-btn"
-        aria-label="Increase"
-        disabled={disabled}
-        onClick={() => step(1)}
-      >
-        <StepperPlusIcon />
-      </button>
-    </div>
   );
 }
 

@@ -55,6 +55,31 @@ export function longQuestionType(type: QuestionType): string {
   return LONG_BY_SHORT[shortQuestionType(type)];
 }
 
+/* The Create Question menu (Figma 724:1010, the same panel Create Task uses):
+   one row per authoring type with the letter that launches it while the menu
+   is open. Multiple Choice covers Multiple select — the editor's Answers
+   control switches between single and multiple. Letters avoid the page's own
+   C (create) and A (add category), so "Match the Following" takes F for
+   "Following" and "File Upload" takes U for "Upload". */
+const TYPE_MENU_SHORTCUTS: [QuestionType, string][] = [
+  ["Multiple choice", "M"],
+  ["True/False", "T"],
+  ["Match the following", "F"],
+  ["Short answer", "S"],
+  ["Linear scale", "L"],
+  ["File upload", "U"],
+];
+
+export const QUESTION_TYPE_MENU: {
+  type: QuestionType;
+  label: string;
+  shortcut: string;
+}[] = TYPE_MENU_SHORTCUTS.map(([type, shortcut]) => ({
+  type,
+  label: longQuestionType(type),
+  shortcut,
+}));
+
 // Short answer, File upload and Linear scale are always ungraded in V1.
 export function supportsGrading(type: QuestionType): boolean {
   return (

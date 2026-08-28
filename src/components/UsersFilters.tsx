@@ -62,22 +62,33 @@ const COMPANY_NAMES = companies.map((c) => c.name);
 export function UsersFilters({
   filters,
   setFilters,
+  leading,
   extra,
+  extraActive = false,
+  onClearExtra,
 }: {
   filters: UserFilterState;
   setFilters: (next: UserFilterState) => void;
+  /** Page-specific pills rendered BEFORE the shared ones — the Quiz Name pill
+   *  on Who Paid, which leads the row the way it does on Quiz Attempts. */
+  leading?: ReactNode;
   /** Extra page-specific filter pills rendered alongside the shared ones. */
   extra?: ReactNode;
+  /** Whether `leading`/`extra` currently hold a value — keeps Clear Filters
+   *  honest about the pills this component doesn't own. */
+  extraActive?: boolean;
+  onClearExtra?: () => void;
 }) {
   const moreCount =
     filters.roles.length + filters.goals.length + filters.industries.length;
 
   const hasFilters =
+    extraActive ||
     filters.types.length +
       filters.subscriptions.length +
       filters.companies.length +
       moreCount >
-    0;
+      0;
 
   function clearAll() {
     setFilters({
@@ -88,10 +99,12 @@ export function UsersFilters({
       goals: [],
       industries: [],
     });
+    onClearExtra?.();
   }
 
   return (
     <div className="filters">
+      {leading}
       <MultiPill
         label="User Type"
         all={USER_TYPES}

@@ -342,19 +342,17 @@ function ReviewerChecklistField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [focused, setFocused] = useState(false);
-
+  // Single-language field (Figma 620:1352): the bottom toolbar is revealed by
+  // the shared `.rte-field:not(:focus-within)` rule while the caret is inside.
   return (
-    <div className={`rte-field ${focused ? "is-focused" : ""}`}>
-      {focused && <RteToolbar />}
+    <div className="rte-field">
       <AutoTextarea
         className="rte-area"
         value={value}
         onChange={onChange}
         placeholder="Note what you checked while reviewing this submission…"
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
       />
+      <RteToolbar />
     </div>
   );
 }

@@ -13,7 +13,7 @@
  * background/headless tabs).
  */
 
-const SELECTOR = ".tasks-scroll, .table-xscroll, .attempts-scroll";
+const SELECTOR = ".tasks-scroll, .table-xscroll";
 const THICKNESS = 6; // px — track/thumb size on the cross axis
 const INSET = 2; // px — gap from the container edge
 const MIN_THUMB = 28; // px — smallest thumb so it stays grabbable

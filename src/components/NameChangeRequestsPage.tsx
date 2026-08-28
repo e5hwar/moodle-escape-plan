@@ -5,7 +5,7 @@ import {
 } from "../data/nameChangeRequests";
 import { users } from "../data/users";
 import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
-import { SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 25;
 
@@ -134,7 +134,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 <span className="search-kbd">
-                  <span className="kbd-cmd">⌘</span>
+                  <span className="kbd-cmd"><KeyCommandIcon /></span>
                   <span className="kbd-letter">K</span>
                 </span>
               </div>

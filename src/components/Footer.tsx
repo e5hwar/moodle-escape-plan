@@ -8,7 +8,7 @@ export type TaskTypeKey =
   | "file";
 
 export const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element }[] = [
-  { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon },
+  { key: "xapi", label: "xAPI Module", icon: PackageIcon },
   { key: "quiz", label: "Quiz", icon: QuizIcon },
   { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon },
   { key: "file", label: "Resource", icon: FileIcon },

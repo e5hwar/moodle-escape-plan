@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "../data/tasks";
 import { CERTIFICATIONS, TASK_TYPES } from "../data/filters";
-import { SearchIcon, SearchClearIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -252,7 +252,7 @@ export function TasksSearch({
           </button>
         ) : (
           <span className="usearch-kbd">
-            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}

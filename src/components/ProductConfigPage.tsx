@@ -2,8 +2,7 @@ import { useRef, useState } from "react";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { UploadIcon, GlobeIcon, LockIcon } from "./icons";
-import { RteToolbar } from "./RteToolbar";
-import { AutoTextarea } from "./AutoTextarea";
+import { RichTextField } from "./RichTextField";
 
 /* ─── Icons ─── */
 const TrashIcon = () => (
@@ -644,44 +643,6 @@ function ForceAppUpdate({
   );
 }
 
-/* ─── Legal (rich text, EN + ES) ─── */
-function LegalRichTextField({
-  en,
-  es,
-  onChangeEn,
-  onChangeEs,
-}: {
-  en: string;
-  es: string;
-  onChangeEn: (v: string) => void;
-  onChangeEs: (v: string) => void;
-}) {
-  return (
-    <div className="rte-field">
-      <RteToolbar />
-      <div className="rte-lang-row">
-        <span className="lang-tag">EN</span>
-        <AutoTextarea
-          className="rte-area"
-          value={en}
-          onChange={onChangeEn}
-          placeholder="Enter the English text…"
-        />
-      </div>
-      <div className="rte-field-divider" />
-      <div className="rte-lang-row">
-        <span className="lang-tag">ES</span>
-        <AutoTextarea
-          className="rte-area"
-          value={es}
-          onChange={onChangeEs}
-          placeholder="Introduce el texto en español…"
-        />
-      </div>
-    </div>
-  );
-}
-
 function LegalDocField({
   title,
   desc,
@@ -699,11 +660,13 @@ function LegalDocField({
         <h2 className="pc-section-title">{title}</h2>
         <p className="pc-section-desc">{desc}</p>
       </div>
-      <LegalRichTextField
+      <RichTextField
         en={doc.en}
         es={doc.es}
         onChangeEn={(v) => onChange({ ...doc, en: v })}
         onChangeEs={(v) => onChange({ ...doc, es: v })}
+        placeholderEn="Enter the English text…"
+        placeholderEs="Introduce el texto en español…"
       />
     </div>
   );

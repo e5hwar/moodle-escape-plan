@@ -5,7 +5,7 @@ import {
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
-import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { NewFeedbackFormModal } from "./NewFeedbackFormModal";
 
@@ -175,7 +175,7 @@ export function FeedbackFormsPage({ forms, onOpen, onViewResponses, onCreate, on
                     onChange={(e) => setQuery(e.target.value)}
                   />
                   <span className="search-kbd">
-                    <span className="kbd-cmd">⌘</span>
+                    <span className="kbd-cmd"><KeyCommandIcon /></span>
                     <span className="kbd-letter">K</span>
                   </span>
                 </div>

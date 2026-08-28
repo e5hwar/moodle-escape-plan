@@ -20,7 +20,6 @@ export type Task = {
   type: TaskType;
   usedIn: string[];
   createdBy: string;
-  draft?: boolean;
   discoverable?: boolean;
   hidden?: boolean;
   /** True when this Task is the certifying final exam for its certification. */
@@ -63,7 +62,7 @@ const T = (
 ): Task => ({ id, name, type, usedIn, createdBy, tags, dateCreated, dateModified, ...extra });
 
 export const tasks: Task[] = [
-  T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026", { draft: true }),
+  T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026"),
   T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", [], "Feb 21, 2024", "Apr 03, 2026"),
   T("T-1654", "HVAC Field Tools Walkthrough", "xAPI",
     ["HVAC Field Skills", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
@@ -168,7 +167,7 @@ export const tasks: Task[] = [
 
 // Only Hands-On Tasks can be discoverable (surfaced in search/browse); every
 // other Task type is always non-discoverable. Discoverability is opt-in even for
-// Hands-On Tasks — only the ones marked below are discoverable. Drafts never are.
+// Hands-On Tasks — only the ones marked below are discoverable.
 const DISCOVERABLE = new Set([
   "T-2350", // Refrigerant Charging Procedure
   "T-2165", // Thermostat Wiring Lab
@@ -182,7 +181,7 @@ const DISCOVERABLE = new Set([
 ]);
 for (const t of tasks) {
   if (t.discoverable === undefined) {
-    t.discoverable = t.type === "Hands-On Task" && !t.draft && DISCOVERABLE.has(t.id);
+    t.discoverable = t.type === "Hands-On Task" && DISCOVERABLE.has(t.id);
   }
 }
 

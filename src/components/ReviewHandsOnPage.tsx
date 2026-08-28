@@ -21,7 +21,10 @@ import {
   PillTrigger,
 } from "./Filters";
 import { Dropdown } from "./Dropdown";
-import { SortIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
+import { SortIcon, ChevronLeftIcon, ChevronRightIcon, RowChevronIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -79,6 +82,32 @@ function rankedCounts(
   return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
+/** The landing's wait column: "Waiting 4 days" (submittedOn is date-only, so
+ *  there is no hours case here — the minimum read is one day). */
+function waitingLabelOf(s: TaskSubmission): string {
+  const d = waitDays(s.submittedOn);
+  return `Waiting ${d} day${d === 1 ? "" : "s"}`;
+}
+
+/* A run's grouping (the Exam Reviews semantics): the queue is ordered by this
+   sequence, longest-waiting first WITHIN each group, so the reviewer clears
+   one certification (or one task) before the next begins. A submission can sit
+   in several certifications — it ranks by the earliest one in the sequence.
+   `null` = the table's plain column sort. */
+type RunOrder = { field: "cert" | "task"; sequence: string[] } | null;
+
+function rankOf(s: TaskSubmission, order: RunOrder): number {
+  if (!order) return 0;
+  if (order.field === "task") {
+    const i = order.sequence.indexOf(s.taskName);
+    return i === -1 ? order.sequence.length : i;
+  }
+  const ranks = s.certifications
+    .map((c) => order.sequence.indexOf(c))
+    .filter((i) => i !== -1);
+  return ranks.length ? Math.min(...ranks) : order.sequence.length;
+}
+
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
@@ -117,7 +146,9 @@ const COLS: ColMeta[] = [
       ),
     sortValue: (s) => (s.certifications[0] ?? "").toLowerCase(),
   },
-  { key: "status", label: "Status", className: "col-rh-status", width: 200, render: (s) => <StatusPill status={displayStatus(s)} />, sortValue: (s) => displayStatus(s) },
+  // Plain text like every other data column — the old amber dot-pill was not a
+  // design-system component and was removed 2026-08-26.
+  { key: "status", label: "Status", className: "col-rh-status", width: 200, render: (s) => displayStatus(s), sortValue: (s) => displayStatus(s) },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
   { key: "taskId", label: "Task ID", className: "col-rh-taskid", width: 120, sortable: false, render: (s) => s.taskId, sortValue: (s) => s.taskId },
   { key: "email", label: "User's Email", className: "col-rh-email", width: 220, sortable: false, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
@@ -128,6 +159,22 @@ const COLS: ColMeta[] = [
   { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
+
+const NAME_WIDTH = 190;
+const TASK_WIDTH = 260;
+
+/* Landing-morph columns — mirror the table's DEFAULT visible columns so the
+   p=1 hand-off to the real table lines up (Edit Columns changes are a
+   table-state concern; the landing always shows the default set). The minimal
+   view is Name plus the right-aligned wait column, which IS the Submitted On
+   column — its cell crossfades from "Waiting 4 days" to the date as the table
+   forms. Task/Certifications/Status grow in between. */
+const LM_COLS: LandingCol[] = [
+  { key: "task", label: "Task", width: TASK_WIDTH },
+  { key: "certifications", label: "Certifications", width: COL_BY_KEY.get("certifications")!.width },
+  { key: "status", label: "Status", width: COL_BY_KEY.get("status")!.width },
+  { key: "submittedOn", label: "Submitted On", width: COL_BY_KEY.get("submittedOn")!.width, fixed: true },
+];
 
 // Adapter so the existing Edit-Columns dropdown (built for the Users page) can
 // drive this page's column set. Only the keys present here are shown.
@@ -151,9 +198,17 @@ export function ReviewHandsOnPage() {
   // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
   const [creators, setCreators] = useState<string[]>(["SkillCat"]);
   const [committedQuery, setCommittedQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "desc" });
+  // Longest waiting first — the landing's framing, and the default review-run
+  // order, so the table below the morph reads in the same order as the queue.
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Set while a By Certification / By Task run is active; overrides the column sort.
+  const [runOrder, setRunOrder] = useState<RunOrder>(null);
+
+  // Landing morph — the page opens as the review-run landing and the wheel (or
+  // any pill / row interaction) morphs it into the table view.
+  const morph = useLandingMorph();
 
   const companyNames = useMemo(() => {
     const set = new Set<string>();
@@ -183,34 +238,47 @@ export function ReviewHandsOnPage() {
     () => list.filter((s) => displayStatus(s) === "Review Pending"),
     [list],
   );
-  const oldestPending = useMemo(
-    () => [...pending].sort((a, b) => a.submittedOn.localeCompare(b.submittedOn))[0],
-    [pending],
-  );
   const certRanked = useMemo(() => rankedCounts(pending, (s) => s.certifications), [pending]);
   const taskRanked = useMemo(() => rankedCounts(pending, (s) => [s.taskName]), [pending]);
 
-  /** Point the page at a run's scope and open the console on its oldest
-   * submission. The console's queue IS the table's filtered+sorted list, so a
-   * run is just: filters = the scope, sort = longest wait first. */
-  function startRun(scope: { certs?: string[]; tasks?: string[] }) {
-    const inScope = pending.filter(
-      (s) =>
-        (!scope.certs || s.certifications.some((c) => scope.certs!.includes(c))) &&
-        (!scope.tasks || scope.tasks.includes(s.taskName)),
-    );
-    const first = [...inScope].sort((a, b) => a.submittedOn.localeCompare(b.submittedOn))[0];
+  /** Start a run: reset the filters to the reviewable queue, order the whole
+   * pending queue by the run's grouping (longest wait first within each
+   * group), and open the console on its first submission. The console's queue
+   * IS the table's filtered+sorted list, so ordering the table is all a run
+   * has to do — the reviewer walks the entire queue in that sequence. */
+  function startRun(order: RunOrder) {
+    const first = [...pending].sort(
+      (a, b) =>
+        rankOf(a, order) - rankOf(b, order) || a.submittedOn.localeCompare(b.submittedOn),
+    )[0];
     if (!first) return;
     setStatuses(["Review Pending"]);
     setCreators(["SkillCat"]);
     setTypes([]);
     setCompanies([]);
-    setCerts(scope.certs ?? []);
-    setTasks(scope.tasks ?? []);
+    setCerts([]);
+    setTasks([]);
     setCommittedQuery("");
     setSort({ key: "submittedOn", dir: "asc" });
+    setRunOrder(order);
     setOpenId(first.id);
   }
+
+  /* The three run cards carry keycaps, so each CTA has the matching letter
+     shortcut (S / C / T) — live only on the landing; the console binds its own
+     keys. This page has no Create CTA, so C is free. */
+  const runnable = !openId && pending.length > 0;
+  useCreateShortcut(() => startRun(null), runnable, "s");
+  useCreateShortcut(
+    () => startRun({ field: "cert", sequence: certRanked.map(([name]) => name) }),
+    runnable,
+    "c",
+  );
+  useCreateShortcut(
+    () => startRun({ field: "task", sequence: taskRanked.map(([name]) => name) }),
+    runnable,
+    "t",
+  );
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -227,7 +295,15 @@ export function ReviewHandsOnPage() {
   }, [list, committedQuery, statuses, types, creators, companies, tasks, certs]);
 
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => {
+    const arr = [...filtered];
+    // A run's grouping wins until the reviewer clicks a column header.
+    if (runOrder) {
+      return arr.sort(
+        (a, b) =>
+          rankOf(a, runOrder) - rankOf(b, runOrder) || a.submittedOn.localeCompare(b.submittedOn),
+      );
+    }
+    arr.sort((a, b) => {
       if (sort.key === "name") return a.userName.localeCompare(b.userName);
       if (sort.key === "task") return a.taskName.localeCompare(b.taskName);
       const col = COL_BY_KEY.get(sort.key)!;
@@ -237,10 +313,10 @@ export function ReviewHandsOnPage() {
       return String(va).localeCompare(String(vb));
     });
     return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort]);
+  }, [filtered, sort, runOrder]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort]);
+  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort, runOrder]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -255,6 +331,8 @@ export function ReviewHandsOnPage() {
     NAME_WIDTH + TASK_WIDTH + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
+    // Sorting by a column is an explicit override of a run's grouping.
+    setRunOrder(null);
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
@@ -340,15 +418,123 @@ export function ReviewHandsOnPage() {
   const hasFilters =
     statuses.length + types.length + creators.length + companies.length + tasks.length + certs.length > 0;
 
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => ({
+    key: s.id,
+    name: s.userName,
+    cells: {
+      task: s.taskName,
+      certifications: COL_BY_KEY.get("certifications")!.render(s),
+      status: COL_BY_KEY.get("status")!.render(s),
+      submittedOn: (
+        <span className="prl-swap">
+          <span className="prl-swap-real">{formatDate(s.submittedOn)}</span>
+          <span className="prl-swap-wait">{waitingLabelOf(s)}</span>
+        </span>
+      ),
+    },
+  }));
+
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks">
+        <div className="tasks lm lm-cards" ref={morph.rootRef}>
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Hands-On Task Submissions</h1>
             </div>
           </header>
+
+          {/* Start a Review Run — the same cards-hero landing as Exam Reviews
+              (Figma 685:2654 chrome); it collapses away as the wheel morphs the
+              landing into the table. By certification / By task list the ranked
+              groups (open-ended sets, so no reorder arrows — the ranking is the
+              sequence). */}
+          {pending.length > 0 && (
+            <section className="run-section">
+              <SectionHeading label="Start a Review Run" />
+              <div className="run-cards">
+                <div className="run-card run-card--rec">
+                  <div className="run-head">
+                    <div className="run-headtext">
+                      <span className="run-title">Oldest first</span>
+                      <span className="run-sub">Longest Wait First</span>
+                    </div>
+                    <span className="run-badge">Recommended</span>
+                  </div>
+                  <div className="run-countblock">
+                    <span className="run-countlabel">Pending:</span>
+                    <span className="run-count">{pending.length}</span>
+                  </div>
+                  <button className="btn-publish run-cta" onClick={() => startRun(null)}>
+                    Start Review
+                    <span className="run-kbd">S</span>
+                  </button>
+                </div>
+
+                <div className="run-card">
+                  <div className="run-headtext">
+                    <span className="run-title">By certification</span>
+                    <span className="run-sub">One Certification at a time</span>
+                  </div>
+                  <div className="run-list">
+                    <div className="run-items">
+                      {certRanked.slice(0, 3).map(([name, n]) => (
+                        <div key={name} className="run-item">
+                          <span className="run-item-label">
+                            {name}
+                            <span className="run-item-count">· {n}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {certRanked.length > 3 && (
+                      <p className="run-more">+ {certRanked.length - 3} more</p>
+                    )}
+                  </div>
+                  <button
+                    className="btn-save-draft run-cta"
+                    onClick={() =>
+                      startRun({ field: "cert", sequence: certRanked.map(([name]) => name) })
+                    }
+                  >
+                    Review By Certification
+                    <span className="run-kbd">C</span>
+                  </button>
+                </div>
+
+                <div className="run-card">
+                  <div className="run-headtext">
+                    <span className="run-title">By task</span>
+                    <span className="run-sub">Same Task back-to-back</span>
+                  </div>
+                  <div className="run-list">
+                    <div className="run-items">
+                      {taskRanked.slice(0, 3).map(([name, n]) => (
+                        <div key={name} className="run-item">
+                          <span className="run-item-label">
+                            {name}
+                            <span className="run-item-count">· {n}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {taskRanked.length > 3 && (
+                      <p className="run-more">+ {taskRanked.length - 3} more</p>
+                    )}
+                  </div>
+                  <button
+                    className="btn-save-draft run-cta"
+                    onClick={() =>
+                      startRun({ field: "task", sequence: taskRanked.map(([name]) => name) })
+                    }
+                  >
+                    Review By Task
+                    <span className="run-kbd">T</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           <div className="tasks-row">
             <div className="tasks-content">
@@ -362,81 +548,12 @@ export function ReviewHandsOnPage() {
                   certifications={certs}
                   onCertificationsChange={setCerts}
                   query={committedQuery}
-                  onCommit={setCommittedQuery}
+                  onCommit={(q) => {
+                    setCommittedQuery(q);
+                    morph.showTable();
+                  }}
                 />
               </div>
-
-              {pending.length > 0 && oldestPending && (
-                <section className="rh-runs">
-                  <SectionHeading label={`Start a Review Run · ${pending.length} Pending`} />
-                  <div className="rh-run-cards">
-                    <div className="rh-run-card is-default">
-                      <div className="rh-run-head">
-                        <span className="rh-run-title">Oldest first</span>
-                        <span className="co-status-pill co-status-pill--accent">Default</span>
-                      </div>
-                      <p className="rh-run-desc">The whole queue, longest wait first.</p>
-                      <p className="rh-run-meta">
-                        Up first: <strong>{oldestPending.userName}</strong> · waited{" "}
-                        {waitDays(oldestPending.submittedOn)}d
-                      </p>
-                      <button className="btn-publish rh-run-cta" onClick={() => startRun({})}>
-                        <span className="rh-run-cta-label">Start Reviewing</span>
-                      </button>
-                    </div>
-
-                    <div className="rh-run-card">
-                      <div className="rh-run-head">
-                        <span className="rh-run-title">By certification</span>
-                      </div>
-                      <p className="rh-run-desc">Clear one certification at a time.</p>
-                      <div className="rh-run-list">
-                        {certRanked.slice(0, 2).map(([name, n]) => (
-                          <div key={name} className="rh-run-row">
-                            <span>{name}</span>
-                            <span className="rh-run-count">{n}</span>
-                          </div>
-                        ))}
-                      </div>
-                      {certRanked.length > 2 && (
-                        <p className="rh-run-more">+ {certRanked.length - 2} more certifications</p>
-                      )}
-                      {certRanked.length > 0 && (
-                        <button
-                          className="btn-save-draft rh-run-cta"
-                          onClick={() => startRun({ certs: [certRanked[0][0]] })}
-                        >
-                          <span className="rh-run-cta-label">Start with {certRanked[0][0]}</span>
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="rh-run-card">
-                      <div className="rh-run-head">
-                        <span className="rh-run-title">By task</span>
-                      </div>
-                      <p className="rh-run-desc">Same task back-to-back, for consistent grading.</p>
-                      <div className="rh-run-list">
-                        {taskRanked.slice(0, 2).map(([name, n]) => (
-                          <div key={name} className="rh-run-row">
-                            <span>{name}</span>
-                            <span className="rh-run-count">{n}</span>
-                          </div>
-                        ))}
-                      </div>
-                      {taskRanked.length > 2 && (
-                        <p className="rh-run-more">+ {taskRanked.length - 2} more tasks</p>
-                      )}
-                      <button
-                        className="btn-save-draft rh-run-cta"
-                        onClick={() => startRun({ tasks: [taskRanked[0][0]] })}
-                      >
-                        <span className="rh-run-cta-label">Start with {taskRanked[0][0]}</span>
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              )}
 
               <div className="filters">
                 <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />
@@ -475,6 +592,18 @@ export function ReviewHandsOnPage() {
                 )}
               </div>
 
+              <div className="lm-stage">
+              <LandingOverlay
+                caption="Longest waiting"
+                total={sorted.length}
+                columns={LM_COLS}
+                rows={landingRows}
+                nameLabel="User's Name"
+                nameWidth={NAME_WIDTH}
+                onShowAll={morph.showTable}
+                onRowClick={(row) => setOpenId(row.key)}
+              />
+              <div className="lm-table">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup cols={visibleCols} />
@@ -512,10 +641,32 @@ export function ReviewHandsOnPage() {
                             {c.render(s)}
                           </td>
                         ))}
-                        {/* Empty counterpart to the header's Edit Columns cell.
-                            Without it the sticky 40px strip has no cell in the
-                            row, so the hover highlight stops short of it. */}
-                        <td className="col-actions" />
+                        {/* Row-end affordance (Figma 761:4653 resting /
+                            762:4663 hovered), built on the same two-layer
+                            machinery as every other table's 3-dot cell: a
+                            centred glyph that hides on row hover, and an
+                            absolutely-positioned bar that takes its place.
+                            The bar's anchor puts its LAST cell's glyph on the
+                            cell centre, so the two chevrons land on exactly the
+                            same pixel — the design's requirement. */}
+                        <td className="col-actions">
+                          <button
+                            className="row-action-btn lone-dots row-chevron"
+                            aria-label="Review Task"
+                            onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}
+                          >
+                            <RowChevronIcon />
+                          </button>
+                          <div className="row-action-bar">
+                            <button
+                              className="row-action-btn row-action-btn--label"
+                              onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}
+                            >
+                              Review Task
+                              <RowChevronIcon />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {paged.length === 0 && (
@@ -533,6 +684,7 @@ export function ReviewHandsOnPage() {
               </div>
 
               <div className="pagination">
+                <BackToSearch onClick={morph.showLanding} />
                 <span>
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
@@ -540,6 +692,8 @@ export function ReviewHandsOnPage() {
                   <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
                   <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
                 </div>
+              </div>
+              </div>
               </div>
             </div>
           </div>
@@ -549,20 +703,18 @@ export function ReviewHandsOnPage() {
   );
 }
 
-const NAME_WIDTH = 190;
-const TASK_WIDTH = 260;
-
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
     <colgroup>
-      {/* Explicit width so the fixed-layout name column never collapses to 0
-         when many optional columns are enabled. */}
+      {/* EVERY column carries an explicit width (Task included — it used to be
+         the auto column): a stretched fixed-layout table then distributes
+         slack across all columns in proportion, which is the regime the
+         landing overlay's track formula reproduces. An auto column would
+         swallow the slack alone and bump every column at the morph hand-off
+         — the same lesson the Exam Reviews conversion learned. `--table-min`
+         still reserves the sum, so nothing can shrink below its width. */}
       <col style={{ width: NAME_WIDTH }} />
-      {/* Task is left auto so it, and not the 40px actions column, soaks up any
-         space left over when few columns are on — the Edit Columns cell must
-         stay the same width whatever the column set is. `--table-min` reserves
-         TASK_WIDTH for it, so it can only ever grow past that, never shrink. */}
-      <col />
+      <col style={{ width: TASK_WIDTH }} />
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />
       ))}
@@ -629,16 +781,6 @@ function MoreFiltersPill({
         />
       )}
     </Dropdown>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const key = status.toLowerCase().replace(/\s+/g, "-");
-  return (
-    <span className={`rh-status rh-status--${key}`}>
-      <span className="rh-status-dot" />
-      {status}
-    </span>
   );
 }
 

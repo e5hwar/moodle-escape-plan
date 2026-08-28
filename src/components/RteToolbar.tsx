@@ -2,10 +2,12 @@ import { useState, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { BoldIcon, ItalicIcon, UnderlineIcon, BulletListIcon, NumberListIcon, LinkSmallIcon, ImageAddIcon, SuperscriptIcon, SubscriptIcon, CodeBlockIcon, RteCaretIcon } from "./icons";
 
-/* ─── Rich-text toolbar — Figma 327:137 "Rich Text Input - Dual Language" ───
+/* ─── Rich-text toolbar — Figma 327:137 / 620:1352 "Focus State" ───
    Six groups split by hairlines: block format, inline format, lists, insert,
    script, code. Every rich-text field in the app renders this same bar, so the
-   toolbar lives here rather than being re-declared per wizard.
+   toolbar lives here rather than being re-declared per wizard. It sits along
+   the field's bottom edge and is only visible while the field owns focus —
+   the reveal is pure CSS (`.rte-field:not(:focus-within) .rte-toolbar`).
 
    Buttons carry a selected state (Figma 640:922): a toggled control fills
    rgba(115,115,115,0.2) and its glyph goes white. The block-format picker opens
@@ -59,7 +61,10 @@ export function RteToolbar() {
   );
 
   return (
-    <div className="rte-toolbar">
+    // preventDefault on the strip itself: clicking its background must not
+    // blur the textarea, or the :focus-within reveal would drop the bar
+    // mid-interaction.
+    <div className="rte-toolbar" onMouseDown={(e) => e.preventDefault()}>
       <div className="rte-group">
         <Dropdown
           overlay

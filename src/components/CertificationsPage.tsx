@@ -11,10 +11,11 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CertPreviewPanel } from "./CertPreviewPanel";
+import { PrmModal } from "./PrmModal";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
@@ -121,6 +122,8 @@ export function CertificationsPage({
   onOpenCompanyDashboard,
   onViewPayers,
   onManageContentLinks,
+  onManageProgress,
+  onArchiveCert,
   onOpenIndustries,
   onOpenAwards,
   onOpenFeedback,
@@ -130,6 +133,8 @@ export function CertificationsPage({
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
   onManageContentLinks: (cert: Certification) => void;
+  onManageProgress: (cert: Certification) => void;
+  onArchiveCert: (cert: Certification) => void;
   onOpenIndustries?: () => void;
   onOpenAwards?: () => void;
   onOpenFeedback?: () => void;
@@ -143,6 +148,8 @@ export function CertificationsPage({
   // Set when someone tries to edit a Certification owned by a company — company
   // certifications are managed from the B2B Dashboard, not here.
   const [blockedEdit, setBlockedEdit] = useState<Certification | null>(null);
+  // The Certification awaiting the delete confirm, if any.
+  const [deleting, setDeleting] = useState<Certification | null>(null);
   // Created by SkillCat is applied on launch.
   const [filters, setFilters] = useState<CertFilterState>({
     industries: [],
@@ -306,10 +313,9 @@ export function CertificationsPage({
   }
 
   function deleteCert(cert: Certification) {
-    const ok = window.confirm(`Delete “${cert.name}” (${cert.id})? This can’t be undone.`);
-    if (!ok) return;
     setCertList((prev) => prev.filter((c) => c.id !== cert.id));
     if (selectedId === cert.id) setSelectedId(null);
+    setDeleting(null);
   }
 
   return (
@@ -348,14 +354,14 @@ export function CertificationsPage({
                   <span className="search-icon"><SearchIcon /></span>
                   <input
                     className="search-input"
-                    placeholder="Search Certifications by name, ID, or industry…"
+                    placeholder="Search Certifications"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") morph.showTable();
                     }}
                   />
-                  <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
+                  <span className="search-kbd"><span className="kbd-cmd"><KeyCommandIcon /></span><span className="kbd-letter">K</span></span>
                 </div>
               </div>
 
@@ -457,10 +463,13 @@ export function CertificationsPage({
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onEdit={() => editCert(menu.cert)}
-          onDelete={() => deleteCert(menu.cert)}
+          onToggleVisibility={() => toggleHidden(menu.cert)}
+          onDelete={() => setDeleting(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
           onBackup={() => backupCertification(menu.cert)}
           onManageContentLinks={() => onManageContentLinks(menu.cert)}
+          onManageProgress={() => onManageProgress(menu.cert)}
+          onArchive={() => onArchiveCert(menu.cert)}
         />
       )}
 
@@ -473,6 +482,23 @@ export function CertificationsPage({
             setBlockedEdit(null);
           }}
         />
+      )}
+
+      {deleting && (
+        <PrmModal
+          title="Delete Certification"
+          confirmLabel="Delete Certification"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => deleteCert(deleting)}
+        >
+          {/* Body copy is children, not `description` — the shell's own
+              convention for a confirm (Figma 483:588). */}
+          <p className="prm-text">
+            “{deleting.name}” ({deleting.id}) is removed from the Certifications list along
+            with its content links. This can't be undone.
+          </p>
+        </PrmModal>
       )}
     </div>
   );
@@ -613,26 +639,34 @@ function CertRow({
 }
 
 /* ─────────────── Three-dot row actions menu ─────────────── */
-/* Fixed-positioned so it escapes the table's scroll container. */
+/* Figma 735:1454 "3-Dot Menu - Certifications" — the same head-less item list
+   the Tasks and Users menus already use. Fixed-positioned so it escapes the
+   table's scroll container. */
 
 function CertActionsMenu({
   cert,
   rect,
   onClose,
   onEdit,
+  onToggleVisibility,
   onDelete,
   onViewPayers,
   onBackup,
   onManageContentLinks,
+  onManageProgress,
+  onArchive,
 }: {
   cert: Certification;
   rect: DOMRect;
   onClose: () => void;
   onEdit: () => void;
+  onToggleVisibility: () => void;
   onDelete: () => void;
   onViewPayers: () => void;
   onBackup: () => void;
   onManageContentLinks: () => void;
+  onManageProgress: () => void;
+  onArchive: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -685,6 +719,10 @@ function CertActionsMenu({
     </button>
   );
 
+  const vis = cert.visibility ?? "Visible";
+  const hidden = vis !== "Visible";
+  const archived = vis === "Archived";
+
   return (
     <div
       ref={ref}
@@ -696,16 +734,27 @@ function CertActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{cert.name}</div>
-        <div className="u-menu-head-id">{cert.id}{cert.type ? ` · ${cert.type}` : ""}</div>
-      </div>
-      {item(<RowEditIcon />, "Edit", onEdit)}
+      {item(<RowEditIcon />, "Edit Certification", onEdit)}
+      {/* An archived Cert is retired from the catalog for good, so there is no
+          visibility left to toggle. */}
+      {!archived &&
+        item(
+          hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
+          hidden ? "Make Visible" : "Make Hidden",
+          onToggleVisibility,
+        )}
       {/* Only paid certifications have payers to view. */}
-      {cert.payment && item(<MenuPlaceholderIcon />, "View who paid", onViewPayers)}
-      {item(<MenuPlaceholderIcon />, "Manage Content Links", onManageContentLinks)}
+      {cert.payment && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
+      {item(<MenuLinkIcon />, "Manage Content Links", onManageContentLinks)}
+      {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
+      {/* Not on the Figma frame, but the export is a live action with nowhere
+          else to live — kept below the frame's own items. */}
       {item(<MenuPlaceholderIcon />, "Backup Certification", onBackup)}
-      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
+      {/* Archiving used to be an edit-only step inside the Cert wizard; it's
+          now this entry, opening its own full-page Archive & Replace view. An
+          already-archived Cert can't be archived again. */}
+      {!archived && item(<MenuArchiveReplaceIcon />, "Archive & Replace", onArchive)}
+      {item(<RowDeleteIcon />, "Delete Certification", onDelete, true)}
     </div>
   );
 }

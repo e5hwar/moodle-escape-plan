@@ -8,6 +8,7 @@ import {
   type BillingPlan,
 } from "../data/offerCodes";
 import {
+  KeyCommandIcon,
   SearchIcon,
   SortIcon,
   AddIcon,
@@ -241,7 +242,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 <span className="search-kbd">
-                  <span className="kbd-cmd">⌘</span>
+                  <span className="kbd-cmd"><KeyCommandIcon /></span>
                   <span className="kbd-letter">K</span>
                 </span>
               </div>

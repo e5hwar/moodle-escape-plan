@@ -6,12 +6,14 @@ import {
   longQuestionType,
   questionDates,
   shortQuestionType,
+  QUESTION_TYPE_MENU,
   QUESTION_TYPE_OPTIONS,
   supportsGrading,
   versionHistory,
   type Category,
   type Question,
   type QuestionStatus,
+  type QuestionType,
   type QuestionVersion,
   type Subcategory,
 } from "../data/questionBank";
@@ -22,6 +24,8 @@ import { SectionHeading } from "./SectionHeading";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { useLandingMorph } from "../hooks/useLandingMorph";
+import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
 
 const PAGE_SIZE = 50;
 
@@ -55,6 +59,17 @@ const QB_FIXED_COLUMNS = [{ label: "Question" }];
 // Roomy, because the question text is allowed to run to a second line.
 const QUESTION_COL_WIDTH = 420;
 const ACTIONS_COL_WIDTH = 40;
+
+/* Landing-morph columns — mirror the table's default visible columns (key,
+   label, width) so the p=1 hand-off to the real table lines up. Type is the
+   landing's visible meta column (the design's right-aligned "category · type"
+   label, which crossfades into the plain Type cell as the table forms), so its
+   LANDING track is wider than the 170px column it becomes. */
+const QB_LM_COLS: LandingCol[] = [
+  { key: "type", label: "Type", width: 170, fixed: true, landingWidth: 280 },
+  { key: "version", label: "Version", width: 84 },
+  { key: "status", label: "Status", width: 108 },
+];
 
 function isGraded(q: Question): boolean {
   return q.gradingEnabled && supportsGrading(q.type);
@@ -170,7 +185,7 @@ export function QuestionBankPage({
   onEditQuestion,
   initialQuestions,
 }: {
-  onNewQuestion?: (categoryPath?: string[]) => void;
+  onNewQuestion?: (categoryPath?: string[], type?: QuestionType) => void;
   onEditQuestion?: (question: Question) => void;
   initialQuestions?: Question[];
 } = {}) {
@@ -189,6 +204,12 @@ export function QuestionBankPage({
   });
   const [catMenu, setCatMenu] = useState<CatMenuState>(null);
   const [catModal, setCatModal] = useState<CatModalState>({ kind: "none" });
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+
+  // Landing morph — the right pane opens as the search-first landing (Claude
+  // Design "Question Bank Landing 1C") and the wheel morphs it into the table.
+  // The rail is outside the morph root, so it stays put in both states.
+  const morph = useLandingMorph();
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -306,6 +327,31 @@ export function QuestionBankPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
+  // Landing list — same order as the table, so the morph reads as "the list
+  // becomes the table". The Type cell carries the design's landing meta
+  // ("{category} · {type}", right-aligned) via the shared swap crossfade.
+  const landingRows: LandingRow[] = sorted.slice(0, 24).map((q) => {
+    const leaf = q.categoryPath[q.categoryPath.length - 1] ?? "—";
+    const type = longQuestionType(q.type);
+    return {
+      key: q.id,
+      name: q.text,
+      dim: q.status === "Archived",
+      cells: {
+        type: (
+          <span className="prl-swap">
+            <span className="prl-swap-real">{type}</span>
+            <span className="prl-swap-wait">
+              {leaf} · {type}
+            </span>
+          </span>
+        ),
+        version: `v${q.version}`,
+        status: q.status,
+      },
+    };
+  });
+
   function toggleSort(key: QSortKey) {
     setSort((prev) =>
       prev.key === key
@@ -339,23 +385,59 @@ export function QuestionBankPage({
     );
   }
 
-  function startCreate() {
+  function startCreate(type: QuestionType) {
     let path: string[] | undefined;
     if (selection.length === 1) {
       path = selection[0].split(" > ");
     }
-    onNewQuestion?.(path);
+    onNewQuestion?.(path, type);
   }
 
-  // "C" opens the right pane's Create Question; "A" opens the rail's Add
+  // "C" opens the right pane's Create Question menu; "A" opens the rail's Add
   // Category (both badges are shown on their buttons). Neither fires while a
-  // category modal is open.
-  useCreateShortcut(startCreate, catModal.kind === "none");
+  // category modal is open, and A is parked while the type menu is up.
+  useCreateShortcut(
+    () => setCreateMenuOpen(true),
+    catModal.kind === "none" && !createMenuOpen,
+  );
   useCreateShortcut(
     () => setCatModal({ kind: "new-category" }),
-    catModal.kind === "none",
+    catModal.kind === "none" && !createMenuOpen,
     "a",
   );
+
+  // With the menu open, each question type's letter (M, T, F, …) launches that
+  // editor — the same pattern as the Tasks page's Create Task menu.
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Escape") {
+        setCreateMenuOpen(false);
+        return;
+      }
+      const option = QUESTION_TYPE_MENU.find(
+        (o) => o.shortcut.toLowerCase() === e.key.toLowerCase(),
+      );
+      if (option) {
+        e.preventDefault();
+        setCreateMenuOpen(false);
+        startCreate(option.type);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [createMenuOpen, selection, onNewQuestion]);
 
   // Toggle a question between Active and Archived from the row menu.
   function toggleArchive(id: string) {
@@ -556,7 +638,12 @@ export function QuestionBankPage({
                       </button>
                       <button
                         className="tree-main"
-                        onClick={() => setSelection([cat.label])}
+                        onClick={() => {
+                          setSelection([cat.label]);
+                          // Scoping to a category is a table interaction — the
+                          // landing snaps into the (filtered) table view.
+                          morph.showTable();
+                        }}
                       >
                         <span className="tree-row-label">{cat.label}</span>
                         <span className="tree-row-count">{cat.count}</span>
@@ -584,7 +671,10 @@ export function QuestionBankPage({
                                 >
                                   <button
                                     className="tree-sub-main"
-                                    onClick={() => setSelection([subLabel])}
+                                    onClick={() => {
+                                      setSelection([subLabel]);
+                                      morph.showTable();
+                                    }}
                                   >
                                     <span className="tree-sub-row-label">{sub.label}</span>
                                     <span className="tree-sub-row-count">{sub.count}</span>
@@ -634,22 +724,75 @@ export function QuestionBankPage({
             </div>
           </aside>
 
-          {/* Right pane */}
-          <section className="qb-content">
-            <QuestionSearch
-              questions={questions}
-              categoryOptions={categoryLabels}
-              selection={selection}
-              onSelectionChange={setSelection}
-              types={typeFilter}
-              onTypesChange={setTypeFilter}
-              quizzes={quizFilter}
-              onQuizzesChange={setQuizFilter}
-              forms={formFilter}
-              onFormsChange={setFormFilter}
-              query={query}
-              onCommit={setQuery}
-            />
+          {/* Right pane — the landing-morph root. It opens as the search-first
+              landing (Claude Design "Question Bank Landing 1C") and the wheel
+              morphs it into the unchanged table view; the shared `.tasks.lm`
+              chrome does the motion, `.qb-lm` holds this page's overrides. */}
+          <section className="qb-content tasks lm qb-lm" ref={morph.rootRef}>
+            {/* The Create CTA holds the pane's top-right in both states (the
+                design's top row) — it used to sit on the filters row, which is
+                collapsed at the landing. Figma 724:1010 menu, one row per
+                question type. */}
+            <div className="qb-head">
+              <Dropdown
+                align="right"
+                width="auto"
+                panelClass="ct-menu"
+                open={createMenuOpen}
+                onOpenChange={setCreateMenuOpen}
+                trigger={({ toggle }) => (
+                  <button className="cta-primary" onClick={toggle}>
+                    Create Question
+                    <span className="cta-kbd">C</span>
+                  </button>
+                )}
+              >
+                {({ close }) => (
+                  <>
+                    {QUESTION_TYPE_MENU.map(({ type, label, shortcut }) => (
+                      <button
+                        key={type}
+                        className="ct-menu-item"
+                        onClick={() => {
+                          startCreate(type);
+                          close();
+                        }}
+                      >
+                        <span className="ct-menu-label">{label}</span>
+                        <span className="ct-menu-kbd">{shortcut}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </Dropdown>
+            </div>
+
+            {/* Landing hero — collapses away as the table forms. */}
+            <div className="qbl-title">Find a question</div>
+
+            <div className="toolbar">
+              <QuestionSearch
+                questions={questions}
+                categoryOptions={categoryLabels}
+                selection={selection}
+                onSelectionChange={setSelection}
+                types={typeFilter}
+                onTypesChange={setTypeFilter}
+                quizzes={quizFilter}
+                onQuizzesChange={setQuizFilter}
+                forms={formFilter}
+                onFormsChange={setFormFilter}
+                query={query}
+                onCommit={(q) => {
+                  setQuery(q);
+                  morph.showTable();
+                }}
+              />
+            </div>
+
+            <div className="qbl-meta">
+              {TOTAL_QUESTIONS} Questions · {categories.length} Categories
+            </div>
 
             <label
               className={`drop-primary qb-bulk-upload ${dropzoneActive ? "is-active" : ""}`}
@@ -731,12 +874,56 @@ export function QuestionBankPage({
                   </button>
                 )}
               </div>
-              <button className="cta-primary" onClick={startCreate}>
-                Create Question
-                <span className="cta-kbd">C</span>
-              </button>
             </div>
 
+            <div className="lm-stage">
+            <LandingOverlay
+              caption="Questions A–Z"
+              total={sorted.length}
+              columns={QB_LM_COLS}
+              rows={landingRows}
+              nameLabel="Question"
+              nameWidth={QUESTION_COL_WIDTH}
+              footer={
+                /* The design's slim landing CSV bar — the full-width
+                   .qb-bulk-upload zone it stands in for fades in with the
+                   table chrome instead. */
+                <div className="qbl-csv-wrap">
+                  <label
+                    className={`qbl-csv ${dropzoneActive ? "is-active" : ""}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDropzoneActive(true);
+                    }}
+                    onDragLeave={() => setDropzoneActive(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDropzoneActive(false);
+                    }}
+                  >
+                    <input type="file" accept=".csv" hidden onChange={() => {/* noop in mock */}} />
+                    <UploadTrayIcon />
+                    <span className="qbl-csv-text">
+                      Bulk Upload — drop a CSV or click
+                      <a
+                        className="qbl-csv-link"
+                        onClick={(e) => e.preventDefault()}
+                        href="#"
+                      >
+                        Download Template
+                        <ArrowRightUpIcon />
+                      </a>
+                    </span>
+                  </label>
+                </div>
+              }
+              onShowAll={morph.showTable}
+              onRowClick={(row) => {
+                setSelectedId(row.key);
+                morph.showTable();
+              }}
+            />
+            <div className="lm-table">
             <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
             <table className="table table-head qb-q-table">
               <QbColGroup cols={visibleCols} />
@@ -803,6 +990,7 @@ export function QuestionBankPage({
             </div>
 
             <div className="pagination qb-pagination">
+              <BackToSearch onClick={morph.showLanding} />
               <span>
                 Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
               </span>
@@ -818,6 +1006,8 @@ export function QuestionBankPage({
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 ><ChevronRightIcon /></button>
               </div>
+            </div>
+            </div>
             </div>
           </section>
 

@@ -11,6 +11,7 @@ import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 
 type Props = {
   form: FeedbackForm;
@@ -66,6 +67,9 @@ export function FeedbackFormWizard({
   onCreateQuestion,
 }: Props) {
   const [step, setStep] = useState(0);
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = STEPS.length - 1;
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
 
   // Everything saves live (the prototype holds forms in App state), so the
   // footer buttons only handle status transitions and navigation.
@@ -116,7 +120,7 @@ export function FeedbackFormWizard({
                 <li
                   key={s.id}
                   className={`wizard-step ${status}`}
-                  onClick={() => setStep(i)}
+                  onClick={() => gate.goStep(i)}
                   title={
                     locked ? "Activate the form before adding triggers" : undefined
                   }
@@ -138,28 +142,40 @@ export function FeedbackFormWizard({
           </div>
         </aside>
 
-        <div className="wizard-content">
-          <h1 className="wizard-title">{STEPS[step].label}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              <h1 className="wizard-title">{STEPS[step].label}</h1>
+              <p className="wizard-desc">{STEPS[step].desc}</p>
 
-          {step === 0 && (
-            <DetailsStep form={form} actives={actives.length} onRename={rename} />
-          )}
-          {step === 1 && (
-            <FeedbackFormEditor
-              form={form}
-              bank={bank}
-              onUpdate={saveLinks}
-              onCreateQuestion={onCreateQuestion}
-            />
-          )}
-          {step === 2 && (
-            <FeedbackFormTriggers
-              form={form}
-              allForms={allForms}
-              onSave={saveTriggers}
-            />
-          )}
+              {step === 0 && (
+                <DetailsStep form={form} actives={actives.length} onRename={rename} />
+              )}
+              {step === 1 && (
+                <FeedbackFormEditor
+                  form={form}
+                  bank={bank}
+                  onUpdate={saveLinks}
+                  onCreateQuestion={onCreateQuestion}
+                />
+              )}
+              {step === 2 && (
+                <FeedbackFormTriggers
+                  form={form}
+                  allForms={allForms}
+                  onSave={saveTriggers}
+                />
+              )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -186,7 +202,7 @@ export function FeedbackFormWizard({
                 }
                 onClick={() => {
                   setStatus("active");
-                  setStep(2); // jump to Triggers, now unlocked
+                  gate.goStep(2); // jump to Triggers, now unlocked
                 }}
               >
                 Activate form

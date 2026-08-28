@@ -15,8 +15,10 @@ import {
 import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
+import { EntitySearch, type SearchScope } from "./UsersSearch";
+import { MultiPill } from "./UsersFilters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
-import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
@@ -70,6 +72,40 @@ const MASTERY_COLS: { key: MasteryColKey; label: string }[] = [
   { key: "dateModified", label: "Date Modified" },
 ];
 
+/* A Skill carries no Certification of its own — it inherits both its Tasks and
+   their Certifications from `taskIds`, so the Certification / Task filters (and
+   their options) are derived from the Task graph. Deriving rather than listing
+   means a filter can never offer a value that matches no row. */
+function skillTaskNames(s: Skill): string[] {
+  return s.taskIds.flatMap((id) => {
+    const t = taskById(id);
+    return t ? [t.name] : [];
+  });
+}
+
+function skillCertifications(s: Skill): string[] {
+  return s.taskIds.flatMap((id) => taskById(id)?.usedIn ?? []);
+}
+
+/** Names of the Mastery Skills a Skill rolls up into (the "Mastery Skills" column). */
+function masteryNamesOf(s: Skill, all: MasterySkill[]): string[] {
+  return masteryUsing(s.id, all).map((m) => m.name);
+}
+
+/** A Mastery Skill reaches Tasks one hop further out, through its Skills. */
+function masterySkillsOf(m: MasterySkill, all: Skill[]): Skill[] {
+  return m.skillIds.flatMap((id) => {
+    const s = all.find((x) => x.id === id);
+    return s ? [s] : [];
+  });
+}
+
+function countBy(skills: Skill[], values: (s: Skill) => string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  skills.forEach((s) => new Set(values(s)).forEach((v) => m.set(v, (m.get(v) ?? 0) + 1)));
+  return m;
+}
+
 export function SkillsPage() {
   const [tab, setTab] = useState<Tab>("skills");
   const [skills, setSkills] = useState<Skill[]>(seedSkills);
@@ -83,6 +119,13 @@ export function SkillsPage() {
   const [menu, setMenu] = useState<{ rect: DOMRect; tab: Tab; id: string } | null>(null);
 
   const [query, setQuery] = useState("");
+  const [certFilter, setCertFilter] = useState<string[]>([]);
+  const [taskFilter, setTaskFilter] = useState<string[]>([]);
+  // Each tab filters by the OTHER list — Skills by the Mastery Skills they roll
+  // up into, Mastery Skills by the Skills they are built from. Both mirror a
+  // column that is already on screen.
+  const [masteryFilter, setMasteryFilter] = useState<string[]>([]);
+  const [skillFilter, setSkillFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [creatorFilter, setCreatorFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "id", dir: "desc" });
@@ -97,7 +140,7 @@ export function SkillsPage() {
   });
 
   // Reset paging/sort context when switching tabs or filtering.
-  useEffect(() => setPage(1), [query, statusFilter, creatorFilter, sort, tab]);
+  useEffect(() => setPage(1), [query, certFilter, taskFilter, masteryFilter, skillFilter, statusFilter, creatorFilter, sort, tab]);
 
   /* ─── Mutations ─── */
   function upsertSkill(s: Skill) {
@@ -142,29 +185,134 @@ export function SkillsPage() {
     else setModal({ kind: "delete-skill", skill: s });
   }
 
-  /* ─── Derived list ─── */
-  const activeSkillCount = skills.filter((s) => s.status === "Active").length;
-  const activeMasteryCount = mastery.filter((m) => m.status === "Active").length;
+  /* ─── Certification / Task filters ─── */
+  const certOptions = useMemo(
+    () => [...new Set(skills.flatMap(skillCertifications))].sort(),
+    [skills],
+  );
+  const taskOptions = useMemo(
+    () => [...new Set(skills.flatMap(skillTaskNames))].sort(),
+    [skills],
+  );
+  const certCounts = useMemo(() => countBy(skills, skillCertifications), [skills]);
+  const taskCounts = useMemo(() => countBy(skills, skillTaskNames), [skills]);
+  const nSkills = (n: number | undefined) => `${n ?? 0} ${n === 1 ? "skill" : "skills"}`;
 
+  /* The two cross-list filters. Options come from the rows that could actually
+     be matched, so neither pill offers a dead value. */
+  const masteryOptions = useMemo(() => mastery.map((m) => m.name).sort(), [mastery]);
+  const skillOptions = useMemo(() => skills.map((s) => s.name).sort(), [skills]);
+  const masteryCounts = useMemo(
+    () => countBy(skills, (s) => masteryNamesOf(s, mastery)),
+    [skills, mastery],
+  );
+  /** How many Mastery Skills a given Skill name appears in. */
+  const skillCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    mastery.forEach((ms) =>
+      masterySkillsOf(ms, skills).forEach((s) => m.set(s.name, (m.get(s.name) ?? 0) + 1)),
+    );
+    return m;
+  }, [mastery, skills]);
+
+  /* The two suggested filters inside the search bar. Picking values there is a
+     pending draft; Enter moves them into the matching Filters-row pill, which is
+     what the table actually filters on (the shared EntitySearch contract). */
+  const scopes: SearchScope[] = [
+    {
+      token: "Certification",
+      options: certOptions,
+      applied: certFilter,
+      onAppliedChange: setCertFilter,
+      optionsLabel: "Certifications",
+      example: "Certification: EPA 608 Universal",
+      hint: "Filter by Certification",
+      describe: (name) => nSkills(certCounts.get(name)),
+    },
+    {
+      token: "Task",
+      options: taskOptions,
+      applied: taskFilter,
+      onAppliedChange: setTaskFilter,
+      optionsLabel: "Tasks",
+      example: "Task: Manifold Gauge Use",
+      hint: "Filter by Task",
+      describe: (name) => nSkills(taskCounts.get(name)),
+    },
+    // The cross-list scope flips with the tab, matching the pill row.
+    tab === "skills"
+      ? {
+          token: "Mastery Skill",
+          options: masteryOptions,
+          applied: masteryFilter,
+          onAppliedChange: setMasteryFilter,
+          optionsLabel: "Mastery Skills",
+          example: "Mastery Skill: EPA 608 Mastery",
+          hint: "Filter by Mastery Skill",
+          describe: (name) => nSkills(masteryCounts.get(name)),
+        }
+      : {
+          token: "Skill",
+          options: skillOptions,
+          applied: skillFilter,
+          onAppliedChange: setSkillFilter,
+          optionsLabel: "Skills",
+          example: "Skill: Refrigerant Recovery",
+          hint: "Filter by Skill",
+          describe: (name) => {
+            const n = skillCounts.get(name) ?? 0;
+            return `${n} mastery skill${n === 1 ? "" : "s"}`;
+          },
+        },
+  ];
+
+  /* Clear Filters counts only what the active tab can see — the cross-list
+     filter of the other tab is cleared too, so the link never leaves a hidden
+     filter applied behind it. */
+  const tabFilterCount =
+    certFilter.length + taskFilter.length + statusFilter.length + creatorFilter.length +
+    (tab === "skills" ? masteryFilter.length : skillFilter.length);
+
+  function clearFilters() {
+    setCertFilter([]);
+    setTaskFilter([]);
+    setMasteryFilter([]);
+    setSkillFilter([]);
+    setStatusFilter([]);
+    setCreatorFilter([]);
+  }
+
+  /* ─── Derived list ─── */
   const filteredSkills = useMemo(() => {
     const q = query.trim().toLowerCase();
     return skills.filter((s) => {
       if (q && !(s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))) return false;
+      if (certFilter.length && !skillCertifications(s).some((c) => certFilter.includes(c))) return false;
+      if (taskFilter.length && !skillTaskNames(s).some((t) => taskFilter.includes(t))) return false;
+      if (masteryFilter.length && !masteryNamesOf(s, mastery).some((m) => masteryFilter.includes(m))) return false;
       if (statusFilter.length && !statusFilter.includes(s.status)) return false;
       if (creatorFilter.length && !creatorFilter.includes(s.createdBy)) return false;
       return true;
     });
-  }, [skills, query, statusFilter, creatorFilter]);
+  }, [skills, mastery, query, certFilter, taskFilter, masteryFilter, statusFilter, creatorFilter]);
 
   const filteredMastery = useMemo(() => {
     const q = query.trim().toLowerCase();
     return mastery.filter((m) => {
       if (q && !(m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))) return false;
+      // A Mastery Skill matches when any of its constituent Skills does — the
+      // same filters, one hop further out.
+      if (certFilter.length || taskFilter.length) {
+        const members = masterySkillsOf(m, skills);
+        if (certFilter.length && !members.some((s) => skillCertifications(s).some((c) => certFilter.includes(c)))) return false;
+        if (taskFilter.length && !members.some((s) => skillTaskNames(s).some((t) => taskFilter.includes(t)))) return false;
+      }
+      if (skillFilter.length && !masterySkillsOf(m, skills).some((s) => skillFilter.includes(s.name))) return false;
       if (statusFilter.length && !statusFilter.includes(m.status)) return false;
       if (creatorFilter.length && !creatorFilter.includes(m.createdBy)) return false;
       return true;
     });
-  }, [mastery, query, statusFilter, creatorFilter]);
+  }, [mastery, skills, query, certFilter, taskFilter, skillFilter, statusFilter, creatorFilter]);
 
   const sortedSkills = useMemo(() => {
     const arr = [...filteredSkills].sort((a, b) => compareSkill(a, b, sort.key, mastery));
@@ -234,11 +382,6 @@ export function SkillsPage() {
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Skills</h1>
-              <div className="tasks-subtitle">
-                {tab === "skills"
-                  ? `${skills.length} Skills · ${activeSkillCount} Active`
-                  : `${mastery.length} Mastery Skills · ${activeMasteryCount} Active`}
-              </div>
             </div>
             <div className="tasks-header-actions">
               <button
@@ -252,7 +395,7 @@ export function SkillsPage() {
             </div>
           </header>
 
-          <div className="tabbar sk-tabbar">
+          <div className="tabbar sk-tabbar sk-tabbar--lead">
             <button className={`tab ${tab === "skills" ? "is-active" : ""}`} onClick={() => setTab("skills")}>
               Skills
             </button>
@@ -264,26 +407,63 @@ export function SkillsPage() {
           <div className="tasks-row">
             <div className="tasks-content">
               <div className="toolbar">
-                <div className="search-wrap">
-                  <span className="search-icon"><SearchIcon /></span>
-                  <input
-                    className="search-input"
-                    placeholder={tab === "skills" ? "Search Skills by name or ID…" : "Search Mastery Skills by name or ID…"}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <span className="search-kbd"><span className="kbd-cmd">⌘</span><span className="kbd-letter">K</span></span>
-                </div>
+                {/* The shared page search — same component (and suggested-filter
+                    panel) as Users and Quiz Attempts; its Certification / Task
+                    scopes feed the two pills below. Commit-on-Enter, so the
+                    table only ever filters on the applied query. */}
+                <EntitySearch
+                  scopes={scopes}
+                  placeholder={tab === "skills" ? "Search Skills…" : "Search Mastery Skills…"}
+                  searchForScope={tab === "skills" ? "Skills" : "Mastery Skills"}
+                  query={query}
+                  onCommit={setQuery}
+                />
               </div>
 
               <div className="filters">
+                <MultiPill
+                  label="Certification"
+                  all={certOptions}
+                  value={certFilter}
+                  onApply={setCertFilter}
+                  searchable
+                  searchPlaceholder="Search Certifications"
+                  width={300}
+                />
+                <MultiPill
+                  label="Task"
+                  all={taskOptions}
+                  value={taskFilter}
+                  onApply={setTaskFilter}
+                  searchable
+                  searchPlaceholder="Search Tasks"
+                  width={300}
+                />
+                {tab === "skills" ? (
+                  <MultiPill
+                    label="Mastery Skills"
+                    all={masteryOptions}
+                    value={masteryFilter}
+                    onApply={setMasteryFilter}
+                    searchable
+                    searchPlaceholder="Search Mastery Skills"
+                    width={300}
+                  />
+                ) : (
+                  <MultiPill
+                    label="Skills"
+                    all={skillOptions}
+                    value={skillFilter}
+                    onApply={setSkillFilter}
+                    searchable
+                    searchPlaceholder="Search Skills"
+                    width={300}
+                  />
+                )}
                 <StatusPill value={statusFilter} onApply={setStatusFilter} />
                 <CreatedByPill value={creatorFilter} onApply={setCreatorFilter} />
-                {(statusFilter.length > 0 || creatorFilter.length > 0) && (
-                  <button
-                    className="filter-clear-link"
-                    onClick={() => { setStatusFilter([]); setCreatorFilter([]); }}
-                  >
+                {tabFilterCount > 0 && (
+                  <button className="filter-clear-link" onClick={clearFilters}>
                     Clear Filters
                   </button>
                 )}

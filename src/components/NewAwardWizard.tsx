@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { CheckBoldIcon, SearchIcon, CheckIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { certifications } from "../data/certifications";
 import {
   MERIT_TIERS,
@@ -69,6 +70,9 @@ export function NewAwardWizard(props: Props) {
   const certValid = data.certificationId.trim().length > 0;
   // Every Award should display a Card on the Portfolio; require at least one appearance.
   const appearanceValid = !!data.cardTemplateId || !!data.certificateTemplateId;
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = STEPS.length - 1;
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
 
   function handleSave() {
     const now = "Apr 28, 2026";
@@ -108,7 +112,7 @@ export function NewAwardWizard(props: Props) {
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => setStep(i)}
+                  onClick={() => gate.goStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -120,26 +124,38 @@ export function NewAwardWizard(props: Props) {
           </ol>
         </aside>
 
-        <div className="wizard-content">
-          <h1 className="wizard-title">{STEPS[step].label}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              <h1 className="wizard-title">{STEPS[step].label}</h1>
+              <p className="wizard-desc">{STEPS[step].desc}</p>
 
-          {step === 0 && (
-            <LinkStep
-              data={data}
-              update={update}
-              editingAwardId={props.editingAward?.id}
-              allAwards={props.allAwards}
-            />
-          )}
-          {step === 1 && (
-            <AppearanceStep
-              data={data}
-              update={update}
-              templates={props.templates}
-              onCreateTemplate={props.onCreateTemplate}
-            />
-          )}
+              {step === 0 && (
+                <LinkStep
+                  data={data}
+                  update={update}
+                  editingAwardId={props.editingAward?.id}
+                  allAwards={props.allAwards}
+                />
+              )}
+              {step === 1 && (
+                <AppearanceStep
+                  data={data}
+                  update={update}
+                  templates={props.templates}
+                  onCreateTemplate={props.onCreateTemplate}
+                />
+              )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -152,11 +168,15 @@ export function NewAwardWizard(props: Props) {
         </div>
         <div className="wizard-actions">
           {step > 0 && (
-            <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
           )}
           {step === 0 ? (
-            <button className="btn-publish" onClick={() => setStep(1)}>
-              Next: {STEPS[1].label}
+            <button className="btn-publish wizard-gate-btn" onClick={() => gate.goStep(1)}>
+              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+              <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
             </button>
           ) : (
             <button

@@ -3,9 +3,9 @@ import { SmallXIcon, ChevronDownIcon } from "./icons";
 import { MultiSelect } from "./NewCompanyWizard";
 import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
-import { RteToolbar } from "./RteToolbar";
-import { AutoTextarea } from "./AutoTextarea";
+import { RichTextField } from "./RichTextField";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { tasks, type Task } from "../data/tasks";
 import {
   type AwardRule,
@@ -113,6 +113,9 @@ export function NewSkillWizard(props: Props) {
 
   const nameValid = data.nameEn.trim().length > 0;
   const criteriaValid = isMastery ? data.skillIds.length > 0 : data.taskIds.length > 0;
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = STEPS.length - 1;
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
 
   function handleSave() {
     const now = "Apr 28, 2026";
@@ -177,7 +180,7 @@ export function NewSkillWizard(props: Props) {
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => setStep(i)}
+                  onClick={() => gate.goStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -189,17 +192,29 @@ export function NewSkillWizard(props: Props) {
           </ol>
         </aside>
 
-        <div className="wizard-content">
-          <h1 className="wizard-title">{STEPS[step].label}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              <h1 className="wizard-title">{STEPS[step].label}</h1>
+              <p className="wizard-desc">{STEPS[step].desc}</p>
 
-          {step === 0 && (
-            <DetailsStep data={data} update={update} isMastery={isMastery} />
-          )}
-          {step === 1 && !isMastery && <CriteriaStep data={data} update={update} />}
-          {step === 1 && isMastery && (
-            <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} />
-          )}
+              {step === 0 && (
+                <DetailsStep data={data} update={update} isMastery={isMastery} />
+              )}
+              {step === 1 && !isMastery && <CriteriaStep data={data} update={update} />}
+              {step === 1 && isMastery && (
+                <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} />
+              )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -212,11 +227,15 @@ export function NewSkillWizard(props: Props) {
         </div>
         <div className="wizard-actions">
           {step > 0 && (
-            <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
           )}
           {step === 0 ? (
-            <button className="btn-publish" onClick={() => setStep(1)}>
-              Next: {STEPS[1].label}
+            <button className="btn-publish wizard-gate-btn" onClick={() => gate.goStep(1)}>
+              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+              <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
             </button>
           ) : (
             <button className="btn-publish" disabled={!nameValid || !criteriaValid} onClick={handleSave}>
@@ -345,7 +364,7 @@ function TaskPicker({
   onChange: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const pool = useMemo(() => tasks.filter((t) => !t.draft), []);
+  const pool = tasks;
   const chosen = selected
     .map((id) => pool.find((t) => t.id === id))
     .filter((t): t is Task => !!t);
@@ -521,29 +540,3 @@ function LangField({
   );
 }
 
-function RichTextField({
-  en,
-  es,
-  onChangeEn,
-  onChangeEs,
-}: {
-  en: string;
-  es: string;
-  onChangeEn: (v: string) => void;
-  onChangeEs: (v: string) => void;
-}) {
-  return (
-    <div className="rte-field">
-      <RteToolbar />
-      <div className="rte-lang-row">
-        <span className="lang-tag">EN</span>
-        <AutoTextarea className="rte-area" value={en} onChange={onChangeEn} />
-      </div>
-      <div className="rte-field-divider" />
-      <div className="rte-lang-row">
-        <span className="lang-tag">ES</span>
-        <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
-      </div>
-    </div>
-  );
-}

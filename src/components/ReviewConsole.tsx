@@ -345,24 +345,14 @@ export function ReviewConsole({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="rvc-root">
-          {/* ── header (Figma 293:849) — breadcrumb over the task + submitter,
-                 with the attempt switcher on the right ── */}
+        <div className="rvc-root rvc-hor">
+          {/* ── left column (Figma 756:2986) — the page header with the attempt
+                 switcher on its right, then the write-up, voice note and media.
+                 There's no breadcrumb any more; the rail footer's "Back" is the
+                 way out of the console. ── */}
+          <div className="rvc-main">
           <div className="rvc-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Home</span>
-                <ChevronRightIcon />
-                <span className="rvc-crumb">Operations</span>
-                <ChevronRightIcon />
-                <button
-                  className="rvc-crumb rvc-crumb--current"
-                  onClick={() => onExit(submitted)}
-                  title="Back to the submissions table"
-                >
-                  Hands-On Task Submissions
-                </button>
-              </nav>
               <div className="rvc-pagehead-id">
                 <h1 className="tasks-title">
                   Task:{" "}
@@ -401,7 +391,7 @@ export function ReviewConsole({
             <div className="rvc-flex" />
             {attemptCount > 1 && (
               <div className="rvc-versions">
-                <span className="rvc-versions-label">Past submissions:</span>
+                <span className="rvc-versions-label">Past submissions</span>
                 <div className="rvc-version-chips">
                   {/* `versions` is newest-first, and so is this row (V5 … V1).
                       Chip v is v submissions back from the current one. */}
@@ -429,10 +419,8 @@ export function ReviewConsole({
           {/* Past attempts announce themselves through the version switcher and
              the locked review card — no banner strip. */}
 
-          {/* ── body ── */}
-          <div className="rvc-body">
-            {/* left — submission. 4:3 stage with the other media stacked to its
-                right (Figma-driven layout update). */}
+            {/* 4:3 stage with the remaining media stacked down its right side
+                (Figma 756:3147). */}
             <div className="rvc-stagecol">
               <p className="rvc-desc">{view.description}</p>
 
@@ -500,10 +488,14 @@ export function ReviewConsole({
                 )}
               </div>
             </div>
+          </div>
 
-            {/* right — review rail. Gradable attempts get the editable card;
-                everything else is read-only (Figma 298:1049 previously graded,
-                298:1924 company-created ungraded, 298:1973 company graded). */}
+          {/* ── right column (Figma 756:3091) — the review rail over its own
+              footer, running the full height of the page. Gradable attempts get
+              the editable fields; everything else is read-only (Figma 298:1049
+              previously graded, 298:1924 company-created ungraded, 298:1973
+              company graded). */}
+          <div className="rvc-railcol">
             <div className="rvc-rail">
               {railReadOnly && (
                 <div className="rvc-notice" role="note">
@@ -559,9 +551,6 @@ export function ReviewConsole({
                       <span className="form-label">
                         Score<span className="req">*</span>
                       </span>
-                      <p className="form-help">
-                        Required. Final once submitted and shown to the user.
-                      </p>
                     </div>
                     <div className="rvc-scores">
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -593,7 +582,7 @@ export function ReviewConsole({
                   </div>
 
                   {/* Feedback — Figma 263:865; read-only 298:1092 */}
-                  <div className="rvc-field rvc-field--fb">
+                  <div className="rvc-field">
                     <label className="form-label" htmlFor="rvc-feedback">Feedback</label>
                     <textarea
                       id="rvc-feedback"
@@ -614,31 +603,19 @@ export function ReviewConsole({
                 </>
               )}
             </div>
-          </div>
 
-          {/* ── footer (Figma 267:1985) — keycap hints + the primary CTA ── */}
+          {/* ── footer (Figma 756:3763) — now the bottom of the rail column, not
+              a page-wide bar: "Back" out to the table on the left, then Skip and
+              the primary CTA 16px apart. This design drops the View Queue
+              button; the popover it used to open still hangs here and is reached
+              with Q. ── */}
           <div className="wizard-footer rvc-footer">
-            {/* Skip's shortcut isn't printed on the button, so it's named on
-                hover instead (Figma 437:638). */}
-            <ShortcutHint label="Skip &amp; Proceed" keyLabel="N">
-              <button className="wizard-cancel" onClick={doSkip}>Skip</button>
-            </ShortcutHint>
-            <div className="rvc-flex" />
-            {/* View Queue — the queue popover now hangs off the footer
-                (button Figma 293:759, panel 263:1587) */}
+            <button className="wizard-cancel" onClick={() => onExit(submitted)}>
+              Back
+            </button>
+            {/* Zero-size anchor — the popover keeps its right-aligned,
+                opens-upward placement now that it has no trigger of its own. */}
             <div className="rvc-queue-wrap" ref={queueWrapRef}>
-              <button
-                className="btn-save-draft rvc-viewqueue"
-                onClick={() => setQueueOpen((v) => !v)}
-                aria-expanded={queueOpen}
-              >
-                <span className="rvc-viewqueue-text">
-                  <span className="rvc-viewqueue-label">View Queue</span>
-                  <span className="rvc-viewqueue-count">· {pendingCount} waiting</span>
-                </span>
-                <span className="kbd-letter">Q</span>
-              </button>
-
               {queueOpen && (
                   <div className="rvc-qpanel" role="dialog" aria-label="Review queue">
                     <div className="rvc-qpanel-head">
@@ -721,27 +698,36 @@ export function ReviewConsole({
                   </div>
               )}
             </div>
-            {isPast ? (
-              <button
-                className="btn-save-draft rvc-back-current"
-                onClick={() => { setViewAttempt(null); setMediaIndex(0); }}
-              >
-                Back To Current Attempt
-                <span className="kbd-letter">Esc</span>
+            <div className="rvc-foot-actions">
+              {/* Skip prints its own N keycap now (756:3836), so it no longer
+                  needs the hover hint that used to name the shortcut. */}
+              <button className="btn-save-draft rvc-skip" onClick={doSkip}>
+                Skip
+                <span className="kbd-letter">N</span>
               </button>
-            ) : reviewable ? (
-              <button className={`btn-publish ${hasScore ? "" : "rvc-dim"}`} onClick={doSubmit}>
-                Submit &amp; Next
-                <span className="rvc-submit-keys">
-                  <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>
-                  <span className="rvc-qkey"><EnterKeyIcon /></span>
+              {isPast ? (
+                <button
+                  className="btn-save-draft rvc-back-current"
+                  onClick={() => { setViewAttempt(null); setMediaIndex(0); }}
+                >
+                  Back To Current Attempt
+                  <span className="kbd-letter">Esc</span>
+                </button>
+              ) : reviewable ? (
+                <button className={`btn-publish ${hasScore ? "" : "rvc-dim"}`} onClick={doSubmit}>
+                  Submit &amp; Next
+                  <span className="rvc-submit-keys">
+                    <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>
+                    <span className="rvc-qkey"><EnterKeyIcon /></span>
+                  </span>
+                </button>
+              ) : isDone ? (
+                <span className="rvc-footer-note">
+                  Reviewed — {submitted[sub.id].score}/10
                 </span>
-              </button>
-            ) : isDone ? (
-              <span className="rvc-footer-note">
-                Reviewed — {submitted[sub.id].score}/10
-              </span>
-            ) : null}
+              ) : null}
+            </div>
+          </div>
           </div>
 
           {toast && <div className="rvc-toast">{toast}</div>}

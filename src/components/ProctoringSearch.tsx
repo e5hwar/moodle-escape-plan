@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Submission } from "../data/proctoring";
-import { SearchIcon, SearchClearIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -309,7 +309,7 @@ export function ProctoringSearch({
           </button>
         ) : (
           <span className="usearch-kbd">
-            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}

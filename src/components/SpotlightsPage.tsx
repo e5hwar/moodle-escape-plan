@@ -9,7 +9,7 @@ import {
   type SpotlightDraft,
 } from "./CreateSpotlightPage";
 import { QueuePositionPicker } from "./QueuePositionPicker";
-import { SearchIcon, AddIcon, SmallXIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, AddIcon, SmallXIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";
@@ -424,7 +424,7 @@ export function SpotlightsPage() {
                 onChange={(e) => setQuery(e.target.value)}
               />
               <span className="search-kbd">
-                <span className="kbd-cmd">⌘</span>
+                <span className="kbd-cmd"><KeyCommandIcon /></span>
                 <span className="kbd-letter">K</span>
               </span>
             </div>

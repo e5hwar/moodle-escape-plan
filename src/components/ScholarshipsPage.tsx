@@ -6,6 +6,7 @@ import {
   type ScholarshipUser,
 } from "../data/scholarships";
 import {
+  KeyCommandIcon,
   SearchIcon,
   SortIcon,
   AddIcon,
@@ -229,7 +230,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 <span className="search-kbd">
-                  <span className="kbd-cmd">⌘</span>
+                  <span className="kbd-cmd"><KeyCommandIcon /></span>
                   <span className="kbd-letter">K</span>
                 </span>
               </div>

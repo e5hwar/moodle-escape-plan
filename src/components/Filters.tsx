@@ -567,9 +567,13 @@ export type CascadingSection = {
   searchPlaceholder?: string;
 };
 
-/* The shared "More filters" body: a list of submenu rows over one Apply button,
-   each row revealing its own checklist. Used by the Tasks and Question Bank
-   filter rows — pass the sections and a {key: values} map. */
+/* The shared "More filters" body: a list of submenu rows, each revealing its own
+   checklist. Used by the Tasks and Question Bank filter rows — pass the sections
+   and a {key: values} map.
+   Apply lives in the SUBMENU, not on the root list (Figma 28:16530 has no footer;
+   774:1243/774:1298, the two submenu states, both carry the Apply footer). The
+   draft is shared across submenus, so opening several and applying from the last
+   one still commits every change. */
 export function CascadingMultiSelect({
   sections,
   value,
@@ -619,11 +623,6 @@ export function CascadingMultiSelect({
               onHover={(top) => hover(s.key, top)}
             />
           ))}
-        </div>
-        <div className="dropdown-footer">
-          <button className="btn-apply" onClick={() => onApply(draft)}>
-            Apply
-          </button>
         </div>
       </div>
 
@@ -677,6 +676,11 @@ export function CascadingMultiSelect({
                   </div>
                 ))
               )}
+            </div>
+            <div className="dropdown-footer">
+              <button className="btn-apply" onClick={() => onApply(draft)}>
+                Apply
+              </button>
             </div>
           </div>
         );

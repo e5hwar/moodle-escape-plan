@@ -1,6 +1,6 @@
 import { users } from "./users";
 import type { Task } from "./tasks";
-import { isoDaysAgo, grantingAdmin } from "./certPurchases";
+import { isoDaysAgo, applyGrants } from "./certPurchases";
 
 /** State of the purchased attempt. */
 export type AttemptStatus = "Not Started" | "In Progress" | "Completed";
@@ -15,6 +15,9 @@ export const PASS_THRESHOLD = 70;
  */
 export type QuizPurchase = {
   userId: string;
+  /** Name of the paid Quiz this attempt was bought (or comped) on. Rows now
+   * span every paid Quiz, so the page's Quiz filter needs it on the row. */
+  quizName: string;
   /** The attempt number this purchase unlocked (free attempts come first). */
   attemptNumber: number;
   /**
@@ -82,33 +85,44 @@ export function buildQuizPurchases(task: Task): QuizPurchase[] {
       passed = score >= PASS_THRESHOLD;
     }
 
-    // A small deterministic slice were comped rather than paid. Comped attempts
-    // have no purchase date — the date lives on grantDate instead.
-    const granted = h % 19 === 0;
-
     out.push({
       userId: u.id,
+      quizName: task.name,
       attemptNumber,
-      purchaseDate: granted ? null : dateIso,
+      purchaseDate: dateIso,
       status,
       score,
       passed,
       revokedDate: null,
-      granted,
-      grantDate: granted ? dateIso : null,
-      grantedBy: granted ? grantingAdmin(h >>> 7) : null,
+      granted: false,
+      grantDate: null,
+      grantedBy: null,
     });
   }
 
-  return out;
+  // Comp a slice of the attempts — admins hand out free attempts often enough
+  // that every paid Quiz has a few on its Who Paid page.
+  return applyGrants(out, task.id);
 }
 
-/** The next free attempt slot for a user — one past the highest existing attempt
- * number, or 2 if the user has no purchases yet (attempt 1 being the free one). */
-export function nextAttemptNumber(purchases: QuizPurchase[], userId: string): number {
+/** Every paid Quiz's purchasers in one list — the page opens filtered to the
+ * Task it was launched from, but its Quiz filter can widen to the rest. */
+export function buildAllQuizPurchases(quizzes: Task[]): QuizPurchase[] {
+  return quizzes.flatMap((t) => buildQuizPurchases(t));
+}
+
+/** The next free attempt slot for a user on one Quiz — one past their highest
+ * existing attempt there, or 2 if they have none (attempt 1 being the free one). */
+export function nextAttemptNumber(
+  purchases: QuizPurchase[],
+  userId: string,
+  quizName: string,
+): number {
   let max = 1;
   for (const p of purchases) {
-    if (p.userId === userId && p.attemptNumber > max) max = p.attemptNumber;
+    if (p.userId === userId && p.quizName === quizName && p.attemptNumber > max) {
+      max = p.attemptNumber;
+    }
   }
   return max + 1;
 }
@@ -116,12 +130,14 @@ export function nextAttemptNumber(purchases: QuizPurchase[], userId: string): nu
 /** Build a fresh granted attempt row for the given user. */
 export function buildGrantedAttempt(
   userId: string,
+  quizName: string,
   attemptNumber: number,
   grantDate: string,
   grantedBy: string,
 ): QuizPurchase {
   return {
     userId,
+    quizName,
     attemptNumber,
     purchaseDate: null,
     status: "Not Started",

@@ -2,12 +2,12 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 
 /* The auto-growing textarea behind every rich text field (`.rte-area`).
  *
- * Height is bounded at both ends — user rule 2026-08-25, app-wide: the box
- * opens at `minRows` (Figma 405:238 "Rich Text Input - Dual Language - 2
- * Lines"), grows a line at a time up to `maxRows` (697:1001, the 4-line
- * variant), then holds that height and scrolls its own content. Both bounds
- * are measured off the element's computed line-height, so they follow
- * `.rte-area`'s 23px instead of hard-coding pixels.
+ * Height is bounded at both ends — app-wide rule: the box opens at `minRows`,
+ * a single line (Figma 620:1352 / 327:137 "Focus State"), grows a line at a
+ * time up to `maxRows` (697:1001, the 4-line variant), then holds that height
+ * and scrolls its own content. Both bounds are measured off the element's
+ * computed line-height, so they follow `.rte-area`'s 23px instead of
+ * hard-coding pixels.
  *
  * Every RTE consumer imports this one — don't re-declare a local copy.
  */
@@ -19,7 +19,7 @@ export function AutoTextarea({
   onFocus,
   onBlur,
   disabled,
-  minRows = 2,
+  minRows = 1,
   maxRows = 4,
 }: {
   value: string;

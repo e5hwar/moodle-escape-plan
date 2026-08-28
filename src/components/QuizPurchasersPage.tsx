@@ -1,20 +1,19 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
   type User,
-  type UserType,
   type UserRole,
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import {
+  buildAllQuizPurchases,
   buildGrantedAttempt,
-  buildQuizPurchases,
   nextAttemptNumber,
   type QuizPurchase,
 } from "../data/quizPurchases";
 import { todayIso, CURRENT_ADMIN } from "../data/certPurchases";
-import type { Task } from "../data/tasks";
+import { tasks as allTasks, isPaid, type Task } from "../data/tasks";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -23,14 +22,17 @@ import {
   type UserFilterState,
 } from "./UsersFilters";
 import { useColumnOrder, orderedColumns } from "./Filters";
-import { UsersSearch } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronRightIcon } from "./icons";
+import { EntitySearch, type SearchScope } from "./UsersSearch";
+import { SortIcon, ChevronLeftIcon, AddIcon, RowKebabIcon, MenuLockIcon, ChevronRightIcon } from "./icons";
+import { GrantAttemptsModal } from "./GrantAttemptsModal";
+import { PrmModal } from "./PrmModal";
 
 const PAGE_SIZE = 50;
 
 /* ─── columns: every Users column plus the five attempt columns ─── */
 type QuizColumnKey =
   | UserColumnKey
+  | "quizName"
   | "attemptNumber"
   | "access"
   | "purchaseDate"
@@ -49,6 +51,7 @@ type QuizColumnState = Record<QuizColumnKey, boolean>;
 const DEFAULT_COLUMNS: QuizColumnState = {
   email: true,
   phone: true,
+  quizName: true,
   attemptNumber: true,
   access: true,
   purchaseDate: true,
@@ -87,13 +90,6 @@ function formatDate(iso: string | null): string {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const VerifiedIcon = () => (
-  <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
-
 type SortKey = "name" | QuizColumnKey;
 type SortDir = "asc" | "desc";
 
@@ -109,33 +105,43 @@ type ColMeta = {
   label: string;
   className: string;
   width: number;
+  /** Tooltip on the cell — where a grant's admin/date detail now lives. */
+  tip?: (r: Row) => string | undefined;
   render: (r: Row) => React.ReactNode;
   sortValue: (r: Row) => string | number;
 };
 
-// Order here is the on-screen column order: attempt columns sit right after
-// Email / Phone, with the rest of the Users columns available afterwards.
+/* Plain-text columns, per the table convention — every cell is a string, with
+   the detail a pill used to carry (who comped an attempt, why a row is muted)
+   demoted to a hover tooltip. Widths fit the HEADER label, not just the data:
+   header type is 16px SemiBold and never wraps, so a column narrower than its
+   own label spills over the next one.
+
+   Order here is the on-screen column order: the quiz and attempt columns sit
+   right after Email / Phone, with the rest of the Users columns available
+   afterwards under Edit Columns. */
 const COLS: ColMeta[] = [
-  { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: ({ u }) => u.email.toLowerCase() },
-  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: ({ u }) => u.phone },
-  { key: "attemptNumber", label: "Attempt Purchased", className: "col-qp-attempt", width: 150, render: ({ p }) => <span className="qp-attempt">#{p.attemptNumber}</span>, sortValue: ({ p }) => p.attemptNumber },
-  { key: "access", label: "Access", className: "col-cp-access", width: 110, render: ({ p }) => <AccessCell purchase={p} />, sortValue: ({ p }) => (p.granted ? 0 : 1) },
-  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
-  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 140, render: ({ p }) => <GrantDateCell purchase={p} />, sortValue: ({ p }) => p.grantDate ?? "" },
-  { key: "attemptStatus", label: "Attempt Status", className: "col-qp-status", width: 140, render: ({ p }) => <StatusCell status={p.status} />, sortValue: ({ p }) => STATUS_ORDER[p.status] },
-  { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => <ScoreCell purchase={p} />, sortValue: ({ p }) => (p.score ?? -1) },
-  { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => <ResultCell purchase={p} />, sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
-  { key: "userType", label: "User Type", className: "col-u-type", width: 96, render: ({ u }) => <TypePill type={u.userType} />, sortValue: ({ u }) => u.userType },
-  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : <span className="u-muted">—</span>), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
+  { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => u.email, sortValue: ({ u }) => u.email.toLowerCase() },
+  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => u.phone, sortValue: ({ u }) => u.phone },
+  { key: "quizName", label: "Quiz Name", className: "col-qp-quiz", width: 230, tip: ({ p }) => p.quizName, render: ({ p }) => p.quizName, sortValue: ({ p }) => p.quizName.toLowerCase() },
+  { key: "attemptNumber", label: "Attempt Purchased", className: "col-qp-attempt", width: 190, render: ({ p }) => `#${p.attemptNumber}`, sortValue: ({ p }) => p.attemptNumber },
+  { key: "access", label: "Access", className: "col-cp-access", width: 110, tip: ({ p }) => (p.granted ? `Free attempt granted by ${p.grantedBy ?? "an admin"}` : undefined), render: ({ p }) => (p.granted ? "Free" : "Paid"), sortValue: ({ p }) => (p.granted ? 0 : 1) },
+  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
+  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 145, tip: ({ p }) => (p.grantDate && p.grantedBy ? `Granted by ${p.grantedBy}` : undefined), render: ({ p }) => formatDate(p.grantDate), sortValue: ({ p }) => p.grantDate ?? "" },
+  { key: "attemptStatus", label: "Attempt Status", className: "col-qp-status", width: 170, render: ({ p }) => p.status, sortValue: ({ p }) => STATUS_ORDER[p.status] },
+  { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => (p.score == null ? "—" : `${p.score}%`), sortValue: ({ p }) => (p.score ?? -1) },
+  { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => (p.passed == null ? "—" : p.passed ? "Pass" : "Fail"), sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
+  { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
+  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : "—"), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
-  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => <SubscriptionCell user={u} />, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
-  { key: "language", label: "Language", className: "col-u-lang", width: 100, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },
-  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: ({ f }) => f.goal, sortValue: ({ f }) => GOAL_ORDER[f.goal] ?? 0 },
+  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
+  { key: "language", label: "Language", className: "col-u-lang", width: 120, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },
+  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, tip: ({ f }) => f.goal, render: ({ f }) => f.goal, sortValue: ({ f }) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: ({ f }) => f.attribution, sortValue: ({ f }) => f.attribution.toLowerCase() },
-  { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: ({ f }) => f.zipCode, sortValue: ({ f }) => f.zipCode },
-  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 165, render: ({ f }) => f.industryPreference, sortValue: ({ f }) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 130, render: ({ u }) => formatDate(u.lastAccess), sortValue: ({ u }) => u.lastAccess },
-  { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: ({ u }) => formatDate(u.joinedOn), sortValue: ({ u }) => u.joinedOn },
+  { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 115, render: ({ f }) => f.zipCode, sortValue: ({ f }) => f.zipCode },
+  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 210, render: ({ f }) => f.industryPreference, sortValue: ({ f }) => f.industryPreference.toLowerCase() },
+  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 145, render: ({ u }) => formatDate(u.lastAccess), sortValue: ({ u }) => u.lastAccess },
+  { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 175, render: ({ u }) => formatDate(u.joinedOn), sortValue: ({ u }) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
@@ -167,17 +173,36 @@ export function QuizPurchasersPage({
   );
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
-  const [purchases, setPurchases] = useState<QuizPurchase[]>(() => buildQuizPurchases(task));
+  /* The Task this page was opened from may sit outside the seeded paid-Quiz
+     set (a Quiz created in this session), so union it in — otherwise the
+     pre-applied Quiz pill would offer no way back to its own value. */
+  const paidQuizzes = useMemo(() => {
+    const seeded = allTasks.filter(isPaid);
+    return seeded.some((t) => t.id === task.id) ? seeded : [task, ...seeded];
+  }, [task]);
+  const quizOptions = useMemo(
+    () => [...new Set(paidQuizzes.map((t) => t.name))].sort(),
+    [paidQuizzes],
+  );
+
+  /* Every paid Quiz's purchasers, pre-filtered to the Task clicked on Tasks —
+     same shape as Quiz Attempts, so the Quiz pill can widen to the rest. */
+  const [purchases, setPurchases] = useState<QuizPurchase[]>(() =>
+    buildAllQuizPurchases(paidQuizzes),
+  );
   const [columns, setColumns] = useState<QuizColumnState>(DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
+  const [quizzes, setQuizzes] = useState<string[]>([task.name]);
   const [accessTypes, setAccessTypes] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
+  // The row awaiting the Revoke Access confirm, if any.
+  const [revoking, setRevoking] = useState<Row | null>(null);
   const [menu, setMenu] = useState<{ row: Row; rect: DOMRect } | null>(null);
 
   const rows = useMemo<Row[]>(
@@ -201,11 +226,40 @@ export function QuizPurchasersPage({
     }
     return out;
   }, [rows]);
-  const passedCount = useMemo(() => rows.filter((r) => r.p.passed === true).length, [rows]);
+  const companyOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    purchaserUsers.forEach((u) => {
+      if (u.companyName) counts.set(u.companyName, (counts.get(u.companyName) ?? 0) + 1);
+    });
+    return { names: [...counts.keys()].sort(), counts };
+  }, [purchaserUsers]);
+
+  const scopes: SearchScope[] = [
+    {
+      token: "Quiz",
+      options: quizOptions,
+      applied: quizzes,
+      onAppliedChange: setQuizzes,
+      optionsLabel: "Quizzes",
+      example: "Quiz: Airflow Calibration Quiz",
+      hint: "Filter by Quiz",
+    },
+    {
+      token: "Company",
+      options: companyOptions.names,
+      applied: filters.companies,
+      onAppliedChange: (v) => setFilters((prev) => ({ ...prev, companies: v })),
+      optionsLabel: "Companies",
+      example: "Company: Acme Inc.",
+      hint: "Filter by Company",
+      describe: (name) => `${companyOptions.counts.get(name)} users`,
+    },
+  ];
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return rows.filter(({ u, f, p }) => {
+      if (quizzes.length && !quizzes.includes(p.quizName)) return false;
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
@@ -217,10 +271,11 @@ export function QuizPurchasersPage({
       return (
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        u.phone.toLowerCase().includes(q)
+        u.phone.toLowerCase().includes(q) ||
+        p.quizName.toLowerCase().includes(q)
       );
     });
-  }, [rows, committedQuery, filters, accessTypes]);
+  }, [rows, committedQuery, filters, quizzes, accessTypes]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
@@ -231,7 +286,7 @@ export function QuizPurchasersPage({
 
   useEffect(() => {
     setPage(1);
-  }, [committedQuery, filters, accessTypes, sort]);
+  }, [committedQuery, filters, quizzes, accessTypes, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -247,57 +302,75 @@ export function QuizPurchasersPage({
     );
   }
 
-  function grantAttempts(user: User, count: number) {
+  /* What the picker shows in its Attempts column — live attempts this user
+     already holds on the Quiz being comped, so an admin can see who is out of
+     attempts before granting. Revoked rows don't count. */
+  const attemptCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of purchases) {
+      if (p.quizName !== task.name || p.revokedDate) continue;
+      m.set(p.userId, (m.get(p.userId) ?? 0) + 1);
+    }
+    return m;
+  }, [purchases, task.name]);
+  const attemptsOf = useCallback(
+    (userId: string) => attemptCounts.get(userId) ?? 0,
+    [attemptCounts],
+  );
+
+  /* One grant can cover any number of users; each gets `count` fresh attempt
+     rows, numbered on from whatever they already have on this Quiz. */
+  function grantAttempts(picked: User[], count: number) {
     setPurchases((prev) => {
       const today = todayIso();
-      let next = nextAttemptNumber(prev, user.id);
       const additions: QuizPurchase[] = [];
-      for (let i = 0; i < count; i++) {
-        additions.push(buildGrantedAttempt(user.id, next, today, CURRENT_ADMIN));
-        next += 1;
+      for (const user of picked) {
+        let next = nextAttemptNumber(prev, user.id, task.name);
+        for (let i = 0; i < count; i++) {
+          additions.push(
+            buildGrantedAttempt(user.id, task.name, next, today, CURRENT_ADMIN),
+          );
+          next += 1;
+        }
       }
       return [...additions, ...prev];
     });
     setGranting(false);
   }
 
-  // A purchased/comped attempt can be revoked only before it's started.
+  /* A purchased/comped attempt can be revoked only before it's started. The
+     confirm is the app's own modal (PrmModal, danger CTA) — a browser
+     window.confirm can't be styled and reads as a different product. */
   function revokeAttempt(row: Row) {
-    const kind = row.p.granted ? "free" : "purchased";
-    const ok = window.confirm(
-      `Revoke ${row.u.name}'s ${kind} attempt #${row.p.attemptNumber} on “${task.name}”?\n\n` +
-        `The attempt is removed immediately. They can purchase the attempt again.`,
-    );
-    if (!ok) return;
     setPurchases((prev) =>
       prev.map((p) =>
-        p.userId === row.u.id && p.attemptNumber === row.p.attemptNumber
+        p.userId === row.u.id &&
+        p.quizName === row.p.quizName &&
+        p.attemptNumber === row.p.attemptNumber
           ? { ...p, revokedDate: todayIso() }
           : p,
       ),
     );
+    setRevoking(null);
   }
 
   return (
     <div className="main">
       <div className="workspace">
         <div className="tasks">
+          {/* Reached from a Task's "Who Paid" action, so the Tasks crumb is the
+              way back — same header as Quiz Attempts. The Quiz this opened on
+              is carried by the pre-applied Quiz Name pill, not a subtitle. */}
           <header className="tasks-header">
-            <div>
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                Tasks
-              </button>
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
+                  Tasks
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
+              </nav>
               <h1 className="tasks-title">Who Paid</h1>
-              <div className="tasks-subtitle">
-                <span>{task.name}</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{rows.length} {rows.length === 1 ? "purchaser" : "purchasers"}</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{passedCount} passed</span>
-                <span className="tasks-subtitle-dot" />
-                <span className="pay-badge pay-badge--paid">Paid Quiz</span>
-              </div>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setGranting(true)}>
@@ -310,10 +383,11 @@ export function QuizPurchasersPage({
           <div className="tasks-row">
             <div className="tasks-content">
               <div className="toolbar">
-                <UsersSearch
-                  users={purchaserUsers}
-                  companies={filters.companies}
-                  onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
+                {/* The shared page search — its scopes feed the Filters-row
+                    pills below, exactly as on Quiz Attempts. */}
+                <EntitySearch
+                  scopes={scopes}
+                  placeholder="Search Users by Name, Email, or Phone…"
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -322,6 +396,17 @@ export function QuizPurchasersPage({
               <UsersFilters
                 filters={filters}
                 setFilters={setFilters}
+                leading={
+                  <MultiPill
+                    label="Quiz Name"
+                    all={quizOptions}
+                    value={quizzes}
+                    onApply={setQuizzes}
+                    searchable
+                    searchPlaceholder="Search Quizzes"
+                    width={300}
+                  />
+                }
                 extra={
                   <MultiPill
                     label="Access"
@@ -330,6 +415,11 @@ export function QuizPurchasersPage({
                     onApply={setAccessTypes}
                   />
                 }
+                extraActive={quizzes.length > 0 || accessTypes.length > 0}
+                onClearExtra={() => {
+                  setQuizzes([]);
+                  setAccessTypes([]);
+                }}
               />
 
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
@@ -361,13 +451,17 @@ export function QuizPurchasersPage({
                     <tbody>
                       {paged.map((row) => (
                         <PurchaserRow
-                          key={`${row.u.id}-${row.p.attemptNumber}`}
+                          key={`${row.u.id}-${row.p.quizName}-${row.p.attemptNumber}`}
                           row={row}
                           cols={visibleCols}
                           selected={row.u.id === selectedId}
                           onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
                           onOpenMenu={(rect) => setMenu({ row, rect })}
-                          menuOpen={menu?.row.p.userId === row.p.userId && menu.row.p.attemptNumber === row.p.attemptNumber}
+                          menuOpen={
+                            menu?.row.p.userId === row.p.userId &&
+                            menu.row.p.quizName === row.p.quizName &&
+                            menu.row.p.attemptNumber === row.p.attemptNumber
+                          }
                         />
                       ))}
                       {paged.length === 0 && (
@@ -400,8 +494,9 @@ export function QuizPurchasersPage({
 
       {granting && (
         <GrantAttemptsModal
-          task={task}
+          quizName={task.name}
           candidates={allUsers}
+          attemptsOf={attemptsOf}
           onGrant={grantAttempts}
           onClose={() => setGranting(false)}
         />
@@ -412,8 +507,29 @@ export function QuizPurchasersPage({
           row={menu.row}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onRevoke={() => revokeAttempt(menu.row)}
+          onRevoke={() => setRevoking(menu.row)}
         />
+      )}
+
+      {revoking && (
+        <PrmModal
+          title="Revoke Access"
+          confirmLabel="Revoke Access"
+          danger
+          onCancel={() => setRevoking(null)}
+          onConfirm={() => revokeAttempt(revoking)}
+        >
+          {/* Body copy is children, not `description` — the shell's own
+              convention for a confirm (Figma 483:588). */}
+          <p className="prm-text">
+            {revoking.u.name}'s {revoking.p.granted ? "free" : "purchased"} attempt #
+            {revoking.p.attemptNumber} on “{revoking.p.quizName}” is removed
+            immediately.{" "}
+            {revoking.p.granted
+              ? "You can grant another free attempt afterwards."
+              : "They can purchase the attempt again."}
+          </p>
+        </PrmModal>
       )}
     </div>
   );
@@ -438,19 +554,18 @@ function PurchaserRow({
   const { u, p } = row;
   return (
     <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
-      <td className="col-name">
+      {/* Plain name. "Granted" used to sit here as a badge, but the plain-text
+          column convention strips it to bare text, where it read as part of
+          the name — and the Access column already says Free vs Paid. Revoked
+          keeps its marker: nothing else on the row carries it. */}
+      <td className="col-name" data-tip={p.revokedDate ? `Attempt revoked ${formatDate(p.revokedDate)}` : u.name}>
         <span className="cp-name-wrap">
           <span className="cp-name">{u.name}</span>
-          {p.granted && (
-            <span className="cp-granted-badge" title="Free attempt granted by an admin">Granted</span>
-          )}
-          {p.revokedDate && (
-            <span className="cp-revoked-badge" title={`Attempt revoked ${formatDate(p.revokedDate)}`}>Revoked</span>
-          )}
+          {p.revokedDate && <span className="cp-revoked-badge">Revoked</span>}
         </span>
       </td>
       {cols.map((c) => (
-        <td key={c.key} className={c.className}>
+        <td key={c.key} className={c.className} data-tip={c.tip?.(row)}>
           {c.render(row)}
         </td>
       ))}
@@ -538,10 +653,12 @@ function AttemptActionsMenu({
   const notStarted = row.p.status === "Not Started";
   const canRevoke = notStarted && !alreadyRevoked;
 
+  /* Figma 786:1719 (available) / 785:1699 (disabled): the panel is the single
+     Revoke Access row — no name/email head — so it hugs its content. */
   return (
     <div
       ref={ref}
-      className="u-menu"
+      className="u-menu u-menu--hug"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -549,10 +666,6 @@ function AttemptActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{row.u.name}</div>
-        <div className="u-menu-head-id">{row.u.email}</div>
-      </div>
       <button
         className="u-menu-item u-menu-item--danger"
         disabled={!canRevoke}
@@ -563,16 +676,18 @@ function AttemptActionsMenu({
           onClose();
         }}
       >
-        <span className="u-menu-item-icon"><MenuPlaceholderIcon /></span>
-        {/* The reason sits INSIDE the button as a second line (Figma 388:354)
-            so the icon centres against the whole block, not just the label. */}
+        <span className="u-menu-item-icon"><MenuLockIcon /></span>
+        {/* The reason sits INSIDE the button as a second line, so the row can
+            top-align the glyph against the label (785:1699). */}
         <span className="u-menu-item-text">
-          <span>Revoke access</span>
+          <span>Revoke Access</span>
           {alreadyRevoked ? (
-            <span className="u-menu-item-sub">Attempt already revoked</span>
+            <span className="u-menu-item-sub">Access has already been revoked for this attempt</span>
           ) : (
             !notStarted && (
-              <span className="u-menu-item-sub">Only a not-started attempt can be revoked</span>
+              <span className="u-menu-item-sub">
+                Access cannot be revoked for attempts that are underway or completed
+              </span>
             )
           )}
         </span>
@@ -623,241 +738,5 @@ function SortableHeader({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
-  );
-}
-
-function TypePill({ type }: { type: UserType }) {
-  return <span className={`u-pill u-type--${type.toLowerCase()}`}>{type}</span>;
-}
-
-function SubscriptionCell({ user }: { user: User }) {
-  const slug = user.subscriptionStatus.toLowerCase().replace(/\s+/g, "-");
-  return (
-    <span className="u-sub">
-      <span className={`u-sub-pill u-sub--${slug}`}>{user.subscriptionStatus}</span>
-      {user.subscriptionStatus === "Subscriber" && user.platform && (
-        <span className="u-platform">{user.platform}</span>
-      )}
-    </span>
-  );
-}
-
-function VerifiedCell({ text, verified }: { text: string; verified: boolean }) {
-  return (
-    <span className="u-vcell">
-      <span className="u-vcell-text">{text}</span>
-      {verified && (
-        <span className="u-verified" title="Verified">
-          <VerifiedIcon />
-        </span>
-      )}
-    </span>
-  );
-}
-
-function AccessCell({ purchase }: { purchase: QuizPurchase }) {
-  if (purchase.granted) {
-    return (
-      <span
-        className="cp-access cp-access--free"
-        title={purchase.grantedBy ? `Free attempt granted by ${purchase.grantedBy}` : "Free attempt granted by an admin"}
-      >
-        Free
-      </span>
-    );
-  }
-  return <span className="cp-access cp-access--paid">Paid</span>;
-}
-
-function GrantDateCell({ purchase }: { purchase: QuizPurchase }) {
-  if (!purchase.grantDate) return <span className="u-muted">—</span>;
-  return (
-    <span
-      className="cp-grant-date"
-      title={purchase.grantedBy ? `Granted by ${purchase.grantedBy}` : undefined}
-    >
-      {formatDate(purchase.grantDate)}
-    </span>
-  );
-}
-
-function StatusCell({ status }: { status: QuizPurchase["status"] }) {
-  const slug =
-    status === "Completed" ? "completed" : status === "In Progress" ? "inprogress" : "notstarted";
-  return <span className={`qp-status qp-status--${slug}`}>{status}</span>;
-}
-
-function ScoreCell({ purchase }: { purchase: QuizPurchase }) {
-  if (purchase.score == null) return <span className="u-muted">—</span>;
-  return <span className="qp-score">{purchase.score}%</span>;
-}
-
-function ResultCell({ purchase }: { purchase: QuizPurchase }) {
-  if (purchase.passed == null) return <span className="u-muted">—</span>;
-  return (
-    <span className={`qp-result qp-result--${purchase.passed ? "pass" : "fail"}`}>
-      {purchase.passed ? "Pass" : "Fail"}
-    </span>
-  );
-}
-
-/* ─────────── Grant Free Attempts flow (search → quantity) ─────────── */
-
-const MAX_GRANT = 10;
-
-function GrantAttemptsModal({
-  task,
-  candidates,
-  onGrant,
-  onClose,
-}: {
-  task: Task;
-  candidates: User[];
-  onGrant: (u: User, count: number) => void;
-  onClose: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<User | null>(null);
-  const [count, setCount] = useState(1);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = q
-      ? candidates.filter(
-          (u) =>
-            u.name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.phone.toLowerCase().includes(q) ||
-            (u.companyName ?? "").toLowerCase().includes(q),
-        )
-      : candidates;
-    return base.slice(0, 40);
-  }, [candidates, query]);
-
-  const clamped = Math.min(MAX_GRANT, Math.max(1, count));
-
-  return (
-    <div className="cl-modal-overlay" onMouseDown={onClose}>
-      <div className="cl-modal" onMouseDown={(e) => e.stopPropagation()}>
-        {!picked ? (
-          <>
-            <div className="cl-modal-head">
-              <div className="cl-modal-eyebrow">Grant attempts · no payment</div>
-              <h2 className="cl-modal-title">Grant free attempts on “{task.name}”</h2>
-              <p className="cl-modal-sub">
-                Give a user extra Quiz attempts without a purchase. Choose who to comp.
-              </p>
-            </div>
-            <div className="cl-modal-search">
-              <span className="search-icon"><SearchIcon /></span>
-              <input
-                ref={inputRef}
-                className="cl-modal-input"
-                placeholder="Search users by name, email, phone, or company…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-            <div className="cl-modal-list">
-              {results.length === 0 ? (
-                <div className="cl-modal-empty">
-                  {query.trim()
-                    ? `No users match “${query.trim()}”.`
-                    : "No users found."}
-                </div>
-              ) : (
-                results.map((u) => (
-                  <button key={u.id} className="cl-modal-item" onClick={() => setPicked(u)}>
-                    <span className="cp-modal-avatar">{u.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>
-                    <span className="cl-modal-item-text">
-                      <span className="cl-modal-item-name">{u.name}</span>
-                      <span className="cl-modal-item-meta">
-                        {u.email} · {u.userType === "B2B" && u.companyName ? u.companyName : "B2C"}
-                      </span>
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="cl-modal-head">
-              <button className="cl-modal-back" onClick={() => setPicked(null)}>‹ Back</button>
-              <h2 className="cl-modal-title">Confirm grant</h2>
-            </div>
-            <div className="cp-confirm-body">
-              <div className="cp-confirm-user">
-                <span className="cp-modal-avatar lg">{picked.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>
-                <div>
-                  <div className="cl-modal-item-name">{picked.name}</div>
-                  <div className="cl-modal-item-meta">{picked.email} · {picked.id}</div>
-                </div>
-              </div>
-
-              <label className="qp-grant-field">
-                <span className="qp-grant-label">Free attempts to grant</span>
-                <div className="qp-grant-stepper">
-                  <button
-                    type="button"
-                    className="qp-grant-step"
-                    aria-label="Decrease"
-                    onClick={() => setCount((c) => Math.max(1, c - 1))}
-                    disabled={clamped <= 1}
-                  >
-                    –
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={MAX_GRANT}
-                    className="qp-grant-input"
-                    value={count}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      setCount(Number.isFinite(n) ? n : 1);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="qp-grant-step"
-                    aria-label="Increase"
-                    onClick={() => setCount((c) => Math.min(MAX_GRANT, c + 1))}
-                    disabled={clamped >= MAX_GRANT}
-                  >
-                    +
-                  </button>
-                </div>
-                <span className="qp-grant-hint">Up to {MAX_GRANT} per grant.</span>
-              </label>
-
-              <p className="cp-confirm-text">
-                <strong>{picked.name}</strong> will receive{" "}
-                <strong>{clamped}</strong> free {clamped === 1 ? "attempt" : "attempts"} on{" "}
-                <strong>{task.name}</strong> at no charge. The{" "}
-                {clamped === 1 ? "attempt is logged as an admin grant" : "attempts are logged as admin grants"} and
-                {clamped === 1 ? " starts" : " start"} in <em>Not Started</em>.
-              </p>
-            </div>
-            <div className="cl-modal-foot cp-confirm-foot">
-              <button className="btn-secondary" onClick={() => setPicked(null)}>Cancel</button>
-              <button className="btn-publish" onClick={() => onGrant(picked, clamped)}>
-                Grant {clamped} {clamped === 1 ? "attempt" : "attempts"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
   );
 }

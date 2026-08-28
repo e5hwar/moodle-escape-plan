@@ -2,13 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
   type User,
-  type UserType,
   type UserRole,
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import {
-  buildCertPurchases,
+  buildAllCertPurchases,
   isConsumableCert,
   consumableResetsProgress,
   todayIso,
@@ -16,7 +15,7 @@ import {
   CURRENT_ADMIN,
   type CertPurchase,
 } from "../data/certPurchases";
-import type { Certification } from "../data/certifications";
+import { certifications as allCerts, type Certification } from "../data/certifications";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -25,14 +24,16 @@ import {
   type UserFilterState,
 } from "./UsersFilters";
 import { useColumnOrder, orderedColumns } from "./Filters";
-import { UsersSearch } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon, MenuPlaceholderIcon, ChevronRightIcon } from "./icons";
+import { PrmModal } from "./PrmModal";
+import { EntitySearch, type SearchScope } from "./UsersSearch";
+import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
 /* ─── columns: every Users column plus the four purchase columns ─── */
 type PurchaserColumnKey =
   | UserColumnKey
+  | "certName"
   | "access"
   | "purchaseDate"
   | "grantDate"
@@ -50,6 +51,7 @@ type PurchaserColumnState = Record<PurchaserColumnKey, boolean>;
 const DEFAULT_COLUMNS: PurchaserColumnState = {
   email: true,
   phone: true,
+  certName: true,
   access: true,
   purchaseDate: true,
   grantDate: true,
@@ -87,13 +89,6 @@ function formatDate(iso: string | null): string {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const VerifiedIcon = () => (
-  <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
-
 type SortKey = "name" | PurchaserColumnKey;
 type SortDir = "asc" | "desc";
 
@@ -108,32 +103,42 @@ type ColMeta = {
   label: string;
   className: string;
   width: number;
+  /** Tooltip on the cell — where a grant's admin detail now lives. */
+  tip?: (r: Row) => string | undefined;
   render: (r: Row) => React.ReactNode;
   sortValue: (r: Row) => string | number;
 };
 
-// Order here is the on-screen column order: purchase columns sit right after
-// Email / Phone, with the rest of the Users columns available afterwards.
+/* Plain-text columns, per the table convention — every cell is a string, with
+   the detail a pill used to carry (who comped access, why a row is muted)
+   demoted to a hover tooltip. Widths fit the HEADER label, not just the data:
+   header type is 16px SemiBold and never wraps, so a column narrower than its
+   own label spills over the next one.
+
+   Order here is the on-screen column order: the certification and purchase
+   columns sit right after Email / Phone, with the rest of the Users columns
+   available afterwards under Edit Columns. */
 const COLS: ColMeta[] = [
-  { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: ({ u }) => u.email.toLowerCase() },
-  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: ({ u }) => u.phone },
-  { key: "access", label: "Access", className: "col-cp-access", width: 110, render: ({ p }) => <AccessCell purchase={p} />, sortValue: ({ p }) => (p.granted ? 0 : 1) },
-  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 140, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
-  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 140, render: ({ p }) => <GrantDateCell purchase={p} />, sortValue: ({ p }) => p.grantDate ?? "" },
-  { key: "progress", label: "Progress", className: "col-cp-progress", width: 150, render: ({ p }) => <ProgressCell value={p.progress} />, sortValue: ({ p }) => p.progress },
-  { key: "completion", label: "Completion", className: "col-cp-completion", width: 130, render: ({ p }) => <CompletionCell completed={p.completed} />, sortValue: ({ p }) => (p.completed ? 1 : 0) },
-  { key: "accessEnded", label: "Access Ended", className: "col-u-date", width: 140, render: ({ p }) => <AccessEndedCell purchase={p} />, sortValue: ({ p }) => p.accessEndedDate ?? "" },
-  { key: "userType", label: "User Type", className: "col-u-type", width: 96, render: ({ u }) => <TypePill type={u.userType} />, sortValue: ({ u }) => u.userType },
-  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : <span className="u-muted">—</span>), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
+  { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => u.email, sortValue: ({ u }) => u.email.toLowerCase() },
+  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => u.phone, sortValue: ({ u }) => u.phone },
+  { key: "certName", label: "Certification", className: "col-cp-cert", width: 250, tip: ({ p }) => p.certName, render: ({ p }) => p.certName, sortValue: ({ p }) => p.certName.toLowerCase() },
+  { key: "access", label: "Access", className: "col-cp-access", width: 110, tip: ({ p }) => (p.granted ? `Access granted by ${p.grantedBy ?? "an admin"}` : undefined), render: ({ p }) => (p.granted ? "Free" : "Paid"), sortValue: ({ p }) => (p.granted ? 0 : 1) },
+  { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
+  { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 145, tip: ({ p }) => (p.grantDate && p.grantedBy ? `Granted by ${p.grantedBy}` : undefined), render: ({ p }) => formatDate(p.grantDate), sortValue: ({ p }) => p.grantDate ?? "" },
+  { key: "progress", label: "Progress", className: "col-cp-progress", width: 125, render: ({ p }) => `${p.progress}%`, sortValue: ({ p }) => p.progress },
+  { key: "completion", label: "Completion", className: "col-cp-completion", width: 145, render: ({ p }) => (p.completed ? "Complete" : "In Progress"), sortValue: ({ p }) => (p.completed ? 1 : 0) },
+  { key: "accessEnded", label: "Access Ended", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.accessEndedDate), sortValue: ({ p }) => p.accessEndedDate ?? "" },
+  { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
+  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : "—"), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
-  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => <SubscriptionCell user={u} />, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
-  { key: "language", label: "Language", className: "col-u-lang", width: 100, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },
-  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: ({ f }) => f.goal, sortValue: ({ f }) => GOAL_ORDER[f.goal] ?? 0 },
+  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
+  { key: "language", label: "Language", className: "col-u-lang", width: 120, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },
+  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, tip: ({ f }) => f.goal, render: ({ f }) => f.goal, sortValue: ({ f }) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: ({ f }) => f.attribution, sortValue: ({ f }) => f.attribution.toLowerCase() },
-  { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: ({ f }) => f.zipCode, sortValue: ({ f }) => f.zipCode },
-  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 165, render: ({ f }) => f.industryPreference, sortValue: ({ f }) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 130, render: ({ u }) => formatDate(u.lastAccess), sortValue: ({ u }) => u.lastAccess },
-  { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: ({ u }) => formatDate(u.joinedOn), sortValue: ({ u }) => u.joinedOn },
+  { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 115, render: ({ f }) => f.zipCode, sortValue: ({ f }) => f.zipCode },
+  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 210, render: ({ f }) => f.industryPreference, sortValue: ({ f }) => f.industryPreference.toLowerCase() },
+  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 145, render: ({ u }) => formatDate(u.lastAccess), sortValue: ({ u }) => u.lastAccess },
+  { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 175, render: ({ u }) => formatDate(u.joinedOn), sortValue: ({ u }) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
@@ -157,25 +162,49 @@ export function CertPurchasersPage({
   cert: Certification;
   onBack: () => void;
 }) {
-  const consumable = isConsumableCert(cert);
   const profiles = useMemo(
     () => new Map(allUsers.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [],
   );
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
+  /* The Certification this page was opened from may sit outside the seeded paid
+     set (one created in this session), so union it in — otherwise the
+     pre-applied pill would offer no way back to its own value. */
+  const paidCerts = useMemo(() => {
+    const seeded = allCerts.filter((c) => !!c.payment);
+    return seeded.some((c) => c.id === cert.id) ? seeded : [cert, ...seeded];
+  }, [cert]);
+  const certOptions = useMemo(
+    () => [...new Set(paidCerts.map((c) => c.name))].sort(),
+    [paidCerts],
+  );
+  /* Rows span certs now, so revoke has to read the consumable rules off the ROW's
+     Certification rather than the page's. */
+  const certByName = useMemo(
+    () => new Map(paidCerts.map((c) => [c.name, c] as const)),
+    [paidCerts],
+  );
+
+  /* Every paid Certification's purchasers, pre-filtered to the one clicked on
+     the Certifications page — same shape as the quiz Who Paid page. */
   // Local working copy so revoke / grant persist in-session.
-  const [purchases, setPurchases] = useState<CertPurchase[]>(() => buildCertPurchases(cert));
+  const [purchases, setPurchases] = useState<CertPurchase[]>(() =>
+    buildAllCertPurchases(paidCerts),
+  );
   const [columns, setColumns] = useState<PurchaserColumnState>(DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
+  const [certNames, setCertNames] = useState<string[]>([cert.name]);
   const [accessTypes, setAccessTypes] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
+  // The row awaiting the Revoke Access confirm, if any.
+  const [revoking, setRevoking] = useState<Row | null>(null);
   const [menu, setMenu] = useState<{ row: Row; rect: DOMRect } | null>(null);
 
   const rows = useMemo<Row[]>(
@@ -192,11 +221,40 @@ export function CertPurchasersPage({
   // Users represented in this list — used by the search bar's suggestions.
   const purchaserUsers = useMemo(() => rows.map((r) => r.u), [rows]);
 
-  const completedCount = useMemo(() => rows.filter((r) => r.p.completed).length, [rows]);
+  const companyOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    purchaserUsers.forEach((u) => {
+      if (u.companyName) counts.set(u.companyName, (counts.get(u.companyName) ?? 0) + 1);
+    });
+    return { names: [...counts.keys()].sort(), counts };
+  }, [purchaserUsers]);
+
+  const scopes: SearchScope[] = [
+    {
+      token: "Certification",
+      options: certOptions,
+      applied: certNames,
+      onAppliedChange: setCertNames,
+      optionsLabel: "Certifications",
+      example: "Certification: EPA 608 Universal",
+      hint: "Filter by Certification",
+    },
+    {
+      token: "Company",
+      options: companyOptions.names,
+      applied: filters.companies,
+      onAppliedChange: (v) => setFilters((prev) => ({ ...prev, companies: v })),
+      optionsLabel: "Companies",
+      example: "Company: Acme Inc.",
+      hint: "Filter by Company",
+      describe: (name) => `${companyOptions.counts.get(name)} users`,
+    },
+  ];
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return rows.filter(({ u, f, p }) => {
+      if (certNames.length && !certNames.includes(p.certName)) return false;
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
@@ -208,10 +266,11 @@ export function CertPurchasersPage({
       return (
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        u.phone.toLowerCase().includes(q)
+        u.phone.toLowerCase().includes(q) ||
+        p.certName.toLowerCase().includes(q)
       );
     });
-  }, [rows, committedQuery, filters, accessTypes]);
+  }, [rows, committedQuery, filters, certNames, accessTypes]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
@@ -222,7 +281,7 @@ export function CertPurchasersPage({
 
   useEffect(() => {
     setPage(1);
-  }, [committedQuery, filters, accessTypes, sort]);
+  }, [committedQuery, filters, certNames, accessTypes, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -238,25 +297,21 @@ export function CertPurchasersPage({
     );
   }
 
+  /* What revoking this row actually costs the user — the confirm and the
+     mutation read the same three facts off the row's own Certification, not
+     the page's, because the list spans all of them. */
+  function revokeTerms(row: Row) {
+    const rowCert = certByName.get(row.p.certName) ?? cert;
+    const consumable = isConsumableCert(rowCert);
+    return { consumable, resets: consumableResetsProgress(rowCert) };
+  }
+
   function revokeAccess(row: Row) {
-    const consumable = isConsumableCert(cert);
-    const resets = consumableResetsProgress(cert);
-
-    const lines = [`Revoke ${row.u.name}'s access to “${cert.name}”?`, "", "Their access ends immediately."];
-    if (consumable) {
-      if (resets) lines.push("Their progress on this Certification will be reset.");
-      lines.push("They can purchase the Certification again to regain access.");
-    } else {
-      lines.push("They keep their completion record. This can't be undone.");
-    }
-
-    const ok = window.confirm(lines.join("\n"));
-    if (!ok) return;
-
+    const { consumable, resets } = revokeTerms(row);
     const today = todayIso();
     setPurchases((prev) =>
       prev.map((p) => {
-        if (p.userId !== row.u.id) return p;
+        if (p.userId !== row.u.id || p.certName !== row.p.certName) return p;
         const next: CertPurchase = { ...p, revokedDate: today };
         // Consumables end their access window on revoke; some also reset progress.
         if (consumable) next.accessEndedDate = today;
@@ -267,14 +322,17 @@ export function CertPurchasersPage({
         return next;
       }),
     );
+    setRevoking(null);
   }
 
   function grantAccess(user: User) {
     setPurchases((prev) => {
-      if (prev.some((p) => p.userId === user.id)) return prev; // already has access
+      // already has access to THIS Certification
+      if (prev.some((p) => p.userId === user.id && p.certName === cert.name)) return prev;
       return [
         {
           userId: user.id,
+          certName: cert.name,
           purchaseDate: null,
           progress: 0,
           completed: false,
@@ -294,24 +352,20 @@ export function CertPurchasersPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks">
+          {/* Reached from a Certification's "View who paid" action, so the
+              Certifications crumb is the way back — same header as the quiz
+              Who Paid page. The Certification this opened on is carried by the
+              pre-applied Certification pill, not a subtitle. */}
           <header className="tasks-header">
-            <div>
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                Certifications
-              </button>
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <button className="rvc-crumb" onClick={onBack} title="Back to Certifications">
+                  Certifications
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
+              </nav>
               <h1 className="tasks-title">Who Paid</h1>
-              <div className="tasks-subtitle">
-                <span>{cert.name}</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{rows.length} {rows.length === 1 ? "purchaser" : "purchasers"}</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{completedCount} completed</span>
-                <span className="tasks-subtitle-dot" />
-                <span className={`pay-badge pay-badge--${consumable ? "consumable" : "nonconsumable"}`}>
-                  {consumable ? "Consumable" : "Non-consumable"}
-                </span>
-              </div>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setGranting(true)}>
@@ -324,10 +378,11 @@ export function CertPurchasersPage({
           <div className="tasks-row">
             <div className="tasks-content">
               <div className="toolbar">
-                <UsersSearch
-                  users={purchaserUsers}
-                  companies={filters.companies}
-                  onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
+                {/* The shared page search — its scopes feed the Filters-row
+                    pills below, exactly as on the quiz Who Paid page. */}
+                <EntitySearch
+                  scopes={scopes}
+                  placeholder="Search Users by Name, Email, or Phone…"
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -336,6 +391,17 @@ export function CertPurchasersPage({
               <UsersFilters
                 filters={filters}
                 setFilters={setFilters}
+                leading={
+                  <MultiPill
+                    label="Certification"
+                    all={certOptions}
+                    value={certNames}
+                    onApply={setCertNames}
+                    searchable
+                    searchPlaceholder="Search Certifications"
+                    width={300}
+                  />
+                }
                 extra={
                   <MultiPill
                     label="Access"
@@ -344,6 +410,11 @@ export function CertPurchasersPage({
                     onApply={setAccessTypes}
                   />
                 }
+                extraActive={certNames.length > 0 || accessTypes.length > 0}
+                onClearExtra={() => {
+                  setCertNames([]);
+                  setAccessTypes([]);
+                }}
               />
 
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
@@ -383,13 +454,16 @@ export function CertPurchasersPage({
                     <tbody>
                       {paged.map((row) => (
                         <PurchaserRow
-                          key={row.u.id}
+                          key={`${row.u.id}-${row.p.certName}`}
                           row={row}
                           cols={visibleCols}
                           selected={row.u.id === selectedId}
                           onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
                           onOpenMenu={(rect) => setMenu({ row, rect })}
-                          menuOpen={menu?.row.p.userId === row.p.userId}
+                          menuOpen={
+                            menu?.row.p.userId === row.p.userId &&
+                            menu.row.p.certName === row.p.certName
+                          }
                         />
                       ))}
                       {paged.length === 0 && (
@@ -423,7 +497,7 @@ export function CertPurchasersPage({
       {granting && (
         <GrantAccessModal
           cert={cert}
-          candidates={usersWithoutAccess(purchases, allUsers)}
+          candidates={usersWithoutAccess(purchases, cert.name, allUsers)}
           onGrant={grantAccess}
           onClose={() => setGranting(false)}
         />
@@ -434,8 +508,27 @@ export function CertPurchasersPage({
           row={menu.row}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onRevoke={() => revokeAccess(menu.row)}
+          onRevoke={() => setRevoking(menu.row)}
         />
+      )}
+
+      {revoking && (
+        <PrmModal
+          title="Revoke Access"
+          confirmLabel="Revoke Access"
+          danger
+          onCancel={() => setRevoking(null)}
+          onConfirm={() => revokeAccess(revoking)}
+        >
+          {/* Body copy is children, not `description` — the shell's own
+              convention for a confirm (Figma 483:588). */}
+          <p className="prm-text">
+            {revoking.u.name}'s access to “{revoking.p.certName}” ends immediately.{" "}
+            {revokeTerms(revoking).consumable
+              ? `${revokeTerms(revoking).resets ? "Their progress on this Certification is reset, and they" : "They"} can purchase the Certification again to regain access.`
+              : "They keep their completion record. This can't be undone."}
+          </p>
+        </PrmModal>
       )}
     </div>
   );
@@ -486,85 +579,6 @@ function SortableHeader({
   );
 }
 
-function TypePill({ type }: { type: UserType }) {
-  return <span className={`u-pill u-type--${type.toLowerCase()}`}>{type}</span>;
-}
-
-function SubscriptionCell({ user }: { user: User }) {
-  const slug = user.subscriptionStatus.toLowerCase().replace(/\s+/g, "-");
-  return (
-    <span className="u-sub">
-      <span className={`u-sub-pill u-sub--${slug}`}>{user.subscriptionStatus}</span>
-      {user.subscriptionStatus === "Subscriber" && user.platform && (
-        <span className="u-platform">{user.platform}</span>
-      )}
-    </span>
-  );
-}
-
-function VerifiedCell({ text, verified }: { text: string; verified: boolean }) {
-  return (
-    <span className="u-vcell">
-      <span className="u-vcell-text">{text}</span>
-      {verified && (
-        <span className="u-verified" title="Verified">
-          <VerifiedIcon />
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ProgressCell({ value }: { value: number }) {
-  return (
-    <span className="cp-progress">
-      <span className="cp-progress-bar">
-        <span className="cp-progress-fill" style={{ width: `${value}%` }} />
-      </span>
-      <span className="cp-progress-pct">{value}%</span>
-    </span>
-  );
-}
-
-function CompletionCell({ completed }: { completed: boolean }) {
-  return (
-    <span className={`cp-status cp-status--${completed ? "complete" : "progress"}`}>
-      {completed ? "Complete" : "In progress"}
-    </span>
-  );
-}
-
-function AccessCell({ purchase }: { purchase: CertPurchase }) {
-  if (purchase.granted) {
-    return (
-      <span
-        className="cp-access cp-access--free"
-        title={purchase.grantedBy ? `Free access granted by ${purchase.grantedBy}` : "Free access granted by an admin"}
-      >
-        Free
-      </span>
-    );
-  }
-  return <span className="cp-access cp-access--paid">Paid</span>;
-}
-
-function GrantDateCell({ purchase }: { purchase: CertPurchase }) {
-  if (!purchase.grantDate) return <span className="u-muted">—</span>;
-  return (
-    <span
-      className="cp-grant-date"
-      title={purchase.grantedBy ? `Granted by ${purchase.grantedBy}` : undefined}
-    >
-      {formatDate(purchase.grantDate)}
-    </span>
-  );
-}
-
-function AccessEndedCell({ purchase }: { purchase: CertPurchase }) {
-  if (!purchase.accessEndedDate) return <span className="u-muted">—</span>;
-  return <span className="cp-ended">{formatDate(purchase.accessEndedDate)}</span>;
-}
-
 function PurchaserRow({
   row,
   cols,
@@ -584,17 +598,18 @@ function PurchaserRow({
   const { u, p } = row;
   return (
     <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
-      <td className="col-name">
+      {/* Plain name. "Granted" used to sit here as a badge, but the plain-text
+          column convention strips it to bare text, where it read as part of
+          the name — and the Access column already says Free vs Paid. Revoked
+          keeps its marker: nothing else on the row carries it. */}
+      <td className="col-name" data-tip={p.revokedDate ? `Access revoked ${formatDate(p.revokedDate)}` : u.name}>
         <span className="cp-name-wrap">
           <span className="cp-name">{u.name}</span>
-          {p.granted && <span className="cp-granted-badge" title="Access granted by an admin">Granted</span>}
-          {p.revokedDate && (
-            <span className="cp-revoked-badge" title={`Access revoked ${formatDate(p.revokedDate)}`}>Revoked</span>
-          )}
+          {p.revokedDate && <span className="cp-revoked-badge">Revoked</span>}
         </span>
       </td>
       {cols.map((c) => (
-        <td key={c.key} className={c.className}>
+        <td key={c.key} className={c.className} data-tip={c.tip?.(row)}>
           {c.render(row)}
         </td>
       ))}
@@ -682,8 +697,8 @@ function PurchaserActionsMenu({
     onPick: () => void,
     danger = false,
     disabled = false,
-    /* Reason the row is disabled — a second line INSIDE the button (Figma
-       388:354) so the icon centres against the whole block. */
+    /* Reason the row is disabled — a second line INSIDE the button, so the row
+       can top-align the glyph against the label (Figma 785:1699). */
     note?: string,
   ) => (
     <button
@@ -707,7 +722,9 @@ function PurchaserActionsMenu({
   return (
     <div
       ref={ref}
-      className="u-menu"
+      /* Figma 786:1719 / 785:1699: the panel is the single Revoke Access row —
+         no name/email head — so it hugs its content. */
+      className="u-menu u-menu--hug"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -715,17 +732,13 @@ function PurchaserActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{row.u.name}</div>
-        <div className="u-menu-head-id">{row.u.email}</div>
-      </div>
       {item(
-        <MenuPlaceholderIcon />,
-        "Revoke access",
+        <MenuLockIcon />,
+        "Revoke Access",
         onRevoke,
         true,
         alreadyRevoked,
-        alreadyRevoked ? "Access already revoked" : undefined,
+        alreadyRevoked ? "Access has already been revoked for this purchase" : undefined,
       )}
     </div>
   );

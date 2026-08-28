@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
-import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, GearIcon, LockIcon, SearchIcon, CheckIcon } from "./icons";
-import { RteToolbar } from "./RteToolbar";
-import { AutoTextarea } from "./AutoTextarea";
+import { PriceIdFields, PriceIdMatrix, newPriceIds, type PriceIds } from "./PriceIdFields";
+import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, MoveIcon, LockIcon, SearchIcon, CheckIcon, InfoTipIcon } from "./icons";
+import { NewQuestionWizard } from "./NewQuestionWizard";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { RichTextField } from "./RichTextField";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
-import {
-  questions as QUESTION_BANK,
-  categories as QB_CATEGORIES,
-  flattenCategories,
-  shortQuestionType,
-  type CategoryOption,
-  type Question,
-} from "../data/questionBank";
+import { MultiSelect } from "./NewCompanyWizard";
+import { questions as QUESTION_BANK, type Question } from "../data/questionBank";
+import { SelectQuestionsModal } from "./SelectQuestionsModal";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -90,6 +88,8 @@ type StaticQuestion = {
   text: string;
   type: string;
   weight: string;
+  /** Position in the unified Questions list (statics and pools interleave). */
+  seq?: number;
 };
 
 type RandomPool = {
@@ -99,21 +99,14 @@ type RandomPool = {
   draw: string;
   /** Per-question weightage, shared by every question in the pool. */
   weight: string;
+  /** Position in the unified Questions list (statics and pools interleave). */
+  seq?: number;
 };
 
 // Only Active, graded Bank questions are eligible for Quizzes — both as
 // hand-picked statics and as random-pool members.
 const GRADED_BANK = QUESTION_BANK.filter(
   (q) => q.status === "Active" && q.gradingEnabled,
-);
-
-// Category options for the picker's Category/Sub-Category filter, limited to
-// branches that actually hold graded questions.
-const matchesCategory = (q: Question, opt: CategoryOption) =>
-  opt.label.split(" > ").every((part, i) => q.categoryPath[i] === part);
-
-const QUIZ_PICKER_CATS = flattenCategories(QB_CATEGORIES).filter((opt) =>
-  GRADED_BANK.some((q) => matchesCategory(q, opt)),
 );
 
 type QuizSection = {
@@ -274,119 +267,10 @@ const DEFAULT_OPEN_IN: OpenIn = "external";
 
 const DEFAULT_FILE_OPEN_IN: FileOpenIn = "in-app-viewer";
 
-// Content Tags for Visibility — three tag types, identical to the Certification
-// wizard. Trade and Partnership draw their values from the B2B Management fields
-// under Product Config; User Type is either unset (blank) or "B2B Only".
+// Audience tags — Trade and Partnership draw their values from the B2B
+// Management fields under Product Config; the audience switch is either unset
+// (All Users) or this one "B2B Only" tag. Identical to the Cert wizard.
 const USER_TYPE_VALUES = ["B2B Only"];
-
-const CONTENT_TAG_GROUPS: {
-  type: ContentTagType;
-  label: string;
-  options: string[];
-  placeholder: string;
-  help: string;
-}[] = [
-  {
-    type: "trade",
-    label: "Trade",
-    options: DEFAULT_TRADES,
-    placeholder: "Select a Trade…",
-    help: "Tenants in any one of these Trades can see this. Leave empty to match every Tenant's Trade.",
-  },
-  {
-    type: "partnership",
-    label: "Partnership",
-    options: DEFAULT_PARTNERSHIPS,
-    placeholder: "Select a Partnership…",
-    help: "Only Tenants in one of these Partnerships can see this. Leave empty to match Tenants with or without a Partnership.",
-  },
-  {
-    type: "userType",
-    label: "User Type",
-    options: USER_TYPE_VALUES,
-    placeholder: "Add B2B Only…",
-    help: 'Default is All — visible to B2C and B2B. Add "B2B Only" to hide this from B2C users.',
-  },
-];
-
-const VisibilityInfoIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9.5" />
-    <path d="M12 16v-4M12 8h.01" />
-  </svg>
-);
-
-// Compact version of the spec's "Content Visibility Scenarios" table — shown in
-// the expandable help panel so admins can sanity-check a tag combination.
-const VISIBILITY_EXAMPLES: { trade: string; partnership: string; userType: string; b2c: string; b2b: string }[] = [
-  { trade: "—", partnership: "—", userType: "All", b2c: "Yes", b2b: "All Companies" },
-  { trade: "—", partnership: "—", userType: "B2B Only", b2c: "No", b2b: "All Companies" },
-  { trade: "Residential HVAC", partnership: "—", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC (with or without a Partnership)" },
-  { trade: "Residential HVAC", partnership: "Nexstar", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC who are also in Nexstar (both conditions)" },
-  { trade: "—", partnership: "Nexstar", userType: "All", b2c: "No", b2b: "Companies in Nexstar (across all Trades)" },
-  { trade: "Res. + Comm. HVAC", partnership: "—", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC OR Commercial HVAC" },
-];
-
-function VisibilityHelpPanel() {
-  return (
-    <div className="cv-help-panel">
-      <p className="cv-help-lead">
-        This Task is <strong>All-User Content</strong> (SkillCat-owned). The tags below
-        scope <strong>which Tenants can see it</strong> — they're computed at query time against each
-        Tenant's profile, with no manual assignment. Once a Tenant can see it, the Paywall applies
-        equally to everyone.
-      </p>
-
-      <ul className="cv-rule-list">
-        <li>
-          <strong>Unset = everyone.</strong> No Trade, no Partnership, and User Type left at All makes
-          this visible to all Tenants — B2C and B2B alike.
-        </li>
-        <li>
-          <strong>Within a filter, OR.</strong> A Tenant matches if it shares at least one value with
-          the content. Two Trades → any Tenant holding either one sees it.
-        </li>
-        <li>
-          <strong>Across filters, AND.</strong> A Tenant must satisfy every filter set — Trade
-          <em> and</em> Partnership <em>and</em> User Type.
-        </li>
-        <li>
-          <strong>B2C has no Trade or Partnership.</strong> Adding <em>any</em> Trade or Partnership tag
-          removes this content from B2C — content can't be both Trade/Partnership-scoped and B2C-visible.
-        </li>
-        <li>
-          <strong>Trade ≠ Industry.</strong> Trade is an access filter and is invisible to learners.
-          Industries are the browse/discovery taxonomy learners actually see.
-        </li>
-      </ul>
-
-      <div className="cv-examples-wrap">
-        <table className="cv-examples">
-          <thead>
-            <tr>
-              <th>Trade</th>
-              <th>Partnership</th>
-              <th>User Type</th>
-              <th>B2C</th>
-              <th>B2B sees it?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {VISIBILITY_EXAMPLES.map((r, i) => (
-              <tr key={i}>
-                <td>{r.trade}</td>
-                <td>{r.partnership}</td>
-                <td>{r.userType}</td>
-                <td>{r.b2c}</td>
-                <td>{r.b2b}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 // Per-attempt pricing starts with just the first attempt; "all subsequent
 // attempts" is tracked separately (subsequentPrice) and always sits at the
@@ -490,7 +374,15 @@ const INITIAL_DATA: WizardData = {
   nateIdEs: "",
 };
 
-type StepDef = { id: string; label: string; sub: string; desc: string };
+/** `tip` hangs a tooltip glyph off the page subtext, as the Certification
+ *  wizard does — page-level framing, not a per-field note. */
+type StepDef = { id: string; label: string; sub: string; desc: string; tip?: string };
+
+/* How the three audience filters combine. Declared here, not beside the
+   Audience field, because the step table below reads it. Kept identical to the
+   Certification wizard's step-6 tip. */
+const AUDIENCE_TIP =
+  "Every filter you set narrows the audience. A company must match all the filters you set (Audience, Trade and Partnership). Within a single filter, matching one value is enough — content tagged Residential HVAC and Commercial HVAC is visible to a company in either.";
 
 const XAPI_STEPS: StepDef[] = [
   { id: "details", label: "Task Details", sub: "Name, file, time, visibility", desc: "Name and describe the Task, upload the xAPI package per language, estimate the duration, and set its visibility." },
@@ -520,7 +412,7 @@ const HANDSON_STEPS: StepDef[] = [
   { id: "reference", label: "Reference Files", sub: "Files, instructions, checklist", desc: "Give learners the files, instructions, and materials they need, and write the checklist reviewers grade against." },
   { id: "submission", label: "Submission Fields", sub: "Description and media limits", desc: "Define what a learner submits — the project description limit and how many media files of which types they can attach." },
   { id: "completion", label: "Completion", sub: "Attempts and passing rule", desc: "How many times a learner can submit, and what marks the Task complete." },
-  { id: "discovery", label: "Discovery & Tags", sub: "Discovery, tags", desc: "Whether this Task surfaces in search and browse, and how it's tagged for Tenant targeting." },
+  { id: "discovery", label: "Discovery & Audience", sub: "Discovery, audience", desc: "Whether learners can find this Task on its own, and which companies can see it. Leave the Audience, Trade, and Partnership fields alone for public content.", tip: AUDIENCE_TIP },
 ];
 
 function stepsForType(type: TaskTypeKey): StepDef[] {
@@ -529,36 +421,6 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
   if (type === "hands-on") return HANDSON_STEPS;
   return XAPI_STEPS;
 }
-
-/* ─────────────────  Edge Line Gate (Wizard 6)  ─────────────────
- * Wheel-past-the-edge step navigation. Scrolling beyond the top/bottom of a
- * step "charges" a gate: an orange edge line scales out from the centre, a
- * caption names the adjacent step, the pane nudges in the scroll direction,
- * and the matching footer button fills left-to-right. At full charge the
- * wizard changes step; releasing the wheel lets the charge decay. */
-
-/** Wheel distance (px) that fully charges a step change. */
-const GATE_DISTANCE = 420;
-/** Wheel events are swallowed for this long after a gated step change, so
- * scroll momentum doesn't immediately scroll (or re-gate) the new step. */
-const GATE_COOLDOWN_MS = 750;
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-type GateLand = "top" | "bottom";
-
-type GateState = {
-  charge: number;
-  /** 1 = charging towards the next step, -1 = towards the previous, 0 = idle. */
-  dir: 1 | -1 | 0;
-  lastWheel: number;
-  coolUntil: number;
-  raf: number;
-  /** Where the next rendered step should land its scroll position. Gating
-   * backwards lands at the bottom — you re-enter the previous page where you
-   * left it, at its end. */
-  land: GateLand;
-};
 
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
@@ -669,146 +531,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const steps = stepsForType(taskType);
   const lastStep = steps.length - 1;
 
-  /* ── Edge Line Gate wiring ── */
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const paneOutRef = useRef<HTMLDivElement>(null);
-  const prevLineRef = useRef<HTMLSpanElement>(null);
-  const prevCapRef = useRef<HTMLSpanElement>(null);
-  const nextLineRef = useRef<HTMLSpanElement>(null);
-  const nextCapRef = useRef<HTMLSpanElement>(null);
-  const backFillRef = useRef<HTMLSpanElement>(null);
-  const nextFillRef = useRef<HTMLSpanElement>(null);
-  const gate = useRef<GateState>({ charge: 0, dir: 0, lastWheel: 0, coolUntil: 0, raf: 0, land: "top" });
-
-  // Charge is painted straight onto the DOM every wheel tick — routing it
-  // through state would re-render the whole step per tick.
-  const paintCharge = useCallback(() => {
-    const g = gate.current;
-    const f = g.dir === 1 ? g.charge : 0;
-    const b = g.dir === -1 ? g.charge : 0;
-    if (nextLineRef.current) nextLineRef.current.style.transform = `scaleX(${f.toFixed(3)})`;
-    if (nextCapRef.current) nextCapRef.current.style.opacity = Math.min(1, f * 1.8).toFixed(3);
-    if (prevLineRef.current) prevLineRef.current.style.transform = `scaleX(${b.toFixed(3)})`;
-    if (prevCapRef.current) prevCapRef.current.style.opacity = Math.min(1, b * 1.8).toFixed(3);
-    if (nextFillRef.current) nextFillRef.current.style.width = `${(f * 100).toFixed(1)}%`;
-    if (backFillRef.current) backFillRef.current.style.width = `${(b * 100).toFixed(1)}%`;
-    const pane = paneOutRef.current;
-    if (pane) {
-      pane.style.transition = g.charge > 0 ? "transform 0.09s linear" : "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)";
-      pane.style.transform = g.charge > 0 ? `translateY(${(-g.dir * g.charge * 10).toFixed(1)}px)` : "";
-    }
-  }, []);
-
-  const goStep = useCallback(
-    (i: number, land: GateLand = "top") => {
-      const j = Math.min(lastStep, Math.max(0, i));
-      setStep((cur) => {
-        if (j === cur) return cur;
-        const g = gate.current;
-        g.charge = 0;
-        g.dir = 0;
-        g.land = land;
-        paintCharge();
-        return j;
-      });
-    },
-    [lastStep, paintCharge],
-  );
-
-  // Land the freshly rendered step before paint — at the top when moving
-  // forward, at the bottom when the back-gate pulled us up a step.
-  useLayoutEffect(() => {
-    const sc = scrollRef.current;
-    if (sc) sc.scrollTop = gate.current.land === "bottom" ? sc.scrollHeight : 0;
-    gate.current.land = "top";
-  }, [step]);
-
-  const stepRef = useRef(step);
-  stepRef.current = step;
-
-  useEffect(() => {
-    const sc = scrollRef.current;
-    if (!sc) return;
-    const g = gate.current;
-
-    const startDecay = () => {
-      if (g.raf) return;
-      const tick = () => {
-        g.raf = 0;
-        if (g.charge <= 0) {
-          g.dir = 0;
-          paintCharge();
-          return;
-        }
-        if (performance.now() - g.lastWheel > 420) {
-          g.charge = Math.max(0, g.charge - 0.05);
-          paintCharge();
-        }
-        g.raf = requestAnimationFrame(tick);
-      };
-      g.raf = requestAnimationFrame(tick);
-    };
-
-    const addCharge = (dir: 1 | -1, amt: number, now: number) => {
-      if (g.dir !== dir) {
-        g.charge = 0;
-        g.dir = dir;
-      }
-      g.lastWheel = now;
-      g.charge = Math.min(1, g.charge + amt / GATE_DISTANCE);
-      if (g.charge >= 1) {
-        g.charge = 0;
-        g.dir = 0;
-        paintCharge();
-        g.coolUntil = now + GATE_COOLDOWN_MS;
-        goStep(stepRef.current + dir, dir === 1 ? "top" : "bottom");
-      } else {
-        paintCharge();
-        startDecay();
-      }
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      const now = performance.now();
-      if (now < g.coolUntil) {
-        e.preventDefault();
-        return;
-      }
-      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1);
-      // A nested scroller (question picker, dropdown list) that can still
-      // consume the wheel owns it — never charge the gate over its content.
-      for (let el = e.target as HTMLElement | null; el && el !== sc; el = el.parentElement) {
-        if (el.scrollHeight > el.clientHeight + 1) {
-          const oy = getComputedStyle(el).overflowY;
-          if (
-            (oy === "auto" || oy === "scroll") &&
-            (dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0)
-          )
-            return;
-        }
-      }
-      const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;
-      const atTop = sc.scrollTop <= 1;
-      if (dy > 0 && atBottom && stepRef.current < lastStep) {
-        e.preventDefault();
-        addCharge(1, dy, now);
-      } else if (dy < 0 && atTop && stepRef.current > 0) {
-        e.preventDefault();
-        addCharge(-1, -dy, now);
-      } else if (g.charge > 0) {
-        g.charge = 0;
-        g.dir = 0;
-        paintCharge();
-      }
-    };
-
-    sc.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      sc.removeEventListener("wheel", onWheel);
-      if (g.raf) cancelAnimationFrame(g.raf);
-      g.raf = 0;
-    };
-  }, [goStep, lastStep, paintCharge]);
+  /* ── Edge Line Gate wiring (shared hook) ── */
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
+  const { goStep } = gate;
 
   // Name is required to publish. Step 01 is the "basics"
   // step that holds the name for every Task type. Quiet-rail behaviour: step 01
@@ -938,27 +663,30 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         </aside>
 
         <div className="wizard-main">
-          {step > 0 && (
-            <>
-              <span className="wizard-gate-line is-top" ref={prevLineRef} />
-              <span className="wizard-gate-cap is-top" ref={prevCapRef}>
-                ↑ BACK TO STEP {pad2(step)} · {steps[step - 1].label.toUpperCase()}
-              </span>
-            </>
-          )}
-          {step < lastStep && (
-            <>
-              <span className="wizard-gate-line is-bottom" ref={nextLineRef} />
-              <span className="wizard-gate-cap is-bottom" ref={nextCapRef}>
-                ↓ NEXT · STEP {pad2(step + 2)} · {steps[step + 1].label.toUpperCase()}
-              </span>
-            </>
-          )}
-          <div className="wizard-content" ref={scrollRef}>
-            <div className="wizard-paneout" ref={paneOutRef}>
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={steps.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
           <h1 className="wizard-title">{steps[step].label}</h1>
-          <p className="wizard-desc">{steps[step].desc}</p>
+          <p className="wizard-desc">
+            {steps[step].desc}
+            {steps[step].tip && (
+              <span
+                className="form-help-info wizard-desc-info"
+                tabIndex={0}
+                role="note"
+                aria-label={steps[step].tip}
+                data-tip={steps[step].tip}
+              >
+                <InfoTipIcon />
+              </span>
+            )}
+          </p>
 
           {(() => {
             const criteriaLocked = isEditing && !criteriaUnlocked;
@@ -1008,7 +736,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         <div className="wizard-actions">
           {step > 0 && (
             <button className="btn-save-draft wizard-gate-btn" onClick={() => goStep(step - 1)}>
-              <span className="wizard-gate-fill" ref={backFillRef} />
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
               <span className="wizard-gate-btn-inner">Back</span>
             </button>
           )}
@@ -1022,8 +750,8 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             className="btn-publish wizard-gate-btn"
             onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
-            <span className="wizard-gate-fill" ref={nextFillRef} />
-            <span className="wizard-gate-btn-inner">{isLast ? publishLabel : `Next: ${steps[step + 1].label}`}</span>
+            <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+            <span className="wizard-gate-btn-inner">{isLast ? publishLabel : "Continue"}</span>
           </button>
         </div>
       </footer>
@@ -1098,9 +826,7 @@ function buildTask(d: WizardData, taskType: TaskTypeKey): Omit<Task, "id"> {
     tags: d.tags,
     dateCreated: stamp,
     dateModified: stamp,
-    // Published, not a draft — the Task goes live with whatever the Visibility
-    // step was left on.
-    draft: false,
+    // The Task goes live with whatever the Visibility step was left on.
     hidden,
     visibility: hidden ? "Hidden" : "Visible · published",
     discoverable: d.discoverable,
@@ -1142,6 +868,9 @@ function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
             es={data.descEs}
             onChangeEn={(v) => update({ descEn: v })}
             onChangeEs={(v) => update({ descEs: v })}
+            placeholderEn="Description"
+            placeholderEs="Descripción"
+            minRows={2}
           />
         </div>
 
@@ -1523,26 +1252,29 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           es={data.hoInstrEs}
           onChangeEn={(v) => update({ hoInstrEn: v })}
           onChangeEs={(v) => update({ hoInstrEs: v })}
+          minRows={4}
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Tools / Materials Required</label>
+        <label className="form-label">Tools/Materials Required</label>
         <RichTextField
           en={data.hoToolsEn}
           es={data.hoToolsEs}
           onChangeEn={(v) => update({ hoToolsEn: v })}
           onChangeEs={(v) => update({ hoToolsEs: v })}
+          minRows={4}
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Reviewer Checklist</label>
+        <label className="form-label">Reviewer's Checklist</label>
         <RichTextField
           en={data.hoReviewerChecklistEn}
           es={data.hoReviewerChecklistEs}
           onChangeEn={(v) => update({ hoReviewerChecklistEn: v })}
           onChangeEs={(v) => update({ hoReviewerChecklistEs: v })}
+          minRows={4}
         />
         <p className="form-help">
           Only the reviewer sees this while grading a submission — learners
@@ -1631,48 +1363,15 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
 }
 
 function HandsOnCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: StepProps) {
-  const limited = data.maxAttemptsMode === "limited";
   const reviewerGrade = data.hoCompletion === "reviewer_grade";
 
   return (
     <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-      <div className="form-group">
-        <label className="form-label">Maximum Attempts</label>
-        <div className="radio-card-group">
-          <button
-            type="button"
-            className={`radio-card ${limited ? "selected" : ""}`}
-            onClick={() => update({ maxAttemptsMode: "limited" })}
-          >
-            <span className="radio-dot" />
-            <div className="radio-card-text">
-              <div className="radio-card-title">
-                Limit to{" "}
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="inline-num"
-                  value={data.maxAttempts}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
-                      update({ maxAttempts: v });
-                  }}
-                />{" "}
-                attempts
-              </div>
-              <div className="radio-card-desc">1–10 attempts. Admins can grant more later.</div>
-            </div>
-          </button>
-          <RadioCard
-            selected={!limited}
-            onSelect={() => update({ maxAttemptsMode: "unlimited" })}
-            title="Unlimited attempts"
-          />
-        </div>
-        <p className="form-help">How many times a learner can submit this Task.</p>
-      </div>
+      <MaxAttemptsField
+        data={data}
+        update={update}
+        help="How many times a learner can submit this Task. Admins can grant more later."
+      />
 
       <div className="form-group">
         <label className="form-label">Completion</label>
@@ -1727,18 +1426,18 @@ function HandsOnDiscoveryStep({ data, update }: StepProps) {
             selected={data.discoverable}
             onSelect={() => update({ discoverable: true })}
             title="Yes"
-            desc="Learners can find this Task by searching and browsing."
+            desc="Companies can add it to their own Certifications. Only for Tasks meant for B2B companies to assign."
           />
           <RadioCard
             selected={!data.discoverable}
             onSelect={() => update({ discoverable: false })}
             title="No"
-            desc="Hidden from search and browse — reachable only via direct assignment or a link."
+            desc="Only reachable by opening a Certification that contains it."
           />
         </div>
         <p className="form-help">
-          Whether this Task surfaces in search and browse, separate from its
-          visibility.
+          Set this to Yes only for Hands-On Tasks we want B2B Companies to be
+          able to assign to their employees.
         </p>
       </div>
 
@@ -1747,113 +1446,89 @@ function HandsOnDiscoveryStep({ data, update }: StepProps) {
   );
 }
 
-/* ─── Content Tags for Visibility (identical to the Certification wizard) ─── */
-function ContentTagsSection({ data, update }: StepProps) {
-  const [showHelp, setShowHelp] = useState(false);
+/* ─── Audience (identical to the Certification wizard's step 6) ───
+ * Edits `contentTags` through three flat wizard fields. Audience is the
+ * All / B2B-only switch, which is one `userType` tag or none; Trade and
+ * Partnership take any number of values. */
+const AUDIENCE_ALL = "All Users";
+const AUDIENCE_B2B = "B2B Companies Only";
+const AUDIENCE_OPTIONS = [AUDIENCE_ALL, AUDIENCE_B2B] as const;
 
-  function addTag(type: ContentTagType, value: string) {
-    if (!value) return;
-    if (data.contentTags.some((t) => t.type === type && t.value === value)) return;
+function ContentTagsSection({ data, update }: StepProps) {
+  const valuesOf = (type: ContentTagType) =>
+    data.contentTags.filter((t) => t.type === type).map((t) => t.value);
+
+  /** Replace every tag of one type, keeping the ids of the values that stay. */
+  function setValues(type: ContentTagType, values: string[]) {
+    const kept = new Map(
+      data.contentTags.filter((t) => t.type === type).map((t) => [t.value, t.id]),
+    );
     update({
       contentTags: [
-        ...data.contentTags,
-        { id: `ct-${type}-${Date.now()}`, type, value },
+        ...data.contentTags.filter((t) => t.type !== type),
+        ...values.map((value, i) => ({
+          id: kept.get(value) ?? `ct-${type}-${Date.now()}-${i}`,
+          type,
+          value,
+        })),
       ],
     });
   }
 
-  function removeTag(id: string) {
-    update({ contentTags: data.contentTags.filter((t) => t.id !== id) });
-  }
-
-  // Live read-out of the current scope, so the admin sees the effect of the tags
-  // they've set without opening the full help panel.
-  const hasTradeOrPartner = data.contentTags.some(
-    (t) => t.type === "trade" || t.type === "partnership",
-  );
-  const isB2BOnly = data.contentTags.some((t) => t.type === "userType");
-  const scopeNote = !hasTradeOrPartner && !isB2BOnly
-    ? "No tags set — visible to all Tenants, including B2C."
-    : isB2BOnly && hasTradeOrPartner
-      ? "Hidden from B2C. Visible only to B2B Tenants matching the Trade/Partnership filters below."
-      : isB2BOnly
-        ? "Hidden from B2C. Visible to all B2B Tenants."
-        : "Hidden from B2C (Trade/Partnership scoped). Visible to B2B Tenants matching the filters below.";
+  // The stored tag value stays "B2B Only" — the label is the display name.
+  const audience = valuesOf("userType").length > 0 ? AUDIENCE_B2B : AUDIENCE_ALL;
 
   return (
-    <div className="form-group">
-      <div className="cv-section-head">
-        <label className="form-label">Content Tags for Visibility</label>
-        <button
-          type="button"
-          className="cv-help-toggle"
-          onClick={() => setShowHelp((v) => !v)}
-          aria-expanded={showHelp}
-        >
-          <VisibilityInfoIcon />
-          {showHelp ? "Hide details" : "How visibility works"}
-        </button>
+    <>
+      <div className="form-group">
+        <label className="form-label">Audience</label>
+        <SelectField
+          className="select-field--full"
+          value={audience}
+          options={AUDIENCE_OPTIONS}
+          onChange={(v) =>
+            setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
+          }
+        />
+        <p className="form-help">
+          Choose "B2B Companies Only" to hide this Task from B2C users. "All Users" means
+          no audience restriction. B2C is still excluded if you set a Trade or Partnership
+          below.
+        </p>
       </div>
 
-      {showHelp && <VisibilityHelpPanel />}
-
-      {CONTENT_TAG_GROUPS.map((group) => {
-        const tags = data.contentTags.filter((t) => t.type === group.type);
-        const remaining = group.options.filter(
-          (o) => !tags.some((t) => t.value === o),
-        );
-        return (
-          <div key={group.type} className="form-sub-group">
-            <label className="form-sub-label">{group.label}</label>
-            <div className="tag-edit-row">
-              {tags.map((t) => (
-                <span key={t.id} className="tag-edit">
-                  {t.value}
-                  <button
-                    className="tag-edit-x"
-                    onClick={() => removeTag(t.id)}
-                    aria-label={`Remove ${group.label} tag ${t.value}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <select
-                className="form-select content-tag-select"
-                value=""
-                disabled={remaining.length === 0}
-                onChange={(e) => {
-                  addTag(group.type, e.target.value);
-                  e.target.value = "";
-                }}
-              >
-                <option value="" disabled>
-                  {remaining.length === 0
-                    ? group.type === "userType" ? "B2B Only added" : "All added"
-                    : group.placeholder}
-                </option>
-                {remaining.map((o) => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
-            </div>
-            <p className="form-help">{group.help}</p>
-          </div>
-        );
-      })}
-
-      <p className="form-help">
-        Tag this Task to control which Tenants can see it. Trade and Partnership
-        values come from the B2B Management fields in Product Config, and a
-        Tenant must match every tag type you set (within a type, matching any
-        one value is enough). Add as many tags of each type as you need.
-      </p>
-
-      <div className="cv-scope-note">
-        <span className="cv-scope-dot" />
-        {scopeNote}
+      <div className="form-group">
+        <label className="form-label">Trade</label>
+        <MultiSelect
+          options={DEFAULT_TRADES}
+          value={valuesOf("trade")}
+          onChange={(v) => setValues("trade", v)}
+          placeholder="Select Trades"
+          searchPlaceholder="Search Trades…"
+        />
+        <p className="form-help">
+          Only companies tagged with a Trade you pick will see this Task. Picking more than
+          one Trade widens the audience — a company needs to match just one. Leave blank so
+          every company can see it.
+        </p>
       </div>
-    </div>
+
+      <div className="form-group">
+        <label className="form-label">Partnership</label>
+        <MultiSelect
+          options={DEFAULT_PARTNERSHIPS}
+          value={valuesOf("partnership")}
+          onChange={(v) => setValues("partnership", v)}
+          placeholder="Select Partnerships"
+          searchPlaceholder="Search Partnerships…"
+        />
+        <p className="form-help">
+          Only companies in a Partnership you pick will see this Task. Picking more than one
+          widens the audience — a company needs to match just one. Leave blank so every
+          company can see it, partnered or not.
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -1885,6 +1560,9 @@ function QuizBasicsStep({ data, update, nameError }: StepProps) {
           es={data.descEs}
           onChangeEn={(v) => update({ descEn: v })}
           onChangeEs={(v) => update({ descEs: v })}
+          placeholderEn="Description"
+          placeholderEs="Descripción"
+          minRows={2}
         />
       </div>
 
@@ -2057,6 +1735,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
           <QuestionGroupEditor
             staticQuestions={data.blockStatic}
             pools={data.blockPools}
+            shortcut
             onChange={(patch) =>
               update({
                 ...(patch.staticQuestions ? { blockStatic: patch.staticQuestions } : {}),
@@ -2116,10 +1795,16 @@ function QuizQuestionsStep({ data, update }: StepProps) {
   );
 }
 
+/** One unified, ordered Questions table (Figma 750:1672): statics and random
+ * pools interleave in a single list, each row carrying its ORDER slot(s) and a
+ * per-question points value. New rows come from the Add Question menu
+ * (752:2708): create a brand-new question, pick statics from the Bank, or
+ * build a random set. */
 function QuestionGroupEditor({
   staticQuestions,
   pools,
   onChange,
+  shortcut = false,
 }: {
   staticQuestions: StaticQuestion[];
   pools: RandomPool[];
@@ -2127,14 +1812,30 @@ function QuestionGroupEditor({
     staticQuestions?: StaticQuestion[];
     randomPools?: RandomPool[];
   }) => void;
+  /** Wire the global "Q" key to the Add Question menu — only one editor per
+   * page may claim it, so sectioned quizzes leave it off. */
+  shortcut?: boolean;
 }) {
-  const drawn = pools.reduce((n, p) => n + (parseInt(p.draw, 10) || 0), 0);
-
-  // Which picker is open: adding statics, building a new pool, or editing an
-  // existing pool's member questions.
+  // Which picker is open: adding statics, building a new random set, or
+  // growing an existing pool via its ADD link.
   const [picker, setPicker] = useState<
     null | { mode: "static" } | { mode: "pool"; poolId?: string }
   >(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const addWrapRef = useRef<HTMLDivElement>(null);
+
+  // Statics and pools live in separate arrays but render as one ordered list;
+  // `seq` interleaves them. Items predating the field slot in array order.
+  const items = [
+    ...staticQuestions.map((q, i) => ({ kind: "q" as const, q, seq: q.seq ?? i })),
+    ...pools.map((p, i) => ({
+      kind: "pool" as const,
+      p,
+      seq: p.seq ?? staticQuestions.length + i,
+    })),
+  ].sort((a, b) => a.seq - b.seq);
+  const nextSeq = items.reduce((m, it) => Math.max(m, it.seq + 1), 0);
 
   // Selected Bank questions arrive in selection order and are appended to the
   // Quiz in that order.
@@ -2145,7 +1846,20 @@ function QuestionGroupEditor({
         ...ids
           .map((id) => GRADED_BANK.find((q) => q.id === id))
           .filter((q): q is Question => !!q)
-          .map((q) => ({ id: q.id, text: q.text, type: q.type, weight: "1" })),
+          .map((q, i) => ({
+            id: q.id,
+            text: q.text,
+            type: q.type,
+            weight: "1",
+            seq: nextSeq + i,
+          })),
+      ],
+    });
+  const addCreatedQuestion = (q: Question) =>
+    onChange({
+      staticQuestions: [
+        ...staticQuestions,
+        { id: q.id, text: q.text, type: q.type, weight: "1", seq: nextSeq },
       ],
     });
   const setWeight = (id: string, weight: string) =>
@@ -2170,6 +1884,7 @@ function QuestionGroupEditor({
             questionIds: ids,
             draw: String(Math.min(5, ids.length)),
             weight: "1",
+            seq: nextSeq,
           },
         ],
       });
@@ -2181,121 +1896,336 @@ function QuestionGroupEditor({
     onChange({ randomPools: pools.map((p) => (p.id === id ? { ...p, weight } : p)) });
   const removePool = (id: string) =>
     onChange({ randomPools: pools.filter((p) => p.id !== id) });
+  const removePoolQuestion = (poolId: string, qid: string) =>
+    onChange({
+      randomPools: pools.map((p) =>
+        p.id === poolId
+          ? { ...p, questionIds: p.questionIds.filter((id) => id !== qid) }
+          : p,
+      ),
+    });
+
+  // Drag-to-reorder, pointer-based (HTML5 DnD is unreliable across
+  // browsers/automation): pressing a handle starts a window-level pointer
+  // drag; the row under the pointer is the drop slot, and releasing moves
+  // the dragged item there, rewriting every item's seq to its list index.
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const keyOf = (it: (typeof items)[number]) =>
+    it.kind === "q" ? `q:${it.q.id}` : `p:${it.p.id}`;
+  const rowUnder = (y: number) => {
+    let target: string | null = null;
+    rowRefs.current.forEach((el, k) => {
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) target = k;
+    });
+    return target;
+  };
+  const reorder = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    const next = [...items];
+    const from = next.findIndex((it) => keyOf(it) === fromKey);
+    const to = next.findIndex((it) => keyOf(it) === toKey);
+    if (from < 0 || to < 0) return;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const seqOf = new Map(next.map((it, i) => [keyOf(it), i]));
+    onChange({
+      staticQuestions: staticQuestions.map((q) => ({ ...q, seq: seqOf.get(`q:${q.id}`) })),
+      randomPools: pools.map((p) => ({ ...p, seq: seqOf.get(`p:${p.id}`) })),
+    });
+  };
+  const startDrag = (key: string) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    setDrag(key);
+    setOver(key);
+    const onMove = (ev: PointerEvent) => setOver(rowUnder(ev.clientY));
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const target = rowUnder(ev.clientY);
+      if (target) reorder(key, target);
+      setDrag(null);
+      setOver(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  const rowRef = (key: string) => (el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(key, el);
+    else rowRefs.current.delete(key);
+  };
+  const rowDragClass = (key: string) =>
+    `${drag === key ? " dragging" : ""}${drag && over === key && drag !== key ? " drag-over" : ""}`;
+
+  const openCreate = () => {
+    setMenuOpen(false);
+    setCreating(true);
+  };
+  const openBank = () => {
+    setMenuOpen(false);
+    setPicker({ mode: "static" });
+  };
+  const openRandomSet = () => {
+    setMenuOpen(false);
+    setPicker({ mode: "pool" });
+  };
+
+  useCreateShortcut(
+    () => setMenuOpen(true),
+    shortcut && !menuOpen && !picker && !creating,
+    "q",
+  );
+
+  // While the menu is open: C / Q / R fire its rows, Escape and outside
+  // clicks dismiss. Escape is captured so it can't also cancel the wizard.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenuOpen(false);
+      } else if (k === "c") {
+        e.preventDefault();
+        openCreate();
+      } else if (k === "q") {
+        e.preventDefault();
+        openBank();
+      } else if (k === "r") {
+        e.preventDefault();
+        openRandomSet();
+      }
+    };
+    const onDown = (e: MouseEvent) => {
+      if (addWrapRef.current && !addWrapRef.current.contains(e.target as Node))
+        setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [menuOpen]);
+
+  // ORDER slots: a static takes one, a pool takes `draw` (its questions land
+  // in those positions each attempt) — so a pool drawing 2 at position 3
+  // reads "3-4" and the next row picks up at 5.
+  let slot = 1;
 
   return (
-    <div className="qbag">
-      <div className="qbag-summary">
-        <div className="qbag-summary-title">
-          Per attempt{" "}
-          <span className="muted">({staticQuestions.length + drawn} questions)</span>
-        </div>
-        <div className="qbag-summary-sub">
-          {staticQuestions.length} static · {drawn} drawn from {pools.length} pool
-          {pools.length === 1 ? "" : "s"}
-        </div>
+    <div className={`qz${drag ? " qz-dragging" : ""}`}>
+      <div className="qz-hd">
+        <span className="qz-ord-col">
+          <span className="qz-drag qz-drag--ghost" aria-hidden="true">
+            <MoveIcon />
+          </span>
+          <span className="qz-ord">ORDER</span>
+        </span>
+        <span className="qz-hd-q">QUESTION</span>
+        <span className="qz-hd-points">
+          POINTS
+          <span
+            className="form-help-info qz-points-info"
+            tabIndex={0}
+            role="note"
+            aria-label="Each question is worth the points shown; every question a pool draws is worth the pool's points."
+            data-tip="Each question is worth the points shown; every question a pool draws is worth the pool's points."
+          >
+            <InfoTipIcon />
+          </span>
+        </span>
       </div>
 
-      <div className="qsub-head">STATIC QUESTIONS</div>
-      {staticQuestions.length === 0 && (
-        <div className="qbag-empty">
-          No static questions yet — add graded questions from the Question Bank.
+      {items.length === 0 && (
+        <div className="qz-empty">
+          No questions yet — Add Question below creates one, picks from the
+          Bank, or builds a random set.
         </div>
       )}
-      {staticQuestions.map((q) => (
-        <div key={q.id} className="q-row">
-          <button className="qbag-drag" aria-label="Drag">
-            <DragHandleIcon />
-          </button>
-          <button className="qbag-gear" aria-label="Question settings">
-            <GearIcon />
-          </button>
-          <div className="qbag-q-text">
-            {q.text}
-            <span className="qbag-q-type"> · {q.type}</span>
-          </div>
-          <span className="form-suffix">weight</span>
-          <input
-            className="q-weight"
-            value={q.weight}
-            aria-label="Weightage"
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setWeight(q.id, v);
-            }}
-          />
-          <button className="q-remove" aria-label="Remove question" onClick={() => removeStatic(q.id)}>
-            <SmallXIcon />
-          </button>
-        </div>
-      ))}
-      <button className="resource-add" onClick={() => setPicker({ mode: "static" })}>
-        + Add questions from Bank
-      </button>
 
-      <div className="qsub-head">RANDOM POOLS</div>
-      {pools.map((p) => {
+      {items.map((item) => {
+        if (item.kind === "q") {
+          const q = item.q;
+          const key = `q:${q.id}`;
+          const label = String(slot);
+          slot += 1;
+          return (
+            <div key={q.id} ref={rowRef(key)} className={`qz-row${rowDragClass(key)}`}>
+              <span className="qz-ord-col">
+                <button
+                  className="qz-drag"
+                  aria-label="Drag to reorder"
+                  onPointerDown={startDrag(key)}
+                >
+                  <MoveIcon />
+                </button>
+                <span className="qz-ord">{label}</span>
+              </span>
+              <div className="qz-q">
+                <div className="qz-q-title">{q.text}</div>
+                <div className="qz-q-type">{q.type}</div>
+              </div>
+              <span className="qz-pt">
+                <input
+                  className="qz-pt-input"
+                  value={q.weight}
+                  aria-label="Points"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setWeight(q.id, v);
+                  }}
+                />
+                <span className="qz-pt-suffix">PT</span>
+              </span>
+              <button
+                className="qz-x"
+                aria-label="Remove question"
+                onClick={() => removeStatic(q.id)}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          );
+        }
+
+        const p = item.p;
+        const key = `p:${p.id}`;
         const drawNum = parseInt(p.draw, 10) || 0;
         const size = p.questionIds.length;
-        const over = drawNum > size;
+        const overDrawn = drawNum > size;
+        const span = Math.max(1, drawNum);
+        const label = span === 1 ? String(slot) : `${slot}-${slot + span - 1}`;
+        slot += span;
+        const members = p.questionIds
+          .map((id) => GRADED_BANK.find((q) => q.id === id))
+          .filter((q): q is Question => !!q);
         return (
-          <div key={p.id} className="pool-row">
-            <div className="pool-name">
-              <div className="qbag-q-text">{p.name}</div>
-              <div className="qbag-q-type">
-                Pool of {size} from the Question Bank ·{" "}
+          <div
+            key={p.id}
+            ref={rowRef(key)}
+            className={`qz-row qz-row--pool${rowDragClass(key)}`}
+          >
+            <div className="qz-pool-main">
+              <span className="qz-ord-col">
                 <button
-                  className="qbag-pool-edit"
+                  className="qz-drag"
+                  aria-label="Drag to reorder"
+                  onPointerDown={startDrag(key)}
+                >
+                  <MoveIcon />
+                </button>
+                <span className="qz-ord">{label}</span>
+              </span>
+              <div className="qz-pool-line">
+                <span>Pick</span>
+                <input
+                  className={`qz-pt-input ${overDrawn ? "invalid" : ""}`}
+                  value={p.draw}
+                  aria-label="Questions drawn per attempt"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d+$/.test(v)) setDraw(p.id, v);
+                  }}
+                />
+                <span>Questions Randomly from {size}</span>
+                <button
+                  className="qz-pool-add"
                   onClick={() => setPicker({ mode: "pool", poolId: p.id })}
                 >
-                  Edit pool
+                  ADD
                 </button>
               </div>
+              <span className="qz-pt">
+                <input
+                  className="qz-pt-input"
+                  value={p.weight}
+                  aria-label="Points per drawn question"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setPoolWeight(p.id, v);
+                  }}
+                />
+                <span className="qz-pt-suffix">PT</span>
+              </span>
+              <button
+                className="qz-x"
+                aria-label="Remove random set"
+                onClick={() => removePool(p.id)}
+              >
+                <SmallXIcon />
+              </button>
             </div>
-            <div className="pool-draw">
-              <span className="form-suffix">draw</span>
-              <input
-                className={`q-weight ${over ? "invalid" : ""}`}
-                value={p.draw}
-                aria-label="Number drawn per attempt"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d+$/.test(v)) setDraw(p.id, v);
-                }}
-              />
-              <span className="form-suffix">/ {size}</span>
-            </div>
-            <div className="pool-draw">
-              <span className="form-suffix">weight</span>
-              <input
-                className="q-weight"
-                value={p.weight}
-                aria-label="Weightage applied to every question in the pool"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setPoolWeight(p.id, v);
-                }}
-              />
-              <span className="form-suffix">each</span>
-            </div>
-            <button className="q-remove" aria-label="Remove pool" onClick={() => removePool(p.id)}>
-              <SmallXIcon />
-            </button>
-            {over && (
-              <div className="pool-warn">Draw can't exceed the pool size ({size}).</div>
+            {overDrawn && (
+              <div className="qz-pool-warn">
+                Draw can't exceed the pool size ({size}).
+              </div>
+            )}
+            {members.length > 0 && (
+              <div className="qz-pool-list">
+                {members.map((q) => (
+                  <div key={q.id} className="qz-pool-q">
+                    <div className="qz-q">
+                      <div className="qz-q-title">{q.text}</div>
+                      <div className="qz-q-type">{q.type}</div>
+                    </div>
+                    <button
+                      className="qz-x"
+                      aria-label="Remove question from the random set"
+                      onClick={() => removePoolQuestion(p.id, q.id)}
+                    >
+                      <SmallXIcon />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         );
       })}
-      <button className="resource-add" onClick={() => setPicker({ mode: "pool" })}>
-        + Add random pool
-      </button>
 
-      {picker && (
-        <QuizQuestionPickerModal
+      <div className="qz-foot">
+        <div className="qz-add-wrap" ref={addWrapRef}>
+          <button
+            className="cta-primary qz-add"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            Add Question
+            <span className="qz-kbd">Q</span>
+          </button>
+          {menuOpen && (
+            <div className="u-menu qz-menu" role="menu">
+              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
+                <span className="qz-menu-label">Create New Question</span>
+                <span className="qz-kbd">C</span>
+              </button>
+              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
+                <span className="qz-menu-label">Add from Question Bank</span>
+                <span className="qz-kbd">Q</span>
+              </button>
+              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openRandomSet}>
+                <span className="qz-menu-label">Add Random Set</span>
+                <span className="qz-kbd">R</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Portalled to <body>: the wizard's step container is transformed, which
+          would otherwise turn the overlay's position:fixed into a local box. */}
+      {picker && createPortal(
+        <SelectQuestionsModal
           mode={picker.mode}
           editingPool={picker.mode === "pool" && !!picker.poolId}
           excludeIds={picker.mode === "static" ? staticQuestions.map((q) => q.id) : []}
-          initialSelected={
+          value={
             picker.mode === "pool" && picker.poolId
               ? pools.find((p) => p.id === picker.poolId)?.questionIds ?? []
               : []
@@ -2305,226 +2235,22 @@ function QuestionGroupEditor({
             else savePool(ids, picker.poolId);
             setPicker(null);
           }}
-          onClose={() => setPicker(null)}
-        />
+          onCancel={() => setPicker(null)}
+        />,
+        document.body,
       )}
-    </div>
-  );
-}
 
-/* ----- Question Bank picker (Create Quiz → Questions) ----- */
-
-type QuizPickerTypeFilter = "all" | Question["type"];
-
-const QUIZ_PICKER_TYPES: { key: QuizPickerTypeFilter; label: string }[] = [
-  { key: "all", label: "All types" },
-  { key: "Multiple choice", label: "Multiple choice" },
-  { key: "Multiple select", label: "Multiple select" },
-  { key: "True/False", label: "True/False" },
-  { key: "Match the following", label: "Match the following" },
-];
-
-/** Multi-select picker over the Question Bank, limited to Active questions
- * with grading enabled. In `static` mode the selection order is tracked and
- * questions join the Quiz in that order; in `pool` mode order is irrelevant —
- * the pool is just a set the Quiz draws from at random. */
-function QuizQuestionPickerModal({
-  mode,
-  editingPool,
-  excludeIds,
-  initialSelected,
-  onConfirm,
-  onClose,
-}: {
-  mode: "static" | "pool";
-  editingPool: boolean;
-  excludeIds: string[];
-  initialSelected: string[];
-  onConfirm: (ids: string[]) => void;
-  onClose: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<QuizPickerTypeFilter>("all");
-  const [catFilter, setCatFilter] = useState<string>("all");
-  const [selected, setSelected] = useState<string[]>(initialSelected);
-
-  const excluded = new Set(excludeIds);
-  const q = query.trim().toLowerCase();
-  const isPool = mode === "pool";
-  const catOption = QUIZ_PICKER_CATS.find((o) => o.key === catFilter);
-
-  const candidates = GRADED_BANK.filter((question) => {
-    if (typeFilter !== "all" && question.type !== typeFilter) return false;
-    if (catOption && !matchesCategory(question, catOption)) return false;
-    if (
-      q &&
-      !(
-        question.text.toLowerCase().includes(q) ||
-        question.id.toLowerCase().includes(q) ||
-        question.categoryPath.join(" > ").toLowerCase().includes(q)
-      )
-    )
-      return false;
-    return true;
-  });
-
-  const toggle = (id: string) =>
-    setSelected((sel) =>
-      sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id],
-    );
-
-  return (
-    <div className="fb-modal-scrim" onClick={onClose}>
-      <div
-        className="fb-modal fb-modal--picker"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="fb-modal-head">
-          <div>
-            <div className="sp-panel-eyebrow">QUESTION BANK</div>
-            <h2 className="sp-panel-title">
-              {isPool
-                ? editingPool
-                  ? "Edit random pool"
-                  : "Build a random pool"
-                : "Add questions"}
-            </h2>
-            <p className="sp-panel-sub">
-              {isPool
-                ? "Pick the questions this pool draws from. Each attempt draws a random subset, so selection order doesn't matter."
-                : "Only Active questions with grading enabled can be added to a Quiz. Select multiple — they're added in the order you pick them."}
-            </p>
-          </div>
-          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="fb-picker-controls">
-          <div className="search-wrap fb-picker-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search by text, ID, or category…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <select
-            className="fb-q-scale-select"
-            value={catFilter}
-            onChange={(e) => setCatFilter(e.target.value)}
-            aria-label="Filter by Category or Sub-Category"
-          >
-            <option value="all">All categories</option>
-            {QUIZ_PICKER_CATS.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="fb-q-scale-select"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as QuizPickerTypeFilter)}
-          >
-            {QUIZ_PICKER_TYPES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="fb-picker-list">
-          {candidates.length === 0 ? (
-            <div className="fb-empty">No matching graded questions.</div>
-          ) : (
-            candidates.map((question) => {
-              const inQuiz = excluded.has(question.id);
-              const order = selected.indexOf(question.id);
-              const isSelected = order !== -1;
-              return (
-                <button
-                  key={question.id}
-                  className={`fb-picker-row ${isSelected ? "is-selected" : ""} ${inQuiz ? "is-linked" : ""}`}
-                  disabled={inQuiz}
-                  onClick={() => toggle(question.id)}
-                >
-                  <div className="fb-link-main">
-                    <div className="fb-link-text">{question.text}</div>
-                    <div className="fb-link-meta">
-                      <span className="fb-link-id">{question.id}</span>
-                      <span className="fb-link-chip">
-                        {shortQuestionType(question.type)}
-                      </span>
-                      <span className="fb-link-chip">
-                        {question.categoryPath.join(" > ")}
-                      </span>
-                      {question.quizzes.length > 0 && (
-                        <span
-                          className="fb-link-id"
-                          title={question.quizzes.join(", ")}
-                        >
-                          used in {question.quizzes.length}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="fb-trigger-pick-cta">
-                    {inQuiz ? (
-                      <>
-                        <CheckIcon /> In quiz
-                      </>
-                    ) : isSelected ? (
-                      isPool ? (
-                        <>
-                          <CheckIcon /> Selected
-                        </>
-                      ) : (
-                        <span className="qpick-order">{order + 1}</span>
-                      )
-                    ) : (
-                      "+ Select"
-                    )}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <div className="fb-modal-footer">
-          <div className="qpick-hint">
-            {isPool
-              ? `${selected.length} in pool`
-              : selected.length === 0
-                ? "Nothing selected yet."
-                : `${selected.length} selected — added in this order.`}
-          </div>
-          <div className="fb-modal-footer-right">
-            <button className="btn-save-draft" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              className="btn-publish"
-              disabled={selected.length === 0}
-              onClick={() => onConfirm(selected)}
-            >
-              {isPool
-                ? editingPool
-                  ? `Update pool (${selected.length})`
-                  : `Create pool (${selected.length})`
-                : `Add ${selected.length} question${selected.length === 1 ? "" : "s"}`}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Full-screen Question editor, portalled over the Task wizard — Create
+          question drops the new question onto this Quiz as a static row. */}
+      {creating && createPortal(
+        <div className="qz-qwiz">
+          <NewQuestionWizard
+            onCreate={addCreatedQuestion}
+            onClose={() => setCreating(false)}
+          />
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -2631,7 +2357,7 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
         </div>
         <p className="form-help">
           {locked
-            ? "The grading model is part of the Quiz structure and is locked after creation. Passing grades below can still be adjusted."
+            ? "The grading model is part of the Quiz structure and is locked after creation. Passing percentages below can still be adjusted."
             : sectioned
             ? "Quiz-level uses one overall threshold across all Sections (NATE-style — Sections exist for display only). Section-level grades each Section independently (EPA-style)."
             : "Single-block Quizzes are always graded at the Quiz level."}
@@ -2641,7 +2367,7 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
       <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
       {sectionLevel ? (
         <div className="form-group">
-          <label className="form-label">Section Passing Grades</label>
+          <label className="form-label">Section Passing Percentages</label>
           <div className="grade-rows">
             {data.sections.map((s, i) => (
               <div key={s.id} className="grade-row">
@@ -2655,7 +2381,8 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
                     value={s.passingPct}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v === "" || /^\d{0,3}$/.test(v)) updateSection(s.id, { passingPct: v });
+                      if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100))
+                        updateSection(s.id, { passingPct: v });
                     }}
                   />
                   <span className="form-suffix">% to pass</span>
@@ -2672,13 +2399,13 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
           </div>
           <p className="form-help">
             {locked
-              ? "Passing grades can be edited — completion is recomputed from existing attempts. Whether a Section is Required to pass is structural and is locked after creation."
-              : "Each Section is graded independently and may differ. Required-to-Pass Sections must be cleared in the same attempt for any Section pass to count."}
+              ? "Enter a percentage from 0-100. Editing one recomputes completion from existing attempts. Whether a Section is Required to pass is structural and is locked after creation."
+              : "Enter a percentage from 0-100 for each Section."}
           </p>
         </div>
       ) : (
         <div className="form-group">
-          <label className="form-label">Quiz Passing Grade</label>
+          <label className="form-label">Passing Percentage</label>
           <div className="time-row">
             <input
               className="form-input no-spinner small"
@@ -2686,27 +2413,15 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
               value={data.quizPassingPct}
               onChange={(e) => {
                 const v = e.target.value;
-                if (v === "" || /^\d{0,3}$/.test(v)) update({ quizPassingPct: v });
+                if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100))
+                  update({ quizPassingPct: v });
               }}
             />
             <span className="form-suffix">% to pass</span>
           </div>
-          <p className="form-help">
-            The overall score a learner must reach to pass.
-          </p>
+          <p className="form-help">Enter a percentage from 0-100.</p>
         </div>
       )}
-
-      <div className="form-group">
-        <label className="form-label">Score Calculation</label>
-        <select className="form-select wide" value="highest" disabled>
-          <option value="highest">Highest grade across attempts</option>
-        </select>
-        <p className="form-help">
-          Locked in Version 1. Highest grade is the only method — it keeps the
-          completion status stable across attempts.
-        </p>
-      </div>
 
       <div className="form-group">
         <label className="form-label">Completion Criterion</label>
@@ -2736,49 +2451,13 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
 }
 
 function QuizAttemptsStep({ data, update }: StepProps) {
-  const limited = data.maxAttemptsMode === "limited";
-
   return (
     <>
-      <div className="form-group">
-        <label className="form-label">Maximum Attempts</label>
-        <div className="radio-card-group">
-          <button
-            type="button"
-            className={`radio-card ${limited ? "selected" : ""}`}
-            onClick={() => update({ maxAttemptsMode: "limited" })}
-          >
-            <span className="radio-dot" />
-            <div className="radio-card-text">
-              <div className="radio-card-title">
-                Limit to{" "}
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="inline-num"
-                  value={data.maxAttempts}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
-                      update({ maxAttempts: v });
-                  }}
-                />{" "}
-                attempts
-              </div>
-              <div className="radio-card-desc">1–10 attempts. Admins can grant more later.</div>
-            </div>
-          </button>
-          <RadioCard
-            selected={!limited}
-            onSelect={() => update({ maxAttemptsMode: "unlimited" })}
-            title="Unlimited attempts"
-          />
-        </div>
-        <p className="form-help">
-          How many times a learner can attempt this Quiz. Quiz-level.
-        </p>
-      </div>
+      <MaxAttemptsField
+        data={data}
+        update={update}
+        help="How many times a learner can attempt this Quiz. Quiz-level. Admins can grant more later."
+      />
 
       <div className="form-group">
         <label className="form-label">Cooldown Between Attempts</label>
@@ -2989,9 +2668,7 @@ function TriggerTaskPickerModal({
 
   const q = query.trim().toLowerCase();
   const candidates = ALL_TASKS.filter(
-    (t) =>
-      !t.draft &&
-      (!q || t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)),
+    (t) => !q || t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
   );
 
   const isSelected = (id: string) => sel.some((t) => t.id === id);
@@ -3372,7 +3049,7 @@ function PaywallPricing({ data, update }: StepProps) {
         <PerAttemptPrices data={data} update={update} />
       ) : (
         <div className="form-sub-group" style={{ marginTop: 16 }}>
-          <label className="form-sub-label">Price IDs for every attempt</label>
+          <label className="form-sub-label">Product IDs for every attempt</label>
           <PriceIdFields
             value={data.commonPriceIds}
             onChange={(ids) => update({ commonPriceIds: ids })}
@@ -3380,9 +3057,7 @@ function PaywallPricing({ data, update }: StepProps) {
         </div>
       )}
 
-      <p className="form-help">
-        Each price point maps to four products — Google, Apple, Stripe (B2C), and Stripe (B2B). Enter the Price ID for each.
-      </p>
+      <p className="form-help">Enter the Product IDs from the respective stores.</p>
     </div>
   );
 }
@@ -3405,43 +3080,25 @@ function PerAttemptPrices({ data, update }: StepProps) {
 
   return (
     <div className="form-sub-group" style={{ marginTop: 16 }}>
-      <div className="price-rows">
-        {rows.map((row, i) => {
-          const removable = i === rows.length - 1 && rows.length > 1;
-          return (
-            <div key={row.id} className="price-id-block">
-              <div className="price-id-block-head">
-                <div className="price-id-block-title">Attempt {row.attempt}</div>
-                {removable && (
-                  <button
-                    className="price-row-x"
-                    aria-label={`Remove attempt ${row.attempt} price`}
-                    onClick={removeLast}
-                  >
-                    <SmallXIcon />
-                  </button>
-                )}
-              </div>
-              <PriceIdFields value={row.priceIds} onChange={(ids) => setRow(row.id, ids)} />
-            </div>
-          );
-        })}
-
-        {/* All subsequent attempts — always present, always at the bottom. */}
-        <div className="price-id-block">
-          <div className="price-id-block-head">
-            <div className="price-id-block-title">All subsequent attempts</div>
-          </div>
-          <PriceIdFields
-            value={data.subsequentPriceIds}
-            onChange={(ids) => update({ subsequentPriceIds: ids })}
-          />
-        </div>
-      </div>
-
-      <button className="price-add" onClick={addNext}>
-        + Add Price IDs for attempt {nextNum}
-      </button>
+      <PriceIdMatrix
+        columns={[
+          ...rows.map((row, i) => ({
+            key: row.id,
+            title: `Attempt ${row.attempt}`,
+            value: row.priceIds,
+            onChange: (ids: PriceIds) => setRow(row.id, ids),
+            onRemove: i === rows.length - 1 && rows.length > 1 ? removeLast : undefined,
+          })),
+          // All subsequent attempts — always present, always the last column.
+          {
+            key: "subsequent",
+            title: "All Subsequent Attempts",
+            value: data.subsequentPriceIds,
+            onChange: (ids: PriceIds) => update({ subsequentPriceIds: ids }),
+          },
+        ]}
+        onAdd={addNext}
+      />
     </div>
   );
 }
@@ -3474,6 +3131,9 @@ function NameAndDescription({ data, update, nameError }: StepProps) {
           es={data.descEs}
           onChangeEn={(v) => update({ descEn: v })}
           onChangeEs={(v) => update({ descEs: v })}
+          placeholderEn="Description"
+          placeholderEs="Descripción"
+          minRows={2}
         />
       </div>
     </>
@@ -3504,6 +3164,47 @@ function TimeToCompleteField({ data, update }: StepProps) {
       <p className="form-help">
         Estimated time required for the user to complete the Task
       </p>
+    </div>
+  );
+}
+
+/* Maximum Attempts — one shared dropdown for every Task type (Hands-On
+   Completion and Quiz Attempts both render this).
+   It was a two-card radio group with a number box inside the first card; a
+   single-select is the plainer control for eleven mutually exclusive values,
+   and it drops the "type a number into a radio" interaction entirely.
+   The stored model is unchanged (`maxAttemptsMode` + `maxAttempts`) — the
+   dropdown is only a view over it, with "Unlimited" as the first option. */
+const MAX_ATTEMPTS_UNLIMITED = "Unlimited";
+const MAX_ATTEMPTS_OPTIONS = [
+  MAX_ATTEMPTS_UNLIMITED,
+  ...Array.from({ length: 10 }, (_, i) => String(i + 1)),
+];
+
+function MaxAttemptsField({
+  data,
+  update,
+  help,
+}: Pick<StepProps, "data" | "update"> & { help: string }) {
+  const value =
+    data.maxAttemptsMode === "unlimited" ? MAX_ATTEMPTS_UNLIMITED : data.maxAttempts;
+
+  return (
+    <div className="form-group">
+      <label className="form-label">Maximum Attempts</label>
+      <SelectField
+        className="select-field--full"
+        value={value}
+        options={MAX_ATTEMPTS_OPTIONS}
+        onChange={(v) =>
+          update(
+            v === MAX_ATTEMPTS_UNLIMITED
+              ? { maxAttemptsMode: "unlimited" }
+              : { maxAttemptsMode: "limited", maxAttempts: v },
+          )
+        }
+      />
+      <p className="form-help">{help}</p>
     </div>
   );
 }
@@ -3904,32 +3605,6 @@ function LangField({
   );
 }
 
-function RichTextField({
-  en,
-  es,
-  onChangeEn,
-  onChangeEs,
-}: {
-  en: string;
-  es: string;
-  onChangeEn: (v: string) => void;
-  onChangeEs: (v: string) => void;
-}) {
-  return (
-    <div className="rte-field">
-      <RteToolbar />
-      <div className="rte-lang-row">
-        <span className="lang-tag">EN</span>
-        <AutoTextarea className="rte-area" value={en} onChange={onChangeEn} />
-      </div>
-      <div className="rte-field-divider" />
-      <div className="rte-lang-row">
-        <span className="lang-tag">ES</span>
-        <AutoTextarea className="rte-area" value={es} onChange={onChangeEs} />
-      </div>
-    </div>
-  );
-}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

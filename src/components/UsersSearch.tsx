@@ -1,32 +1,55 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "../data/users";
-import { SearchIcon, SearchClearIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-const COMPANY_PREFIX = "COMPANY:";
 
-type Opt = { kind: "company-filter" } | { kind: "company"; name: string };
+/** One "suggested filter" offered by the search bar — the `Company:` row on the
+ *  Users and Who Paid pages, `Quiz:` / `Certification:` on Quiz Attempts.
+ *  Picking values inside the bar builds a PENDING scope; Enter moves them into
+ *  the page's matching Filters-row pill (`applied`), which is what the table
+ *  actually filters on. */
+export type SearchScope = {
+  /** The chip text and the prefix the user types — "Company" ⇒ "company:". */
+  token: string;
+  /** Everything selectable under this scope. */
+  options: string[];
+  /** Values the matching Filters-row pill already has applied. */
+  applied: string[];
+  onAppliedChange: (next: string[]) => void;
+  /** Heading over the option list once in scope mode ("Companies"). */
+  optionsLabel: string;
+  /** The greyed example on the suggested row ("Company: Acme Inc."). */
+  example: string;
+  /** What the suggested row promises ("Filter by Company"). */
+  hint: string;
+  /** Right-hand note per option ("12 users"). */
+  describe?: (name: string) => string | undefined;
+};
 
-export function UsersSearch({
-  users,
-  companies: applied,
-  onCompaniesChange,
+/** The shared page search: a combobox bar with a suggested-filters panel, used
+ *  by Users, Who Paid (quiz + certification) and Quiz Attempts. Commit-on-Enter
+ *  — the table only ever filters on the applied query. */
+export function EntitySearch({
+  scopes,
+  placeholder,
+  searchForScope = "Users",
   query,
   onCommit,
 }: {
-  users: User[];
-  /** Company filter currently applied to the table (shared with the Filters row). */
-  companies: string[];
-  onCompaniesChange: (next: string[]) => void;
+  scopes: SearchScope[];
+  placeholder: string;
+  /** The noun on the "Search for … in X" row. */
+  searchForScope?: string;
   query: string;
   onCommit: (q: string) => void;
 }) {
   const [text, setText] = useState(query);
   // The search bar builds a *pending* search; nothing hits the table until Enter.
-  // `draft` holds only companies picked in THIS search session (not yet applied).
-  // On Enter they move into the applied filter (the Filters row pill) and clear here.
-  const [draft, setDraft] = useState<string[]>([]);
+  // `draft` holds only values picked in THIS search session (not yet applied),
+  // keyed by scope token. On Enter they move into that scope's applied filter.
+  const [draft, setDraft] = useState<Record<string, string[]>>({});
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -36,38 +59,40 @@ export function UsersSearch({
   // (Clear Filters, a preset, the ✕ on another control).
   useEffect(() => setText(query), [query]);
 
-  const allCompanies = useMemo(() => {
-    const counts = new Map<string, number>();
-    users.forEach((u) => {
-      if (u.companyName) counts.set(u.companyName, (counts.get(u.companyName) ?? 0) + 1);
-    });
-    return { names: [...counts.keys()].sort(), counts };
-  }, [users]);
+  const drafted = useMemo(
+    () => scopes.map((s) => ({ scope: s, values: draft[s.token] ?? [] })).filter((d) => d.values.length > 0),
+    [scopes, draft],
+  );
+  const scoped = drafted.length > 0;
+  const scopeLabel = (() => {
+    const all = drafted.flatMap((d) => d.values);
+    if (all.length === 1) return all[0];
+    const noun = drafted.length === 1 ? drafted[0].scope.optionsLabel.toLowerCase() : "filters";
+    return `${all.length} ${noun}`;
+  })();
 
-  const scoped = draft.length > 0;
-  const scopeLabel = draft.length === 1 ? draft[0] : `${draft.length} companies`;
+  // A "<token>:" prefix puts us in that scope's selection mode (case-insensitive).
+  const mode = useMemo(() => {
+    for (const s of scopes) {
+      const m = text.match(new RegExp(`^\\s*${s.token}:\\s*(.*)$`, "i"));
+      if (m) return { scope: s, query: m[1] };
+    }
+    return null;
+  }, [scopes, text]);
+  const userQuery = mode ? "" : text;
 
-  // "COMPANY:" prefix puts us in company-selection mode (case-insensitive).
-  const companyMatch = text.match(/^\s*company:\s*(.*)$/i);
-  const inCompanyMode = companyMatch != null;
-  const companyQuery = companyMatch ? companyMatch[1] : "";
-  const userQuery = inCompanyMode ? "" : text;
-
-  const companyResults = useMemo(() => {
-    const q = companyQuery.trim().toLowerCase();
-    return allCompanies.names
-      .filter((c) => !draft.includes(c) && !applied.includes(c) && c.toLowerCase().includes(q))
+  const scopeResults = useMemo(() => {
+    if (!mode) return [];
+    const q = mode.query.trim().toLowerCase();
+    const picked = draft[mode.scope.token] ?? [];
+    return mode.scope.options
+      .filter((o) => !picked.includes(o) && !mode.scope.applied.includes(o) && o.toLowerCase().includes(q))
       .slice(0, MAX_RESULTS);
-  }, [allCompanies, companyQuery, draft, applied]);
+  }, [mode, draft]);
 
-  const optionCount = inCompanyMode ? companyResults.length : 1;
+  const optionCount = mode ? scopeResults.length : scopes.length;
 
-  function optionAt(i: number): Opt | null {
-    if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
-    return i === 0 ? { kind: "company-filter" } : null;
-  }
-
-  useEffect(() => setActive(-1), [text, draft.length]);
+  useEffect(() => setActive(-1), [text, drafted.length]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
      query, so a bar left showing half-typed text would be lying about what the
@@ -75,7 +100,7 @@ export function UsersSearch({
      (and no pending scope) back. */
   function revert() {
     setText(query);
-    setDraft([]);
+    setDraft({});
     setActive(-1);
     setOpen(false);
   }
@@ -93,37 +118,38 @@ export function UsersSearch({
   // Clear the applied search outright — no Enter needed.
   function clearSearch() {
     setText("");
-    setDraft([]);
+    setDraft({});
     setActive(-1);
     setOpen(false);
     onCommit("");
   }
 
-  // Add a company to the pending scope (does NOT touch the table yet).
-  function addCompany(name: string) {
-    if (!draft.includes(name)) setDraft([...draft, name]);
+  // Add a value to the pending scope (does NOT touch the table yet).
+  function addValue(scope: SearchScope, name: string) {
+    setDraft((d) => {
+      const cur = d[scope.token] ?? [];
+      return cur.includes(name) ? d : { ...d, [scope.token]: [...cur, name] };
+    });
     setText("");
     setActive(-1);
     setOpen(true);
     inputRef.current?.focus();
   }
 
-  function activate(opt: Opt) {
-    if (opt.kind === "company-filter") {
-      setText(COMPANY_PREFIX);
-      setActive(-1);
-      inputRef.current?.focus();
-    } else {
-      addCompany(opt.name);
-    }
+  function enterScope(scope: SearchScope) {
+    setText(`${scope.token}:`);
+    setActive(-1);
+    inputRef.current?.focus();
   }
 
-  // Enter — run the pending search against the table. Pending companies move into
-  // the applied filter (the Filters row pill) and clear from the search bar.
+  // Enter — run the pending search against the table. Pending scope values move
+  // into their applied filters (the Filters row pills) and clear from the bar.
   function commit() {
-    onCompaniesChange(Array.from(new Set([...applied, ...draft])));
+    drafted.forEach(({ scope, values }) =>
+      scope.onAppliedChange(Array.from(new Set([...scope.applied, ...values]))),
+    );
     onCommit(userQuery);
-    setDraft([]);
+    setDraft({});
     setOpen(false);
   }
 
@@ -138,24 +164,26 @@ export function UsersSearch({
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
-        const opt = optionAt(active);
-        if (opt) return activate(opt);
+        if (mode) {
+          const name = scopeResults[active];
+          if (name) return addValue(mode.scope, name);
+        } else if (scopes[active]) {
+          return enterScope(scopes[active]);
+        }
       }
-      if (inCompanyMode) {
-        if (companyResults[0]) return addCompany(companyResults[0]);
+      if (mode) {
+        if (scopeResults[0]) return addValue(mode.scope, scopeResults[0]);
         return;
       }
       commit();
     } else if (e.key === "Escape") {
       revert();
     } else if (e.key === "Backspace" && text === "" && scoped) {
-      setDraft(draft.slice(0, -1));
+      // Drop the most recently added value, whichever scope it belongs to.
+      const last = drafted[drafted.length - 1];
+      setDraft((d) => ({ ...d, [last.scope.token]: last.values.slice(0, -1) }));
     }
   }
-
-  const placeholder = scoped
-    ? `Search within ${scopeLabel}…`
-    : "Search users by name, email, or phone…";
 
   return (
     <div className="usearch" ref={wrapRef}>
@@ -163,16 +191,18 @@ export function UsersSearch({
         <span className="usearch-icon">
           <SearchIcon />
         </span>
-        {scoped && (
-          <span className="usearch-scope">
-            <span className="usearch-scope-label">Company:</span>
-            <span className="usearch-scope-name">{scopeLabel}</span>
+        {drafted.map(({ scope, values }) => (
+          <span className="usearch-scope" key={scope.token}>
+            <span className="usearch-scope-label">{scope.token}:</span>
+            <span className="usearch-scope-name">
+              {values.length === 1 ? values[0] : `${values.length} ${scope.optionsLabel.toLowerCase()}`}
+            </span>
           </span>
-        )}
+        ))}
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder={placeholder}
+          placeholder={scoped ? `Search within ${scopeLabel}…` : placeholder}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -196,7 +226,7 @@ export function UsersSearch({
           </button>
         ) : (
           <span className="usearch-kbd">
-            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}
@@ -204,31 +234,44 @@ export function UsersSearch({
 
       {open && (
         <div className="usearch-panel">
-          {!inCompanyMode && (
+          {!mode && (
             <>
               <div className="usearch-head">Suggested filters</div>
-              <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "company-filter" })}>
-                <span className="usearch-chip">Company:</span>
-                <span className="usearch-row-ex">Company: Acme Inc.</span>
-                <span className="usearch-row-desc">Filter users by company</span>
-              </OptionRow>
-
+              {scopes.map((s, i) => (
+                <OptionRow
+                  key={s.token}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => enterScope(s)}
+                >
+                  <span className="usearch-chip">{s.token}:</span>
+                  <span className="usearch-row-ex">{s.example}</span>
+                  <span className="usearch-row-desc">{s.hint}</span>
+                </OptionRow>
+              ))}
             </>
           )}
 
-          {inCompanyMode && (
+          {mode && (
             <>
-              <div className="usearch-head">Companies</div>
-              {companyResults.length === 0 ? (
+              <div className="usearch-head">{mode.scope.optionsLabel}</div>
+              {scopeResults.length === 0 ? (
                 <div className="usearch-empty">
-                  {companyQuery.trim() ? `No companies match “${companyQuery.trim()}”.` : "Start typing a company name…"}
+                  {mode.query.trim()
+                    ? `No ${mode.scope.optionsLabel.toLowerCase()} match “${mode.query.trim()}”.`
+                    : `Start typing a ${mode.scope.token.toLowerCase()} name…`}
                 </div>
               ) : (
-                companyResults.map((name, i) => (
-                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
-                    <span className="usearch-chip">Company:</span>
+                scopeResults.map((name, i) => (
+                  <OptionRow
+                    key={name}
+                    active={active === i}
+                    onHover={() => setActive(i)}
+                    onClick={() => addValue(mode.scope, name)}
+                  >
+                    <span className="usearch-chip">{mode.scope.token}:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allCompanies.counts.get(name)} users</span>
+                    <span className="usearch-row-desc">{mode.scope.describe?.(name)}</span>
                   </OptionRow>
                 ))
               )}
@@ -236,13 +279,57 @@ export function UsersSearch({
           )}
 
           {userQuery.trim() ? (
-            <SearchForRow query={userQuery.trim()} scope="Users" onClick={commit} />
+            <SearchForRow query={userQuery.trim()} scope={searchForScope} onClick={commit} />
           ) : (
             <SearchHints />
           )}
         </div>
       )}
     </div>
+  );
+}
+
+/** The Users / Who Paid bar: one `Company:` scope built from the rows on screen. */
+export function UsersSearch({
+  users,
+  companies: applied,
+  onCompaniesChange,
+  query,
+  onCommit,
+}: {
+  users: User[];
+  /** Company filter currently applied to the table (shared with the Filters row). */
+  companies: string[];
+  onCompaniesChange: (next: string[]) => void;
+  query: string;
+  onCommit: (q: string) => void;
+}) {
+  const companies = useMemo(() => {
+    const counts = new Map<string, number>();
+    users.forEach((u) => {
+      if (u.companyName) counts.set(u.companyName, (counts.get(u.companyName) ?? 0) + 1);
+    });
+    return { names: [...counts.keys()].sort(), counts };
+  }, [users]);
+
+  const scope: SearchScope = {
+    token: "Company",
+    options: companies.names,
+    applied,
+    onAppliedChange: onCompaniesChange,
+    optionsLabel: "Companies",
+    example: "Company: Acme Inc.",
+    hint: "Filter by Company",
+    describe: (name) => `${companies.counts.get(name)} users`,
+  };
+
+  return (
+    <EntitySearch
+      scopes={[scope]}
+      placeholder="Search Users by Name, Email, or Phone…"
+      query={query}
+      onCommit={onCommit}
+    />
   );
 }
 

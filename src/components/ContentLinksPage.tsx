@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   nodes as allNodes,
   links as seedLinks,
@@ -6,7 +6,21 @@ import {
   type Link,
   type LinkKind,
 } from "../data/contentLinks";
-import { SearchIcon, SmallXIcon, ChevronLeftIcon } from "./icons";
+import { SectionHeading } from "./SectionHeading";
+import { PrmModal } from "./PrmModal";
+import {
+  KeyCommandIcon,
+  AddIcon,
+  ChevronRightIcon,
+  SearchIcon,
+  SmallXIcon,
+} from "./icons";
+
+/* Content Links — rebuilt 2026-08-26 on the shared design-system components:
+ * the `.tasks` list-page shell with the `.rvc-crumbs` header, the shared
+ * `.search-wrap` bar with a `.dropdown` results panel, SectionHeading column
+ * headings with `.cta-quiet` actions, the PrmModal add-link picker, and the
+ * Spotlights `.sp-save-footer` for the dirty-state Save/Discard bar. */
 
 type Focus = string | null;
 
@@ -14,6 +28,12 @@ const KIND_PLURAL: Record<LinkKind, string> = {
   prerequisite: "Prerequisites",
   recommended: "Recommended Next",
   related: "Related",
+};
+
+const KIND_ADD_TITLE: Record<LinkKind, string> = {
+  prerequisite: "Add Prerequisite",
+  recommended: "Add Recommended Next",
+  related: "Add Related Content",
 };
 
 // One-line guidance shown under each column heading.
@@ -65,14 +85,13 @@ export function ContentLinksPage({
 } = {}) {
   const [focusId, setFocusId] = useState<Focus>(initialFocus?.id ?? null);
   const [links, setLinks] = useState<Link[]>(seedLinks);
-  // Last-saved snapshot; the Save / Cancel bar diffs the working set against it.
+  // Last-saved snapshot; the Save / Discard footer diffs the working set against it.
   const [baseline, setBaseline] = useState<Link[]>(seedLinks);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   // Add-link picker state — { kind: which list we're adding to }
   const [picker, setPicker] = useState<{ kind: LinkKind } | null>(null);
-  const [pickerQuery, setPickerQuery] = useState("");
 
   // Resolve the focused node. A certification opened from the 3-dot menu may not
   // exist in the mock content graph — fall back to the injected initialFocus so
@@ -141,17 +160,12 @@ export function ContentLinksPage({
 
   function addLink(kind: LinkKind, otherId: string) {
     if (!focusId) return;
-    let newEdge: Link;
-    if (kind === "prerequisite") {
-      newEdge = { from: otherId, to: focusId, kind, strength: 50 };
-    } else if (kind === "recommended") {
-      newEdge = { from: focusId, to: otherId, kind, strength: 50 };
-    } else {
-      newEdge = { from: focusId, to: otherId, kind, strength: 50 };
-    }
+    const newEdge: Link =
+      kind === "prerequisite"
+        ? { from: otherId, to: focusId, kind, strength: 50 }
+        : { from: focusId, to: otherId, kind, strength: 50 };
     setLinks((prev) => [...prev, newEdge]);
     setPicker(null);
-    setPickerQuery("");
   }
 
   // Nodes already linked from this focus in the given kind (so we can hide them in picker)
@@ -171,22 +185,40 @@ export function ContentLinksPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks cl-page cl2-page">
-          <header className="cl2-head">
-            {onBack && (
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                {backLabel ?? "All certifications"}
-              </button>
-            )}
-            <div className="cl2-eyebrow">CONTENT LINKS</div>
+        <div className="tasks lc-page">
+          <header className="tasks-header">
+            {/* Reached from a Certification's 3-dot menu — the crumb is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <span className="rvc-crumb">Content</span>
+                <ChevronRightIcon />
+                {onBack ? (
+                  <button
+                    className="rvc-crumb"
+                    onClick={onBack}
+                    title={`Back to ${backLabel ?? "Certifications"}`}
+                  >
+                    {backLabel ?? "Certifications"}
+                  </button>
+                ) : (
+                  <span className="rvc-crumb">Certifications</span>
+                )}
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">Content Links</span>
+              </nav>
+              <h1 className="tasks-title">Content Links</h1>
+              <div className="tasks-subtitle">
+                {focused
+                  ? `${focused.industry ?? "—"} · Advisory only — links never block access`
+                  : "Search for content to view and edit its links"}
+              </div>
+            </div>
+          </header>
 
-            {/* Existing shared search bar — shows the focused certification and
-                lets you switch to another one. */}
+          <div className="toolbar">
             <SearchField
               value={focused ? focused.name : query}
               placeholder="Search all Certifications…"
-              disabled={false}
               isFocusedNode={!!focused}
               onChange={(v) => {
                 setQuery(v);
@@ -200,62 +232,59 @@ export function ContentLinksPage({
               query={query}
               onPick={pickFocus}
             />
+          </div>
 
-            {focused && (
-              <div className="cl2-focus-sub">
-                {focused.industry} <span className="cl2-focus-dot" /> Advisory
-                only — links never block access.
-              </div>
+          <div className="lc-scroll">
+            {focused && groups ? (
+              <>
+                <div className="lc-grid">
+                  <LinkColumn
+                    kind="prerequisite"
+                    items={groups.prereqs}
+                    onRemove={removeEdge}
+                    onStrength={updateStrength}
+                    onAdd={() => setPicker({ kind: "prerequisite" })}
+                    onPickNode={pickFocus}
+                  />
+                  <LinkColumn
+                    kind="recommended"
+                    items={groups.recommended}
+                    onRemove={removeEdge}
+                    onStrength={updateStrength}
+                    onAdd={() => setPicker({ kind: "recommended" })}
+                    onPickNode={pickFocus}
+                  />
+                  <LinkColumn
+                    kind="related"
+                    items={groups.related}
+                    onRemove={removeEdge}
+                    onStrength={updateStrength}
+                    onAdd={() => setPicker({ kind: "related" })}
+                    onPickNode={pickFocus}
+                  />
+                </div>
+
+                <ReferencedBy items={referencedBy} onPickNode={pickFocus} />
+              </>
+            ) : (
+              <EmptyState onPick={pickFocus} />
             )}
-          </header>
+          </div>
 
-          {focused && groups ? (
-            <>
-              <div className="cl2-grid">
-                <LinkColumn
-                  kind="prerequisite"
-                  items={groups.prereqs}
-                  onRemove={removeEdge}
-                  onStrength={updateStrength}
-                  onAdd={() => setPicker({ kind: "prerequisite" })}
-                  onPickNode={pickFocus}
-                />
-                <LinkColumn
-                  kind="recommended"
-                  items={groups.recommended}
-                  onRemove={removeEdge}
-                  onStrength={updateStrength}
-                  onAdd={() => setPicker({ kind: "recommended" })}
-                  onPickNode={pickFocus}
-                />
-                <LinkColumn
-                  kind="related"
-                  items={groups.related}
-                  onRemove={removeEdge}
-                  onStrength={updateStrength}
-                  onAdd={() => setPicker({ kind: "related" })}
-                  onPickNode={pickFocus}
-                />
-              </div>
-
-              <ReferencedBy items={referencedBy} onPickNode={pickFocus} />
-            </>
-          ) : (
-            <EmptyState onPick={pickFocus} />
-          )}
-
+          {/* Same in-flow save footer as the Spotlights reorder bar — spans the
+              content column only, stops at the left nav. */}
           {focused && dirty && (
-            <div className="cl2-savebar">
-              <span className="cl2-savebar-dot" />
-              <span className="cl2-savebar-text">Unsaved changes</span>
-              <div className="cl2-savebar-spacer" />
-              <button className="cl2-cancel" onClick={cancelChanges}>
-                Cancel
-              </button>
-              <button className="cl2-save" onClick={saveChanges}>
-                Save changes
-              </button>
-            </div>
+            <footer className="sp-save-footer">
+              <div className="sp-save-footer-text">Unsaved Changes</div>
+              <div className="sp-save-footer-actions">
+                <button className="btn-save-draft" onClick={cancelChanges}>
+                  Discard
+                </button>
+                <button className="btn-publish" onClick={saveChanges}>
+                  Save Changes
+                </button>
+              </div>
+            </footer>
           )}
         </div>
       </div>
@@ -263,14 +292,9 @@ export function ContentLinksPage({
       {picker && focusId && (
         <PickerModal
           kind={picker.kind}
-          query={pickerQuery}
-          setQuery={setPickerQuery}
           exclude={alreadyLinkedIds(picker.kind)}
-          onPick={(id) => addLink(picker.kind, id)}
-          onClose={() => {
-            setPicker(null);
-            setPickerQuery("");
-          }}
+          onAdd={(id) => addLink(picker.kind, id)}
+          onClose={() => setPicker(null)}
         />
       )}
     </div>
@@ -293,7 +317,6 @@ function SearchField({
 }: {
   value: string;
   placeholder: string;
-  disabled: boolean;
   isFocusedNode: boolean;
   onChange: (v: string) => void;
   onFocus: () => void;
@@ -303,24 +326,25 @@ function SearchField({
   query: string;
   onPick: (id: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q
-      ? allNodes.filter((n) => n.name.toLowerCase().includes(q) || (n.industry ?? "").toLowerCase().includes(q))
+      ? allNodes.filter(
+          (n) =>
+            n.name.toLowerCase().includes(q) ||
+            (n.industry ?? "").toLowerCase().includes(q)
+        )
       : allNodes;
     return list.slice(0, 8);
   }, [query]);
 
   return (
-    <div className="cl-search-wrap" style={{ position: "relative" }}>
-      <div className="search-wrap" style={{ marginBottom: 18 }}>
+    <div className="lc-search">
+      <div className="search-wrap">
         <span className="search-icon">
           <SearchIcon />
         </span>
         <input
-          ref={inputRef}
           className="search-input"
           placeholder={placeholder}
           value={value}
@@ -329,8 +353,9 @@ function SearchField({
           onChange={(e) => onChange(e.target.value)}
         />
         {isFocusedNode ? (
+          /* Applied state — the ✕ replaces the ⌘K badge (Figma 399:216). */
           <button
-            className="cl-search-clear"
+            className="usearch-clear lc-search-clear"
             aria-label="Clear focus"
             onClick={onClear}
             onMouseDown={(e) => e.preventDefault()}
@@ -339,44 +364,42 @@ function SearchField({
           </button>
         ) : (
           <span className="search-kbd">
-            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}
       </div>
       {open && (
-        <div className="cl-search-dropdown" onMouseDown={(e) => e.preventDefault()}>
-          {results.length === 0 ? (
-            <div className="cl-search-empty">No matches for "{query}"</div>
-          ) : (
-            <>
-              <div className="cl-search-section-label">
-                {query.trim() ? "Results" : "All content"}
-              </div>
-              <div className="cl-search-list">
+        <div
+          className="dropdown ms-menu lc-search-menu"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div className="dropdown-list">
+            {results.length === 0 ? (
+              <div className="lc-search-empty">No matches for "{query}"</div>
+            ) : (
+              <>
+                <div className="dropdown-section-label">
+                  {query.trim() ? "Results" : "All content"}
+                </div>
                 {results.map((n) => (
                   <button
                     key={n.id}
-                    className="cl-search-item"
+                    className="dropdown-item"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       onPick(n.id);
                     }}
                   >
-                    <span className={`cl-node-badge cl-node-badge--${n.kind.toLowerCase()}`}>
-                      {n.kind[0]}
-                    </span>
-                    <span className="cl-search-item-text">
-                      <span className="cl-search-item-name">{n.name}</span>
-                      <span className="cl-search-item-meta">
-                        {n.kind} · {n.level} · {n.tasksCount} tasks
-                      </span>
+                    <span className="lc-item-name">{n.name}</span>
+                    <span className="dropdown-item-detail">
+                      {n.kind} · {n.level} · {n.tasksCount} Tasks
                     </span>
                   </button>
                 ))}
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -388,22 +411,19 @@ function SearchField({
 function EmptyState({ onPick }: { onPick: (id: string) => void }) {
   const suggestions = allNodes.slice(0, 4);
   return (
-    <div className="cl-empty">
-      <div className="cl-empty-illustration" aria-hidden>
+    <div className="lc-empty">
+      <div aria-hidden>
         <EmptyGraph />
       </div>
-      <h2 className="cl-empty-title">Search for content to view its links</h2>
-      <p className="cl-empty-sub">
-        Pick a course, certification, or task above. The graph will show prerequisites, recommended next steps, and related content.
+      <h2 className="lc-empty-title">Search for content to view its links</h2>
+      <p className="lc-empty-sub">
+        Pick a course, certification, or task above. The page will show
+        prerequisites, recommended next steps, and related content.
       </p>
-      <div className="cl-empty-suggest">
-        <span className="cl-empty-suggest-label">Try:</span>
+      <div className="lc-empty-suggest">
+        <span className="form-help">Try:</span>
         {suggestions.map((n) => (
-          <button
-            key={n.id}
-            className="cl-empty-chip"
-            onClick={() => onPick(n.id)}
-          >
+          <button key={n.id} className="cta-quiet" onClick={() => onPick(n.id)}>
             {n.name}
           </button>
         ))}
@@ -437,12 +457,6 @@ function EmptyGraph() {
 
 type GroupItem = { other: string; strength: number; edge: Link };
 
-const PlusIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
-
 function LinkColumn({
   kind,
   items,
@@ -459,19 +473,18 @@ function LinkColumn({
   onPickNode: (id: string) => void;
 }) {
   return (
-    <section className="cl2-col">
-      <div className="cl2-col-head">
-        <span className="cl2-col-title">
-          {KIND_PLURAL[kind]}
-          <span className="cl2-col-count"> · {items.length}</span>
-        </span>
-        <button className="cl2-add" onClick={onAdd}>
-          <PlusIcon />
-          Add
-        </button>
-      </div>
-      <div className="cl2-col-helper">{KIND_HELPER[kind]}</div>
-      <div className="cl2-cards">
+    <section className="lc-col">
+      <SectionHeading
+        label={`${KIND_PLURAL[kind]} · ${items.length}`}
+        trailing={
+          <button className="cta-quiet lc-add" onClick={onAdd}>
+            <AddIcon />
+            Add
+          </button>
+        }
+      />
+      <p className="form-help">{KIND_HELPER[kind]}</p>
+      <div className="lc-cards">
         {items.map(({ other, strength, edge }) => {
           const n = nodeById(other);
           if (!n) return null;
@@ -488,7 +501,7 @@ function LinkColumn({
           );
         })}
         {items.length === 0 && (
-          <div className="cl2-col-empty">Nothing linked yet.</div>
+          <div className="lc-col-empty">Nothing linked yet.</div>
         )}
       </div>
     </section>
@@ -511,16 +524,18 @@ function LinkCard({
   onPick: () => void;
 }) {
   return (
-    <div className="cl2-card">
-      <button className="cl2-card-main" onClick={onPick} title="Focus on this node">
-        <span className="cl2-card-name">
+    <div className="lc-card">
+      <button className="lc-card-main" onClick={onPick} title="Focus on this node">
+        <span className="lc-card-name">
           {node.name}
-          {related && <span className="cl2-card-swap"> ⇄</span>}
+          {related && (
+            <span className="lc-card-swap" title="Two-way link"> ⇄</span>
+          )}
         </span>
-        <span className="cl2-card-meta">{node.industry ?? "—"}</span>
+        <span className="lc-card-meta">{node.industry ?? "—"}</span>
       </button>
       <input
-        className="cl2-card-strength"
+        className="lc-strength"
         type="number"
         min={0}
         max={100}
@@ -530,8 +545,9 @@ function LinkCard({
           onStrength(next);
         }}
         aria-label="Strength"
+        title="Strength (0–100)"
       />
-      <button className="cl2-card-remove" aria-label="Remove link" onClick={onRemove}>
+      <button className="lc-card-remove" title="Remove Link" onClick={onRemove}>
         <SmallXIcon />
       </button>
     </div>
@@ -551,21 +567,29 @@ function ReferencedBy({
   const shown = items.slice(0, 6);
   const extra = items.length - shown.length;
   return (
-    <div className="cl2-refby">
-      <span className="cl2-refby-title">Referenced by · {items.length}</span>
-      <span className="cl2-refby-note">read-only</span>
-      {shown.map((r, i) => (
-        <button
-          key={`${r.id}-${i}`}
-          className="cl2-refby-chip"
-          onClick={() => onPickNode(r.id)}
-          title="Focus on this certification"
-        >
-          <span className="cl2-refby-chip-name">{r.name}</span>
-          <span className="cl2-refby-chip-tag">{r.tag}</span>
-        </button>
-      ))}
-      {extra > 0 && <span className="cl2-refby-more">+ {extra} more</span>}
+    <div className="lc-refby">
+      <SectionHeading
+        label={`Referenced By · ${items.length}`}
+        trailing={
+          <span className="form-help lc-refby-note">
+            Read-only — edit from the other Certification's page
+          </span>
+        }
+      />
+      <div className="lc-refby-row">
+        {shown.map((r, i) => (
+          <button
+            key={`${r.id}-${i}`}
+            className="cta-quiet"
+            onClick={() => onPickNode(r.id)}
+            title="Focus on this certification"
+          >
+            {r.name}
+            <span className="lc-ref-tag">{r.tag}</span>
+          </button>
+        ))}
+        {extra > 0 && <span className="lc-ref-more">+ {extra} more</span>}
+      </div>
     </div>
   );
 }
@@ -574,71 +598,87 @@ function ReferencedBy({
 
 function PickerModal({
   kind,
-  query,
-  setQuery,
   exclude,
-  onPick,
+  onAdd,
   onClose,
 }: {
   kind: LinkKind;
-  query: string;
-  setQuery: (q: string) => void;
   exclude: Set<string>;
-  onPick: (id: string) => void;
+  onAdd: (id: string) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  // Staged single-select — the pick only lands on the column via "Add Link",
+  // the same commit-on-Continue convention as the Select Tasks modal.
+  const [picked, setPicked] = useState<string | null>(null);
+
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     return allNodes
       .filter((n) => !exclude.has(n.id))
-      .filter((n) => (q ? n.name.toLowerCase().includes(q) || (n.industry ?? "").toLowerCase().includes(q) : true))
+      .filter((n) =>
+        q
+          ? n.name.toLowerCase().includes(q) ||
+            (n.industry ?? "").toLowerCase().includes(q)
+          : true
+      )
       .slice(0, 12);
   }, [query, exclude]);
 
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <div className="cl-modal-eyebrow">
-            <ChevronLeftIcon />
-            <button className="cl-modal-back" onClick={onClose}>Back</button>
-          </div>
-          <h3 className="cl-modal-title">Add {KIND_PLURAL[kind]}</h3>
-          <p className="cl-modal-sub">Pick a course, certification, or task to link.</p>
-        </div>
-        <div className="cl-modal-search">
-          <span className="search-icon"><SearchIcon /></span>
+    <PrmModal
+      title={KIND_ADD_TITLE[kind]}
+      description="Pick a course, certification, or task to link. Links are advisory only — they never block access."
+      confirmLabel="Add Link"
+      confirmDisabled={!picked}
+      wide
+      onCancel={onClose}
+      onConfirm={() => picked && onAdd(picked)}
+    >
+      <div className="lc-pick">
+        <div className="search-wrap stm-search">
+          <span className="search-icon">
+            <SearchIcon />
+          </span>
           <input
             autoFocus
-            className="cl-modal-input"
-            placeholder="Search content…"
+            className="search-input stm-search-input"
+            placeholder="Search Content"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPicked(null);
+            }}
           />
         </div>
-        <div className="cl-modal-list">
+        <div className="lc-pick-list">
           {results.length === 0 ? (
-            <div className="cl-modal-empty">No matches.</div>
+            <div className="lc-pick-empty">No matches.</div>
           ) : (
             results.map((n) => (
-              <button key={n.id} className="cl-modal-item" onClick={() => onPick(n.id)}>
-                <span className={`cl-node-badge cl-node-badge--${n.kind.toLowerCase()}`}>
-                  {n.kind[0]}
-                </span>
-                <span className="cl-modal-item-text">
-                  <span className="cl-modal-item-name">{n.name}</span>
-                  <span className="cl-modal-item-meta">
-                    {n.kind} · {n.level} · {n.tasksCount} tasks
-                  </span>
+              <button
+                key={n.id}
+                className={`dropdown-item${picked === n.id ? " is-current" : ""}`}
+                onClick={() => setPicked(n.id)}
+              >
+                <span className="lc-item-name">{n.name}</span>
+                <span className="dropdown-item-detail">
+                  {n.kind} · {n.level} · {n.tasksCount} Tasks
                 </span>
               </button>
             ))
           )}
         </div>
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>Cancel</button>
-        </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }

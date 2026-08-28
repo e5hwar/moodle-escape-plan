@@ -1,3 +1,5 @@
+import { tasks } from "./tasks";
+
 // "In Review" and "Rejected" only occur on proctored exams: a passing attempt
 // enters In Review until the Proctoring Team approves the footage, and is
 // Rejected (with a reason) if the footage fails review.
@@ -284,3 +286,20 @@ export const ATTEMPT_STATUSES: AttemptStatus[] = [
   "In Review",
   "Rejected",
 ];
+
+/* ── Certifications ──
+   An attempt carries only its Task's name, so the Certification filter resolves
+   through the Tasks library's `usedIn` — the same source the Hands-On review
+   queue uses for its Certifications column. */
+const CERTS_BY_TASK = new Map<string, string[]>(tasks.map((t) => [t.name, t.usedIn]));
+
+/** Certifications the attempt's Task is used in. Empty for a Task outside the
+ *  library (nothing to filter on, so it never matches a Certification pill). */
+export function attemptCertifications(quizName: string): string[] {
+  return CERTS_BY_TASK.get(quizName) ?? [];
+}
+
+/** Distinct certifications reachable from the attempt set, for the pill. */
+export const ATTEMPT_CERTIFICATION_NAMES: string[] = [
+  ...new Set(attempts.flatMap((a) => attemptCertifications(a.quizName))),
+].sort();

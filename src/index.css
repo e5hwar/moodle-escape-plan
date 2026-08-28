@@ -40,6 +40,24 @@
   --tip-bg: #1e1e20;
   --tip-text: #fff;
   --tip-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+
+  /* Floating panels — Figma 772:1109 "Search" + 772:1108 "Filters" (re-synced
+     2026-08-28). Search bars, their dropdown panels, and every .dropdown
+     (filters, Edit Columns, More Filters, the row menus) now share ONE
+     surface: a 15% #7a7a7a wash over #0d0d0d inside a half-strength #404040
+     hairline. It replaces the flat #1e1e20 bar fill on a transparent border
+     and the flat --bg-panel #0f0f10 on a solid #404040 one. Rows hovered or
+     pressed on that surface double the wash to 30% (#2e2e2e over the same
+     ground) — --bg-pill is DARKER than the panel and reads as a hole.
+       --search-h  43px = 12px padding either side of a 19px line, so the CSS
+                   padding is 11/15 — the padding-minus-border rule.
+       --search-h-lg 56px "Search Bar - Large" (772:1192), the landing hero:
+                   16px padding around a 24px line, 20px icon and 20px type. */
+  --search-bg: linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)), #0d0d0d;
+  --search-border: rgba(64, 64, 64, 0.5);
+  --panel-row-hover: #2e2e2e;
+  --search-h: 43px;
+  --search-h-lg: 56px;
 }
 
 * {
@@ -486,13 +504,11 @@ a {
    native scrollbar on these containers and draw our own persistent track + thumb
    via customScrollbars.ts (positioned over each container's edges). */
 .tasks-scroll,
-.table-xscroll,
-.attempts-scroll {
+.table-xscroll {
   scrollbar-width: none; /* Firefox */
 }
 .tasks-scroll::-webkit-scrollbar,
-.table-xscroll::-webkit-scrollbar,
-.attempts-scroll::-webkit-scrollbar {
+.table-xscroll::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
@@ -592,7 +608,8 @@ a {
    Codes / Scholarships). Its keycap inherits the .tasks-header .cta-kbd
    override above. The fill is the node's rgba(122,122,122,0.2) wash over
    #0d0d0d and the stroke its 0.5px rgba(122,122,122,0.1) hairline. */
-.tasks-header .cta-quiet {
+.tasks-header .cta-quiet,
+.tasks.lc-page .cta-quiet {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -612,7 +629,8 @@ a {
   cursor: pointer;
 }
 
-.tasks-header .cta-quiet:hover {
+.tasks-header .cta-quiet:hover,
+.tasks.lc-page .cta-quiet:hover {
   background:
     linear-gradient(90deg, rgba(122, 122, 122, 0.3) 0%, rgba(122, 122, 122, 0.3) 100%),
     #0d0d0d;
@@ -782,11 +800,12 @@ button.breadcrumb-item:hover {
 
 .search-input {
   width: 100%;
-  height: 40px;
-  /* 43 + the 1px border = the 44px text inset of Figma 11:15130. */
-  padding: 0 55px 0 43px;
-  background: #1e1e20;
-  border: 1px solid transparent;
+  height: var(--search-h);
+  /* 43 + the 1px border = the 44px text inset of Figma 399:216; on the right,
+     16px of edge plus the 43px ⌘K badge, again less the border. */
+  padding: 0 58px 0 43px;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
@@ -805,11 +824,18 @@ button.breadcrumb-item:hover {
   border-color: var(--border-strong);
 }
 
+/* inline-flex, not a bare inline span: an inline box is a LINE box, so the glyph
+   sits on the text baseline with the descender gap below it, and translateY(-50%)
+   then centres that taller box — leaving the icon ~3px high of the bar's centre
+   (worst at the 56px landing size, where the icon is 20px). Same reason
+   .usearch-icon has always carried inline-flex. */
 .search-icon {
   position: absolute;
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
   color: #a8a8a8;
 }
 
@@ -819,15 +845,19 @@ button.breadcrumb-item:hover {
   height: 16px;
 }
 
+/* ⌘K badge — Figma 773:1229. Two 20px caps 3px apart: the command glyph is a
+   14px stroke ICON (it used to be a text ⌘, which sat a shade heavier than the
+   K beside it), the letter is IBM Plex Mono Medium 12. The Large bar reuses the
+   same badge one step up (773:1236) — see the landing-morph block. */
 .search-kbd {
   position: absolute;
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
-  height: 24px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .kbd-cmd,
@@ -840,27 +870,14 @@ button.breadcrumb-item:hover {
 .search-kbd .kbd-cmd,
 .search-kbd .kbd-letter {
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
   color: #a8a8a8;
 }
 
-.search-kbd .kbd-cmd {
-  font-size: 16px;
-}
-
-.search-kbd .kbd-letter {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.kbd-cmd {
-  font-size: 10px;
-}
 
 /* ===== Filters row ===== */
 .filters {
@@ -872,19 +889,22 @@ button.breadcrumb-item:hover {
   flex-shrink: 0;
 }
 
-/* Figma 12:15164 "Filters - Unapplied": 32px, r20, 1px dashed #404040, 12px
-   insets, 6px gap to the 16px add-circle, Fira Sans Medium 16 #a8a8a8. */
+/* Figma 12:15164 "Filters - Unapplied" (re-synced 2026-08-28): 28px, r20,
+   1px dashed #404040, 12px insets, 6px gap to the 14px add-circle, Fira Sans
+   Medium 14 #a8a8a8. The label went 16→14 and the shell 32→28 — the 28 is the
+   applied pill's frame height (12:15221), which its 20px divider sets; the
+   unapplied node hugs to 25, and matching the taller one keeps one row height. */
 .filter-pill-dashed {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 28px;
   padding: 0 12px;
   background: transparent;
   border: 1px dashed #404040;
   border-radius: 20px;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: #a8a8a8;
   white-space: nowrap;
@@ -903,17 +923,17 @@ button.breadcrumb-item:hover {
 }
 
 .filter-pill-dashed .icon svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 /* Figma 12:15221 "Filters - Applied": same shell but a SOLID #404040 border;
-   close-circle 16px, label Medium 16 #a8a8a8, 20px divider, value #f05523. */
+   close-circle 14px, label Medium 14 #a8a8a8, 20px divider, value #f05523. */
 .filter-applied {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 28px;
   border: 1px solid #404040;
   border-radius: 20px;
   background: transparent;
@@ -933,8 +953,8 @@ button.breadcrumb-item:hover {
 }
 
 .filter-applied-clear svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .filter-applied-clear:hover {
@@ -947,7 +967,7 @@ button.breadcrumb-item:hover {
   gap: 6px;
   padding: 0 12px 0 0;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .filter-applied-main .label {
@@ -1024,18 +1044,24 @@ button.breadcrumb-item:hover {
   line-height: 1.35;
 }
 
-/* Figma 32:16835 "Clear Filters" — Fira Sans Medium 14 #7a7a7a. */
+/* Figma 32:16835 "Clear Filters" (re-synced 2026-08-28) — Fira Sans Medium 14
+   #f05523. It went #7a7a7a → #a8a8a8 → the accent: it now reads as the row's one
+   action rather than as another muted pill label. */
 .filter-clear-link {
-  color: #7a7a7a;
+  color: #f05523;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
-  padding: 4px 8px;
-  margin-left: 2px;
+  /* No horizontal padding or margin: the row's 8px gap is the ONLY space before
+     "Clear Filters", so it sits exactly as far from the last pill as the pills
+     sit from each other. The 8px inset + 2px margin it used to carry read as an
+     18px gap and made the link look detached from the row. */
+  padding: 4px 0;
 }
 
+/* The same lift the dropdowns' ALL/NONE links use. */
 .filter-clear-link:hover {
-  color: #79bbff;
+  color: #ff6a3c;
 }
 
 .filters-end {
@@ -1121,11 +1147,12 @@ button.breadcrumb-item:hover {
 .dropdown {
   position: absolute;
   top: calc(100% + 8px);
-  background: var(--bg-panel);
-  /* Figma 24:16115 / 28:16530 / 28:16625 panel shell: 1px #404040, r10. */
-  border: 1px solid #404040;
+  /* Figma 24:16115 / 28:16530 / 28:16625 panel shell: the shared floating-panel
+     wash, a HALF-strength #404040 hairline, r10 and a 20px-blur shadow. */
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
   z-index: 100;
   font-family: var(--font-sans);
   font-size: 12pt;
@@ -1171,7 +1198,7 @@ button.breadcrumb-item:hover {
 }
 
 .menu-item:hover {
-  background: var(--bg-pill);
+  background: var(--panel-row-hover);
 }
 
 .menu-item-icon {
@@ -1199,11 +1226,73 @@ button.breadcrumb-item:hover {
   line-height: 1;
 }
 
+/* ===== Create Task menu (Figma 724:1010 "Create Task Options") ===== */
+/* A label + shortcut list — no icons, unlike the generic .menu it replaced.
+   It owns its whole surface: the .rte-toolbar fill recipe over #0d0d0d (a
+   lighter panel than the shared --bg-panel), a 0.5px hairline, r8, an 8px
+   inset and a 1px hair between rows. The shared .dropdown shadow stays — every
+   floating panel in the app carries one, and the node has no state for it. */
+/* Width hugs the longest label rather than pinning Figma's 174px: the app's
+   Fira Sans runs a hair wider than Figma's, and at 174 the Hands-On row wrapped.
+   Hugging lands at ~175 and can never wrap, whatever the font metrics. */
+.dropdown.ct-menu {
+  padding: 8px;
+  gap: 1px;
+  border: 0.5px solid #404040;
+  border-radius: 8px;
+  background: linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)), #0d0d0d;
+}
+
+/* 36px row: 8px inset around the 20px shortcut badge, which is the tallest
+   child (the 16px label's line box is 19px). */
+.ct-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+/* Hover isn't in the node; it takes the shared panel-row fill — --bg-pill
+   would read as darker against this lighter panel. */
+.ct-menu-item:hover {
+  background: var(--panel-row-hover);
+}
+
+/* One line per row, always — "Hands-On Task" renders 108.7px here against the
+   108px column Figma's 174px panel leaves, so a wrapping label would silently
+   turn that row into two lines. The panel hugs instead (see .ct-menu). */
+.ct-menu-label {
+  flex: 1;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.ct-menu-kbd {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  line-height: 1;
+}
+
 .dropdown-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px 9px;
+  padding: 8px 16px 8.5px;
   /* 0.5px hairline under the search header (Figma 24:16116). */
   border-bottom: 0.5px solid #404040;
   flex-shrink: 0;
@@ -1223,6 +1312,10 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 12pt;
   font-weight: 400;
+  /* 35.5px header (Figma 24:16116) = 8 + a 19px line + 8.5, and the text sits
+     at 40px — both need the UA's 1px/2px input padding zeroed. */
+  line-height: normal;
+  padding: 0;
   outline: none;
 }
 
@@ -1231,10 +1324,22 @@ button.breadcrumb-item:hover {
 }
 
 .dropdown-list {
-  padding: 10px 6px;
+  /* Figma 774:1298 / 774:1243 (the flat-list states) are px-8 py-6; a list with
+     section headings (24:16123 / 28:16629) opens up to py-12 below. More Filters
+     is the one node that stays tighter (28:16534 is px-6 py-10) — see
+     .cascading-root > .dropdown-list. */
+  padding: 6px 8px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+}
+
+/* Headings make it a sectioned list (24:16115 / 28:16625) — 12px above and
+   below, so the first heading isn't crowded against the search hairline. */
+.dropdown-list:has(.dropdown-section-label),
+.dropdown-list:has(.dropdown-subsection-label) {
+  padding-top: 12px;
+  padding-bottom: 12px;
 }
 
 .dropdown-section + .dropdown-section,
@@ -1313,7 +1418,10 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  padding: 0 8px 2px;
+  /* The heading frame is exactly its 17px line — the row below butts straight
+     onto it, so the body's 1.45 has to go and there is no bottom pad. */
+  line-height: normal;
+  padding: 0 8px;
 }
 
 .dropdown-subsection-label {
@@ -1325,7 +1433,8 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  padding: 0 8px 2px;
+  line-height: normal;
+  padding: 0 8px;
 }
 /* ALL / NONE quick-select on a filter section header */
 .dropdown-allnone {
@@ -1359,16 +1468,18 @@ button.breadcrumb-item:hover {
   color: var(--text);
   text-align: left;
 }
-/* Filter / column option rows — Figma 24:16130/28:16647: Medium 16 WHITE.
-   (More-filters rows stay muted — they use .dropdown-submenu-row, 28:16541.) */
-.dropdown-list .dropdown-item {
+/* Filter / column option rows — Figma 24:16130/28:16647: Medium 16 WHITE, and
+   31px tall (6 + a 19px line + 6), which needs the body's 1.45 turned off. */
+.dropdown-list .dropdown-item,
+.cols-menu .cols-fixed-row {
   font-size: 16px;
   font-weight: 500;
   color: #ffffff;
+  line-height: normal;
 }
 
 .dropdown-item:hover {
-  background: var(--bg-pill);
+  background: var(--panel-row-hover);
 }
 
 .checkbox {
@@ -1406,7 +1517,7 @@ button.breadcrumb-item:hover {
 }
 
 .dropdown-footer {
-  padding: 9px 12px 8px;
+  padding: 8.5px 12px 8px;
   /* 0.5px hairline over the Apply footer (Figma 24:16150 / 28:16569). */
   border-top: 0.5px solid #404040;
   display: flex;
@@ -1475,6 +1586,24 @@ button.breadcrumb-item:hover {
   background: transparent;
   cursor: pointer;
   user-select: none;
+}
+
+/* Header cells are white, full stop (Figma 79:445). Per-column rules further
+   down carry their class on BOTH the th and the td, so a `color` there repaints
+   the header too and outranks the (0,1,2) rule above — that's why Email, Phone
+   and the date columns used to read dimmer than the rest of the header row.
+   The `[class]` here lifts this to (0,2,2) so it wins without !important. */
+.table thead th[class] {
+  color: #fff;
+}
+
+/* Safety net for the overlap this used to produce: header labels never wrap, so
+   a column narrower than its own label spilled its text across the next header
+   ("Attempt Purchased" over "Access"). Column widths are sized to fit the label
+   — this just clips rather than overlapping if one ever isn't. `.col-actions`
+   is excluded: it hosts the Edit Columns dropdown panel. */
+.table thead th:not(.col-actions) {
+  overflow: hidden;
 }
 
 /* Columns without a sort handler render as a plain (non-interactive) header. */
@@ -1744,7 +1873,17 @@ button.breadcrumb-item:hover {
   text-align: center;
 }
 
-/* Hidden tasks: dim the row and badge the name. */
+/* A hidden Task reads as one flat grey row — no badge on the name, every value
+   at #7a7a7a. The plain-text block above forces `color: inherit` on inline
+   children, so the pills and +n counts follow the cell without extra rules.
+   !important because the per-column colours (.col-name #fff, and the
+   :not()-chained #a8a8a8 default) carry more classes than this selector. */
+.table tbody tr.task-dim td:not(.col-actions):not(.col-checkbox) {
+  color: #7a7a7a !important;
+}
+
+/* Archived rows on Awards, Skills and Certifications keep the older treatment:
+   dim the row and badge the name. */
 .table tbody tr.task-hidden td:not(.col-actions) {
   opacity: 0.5;
 }
@@ -1891,6 +2030,12 @@ button.breadcrumb-item:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Certification is the widest label on the cert Who Paid row and holds full
+   credential titles. */
+.table .col-cp-cert {
+  white-space: nowrap;
+}
+
 /* ── Access type (Free / Paid) pill + Grant Date cell ── */
 .cp-access {
   display: inline-block;
@@ -1916,6 +2061,11 @@ button.breadcrumb-item:hover {
 }
 
 /* ── Paid Quiz "Who Paid" page ── */
+/* Quiz Name is the widest label on the row and holds full exam titles. */
+.table .col-qp-quiz {
+  white-space: nowrap;
+}
+
 .qp-attempt {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -2012,71 +2162,6 @@ button.breadcrumb-item:hover {
   gap: 10px;
 }
 
-/* Quiz "Grant Free Attempts" — quantity stepper inside the confirm step. */
-.qp-grant-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 16px;
-}
-.qp-grant-label {
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.qp-grant-stepper {
-  display: inline-flex;
-  align-items: stretch;
-  width: max-content;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-pill);
-}
-.qp-grant-step {
-  width: 34px;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 14pt;
-  font-weight: 700;
-  cursor: pointer;
-}
-.qp-grant-step:hover:not(:disabled) {
-  background: var(--bg-pill-strong);
-}
-.qp-grant-step:disabled {
-  color: var(--text-faint);
-  cursor: not-allowed;
-}
-.qp-grant-input {
-  width: 52px;
-  background: transparent;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-top: none;
-  border-bottom: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  text-align: center;
-  outline: none;
-  -moz-appearance: textfield;
-}
-.qp-grant-input::-webkit-outer-spin-button,
-.qp-grant-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.qp-grant-hint {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-faint);
-}
-
 .lone-dots {
   display: inline-flex;
   align-items: center;
@@ -2099,11 +2184,13 @@ button.breadcrumb-item:hover {
      text-align:center td), and the cell's rendered width varies: a table wider
      than its container keeps the colgroup's 40px, but a narrower one stretches
      every fixed-layout column. So anchor to the cell's centre, not its edge:
-     the bar kebab's centre sits 19px from the bar's right edge (10px cell
-     padding + 0.5px border as the browser lays it out + 8px half-icon —
-     measured, not summed: half-pixel borders round). 50% of the cell minus
-     that puts the two glyphs on the same centre at ANY cell width. */
-  right: calc(50% - 19px);
+     the bar's last glyph sits 17px from the bar's right edge (8px cell padding
+     + 0.5px border + 8px half-icon = 16.5, and half-pixel borders round up).
+     50% of the cell minus that puts the two glyphs on the same centre at ANY
+     cell width. Figma confirms it independently: in 762:4663 the pill is 115
+     wide with its 16px glyph at x=90, so the glyph centre is 115-98 = 17 from
+     the right edge. MOVE THIS whenever the cell's side padding changes. */
+  right: calc(50% - 17px);
   top: 50%;
   transform: translateY(-50%);
   display: none;
@@ -2170,10 +2257,19 @@ button.breadcrumb-item:hover {
 
 /* Inside the bar the cell owns the hairline. Adjacent cells overlap by the
    border width so the shared edge stays a single 0.5px line. The 10px side
-   padding is wider than the standalone `.lone-dots` kebab's 8px. */
+   padding is wider than the standalone `.lone-dots` kebab's 8px.
+
+   Height is set EXPLICITLY, not derived from padding. Figma 386:269 and
+   762:4663 were re-cut together on 2026-08-28 and are now both 33px frames
+   (386:269's cells are 32.5×33 with the 16px glyph inset 8/8.5px). Deriving
+   the height from padding drifts: the 0.5px hairlines round up to a full 1px
+   per edge on a 1x display, and the two cell kinds drift by DIFFERENT amounts
+   because a 16px glyph and a 16px text line sit in different boxes. With
+   border-box, `height:33px` lands both on Figma's 33 exactly. */
 .row-action-bar > .row-action-btn {
   width: auto;
-  padding: 6px 10px;
+  height: 33px;
+  padding: 0 8px;
   border: 0.5px solid #404040;
 }
 
@@ -2197,6 +2293,12 @@ button.breadcrumb-item:hover {
   border-radius: 0 8px 8px 0;
 }
 
+/* A one-cell bar is both :first-child and :last-child, and the shorthand above
+   would leave its left corners square. Must stay after both. */
+.row-action-bar > .row-action-btn:only-child {
+  border-radius: 8px;
+}
+
 /* Hovered cell: the hairline turns orange. Nothing else moves — no fill change,
    no icon-colour change — and z-index keeps the orange edge above its
    neighbour's grey one. */
@@ -2206,6 +2308,36 @@ button.breadcrumb-item:hover {
   border-color: #f05523;
   position: relative;
   z-index: 1;
+}
+
+/* Labeled bar cell — the Hands-On row's "Review Task ›". Same bar chrome; the
+   differences are all the label's: 8px gap to the glyph, the frame's 8px
+   vertical padding (35px inner height vs the icon-only cell's 29 — the 16px
+   type needs it), and white for BOTH the text and the glyph.
+
+   Two states, same grey→orange hairline swap as the icon-only cells: row
+   hovered (781:1527) is the resting #404040 frame, and the orange one
+   (762:4663) is the cell's OWN hover. The border-colours therefore come
+   entirely from the shared `.row-action-bar > .row-action-btn` rules above —
+   this pair only holds the label's white against the icon-only :hover rule,
+   which would otherwise pull text and glyph to #a8a8a8. */
+.row-action-bar > .row-action-btn--label,
+.row-action-bar > .row-action-btn--label:hover {
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* Resting row-end chevron. `.lone-dots` carries the swap-for-the-bar mechanic;
+   this only restates the colour, because the Figma row (761:4653) strokes the
+   glyph at the table's own #a8a8a8 rather than the kebab's dimmer
+   --text-muted. Must stay after `.lone-dots:hover` (same specificity). */
+.lone-dots.row-chevron,
+.lone-dots.row-chevron:hover {
+  color: #a8a8a8;
 }
 
 /* Subtle checkbox column */
@@ -2990,14 +3122,24 @@ button.breadcrumb-item:hover {
 }
 
 /* Wizard content subtext — mirrors the shared page subtext (.tasks-subtitle):
-   16px Fira Sans Regular, #a8a8a8. */
+   16px Fira Sans Regular, #a8a8a8. `.tasks-subtitle` is a one-line inline-flex
+   and never had to set leading; this one wraps, and 1.5 read loose beside the
+   14/17 of every field subtext under it, so it takes the same ratio. */
 .wizard-desc {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
   color: #a8a8a8;
   margin: 0 0 28px;
-  line-height: 1.5;
+  line-height: 1.22;
+}
+
+/* Info glyph on a step description — same DS tooltip affordance as a field's
+   subtext (`.form-help-info`), nudged down so the 16px box sits on the 16px
+   text's baseline rather than riding above it. */
+.wizard-desc-info {
+  vertical-align: -3px;
+  margin-left: 6px;
 }
 
 /* ===== Wizard footer ===== */
@@ -3527,6 +3669,14 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
+/* Inline at the end of a wrapping subtext, rather than the single centred row
+   `.form-help--tip` lays out: the glyph follows the last word, so it needs its
+   own gap and a nudge onto the 12px text's baseline. */
+.form-help:not(.form-help--tip) > .form-help-info {
+  margin-left: 4px;
+  vertical-align: -2px;
+}
+
 /* Accent hyperlink inside helper text (e.g. Tax status → Stripe docs). */
 .form-help-link {
   color: #f05523;
@@ -3720,7 +3870,7 @@ button.breadcrumb-item:hover {
 }
 .section-heading-label {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   text-transform: uppercase;
   color: #a8a8a8;
@@ -4276,17 +4426,24 @@ button.breadcrumb-item:hover {
   max-width: none;
 }
 
-/* Toolbar strip: 8px above/below the control row and NO side padding — the
-   first group's own inset is what sets the left edge. 42px tall with the
-   border. The fill is rgba(122,122,122,0.2) over #0d0d0d (Figma 640:917). */
+/* Toolbar strip — Figma 620:1352 / 327:137 "Focus State": a compact 34px bar
+   along the field's BOTTOM edge. 4px side inset, 6px above/below the 22px
+   control row; the fill is rgba(122,122,122,0.1) over #0d0d0d and carries no
+   border of its own — the fill step against the panes is the separator. */
 .rte-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  row-gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid #404040;
-  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  row-gap: 6px;
+  padding: 6px 4px;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+}
+
+/* Out of focus a rich text field reads as a plain text field: the strip is
+   only shown while the caret is inside. Every toolbar control preventDefaults
+   its mousedown, so using the bar never blurs the field. */
+.rte-field:not(:focus-within) .rte-toolbar {
+  display: none;
 }
 
 /* Each tool group is padded 8px a side and closed by a hairline; the trailing
@@ -4295,6 +4452,7 @@ button.breadcrumb-item:hover {
   display: flex;
   align-items: center;
   gap: 4px;
+  height: 22px;
   padding: 0 8px;
   border-right: 0.5px solid #404040;
 }
@@ -4303,16 +4461,23 @@ button.breadcrumb-item:hover {
   border-right: none;
 }
 
-/* 24px hit box around the 16px glyph. A toggled-on control keeps the soft fill
-   and a white glyph (Figma 640:922 selected state). */
+/* 22px hit box around the 14px glyph. A toggled-on control keeps the soft fill
+   and a white glyph (Figma 640:907 selected state). */
 .rte-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #a8a8a8;
+}
+
+/* The glyphs keep their 12-unit viewBoxes; rendering them at 14px is exactly
+   Figma's 14px export (geometry × 1.1667, stroke 1.1667px). */
+.rte-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .rte-btn:hover {
@@ -4324,14 +4489,12 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-/* Block-format picker: 14px label + 14px caret, 4px apart, in its own 4px
-   inset. Its 25px box is the tallest thing in the strip, so it sets the
-   toolbar's content height. */
+/* Block-format picker: 14px label + 14px caret, 4px apart, sitting directly
+   in the group's 8px inset — no padded box of its own any more. */
 .rte-heading {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
   border-radius: 4px;
   color: #a8a8a8;
 }
@@ -4669,193 +4832,6 @@ button.breadcrumb-item:hover {
   line-height: 17px;
 }
 
-/* ===== Tag editor ===== */
-.tag-edit-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.tag-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
-  background: var(--bg-pill-strong);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
-}
-
-.tag-edit-x {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-}
-
-.tag-edit-x:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-}
-
-.tag-add {
-  padding: 6px 14px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-}
-
-.tag-add:hover {
-  color: var(--text);
-  border-color: var(--text-faint);
-}
-
-.content-tag-select {
-  width: auto;
-  min-width: 200px;
-}
-
-.content-tag-select:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/* ── Content Visibility help & scope read-out ── */
-.cv-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.cv-help-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 5px 11px;
-  border: 1px solid rgba(110, 161, 247, 0.28);
-  border-radius: 7px;
-  background: rgba(78, 161, 255, 0.06);
-  color: #7fb6f5;
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.cv-help-toggle:hover {
-  border-color: rgba(110, 161, 247, 0.5);
-  background: rgba(78, 161, 255, 0.1);
-}
-
-.cv-help-panel {
-  margin: 4px 0 18px;
-  padding: 16px 18px;
-  border: 1px solid rgba(110, 161, 247, 0.24);
-  background: rgba(78, 161, 255, 0.05);
-  border-radius: 10px;
-  font-family: var(--font-sans);
-  color: var(--text-muted);
-}
-
-.cv-help-lead {
-  margin: 0 0 12px;
-  font-size: 11pt;
-  line-height: 1.6;
-}
-
-.cv-help-panel strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.cv-help-panel em {
-  font-style: normal;
-  color: #9fc6f7;
-  font-weight: 600;
-}
-
-.cv-rule-list {
-  margin: 0 0 14px;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 10.5pt;
-  line-height: 1.55;
-}
-
-.cv-examples-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.cv-examples {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 10pt;
-}
-
-.cv-examples th,
-.cv-examples td {
-  text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-.cv-examples thead th {
-  color: var(--text);
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.03);
-  white-space: nowrap;
-}
-
-.cv-examples tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.cv-examples tbody td:nth-child(4) {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.cv-scope-note {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 16px;
-  padding: 11px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-pill-strong);
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  color: var(--text-muted);
-}
-
-.cv-scope-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: #7fb6f5;
-}
-
 /* ============== Wizard type badge (Quiz, etc.) ============== */
 .wizard-type-badge {
   display: inline-block;
@@ -5163,196 +5139,6 @@ button.breadcrumb-item:hover {
 }
 
 /* ============== Question bag ============== */
-.qbag {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.qbag-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.qbag-toolbar-spacer {
-  flex: 1;
-}
-
-.qbag-summary {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-
-.qbag-summary-title {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.qbag-summary-title .muted {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.qbag-summary-sub {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.qbag-list-header {
-  display: grid;
-  grid-template-columns: 28px 1fr 80px;
-  gap: 12px;
-  padding: 8px 12px;
-  background: var(--bg-pill);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-}
-
-.qbag-num-col,
-.qbag-points-col {
-  text-align: center;
-}
-
-.qbag-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.qbag-section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px 8px;
-  border-top: 1px solid var(--border);
-}
-
-.qbag-section-titles {
-  flex: 1;
-  min-width: 0;
-}
-
-.qbag-section-title {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
-}
-
-.qbag-section-title strong {
-  font-weight: 600;
-}
-
-.qbag-section-sub {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.qbag-section-meta {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.qbag-section-menu {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 12pt;
-}
-
-.qbag-section-menu:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-
-.qbag-section-menu .dots {
-  letter-spacing: 1px;
-  margin-top: -4px;
-  font-weight: 700;
-  font-size: 14pt;
-}
-
-.qbag-question {
-  display: grid;
-  grid-template-columns: 18px 22px 1fr 80px;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px 8px 36px;
-}
-
-.qbag-drag,
-.qbag-gear {
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-
-.qbag-drag:hover,
-.qbag-gear:hover {
-  color: var(--text);
-}
-
-.qbag-q-text {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
-  line-height: 1.45;
-  min-width: 0;
-}
-
-.qbag-q-type {
-  color: var(--text-muted);
-}
-
-.qbag-points-input {
-  width: 70px;
-  padding: 6px 10px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  text-align: center;
-  outline: none;
-}
-
-.qbag-points-input:focus {
-  border-color: var(--accent);
-}
-
 /* ============== Resource list ============== */
 .resource-list {
   display: flex;
@@ -5432,7 +5218,7 @@ button.breadcrumb-item:hover {
 .price-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 .price-row {
@@ -5533,55 +5319,157 @@ button.breadcrumb-item:hover {
   color: var(--text);
 }
 
-/* Paywall Price IDs — four products per paid entry (Google, Apple, Stripe B2C,
- * Stripe B2B). Replaces the single-amount price input. */
+/* Paywall Price IDs (Figma 748:1593 "Paywall - Certification") — four products
+ * per paid entry: a tinted 12px card with a label column beside the inputs.
+ * Each row is `display: contents`, so the label and its input drop into the
+ * card's two shared columns while staying paired in the markup. */
 .price-id-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(122, 122, 122, 0.1);
+  overflow: clip;
 }
 
-.price-id-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
+.price-id-row {
+  display: contents;
 }
 
 .price-id-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  line-height: normal;
 }
 
-.price-id-input {
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  margin-bottom: 0 !important;
+/* Per-attempt pricing (Figma 752:2816 "Paywall - Multiple Prices") — one
+ * tinted card: a shared platform-label column, a scrollable run of per-attempt
+ * input columns, and a dashed Add tile stretched to the card's height. The
+ * label column repeats the heading row as invisible text ("Platform") so its
+ * 45px rows stay level with the columns' 45px inputs. */
+.price-id-matrix {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(122, 122, 122, 0.1);
 }
 
-/* Per-attempt pricing: each attempt is a titled block holding its 4 Price IDs. */
-.price-id-block {
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+.price-idm-labels {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.price-id-block-head {
+/* The columns scroll sideways once the attempts outgrow the card. The track is
+ * drawn along the bottom of the scrollport — and overlay scrollbars claim no
+ * layout space — so a bare box would paint it across the last input. The 10px
+ * padding drops the scrollport below the inputs and the matching negative
+ * margin takes that band back out of the flex line, so the track rides inside
+ * the card's 16px bottom padding without changing the card's height.
+ * `align-self` keeps the box sized to its own content: stretched, it would be
+ * pinned to the card's inner height and the padding would have nowhere to go. */
+.price-idm-cols {
+  flex: 1;
+  min-width: 0;
+  align-self: flex-start;
+  display: flex;
+  gap: 16px;
+  padding-bottom: 10px;
+  margin-bottom: -10px;
+  overflow-x: auto;
+}
+
+.price-idm-col {
+  flex: 1 0 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.price-idm-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  padding-right: 4px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
 }
 
-.price-id-block-title {
+.price-idm-ghost {
+  color: transparent;
+  user-select: none;
+}
+
+.price-idm-label {
+  height: 45px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   font-family: var(--font-sans);
-  font-size: 12pt;
+  font-size: 16px;
   font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.price-idm-x {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.price-idm-x:hover {
   color: var(--text);
+}
+
+.price-idm-add {
+  flex: none;
+  align-self: stretch;
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 1px dashed #404040;
+  border-radius: 12px;
+  color: #a8a8a8;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  text-align: center;
+  cursor: pointer;
+}
+
+.price-idm-add:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
 }
 
 /* =============================================================
@@ -7669,10 +7557,10 @@ button.breadcrumb-item:hover {
   margin-left: 6px;
   width: 280px;
   max-height: 440px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -7689,11 +7577,24 @@ button.breadcrumb-item:hover {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
-  color: #a8a8a8;
+  /* 28:16541 went #a8a8a8 -> white, so More Filters no longer reads dimmer
+     than the filter and column lists it sits beside. */
+  color: #fff;
+  line-height: normal;
   text-align: left;
 }
 .dropdown-submenu-row:hover,
-.dropdown-submenu-row.active { background: var(--bg-pill); }
+.dropdown-submenu-row.active { background: var(--panel-row-hover); }
+
+/* Figma 28:16534 is the one body that stays at px-6 py-10, and its rows are
+   bare .dropdown-submenu-rows rather than .dropdown-sections, so the node's
+   8px column gap has to come from the list itself. */
+.cascading-root > .dropdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 6px;
+}
 
 .dropdown-submenu-label { flex: 1; min-width: 0; }
 .dropdown-submenu-count {
@@ -7739,497 +7640,330 @@ button.breadcrumb-item:hover {
 }
 
 /* =============================================================
- * Content Links page
+ * Content Links — built on the shared design-system components:
+ * .tasks shell + .rvc-crumbs header, shared .search-wrap bar with a
+ * .dropdown/.ms-menu results panel, SectionHeading columns with
+ * .cta-quiet actions, PrmModal picker, Spotlights .sp-save-footer.
+ * (.cl-modal-* below is the shared picker-modal pattern other pages
+ * still use — this page itself moved to PrmModal.)
  * ============================================================= */
 
-:root {
-  --cl-prereq: #e97237;
-  --cl-rec: #4ea1ff;
-  --cl-rel: #5fd0a3;
+.lc-search {
+  position: relative;
+  flex: 1;
 }
 
-.cl-page {
-  display: flex;
-  flex-direction: column;
-}
-
-.cl-search-wrap {
-  flex-shrink: 0;
-}
-
-.cl-search-clear {
+/* Applied state ✕ — same glyph/colour as .usearch-clear, positioned where the
+   shared bar parks its ⌘K badge. */
+.lc-search-clear {
   position: absolute;
-  right: 12px;
+  right: 16px;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
 }
-.cl-search-clear:hover { background: var(--bg-pill); color: var(--text); }
 
-.cl-search-dropdown {
-  position: absolute;
+/* The results panel is the shared .dropdown/.ms-menu chrome, pinned to the
+   bar's full width. */
+.lc-search-menu {
   left: 0;
   right: 0;
-  top: calc(100% - 6px);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  z-index: 60;
-  padding: 6px;
-  max-height: 360px;
+}
+
+.lc-search-menu .dropdown-item {
+  gap: 12px;
+}
+
+.lc-search-empty {
+  padding: 6px 8px;
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
+/* Right-aligned row meta — the .ss-menu .dropdown-item-detail treatment,
+   re-scoped for the two Content Links lists. */
+.lc-search-menu .dropdown-item-detail,
+.lc-pick .dropdown-item-detail {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+.lc-item-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+/* ---- Page scroll: content scrolls between the fixed toolbar and the
+   in-flow save footer. ---- */
+.lc-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding-bottom: 32px;
 }
 
-.cl-search-section-label {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 600;
-  padding: 8px 10px 6px;
+/* ---- Three link columns ---- */
+.lc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 32px;
+  align-items: start;
 }
 
-.cl-search-list {
+/* Stack the columns before they get too narrow to read. */
+@media (max-width: 1080px) {
+  .lc-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lc-col {
+  min-width: 0;
+}
+
+/* The SectionHeading supplies the label; the column owns the rhythm. */
+.lc-col .section-heading {
+  margin: 0;
+  width: 100%;
+}
+
+.lc-add {
+  margin-left: auto;
+}
+
+.lc-cards {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.cl-search-empty {
-  padding: 18px 12px;
-  color: var(--text-muted);
-  font-size: 12pt;
+.lc-col-empty {
+  padding: 12px 0;
+  font-size: 14px;
+  color: #a8a8a8;
 }
 
-.cl-search-item {
+/* ---- Link card — the design-system card wash over #0d0d0d. ---- */
+.lc-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  padding: 10px 10px;
+  padding: 0 12px;
   border-radius: 8px;
-  background: transparent;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text);
-}
-.cl-search-item:hover {
-  background: var(--bg-pill);
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+  border: 0.5px solid rgba(64, 64, 64, 0.5);
 }
 
-.cl-search-item-text {
+.lc-card-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
-}
-.cl-search-item-name {
-  color: var(--text);
-  font-weight: 600;
-}
-.cl-search-item-meta {
-  color: var(--text-muted);
-  font-size: 10pt;
-}
-
-/* Kind badges */
-.cl-node-badge {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 700;
-  color: #fff;
-}
-.cl-node-badge--course { background: #2f5d9c; color: #cfe1ff; }
-.cl-node-badge--certification { background: #3d3066; color: #c8b8ff; }
-.cl-node-badge--task { background: #7a3a18; color: #ffd2b3; }
-
-/* ---------- Empty state ---------- */
-.cl-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 40px 20px 60px;
-  gap: 14px;
-}
-.cl-empty-illustration {
-  margin-bottom: 6px;
-  opacity: 0.7;
-}
-.cl-empty-title {
-  font-family: var(--font-sans);
-  font-size: 16pt;
-  font-weight: 700;
-  margin: 0;
-  color: var(--text);
-}
-.cl-empty-sub {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin: 0;
-  max-width: 520px;
-  line-height: 1.55;
-}
-.cl-empty-suggest {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 8px;
-}
-.cl-empty-suggest-label {
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  margin-right: 4px;
-}
-.cl-empty-chip {
-  padding: 6px 14px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-}
-.cl-empty-chip:hover {
-  background: var(--bg-pill-strong);
-  border-color: var(--text-faint);
-}
-
-/* ---------- Body: graph + side panel ---------- */
-.cl-body {
-  flex: 1;
-  display: flex;
-  gap: 20px;
-  min-height: 0;
-  padding-bottom: 16px;
-}
-
-.cl-graph-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px 16px 14px;
-}
-
-.cl-graph-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.cl-graph {
-  position: relative;
-  margin: 0 auto;
-}
-
-.cl-edges {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.cl-col-label {
-  position: absolute;
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 700;
-}
-.cl-col-label--prereq { color: var(--cl-prereq); }
-.cl-col-label--rec    { color: var(--cl-rec); }
-.cl-col-label--rel    { color: var(--cl-rel); }
-
-.cl-node {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 0 12px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 500;
-  text-align: center;
-  cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.05s ease;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-}
-.cl-node:hover {
-  background: var(--bg-pill-strong);
-  border-color: var(--text-faint);
-}
-.cl-node:active { transform: translateY(1px); }
-
-.cl-node-name {
-  display: block;
-  width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cl-node--focus {
-  background: rgba(78, 161, 255, 0.12);
-  border: 1.5px solid var(--cl-rec);
-  color: var(--text);
-  font-weight: 700;
-  cursor: default;
-  box-shadow: 0 6px 18px rgba(78, 161, 255, 0.18);
-}
-
-.cl-node--prerequisite {
-  border-color: rgba(233, 114, 55, 0.55);
-}
-.cl-node--prerequisite:hover { border-color: var(--cl-prereq); }
-
-.cl-node--recommended {
-  border-color: rgba(78, 161, 255, 0.45);
-}
-.cl-node--recommended:hover { border-color: var(--cl-rec); }
-
-.cl-node--related {
-  border-color: rgba(95, 208, 163, 0.45);
-}
-.cl-node--related:hover { border-color: var(--cl-rel); }
-
-/* Legend */
-.cl-legend {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  padding: 14px 12px 4px;
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.cl-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.cl-legend-line {
-  width: 28px;
-  height: 0;
-  border-top: 1.6px solid;
-}
-.cl-legend-line--prereq { border-top-color: var(--cl-prereq); }
-.cl-legend-line--rec    { border-top-style: dashed; border-top-color: var(--cl-rec); }
-.cl-legend-line--rel    { border-top-style: dotted; border-top-color: var(--cl-rel); }
-.cl-legend-text {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-.cl-legend-hint {
-  margin-left: auto;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-faint);
-}
-
-/* ---------- Side detail panel ---------- */
-.cl-panel {
-  width: 420px;
-  flex-shrink: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px 22px 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.cl-panel-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 700;
-}
-.cl-panel-title {
-  font-family: var(--font-sans);
-  font-size: 18pt;
-  font-weight: 700;
-  margin: -10px 0 0 0;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  color: var(--text);
-}
-.cl-panel-sub {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  margin: -12px 0 6px;
-}
-
-.cl-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.cl-section-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cl-section-bar {
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--text-muted);
-}
-.cl-section-bar--prerequisite { background: var(--cl-prereq); }
-.cl-section-bar--recommended  { background: var(--cl-rec); }
-.cl-section-bar--related      { background: var(--cl-rel); }
-
-.cl-section-title {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 700;
-  color: var(--text);
-}
-.cl-section-count {
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-}
-
-.cl-link-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.cl-link-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px 10px 12px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.cl-link-main {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
+  padding: 12px 0;
   background: transparent;
   border: none;
+  text-align: left;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0;
 }
-.cl-link-name {
+
+.lc-card-name {
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cl-link-meta {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-muted);
-}
-.cl-link-main:hover .cl-link-name { color: var(--accent-strong); }
 
-.cl-link-strength {
-  width: 56px;
-  padding: 6px 8px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 11pt;
-  text-align: center;
-  outline: none;
-  -moz-appearance: textfield;
+/* Link hover = underline, per the crumb/link hover convention. */
+.lc-card-main:hover .lc-card-name {
+  text-decoration: underline;
 }
-.cl-link-strength::-webkit-inner-spin-button,
-.cl-link-strength::-webkit-outer-spin-button {
+
+.lc-card-swap {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+.lc-card-meta {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Strength (0–100) — the shared input-shell tokens (1px #404040, r8) at a
+   compact 32px. */
+.lc-strength {
+  flex: none;
+  width: 56px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.lc-strength::-webkit-inner-spin-button,
+.lc-strength::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.cl-link-strength:focus { border-color: var(--accent); }
 
-.cl-link-remove {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+.lc-strength:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.lc-card-remove {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.cl-link-remove:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
-
-.cl-link-add {
-  margin-top: 2px;
-  padding: 10px 12px;
-  background: transparent;
-  border: 1px dashed var(--border-strong);
+  width: 28px;
+  height: 28px;
+  border: none;
   border-radius: 8px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 500;
+  background: transparent;
+  color: #a8a8a8;
   cursor: pointer;
+}
+
+.lc-card-remove:hover {
+  color: #fff;
+  background: rgba(115, 115, 115, 0.1);
+}
+
+/* ---- Referenced by ---- */
+.lc-refby .section-heading {
+  margin: 32px 0 16px;
+}
+
+.lc-refby-note {
+  margin: 0;
+}
+
+.lc-refby-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* PREREQ / REC NEXT tag — the keycap-badge recipe off the Create CTAs. */
+.lc-ref-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a8a8a8;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lc-ref-more {
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
+/* ---- Empty state ---- */
+.lc-empty {
+  margin: 64px auto 0;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
 }
-.cl-link-add:hover {
-  color: var(--text);
-  border-color: var(--text-faint);
-  background: rgba(255, 255, 255, 0.02);
+
+.lc-empty-title {
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.lc-empty-sub {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #a8a8a8;
+}
+
+.lc-empty-suggest {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lc-empty-suggest .form-help {
+  margin: 0;
+}
+
+/* ---- Add-link picker (inside PrmModal) ---- */
+.lc-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.lc-pick-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lc-pick .dropdown-item {
+  gap: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.lc-pick .dropdown-item:hover {
+  background: #2c2c2f;
+}
+
+/* Single-select convention: the picked row is the SemiBold one. */
+.lc-pick .dropdown-item.is-current .lc-item-name {
+  font-weight: 600;
+}
+
+.lc-pick-empty {
+  padding: 6px 8px;
+  font-size: 14px;
+  color: #a8a8a8;
 }
 
 /* ---------- Picker modal ---------- */
@@ -8367,358 +8101,6 @@ button.breadcrumb-item:hover {
 }
 
 /* =============================================================
- * Content Links — 6b column editor
- * Focused view: three link columns + referenced-by strip + save bar.
- * ============================================================= */
-
-/* The page owns its own vertical scroll so the save bar can stick to the
-   bottom edge. Kill the default header margins — the 6b header is custom. */
-.tasks.cl2-page {
-  overflow-y: auto;
-  padding-bottom: 0;
-}
-
-.cl2-head {
-  flex: none;
-}
-
-.cl2-eyebrow {
-  margin: 16px 0 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  color: var(--accent);
-}
-
-.cl2-focus-sub {
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-top: -4px;
-}
-
-.cl2-focus-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--text-faint);
-  margin: 0 9px;
-}
-
-/* ---- Three columns ---- */
-.cl2-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 24px;
-  align-items: start;
-  margin-top: 28px;
-}
-
-/* Stack the columns before they get too narrow to read. */
-@media (max-width: 1080px) {
-  .cl2-grid {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-}
-
-.cl2-col {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.cl2-col-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cl2-col-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.cl2-col-count {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.cl2-add {
-  margin-left: auto;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.cl2-add:hover {
-  background: var(--bg-pill-strong);
-}
-
-.cl2-add svg {
-  opacity: 0.7;
-}
-
-.cl2-col-helper {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  margin-top: 5px;
-}
-
-.cl2-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.cl2-col-empty {
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 16px 14px;
-  font-size: 12.5px;
-  color: var(--text-faint);
-  text-align: center;
-}
-
-/* ---- Link card ---- */
-.cl2-card {
-  box-sizing: border-box;
-  min-height: 58px;
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-pill);
-}
-
-.cl2-card-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 0;
-  background: transparent;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.cl2-card-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cl2-card-main:hover .cl2-card-name {
-  color: var(--accent-strong);
-}
-
-.cl2-card-swap {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.cl2-card-meta {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cl2-card-strength {
-  flex: none;
-  width: 54px;
-  height: 34px;
-  box-sizing: border-box;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 600;
-  text-align: center;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.cl2-card-strength::-webkit-inner-spin-button,
-.cl2-card-strength::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.cl2-card-strength:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
-.cl2-card-remove {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-
-.cl2-card-remove:hover {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-
-/* ---- Referenced by ---- */
-.cl2-refby {
-  margin-top: 30px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-panel);
-  padding: 13px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.cl2-refby-title {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.cl2-refby-note {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.cl2-refby-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.cl2-refby-chip:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-pill);
-}
-
-.cl2-refby-chip-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.cl2-refby-chip-tag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-
-.cl2-refby-more {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-/* ---- Save bar ---- */
-.cl2-savebar {
-  position: sticky;
-  bottom: 0;
-  margin: 30px -36px 0;
-  padding: 0 36px;
-  height: 74px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: #0a0a0a;
-  border-top: 1px solid var(--border);
-}
-
-.cl2-savebar-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.cl2-savebar-text {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.cl2-savebar-spacer {
-  flex: 1;
-}
-
-.cl2-cancel {
-  background: transparent;
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 8px 8px;
-}
-
-.cl2-cancel:hover {
-  color: var(--text);
-}
-
-.cl2-save {
-  height: 40px;
-  padding: 0 20px;
-  border: none;
-  border-radius: 8px;
-  background: #d9501c;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.cl2-save:hover {
-  background: #e85c26;
-}
-
-/* =============================================================
  * Question Bank
  * ============================================================= */
 .qb-page {
@@ -8739,7 +8121,8 @@ button.breadcrumb-item:hover {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 28px 36px 0;
+  /* App-wide 32px page gutter, as .tasks and the wizards use. */
+  padding: 32px 32px 0;
 }
 
 /* search bar (full width) */
@@ -8750,11 +8133,11 @@ button.breadcrumb-item:hover {
 
 .qb-search-input {
   width: 100%;
-  height: 40px;
-  /* Same 44px text inset as .search-input, less the 1px border. */
-  padding: 0 55px 0 43px;
-  background: #1e1e20;
-  border: 1px solid transparent;
+  height: var(--search-h);
+  /* Same 44/58px text insets as .search-input, less the 1px border. */
+  padding: 0 58px 0 43px;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 8px;
   color: var(--text);
   font-family: var(--font-sans);
@@ -8891,17 +8274,19 @@ button.breadcrumb-item:hover {
   display: inline-block;
 }
 
+/* The Question Bank's local copy of the applied filter pill (12:15221) — same
+   28px / #404040 / 14px atom as .filter-applied. */
 .qb-select-pill-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 28px;
   padding: 0 12px;
-  border: 1px solid #3b3b3f;
+  border: 1px solid #404040;
   border-radius: 20px;
   background: transparent;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text);
   white-space: nowrap;
@@ -8998,17 +8383,18 @@ button.breadcrumb-item:hover {
   flex-shrink: 0;
 }
 
+/* …and of the unapplied one (12:15164). */
 .qb-more-filters {
   display: inline-flex;
   align-items: center;
-  height: 32px;
+  height: 28px;
   padding: 0 12px;
-  border: 1px dashed #3b3b3f;
+  border: 1px dashed #404040;
   border-radius: 20px;
   background: transparent;
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -10543,14 +9929,15 @@ button.breadcrumb-item:hover {
    It is the last child of the page column rather than fixed to the viewport, so
    it spans the content area only and stops at the left nav — the same placement
    as the Create Spotlight page's .wizard-footer. The negative margins cancel
-   .tasks' 36px side padding so the rule runs the full width of the page. */
+   .tasks' 32px side padding so the rule runs the full width of the page.
+   (Shared with Content Links' Save/Discard bar.) */
 .sp-save-footer {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 0 -36px;
+  margin: 0 -32px;
   padding: 20px 32px;
   background: #0d0d0d;
   border-top: 2px solid rgba(122, 122, 122, 0.5);
@@ -11762,7 +11149,7 @@ button.breadcrumb-item:hover {
 
 /* Body copy in the content slot — plain white text, unlike the grey
    description (Figma 667:884's "Pop-up content" text). Nested lists render
-   as plain numbered lines, no decoration. */
+   as plain numbered or bulleted lines, no decoration. */
 .prm-content {
   margin: 0;
   font-family: var(--font-sans);
@@ -11774,7 +11161,8 @@ button.breadcrumb-item:hover {
 .prm-content p {
   margin: 0;
 }
-.prm-content ol {
+.prm-content ol,
+.prm-content ul {
   margin: 12px 0 0;
   padding-left: 22px;
   display: flex;
@@ -11971,6 +11359,11 @@ button.breadcrumb-item:hover {
   padding: 12px 24px;
   border-top: 1px solid rgba(122, 122, 122, 0.5);
   border-radius: 0 0 8px 8px;
+}
+/* Acknowledgment modals drop the text button, so the CTA keeps the right edge
+   instead of sliding over to where Cancel used to sit. */
+.prm-foot--solo {
+  justify-content: flex-end;
 }
 
 .prm-cancel {
@@ -12272,142 +11665,12 @@ a.rh-crumb-link:hover {
   color: var(--accent-strong);
 }
 
-/* Status pill (table cell + anywhere a status chip is shown) */
-.rh-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 8px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.rh-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.rh-status--review-pending { background: rgba(240, 165, 70, 0.14); color: #e6a85c; }
-.rh-status--review-pending .rh-status-dot { background: #e6a85c; }
-.rh-status--completed { background: rgba(95, 208, 163, 0.14); color: #6fdbb1; }
-.rh-status--completed .rh-status-dot { background: #6fdbb1; }
-.rh-status--rejected { background: rgba(231, 110, 110, 0.14); color: #e87171; }
-.rh-status--rejected .rh-status-dot { background: #e87171; }
-/* Company-created submissions: nothing for a SkillCat reviewer to do, so the
-   pill stays neutral instead of competing with the actionable states. */
-.rh-status--no-action-required { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
-.rh-status--no-action-required .rh-status-dot { background: var(--text-muted); }
+/* The `.rh-status*` amber/green/red dot-pill was removed 2026-08-26 — it was
+   never a design-system component; the Status column is plain text now.
 
-/* ── "Start a review run" cards ("Submissions Landing 1c" reference) ──
-   The landing section between the search bar and the filter row: a PageBreak
-   eyebrow, then three entry points into the review console. The reference's
-   literal palette is mapped onto the app system — card shell = the
-   Secondary-Button fill at 10% over #0d0d0d (the console rail-card
-   construction), the highlighted default card = the accent at 10→4%; CTAs are
-   the shared .btn-publish / .btn-save-draft. */
-.rh-runs .section-heading {
-  margin: 0 0 12px;
-}
-.rh-run-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-.rh-run-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 16px;
-  border-radius: 12px;
-  background:
-    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
-    #0d0d0d;
-}
-.rh-run-card.is-default {
-  border: 1px solid rgba(240, 85, 35, 0.4);
-  background:
-    linear-gradient(180deg, rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.04)),
-    #0d0d0d;
-  /* Border eats 1px per edge — pull the padding in so the three cards'
-     content boxes stay aligned across the row. */
-  padding: 15px;
-}
-.rh-run-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-}
-.rh-run-title {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-}
-.rh-run-desc {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: #a8a8a8;
-}
-.rh-run-meta {
-  margin: 12px 0 0;
-  font-size: 12px;
-  font-weight: 400;
-  color: #7a7a7a;
-}
-.rh-run-meta strong {
-  font-weight: 600;
-  color: #fff;
-}
-.rh-run-list {
-  width: 100%;
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.rh-run-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  color: #d9d9d9;
-}
-.rh-run-row > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rh-run-count {
-  color: #7a7a7a;
-}
-.rh-run-more {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: #7a7a7a;
-}
-/* CTAs sit on the card floor so all three stay aligned however tall the
-   content above them runs; the :nth-last-child(2) rule guarantees at least
-   16px between a card's last content block and its button. */
-.rh-run-cta {
-  margin-top: auto;
-  max-width: 100%;
-}
-.rh-run-card > :nth-last-child(2) {
-  margin-bottom: 16px;
-}
-.rh-run-cta-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+   The old "Start a review run" cards ("Submissions Landing 1c", `.rh-runs`/
+   `.rh-run-*`) were retired 2026-08-26: Hands-On Submissions now uses the same
+   `.run-*` cards + `.lm-cards` landing morph as Exam Reviews. */
 
 /* Split layout */
 .rh-split {
@@ -14826,11 +14089,14 @@ a.rh-crumb-link:hover {
  * (rail) and 314:2239 "Tree Menu States" (rows).
  * ============================================================= */
 /* ─── Left rail ─── */
+/* Gutter is the app-wide 32px (the same one .tasks and the wizards use), not
+   the node's own 22/28 — a page's rail has to line up with the pages beside it
+   in the flow, and Question Bank → the question editor was stepping 22→32. */
 .rail {
   width: 380px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
-  padding: 28px 22px 16px;
+  padding: 32px 32px 16px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -14960,10 +14226,6 @@ a.rh-crumb-link:hover {
    size down to fit the narrow rail. */
 .rail .section-heading {
   margin: 0 0 12px;
-}
-
-.rail .section-heading-label {
-  font-size: 14px;
 }
 
 /* Inline "Add Sub-Industry" — Figma's dashed Secondary Button (314:2121). */
@@ -15340,7 +14602,9 @@ a.rh-crumb-link:hover {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 28px 36px 36px;
+  /* App-wide 32px page gutter — it shares .rail with Question Bank, so the two
+     panes move together. */
+  padding: 32px;
   overflow-y: auto;
 }
 
@@ -15974,15 +15238,18 @@ a.rh-crumb-link:hover {
 }
 
 /* ============== Manage Users page ============== */
-/* Column widths/colors — follow the shared .table system. */
+/* Column widths — follow the shared .table system.
+   These are class-on-BOTH-th-and-td selectors, so a `color` here also repaints
+   the header cell and beats `.table thead th { color: #fff }` (0,2,0 vs 0,1,2)
+   — that's how Email / Phone / the date columns ended up dimmer than the rest
+   of the header row. Body-cell colour is owned by the shared
+   `.table tbody td:not(.col-name)…` rule anyway, so these carry width only. */
 .table .col-u-email {
-  color: var(--text-muted);
   width: 190px;
   white-space: nowrap;
 }
 
 .table .col-u-phone {
-  color: var(--text);
   width: 165px;
   white-space: nowrap;
 }
@@ -15993,13 +15260,11 @@ a.rh-crumb-link:hover {
 }
 
 .table .col-u-company {
-  color: var(--text);
   width: 175px;
   white-space: nowrap;
 }
 
 .table .col-u-role {
-  color: var(--text);
   width: 130px;
   white-space: nowrap;
 }
@@ -16010,12 +15275,12 @@ a.rh-crumb-link:hover {
 }
 
 /* Optional profile columns (Edit Columns) */
-.table .col-u-lang { color: var(--text); width: 100px; white-space: nowrap; }
-.table .col-u-stage { color: var(--text); width: 130px; white-space: nowrap; }
-.table .col-u-attr { color: var(--text); width: 160px; white-space: nowrap; }
-.table .col-u-zip { color: var(--text-muted); width: 100px; white-space: nowrap; }
-.table .col-u-industry { color: var(--text); width: 165px; white-space: nowrap; }
-.table .col-u-date { color: var(--text-muted); width: 130px; white-space: nowrap; }
+.table .col-u-lang { width: 100px; white-space: nowrap; }
+.table .col-u-stage { width: 130px; white-space: nowrap; }
+.table .col-u-attr { width: 160px; white-space: nowrap; }
+.table .col-u-zip { width: 100px; white-space: nowrap; }
+.table .col-u-industry { width: 165px; white-space: nowrap; }
+.table .col-u-date { width: 130px; white-space: nowrap; }
 
 .u-muted {
   color: var(--text-faint);
@@ -16153,6 +15418,19 @@ a.rh-crumb-link:hover {
 /* Menu row — Figma 670:1323 (superseding 388:354/559:2206): 8px padding, 12px
    gap to a 16px icon, 16px Fira Sans Regular. Icon and label are both pure
    white here, unlike the action bar's #a8a8a8. */
+/* A menu with no head block and short actions (Figma 782:1656, Quiz Attempts)
+   hugs its rows instead of holding the shared 210px floor — that minimum
+   exists for the menus that carry a name/id head above the actions. */
+.u-menu--hug {
+  min-width: 0;
+  /* `max-content`, not just a dropped minimum: the items are `width: 100%`, so
+     in a plain shrink-to-fit box they resolve against a width that hasn't been
+     decided yet and the labels get clipped. Sizing the panel from its content
+     first gives them something real to stretch to. */
+  width: max-content;
+  max-width: min(320px, 90vw);
+}
+
 .u-menu-item {
   display: flex;
   align-items: center;
@@ -16210,11 +15488,27 @@ a.rh-crumb-link:hover {
   font-style: italic;
 }
 
-/* Disabled row: label AND icon drop to a flat #404040 rather than fading the
-   whole row out — Figma 388:354 "Archive". */
+/* Disabled row — re-synced 2026-08-28 to Figma 785:1699 ("3-Dot Menu - Revoke
+   Access Disabled"): label AND icon drop to a flat #7a7a7a (was #404040, from
+   the older 388:354 "Archive" frame) rather than fading the whole row out, and
+   the row top-aligns so the glyph sits level with the LABEL instead of being
+   centred between the label and its reason line. */
 .u-menu-item:disabled {
-  color: #404040;
+  color: #7a7a7a;
+  align-items: flex-start;
   cursor: not-allowed;
+}
+
+/* 1.5px of lead so the 16px glyph centres on the 16px label's own line box
+   (785:1699 puts this padding on the icon's wrapper for exactly that reason). */
+.u-menu-item:disabled .u-menu-item-icon {
+  padding: 1.5px 0;
+}
+
+/* A disabled destructive row is grey, not red — the danger colour above is set
+   on the icon directly, so it needs an equal-specificity override. */
+.u-menu-item--danger:disabled .u-menu-item-icon {
+  color: #7a7a7a;
 }
 
 .u-menu-item:disabled:hover {
@@ -16233,11 +15527,15 @@ a.rh-crumb-link:hover {
   min-width: 0;
 }
 
-/* The reason a row is disabled ("Currently active in 4 Quizzes") — same 16px
-   as the label, and it inherits the disabled #404040. */
-.u-menu-item-sub {
-  font-size: 16px;
+/* The reason a row is disabled ("Currently active in 4 Quizzes"), inheriting
+   the row's disabled grey. 785:1699 drops it to 14px under the 16px label and
+   caps the text column at 248px, so a long reason wraps instead of stretching
+   the panel; `max-width` rather than a fixed `width` so a short note still
+   hugs. Scoped to :disabled — every note in the app IS a disabled reason. */
+.u-menu-item:disabled .u-menu-item-sub {
+  font-size: 14px;
   line-height: normal;
+  max-width: 248px;
 }
 
 .u-empty {
@@ -16494,14 +15792,14 @@ a.rh-crumb-link:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 40px;
-  /* Figma 11:15130 pads 16px from the OUTER edge and this shell has a 1px
+  height: var(--search-h);
+  /* Figma 399:216 pads 16px from the OUTER edge and this shell has a 1px
      border, so the CSS padding is 15 — see the padding-minus-border rule. The
      placeholder then starts at 44px (15 + 1 + 16px icon + 12px gap), matching
      .search-input's 44px. */
   padding: 0 15px;
-  background: #1e1e20;
-  border: 1px solid transparent;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 8px;
 }
 .usearch-bar.open {
@@ -16530,7 +15828,8 @@ a.rh-crumb-link:hover {
 .usearch-input::placeholder { color: #a8a8a8; }
 .usearch-kbd {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 3px;
   flex-shrink: 0;
   color: #a8a8a8;
 }
@@ -16559,17 +15858,24 @@ a.rh-crumb-link:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
 }
-.usearch-kbd .kbd-cmd { font-size: 16px; }
+
+/* The glyph and letter are the same in both bar flavours (773:1231/1233). */
+.search-kbd .kbd-cmd svg,
+.usearch-kbd .kbd-cmd svg {
+  width: 14px;
+  height: 14px;
+}
+.search-kbd .kbd-letter,
 .usearch-kbd .kbd-letter {
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* Applied company scope pill inside the bar — minimal/subtle, name in bold */
@@ -16578,15 +15884,16 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  /* Figma 17:15914 "Search Bar - Text Entered + Filter" pads 5px / 9px left /
-     5px right around a 1px border — minus the border, per the bordered-shell
+  /* Figma 772:1120 "Search Bar - Default - Filter Applied" pads 5px / 9px left
+     / 5px right around a 1px border — minus the border, per the bordered-shell
      rule. The ✕ side is the tight one. */
   padding: 4px 4px 4px 8px;
   border-radius: 6px;
   background: transparent;
-  border: 1px solid #3d3d43;
+  border: 1px solid #404040;
   max-width: 320px;
   font-family: var(--font-sans);
+  line-height: normal;
   font-size: 14px;
   font-weight: 500;
   color: #a8a8a8;
@@ -16654,18 +15961,24 @@ a.rh-crumb-link:hover {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: #1e1e20;
-  border: 1px solid #3d3d43;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
   border-radius: 8px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
-  padding: 6px;
+  /* Figma 21:15952 / 772:1125: the panel is `p-px` — the 1px border IS the
+     whole inset, so rows and the footer run edge to edge and carry the 18px
+     text inset themselves (was a 6px panel pad + 12px row pad). */
+  padding: 0;
   max-height: 460px;
   overflow: hidden auto;
   z-index: 50;
 }
 .usearch-head {
-  padding: 6px 12px 8px;
+  padding: 12px 18px 8px;
   font-family: var(--font-sans);
+  /* Every block in the panel is measured off Figma's `leading-normal`, so the
+     body's 1.45 has to be turned off or each one runs ~3px tall. */
+  line-height: normal;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.533px;
@@ -16673,7 +15986,7 @@ a.rh-crumb-link:hover {
   text-transform: uppercase;
 }
 .usearch-empty {
-  padding: 8px 12px 14px;
+  padding: 8px 18px 14px;
   color: #7a7a7a;
   font-size: 14px;
 }
@@ -16683,18 +15996,22 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 4px 12px;
+  padding: 4px 18px;
   border-radius: 8px;
   text-align: left;
   font-family: var(--font-sans);
+  line-height: normal;
 }
-.usearch-row.active { background: #2c2c2f; }
+.usearch-row.active { background: var(--panel-row-hover); }
 
 .usearch-chip {
   flex-shrink: 0;
-  border: 1px solid #3d3d43;
+  border: 1px solid #404040;
   border-radius: 6px;
-  padding: 5px 9px;
+  /* 27px tall: Figma 21:15958 pads 5/9 to the frame edge around a 1px inside
+     stroke, so the CSS is 4/8 — the same padding-minus-border read as the
+     in-bar .usearch-scope token. */
+  padding: 4px 8px;
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 14px;
@@ -16704,7 +16021,7 @@ a.rh-crumb-link:hover {
 .usearch-row-ex {
   font-family: var(--font-sans);
   font-weight: 400;
-  color: #7a7a7a;
+  color: #a8a8a8;
   font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -16759,16 +16076,20 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 12px;
   width: 100%;
-  margin-top: 2px;
-  padding: 11px 12px;
+  /* Figma 772:1125 hangs it off the panel's 8px column gap and lets it run the
+     full width — the panel's radius + overflow round its bottom corners, so it
+     takes none of its own. */
+  margin-top: 8px;
+  padding: 12px 16px;
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 0;
   text-align: left;
   cursor: pointer;
   font-family: var(--font-sans);
+  line-height: normal;
 }
-.usearch-searchfor.active { background: #2c2c2f; }
+.usearch-searchfor.active { background: var(--panel-row-hover); }
 .usearch-searchfor-icon {
   display: inline-flex;
   color: #a8a8a8;
@@ -16782,15 +16103,17 @@ a.rh-crumb-link:hover {
 }
 .usearch-searchfor-text .q { color: #f05523; }
 
-/* Keyboard hints footer — shown when the box is empty. Negative margin lets the
-   top border span the full panel width despite the panel's 6px padding. */
+/* Keyboard hints footer — shown when the box is empty. Figma 21:15979: it sits
+   on the panel's 8px column gap behind a 0.5px #7a7a7a hairline, and the panel
+   no longer pads, so it spans the full width on its own. */
 .usearch-foot {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 6px -6px 0;
-  padding: 9px 18px 8px;
-  border-top: 1px solid #3d3d43;
+  margin: 8px 0 0;
+  padding: 8.5px 18px 8px;
+  border-top: 0.5px solid rgba(122, 122, 122, 0.5);
+  line-height: normal;
 }
 .usearch-hint {
   display: inline-flex;
@@ -16917,94 +16240,6 @@ a.rh-crumb-link:hover {
 .section-remove:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-}
-
-.qsub-head {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-  margin-top: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.q-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-}
-
-.q-row .qbag-q-text {
-  flex: 1;
-}
-
-.q-weight {
-  width: 64px;
-  padding: 6px 10px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  text-align: center;
-  outline: none;
-  flex-shrink: 0;
-}
-
-.q-weight:focus {
-  border-color: var(--accent);
-}
-
-.q-weight.invalid {
-  border-color: #ff6b6b;
-}
-
-.q-remove {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.q-remove:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-}
-
-.pool-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  flex-wrap: wrap;
-}
-
-.pool-name {
-  flex: 1;
-  min-width: 0;
-}
-
-.pool-draw {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pool-warn {
-  flex-basis: 100%;
-  color: #ff6b6b;
-  font-family: var(--font-sans);
-  font-size: 11pt;
 }
 
 .grade-rows {
@@ -17198,7 +16433,7 @@ a.rh-crumb-link:hover {
 
 .co-cert-item.is-active,
 .dropdown-item.is-active {
-  background: var(--bg-pill);
+  background: var(--panel-row-hover);
 }
 
 .co-cert-item-id {
@@ -18727,6 +17962,10 @@ a.rh-crumb-link:hover {
 /* Same full-width override the wizard's native selects get. */
 .company-wizard .select-field { width: 100%; }
 
+/* Opt-in full width, for a field that owns its row and should line up with the
+   MultiSelects and text inputs stacked above and below it. */
+.select-field--full { width: 100%; }
+
 /* The menu itself: an even 8px inset, no check glyph — the current value is the
    SemiBold row — and a #2c2c2f fill on hover / keyboard focus. */
 /* Above .pr-confirm-overlay (400): the Change Account Holder modal opens a
@@ -19345,7 +18584,7 @@ a.rh-crumb-link:hover {
 .date-shortcut:hover .date-shortcut-label { text-decoration: underline; }
 
 /* ===== Date Range filter (Figma 673:1409/1421 pill · 606:1688 panel) =====
-   The pill wears the shared applied-filter chrome but keeps the 16px chevron
+   The pill wears the shared applied-filter chrome but keeps the chevron
    the other applied pills hide — it has no unapplied state, so the caret is
    its only "this opens something" affordance. */
 /* No ⊗ on this pill (the range cannot be removed), so the main button carries
@@ -19359,8 +18598,8 @@ a.rh-crumb-link:hover {
   color: #a8a8a8;
 }
 .drp-pill .caret svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 /* Custom-range value: date → date around the 14px arrow (673:1435). */
 .drp-pill-range {
@@ -20420,7 +19659,7 @@ a.rh-crumb-link:hover {
   flex: none;
 }
 .mgf-usearch .usearch-row:hover {
-  background: #2c2c2f;
+  background: var(--panel-row-hover);
 }
 
 /* The two side-by-side pickers share one control slot so their labels and
@@ -20543,8 +19782,7 @@ a.rh-crumb-link:hover {
    A list table is a fixed-height scanning grid: 40px rows, nowrap, ellipsis.
    These are DETAIL tables in a ~684px wizard column, and the values are the
    whole point of the screen — so the rows here grow instead of truncating.
-   The list rule carries three :not()s, hence the !important (same escape hatch
-   as .att-col-grade). */
+   The list rule carries three :not()s, hence the !important. */
 .mgf-table {
   min-width: 0;
   /* Collapses against a following PageBreak's 32px, so it only shows up before
@@ -20634,32 +19872,6 @@ a.rh-crumb-link:hover {
    components: the compact rich-text variant used by the certification tree and
    the feedback dot-labels reused by the question preview panel. */
 
-/* Compact RTE inside the inline course/lesson tree — same anatomy as the full
-   editor, tightened one step so a row still fits the tree. */
-.rte-field--compact .rte-area {
-  padding: 8px 12px;
-  font-size: 14px;
-  line-height: 20px;
-  min-height: 20px;
-}
-
-.rte-field--compact .rte-lang-row {
-  padding: 0 12px;
-}
-
-.rte-field--compact .rte-lang-row .rte-area {
-  padding: 8px 0;
-}
-
-.rte-field--compact .rte-lang-row .lang-tag {
-  padding-top: 8px;
-  line-height: 20px;
-}
-
-.rte-field--compact .rte-toolbar {
-  padding: 8px 0;
-}
-
 /* Feedback labels — the coloured dot in front of Correct / Partially correct /
    Incorrect. Used by QuestionPreviewPanel. */
 .qe-fb-label {
@@ -20680,7 +19892,9 @@ a.rh-crumb-link:hover {
 .qe-fb-partial::before { background: #f0b46a; }
 .qe-fb-incorrect::before { background: #f08a72; }
 
-/* ============== Attempts page (View Attempts) ============== */
+/* Back link over a sub-page title. Named for the Attempts page it started on;
+   that page now uses the shared breadcrumb, but the Purchasers / Recipients /
+   Form Responses pages still key off this. */
 .attempts-back {
   display: inline-flex;
   align-items: center;
@@ -20698,176 +19912,9 @@ a.rh-crumb-link:hover {
 .attempts-back:hover { color: var(--text); }
 .attempts-back svg { width: 16px; height: 16px; }
 
-
-/* Single table with sticky head + horizontal scroll (many columns) */
-.attempts-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-.attempts-table { min-width: 1460px; }
-/* Grade cell holds a bar + number — don't clip it to an ellipsis. */
-.att-col-grade { overflow: visible !important; text-overflow: clip !important; }
-.attempts-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: var(--bg);
-}
-
-/* Status pill */
-.att-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11pt;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.att-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.att-status--done {
-  background: rgba(95, 208, 163, 0.14);
-  color: #6fdbb1;
-}
-.att-status--done .att-status-dot {
-  background: #6fdbb1;
-  box-shadow: 0 0 0 3px rgba(95, 208, 163, 0.18);
-}
-.att-status--progress {
-  background: rgba(240, 180, 106, 0.14);
-  color: #f0b46a;
-}
-.att-status--progress .att-status-dot {
-  background: #f0b46a;
-  box-shadow: 0 0 0 3px rgba(240, 180, 106, 0.18);
-}
-/* Proctoring hold — footage awaiting review. */
-.att-status--review {
-  background: rgba(122, 162, 247, 0.14);
-  color: #8ab0f8;
-}
-.att-status--review .att-status-dot {
-  background: #8ab0f8;
-  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.18);
-}
-/* Proctoring rejected the footage. */
-.att-status--rejected {
-  background: rgba(240, 110, 110, 0.14);
-  color: #f08a8a;
-}
-.att-status--rejected .att-status-dot {
-  background: #f08a8a;
-  box-shadow: 0 0 0 3px rgba(240, 110, 110, 0.18);
-}
-/* Rejection reason shown under the status. The plain-text-column convention
-   forces cell content to a single inline line; the Status cell opts out so the
-   proctoring reason is readable on its own line (full text in the title). */
-.attempts-table tbody td.att-col-status:not(.col-actions) {
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  vertical-align: top;
-  padding-top: 14px;
-}
-.attempts-table tbody td.att-col-status div.att-reject-reason {
-  display: -webkit-box !important;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden !important;
-  white-space: normal !important;
-  margin-top: 5px;
-  font-size: 9.5pt !important;
-  line-height: 1.35 !important;
-  color: #8a8a8a !important;
-}
-
+/* ============== Attempts page (Quiz Attempts) ============== */
 /* Attempt number */
 .att-col-attemptNumber, .att-col-attempt { color: var(--text-muted); }
-
-/* Grade cell: mini bar + number */
-.att-grade {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
-.att-grade-track {
-  width: 56px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--bg-pill-strong);
-  overflow: hidden;
-}
-.att-grade-fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-}
-.att-grade-fill.pass { background: #5fcf80; }
-.att-grade-fill.fail { background: #f08a72; }
-.att-grade-num {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--text);
-}
-.att-grade-empty { color: var(--text-faint); }
-
-/* View Attempt button column */
-.att-col-view { text-align: right; padding-right: 8px !important; }
-.att-view-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 14px;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.att-view-btn:hover {
-  border-color: var(--accent-strong);
-  color: #fff;
-}
-
-/* Hover-only 3-dot menu */
-.att-dots {
-  /* 16px kebab + 6px either side — narrower than the 32px action-bar cell. */
-  width: 28px;
-  padding: 6px;
-  visibility: hidden;
-  color: var(--text-muted);
-  border-radius: 6px;
-}
-.attempts-table tbody tr:hover .att-dots { visibility: visible; }
-.att-dots:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
-
-/* Text filter dropdown body */
-.att-filter-body { padding: 10px; }
-.att-filter-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  outline: none;
-  box-sizing: border-box;
-}
-.att-filter-input::placeholder { color: var(--text-faint); }
-.att-filter-body .dropdown-footer { padding: 10px 0 0; }
 
 /* Single-select radio look in the Quiz filter */
 .att-radio { border-radius: 50%; }
@@ -20877,9 +19924,25 @@ a.rh-crumb-link:hover {
 /* ===================================================================== */
 
 /* Tab bar placement — the shared .tabbar switches the list between Skills
-   and Mastery Skills (Awards reuses it too) */
+   and Mastery Skills (Awards reuses it too).
+
+   Both pages take the Tasks *table* header→search-bar gap: .tasks-header's own
+   22px bottom margin, with no extra lead (the 56px offset in .tasks.lm .toolbar
+   only applies while the Tasks landing hero is expanded). The margin below the
+   tabs repeats that gap, so header→tabs→search reads as one rhythm.
+
+   Awards is the base case: its header ends on the subtext, so 22px above and
+   below are the same gap as drawn. */
 .sk-tabbar {
-  margin-top: 14px;
+  margin-top: 0;
+  margin-bottom: 22px;
+}
+
+/* Skills dropped its page subtext, so its header ends on the title — and the
+   header box sits 2px lower than the h1 because the Create CTA is taller. The
+   gap above the tabs therefore draws as 24px; match it below. */
+.sk-tabbar--lead {
+  margin-bottom: 24px;
 }
 
 /* Badge artwork — complete + auto-greyed states */
@@ -21490,84 +20553,32 @@ a.rh-crumb-link:hover {
    What is left below is the repeating option/pair row, which the design system
    has no component for — it is built on the .radio-card shell's tokens (1px
    #404040, radius 9, 12px padding, 12px gap) so it drops in when one exists. */
-.qed {
-  flex: 1;
+/* The question editor runs the Task wizard's shell (.wizard > .wizard-body >
+   .wizard-main + rail), mirrored: the question itself in the wizard's main
+   pane on the LEFT — same 32px padding, .wizard-title/.wizard-desc header —
+   and the settings rail on the RIGHT. The rail is not a step list, so it keeps
+   its own controls; what it takes from .wizard-nav is the geometry (a 32px
+   gutter, its own scroll, a hairline against the pane) instead of the card
+   background it used to carry.
+   Width is the app's other content rail (380px, as .rail) rather than
+   .wizard-nav's 338: a step list can live in 273px of usable width, but this
+   column holds real form controls, and the shared .seg-control ("Single answer"
+   / "Multiple answers") is 300px intrinsic — at 338 it broke out of the 32px
+   gutter. 380 leaves 315px, so every control fits at its design-system size. */
+.qed-side {
+  width: 380px;
+  flex-shrink: 0;
+  padding: 32px;
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* Same gutters as the Hands-On review console (.rvc-header/.rvc-stagecol/
-   .rvc-rail: 24px top/bottom, 40px sides). */
-/* The header is fixed; the two columns below it scroll independently — same
-   shape as the Hands-On review console (.rvc-header + .rvc-body), so the
-   settings rail stays put while the form scrolls. */
-.qed-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 24px 40px 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.qed-pagehead {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: none;
-  flex: none;
-}
-
-/* Two panels: content (question, options, feedback) on the left, the question's
-   settings in a narrow rail on the right. Each column runs its own section
-   stack, so the 32px page-break rhythm is unchanged inside them.
-   24px below the header — same header-to-body gap as .rvc-header/.rvc-body
-   (Review Console / Proctoring Review), which this page didn't have: those
-   pages get it from two separately-padded boxes, but .qed-pagehead and
-   .qed-split are plain siblings in one padded container, so it needs an
-   explicit margin. */
-.qed-split {
-  display: flex;
-  align-items: stretch;
-  gap: 48px;
-  max-width: 1360px;
-  margin-top: 24px;
-  flex: 1;
-  min-height: 0;
-}
-
-.qed-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
   overflow-y: auto;
-  padding-bottom: 24px;
 }
 
 /* No page-break dividers between sections here (Question / Options / Feedback
    read as one flowing form), so the gap between them is a plain margin. */
-.qed-main > .wizard-fields + .wizard-fields {
+.qed .wizard-content > .wizard-fields + .wizard-fields {
   margin-top: 40px;
-}
-
-/* The settings rail sits in its own card — same box formula as the Hands-On
-   review rail (Figma 298:1049 / .rvc-rail): 20px padding, 12px radius, a
-   subtle tint over #0d0d0d. */
-.qed-side {
-  flex: 0 0 360px;
-  width: 360px;
-  min-width: 0;
-  padding: 20px;
-  border-radius: 12px;
-  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
-  /* Scrolls on its own, like .rvc-rail. */
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  margin-bottom: 24px;
 }
 
 .qed-side > .section-heading {
@@ -21589,27 +20600,22 @@ a.rh-crumb-link:hover {
 /* Too narrow for two columns — stack them and hand scrolling back to the page,
    otherwise each column would get its own scrollbar in a single stream. */
 @media (max-width: 1200px) {
-  .qed-content {
-    overflow-y: auto;
-    padding-bottom: 24px;
-  }
-  .qed-split {
+  .qed .wizard-body {
     flex-direction: column;
-    gap: 0;
+    overflow-y: auto;
+  }
+  .qed .wizard-main {
     flex: none;
   }
-  .qed-main,
-  .qed-side {
+  .qed .wizard-content {
+    flex: none;
     overflow: visible;
   }
-  .qed-main {
-    padding-bottom: 0;
-  }
   .qed-side {
-    flex: none;
     width: 100%;
-    max-width: none;
-    margin-bottom: 0;
+    padding-top: 0;
+    overflow: visible;
+    border-left: 0;
   }
 }
 
@@ -21796,10 +20802,6 @@ a.rh-crumb-link:hover {
 }
 
 /* ─── Grading toggles ─── */
-.qed-toggles {
-  max-width: none;
-}
-
 /* ─── Version history modal ─── */
 /* Version-history modal — the shared .pm-modal shell, sized for a scrolling
    list and given a two-part head (title block + close button). */
@@ -22862,28 +21864,6 @@ a.rh-crumb-link:hover {
   text-align: right;
 }
 
-/* ----- Quiz question picker (Create Quiz → Questions step) ----- */
-
-.qbag-empty {
-  font-size: 10.5pt;
-  color: var(--text-faint);
-  padding: 10px 2px;
-}
-
-.qbag-pool-edit {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: inherit;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.qbag-pool-edit:hover {
-  text-decoration: underline;
-}
-
 .fb-picker-row.is-selected {
   background: rgba(233, 114, 55, 0.08);
 }
@@ -23064,6 +22044,34 @@ a.rh-crumb-link:hover {
   font-size: 12px;
 }
 
+/* ── two-column shell (Figma 756:2985) ──
+   The Hands-On console lays out as two full-height columns rather than the
+   header/body/footer stack: the submission scrolls on the left, and the review
+   rail owns the right 516px with its own footer pinned to the bottom of it.
+   `.rvc-hor` scopes that to this console — ProctoringConsole still stacks. */
+.rvc-hor { flex-direction: row; }
+/* Left column (756:2986) — page header, write-up, voice note and media, all
+   scrolling together behind a 32px gutter. */
+.rvc-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  overflow-y: auto;
+}
+/* Right column (756:3091) — no rule between the columns: the 15% grey wash IS
+   the divider, and it runs behind the footer too. */
+.rvc-railcol {
+  width: 516px;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)), #0d0d0d;
+}
+
 /* ── header (Figma 293:849) ──
    Breadcrumb over the DS page header (title + subtitle), no bottom rule. The
    task and submitter now live here, which is why there's no separate submission
@@ -23075,6 +22083,9 @@ a.rh-crumb-link:hover {
   padding: 24px 40px;
   flex: none;
 }
+/* In the split layout the column owns the gutter, so the header only keeps the
+   28px down to the submission's write-up (756:3783 → 756:3140). */
+.rvc-hor .rvc-header { padding: 0 0 28px; }
 .rvc-pagehead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .rvc-crumbs { display: flex; align-items: center; gap: 4px; }
 .rvc-crumb {
@@ -23395,6 +22406,7 @@ span.rvc-crumb--current { cursor: default; }
   gap: 10px;
   overflow-y: auto;
 }
+.rvc-hor .rvc-stagecol { padding: 0; overflow: visible; }
 /* Media — a 4:3 main stage with the remaining media stacked down its right
    side. No design system component yet (see handoff note). */
 /* The stage governs the row height (it's the 4:3 element); the media rail is
@@ -23494,11 +22506,17 @@ span.rvc-crumb--current { cursor: default; }
   scrollbar-width: none;
 }
 .rvc-thumbs::-webkit-scrollbar { display: none; }
+/* 160x120 at most (the design's size), but they SHRINK to fit rather than
+   letting the last one clip: the stage's 4:3 governs the row height, and a
+   narrow window makes that shorter than 4 thumbs stacked. `aspect-ratio` sets
+   the flex base, `flex-shrink` takes over once they'd overflow, and object-fit
+   keeps the images filled. */
 .rvc-thumb {
   position: relative;
   width: 160px;
   aspect-ratio: 4 / 3;
-  flex: none;
+  flex: 0 1 auto;
+  min-height: 0;
   cursor: pointer;
   border-radius: 8px;
   border: 1px solid var(--rvc-ctl);
@@ -23529,17 +22547,14 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* ── right rail ── */
-/* Rail = the "Atomic Component - Reviewing" CARD (Figma 293:768): 492px wide,
-   20px padding (so the content column is the design's 452px), 12px radius and a
-   10% grey wash over #0d0d0d. It replaces the old two-column divider line, so
-   it floats on the page gutter instead of butting against the media column. */
+/* The fields fill the top of the right column and scroll under a fixed footer
+   (Figma 756:3762). The card treatment it used to carry (492px, 12px radius,
+   its own margin) is gone: `.rvc-railcol` paints the fill now, and the 32px
+   padding here is what keeps the content column at the design's 452px. */
 .rvc-rail {
-  width: 492px;
-  flex: none;
-  margin: 0 40px 24px 0;
-  padding: 20px;
-  border-radius: 12px;
-  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+  flex: 1;
+  min-height: 0;
+  padding: 32px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -23549,29 +22564,34 @@ span.rvc-crumb--current { cursor: default; }
 /* Field group — label + subtext, then 8px to the control (Figma 263:1015,
    263:865, 263:1045). Label and subtext sit flush against each other. */
 .rvc-field { display: flex; flex-direction: column; gap: 8px; }
-/* Each following group sits 20px below the previous one behind a hairline, then
-   16px of padding before its label (Figma 293:803). */
+/* Each following group sits 16px below the previous one behind a hairline, then
+   16px of padding before its label (Figma 756:3719 / 756:3749). */
 .rvc-field + .rvc-field {
-  margin-top: 20px;
+  margin-top: 16px;
   border-top: 0.5px solid rgba(64, 64, 64, 0.5);
   padding-top: 16px;
 }
-.rvc-field-head .form-label { margin-bottom: 0; }
-.rvc-field-head .form-help { margin: 0; }
-.rvc-field--fb { flex: 1; min-height: 0; }
+/* The 8px flex gap owns the rhythm inside a field, so the shared label's and
+   subtext's own margins are cleared wherever they sit — otherwise the feedback
+   box picks up 16px above and below instead of the design's 8 (756:3819). */
+.rvc-field .form-label { margin-bottom: 0; }
+.rvc-field .form-help { margin: 0; }
 
-/* Reviewer's checklist (Figma 263:1045) — authored content, read-only. */
+/* Reviewer's checklist (Figma 756:3828) — authored content, read-only. The body
+   is 16px, the same as the feedback box's text: only the grey subtext above it
+   drops to 14. The "Fail if:" run is preceded by a blank line in the design,
+   which at 16px/normal is the 19px margin below. */
 .rvc-checklist {
   padding: 0 12px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   line-height: normal;
   color: #fff;
 }
 .rvc-checklist ul {
   margin: 0;
-  padding-left: 21px;
+  padding-left: 24px;
   list-style: disc;
 }
 .rvc-checklist-fail { margin: 19px 0 0; }
@@ -23609,7 +22629,8 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
   font-weight: 600;
 }
-/* Threshold legend (Figma 263:1042) — the active side turns bold + verdict colour. */
+/* Threshold legend (Figma 756:3746) — the active side turns bold + verdict
+   colour. Leading is `normal` per the design, not the app's 1.45 body ramp. */
 .rvc-scale-legend {
   display: flex;
   align-items: flex-start;
@@ -23617,6 +22638,7 @@ span.rvc-crumb--current { cursor: default; }
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
+  line-height: normal;
   color: #a8a8a8;
   white-space: nowrap;
 }
@@ -23625,7 +22647,7 @@ span.rvc-crumb--current { cursor: default; }
 
 /* Feedback field (Figma 263:871) — 197px box: 171px of text + 12px padding. */
 .rvc-feedback {
-  flex: 1;
+  flex: none;
   min-height: 197px;
   line-height: normal;
   resize: vertical;
@@ -23664,13 +22686,34 @@ span.rvc-crumb--current { cursor: default; }
 
 /* ── footer (shared .wizard-footer + Figma 267:1985) ──
    Same 20px/40px box as the wizard footer, but with a 2px top rule, a bolder
-   "Skip", then the View Queue button and the primary CTA 16px apart. */
+   left-hand link, then the View Queue button and the primary CTA 16px apart. */
 .rvc-footer { gap: 16px; border-top-width: 2px; }
 .rvc-footer .wizard-cancel { font-weight: 600; color: #a8a8a8; padding: 0; }
 .rvc-footer .wizard-cancel:hover { color: #fff; }
-/* "Back To Current Attempt" (Figma 297:1040) — Secondary Button + ESC keycap. */
-.rvc-back-current { gap: 8px; font-weight: 500; }
-.rvc-back-current .kbd-letter {
+/* Hands-On (756:3763): the footer is the bottom of the rail column, so the rule
+   thins to the design's 0.5px and the column's own fill shows through. */
+.rvc-hor .rvc-footer {
+  position: relative;
+  border-top-width: 0.5px;
+  background: transparent;
+}
+/* Skip + the primary CTA, 16px apart (756:3765). */
+.rvc-foot-actions { display: flex; align-items: center; gap: 16px; }
+/* This design has no View Queue button, so the popover hangs off a zero-size
+   anchor at the footer's top-right and Q is what opens it. */
+.rvc-hor .rvc-queue-wrap {
+  position: absolute;
+  top: 0;
+  right: 32px;
+  width: 0;
+  height: 0;
+}
+/* "Skip" (756:3836) and "Back To Current Attempt" (297:1040) are the same
+   Secondary-Button-plus-keycap atom — the design reuses the component. */
+.rvc-back-current,
+.rvc-skip { gap: 8px; font-weight: 500; }
+.rvc-back-current .kbd-letter,
+.rvc-skip .kbd-letter {
   justify-content: center;
   height: 20px;
   min-width: 18px;
@@ -24411,22 +23454,27 @@ span.rvc-crumb--current { cursor: default; }
 /* ==================================================================
    Manage Completions (ContentOverridesPage) — `.mc-*`
    ==================================================================
-   Rebuilt on the shared design system (Figma "Components" page 11:15114)
-   instead of the page's former bespoke palette. Mapping:
+   Rebuilt on the shared design system (Figma "Components" page 11:15114);
+   the 2026-08-28 pass mapped Claude Design "Progress Admin - Prototype" onto
+   it (staged changes, expandable cohort roster, attempt management). Mapping:
      · page header            → .tasks-title / .tasks-subtitle (46:314)
      · scope pickers          → .usearch-* combobox + .usearch-scope token
      · task filters           → .filter-pill-dashed / .filter-applied (12:15164, 12:15221)
-     · status & cert pills    → .co-status-pill--{green|accent|grey} (109:1237)
-     · section headers        → <PageBreak /> (104:376)
+     · status & staged pills  → .co-status-pill--{green|accent|red|grey} (109:1237)
      · buttons                → .btn-publish (73:473) / .btn-save-draft (73:495)
+     · mark-complete checkbox → the shared .checkbox atom (8:13495)
+     · row 3-dot menu         → .u-menu (386:269 family)
+     · modals                 → PrmModal (483:588) + .prm-field / Stepper (618:1264)
      · footer                 → .wizard-footer / .wizard-actions (73:515)
      · grade prompt           → .pm-overlay / .pm-modal + .form-label/.form-input/.form-help
-     · roster table           → the large-table tokens (190:285 head / 190:309 row)
+     · tables                 → the large-table tokens (190:285 head / 190:309 row)
+     · toast                  → .rvc-toast (no DS component yet — see its note)
    What remains below is the lookup-specific structure the design system has no
-   component for: the status dot, the employee × task matrix, the task
-   accordion, the metrics grid and the status timeline. All are built on DS
-   tokens — 36px page gutters, 32px controls, 8px radius, the 12/14/16/28 type
-   ramp, rgba(122,122,122,.5) structural rules and #404040 control borders. */
+   component for: the roster/task tables' column plan, the inline-expanded row
+   (.mc-exp-row/.mc-subtable), the review-dialog change list, the metrics grid
+   and the attempt-detail answers list. All are built on DS tokens — 36px page
+   gutters, 32px controls, 8px radius, the 12/14/16/28 type ramp,
+   rgba(122,122,122,.5) structural rules and #404040 control borders. */
 
 .mc-root {
   --mc-divider: rgba(122, 122, 122, 0.5); /* DS structural rule */
@@ -24445,6 +23493,12 @@ span.rvc-crumb--current { cursor: default; }
 .mc-header {
   flex: none;
   padding: 32px 32px 0;
+}
+/* The page is only ever opened from another page's row menu, so it carries the
+   shared crumb row above the title — same 12px crumb→title gap .rvc-pagehead
+   uses (the header itself is a plain block, not a flex column). */
+.mc-header .rvc-crumbs {
+  margin-bottom: 12px;
 }
 
 /* ── scope pickers ── */
@@ -24491,23 +23545,6 @@ span.rvc-crumb--current { cursor: default; }
   gap: 24px;
 }
 
-.mc-legend {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: none;
-}
-
-.mc-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 400;
-  color: #a8a8a8;
-  white-space: nowrap;
-}
-
 .mc-filters {
   padding: 20px 36px 0;
   margin-bottom: 0;
@@ -24518,48 +23555,6 @@ span.rvc-crumb--current { cursor: default; }
   font-weight: 400;
   color: #a8a8a8;
   align-items: center;
-}
-
-/* ── status dot ──
-   The one glyph the DS has no atom for: a 44px matrix cell can't fit a pill.
-   Tones come from the Table Pill palette so dot and pill always agree. */
-.mc-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  flex: none;
-  box-sizing: border-box;
-}
-
-.mc-dot--todo {
-  border: 1px solid var(--mc-ctl);
-  background: transparent;
-}
-
-.mc-dot--review {
-  border: 2px solid #f05523;
-  background: rgba(240, 85, 35, 0.1);
-}
-
-.mc-dot--done {
-  border: 1px solid #14b867;
-  background: rgba(20, 184, 103, 0.9);
-}
-
-/* Admin-applied completion keeps the green fill, ringed in accent. */
-.mc-dot--done.is-manual {
-  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px #f05523;
-}
-
-.mc-dot--done::after {
-  content: "";
-  width: 45%;
-  height: 24%;
-  margin-top: -12%;
-  border-left: 1.5px solid #0d0d0d;
-  border-bottom: 1.5px solid #0d0d0d;
-  transform: rotate(-45deg);
 }
 
 .mc-typeicon {
@@ -24626,12 +23621,6 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   flex-direction: column;
   padding-top: 20px;
-}
-
-.mc-split {
-  flex: 1;
-  min-height: 0;
-  display: flex;
 }
 
 /* ── empty / half states ── */
@@ -24730,168 +23719,6 @@ span.rvc-crumb--current { cursor: default; }
 
 .mc-example-what {
   color: #f05523;
-}
-
-/* ── matrix (cohort × certification) ── */
-.mc-matrix-scroll {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 0 36px 24px;
-}
-
-.mc-matrix {
-  width: max-content;
-  min-width: 100%;
-}
-
-.mc-matrix-head {
-  display: flex;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--bg);
-  border-bottom: 2px solid var(--mc-divider);
-}
-
-.mc-matrix-headcell {
-  display: flex;
-  align-items: flex-end;
-  height: 132px;
-  padding-bottom: 10px;
-}
-
-.mc-matrix-namecell {
-  width: 240px;
-  flex: none;
-  position: sticky;
-  left: 0;
-  z-index: 6;
-  background: var(--bg);
-  padding-right: 16px;
-}
-
-.mc-matrix-certcell {
-  width: 160px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-left: 16px;
-}
-
-/* Both header cells sit on the baseline of the rotated column labels. */
-.mc-matrix-head .mc-matrix-certcell {
-  align-items: flex-end;
-}
-
-.mc-matrix-colhead {
-  width: 44px;
-  height: 132px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0;
-}
-
-.mc-matrix-colhead.is-final {
-  border-top: 2px solid #f05523;
-}
-
-.mc-matrix-colname {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-height: 92px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: #e7e7e8;
-}
-
-.mc-matrix-colhead.is-final .mc-matrix-colname {
-  color: #f05523;
-  font-weight: 600;
-}
-
-.mc-matrix-row {
-  display: flex;
-  border-bottom: 1px solid var(--mc-divider);
-}
-
-.mc-matrix-row:last-child {
-  border-bottom: none;
-}
-
-.mc-matrix-row.is-focus .mc-matrix-namecell,
-.mc-matrix-row.is-focus .mc-matrix-cell {
-  background: rgba(240, 85, 35, 0.08);
-}
-
-.mc-matrix-name {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 44px;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 0 transparent;
-}
-
-.mc-matrix-row.is-focus .mc-matrix-name {
-  box-shadow: inset 2px 0 0 #f05523;
-}
-
-.mc-matrix-name:hover {
-  background: var(--bg-row-hover);
-}
-
-.mc-matrix-nametext {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.mc-matrix-nameline {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  color: #e7e7e8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mc-matrix-pct {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #7a7a7a;
-}
-
-.mc-matrix-cell {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.mc-matrix-cell.is-final {
-  background: rgba(240, 85, 35, 0.04);
-}
-
-.mc-matrix-cell:hover {
-  box-shadow: inset 0 0 0 1px var(--mc-ctl);
-}
-
-.mc-matrix-cell.is-open {
-  background: rgba(240, 85, 35, 0.18);
 }
 
 /* ── roster table (cohort × one task) ── */
@@ -24994,77 +23821,176 @@ span.rvc-crumb--current { cursor: default; }
   gap: 8px;
 }
 
-/* ── detail pane ── */
-.mc-detail {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
+/* ── new-table column plan (cohort roster / task tables / attempts modal) ── */
+.mc-table .mc-col-progress { width: 200px; }
+.mc-table .mc-col-date { width: 210px; white-space: nowrap; }
+.mc-table .mc-col-grade { width: 90px; }
+.mc-table .mc-col-tries { width: 150px; }
+.mc-table .mc-col-marked { width: 190px; }
+.mc-table .mc-col-certact { width: 230px; }
+.mc-table .mc-col-caret { width: 36px; padding-right: 0; text-align: right; }
+.mc-table .mc-col-act2 { width: 96px; padding-right: 0; }
+.mc-table .mc-col-attnum { width: 90px; }
+.mc-table .mc-col-result { width: 110px; }
 
-.mc-detail--split {
-  flex: none;
-  width: 560px;
-  border-left: 1px solid var(--mc-divider);
-}
+/* Task tables don't navigate anywhere — rows are flat, actions do the work. */
+.mc-table--flat tbody tr { cursor: default; }
+.mc-table--flat tbody tr:hover { background: transparent; }
 
-.mc-detail-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
+/* A staged row keeps a faint accent wash until Review & Save applies it. */
+.mc-table tbody tr.is-staged { background: rgba(240, 85, 35, 0.05); }
 
-.mc-detail-inner {
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 0 36px 32px;
-}
-
-.mc-detail-inner.is-split {
-  max-width: none;
-  padding: 20px 24px 32px;
-}
-
-/* The "open someone" placeholder is narrower than a real detail pane so the
-   matrix / roster beside it keeps as much width as possible. */
-.mc-pickhint {
-  width: 320px;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 24px;
-}
-
-.mc-focushead {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--mc-divider);
-}
-
-.mc-focushead-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.mc-focushead-name {
+/* Cohort-roster progress percentage (plain text until certified). */
+.mc-pct {
   font-size: 16px;
   font-weight: 600;
   color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.mc-focushead-sub {
-  font-size: 14px;
-  color: #7a7a7a;
-  white-space: nowrap;
+/* Expander caret on the cohort roster. */
+.mc-caret {
+  display: inline-flex;
+  color: #a8a8a8;
+}
+.mc-caret svg { transition: transform 0.15s ease; }
+.mc-caret.is-open svg { transform: rotate(180deg); }
+
+/* ── inline-expanded roster row → nested task table ── */
+.mc-exp-row > td {
+  padding: 0 0 16px;
+}
+.mc-exp-row:hover { background: transparent; }
+.mc-subtable {
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  background: var(--mc-card);
+  padding: 4px 16px;
+}
+.mc-subtable .mc-table thead th { font-size: 14px; padding-top: 10px; }
+
+/* Task-name cell (icon + name + optional Final pill). */
+.mc-taskname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mc-taskname-text {
+  color: #e7e7e8;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Attempts cell — count + the staged-grant / exhausted pill beside it. */
+.mc-attcell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* Bare-button reset so a .co-status-pill can act as its own undo control. */
+.mc-unbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The mark-complete checkbox rides in table cells. */
+.mc-table .mc-check {
+  cursor: pointer;
+  padding: 0;
+}
+.mc-table .mc-check svg { width: 10px; height: 10px; }
+
+/* ── review-changes dialog list ── */
+.mc-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mc-review-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0.5px solid rgba(122, 122, 122, 0.2);
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.06);
+}
+.mc-review-item .mc-typeicon { margin-top: 1px; }
+.mc-review-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: #d9d9d9;
+  line-height: 1.45;
+}
+.mc-review-text b {
+  font-weight: 600;
+  color: #fff;
+}
+
+/* ── attempts modal ── */
+.mc-att-table { margin-bottom: 4px; }
+.mc-att-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+.mc-att-foot .form-help { margin: 0; }
+.mc-att-foot .btn-save-draft svg { width: 14px; height: 14px; }
+
+/* ── attempt-detail answers list ── */
+.mc-answers .section-heading { margin: 4px 0 8px; }
+.mc-ans {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--mc-hairline);
+}
+.mc-ans:last-child { border-bottom: none; }
+.mc-ans-mark {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #14b867;
+  background: rgba(20, 184, 103, 0.12);
+}
+.mc-ans-mark.is-wrong {
+  color: #ff1f31;
+  background: rgba(255, 31, 49, 0.12);
+}
+.mc-ans-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #7a7a7a;
+  width: 26px;
+  flex: none;
+}
+.mc-ans-text {
+  font-size: 14px;
+  color: #d9d9d9;
+  line-height: 1.4;
+}
+
+/* Footer summary — first changes inline, ellipsised. */
+.mc-dirty-summary {
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── certification notice (Secondary Button shell, 73:495) ── */
@@ -25224,142 +24150,6 @@ span.rvc-crumb--current { cursor: default; }
 
 .mc-metric-value.is-big {
   font-size: 16px;
-}
-
-/* ── quiz attempts block ── */
-.mc-quizbox .section-heading {
-  margin: 24px 0 12px;
-}
-
-.mc-quizbox-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.mc-quizbox-text {
-  font-size: 14px;
-  font-weight: 400;
-  color: #a8a8a8;
-}
-
-.mc-quizbox-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.mc-quizbox-actions .btn-save-draft {
-  gap: 8px;
-}
-
-.mc-quizbox-actions svg {
-  width: 14px;
-  height: 14px;
-}
-
-.mc-grantlog {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.mc-grantlog-row {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.mc-grantlog-amount {
-  color: #f05523;
-}
-
-.mc-grantlog-at {
-  color: #7a7a7a;
-}
-
-/* ── status timeline (same construction as .sub-timeline, 107:1233) ── */
-.mc-timeline {
-  display: flex;
-  flex-direction: column;
-}
-
-.mc-tl-item {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-}
-
-.mc-tl-rail {
-  flex: none;
-  width: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding-top: 3px;
-}
-
-.mc-tl-dot {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--mc-ctl);
-  background: transparent;
-}
-
-.mc-tl-dot--done {
-  border-color: #7a7a7a;
-  background: #7a7a7a;
-}
-
-.mc-tl-dot--accent {
-  border-color: #f05523;
-  background: #f05523;
-}
-
-.mc-tl-divider {
-  flex: 1 0 0;
-  min-height: 8px;
-  width: 2px;
-  background: var(--mc-hairline);
-}
-
-.mc-tl-body {
-  flex: 1 0 0;
-  min-width: 0;
-  padding-bottom: 16px;
-}
-
-.mc-tl-item:last-child .mc-tl-body {
-  padding-bottom: 0;
-}
-
-.mc-tl-label {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: #e7e7e8;
-}
-
-.mc-tl-label.is-muted {
-  color: #7a7a7a;
-  font-weight: 400;
-}
-
-.mc-tl-ts {
-  margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-  color: #7a7a7a;
 }
 
 /* ── single-task detail card ── */
@@ -25657,44 +24447,114 @@ span.rvc-crumb--current { cursor: default; }
   --lmt: 1;
 }
 
-/* Page title grows a step at the landing. */
-.tasks.lm .tasks-title {
-  font-size: calc(28px + 4px * (1 - var(--lm)));
-}
+/* The page header does NOT change between the landing and the table: Figma
+   29:16832 is one size in both states (Fira Sans SemiBold 28 / #fff, the base
+   `.tasks-title`). An earlier version grew it 4px at the landing, which read as
+   the header shrinking as the page morphed. */
 
-/* Hero search: a centered 640px card that widens into the full-width toolbar. */
+/* Hero search: a centered card at 70% of the page width that widens into the
+   full-width toolbar. (Was a fixed 640px — 2026-08-28.) */
 .tasks.lm .toolbar {
-  width: calc(640px * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(70% * (1 - var(--lm)) + 100% * var(--lm));
   margin-left: auto;
   margin-right: auto;
   margin-top: calc(56px * (1 - var(--lm)));
 }
+/* At the landing the bar IS Figma 772:1192 "Search Bar - Large": 56px tall
+   (16px padding around a 24px line) with a 20px icon and 20px type, morphing
+   down to the 43px "Search Bar - Default". The radius is 8 in both nodes now —
+   it used to grow to 10 at the landing. */
 .tasks.lm .toolbar .usearch-bar,
 .tasks.lm .toolbar .search-input {
-  height: calc(40px + 14px * (1 - var(--lm)));
-  border-radius: calc(8px + 2px * (1 - var(--lm)));
+  height: calc(var(--search-h) + (var(--search-h-lg) - var(--search-h)) * (1 - var(--lm)));
+  border-radius: 8px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--lm)));
+  font-size: calc(16px + 4px * (1 - var(--lm)));
+}
+/* The 12px icon→text gap and 16px edge padding hold at both sizes, so the
+   text inset grows with the icon: 44px → 48px, and the right inset with the
+   badge: 59px → 67px. */
+.tasks.lm .toolbar .search-input {
+  padding-left: calc(43px + 4px * (1 - var(--lm)));
+  padding-right: calc(58px + 8px * (1 - var(--lm)));
+}
+/* ⌘K badge, Figma 773:1236: 24px caps holding an 18px glyph and a 16px K. */
+.tasks.lm .toolbar .search-kbd {
+  height: calc(20px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-cmd,
+.tasks.lm .toolbar .search-kbd .kbd-letter,
+.tasks.lm .toolbar .usearch-kbd .kbd-cmd,
+.tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  width: calc(20px + 4px * (1 - var(--lm)));
+  height: calc(20px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-cmd svg,
+.tasks.lm .toolbar .usearch-kbd .kbd-cmd svg {
+  width: calc(14px + 4px * (1 - var(--lm)));
+  height: calc(14px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-letter,
+.tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  font-size: calc(12px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-input::placeholder,
+.tasks.lm .toolbar .usearch-input,
+.tasks.lm .toolbar .usearch-input::placeholder {
+  font-size: calc(16px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-wrap > .search-icon svg,
+.tasks.lm .toolbar .usearch-icon svg {
+  width: calc(16px + 4px * (1 - var(--lm)));
+  height: calc(16px + 4px * (1 - var(--lm)));
 }
 
-/* ── Filter row: ONE row for both states. It widens from the centered 660px
-   landing width to full width (same motion as the search bar above it), the
-   "Suggested" label collapses, the suggested pills persist, and the real
+/* ── Filter row: ONE row for both states. It widens from the centered landing
+   width to full width (same motion as the search bar above it), the "Quick
+   Filters" label collapses, the quick-filter pills persist, and the real
    Filters row unfolds after them (--lmf) — pills transition between states
-   rather than one set crossfading into another. ── */
+   rather than one set crossfading into another.
+
+   Landing width = 64.4% of the page = 92% of the hero search bar (which is 70%
+   of the page, see `.tasks.lm .toolbar`), so the quick filters can never run
+   wider than the bar they sit under. ── */
 .tasks.lm .lm-filter-slot {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(64.4% * (1 - var(--lm)) + 100% * var(--lm));
   margin: 0 auto;
   min-width: 0;
   padding-bottom: 14px; /* matches .filters' bottom spacing */
   overflow: hidden; /* clip the sliding pills mid-morph */
 }
+/* Centering the landing pills without breaking the morph: `justify-content`
+   can't be interpolated, so two zero-basis flex spacers take the slack and
+   their grow factor fades to 0 as the row becomes the table's left-aligned
+   filter row. The -8px margins cancel the spacers' own flex gap, so at p=1
+   they occupy nothing at all and the row lays out exactly as it did before. */
+.tasks.lm .lm-filter-slot::before,
+.tasks.lm .lm-filter-slot::after {
+  content: "";
+  flex-grow: calc(1 - var(--lm));
+  flex-shrink: 0;
+  flex-basis: 0;
+  min-width: 0;
+}
+.tasks.lm .lm-filter-slot::before {
+  margin-right: -8px;
+}
+.tasks.lm .lm-filter-slot::after {
+  margin-left: -8px;
+}
 .tasks.lm[data-lm="table"] .lm-filter-slot {
   overflow: visible; /* the filter pills' dropdown panels must escape */
 }
-/* The suggested pills persist through the morph, then compress away as the
+.tasks.lm[data-lm="table"] .lm-filter-slot::before,
+.tasks.lm[data-lm="table"] .lm-filter-slot::after {
+  display: none;
+}
+/* The quick-filter pills persist through the morph, then compress away as the
    table chrome forms (--lmt) — the real filter pills slide left into their
    place, so the row reads as one set transitioning into the other. */
 .tasks.lm .lm-pills {
@@ -25711,7 +24571,9 @@ span.rvc-crumb--current { cursor: default; }
 .tasks.lm[data-lm="table"] .lm-pills {
   display: none;
 }
-.lm-suggested-label {
+/* "Quick Filters" — the landing-only eyebrow before the pills (was "Suggested";
+   the cap is 90px because the longer label needs the extra room). */
+.lm-quick-label {
   flex: none;
   font-family: var(--font-sans);
   font-size: 12px;
@@ -25719,7 +24581,7 @@ span.rvc-crumb--current { cursor: default; }
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
-  max-width: calc(70px * (1 - var(--lm)));
+  max-width: calc(90px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
   /* At p=1 the zero-width label would still leave a stray flex gap — pull it in. */
   margin-right: calc(2px - 10px * var(--lm));
@@ -25750,14 +24612,23 @@ span.rvc-crumb--current { cursor: default; }
   flex-shrink: 0;
   flex-grow: 1;
 }
+/* The quick-filter pills are the shared Figma 12:15164 atom (.filter-pill-dashed)
+   — they only need to hold their width inside the clipped .lm-pills track. */
+.tasks.lm .lm-pills .filter-pill-dashed {
+  flex: none;
+}
+
+/* Exam Reviews' kind pills (`.prl-kinds`) — the one remaining user of this
+   solid-bordered variant; it rides the persistent filters flow, not the
+   collapsing quick-filter track. */
 .lm-pill {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 7px;
-  height: 32px;
+  height: 28px;
   padding: 0 14px;
-  border: 1px solid #3b3b3f;
+  border: 1px solid #404040;
   border-radius: 999px;
   background: transparent;
   font-family: var(--font-sans);
@@ -25840,14 +24711,17 @@ span.rvc-crumb--current { cursor: default; }
   transition: opacity 0.25s ease, visibility 0s 0.25s;
 }
 
+/* Minimal-state header row — Figma 760:4642: a 40px row, label left and the
+   "ALL n ↓" affordance right, both centred on it. Shared by every landing that
+   uses the minimal table. */
 .lm-caption {
-  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   margin-top: calc(65px * (1 - var(--lm)));
-  height: calc(26px * (1 - var(--lm)));
+  height: calc(40px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
   overflow: hidden;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   padding: 0 2px;
   flex-shrink: 0;
@@ -25856,15 +24730,23 @@ span.rvc-crumb--current { cursor: default; }
    "RECENTLY CREATED" / "LONGEST WAITING" caption is one of its uses. */
 .lm-caption-label {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   text-transform: uppercase;
   color: #a8a8a8;
   white-space: nowrap;
 }
+/* Right half of 760:4642: the count and its 14px arrow, 4px apart, in the same
+   14px Medium #a8a8a8 as the label opposite. The icon takes currentColor, so it
+   follows the button into accent on hover. */
 .lm-caption-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
   color: #a8a8a8;
   white-space: nowrap;
 }
@@ -25873,7 +24755,7 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 .lm-list {
-  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -25988,7 +24870,7 @@ span.rvc-crumb--current { cursor: default; }
      rows above it — same width expression as .lm-list, so it lines up with the
      row edges in both states instead of running the full page width. */
   height: calc(40px * (1 - var(--lm)));
-  width: calc(660px * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
   display: flex;
@@ -26052,17 +24934,15 @@ span.rvc-crumb--current { cursor: default; }
   gap: 8px; /* Figma 682:2496 */
 }
 
-/* The node fills this bar with the design-system card wash rather than the
-   app-wide `#1e1e20`: inside a card that is itself a grey wash over #0d0d0d, a
-   flat dark well would read as a hole. Geometry and type stay `.search-input`'s. */
+/* The card wash this bar used to opt into locally is now what every bar wears
+   (`--search-bg`/`--search-border`), so only the ⌘K-less right padding is left
+   to say. Geometry and type stay `.search-input`'s. */
 .stm-search {
   margin-bottom: 0;
 }
 
 .stm-search-input {
   padding-right: 16px;
-  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
-  border-color: rgba(64, 64, 64, 0.5);
 }
 
 .stm-search-input:focus {
@@ -26174,13 +25054,85 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* The pagination row is justify-end, so the count takes the left edge. */
-.sum-picked {
+.sum-picked,
+.sqm-picked {
   margin-right: auto;
   color: var(--text-muted);
 }
 
 .stm-empty-row:hover {
   background: transparent !important;
+}
+
+/* ── Select Users (Who Paid → Grant Free Attempts) ──
+   The same chrome once more, over the app's user list. Uncapped: a grant can
+   cover any number of users, so there are no locked rows here — instead this
+   is the one picker with a REAL select-all in the header (the others hold that
+   cell as a spacer), and the pagination row carries the ticked count. Seven
+   columns overflow the 836px card on purpose; `.table-xscroll` scrolls. */
+/* Body cells only. These classes sit on the th as well, and an `ellipsis`
+   there truncates the HEADER label — that is what put a clipped "…" after
+   "Subscription" when the column was narrower than its own label. Header
+   truncation is owned by `.table thead th`; columns are sized to fit. */
+.gam-table tbody td.gam-col-email,
+.gam-table tbody td.gam-col-company,
+.gam-table tbody td.gam-col-role,
+.gam-table tbody td.gam-col-plan {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A count, so it reads against the header rather than the cell beside it. */
+.gam-table .gam-col-attempts {
+  text-align: right;
+  padding-right: 20px !important;
+}
+.gam-table th.gam-col-attempts .th-content {
+  justify-content: flex-end;
+}
+
+/* The pagination row is justify-end, so the count takes the left edge. */
+.gam-picked {
+  margin-right: auto;
+  color: var(--text-muted);
+}
+
+/* Select-all, partially ticked: the same fill as `checked` with a dash in
+   place of the tick, so the header reads "some of these" at a glance. */
+.stm-table .checkbox.partial {
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    rgba(13, 13, 13, 0.75);
+  border-color: rgba(240, 85, 35, 0.75);
+}
+.checkbox-dash {
+  width: 8px;
+  height: 1.6px;
+  border-radius: 1px;
+  background: #ffffff;
+}
+
+/* ── Select Questions (Quiz wizard → Questions step) ──
+   Same chrome again, over the Question Bank. Question text and Category can
+   both run long, so every non-check cell ellipsises to keep the 40px rows. */
+.sqm-table .sqm-col-question,
+.sqm-table .sqm-col-type,
+.sqm-table .sqm-col-cat,
+.sqm-table .sqm-col-edited {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Static questions already on the Quiz stay visible — ticked but locked — so
+   the admin can see what's taken without being able to double-add it. */
+.sqm-table tbody tr.is-locked {
+  opacity: 0.45;
+  cursor: default;
+}
+.sqm-table tbody tr.is-locked:hover {
+  background: transparent;
 }
 
 /* ═══════════ Proctoring Review landing — Claude Design "User Reviews 6B" ═══════════
@@ -26190,13 +25142,14 @@ span.rvc-crumb--current { cursor: default; }
    and the morphing list keep full width in both states, and the cards are what
    collapse away as the wheel forms the table. */
 
-/* ── Collapsed view = the run cards + the list. Nothing else. ──
-   Unlike the other landing pages, the search bar and the filter row are NOT
-   part of this page's minimal state — the cards are its hero, so both rows
-   belong to the expanded table and fade in with the table chrome (--lmt).
-   Everything else — the search's width/height treatment, the caption, the list
-   and the hint bar — is the shared `.tasks.lm` chrome untouched, so this page
-   measures identically to Tasks in both states. */
+/* ── `.lm-cards`: the cards-hero landing variant (Exam Reviews + Hands-On
+   Submissions). Collapsed view = the run cards + the list. Nothing else. ──
+   Unlike the search-first landing pages, the search bar and the filter row are
+   NOT part of the minimal state — the cards are the hero, so both rows belong
+   to the expanded table and fade in with the table chrome (--lmt; their HEIGHT
+   rides --lm — see the comment below). Everything else — the caption, the
+   list and the hint bar — is the shared `.tasks.lm` chrome untouched, so these
+   pages measure identically to Tasks in both states. */
 /* HEIGHT rides --lm, VISIBILITY rides --lmt — deliberately split. The cards
    above shrink at a constant 332px per unit of --lm; if these rows also grew
    on --lmt (a steep late ramp), their growth briefly outran the cards' shrink
@@ -26204,8 +25157,8 @@ span.rvc-crumb--current { cursor: default; }
    visible wobble. On --lm the sum is strictly monotonic (−332 + ~108 < 0
    everywhere), so the rows quietly reserve their space across the whole
    gesture and only FADE in with the table chrome. */
-.tasks.lm.pr-page:not([data-lm="table"]) .toolbar,
-.tasks.lm.pr-page:not([data-lm="table"]) .filters {
+.tasks.lm.lm-cards:not([data-lm="table"]) .toolbar,
+.tasks.lm.lm-cards:not([data-lm="table"]) .filters {
   max-height: calc(40px * var(--lm));
   opacity: var(--lmt);
   overflow: hidden;
@@ -26220,13 +25173,15 @@ span.rvc-crumb--current { cursor: default; }
    as a jerk near the end of the gesture. The toolbar only becomes visible as
    --lmt approaches 1, where the shared rule's margin is 0 anyway, so nothing
    is lost by pinning it.) */
-.tasks.lm.pr-page .toolbar {
+.tasks.lm.lm-cards .toolbar {
   margin-top: 0;
 }
-/* The caption follows the cards directly, rather than the 65px the other pages
-   leave under their suggested-pill row. */
-.tasks.lm.pr-page .lm-caption {
-  margin-top: calc(24px * (1 - var(--lm)));
+/* Matches the 79px of ink the search-first landings leave between their
+   suggested-pill row and the caption (their 14px filter-slot padding + the 65px
+   below): 59px here + the 20px bottom margin the run cards carry inside
+   `.run-section`. */
+.tasks.lm.lm-cards .lm-caption {
+  margin-top: calc(59px * (1 - var(--lm)));
 }
 
 /* The run cards collapse as the landing morphs into the table (the reference
@@ -26234,8 +25189,12 @@ span.rvc-crumb--current { cursor: default; }
    must sit at the section's natural height so the gesture starts moving
    immediately — tune it if the cards change shape. */
 .tasks.lm .run-section {
-  /* = the eyebrow (20 + 12 margin) + the 280px cards + their 20px bottom margin. */
-  max-height: calc(332px * (1 - var(--lm)));
+  /* = the eyebrow (20.3 + 8 margin) + the 240px cards + their 20px bottom
+     margin, rounded up. Must be at least the section's FULL natural height: an
+     undersized cap eats into the cards' bottom margin, which silently shortens
+     the gap to the caption. Re-tune it if the cards or the eyebrow change size
+     — a cap far above natural just adds dead travel at the start of the wheel. */
+  max-height: calc(289px * (1 - var(--lm)));
   opacity: calc(1 - 1.8 * var(--lm));
   transform: translateY(calc(-14px * var(--lm)));
   overflow: hidden;
@@ -26277,22 +25236,29 @@ span.rvc-crumb--current { cursor: default; }
   opacity: calc(1 - 2.4 * var(--lm));
   color: var(--text-faint);
   white-space: nowrap;
+  /* QB's "{category} · {type}" label can outrun its landing track — clip it
+     like any cell (a no-op for the short Proctoring wait labels). */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ═══════════ Review-run cards — Figma 685:2654 "Cards" ═══════════
    The three entry points into the review console on the Proctoring landing:
    Oldest first (300:311, the "Recommended" accent card), By type (300:363) and
-   By quiz (714:1515). Every card is a fixed 280px square in the node, laid out
+   By quiz (714:1515). Every card is a fixed 280×240 box in the node, laid out
    `space-between` so the CTA sits on the floor whatever the middle block runs
    to. The CTAs are the shared .btn-publish / .btn-save-draft unchanged — they
    already match the node's Primary/Secondary Button exactly — so only the card
    chrome lives here.
 
-   NOTE these are deliberately NOT the Hands-On page's `.rh-run-*` cards: that
-   page still runs the older "Submissions Landing 1c" design and was not part
-   of this sync. */
+   Shared by Exam Reviews and (since 2026-08-26) Hands-On Submissions — the
+   old `.rh-run-*` cards are gone. */
+/* 8px — this is the landing hero's own label, not a mid-page section heading,
+   so the atom's 32px rhythm does NOT apply here (user, 2026-08-27). Its top
+   margin is dropped too; the section's own position sets that. */
 .run-section .section-heading {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 .run-cards {
   display: grid;
@@ -26305,7 +25271,7 @@ span.rvc-crumb--current { cursor: default; }
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  min-height: 280px;
+  min-height: 240px;
   padding: 24px;
   border-radius: 8px;
   /* 10% grey wash over #0d0d0d — the node's two stacked fills. */
@@ -26490,4 +25456,532 @@ span.rvc-crumb--current { cursor: default; }
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
+}
+
+/* ═══════════ Question Bank landing — Claude Design "Question Bank Landing 1C" ═══════════
+   The QB RIGHT PANE (`.qb-content`) is the morph root — the category rail sits
+   outside it and stays put in both states. The hero is the oversized search
+   (the shared `.tasks.lm` treatment), fronted by this page's own pieces: a
+   "Find a question" title and counts line above/below the bar, the bulk-upload
+   zone and the filters row collapsed away (they fade in with the table chrome,
+   the `.lm-cards` recipe), and a slim landing CSV bar above the "keep
+   scrolling" rule. The Create CTA rides its own `.qb-head` top row so it holds
+   the pane's top-right in both states. */
+
+.qb-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+/* The hero title supplies the landing's top offset, so the shared 56px toolbar
+   margin is retired here (kept a constant — see the `.lm-cards` note on why an
+   animated margin above the toolbar must never mix ramps). */
+.tasks.lm.qb-lm .toolbar {
+  margin-top: 0;
+}
+
+/* "Find a question" — collapses on the linear --lm, fades early like the
+   caption row. */
+.qbl-title {
+  height: calc(31px * (1 - var(--lm)));
+  margin-top: calc(40px * (1 - var(--lm)));
+  margin-bottom: calc(18px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  overflow: hidden;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 31px;
+  color: #a8a8a8;
+  flex-shrink: 0;
+}
+
+/* "1,089 Questions · 13 Categories" — sits in the toolbar's standard 14px
+   bottom gap, so it needs no margin of its own. */
+.qbl-meta {
+  height: calc(20px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  overflow: hidden;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+/* The bulk-upload zone and the filter pills belong to the EXPANDED table view
+   only. HEIGHT rides --lm, VISIBILITY rides --lmt — the `.lm-cards` split that
+   keeps everything below strictly monotonic through the gesture. */
+.tasks.lm.qb-lm:not([data-lm="table"]) .qb-bulk-upload,
+.tasks.lm.qb-lm:not([data-lm="table"]) .qb-filters-row {
+  opacity: var(--lmt);
+  overflow: hidden;
+  pointer-events: none;
+}
+/* = the zone's natural height: 20px padding ×2 + 19px title + 4px gap + 17px sub. */
+.tasks.lm.qb-lm:not([data-lm="table"]) .qb-bulk-upload {
+  max-height: calc(80px * var(--lm));
+  margin-bottom: calc(18px * var(--lm));
+}
+/* The cap sits ABOVE the row's tallest natural height (the pills wrap to a
+   second line once a couple of filters are applied — ~52–72px), unlike the
+   bulk zone's exact 80: the row is invisible until --lmt anyway, so an early
+   arrival at natural height can't be seen, and a cap BELOW natural would snap
+   the clipped rows open at the data-lm="table" boundary. min(cap, natural)
+   stays monotonic in --lm either way. */
+.tasks.lm.qb-lm:not([data-lm="table"]) .qb-filters-row {
+  max-height: calc(96px * var(--lm));
+  margin-bottom: calc(14px * var(--lm));
+}
+
+/* The landing widths are percentages of the pane (70/72%), so the rail-narrowed
+   Question Bank pane needs no special clamp — the cap is kept as a backstop. */
+.tasks.lm.qb-lm .toolbar,
+.tasks.lm.qb-lm .lm-caption,
+.tasks.lm.qb-lm .lm-list,
+.tasks.lm.qb-lm .lm-hint-wrap {
+  max-width: 100%;
+}
+
+/* The hero meta line (20px) + the toolbar gap already pad the stage top, so
+   the caption sits closer than the shared 65px. */
+.tasks.lm.qb-lm .lm-caption {
+  margin-top: calc(33px * (1 - var(--lm)));
+}
+
+/* The Question cell is the app's one WRAPPING table cell (two-line clamp), so
+   the landing rows must wrap identically — with fixed 40px landing rows, every
+   row below a wrapped one would shear sideways during the p=1 crossfade.
+   Height is content-driven over the table's 40px floor; as the tracks widen
+   each frame the text reflows continuously, so tall rows settle into the
+   table's own heights by the hand-off. */
+.tasks.lm.qb-lm .lm-row {
+  height: auto;
+  min-height: 40px;
+}
+.tasks.lm.qb-lm .lm-cell--name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  /* The real cell's metrics: regular weight (only the color stands out — per
+     the 2026-08-06 pass on td.qb-col-question) and 6px vertical insets. */
+  font-weight: 400;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* The table's Type column is var(--text) (td.qb-col-type), not the landing's
+   muted #a8a8a8 — match it so the crossfade doesn't brighten the column. */
+.tasks.lm.qb-lm .prl-swap-real {
+  color: var(--text);
+}
+
+/* The row-click preview panel belongs to the TABLE view. It sits OUTSIDE the
+   morph root (the third pane of .qb-page), so at the landing it would squeeze
+   the hero into the leftover width — instead it joins the table's own
+   appearing/disappearing boundary: hidden the moment the pane leaves the
+   table state, back when a landing row click's morph completes. */
+.qb-content.qb-lm:not([data-lm="table"]) ~ .qprev {
+  display: none;
+}
+
+/* ── Slim landing CSV bar (the design's "Bulk upload — drop a CSV or click").
+   Stands in for the collapsed .qb-bulk-upload zone; sits between the list and
+   the keep-scrolling rule, and collapses away like the hint bar. ── */
+.qbl-csv-wrap {
+  height: calc(58px * (1 - var(--lm)));
+  opacity: calc(1 - 2.6 * var(--lm));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  flex-shrink: 0;
+}
+.qbl-csv {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 640px;
+  max-width: 100%;
+  height: 42px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.qbl-csv > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.qbl-csv:hover,
+.qbl-csv.is-active {
+  border-color: rgba(233, 114, 55, 0.5);
+  color: var(--accent);
+}
+.qbl-csv-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.qbl-csv-link {
+  display: inline-flex;
+  align-items: center;
+  color: #f05523;
+}
+.qbl-csv-link:hover {
+  text-decoration: underline;
+}
+.qbl-csv-link svg {
+  flex-shrink: 0;
+  transform: translateY(-1px);
+}
+
+/* =============================================================
+ * Quiz Questions card — Figma 750:1672 "Quiz Questions".
+ * One ordered table for the Quiz wizard's Questions step: static
+ * questions and random sets interleave as rows under an
+ * ORDER / QUESTION / POINTS header, and the footer row holds the
+ * Add Question CTA whose menu (752:2708) reuses the .u-menu chrome.
+ * ============================================================= */
+.qz {
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 12px;
+  /* No overflow clip — the Add Question menu hangs below the footer row. */
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+}
+
+.qz-hd,
+.qz-row,
+.qz-empty {
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+/* Header — 14px muted column labels over the same 16px gutters as the rows. */
+.qz-hd {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px 9px;
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
+.qz-hd-q {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Sized to cover the rows' points group + remove icon (44+4+17+16+16). */
+.qz-hd-points {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 98px;
+  flex-shrink: 0;
+}
+
+/* The design-system 16px info glyph rendered at the header's 12px, lifted
+   1px so it optically centres on the uppercase label rather than sagging
+   below its baseline. */
+.qz-points-info {
+  position: relative;
+  top: -1px;
+}
+
+.qz-points-info svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ORDER gutter: 16px drag handle + 48px centered slot label. */
+.qz-ord-col {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.qz-ord {
+  width: 48px;
+  text-align: center;
+}
+
+.qz-row .qz-ord {
+  font-size: 16px;
+  color: #fff;
+}
+
+/* 16px "move" handle (751:2524) — the icon bakes #a8a8a8 in Figma. */
+.qz-drag {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #a8a8a8;
+  cursor: grab;
+}
+
+.qz-drag:hover {
+  color: #fff;
+}
+
+.qz-drag:active {
+  cursor: grabbing;
+}
+
+/* Drag-to-reorder feedback: the lifted row dims; the row it would land on
+   fills like a hovered table row. While a drag is live the whole card stops
+   selecting text and keeps the grabbing cursor. */
+.qz-row.dragging {
+  opacity: 0.45;
+}
+
+.qz-row.drag-over {
+  background: var(--bg-row-hover);
+}
+
+.qz.qz-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* Header spacer keeping ORDER over the numbers without drawing a handle. */
+.qz-drag--ghost {
+  visibility: hidden;
+}
+
+.qz-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px 13px;
+}
+
+.qz-empty {
+  padding: 12px 16px 13px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.qz-q {
+  flex: 1;
+  min-width: 0;
+}
+
+.qz-q-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.qz-q-type {
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
+/* Points group — the bordered value box + its PT suffix. */
+.qz-pt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Plain Text Input at the row scale: 12px/8px padding around a 2-digit
+   center-aligned value (44×37 with the border). */
+.qz-pt-input {
+  width: 44px;
+  height: 37px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  text-align: center;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.qz-pt-input:focus {
+  border-color: var(--accent);
+}
+
+.qz-pt-input.invalid {
+  border-color: #ff6b6b;
+}
+
+.qz-pt-suffix {
+  font-size: 16px;
+  color: #a8a8a8;
+}
+
+.qz-x {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #a8a8a8;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.qz-x:hover {
+  color: #fff;
+}
+
+/* Random-set row — the "Pick [n] Questions Randomly from N" line stacked over
+   the set's member list, which indents 40px under the ORDER gutter. */
+.qz-row--pool {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px 0 13px;
+}
+
+.qz-pool-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.qz-pool-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  color: #fff;
+}
+
+/* The pool's ADD affordance — brand orange (the literal #f05523, as on the
+   other Figma-synced accents), underlined, pushed to the line's right edge. */
+.qz-pool-add {
+  margin-left: auto;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #f05523;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.qz-pool-add:hover {
+  filter: brightness(1.15);
+}
+
+.qz-pool-warn {
+  padding: 0 16px 0 84px;
+  font-size: 11pt;
+  color: #ff6b6b;
+}
+
+.qz-pool-list {
+  margin: 0 40px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.qz-pool-q {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 16px 13px;
+}
+
+.qz-pool-q:not(:last-child) {
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+/* Footer row — the Add Question CTA and its anchored menu. */
+.qz-foot {
+  padding: 12px 16px 13px;
+}
+
+.qz-add-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* The shared 20px mono keycap (as on the header CTAs' C badge), on the Add
+   Question button and each menu row. */
+.qz-kbd {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* Create Task Options menu (752:2708) — the .u-menu surface re-anchored to
+   the button instead of fixed-positioned, rows at SemiBold with keycaps. */
+.qz-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  min-width: 241px;
+  z-index: 50;
+}
+
+.qz-menu-item {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.qz-menu-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+/* Full-screen shell for the portalled Question editor launched from the menu's
+   Create New Question — sits over the Task wizard, under the pickers' fixed
+   overlays spawned inside it. */
+.qz-qwiz {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
 }

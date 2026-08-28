@@ -7,6 +7,8 @@ import {
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
+import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
+import { IdModal } from "./IdModal";
 import { PrmModal } from "./PrmModal";
 import {
   UsersFilters,
@@ -31,7 +33,7 @@ const LM_COLS: LandingCol[] = [
   { key: "role", label: "Role", width: 130 },
   { key: "subscription", label: "Subscription", width: 195, fixed: true },
 ];
-import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuIdDocIcon, MenuMergeIcon, MenuTransferIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -181,6 +183,10 @@ export function UsersPage({
   // status since access runs to the end of the billing period anyway.
   const [cancelSub, setCancelSub] = useState<User | null>(null);
   const [canceledSubs, setCanceledSubs] = useState<ReadonlySet<string>>(new Set());
+  // "View User IDs" opens the shared ID popup on that user's document. Replace
+  // and Approve edit the open record only — like the cancellations above, the
+  // decision is session-local, and the table has no ID column to reflect it.
+  const [idRecord, setIdRecord] = useState<IdRecord | null>(null);
 
   const counts = useMemo(() => {
     let b2c = 0;
@@ -441,7 +447,6 @@ export function UsersPage({
 
       {menu && (
         <UserActionsMenu
-          user={menu.user}
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onOpenProfile={() => openProfile(menu.user)}
@@ -467,6 +472,7 @@ export function UsersPage({
               ? () => setCancelSub(menu.user)
               : undefined
           }
+          onViewIds={() => setIdRecord(idRecordForUser(menu.user))}
         />
       )}
       {pageMenu && (
@@ -475,6 +481,24 @@ export function UsersPage({
           onClose={() => setPageMenu(null)}
           onMergeAccounts={onOpenMergeAccounts}
           onTransferSubscription={onOpenTransferSubscription}
+        />
+      )}
+      {idRecord && (
+        <IdModal
+          record={idRecord}
+          onClose={() => setIdRecord(null)}
+          /* Same two transitions the Manage IDs table applies: a replacement
+             re-takes the upload stamp and either takes or drops the approval;
+             an approval only records the decision. */
+          onReplace={(status: IdStatus) => {
+            const now = nowIdStamp();
+            setIdRecord((r) =>
+              r ? { ...r, status, uploadedAt: now, approvedAt: status === "approved" ? now : undefined } : r,
+            );
+          }}
+          onApprove={() =>
+            setIdRecord((r) => (r ? { ...r, status: "approved", approvedAt: nowIdStamp() } : r))
+          }
         />
       )}
       {cancelSub && (
@@ -619,10 +643,13 @@ function UserRow({
   );
 }
 
-/* ─── Three-dot actions menu (fixed-positioned so it escapes the table scroll) ─── */
+/* ─── Three-dot actions menu — Figma 673:1437 "3-Dot Menu - B2C User", in that
+   node's order (View User IDs sits after the destructive Remove User). Fixed-
+   positioned so it escapes the table scroll. The name/ID header this used to
+   carry isn't in the component — the row the menu opened from already names
+   the user. Items that don't apply to the row drop out; the rest close up. ─── */
 
 function UserActionsMenu({
-  user,
   rect,
   onClose,
   onOpenProfile,
@@ -630,8 +657,8 @@ function UserActionsMenu({
   onViewAllEmployees,
   onManageCompletions,
   onCancelSubscription,
+  onViewIds,
 }: {
-  user: User;
   rect: DOMRect;
   onClose: () => void;
   onOpenProfile: () => void;
@@ -640,6 +667,7 @@ function UserActionsMenu({
   onManageCompletions: () => void;
   /** Omitted when the user can't be cancelled from here — the item is hidden. */
   onCancelSubscription?: () => void;
+  onViewIds: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -708,10 +736,6 @@ function UserActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{user.name}</div>
-        <div className="u-menu-head-id">{user.id}</div>
-      </div>
       {item(<RowEditIcon />, "Edit User Details", () => {})}
       {item(<MenuEnterIcon />, "Login As", () => {})}
       {item(<MenuProfileIcon />, "View Profile", onOpenProfile)}
@@ -720,13 +744,14 @@ function UserActionsMenu({
       {onViewAllEmployees && item(<MenuUsersIcon />, "View All Company Employees", onViewAllEmployees)}
       {onCancelSubscription && item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription)}
       {item(<RowDeleteIcon />, "Remove User", () => {}, true)}
+      {item(<MenuIdDocIcon />, "View User IDs", onViewIds)}
     </div>
   );
 }
 
 /* ─── Page-level 3-dot menu — Figma 677:1956 "3-Dot Menu - Manage Users
    Page". Same .u-menu chrome and close/positioning behavior as the row menu,
-   anchored under the header kebab; no head block — it isn't about a user. ─── */
+   anchored under the header kebab. ─── */
 
 function PageActionsMenu({
   rect,

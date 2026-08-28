@@ -7,10 +7,9 @@ import {
   type QuestionType,
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
-import { ArrowRightIcon, ChevronRightIcon, SmallXIcon, DragHandleIcon, PlusThinIcon } from "./icons";
+import { ArrowRightIcon, SmallXIcon, DragHandleIcon, PlusThinIcon } from "./icons";
 import { SectionHeading } from "./SectionHeading";
-import { RteToolbar } from "./RteToolbar";
-import { AutoTextarea } from "./AutoTextarea";
+import { RichTextField } from "./RichTextField";
 
 /* ─────────────────  Types  ───────────────── */
 
@@ -147,7 +146,11 @@ function catKeyFromPath(path?: string[]): string {
   return cat.key;
 }
 
-function buildInitial(initialCategoryPath?: string[], editing?: Question): QuestionDraft {
+function buildInitial(
+  initialCategoryPath?: string[],
+  editing?: Question,
+  initialType?: QuestionType,
+): QuestionDraft {
   // Category is required, so a fresh question starts on the first real
   // category rather than "Uncategorized" — unless one was handed in already.
   const defaultCatKey =
@@ -155,7 +158,7 @@ function buildInitial(initialCategoryPath?: string[], editing?: Question): Quest
       ? catKeyFromPath(initialCategoryPath)
       : (flattenCategories(seedCategories)[0]?.key ?? "");
   const base: QuestionDraft = {
-    type: "mcq",
+    type: initialType ? editorType(initialType) : "mcq",
     mcqMode: "single",
     catKey: defaultCatKey,
     status: "Active",
@@ -277,6 +280,8 @@ type Props = {
   // (creation only — edits still just close, as before).
   onCreate?: (q: Question) => void;
   initialCategoryPath?: string[];
+  /** Type picked in the Create Question menu — the editor opens on it. */
+  initialType?: QuestionType;
   editingQuestion?: Question;
 };
 
@@ -350,10 +355,16 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
   return q;
 }
 
-export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, editingQuestion }: Props) {
+export function NewQuestionWizard({
+  onClose,
+  onCreate,
+  initialCategoryPath,
+  initialType,
+  editingQuestion,
+}: Props) {
   const isEditing = !!editingQuestion;
   const [data, setData] = useState<QuestionDraft>(() =>
-    buildInitial(initialCategoryPath, editingQuestion),
+    buildInitial(initialCategoryPath, editingQuestion, initialType),
   );
   const [showHistory, setShowHistory] = useState(false);
   const update = (patch: Partial<QuestionDraft>) => setData((d) => ({ ...d, ...patch }));
@@ -377,34 +388,23 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
 
   const version = editingQuestion?.version ?? 0;
   const title = isEditing ? "Edit Question" : "New Question";
+  const desc = isEditing
+    ? `Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`
+    : "Write the question and its answers. Type, category and grading live in the panel on the right.";
 
+  /* The Task wizard's two-column shell (.wizard-body: main pane + rail),
+     mirrored — the question itself runs in the main pane on the LEFT with the
+     wizard's own title/subtext header, and the settings rail sits on the
+     right. The rail is not a step list, so it keeps its own controls and drops
+     the card background for the wizard's plain bordered column. */
   return (
-    <div className="qed">
-      <div className="qed-content">
-        {/* Page header (Figma 46:314) under a breadcrumb (275:2108). */}
-        <div className="qed-pagehead">
-          <nav className="breadcrumb" aria-label="Breadcrumb">
-            <button className="breadcrumb-item" onClick={onClose}>
-              Question Bank
-            </button>
-            <span className="breadcrumb-sep">
-              <ChevronRightIcon />
-            </span>
-            <span className="breadcrumb-current">{title}</span>
-          </nav>
-          <div>
-            <h1 className="tasks-title">{title}</h1>
-            {isEditing && (
-              <p className="tasks-subtitle">
-                {`Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`}
-              </p>
-            )}
-          </div>
-        </div>
+    <div className="wizard qed">
+      <div className="wizard-body">
+        <div className="wizard-main">
+          <div className="wizard-content">
+            <h1 className="wizard-title">{title}</h1>
+            <p className="wizard-desc">{desc}</p>
 
-        {/* Content on the left, settings on the right. */}
-        <div className="qed-split">
-          <div className="qed-main">
             <QuestionTextSection data={data} update={update} />
 
             {data.type === "mcq" && <McqSection data={data} update={update} grading={grading} />}
@@ -418,29 +418,29 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
 
             {grading && <FeedbackSection data={data} update={update} />}
           </div>
-
-          <aside className="qed-side">
-            <SetupSection
-              data={data}
-              update={update}
-              isEditing={isEditing}
-              catOptions={catOptions}
-            />
-
-            {data.type === "match" && grading && (
-              <MatchScoringSection data={data} update={update} />
-            )}
-            {data.type === "file" && <FileRulesSection data={data} update={update} />}
-            {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
-
-            <GradingSection
-              data={data}
-              update={update}
-              gradable={gradable}
-              usedInQuizzes={usedInQuizzes}
-            />
-          </aside>
         </div>
+
+        <aside className="qed-side">
+          <SetupSection
+            data={data}
+            update={update}
+            isEditing={isEditing}
+            catOptions={catOptions}
+          />
+
+          {data.type === "match" && grading && (
+            <MatchScoringSection data={data} update={update} />
+          )}
+          {data.type === "file" && <FileRulesSection data={data} update={update} />}
+          {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
+
+          <GradingSection
+            data={data}
+            update={update}
+            gradable={gradable}
+            usedInQuizzes={usedInQuizzes}
+          />
+        </aside>
       </div>
 
       {/* Footer (Figma 73:515) */}
@@ -449,14 +449,16 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
           <button className="wizard-cancel" onClick={onClose}>
             Cancel
           </button>
-          <span className="wizard-saved">
-            {isEditing ? `last saved · v${version}` : "not saved yet"}
-          </span>
+          {isEditing && (
+            <span className="wizard-saved">{`last saved · v${version}`}</span>
+          )}
         </div>
         <div className="wizard-actions">
-          <button className="btn-save-draft" onClick={() => setShowHistory(true)}>
-            View history
-          </button>
+          {isEditing && (
+            <button className="btn-save-draft" onClick={() => setShowHistory(true)}>
+              View history
+            </button>
+          )}
           <button
             className="btn-publish"
             onClick={() => {
@@ -471,15 +473,12 @@ export function NewQuestionWizard({ onClose, onCreate, initialCategoryPath, edit
         </div>
       </footer>
 
-      {showHistory &&
-        (isEditing ? (
-          <QuestionHistoryModal
-            question={editingQuestion!}
-            onClose={() => setShowHistory(false)}
-          />
-        ) : (
-          <EmptyHistoryModal onClose={() => setShowHistory(false)} />
-        ))}
+      {showHistory && (
+        <QuestionHistoryModal
+          question={editingQuestion!}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
     </div>
   );
 }
@@ -620,14 +619,13 @@ function QuestionTextSection({
         <label className="form-label">
           Question <span className="req">*</span>
         </label>
-        {/* Rich Text Input - Dual Language, 2 lines (Figma 405:238) */}
         <RichTextField
           en={data.text}
           es={data.textEs}
-          onEn={(v) => update({ text: v })}
-          onEs={(v) => update({ textEs: v })}
-          placeholder="Write the question…"
-          esPlaceholder="Escribe la pregunta…"
+          onChangeEn={(v) => update({ text: v })}
+          onChangeEs={(v) => update({ textEs: v })}
+          placeholderEn="Write the question…"
+          placeholderEs="Escribe la pregunta…"
         />
       </div>
     </div>
@@ -680,10 +678,10 @@ function McqSection({
                 <RichTextField
                   en={c.text}
                   es={c.textEs}
-                  onEn={(v) => setChoice(c.id, { text: v })}
-                  onEs={(v) => setChoice(c.id, { textEs: v })}
-                  placeholder="Option text…"
-                  esPlaceholder="Texto de la opción…"
+                  onChangeEn={(v) => setChoice(c.id, { text: v })}
+                  onChangeEs={(v) => setChoice(c.id, { textEs: v })}
+                  placeholderEn="Option text…"
+                  placeholderEs="Texto de la opción…"
                 />
                 {grading && (
                   <GradeSelect value={c.grade} onChange={(v) => setChoice(c.id, { grade: v })} />
@@ -1121,7 +1119,7 @@ function GradingSection({
   return (
     <>
       <SectionHeading label="Grading" />
-      <div className="qed-toggles">
+      <div className="wizard-fields">
         <ToggleRow
           checked={grading}
           disabled={gradingDisabled}
@@ -1233,37 +1231,12 @@ function FeedbackRow({
       <RichTextField
         en={en}
         es={es}
-        onEn={onEn}
-        onEs={onEs}
-        placeholder={placeholder}
-        esPlaceholder={esPlaceholder}
+        onChangeEn={onEn}
+        onChangeEs={onEs}
+        placeholderEn={placeholder}
+        placeholderEs={esPlaceholder}
         disabled={disabled}
       />
-    </div>
-  );
-}
-
-/* ─────────────────  Modals  ───────────────── */
-
-function EmptyHistoryModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="pm-overlay" onClick={onClose}>
-      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head qh-head">
-          <h3 className="pm-title">Version history</h3>
-          <button className="ind-icon-btn" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="pm-body">
-          <p className="pm-text">
-            No versions yet — this question becomes <strong>v1</strong> when it's created.
-          </p>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onClose}>Close</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1464,50 +1437,3 @@ function LangField({
   );
 }
 
-/* Dual-language rich text field — Question, Options, and Feedback all share
-   this (Figma 405:238 "2 Lines"). The toolbar is always visible: Figma
-   416:578 draws it on every field, including the option rows. */
-function RichTextField({
-  en,
-  es,
-  onEn,
-  onEs,
-  placeholder,
-  esPlaceholder,
-  disabled,
-}: {
-  en: string;
-  es: string;
-  onEn: (v: string) => void;
-  onEs: (v: string) => void;
-  placeholder?: string;
-  esPlaceholder?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <div className={`rte-field ${disabled ? "is-disabled" : ""}`}>
-      <RteToolbar />
-      <div className="rte-lang-row">
-        <span className="lang-tag">EN</span>
-        <AutoTextarea
-          className="rte-area"
-          value={en}
-          placeholder={placeholder}
-          onChange={onEn}
-          disabled={disabled}
-        />
-      </div>
-      <div className="rte-field-divider" />
-      <div className="rte-lang-row">
-        <span className="lang-tag">ES</span>
-        <AutoTextarea
-          className="rte-area"
-          value={es}
-          placeholder={esPlaceholder ?? "Traducción en español…"}
-          onChange={onEs}
-          disabled={disabled}
-        />
-      </div>
-    </div>
-  );
-}

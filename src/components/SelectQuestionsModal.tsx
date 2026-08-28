@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
+import {
+  questions as QUESTION_BANK,
+  categories as QB_CATEGORIES,
+  flattenCategories,
+  questionDates,
+  type Question,
+} from "../data/questionBank";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -11,63 +17,98 @@ import {
   SortIcon,
 } from "./icons";
 
-/* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
- * inside the shared PrmModal shell: search bar, two filter pills, a 5-column
- * table and pagination, with Cancel / Continue in the modal's own footer.
+/* Select Questions — the Quiz wizard's Question Bank twin of SelectTasksModal
+ * (Figma 682:2321): search bar, two filter pills, a sortable table and
+ * pagination inside the shared PrmModal shell, with Cancel / Continue in the
+ * modal's own footer. All the chrome is the `.stm-*` geometry that modal
+ * introduced; only the column widths here are new.
  *
- * Distinct from AddExistingTasksModal (the Certification wizard's Task Library),
- * which is a much larger surface with a preview panel, Industries and cert
- * types. This one is deliberately the smaller sibling.
+ * One modal serves both Add flows on the Questions step. `static` mode picks
+ * hand-picked questions — selection order is kept, and questions already on
+ * the Quiz show ticked but locked. `pool` mode builds/edits a random pool —
+ * order is irrelevant (the pool is a set the Quiz draws from), and the modal
+ * opens pre-ticked with the pool's current members.
  *
  * Selection is staged: the modal owns `picked` and only hands it back on
  * Continue, so Cancel discards. */
 
 const PAGE_SIZE = 50;
 
-const TASK_TYPES: TaskType[] = ["Hands-On Task", "Quiz", "xAPI", "Resource"];
+/** Menu order for the Question Type pill — the Bank's graded types. */
+const GRADED_TYPES = [
+  "Multiple choice",
+  "Multiple select",
+  "True/False",
+  "Match the following",
+];
 
-type SortKey = "name" | "type" | "certs" | "dateModified";
+type SortKey = "question" | "type" | "category" | "dateModified";
 type SortDir = "asc" | "desc";
 
-/** The node's subtitle is a rule, not decoration: only SkillCat's own Tasks are
- *  eligible. */
-function eligible(t: Task) {
-  return t.createdBy === "SkillCat";
+/** Only Active, graded Bank questions are eligible for Quizzes — both as
+ *  hand-picked statics and as random-pool members. */
+function eligible(q: Question) {
+  return q.status === "Active" && q.gradingEnabled;
 }
 
-function certsOf(t: Task) {
-  return t.usedIn.join(", ");
+function categoryOf(q: Question) {
+  return q.categoryPath.join(" > ");
 }
 
-function compare(a: Task, b: Task, key: SortKey): number {
+/* questionDates derives the whole mocked version history per call, and sorting
+ * asks for it O(n log n) times — cache it once per question. */
+const MODIFIED = new Map<string, string>();
+function modifiedOf(q: Question) {
+  let d = MODIFIED.get(q.id);
+  if (!d) {
+    d = questionDates(q).modified;
+    MODIFIED.set(q.id, d);
+  }
+  return d;
+}
+
+/** A "Parent > Sub" pill label matches on the sub-category; a bare category
+ *  label matches every question under it. */
+function matchesCategoryLabel(q: Question, label: string) {
+  return label.split(" > ").every((part, i) => q.categoryPath[i] === part);
+}
+
+function compare(a: Question, b: Question, key: SortKey): number {
   switch (key) {
-    case "name":
-      return a.name.localeCompare(b.name);
+    case "question":
+      return a.text.localeCompare(b.text);
     case "type":
       return a.type.localeCompare(b.type);
-    case "certs":
-      return certsOf(a).localeCompare(certsOf(b));
+    case "category":
+      return categoryOf(a).localeCompare(categoryOf(b));
     case "dateModified":
       return (
-        (Date.parse(a.dateModified ?? "") || 0) -
-        (Date.parse(b.dateModified ?? "") || 0)
+        (Date.parse(modifiedOf(a)) || 0) - (Date.parse(modifiedOf(b)) || 0)
       );
   }
 }
 
-export function SelectTasksModal({
+export function SelectQuestionsModal({
+  mode,
+  editingPool,
+  excludeIds,
   value,
   onCancel,
   onConfirm,
 }: {
-  /** Task ids already chosen on the field — the modal opens pre-ticked. */
+  mode: "static" | "pool";
+  /** Pool mode only: editing an existing pool rather than building a new one. */
+  editingPool?: boolean;
+  /** Static mode only: questions already on the Quiz — shown ticked but locked. */
+  excludeIds?: string[];
+  /** Question ids already chosen — the modal opens pre-ticked. */
   value: string[];
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
-  const [certs, setCerts] = useState<string[]>([]);
+  const [cats, setCats] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>(value);
   const [page, setPage] = useState(1);
   // Default sort is by last edited — newest first.
@@ -75,6 +116,9 @@ export function SelectTasksModal({
     key: "dateModified",
     dir: "desc",
   });
+
+  const isPool = mode === "pool";
+  const locked = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
@@ -85,26 +129,35 @@ export function SelectTasksModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const pool = useMemo(() => taskLibrary.filter(eligible), []);
+  const pool = useMemo(() => QUESTION_BANK.filter(eligible), []);
 
-  const allCerts = useMemo(
-    () => Array.from(new Set(pool.flatMap((t) => t.usedIn))).sort(),
+  // Category options limited to branches that actually hold graded questions.
+  const allCats = useMemo(
+    () =>
+      flattenCategories(QB_CATEGORIES)
+        .map((opt) => opt.label)
+        .filter((label) => pool.some((q) => matchesCategoryLabel(q, label))),
     [pool],
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return pool.filter((t) => {
+    return pool.filter((question) => {
       if (
         q &&
-        !(t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q))
+        !(
+          question.text.toLowerCase().includes(q) ||
+          question.id.toLowerCase().includes(q) ||
+          categoryOf(question).toLowerCase().includes(q)
+        )
       )
         return false;
-      if (types.length && !types.includes(t.type)) return false;
-      if (certs.length && !t.usedIn.some((c) => certs.includes(c))) return false;
+      if (types.length && !types.includes(question.type)) return false;
+      if (cats.length && !cats.some((c) => matchesCategoryLabel(question, c)))
+        return false;
       return true;
     });
-  }, [pool, query, types, certs]);
+  }, [pool, query, types, cats]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -117,6 +170,7 @@ export function SelectTasksModal({
   const rows = sorted.slice(start, start + PAGE_SIZE);
 
   function toggle(id: string) {
+    if (locked.has(id)) return;
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
@@ -138,9 +192,20 @@ export function SelectTasksModal({
 
   return (
     <PrmModal
-      title="Select Tasks"
-      description="Only Tasks that have been created by SkillCat are shown and can be selected here"
+      title={
+        isPool
+          ? editingPool
+            ? "Edit Random Pool"
+            : "Build a Random Pool"
+          : "Select Questions"
+      }
+      description={
+        isPool
+          ? "Pick the questions this pool draws from. Each attempt draws a random subset, so selection order doesn't matter"
+          : "Only Active questions with grading enabled are shown here. Questions join the Quiz in the order you pick them"
+      }
       confirmLabel="Continue"
+      confirmDisabled={picked.length === 0}
       pick
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
@@ -153,7 +218,7 @@ export function SelectTasksModal({
             </span>
             <input
               className="search-input stm-search-input"
-              placeholder="Search Tasks"
+              placeholder="Search Questions"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -167,8 +232,8 @@ export function SelectTasksModal({
               width={220}
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
-                  label="Task Type"
-                  value={summarize(types, TASK_TYPES)}
+                  label="Question Type"
+                  value={summarize(types, GRADED_TYPES)}
                   open={open}
                   toggle={t}
                   onClear={() => resetPage(setTypes)([])}
@@ -177,7 +242,7 @@ export function SelectTasksModal({
             >
               {({ close }) => (
                 <SectionedMultiSelect
-                  sections={[{ items: [...TASK_TYPES] }]}
+                  sections={[{ items: GRADED_TYPES }]}
                   value={types}
                   onApply={(v) => {
                     resetPage(setTypes)(v);
@@ -188,23 +253,23 @@ export function SelectTasksModal({
             </Dropdown>
 
             <Dropdown
-              width={260}
+              width={280}
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
-                  label="Certifications"
-                  value={summarize(certs, allCerts)}
+                  label="Category"
+                  value={summarize(cats, allCats)}
                   open={open}
                   toggle={t}
-                  onClear={() => resetPage(setCerts)([])}
+                  onClear={() => resetPage(setCats)([])}
                 />
               )}
             >
               {({ close }) => (
                 <SectionedMultiSelect
-                  sections={[{ items: allCerts }]}
-                  value={certs}
+                  sections={[{ items: allCats }]}
+                  value={cats}
                   onApply={(v) => {
-                    resetPage(setCerts)(v);
+                    resetPage(setCats)(v);
                     close();
                   }}
                 />
@@ -216,12 +281,12 @@ export function SelectTasksModal({
         <div className="stm-table-wrap">
           {/* Column-width floor, per the shared table convention — below it the
               table scrolls sideways instead of crushing the cells. 44 check +
-              240 name + 136 type + 224 certs + 126 edited. */}
+              260 question + 150 type + 190 category + 126 edited. */}
           <div
             className="table-xscroll"
             style={{ "--table-min": "770px" } as React.CSSProperties}
           >
-            <table className="table table-head stm-table">
+            <table className="table table-head stm-table sqm-table">
               <ColGroup />
               <thead>
                 <tr>
@@ -229,30 +294,33 @@ export function SelectTasksModal({
                       with a transparent border to hold the column, not a
                       select-all control. */}
                   <th className="stm-col-check no-sort" />
-                  <Th col="name" label="Task Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
-                  <Th col="type" label="Task Type" cls="stm-col-type" sort={sort} toggle={toggleSort} />
-                  <Th col="certs" label="Certifications" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="dateModified" label="Edited On" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
+                  <Th col="question" label="Question" cls="sqm-col-question" sort={sort} toggle={toggleSort} />
+                  <Th col="type" label="Question Type" cls="sqm-col-type" sort={sort} toggle={toggleSort} />
+                  <Th col="category" label="Category" cls="sqm-col-cat" sort={sort} toggle={toggleSort} />
+                  <Th col="dateModified" label="Edited On" cls="sqm-col-edited" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>
             </table>
 
             <div className="tasks-scroll">
-              <table className="table table-body stm-table">
+              <table className="table table-body stm-table sqm-table">
                 <ColGroup />
                 <tbody>
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={5}>No Tasks match your search and filters.</td>
+                      <td colSpan={5}>
+                        No graded questions match your search and filters.
+                      </td>
                     </tr>
                   ) : (
-                    rows.map((t) => {
-                      const on = picked.includes(t.id);
+                    rows.map((question) => {
+                      const inQuiz = locked.has(question.id);
+                      const on = inQuiz || picked.includes(question.id);
                       return (
                         <tr
-                          key={t.id}
-                          className={on ? "selected" : ""}
-                          onClick={() => toggle(t.id)}
+                          key={question.id}
+                          className={`${on ? "selected" : ""}${inQuiz ? " is-locked" : ""}`}
+                          onClick={() => toggle(question.id)}
                         >
                           <td className="stm-col-check">
                             {/* A <button>, not a <span> — the shared table reset
@@ -260,26 +328,36 @@ export function SelectTasksModal({
                                 would leave a bare tick with no box. */}
                             <button
                               className={`checkbox ${on ? "checked" : ""}`}
-                              aria-label={on ? "Deselect" : "Select"}
+                              aria-label={
+                                inQuiz
+                                  ? "Already on the Quiz"
+                                  : on
+                                    ? "Deselect"
+                                    : "Select"
+                              }
                               aria-pressed={on}
+                              disabled={inQuiz}
                               tabIndex={-1}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggle(t.id);
+                                toggle(question.id);
                               }}
                             >
                               {on && <CheckIcon />}
                             </button>
                           </td>
-                          {/* `col-name` is the shared Name-column class: it
-                              carries the #FFFFFF emphasis this node wants, and
-                              it is one of the classes the app-wide "mute every
-                              non-Name cell" rule excludes. Without it that rule
-                              (five :not()s deep) silently wins. */}
-                          <td className="stm-col-name col-name">{t.name}</td>
-                          <td className="stm-col-type">{t.type}</td>
-                          <td className="stm-col-certs">{certsOf(t) || "—"}</td>
-                          <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
+                          {/* `col-name` carries the #FFFFFF emphasis and is one
+                              of the classes the app-wide "mute every non-Name
+                              cell" rule excludes — a local colour would lose to
+                              it on specificity. */}
+                          <td className="sqm-col-question col-name" title={question.text}>
+                            {question.text}
+                          </td>
+                          <td className="sqm-col-type">{question.type}</td>
+                          <td className="sqm-col-cat" title={categoryOf(question)}>
+                            {categoryOf(question)}
+                          </td>
+                          <td className="sqm-col-edited">{modifiedOf(question)}</td>
                         </tr>
                       );
                     })
@@ -290,6 +368,11 @@ export function SelectTasksModal({
           </div>
 
           <div className="pagination stm-pagination">
+            <span className="sqm-picked">
+              {isPool
+                ? `${picked.length} in pool`
+                : `${picked.length} selected`}
+            </span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
               {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
@@ -324,8 +407,8 @@ function ColGroup() {
     <colgroup>
       <col style={{ width: 44 }} />
       <col />
-      <col style={{ width: 136 }} />
-      <col style={{ width: 224 }} />
+      <col style={{ width: 150 }} />
+      <col style={{ width: 190 }} />
       <col style={{ width: 126 }} />
     </colgroup>
   );

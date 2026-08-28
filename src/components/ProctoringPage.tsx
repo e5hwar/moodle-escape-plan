@@ -404,7 +404,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm pr-page" ref={morph.rootRef}>
+        <div className="tasks lm lm-cards pr-page" ref={morph.rootRef}>
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Exam Reviews</h1>

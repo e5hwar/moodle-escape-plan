@@ -8,6 +8,9 @@ import type { Certification } from "./certifications";
  */
 export type CertPurchase = {
   userId: string;
+  /** Name of the Certification this access was bought (or comped) on. Rows now
+   * span every paid Certification, so the page's filter needs it on the row. */
+  certName: string;
   /**
    * ISO date (yyyy-mm-dd) the user *paid* for access. null for admin grants —
    * comped users have no purchase, so this cell is left blank and the grant is
@@ -91,6 +94,51 @@ export function grantingAdmin(hash: number): string {
   return SKILLCAT_ADMINS[hash % SKILLCAT_ADMINS.length];
 }
 
+/** Any purchase row that can be comped — Certification access or a Quiz attempt. */
+type Grantable = {
+  userId: string;
+  purchaseDate: string | null;
+  granted: boolean;
+  grantDate: string | null;
+  grantedBy: string | null;
+};
+
+/**
+ * Flip a deterministic slice of paid rows into admin grants — roughly a quarter
+ * of the list, always at least two and at most five, so every "Who Paid" page
+ * shows a few comped users instead of leaving it to a hash bucket that often
+ * lands on none. The paid date becomes the grant date, since a comped user
+ * never paid.
+ */
+export function applyGrants<T extends Grantable>(rows: T[], seed: string): T[] {
+  const want = Math.min(5, Math.max(2, Math.round(rows.length * 0.25)));
+  // Never comp the whole page — there has to be someone who actually paid.
+  const n = Math.min(want, Math.max(0, rows.length - 1));
+  if (n === 0) return rows;
+
+  // Rank by a grant-specific hash so the chosen users don't correlate with the
+  // slices that drive progress, status, or dates.
+  const chosen = new Set(
+    rows
+      .map((r, i) => ({ i, k: phash(`grant:${seed}:${r.userId}`) }))
+      .sort((a, b) => a.k - b.k || a.i - b.i)
+      .slice(0, n)
+      .map((r) => r.i),
+  );
+
+  return rows.map((r, i) =>
+    chosen.has(i)
+      ? {
+          ...r,
+          purchaseDate: null,
+          granted: true,
+          grantDate: r.grantDate ?? r.purchaseDate,
+          grantedBy: grantingAdmin(phash(`grantedBy:${seed}:${r.userId}`)),
+        }
+      : r,
+  );
+}
+
 /**
  * Build the seed list of purchasers for a Certification. Roughly half the user
  * base "bought" it, with a spread of progress, completion, and (for
@@ -121,32 +169,39 @@ export function buildCertPurchases(cert: Certification): CertPurchase[] {
       accessEndedDate = isoDaysAgo(endedDaysAgo);
     }
 
-    // A small deterministic slice were comped rather than paid. Comped users
-    // have no purchase date — the date lives on grantDate instead.
-    const granted = h % 17 === 0;
-    const dateIso = isoDaysAgo(purchasedDaysAgo);
-
     out.push({
       userId: u.id,
-      purchaseDate: granted ? null : dateIso,
+      certName: cert.name,
+      purchaseDate: isoDaysAgo(purchasedDaysAgo),
       progress,
       completed,
       accessEndedDate,
       revokedDate: null,
-      granted,
-      grantDate: granted ? dateIso : null,
-      grantedBy: granted ? grantingAdmin(h >>> 7) : null,
+      granted: false,
+      grantDate: null,
+      grantedBy: null,
     });
   }
 
-  return out;
+  // Comp a slice of them — grants are common enough that every page has some.
+  return applyGrants(out, cert.id);
 }
 
-/** Users who don't yet have access — candidates for the Grant Access flow. */
+/** Every paid Certification's purchasers in one list — the page opens filtered
+ * to the Certification it was launched from, but its filter can widen. */
+export function buildAllCertPurchases(certs: Certification[]): CertPurchase[] {
+  return certs.flatMap((c) => buildCertPurchases(c));
+}
+
+/** Users who don't yet have access to ONE Certification — candidates for its
+ * Grant Access flow. Rows now span certs, so the caller passes its cert name. */
 export function usersWithoutAccess(
   purchases: CertPurchase[],
+  certName: string,
   all: User[] = users,
 ): User[] {
-  const have = new Set(purchases.map((p) => p.userId));
+  const have = new Set(
+    purchases.filter((p) => p.certName === certName).map((p) => p.userId),
+  );
   return all.filter((u) => !have.has(u.id));
 }

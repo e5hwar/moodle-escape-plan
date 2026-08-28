@@ -1,13 +1,13 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import { CheckBoldIcon, InfoTipIcon, SmallXIcon } from "./icons";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
-import { RteToolbar } from "./RteToolbar";
-import { AutoTextarea } from "./AutoTextarea";
+import { RichTextField } from "./RichTextField";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { PrmModal } from "./PrmModal";
@@ -476,12 +476,6 @@ type WizardData = {
   consumableProgress: ConsumableProgress;
   priceIds: PriceIds;
   contentTags: ContentTag[];
-
-  // Archiving
-  archived: boolean;
-  replacementCerts: { id: string; name: string }[];
-  replaceAlertEn: string;
-  replaceAlertEs: string;
 };
 
 // Everything starts blank when creating a new Certification. Type defaults to
@@ -583,11 +577,6 @@ const BLANK_DATA: WizardData = {
   consumableProgress: "preserve",
   priceIds: newPriceIds(),
   contentTags: [],
-
-  archived: false,
-  replacementCerts: [],
-  replaceAlertEn: "",
-  replaceAlertEs: "",
 };
 
 // When editing, prefill the fields the Certification record actually carries.
@@ -614,28 +603,32 @@ function buildInitialData(editing?: Certification): WizardData {
     slug: slugify(editing.name),
     slugCustom: true,
     // An archived Cert isn't publicly visible, so it maps to "hidden" on the
-    // Visibility step — its retired state is reflected by the archived toggle.
+    // Visibility step. Retiring one is its own full-page flow off the row menu
+    // (ArchiveCertificationPage), not a step in here.
     visibility: vis === "Visible" ? "visible" : "hidden",
-    archived: vis === "Archived",
   };
 }
 
-const STEPS = [
+const STEPS: { id: string; label: string; sub: string; desc: string; tip?: string }[] = [
   { id: "details", label: "Details", sub: "Name, description, metadata", desc: "Name, describe, and tag this Certification." },
   { id: "additional", label: "Additional Info", sub: "Announcement, CEUs, keywords", desc: "Add an announcement, CEUs awarded on completion, and search keywords." },
   { id: "tasks", label: "Add Tasks", sub: "Courses, lessons, and tasks", desc: "Build this Certification's structure: Courses contain Lessons (optional) and Tasks. Tasks can be pulled from the Task library or created fresh — newly created Tasks are added to the library too." },
   { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Define how this Certification is completed. Add Condition Sets — satisfying any one completes the Cert; every item within a set is required." },
-  { id: "settings", label: "Other Settings", sub: "Paywall and content tags", desc: "Control how this Certification is purchased and which content tags gate its visibility." },
-  { id: "archiving", label: "Archiving", sub: "Retire and replace", desc: "Archive this Certification and point enrolled learners to a replacement. Archiving is permanent." },
+  { id: "paywall", label: "Paywall", sub: "Access type and Product IDs", desc: "Control how this Certification is purchased — the access type, its store Product IDs, and what happens to progress on repurchase." },
+  {
+    id: "scope",
+    label: "Audience",
+    sub: "Who can see this Certification",
+    desc: "Restricts this Certification to specific B2B companies. Leave this step untouched for public content — anything you set here hides the Certification from B2C users.",
+    tip: "Every filter you set narrows the audience. A company must match all the filters you set (Audience, Trade and Partnership). Within a single filter, matching one value is enough — content tagged Residential HVAC and Commercial HVAC is visible to a company in either.",
+  },
 ];
 
 type Props = { onClose: () => void; editingCert?: Certification };
 
 export function NewCertificationWizard({ onClose, editingCert }: Props) {
   const isEditing = !!editingCert;
-  // Archiving retires an existing Certification and reroutes learners — it only
-  // makes sense once the Cert exists, so the step is hidden while creating.
-  const steps = isEditing ? STEPS : STEPS.filter((s) => s.id !== "archiving");
+  const steps = STEPS;
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(editingCert));
   const [splitTask, setSplitTask] = useState<{ courseId: string; lessonId?: string; taskType: TaskTypeKey } | null>(null);
@@ -654,12 +647,15 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
 
   const update = (patch: Partial<WizardData>) => setData((d) => ({ ...d, ...patch }));
 
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = steps.length - 1;
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
   // The step pane scrolls, so jumping to a flagged field has to take the view
-  // back to the top — otherwise a same-step jump looks like nothing happened.
-  const contentRef = useRef<HTMLDivElement>(null);
+  // back to the top — otherwise a same-step jump looks like nothing happened
+  // (gate.goStep no-ops when the step doesn't actually change).
   function goStep(i: number) {
-    setStep(i);
-    contentRef.current?.scrollTo({ top: 0 });
+    gate.goStep(i);
+    gate.scrollRef.current?.scrollTo({ top: 0 });
   }
 
   const stepIndex = useCallback(
@@ -793,39 +789,64 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
           </ol>
         </aside>
 
-        <div className="wizard-content" ref={contentRef}>
-          <h1 className="wizard-title">{steps[step].label}</h1>
-          <p className="wizard-desc">{steps[step].desc}</p>
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={steps.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              <h1 className="wizard-title">{steps[step].label}</h1>
+              <p className="wizard-desc">
+                {steps[step].desc}
+                {steps[step].tip && (
+                  <span
+                    className="form-help-info wizard-desc-info"
+                    tabIndex={0}
+                    role="note"
+                    aria-label={steps[step].tip}
+                    data-tip={steps[step].tip}
+                  >
+                    <InfoTipIcon />
+                  </span>
+                )}
+              </p>
 
-          {step === 0 && (
-            <DetailsStep data={data} update={update} nameError={missing.has("name")} />
-          )}
-          {step === 1 && (
-            <AdditionalInfoStep
-              data={data}
-              update={update}
-              editingName={editingCert?.name}
-            />
-          )}
-          {step === 2 && (
-            <TasksStep
-              data={data}
-              update={update}
-              onCreateTask={(courseId, lessonId, taskType) => setSplitTask({ courseId, lessonId, taskType })}
-              onAddExisting={(courseId, lessonId) => setExistingPicker({ courseId, lessonId })}
-            />
-          )}
-          {step === 3 && (
-            <CompletionStep
-              data={data}
-              update={update}
-              criteriaLocked={isEditing && !completionUnlocked}
-              onUnlockCriteria={() => setCompletionUnlocked(true)}
-              missing={missing.has("completion")}
-            />
-          )}
-          {step === 4 && <SettingsStep data={data} update={update} />}
-          {step === 5 && <ArchivingStep data={data} update={update} />}
+              {step === 0 && (
+                <DetailsStep data={data} update={update} nameError={missing.has("name")} />
+              )}
+              {step === 1 && (
+                <AdditionalInfoStep
+                  data={data}
+                  update={update}
+                  editingName={editingCert?.name}
+                />
+              )}
+              {step === 2 && (
+                <TasksStep
+                  data={data}
+                  update={update}
+                  onCreateTask={(courseId, lessonId, taskType) => setSplitTask({ courseId, lessonId, taskType })}
+                  onAddExisting={(courseId, lessonId) => setExistingPicker({ courseId, lessonId })}
+                />
+              )}
+              {step === 3 && (
+                <CompletionStep
+                  data={data}
+                  update={update}
+                  criteriaLocked={isEditing && !completionUnlocked}
+                  onUnlockCriteria={() => setCompletionUnlocked(true)}
+                  missing={missing.has("completion")}
+                />
+              )}
+              {step === 4 && <PaywallStep data={data} update={update} />}
+              {step === 5 && <AudienceStep data={data} update={update} />}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1046,7 +1067,8 @@ function DetailsStep({
 
       {/* Same control as the Task wizard's visibility (359:2373 / 639:895):
           Hidden takes the neutral active segment, Visible the accent one.
-          Archiving — the permanent retirement — keeps its own step. */}
+          Archiving — the permanent retirement — is its own page off the row
+          menu, not a visibility state. */}
       <div className="form-group">
         <label className="form-label">Visibility</label>
         <div className="seg-control">
@@ -2956,9 +2978,9 @@ function ConditionItemPicker({ onPick }: { onPick: (item: CompletionItem) => voi
   );
 }
 
-/* ─────────────────  Step 5: Other Settings  ───────────────── */
+/* ─────────────────  Step 5: Paywall  ───────────────── */
 
-function SettingsStep({
+function PaywallStep({
   data,
   update,
 }: {
@@ -2970,37 +2992,35 @@ function SettingsStep({
       <div className="form-group">
         <label className="form-label">Access Type</label>
         <div className="radio-card-group">
-            <RadioCard
-              selected={data.accessType === "open"}
-              onSelect={() => update({ accessType: "open" })}
-              title="Open-To-All (free)"
-              desc="Free for any user who can see the Certification. Access depends on B2C tier."
-            />
-            <RadioCard
-              selected={data.accessType === "non-consumable"}
-              onSelect={() => update({ accessType: "non-consumable" })}
-              title="Non-Consumable"
-              desc="One-time purchase. Access persists as long as the user is a Subscriber."
-            />
-            <RadioCard
-              selected={data.accessType === "consumable"}
-              onSelect={() => update({ accessType: "consumable" })}
-              title="Consumable"
-              desc="Time-bounded access window. Used for finite-duration enrollments."
-            />
-          </div>
+          <RadioCard
+            selected={data.accessType === "open"}
+            onSelect={() => update({ accessType: "open" })}
+            title="Open-To-All (free)"
+            desc="Free for any user who can see the Certification. Access depends on B2C tier."
+          />
+          <RadioCard
+            selected={data.accessType === "non-consumable"}
+            onSelect={() => update({ accessType: "non-consumable" })}
+            title="Non-Consumable"
+            desc="One-time purchase. Access persists as long as the user is a Subscriber."
+          />
+          <RadioCard
+            selected={data.accessType === "consumable"}
+            onSelect={() => update({ accessType: "consumable" })}
+            title="Consumable"
+            desc="Time-bounded access window. Used for finite-duration enrollments."
+          />
         </div>
+      </div>
 
       {data.accessType !== "open" && (
         <div className="form-group">
-          <label className="form-label">Price IDs</label>
+          <label className="form-label">Product IDs</label>
           <PriceIdFields
             value={data.priceIds}
             onChange={(ids) => update({ priceIds: ids })}
           />
-          <p className="form-help">
-            Enter the Price ID for each — Google, Apple, Stripe (B2C), and Stripe (B2B).
-          </p>
+          <p className="form-help">Enter the Product IDs from the respective stores.</p>
         </div>
       )}
 
@@ -3027,241 +3047,104 @@ function SettingsStep({
           </p>
         </div>
       )}
-
-      <ContentTagsSection data={data} update={update} />
     </>
   );
 }
 
-/* ─── Content Tags for Visibility ─── */
+/* ─────────────────  Step 6: Audience  ───────────────── */
 
-const TAG_GROUPS: {
-  type: ContentTagType;
-  label: string;
-  options: string[];
-  placeholder: string;
-  help: string;
-}[] = [
-  {
-    type: "trade",
-    label: "Trade",
-    options: DEFAULT_TRADES,
-    placeholder: "Select a Trade…",
-    help: "Tenants in any one of these Trades can see this. Leave empty to match every Tenant's Trade.",
-  },
-  {
-    type: "partnership",
-    label: "Partnership",
-    options: DEFAULT_PARTNERSHIPS,
-    placeholder: "Select a Partnership…",
-    help: "Only Tenants in one of these Partnerships can see this. Leave empty to match Tenants with or without a Partnership.",
-  },
-  {
-    type: "userType",
-    label: "User Type",
-    options: USER_TYPE_VALUES,
-    placeholder: "Add B2B Only…",
-    help: 'Default is All — visible to B2C and B2B. Add "B2B Only" to hide this from B2C users.',
-  },
-];
+/* The step edits `contentTags` through three flat wizard fields. Audience is the
+   All / B2B-only switch, which is one `userType` tag or none; Trade and
+   Partnership take any number of values (MultiSelect). */
+const AUDIENCE_ALL = "All Users";
+const AUDIENCE_B2B = "B2B Companies Only";
+const AUDIENCE_OPTIONS = [AUDIENCE_ALL, AUDIENCE_B2B] as const;
 
-const InfoIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9.5" />
-    <path d="M12 16v-4M12 8h.01" />
-  </svg>
-);
-
-// Compact version of the spec's "Content Visibility Scenarios" table — shown in
-// the expandable help panel so admins can sanity-check a tag combination.
-const VISIBILITY_EXAMPLES: { trade: string; partnership: string; userType: string; b2c: string; b2b: string }[] = [
-  { trade: "—", partnership: "—", userType: "All", b2c: "Yes", b2b: "All Companies" },
-  { trade: "—", partnership: "—", userType: "B2B Only", b2c: "No", b2b: "All Companies" },
-  { trade: "Residential HVAC", partnership: "—", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC (with or without a Partnership)" },
-  { trade: "Residential HVAC", partnership: "Nexstar", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC who are also in Nexstar (both conditions)" },
-  { trade: "—", partnership: "Nexstar", userType: "All", b2c: "No", b2b: "Companies in Nexstar (across all Trades)" },
-  { trade: "Res. + Comm. HVAC", partnership: "—", userType: "All", b2c: "No", b2b: "Companies in Residential HVAC OR Commercial HVAC" },
-];
-
-function VisibilityHelpPanel() {
-  return (
-    <div className="cv-help-panel">
-      <p className="cv-help-lead">
-        This Certification is <strong>All-User Content</strong> (SkillCat-owned). The tags below
-        scope <strong>which Tenants can see it</strong> — they're computed at query time against each
-        Tenant's profile, with no manual assignment. Once a Tenant can see it, the Paywall applies
-        equally to everyone.
-      </p>
-
-      <ul className="cv-rule-list">
-        <li>
-          <strong>Unset = everyone.</strong> No Trade, no Partnership, and User Type left at All makes
-          this visible to all Tenants — B2C and B2B alike.
-        </li>
-        <li>
-          <strong>Within a filter, OR.</strong> A Tenant matches if it shares at least one value with
-          the content. Two Trades → any Tenant holding either one sees it.
-        </li>
-        <li>
-          <strong>Across filters, AND.</strong> A Tenant must satisfy every filter set — Trade
-          <em> and</em> Partnership <em>and</em> User Type.
-        </li>
-        <li>
-          <strong>B2C has no Trade or Partnership.</strong> Adding <em>any</em> Trade or Partnership tag
-          removes this content from B2C — content can't be both Trade/Partnership-scoped and B2C-visible.
-        </li>
-        <li>
-          <strong>Trade ≠ Industry.</strong> Trade is an access filter and is invisible to learners.
-          Industries (on the Details step) are the browse/discovery taxonomy learners actually see.
-        </li>
-      </ul>
-
-      <div className="cv-examples-wrap">
-        <table className="cv-examples">
-          <thead>
-            <tr>
-              <th>Trade</th>
-              <th>Partnership</th>
-              <th>User Type</th>
-              <th>B2C</th>
-              <th>B2B sees it?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {VISIBILITY_EXAMPLES.map((r, i) => (
-              <tr key={i}>
-                <td>{r.trade}</td>
-                <td>{r.partnership}</td>
-                <td>{r.userType}</td>
-                <td>{r.b2c}</td>
-                <td>{r.b2b}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function ContentTagsSection({
+function AudienceStep({
   data,
   update,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
 }) {
-  const [showHelp, setShowHelp] = useState(false);
+  const valuesOf = (type: ContentTagType) =>
+    data.contentTags.filter((t) => t.type === type).map((t) => t.value);
 
-  function addTag(type: ContentTagType, value: string) {
-    if (!value) return;
-    // Don't add a duplicate of the same type + value.
-    if (data.contentTags.some((t) => t.type === type && t.value === value)) return;
+  /** Replace every tag of one type, keeping the ids of the values that stay. */
+  function setValues(type: ContentTagType, values: string[]) {
+    const kept = new Map(
+      data.contentTags.filter((t) => t.type === type).map((t) => [t.value, t.id]),
+    );
     update({
       contentTags: [
-        ...data.contentTags,
-        { id: `ct-${type}-${Date.now()}`, type, value },
+        ...data.contentTags.filter((t) => t.type !== type),
+        ...values.map((value, i) => ({
+          id: kept.get(value) ?? `ct-${type}-${Date.now()}-${i}`,
+          type,
+          value,
+        })),
       ],
     });
   }
 
-  function removeTag(id: string) {
-    update({ contentTags: data.contentTags.filter((t) => t.id !== id) });
-  }
-
-  // Live read-out of the current scope, so the admin sees the effect of the tags
-  // they've set without opening the full help panel.
-  const hasTradeOrPartner = data.contentTags.some(
-    (t) => t.type === "trade" || t.type === "partnership",
-  );
-  const isB2BOnly = data.contentTags.some((t) => t.type === "userType");
-  const scopeNote = !hasTradeOrPartner && !isB2BOnly
-    ? "No tags set — visible to all Tenants, including B2C."
-    : isB2BOnly && hasTradeOrPartner
-      ? "Hidden from B2C. Visible only to B2B Tenants matching the Trade/Partnership filters below."
-      : isB2BOnly
-        ? "Hidden from B2C. Visible to all B2B Tenants."
-        : "Hidden from B2C (Trade/Partnership scoped). Visible to B2B Tenants matching the filters below.";
+  // The stored tag value stays "B2B Only" — the label is the display name.
+  const audience = valuesOf("userType").length > 0 ? AUDIENCE_B2B : AUDIENCE_ALL;
 
   return (
-    <div className="form-group">
-      <div className="cv-section-head">
-        <label className="form-label">Content Tags for Visibility</label>
-        <button
-          type="button"
-          className="cv-help-toggle"
-          onClick={() => setShowHelp((v) => !v)}
-          aria-expanded={showHelp}
-        >
-          <InfoIcon />
-          {showHelp ? "Hide details" : "How visibility works"}
-        </button>
+    <>
+      <div className="form-group">
+        <label className="form-label">Audience</label>
+        <SelectField
+          className="select-field--full"
+          value={audience}
+          options={AUDIENCE_OPTIONS}
+          onChange={(v) =>
+            setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
+          }
+        />
+        <p className="form-help">
+          Choose "B2B Companies Only" to hide this Certification from B2C users. "All
+          Users" means no audience restriction. B2C is still excluded if you set a Trade
+          or Partnership below.
+        </p>
       </div>
 
-      {showHelp && <VisibilityHelpPanel />}
-
-      {TAG_GROUPS.map((group) => {
-        const tags = data.contentTags.filter((t) => t.type === group.type);
-        const remaining = group.options.filter(
-          (o) => !tags.some((t) => t.value === o),
-        );
-        return (
-          <div key={group.type} className="form-sub-group">
-            <label className="form-sub-label">{group.label}</label>
-            <div className="tag-edit-row">
-              {tags.map((t) => (
-                <span key={t.id} className="tag-edit">
-                  {t.value}
-                  <button
-                    className="tag-edit-x"
-                    onClick={() => removeTag(t.id)}
-                    aria-label={`Remove ${group.label} tag ${t.value}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <select
-                className="form-select content-tag-select"
-                value=""
-                disabled={remaining.length === 0}
-                onChange={(e) => {
-                  addTag(group.type, e.target.value);
-                  e.target.value = "";
-                }}
-              >
-                <option value="" disabled>
-                  {remaining.length === 0
-                    ? group.type === "userType" ? "B2B Only added" : "All added"
-                    : group.placeholder}
-                </option>
-                {remaining.map((o) => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
-            </div>
-            <p className="form-help">{group.help}</p>
-          </div>
-        );
-      })}
-
-      <p className="form-help">
-        Tag this Certification to control which Tenants can see it. Trade and
-        Partnership values come from the B2B Management fields in Product
-        Config, and a Tenant must match every tag type you set (within a type,
-        matching any one value is enough). Add as many tags of each type as you
-        need.
-      </p>
-
-      <div className="cv-scope-note">
-        <span className="cv-scope-dot" />
-        {scopeNote}
+      <div className="form-group">
+        <label className="form-label">Trade</label>
+        <MultiSelect
+          options={DEFAULT_TRADES}
+          value={valuesOf("trade")}
+          onChange={(v) => setValues("trade", v)}
+          placeholder="Select Trades"
+          searchPlaceholder="Search Trades…"
+        />
+        <p className="form-help">
+          Only companies tagged with a Trade you pick will see this Certification. Picking
+          more than one Trade widens the audience — a company needs to match just one.
+          Leave blank so every company can see it.
+        </p>
       </div>
-    </div>
+
+      <div className="form-group">
+        <label className="form-label">Partnership</label>
+        <MultiSelect
+          options={DEFAULT_PARTNERSHIPS}
+          value={valuesOf("partnership")}
+          onChange={(v) => setValues("partnership", v)}
+          placeholder="Select Partnerships"
+          searchPlaceholder="Search Partnerships…"
+        />
+        <p className="form-help">
+          Only companies in a Partnership you pick will see this Certification. Picking
+          more than one widens the audience — a company needs to match just one. Leave
+          blank so every company can see it, partnered or not.
+        </p>
+      </div>
+    </>
   );
 }
 
-/* ─────────────────  Step 6: Archiving  ───────────────── */
+/* ─────────────────  Archive & Replace (full page)  ───────────────── */
 
 const WarnIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -3270,108 +3153,141 @@ const WarnIcon = () => (
   </svg>
 );
 
-function ArchivingStep({
-  data,
-  update,
+/* Archiving used to be the Cert wizard's 7th step, shown only while editing.
+   It's now reached from the Certifications row menu's "Archive & Replace"
+   (Figma 735:1454) and renders as its own full-page view: the shared wizard
+   shell minus the step rail, so there are no two panels — just the form and
+   the footer. */
+export function ArchiveCertificationPage({
+  cert,
+  onClose,
+  onArchive,
 }: {
-  data: WizardData;
-  update: (p: Partial<WizardData>) => void;
+  cert: Certification;
+  onClose: () => void;
+  /** Commits the archive — the caller flips the Cert's visibility to Archived. */
+  onArchive: () => void;
 }) {
+  const [replacementCerts, setReplacementCerts] = useState<{ id: string; name: string }[]>([]);
+  const [alertEn, setAlertEn] = useState("");
+  const [alertEs, setAlertEs] = useState("");
+  // Archiving is permanent, so the destructive CTA stays disabled until the
+  // admin has explicitly acknowledged it — the same gate the step's toggle was.
+  const [confirmed, setConfirmed] = useState(false);
+
   return (
-    <>
-      <div className="form-group">
-        <div className="form-warning">
-          <span className="form-warning-icon"><WarnIcon /></span>
-          <div>
-            <strong>Archiving is permanent.</strong> Once archived, this Certification is
-            retired from the catalog and can't be un-archived. Enrolled learners keep their
-            completion record and are pointed to the replacement Certification(s) below.
-          </div>
-        </div>
-      </div>
+    <div className="wizard">
+      <div className="wizard-body">
+        <div className="wizard-main">
+          <div className="wizard-content">
+            <div className="wizard-pane">
+              <h1 className="wizard-title">Archive &amp; Replace</h1>
+              <p className="wizard-desc">
+                Retire “{cert.name}” ({cert.id}) and point enrolled learners to a
+                replacement. Archiving is permanent.
+              </p>
 
-      <div className="form-group">
-        <div className="toggle-field">
-          <span className="form-label">Archive this Certification</span>
-          <div className="toggle-switch-row">
-            <button
-              className={`toggle ${data.archived ? "on" : ""}`}
-              onClick={() => update({ archived: !data.archived })}
-              aria-pressed={data.archived}
-            >
-              <span className="toggle-knob" />
-            </button>
-            <span className="toggle-state">{data.archived ? "Yes" : "No"}</span>
-          </div>
-          <p className="toggle-sub">
-            Retires the Certification and removes it from the catalog. This action is
-            permanent and cannot be undone.
-          </p>
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Replacement Certifications</label>
-        <div className="replace-list">
-            {data.replacementCerts.map((c) => (
-              <div key={c.id} className="replace-row">
-                <span className="task-kind-badge cert">C</span>
-                <span className="cond-row-name">{c.name}</span>
-                <button
-                  className="cond-row-x"
-                  onClick={() =>
-                    update({
-                      replacementCerts: data.replacementCerts.filter((x) => x.id !== c.id),
-                    })
-                  }
-                >
-                  <SmallXIcon />
-                </button>
+              <div className="form-group">
+                <div className="form-warning">
+                  <span className="form-warning-icon"><WarnIcon /></span>
+                  <div>
+                    <strong>Archiving is permanent.</strong> Once archived, this Certification is
+                    retired from the catalog and can't be un-archived. Enrolled learners keep their
+                    completion record and are pointed to the replacement Certification(s) below.
+                  </div>
+                </div>
               </div>
-            ))}
-            <Dropdown
-              width={340}
-              trigger={({ toggle }) => (
-                <button className="cond-add" onClick={toggle}>+ Add replacement Certification</button>
-              )}
-            >
-              {({ close }) => (
-                <ReplacementCertPicker
-                  exclude={data.replacementCerts.map((c) => c.id)}
-                  onPick={(cert) => {
-                    update({
-                      replacementCerts: [
-                        ...data.replacementCerts,
-                        { id: cert.id, name: cert.name },
-                      ],
-                    });
-                    close();
-                  }}
+
+              <div className="form-group">
+                <div className="toggle-field">
+                  <span className="form-label">Archive this Certification</span>
+                  <div className="toggle-switch-row">
+                    <button
+                      className={`toggle ${confirmed ? "on" : ""}`}
+                      onClick={() => setConfirmed((v) => !v)}
+                      aria-pressed={confirmed}
+                    >
+                      <span className="toggle-knob" />
+                    </button>
+                    <span className="toggle-state">{confirmed ? "Yes" : "No"}</span>
+                  </div>
+                  <p className="toggle-sub">
+                    Retires the Certification and removes it from the catalog. This action is
+                    permanent and cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Replacement Certifications</label>
+                <div className="replace-list">
+                  {replacementCerts.map((c) => (
+                    <div key={c.id} className="replace-row">
+                      <span className="task-kind-badge cert">C</span>
+                      <span className="cond-row-name">{c.name}</span>
+                      <button
+                        className="cond-row-x"
+                        onClick={() =>
+                          setReplacementCerts((prev) => prev.filter((x) => x.id !== c.id))
+                        }
+                      >
+                        <SmallXIcon />
+                      </button>
+                    </div>
+                  ))}
+                  <Dropdown
+                    width={340}
+                    trigger={({ toggle }) => (
+                      <button className="cond-add" onClick={toggle}>+ Add replacement Certification</button>
+                    )}
+                  >
+                    {({ close }) => (
+                      <ReplacementCertPicker
+                        exclude={[cert.id, ...replacementCerts.map((c) => c.id)]}
+                        onPick={(picked) => {
+                          setReplacementCerts((prev) => [...prev, { id: picked.id, name: picked.name }]);
+                          close();
+                        }}
+                      />
+                    )}
+                  </Dropdown>
+                </div>
+                <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Replacement Alert</label>
+                <RichTextField
+                  en={alertEn}
+                  es={alertEs}
+                  onChangeEn={setAlertEn}
+                  onChangeEs={setAlertEs}
                 />
-              )}
-            </Dropdown>
+                <p className="form-help">
+                  Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
+                </p>
+              </div>
+            </div>
           </div>
-        <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
+        </div>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Replacement Alert</label>
-        <RichTextField
-          en={data.replaceAlertEn}
-          es={data.replaceAlertEs}
-          onChangeEn={(v) => update({ replaceAlertEn: v })}
-          onChangeEs={(v) => update({ replaceAlertEs: v })}
-        />
-        <p className="form-help">
-          Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
-        </p>
-      </div>
-    </>
+      <footer className="wizard-footer">
+        <div className="wizard-footer-left">
+          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+        </div>
+        <div className="wizard-actions">
+          <button className="btn-publish" disabled={!confirmed} onClick={onArchive}>
+            Archive Certification
+          </button>
+        </div>
+      </footer>
+    </div>
   );
 }
 
-// Searchable Certification picker for the Archiving step's replacement list.
-// Certifications already chosen as replacements are filtered out.
+// Searchable Certification picker for the Archive & Replace page's replacement
+// list. The Cert being archived, and anything already chosen, are filtered out.
 function ReplacementCertPicker({
   exclude,
   onPick,
@@ -3498,61 +3414,6 @@ function LangField({
       </div>
       {error && errorMessage && <p className="form-error-text">{errorMessage}</p>}
     </>
-  );
-}
-
-function RichTextField({
-  en,
-  es,
-  onChangeEn,
-  onChangeEs,
-  compact,
-  placeholderEn,
-  placeholderEs,
-}: {
-  en: string;
-  es: string;
-  onChangeEn: (v: string) => void;
-  onChangeEs: (v: string) => void;
-  compact?: boolean;
-  placeholderEn?: string;
-  placeholderEs?: string;
-}) {
-  // Compact (inline-tree) editors keep the toolbar hidden until the field is
-  // focused — a tree row can't spare 30px of permanent chrome. Full-size
-  // editors show it always, per the Figma component.
-  const [focused, setFocused] = useState(false);
-  const showToolbar = !compact || focused;
-  const focus = compact ? () => setFocused(true) : undefined;
-  const blur = compact ? () => setFocused(false) : undefined;
-
-  return (
-    <div className={`rte-field ${compact ? "rte-field--compact" : ""}`}>
-      {showToolbar && <RteToolbar />}
-      <div className="rte-lang-row">
-        <span className="lang-tag">EN</span>
-        <AutoTextarea
-          className="rte-area"
-          value={en}
-          placeholder={placeholderEn}
-          onChange={onChangeEn}
-          onFocus={focus}
-          onBlur={blur}
-        />
-      </div>
-      <div className="rte-field-divider" />
-      <div className="rte-lang-row">
-        <span className="lang-tag">ES</span>
-        <AutoTextarea
-          className="rte-area"
-          value={es}
-          placeholder={placeholderEs}
-          onChange={onChangeEs}
-          onFocus={focus}
-          onBlur={blur}
-        />
-      </div>
-    </div>
   );
 }
 

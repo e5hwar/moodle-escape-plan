@@ -17,12 +17,12 @@
  *   </div>
  */
 
-import { KeepScrollingIcon } from "./icons";
+import { CaptionAllIcon, KeepScrollingIcon, PlusCircleIcon } from "./icons";
 
 export type LandingPill = { key: string; label: string; onPick: () => void };
 
 /** Most frequent values of a field across the page's rows — used to pick the
- * data-driven "Suggested" pills (e.g. the most-used certification). */
+ * data-driven quick-filter pills (e.g. the most-used certification). */
 export function topValues<T>(
   items: T[],
   pick: (item: T) => string | string[] | undefined,
@@ -65,19 +65,16 @@ export type LandingRow = {
   dim?: boolean;
 };
 
-const PillPlusIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" />
-    <line x1="8" y1="5.4" x2="8" y2="10.6" stroke="currentColor" strokeWidth="1.3" />
-    <line x1="5.4" y1="8" x2="10.6" y2="8" stroke="currentColor" strokeWidth="1.3" />
-  </svg>
-);
-
 /** One continuous filter row for both states (the reference's pill row): the
- * "Suggested" label collapses away, the suggested pills stay put, and the real
- * Filters row (passed as children) slides in after them as the row widens from
- * its centered 660px landing width to full width — the same pills transition
- * between states instead of one set crossfading into another. */
+ * "Quick Filters" label collapses away, the quick-filter pills stay put, and
+ * the real Filters row (passed as children) slides in after them as the row
+ * widens from its centered landing width to full width — the same pills
+ * transition between states instead of one set crossfading into another.
+ *
+ * At the landing the label + pills are CENTERED under the hero search bar and
+ * the row is capped at 92% of that bar's width (see `.lm-filter-slot`); the
+ * pills themselves ARE the shared Figma 12:15164 "Filters - Unapplied" atom
+ * (`.filter-pill-dashed`), the same component the real Filters row uses. */
 export function LandingFilterRow({
   pills,
   children,
@@ -87,11 +84,13 @@ export function LandingFilterRow({
 }) {
   return (
     <div className="lm-filter-slot">
-      <span className="lm-suggested-label">Suggested</span>
+      <span className="lm-quick-label">Quick Filters</span>
       <span className="lm-pills">
         {pills.map((p) => (
-          <button key={p.key} className="lm-pill" onClick={p.onPick}>
-            <PillPlusIcon />
+          <button key={p.key} className="filter-pill-dashed" onClick={p.onPick}>
+            <span className="icon">
+              <PlusCircleIcon />
+            </span>
             {p.label}
           </button>
         ))}
@@ -114,6 +113,7 @@ export function LandingOverlay({
   nameLabel = "Name",
   nameWidth = 240,
   actionsWidth = 40,
+  footer,
   onShowAll,
   onRowClick,
 }: {
@@ -132,6 +132,9 @@ export function LandingOverlay({
   /** The real table's ⋯ actions gutter. Pass 0 for tables with no actions
    * column (Proctoring) so no gutter track is reserved or drawn. */
   actionsWidth?: number;
+  /** Landing-only content between the list and the "keep scrolling" bar —
+   * the Question Bank's slim CSV drop bar. Collapse it with --lm yourself. */
+  footer?: React.ReactNode;
   onShowAll: () => void;
   onRowClick?: (row: LandingRow) => void;
 }) {
@@ -145,9 +148,12 @@ export function LandingOverlay({
   const totalWidth =
     nameWidth + [...leadColumns, ...columns].reduce((s, c) => s + c.width, 0) + actionsWidth;
   const share = (w: number) => `max(${w}px, ${w} * 100% / ${totalWidth})`;
+  // A fixed column's LANDING width also caps at 45% of the row, so a narrow
+  // pane (Question Bank beside its 380px rail) splits between it and Name
+  // instead of crushing Name — wide panes resolve the min() to the px value.
   const track = (c: LandingCol) =>
     c.fixed
-      ? `calc(${c.landingWidth ?? c.width}px * (1 - var(--lm)) + ${share(c.width)} * var(--lm))`
+      ? `calc(min(${c.landingWidth ?? c.width}px, 45%) * (1 - var(--lm)) + ${share(c.width)} * var(--lm))`
       : `calc(${share(c.width)} * var(--lm))`;
   const template = [
     ...leadColumns.map(track),
@@ -179,7 +185,8 @@ export function LandingOverlay({
       <div className="lm-caption">
         <span className="lm-caption-label">{caption}</span>
         <button className="lm-caption-all" onClick={onShowAll}>
-          all {total} ↓
+          all {total}
+          <CaptionAllIcon />
         </button>
       </div>
       <div className="lm-list">
@@ -206,6 +213,7 @@ export function LandingOverlay({
           </div>
         ))}
       </div>
+      {footer}
       <div className="lm-hint-wrap">
         {/* Figma 716:1648 "Minimal State - Keep Scrolling" — a full-width bar
             with a top rule, not the pill it replaced. */}

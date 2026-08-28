@@ -23,6 +23,7 @@ export function PrmModal({
   confirmDisabled,
   confirmHref,
   cancelLabel = "Cancel",
+  hideCancel,
   danger,
   wide,
   pick,
@@ -40,6 +41,9 @@ export function PrmModal({
   /** Renders the CTA as an external link (new tab) instead of a button. */
   confirmHref?: string;
   cancelLabel?: string;
+  /** Acknowledgment-only modal — drops the footer's text button so the CTA is
+   *  the single way out (besides the close glyph). */
+  hideCancel?: boolean;
   /** Destructive confirm — the CTA takes the red variant of the button's own
    *  gradient recipe (Figma 495:2247). */
   danger?: boolean;
@@ -77,10 +81,12 @@ export function PrmModal({
           </div>
           {children}
         </div>
-        <div className="prm-foot">
-          <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
-            {cancelLabel}
-          </button>
+        <div className={`prm-foot${hideCancel ? " prm-foot--solo" : ""}`}>
+          {!hideCancel && (
+            <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
+              {cancelLabel}
+            </button>
+          )}
           {confirmHref ? (
             <a
               className={`prm-cta${danger ? " prm-cta--danger" : ""}`}

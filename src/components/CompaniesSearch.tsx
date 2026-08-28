@@ -6,7 +6,7 @@ import {
   COMPANY_INDUSTRIES,
   type Company,
 } from "../data/companies";
-import { SearchIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -250,7 +250,7 @@ export function CompaniesSearch({
           onKeyDown={onKeyDown}
         />
         <span className="usearch-kbd">
-          <span className="kbd-cmd">⌘</span>
+          <span className="kbd-cmd"><KeyCommandIcon /></span>
           <span className="kbd-letter">K</span>
         </span>
       </div>

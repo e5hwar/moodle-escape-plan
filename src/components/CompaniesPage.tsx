@@ -20,6 +20,7 @@ import {
 import {
   SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
   MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
+  MenuProgressIcon,
 } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
@@ -93,9 +94,11 @@ type Props = {
   onManageSubscription: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
   onViewEmployees: (company: Company) => void;
+  /** Opens Manage Completions with this company's cohort pre-selected. */
+  onManageProgress: (company: Company) => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onViewEmployees }: Props) {
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onViewEmployees, onManageProgress }: Props) {
   useCreateShortcut(onNewCompany);
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<CompanyFilterState>({
@@ -402,6 +405,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           onAddBillingEmails={() => setBillingModal(menu.company)}
           onCancelSubscription={() => setCancelModal(menu.company)}
           onViewEmployees={() => onViewEmployees(menu.company)}
+          onManageProgress={() => onManageProgress(menu.company)}
           onViewInvoices={() => setInvoicesModal(menu.company)}
         />
       )}
@@ -582,7 +586,7 @@ function CompanyRow({
 /* ─────────────── Row actions menu (fixed-positioned) ─────────────── */
 
 function CompanyActionsMenu({
-  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onViewInvoices,
+  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onManageProgress, onViewInvoices,
 }: {
   company: Company;
   rect: DOMRect;
@@ -593,6 +597,7 @@ function CompanyActionsMenu({
   onAddBillingEmails: () => void;
   onCancelSubscription: () => void;
   onViewEmployees: () => void;
+  onManageProgress: () => void;
   onViewInvoices: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -658,6 +663,9 @@ function CompanyActionsMenu({
       {item(<MenuUserVipIcon />, "Change Account Holder", onEditAccountHolder)}
       {item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
       {item(<MenuUsersIcon />, "View All Employees", onViewEmployees)}
+      {/* Sits with the other roster action — opens Manage Completions on this
+          company's cohort (that page left the sidebar; every way in is scoped). */}
+      {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
       {item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
       {item(<MenuEnterIcon />, "View Company Dashboard", () => viewDashboard(company))}
       {canCancel && item(<MenuCancelSubIcon />, "Cancel Subscription", onCancelSubscription, true)}

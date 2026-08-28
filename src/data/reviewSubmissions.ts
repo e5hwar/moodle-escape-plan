@@ -1,5 +1,4 @@
-import { users, type User } from "./users";
-import { CREATED_BY_B2B } from "./filters";
+import { users } from "./users";
 import { tasks } from "./tasks";
 
 export type SubmissionMedia =
@@ -49,7 +48,10 @@ export type TaskSubmission = {
   failCriteria: EvaluationCriterion[];
 };
 
-const TASK_NAMES = [
+/* The Hands-On Tasks the review queue draws submissions from, split by owner.
+   SkillCat's own library is open to every learner; company-created Tasks are
+   B2B content, so only a company's learners ever submit against them. */
+const SKILLCAT_TASK_NAMES = [
   "HVAC Install",
   "Refrigerant Charging Procedure",
   "Thermostat Wiring Lab",
@@ -62,11 +64,33 @@ const TASK_NAMES = [
   "Vacuum & Evacuation",
   "Leak Detection Test",
   "Furnace Ignition Check",
+  "Field Visit – Brazing Joints",
+  "Automotive A/C Recovery",
+  "PVC Pipe Joining Lab",
+  "Sweat Soldering Lab",
+  "Tankless Heater Lab",
+  "Hose Bibb Replacement",
 ];
 
+const COMPANY_TASK_NAMES = [
+  "Coil Cleaning Procedure",
+  "Gas Furnace Safety Check",
+  "Vacuum Pump Operation",
+  "Superheat Reading Lab",
+  "Electrical Panel Lab",
+  "Igniter Replacement Module",
+  "Gas Line Pressure Test",
+  "MultiFamily Service Visit",
+  "Backflow Preventer Setup",
+  "Sump Pump Install",
+];
+
+const B2B_TASK_NAMES = [...SKILLCAT_TASK_NAMES, ...COMPANY_TASK_NAMES];
+
 /* Every name above is a real Hands-On Task in the Tasks library, so a
-   submission's Task ID and Certifications are read from that record rather than
-   invented here — the review table shows the same values the Tasks page does. */
+   submission's Task ID, Certifications and creator are read from that record
+   rather than invented here — the review table shows the same values the Tasks
+   page does. */
 const taskRecordByName = new Map(tasks.map((t) => [t.name, t] as const));
 
 const DESCRIPTIONS = [
@@ -122,67 +146,78 @@ function activityLabel(days: number): string {
   return `${Math.floor(days / 7)} weeks ago`;
 }
 
-/** Build review submissions from a subset of real users. */
+/** Build the review queue: every learner in the user list, each with one to
+ * three Hands-On Tasks in flight. A learner can have several submissions
+ * waiting at once (different Tasks), which is what the real queue looks like —
+ * one row per user would never fill a reviewer's day. */
 function buildSubmissions(): TaskSubmission[] {
-  const pool: User[] = users.slice(0, 18);
-  return pool.map((u, i) => {
-    const k = uhash(u.id + i);
-    const taskName = TASK_NAMES[k % TASK_NAMES.length];
-    const taskRecord = taskRecordByName.get(taskName);
-    const submittedDaysAgo = (k % 21) + 1;
-    const mediaCount = 2 + (k % 3); // 2–4 media items
-    const media: SubmissionMedia[] = Array.from({ length: mediaCount }, (_, m) =>
-      m === 0
-        ? {
-            kind: "video" as const,
-            seed: `${u.id}-${m}`,
-            duration: `0:${String(4 + (k % 50)).padStart(2, "0")}`,
-          }
-        : { kind: "image" as const, seed: `${u.id}-${m}` },
-    );
-    // Newest-first version list, always anchored at V1. A user with 3 attempts
-    // gets ["V3","V2","V1"] — never "V5" with no V1 underneath it.
-    const versionCount = 1 + (k % 5);
-    const versions = Array.from({ length: versionCount }, (_, vi) => `V${versionCount - vi}`);
-    const status: SubmissionStatus =
-      k % 9 === 0 ? "Rejected" : k % 11 === 0 ? "Completed" : "Review Pending";
-    return {
-      id: `RS-${2400 - i * 7}`,
-      userId: u.id,
-      userName: u.name,
-      email: u.email,
-      phone: u.phone,
-      userType: u.userType,
-      companyName: u.companyName,
-      taskName,
-      taskId: taskRecord?.id ?? "—",
-      certifications: taskRecord?.usedIn ?? [],
-      submittedOn: isoDaysAgo(submittedDaysAgo),
-      // Who created the Task — SkillCat for B2C content, or a B2B customer for
-      // company-owned Tasks. Uses the same shorthand creator list as the
-      // Tasks/Certifications pages so the "Created By" filter options match.
-      createdBy:
-        u.userType === "B2B"
-          ? CREATED_BY_B2B[k % CREATED_BY_B2B.length]
-          : "SkillCat",
-      durationLabel: "Hands-on Task · 2 Hours",
-      status,
-      progress: 100,
-      completion: isoDaysAgo(submittedDaysAgo),
-      // Only B2B (company) learners have a company-assigned deadline.
-      dueDate: u.userType === "B2B" ? isoDaysAhead(15 + (k % 30)) : undefined,
-      lastActivity: activityLabel(submittedDaysAgo),
-      versions,
-      media,
-      description: DESCRIPTIONS[k % DESCRIPTIONS.length],
-      // Two in three submissions come with a voice note.
-      hasAudio: k % 3 !== 0,
-      audioLabel: "Voice note",
-      audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
-      criteria: CRITERIA,
-      failCriteria: FAIL_CRITERIA,
-    };
+  const out: TaskSubmission[] = [];
+  users.forEach((u) => {
+    const base = uhash(u.id);
+    // A Self-Learner only ever sees SkillCat's library; a company's learners
+    // also get that company's own Tasks.
+    const pool = u.userType === "B2B" ? B2B_TASK_NAMES : SKILLCAT_TASK_NAMES;
+    // 1–3 Tasks per learner, deterministically.
+    const attempts = base % 9 === 0 ? 3 : base % 3 === 0 ? 2 : 1;
+    for (let a = 0; a < attempts; a++) {
+      const k = uhash(`${u.id}:${a}`);
+      // Stride 5 over a pool whose length is coprime to it, so a learner's
+      // submissions are always against distinct Tasks.
+      const taskName = pool[(base + a * 5) % pool.length];
+      const taskRecord = taskRecordByName.get(taskName);
+      const submittedDaysAgo = (k % 21) + 1;
+      const mediaCount = 2 + (k % 3); // 2–4 media items
+      const media: SubmissionMedia[] = Array.from({ length: mediaCount }, (_, m) =>
+        m === 0
+          ? {
+              kind: "video" as const,
+              seed: `${u.id}-${a}-${m}`,
+              duration: `0:${String(4 + (k % 50)).padStart(2, "0")}`,
+            }
+          : { kind: "image" as const, seed: `${u.id}-${a}-${m}` },
+      );
+      // Newest-first version list, always anchored at V1. A user with 3 attempts
+      // gets ["V3","V2","V1"] — never "V5" with no V1 underneath it.
+      const versionCount = 1 + (k % 5);
+      const versions = Array.from({ length: versionCount }, (_, vi) => `V${versionCount - vi}`);
+      const status: SubmissionStatus =
+        k % 9 === 0 ? "Rejected" : k % 11 === 0 ? "Completed" : "Review Pending";
+      out.push({
+        id: `RS-${2400 - out.length * 7}`,
+        userId: u.id,
+        userName: u.name,
+        email: u.email,
+        phone: u.phone,
+        userType: u.userType,
+        companyName: u.companyName,
+        taskName,
+        taskId: taskRecord?.id ?? "—",
+        certifications: taskRecord?.usedIn ?? [],
+        submittedOn: isoDaysAgo(submittedDaysAgo),
+        // Who created the Task, straight from the Tasks library — SkillCat for
+        // its own content, or the B2B customer that authored it. A company's
+        // own Task is graded by that company, so those rows land read-only.
+        createdBy: taskRecord?.createdBy ?? "SkillCat",
+        durationLabel: "Hands-on Task · 2 Hours",
+        status,
+        progress: 100,
+        completion: isoDaysAgo(submittedDaysAgo),
+        // Only B2B (company) learners have a company-assigned deadline.
+        dueDate: u.userType === "B2B" ? isoDaysAhead(15 + (k % 30)) : undefined,
+        lastActivity: activityLabel(submittedDaysAgo),
+        versions,
+        media,
+        description: DESCRIPTIONS[k % DESCRIPTIONS.length],
+        // Two in three submissions come with a voice note.
+        hasAudio: k % 3 !== 0,
+        audioLabel: "Voice note",
+        audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
+        criteria: CRITERIA,
+        failCriteria: FAIL_CRITERIA,
+      });
+    }
   });
+  return out;
 }
 
 export const reviewSubmissions: TaskSubmission[] = buildSubmissions();

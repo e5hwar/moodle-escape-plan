@@ -294,6 +294,15 @@ export const RunMoveDownIcon = () => (
   </svg>
 );
 
+/* The "ALL 30 ↓" affordance on the minimal-state header row (Figma 760:4649).
+   Same Icon Library glyph as RunMoveDownIcon, exported at 14px — the geometry
+   and the 1.33333 stroke scale by 14/16 (→ 1.16667), square caps kept. */
+export const CaptionAllIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M10.2083 7.93333L7 11.1417L3.79167 7.93333M7 10.4125V2.82917" />
+  </svg>
+);
+
 /* Double chevron for the landing's "keep scrolling" bar (Figma 716:1656) —
    transcribed from the exported asset: 16px box, 1.33333 stroke, square caps. */
 export const KeepScrollingIcon = () => (
@@ -688,6 +697,16 @@ export const MenuInvoiceIcon = () => (
   </svg>
 );
 
+/* Padlock — Revoke Access on the Who Paid menus (Figma 786:1719 available /
+   785:1699 disabled). Transcribed from the exported asset, which draws in an
+   11.333×14 box inset 18.75% left/right and 8.33%/12.5% top/bottom of the 16px
+   frame — i.e. the same path translated by (2.333, 0.667). */
+export const MenuLockIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.667 10.667H9.333M3 7.333H13V14H3V7.333ZM4.667 4.667C4.667 3.783 5.018 2.935 5.643 2.31C6.268 1.685 7.116 1.333 8 1.333C8.884 1.333 9.732 1.685 10.357 2.31C10.982 2.935 11.333 3.783 11.333 4.667V7.333H4.667V4.667Z" />
+  </svg>
+);
+
 /* Arrow into a frame — View Company Dashboard, and Login As on the Users
    menu (673:1437 ships the identical asset). */
 export const MenuEnterIcon = () => (
@@ -741,6 +760,16 @@ export const MenuCardOffIcon = () => (
   </svg>
 );
 
+/* Document with a folded corner and a person on it — View User IDs (node
+   679:2031). The person is MenuProfileIcon's, dropped 0.667 to sit inside the
+   page. */
+export const MenuIdDocIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M2.667 1.333H10L13.333 4.667V14.667H2.667V1.333Z" />
+    <path d="M11.333 12.667C11.333 12.136 11.123 11.628 10.748 11.252C10.372 10.877 9.864 10.667 9.333 10.667H6.667C6.136 10.667 5.628 10.877 5.252 11.252C4.877 11.628 4.667 12.136 4.667 12.667M9.667 7C9.667 7.442 9.491 7.866 9.179 8.179C8.866 8.491 8.442 8.667 8 8.667C7.558 8.667 7.134 8.491 6.821 8.179C6.509 7.866 6.333 7.442 6.333 7C6.333 6.558 6.509 6.134 6.821 5.821C7.134 5.509 7.558 5.333 8 5.333C8.442 5.333 8.866 5.509 9.179 5.821C9.491 6.134 9.667 6.558 9.667 7Z" />
+  </svg>
+);
+
 /* ── Manage Users PAGE-level 3-dot menu — Figma 677:1956. The sidebar draws
    its own off-family merge/transfer glyphs (24-unit, round caps); these are
    the Icon Library's 16px square-cap versions. ── */
@@ -759,10 +788,55 @@ export const MenuTransferIcon = () => (
   </svg>
 );
 
+/* ── Tasks 3-dot menu glyphs — Figma 735:1375 "3-Dot Menu - Task". Edit Task,
+   Make Visible, Manage User Progress and Delete Task reuse RowEditIcon /
+   RowEyeIcon / MenuProgressIcon / RowDeleteIcon — those assets are
+   byte-identical. Same transcription rules as the sets above. ── */
+
+/* Bill sliding into a cash tray with a coin — View Who Paid (node 7:5522). */
+export const MenuPaidIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M14 7.336H13.883L12.667 3.781L2.236 7.336L2 7.334M1.667 7.337H2L9.431 1.401L11.309 4.034" />
+    <path d="M9.667 10.668C9.667 11.11 9.491 11.534 9.179 11.846C8.866 12.159 8.442 12.334 8 12.334C7.558 12.334 7.134 12.159 6.821 11.846C6.509 11.534 6.333 11.11 6.333 10.668C6.333 10.226 6.509 9.802 6.821 9.489C7.134 9.177 7.558 9.001 8 9.001C8.442 9.001 8.866 9.177 9.179 9.489C9.491 9.802 9.667 10.226 9.667 10.668Z" />
+    <path d="M14.333 7.334V14.001H1.667V7.334H14.333Z" />
+    <path d="M1.667 7.334H3C3 7.688 2.86 8.027 2.609 8.277C2.359 8.527 2.02 8.668 1.667 8.668V7.334ZM14.333 7.334H13C13 7.688 13.141 8.027 13.391 8.277C13.641 8.527 13.98 8.668 14.333 8.668V7.334ZM1.667 14.001H3.001C3.002 13.826 2.967 13.652 2.9 13.49C2.833 13.328 2.735 13.181 2.611 13.057C2.487 12.933 2.34 12.835 2.178 12.768C2.016 12.701 1.842 12.666 1.667 12.666V14.001ZM14.333 14.001H13C13 13.647 13.141 13.308 13.391 13.058C13.641 12.808 13.98 12.667 14.333 12.667V14.001Z" />
+  </svg>
+);
+
+/* Speech bubble with a question mark — View All Attempts (node 7:3217). */
+export const MenuAttemptsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M1.667 2H14.333V11.333H4.333L1.667 13.667V2Z" />
+    <path d="M6.667 5.667C6.667 5.313 6.807 4.974 7.057 4.724C7.307 4.473 7.646 4.333 8 4.333C8.354 4.333 8.693 4.473 8.943 4.724C9.193 4.974 9.333 5.313 9.333 5.667C9.333 7 8.002 7.019 8.002 7.167M8 9H8.003V9.003H8V9Z" />
+  </svg>
+);
+
 /* Octagon with an ✕ — the archive/deactivate glyph (Figma node 7:1812). */
 export const MenuArchiveIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
     <path d="M10.121 5.879L8 8M8 8L5.879 10.121M8 8L10.121 10.121M8 8L5.879 5.878M5.377 1.667H10.623L14.333 5.377V10.623L10.623 14.333H5.377L1.667 10.623V5.377L5.377 1.667Z" />
+  </svg>
+);
+
+/* ── Certifications 3-dot menu glyphs — Figma 735:1454 "3-Dot Menu -
+   Certifications". Edit Certification, Make Visible/Hidden, View Who Paid,
+   Manage User Progress and Delete Certification reuse RowEditIcon /
+   RowEyeIcon / RowEyeOffIcon / MenuPaidIcon / MenuProgressIcon /
+   RowDeleteIcon — those assets are byte-identical. These two are new. ── */
+
+/* Broken chain — Manage Content Links (node 735:1501). The asset already
+   draws in the full 16px frame, so it needs no translation. */
+export const MenuLinkIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M7.784 4.66L9.333 3.111C9.805 2.64 10.444 2.375 11.111 2.375C11.441 2.375 11.768 2.44 12.073 2.566C12.378 2.693 12.655 2.878 12.889 3.111C13.122 3.345 13.307 3.622 13.434 3.927C13.56 4.232 13.625 4.559 13.625 4.889C13.625 5.219 13.56 5.546 13.434 5.851C13.307 6.156 13.122 6.433 12.889 6.667L11.34 8.216M4.66 7.785L3.111 9.333C2.639 9.805 2.374 10.444 2.374 11.111C2.374 11.778 2.639 12.418 3.111 12.889C3.582 13.361 4.222 13.626 4.889 13.626C5.556 13.626 6.195 13.361 6.667 12.889L8.215 11.34M9.332 6.667L6.665 9.333" />
+  </svg>
+);
+
+/* Compass dial struck through — Archive & Replace (node 790:1747). Retiring a
+   Certification takes it off the catalog's map; the slash is the asset's. */
+export const MenuArchiveReplaceIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M9.133 6.047L10.468 5.533L9.955 6.868M5.255 1.923C6.118 1.534 7.054 1.333 8 1.333C11.682 1.333 14.667 4.318 14.667 8C14.667 8.978 14.456 9.907 14.077 10.744M3.287 3.287C2.667 3.905 2.175 4.64 1.84 5.448C1.505 6.257 1.332 7.124 1.333 8C1.333 11.682 4.318 14.667 8 14.667C8.876 14.668 9.743 14.496 10.552 14.161C11.361 13.826 12.096 13.334 12.714 12.714M2 2L14 14M8.339 11.067L7.439 8.563L4.933 7.662L6.905 6.903L9.097 9.096L8.339 11.067Z" />
   </svg>
 );
 
@@ -783,6 +857,17 @@ export const RowKebabIcon = () => (
 export const ChevronDownSquareIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
     <path d="M11.667 6.333L8 10L4.333 6.333" />
+  </svg>
+);
+
+/* Chevron right (762:4704 / 762:4707, "Icon Library") — the open-row affordance
+   on the Hands-On submissions table, in the resting cell AND inside the hover
+   pill. Same 16px / 1.3333 / square-cap grid as ChevronDownSquareIcon; the path
+   is the Figma export verbatim. Inline (not the exported <img>) because the two
+   states tint it differently — #a8a8a8 resting, white in the pill. */
+export const RowChevronIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M6.33333 11.6667L10 8L6.33333 4.33333" />
   </svg>
 );
 
@@ -822,6 +907,21 @@ export const RowDragIcon = () => (
   </svg>
 );
 
+/* move (751:2524) — the Quiz Questions row drag handle: the 16px "move"
+   variant of the family, two columns of four 2px square dots. Same
+   construction as RowDragIcon: Figma strokes a 0.667 square with a 1.333
+   square cap, which resolves to these filled rects. */
+export const MoveIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    {[1.5, 5.167, 8.833, 12.5].map((y) => (
+      <g key={y}>
+        <rect x="4.5" y={y} width="2" height="2" />
+        <rect x="9.5" y={y} width="2" height="2" />
+      </g>
+    ))}
+  </svg>
+);
+
 /* Copy — two stacked pages, from the Figma icon library (436:607). Drawn on the
    library's 14px box: the sheet in front, then the one behind it. */
 export const CopyIcon = () => (
@@ -846,5 +946,14 @@ export const KeyArrowLeftIcon = () => (
     <g transform="translate(1.83 2.54)">
       <path d="M3.45711 0.707107L0.707107 3.45711L3.45711 6.20711M1.33211 3.45711H7.83211" />
     </g>
+  </svg>
+);
+
+/* ⌘ keycap glyph (Figma 773:1231) — the search bar's command key, drawn on the
+   icon library's 14px box. The 18px Large bar reuses it; the viewBox scales the
+   1.1667 stroke with it. */
+export const KeyCommandIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667">
+    <path d="M8.45833 5.54167V8.45833M8.45833 5.54167H5.54167M8.45833 5.54167V3.79167C8.45833 3.44555 8.56097 3.1072 8.75326 2.81942C8.94555 2.53163 9.21887 2.30733 9.53864 2.17488C9.85841 2.04242 10.2103 2.00777 10.5497 2.07529C10.8892 2.14282 11.201 2.30949 11.4458 2.55423C11.6905 2.79897 11.8572 3.11079 11.9247 3.45026C11.9922 3.78973 11.9576 4.14159 11.8251 4.46136C11.6927 4.78113 11.4684 5.05445 11.1806 5.24674C10.8928 5.43903 10.5545 5.54167 10.2083 5.54167H8.45833ZM8.45833 8.45833H5.54167M8.45833 8.45833H10.2083C10.5545 8.45833 10.8928 8.56097 11.1806 8.75326C11.4684 8.94555 11.6927 9.21887 11.8251 9.53864C11.9576 9.85841 11.9922 10.2103 11.9247 10.5497C11.8572 10.8892 11.6905 11.201 11.4458 11.4458C11.201 11.6905 10.8892 11.8572 10.5497 11.9247C10.2103 11.9922 9.85841 11.9576 9.53864 11.8251C9.21887 11.6927 8.94555 11.4684 8.75326 11.1806C8.56097 10.8928 8.45833 10.5545 8.45833 10.2083V8.45833ZM5.54167 5.54167V8.45833M5.54167 5.54167H3.79167C3.44555 5.54167 3.1072 5.43903 2.81942 5.24674C2.53163 5.05445 2.30733 4.78113 2.17488 4.46136C2.04242 4.14159 2.00777 3.78973 2.07529 3.45026C2.14282 3.11079 2.30949 2.79897 2.55423 2.55423C2.79897 2.30949 3.11079 2.14282 3.45026 2.07529C3.78973 2.00777 4.14159 2.04242 4.46136 2.17488C4.78113 2.30733 5.05445 2.53163 5.24674 2.81942C5.43903 3.1072 5.54167 3.44555 5.54167 3.79167V5.54167ZM5.54167 8.45833V10.2083C5.54167 10.5545 5.43903 10.8928 5.24674 11.1806C5.05445 11.4684 4.78113 11.6927 4.46136 11.8251C4.14159 11.9576 3.78973 11.9922 3.45026 11.9247C3.11079 11.8572 2.79897 11.6905 2.55423 11.4458C2.30949 11.201 2.14282 10.8892 2.07529 10.5497C2.00777 10.2103 2.04242 9.85841 2.17488 9.53864C2.30733 9.21887 2.53163 8.94555 2.81942 8.75326C3.1072 8.56097 3.44555 8.45833 3.79167 8.45833H5.54167Z" />
   </svg>
 );

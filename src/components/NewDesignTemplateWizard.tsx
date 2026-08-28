@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { UploadIcon } from "./icons";
 import { WizardStepRail } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import type { AwardDesignTemplate } from "../data/awards";
 
 type Props = {
@@ -55,6 +56,15 @@ export function NewDesignTemplateWizard(props: Props) {
 
   const nameValid = data.name.trim().length > 0;
   const bgValid = data.background.trim().length > 0;
+  // Wheel-past-the-edge step navigation, shared with every other wizard.
+  const lastStep = STEPS.length - 1;
+  const gate = useEdgeLineGate({
+    step,
+    setStep,
+    lastStep,
+    // Same guard the footer's Next button enforces.
+    canGoNext: nameValid && bgValid,
+  });
 
   function handleSave() {
     const now = "Apr 28, 2026";
@@ -91,7 +101,7 @@ export function NewDesignTemplateWizard(props: Props) {
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => (i === 0 || nameValid ? setStep(i) : undefined)}
+                  onClick={() => (i === 0 || nameValid ? gate.goStep(i) : undefined)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
@@ -103,12 +113,24 @@ export function NewDesignTemplateWizard(props: Props) {
           </ol>
         </aside>
 
-        <div className="wizard-content">
-          <h1 className="wizard-title">{STEPS[step].label}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((s) => s.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
+              <h1 className="wizard-title">{STEPS[step].label}</h1>
+              <p className="wizard-desc">{STEPS[step].desc}</p>
 
-          {step === 0 && <DetailsStep data={data} update={update} />}
-          {step === 1 && <PositioningStep />}
+              {step === 0 && <DetailsStep data={data} update={update} />}
+              {step === 1 && <PositioningStep />}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -121,11 +143,15 @@ export function NewDesignTemplateWizard(props: Props) {
         </div>
         <div className="wizard-actions">
           {step > 0 && (
-            <button className="btn-save-draft" onClick={() => setStep(step - 1)}>Back</button>
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
           )}
           {step === 0 ? (
-            <button className="btn-publish" disabled={!nameValid || !bgValid} onClick={() => setStep(1)}>
-              Next: {STEPS[1].label}
+            <button className="btn-publish wizard-gate-btn" disabled={!nameValid || !bgValid} onClick={() => gate.goStep(1)}>
+              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+              <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
             </button>
           ) : (
             <button className="btn-publish" disabled={!nameValid || !bgValid} onClick={handleSave}>

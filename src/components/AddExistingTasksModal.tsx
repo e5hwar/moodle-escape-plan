@@ -637,7 +637,6 @@ function TaskPreviewPanel({
         <span className="co-pill-muted">{task.createdBy}</span>
         <span className="co-pill-muted">{isPaid(task) ? "Paid" : "Free"}</span>
         {task.finalExam && <span className="co-pill-muted">Final Exam</span>}
-        {task.draft && <span className="co-pill-muted">Draft</span>}
       </div>
 
       <div className="co-panel-body">

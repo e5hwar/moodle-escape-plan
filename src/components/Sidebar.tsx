@@ -126,6 +126,9 @@ type NavSection = { label?: string; items: LinkItem[] };
 // into the Tasks page header (same move Offer Codes / Scholarships made).
 // Industries, Awards, and Feedback made the same move onto the Certifications
 // page header; the crumb on each page is the way back.
+// Manage Completions is absent too: it is only ever reached scoped, from a
+// row's "Manage User Progress" action on Tasks, Certifications, Manage Users,
+// or Companies — see ContentOverridesPage.
 const sections: NavSection[] = [
   {
     label: "Content",
@@ -137,7 +140,6 @@ const sections: NavSection[] = [
   {
     label: "Operations",
     items: [
-      { key: "content-overrides", label: "Manage Completions", icon: "edit", navKey: "content-overrides" },
       { key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
       // Name Change Requests left this group 2026-08-25 — it's reached from the
       // Proctoring Review header's "Name Changes" button now (the route stays).

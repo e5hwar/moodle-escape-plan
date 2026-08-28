@@ -5,7 +5,7 @@ import {
   type Question,
 } from "../data/questionBank";
 
-import { SearchIcon, SearchClearIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 8;
@@ -360,7 +360,7 @@ export function QuestionSearch({
           </button>
         ) : (
           <span className="usearch-kbd">
-            <span className="kbd-cmd">⌘</span>
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}

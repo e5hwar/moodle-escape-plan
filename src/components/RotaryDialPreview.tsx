@@ -79,7 +79,7 @@ function buildFacets(task: Task): Facet[] {
     {
       id: "lifecycle",
       kicker: "LIFECYCLE",
-      heading: task.draft ? "Draft · unpublished" : (task.visibility ?? "Visible · published"),
+      heading: task.visibility ?? "Visible · published",
       subtext: task.updated ? `Updated ${task.updated}` : task.dateModified ? `Updated ${task.dateModified}` : "Updated recently",
       detail: [
         ["Created", `${task.dateCreated ?? "—"} · ${task.createdBy}`],

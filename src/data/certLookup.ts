@@ -3,8 +3,10 @@
  *
  * Ports the "cert-engine" status/attempt/timeline logic, but seeds everything
  * from the app's real entities instead of synthetic demo data:
- *   • Employees      → src/data/users.ts (the Users page)
- *   • Cohorts        → distinct companyName groups among B2B users
+ *   • Employees      → src/data/users.ts (the Users page) plus every company's
+ *                      own generated roster (src/data/companies.ts), so a
+ *                      cohort exists for every company on the Companies page
+ *   • Cohorts        → one per company, holding both rosters' employees
  *   • Certifications → src/data/certifications.ts
  *   • Tasks          → src/data/tasks.ts (associated by `usedIn`, then padded
  *                      deterministically to each cert's declared task count)
@@ -16,6 +18,7 @@
  */
 
 import { users, type User } from "./users";
+import { companies as appCompanies, getCompanyUsers } from "./companies";
 import { certifications as appCerts } from "./certifications";
 import { tasks as appTasks, type Task, type TaskType } from "./tasks";
 import type { Attempt } from "./attempts";
@@ -61,6 +64,13 @@ export type Cell = {
   returnedAt: number | null;
   attemptGrants: { at: number; amount: number }[];
   manual: boolean;
+  /** Who marked the task complete — an instructor for reviewed Hands-On work,
+   *  the admin for manual overrides, null when it was earned in-product. */
+  markedBy: string | null;
+  /** Attempt numbers an admin has deleted (each frees one attempt slot). */
+  deletedAttempts: number[];
+  /** The reason typed into the apply-changes dialog, when one was given. */
+  note: string | null;
 };
 
 export type CertTask = {
@@ -136,10 +146,10 @@ function attemptLimitFor(t: Task): number | null {
 /** Real tasks associated with a cert via `usedIn`, padded to the declared count. */
 function tasksForCert(cert: (typeof appCerts)[number], certIndex: number): Task[] {
   const matched = appTasks.filter(
-    (t) => !t.draft && t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
+    (t) => t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
   );
   const target = clamp(cert.tasks, 4, 12);
-  const pool = appTasks.filter((t) => !t.draft && !t.finalExam);
+  const pool = appTasks.filter((t) => !t.finalExam);
 
   const list: Task[] = [];
   const seen = new Set<string>();
@@ -170,6 +180,9 @@ function tasksForCert(cert: (typeof appCerts)[number], certIndex: number): Task[
 }
 
 /* ─────────────────────────── build the model ────────────────────────── */
+
+/** Instructors credited on reviewed Hands-On completions (hash-picked). */
+const INSTRUCTORS = ["J. Cole (Instructor)", "M. Ferris (Instructor)", "S. Bhatt (Instructor)"];
 
 function genCell(uid: string, task: CertTask, forceComplete: boolean): Cell {
   const rng = mulberry32(hash(uid + "|" + task.id));
@@ -213,11 +226,17 @@ function genCell(uid: string, task: CertTask, forceComplete: boolean): Cell {
     returnedAt: null,
     attemptGrants: [],
     manual: false,
+    markedBy:
+      status === "complete" && task.type === "Hands-On Task"
+        ? INSTRUCTORS[hash(uid + "|" + task.id + "|marker") % INSTRUCTORS.length]
+        : null,
+    deletedAttempts: [],
+    note: null,
   };
 }
 
 export function buildData(): CertData {
-  // Employees from the Users list.
+  // Employees from the Users list…
   const employees: Employee[] = (users as User[]).map((u) => ({
     id: u.id,
     name: u.name,
@@ -226,11 +245,32 @@ export function buildData(): CertData {
     cohort: u.companyName ?? null,
     isB2B: u.userType === "B2B",
   }));
+
+  /* …plus each company's own roster. Company employees are generated and live
+     outside the Manage Users list (see getCompanyUsers), but a company opened
+     from the Companies page must resolve to a cohort with people in it —
+     only 11 of the 28 companies have anyone in the Manage Users roster. Their
+     "U-9…" ids are outside the users.ts range, so the two never collide. */
+  appCompanies.forEach((c) => {
+    getCompanyUsers(c).forEach((u) => {
+      employees.push({
+        id: u.id,
+        name: u.name,
+        initials: initialsOf(u.name),
+        contact: u.email,
+        cohort: c.name,
+        isB2B: true,
+      });
+    });
+  });
+
   const employeesById: Record<string, Employee> = {};
   employees.forEach((e) => (employeesById[e.id] = e));
 
-  // Cohorts = distinct companyName groups (B2B only), ordered by name.
+  // Cohorts = one per company, ordered by name. Every company on the
+  // Companies page gets an entry, even when only one roster feeds it.
   const cohortMap = new Map<string, string[]>();
+  appCompanies.forEach((c) => cohortMap.set(c.name, []));
   employees.forEach((e) => {
     if (!e.cohort) return;
     if (!cohortMap.has(e.cohort)) cohortMap.set(e.cohort, []);
@@ -408,11 +448,20 @@ export function attemptInfo(t: CertTask, c: Cell): AttemptInfo {
   const attemptLimit = t.attemptLimit ?? null;
   const grants = c.attemptGrants || [];
   const grantedTotal = grants.reduce((s, g) => s + g.amount, 0);
-  const attemptsUsed = c.attempts || 0;
+  /* A deleted attempt frees its slot. */
+  const attemptsUsed = Math.max(0, (c.attempts || 0) - (c.deletedAttempts?.length ?? 0));
   const hasLimit = isQuiz && attemptLimit != null;
   const totalAllowed = hasLimit ? attemptLimit! + grantedTotal : null;
   const remaining = hasLimit ? Math.max(0, (totalAllowed ?? 0) - attemptsUsed) : null;
   return { isQuiz, hasLimit, attemptLimit, grantedTotal, attemptsUsed, totalAllowed, remaining, grants };
+}
+
+/** True when an attempt-limited quiz is out of attempts without a pass —
+ *  the red "Attempts Exhausted" state. Granting attempts clears it. */
+export function isExhausted(t: CertTask, c: Cell): boolean {
+  if (c.status === "complete") return false;
+  const ai = attemptInfo(t, c);
+  return ai.hasLimit && ai.remaining === 0;
 }
 
 /* ───────────────────── attempt history (for the Attempts page) ──────────────────── */
@@ -447,6 +496,7 @@ export function attemptsForTask(
   const endBase = cell.completedAt ?? cell.submittedAt ?? startBase + DAY;
   const span = Math.max(endBase - startBase, DAY);
 
+  const deleted = new Set(cell.deletedAttempts ?? []);
   const out: Attempt[] = [];
   for (let i = 1; i <= n; i++) {
     const isLast = i === n;
@@ -471,7 +521,9 @@ export function attemptsForTask(
       grade,
     });
   }
-  return out;
+  /* Admin-deleted attempts drop out of the history but keep their numbering,
+     so "#3" still names the same attempt after "#2" is deleted. */
+  return out.filter((a) => !deleted.has(a.attemptNumber));
 }
 
 /* ──────────────────────────── formatting ───────────────────────────── */
@@ -603,7 +655,19 @@ export function needsGradePrompt(task: CertTask): boolean {
 
 /* ──────────────────── mutations (return new state) ───────────────────── */
 
-export function applyMarkComplete(cells: CellMap, uid: string, tid: string, grade: number | null): CellMap {
+/** The admin every manual change is logged as, and the fixed-clock stamp the
+ *  audit line shows (the app runs on the deterministic NOW above). */
+export const ADMIN_ACTOR = "A. Rivera (CS)";
+export const ADMIN_STAMP = fmtDT(NOW);
+
+export function applyMarkComplete(
+  cells: CellMap,
+  uid: string,
+  tid: string,
+  grade: number | null,
+  markedBy: string | null = null,
+  note: string | null = null,
+): CellMap {
   const key = uid + "_" + tid;
   const c = cells[key];
   if (!c) return cells;
@@ -614,12 +678,28 @@ export function applyMarkComplete(cells: CellMap, uid: string, tid: string, grad
     submittedAt: c.submittedAt ?? NOW - 3600000,
     completedAt: NOW,
     manual: true,
+    markedBy: markedBy ?? c.markedBy,
+    note: note ?? c.note,
     attempts: c.attempts || 1,
     timeSpent: c.timeSpent || 30,
     grade:
       grade != null && !Number.isNaN(grade) ? Math.max(0, Math.min(100, Math.round(grade))) : null,
   };
   return { ...cells, [key]: next };
+}
+
+/** Deletes one attempt from a quiz's history — the attempt number disappears
+ *  from `attemptsForTask` and `attemptInfo` counts one more remaining slot. */
+export function applyDeleteAttempt(
+  cells: CellMap,
+  uid: string,
+  tid: string,
+  attemptNumber: number,
+): CellMap {
+  const key = uid + "_" + tid;
+  const c = cells[key];
+  if (!c || c.deletedAttempts.includes(attemptNumber)) return cells;
+  return { ...cells, [key]: { ...c, deletedAttempts: [...c.deletedAttempts, attemptNumber] } };
 }
 
 export function applyGrantAttempt(cells: CellMap, uid: string, tid: string, amount = 1): CellMap {
@@ -677,7 +757,7 @@ export function attemptTaskIdForExam(examName: string): string | null {
   cachedData ??= buildData();
 
   const used = (appTasks as Task[]).filter(
-    (t) => !t.draft && t.usedIn.some((u) => USEDIN_TO_CERT[u] === certId),
+    (t) => t.usedIn.some((u) => USEDIN_TO_CERT[u] === certId),
   );
   const candidates = [
     ...used.filter((t) => t.finalExam),

@@ -83,9 +83,9 @@ const toPreviewTask = (t: Task): CertPreviewTask => ({
 function tasksFor(cert: Certification): CertPreviewTask[] {
   const seed = hash(cert.id);
   const matched = appTasks.filter(
-    (t) => !t.draft && t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
+    (t) => t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
   );
-  const pool = appTasks.filter((t) => !t.draft && !t.finalExam);
+  const pool = appTasks.filter((t) => !t.finalExam);
   const target = cert.tasks;
 
   const list: Task[] = [];

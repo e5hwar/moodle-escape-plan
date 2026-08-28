@@ -11,7 +11,7 @@ import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
 import { tasks, type Task } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
-import { NewCertificationWizard } from "./components/NewCertificationWizard";
+import { NewCertificationWizard, ArchiveCertificationPage } from "./components/NewCertificationWizard";
 import { NewCertificationStart } from "./components/NewCertificationStart";
 import { SkillsPage } from "./components/SkillsPage";
 import { AwardsPage } from "./components/AwardsPage";
@@ -20,7 +20,7 @@ import { ContentLinksPage } from "./components/ContentLinksPage";
 import { nodes as contentNodes, type ContentNode, type Level } from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
-import { questions as seedQuestions, type Question } from "./data/questionBank";
+import { questions as seedQuestions, type Question, type QuestionType } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
@@ -88,12 +88,13 @@ type View =
   | { name: "new-cert-start" }
   | { name: "new-cert" }
   | { name: "edit-cert"; cert: Certification }
+  | { name: "archive-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
   | { name: "content-links"; cert?: Certification }
   | { name: "skills" }
   | { name: "awards" }
   | { name: "question-bank" }
-  | { name: "new-question"; categoryPath?: string[]; forFormId?: string }
+  | { name: "new-question"; categoryPath?: string[]; initialType?: QuestionType; forFormId?: string }
   | { name: "edit-question"; question: Question }
   | { name: "spotlight" }
   | { name: "proctoring" }
@@ -111,7 +112,17 @@ type View =
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
   | { name: "name-change-requests" }
-  | { name: "content-overrides"; userId?: string }
+  /* Manage Completions is not a nav landing page — it is only reached scoped,
+     from a row's "Manage User Progress" action. `origin` is the page that
+     opened it: it lights that sidebar entry and is the crumb back. */
+  | {
+      name: "content-overrides";
+      userId?: string;
+      cohort?: string;
+      certId?: string;
+      taskId?: string;
+      origin: "tasks" | "certs" | "users" | "companies";
+    }
   | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" }
   | { name: "merge-accounts" }
   | { name: "transfer-subscription" }
@@ -133,7 +144,6 @@ const VIEW_SLUGS: Record<string, string> = {
   skills: "skills",
   awards: "awards",
   feedback: "feedback",
-  "content-overrides": "certification-lookup",
   "review-hands-on": "review-hands-on",
   proctoring: "proctoring-review",
   "name-change-requests": "name-change-requests",
@@ -170,11 +180,28 @@ const NAV_KEY_TO_VIEW: Record<string, View> = {
   "offer-codes": { name: "offer-codes" },
   "review-hands-on": { name: "review-hands-on" },
   "name-change-requests": { name: "name-change-requests" },
-  "content-overrides": { name: "content-overrides" },
   "product-config": { name: "product-config" },
   "merge-accounts": { name: "merge-accounts" },
   "transfer-subscription": { name: "transfer-subscription" },
   permissions: { name: "permissions" },
+};
+
+/* Manage Completions' four entry points: which sidebar entry stays lit, what
+   the crumb reads, and where it goes back to. */
+const CONTENT_OVERRIDES_NAV: Record<"tasks" | "certs" | "users" | "companies", string> = {
+  tasks: "tasks",
+  certs: "certs",
+  users: "manage-users",
+  companies: "manage-companies",
+};
+const CONTENT_OVERRIDES_BACK: Record<
+  "tasks" | "certs" | "users" | "companies",
+  { label: string; view: View }
+> = {
+  tasks: { label: "Tasks", view: { name: "tasks" } },
+  certs: { label: "Certifications", view: { name: "certs" } },
+  users: { label: "Manage Users", view: { name: "users" } },
+  companies: { label: "Companies", view: { name: "companies" } },
 };
 
 function currentSlug(): string {
@@ -265,8 +292,6 @@ function StandaloneAttemptsPage({
   taskId: string;
   status?: AttemptStatus;
 }) {
-  const [viewer, setViewer] = useState<Attempt | null>(null);
-
   const data = useMemo(() => buildData(), []);
   const employee = data.employeesById[uid];
   const task = data.tasksById[taskId];
@@ -274,16 +299,12 @@ function StandaloneAttemptsPage({
   const cell = data.cells[uid + "_" + taskId];
   const history = attemptsForTask(uid, employee.name, employee.contact, task, cell);
 
-  if (viewer) {
-    return <AttemptViewerPage attempt={viewer} onBack={() => setViewer(null)} />;
-  }
   return (
     <AttemptsPage
       quizName={task.name}
       initialNameFilter={employee.name}
       initialStatusFilter={status}
       extraAttempts={history}
-      onViewAttempt={setViewer}
     />
   );
 }
@@ -397,8 +418,20 @@ function AdminApp() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        // An open modal owns the shortcut: the page's own bar is still
+        // "visible" behind the overlay, so without this ⌘K would reach past a
+        // picker (Grant Free Attempts) to the bar underneath it. A modal with
+        // no search bar simply swallows the shortcut.
+        // The TOPMOST one: a picker opened from inside another modal (Grant
+        // Free Attempts → Select Users) is last in DOM order and is the one
+        // wearing the shortcut.
+        const modal = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'),
+        )
+          .filter((el) => el.offsetParent !== null)
+          .pop();
         const target = Array.from(
-          document.querySelectorAll<HTMLInputElement>(
+          (modal ?? document).querySelectorAll<HTMLInputElement>(
             ".usearch-input, .search-input, .qb-search-input",
           ),
         ).find((el) => el.offsetParent !== null);
@@ -414,7 +447,7 @@ function AdminApp() {
   }, []);
 
   const sidebarActive =
-    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "cert-purchasers" || view.name === "content-links"
+    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "archive-cert" || view.name === "cert-purchasers" || view.name === "content-links"
       ? "certs"
       : view.name === "skills"
       ? "skills"
@@ -448,8 +481,10 @@ function AdminApp() {
       ? "manage-users"
       : view.name === "review-hands-on"
       ? "review-hands-on"
-      : view.name === "content-overrides"
-      ? "content-overrides"
+      : // Manage Completions has no sidebar entry of its own — the page it was
+        // opened from stays lit.
+      view.name === "content-overrides"
+      ? CONTENT_OVERRIDES_NAV[view.origin]
       : view.name === "product-config"
       ? "product-config"
       : view.name === "merge-accounts"
@@ -528,6 +563,9 @@ function AdminApp() {
               onOpenCompanyDashboard={openLoginAsLibrary}
               onViewAttempts={(task) => setView({ name: "attempts", quizName: task.name })}
               onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
+              onManageProgress={(task) =>
+                setView({ name: "content-overrides", taskId: task.id, origin: "tasks" })
+              }
               onOpenQuestionBank={() => navigate("question-bank")}
               onOpenSkills={() => navigate("skills")}
               extraTasks={createdTasks}
@@ -538,9 +576,6 @@ function AdminApp() {
         <AttemptsPage
           quizName={view.quizName}
           onBack={() => setView({ name: "tasks" })}
-          onViewAttempt={(attempt) =>
-            setView({ name: "attempt-viewer", attempt, quizName: view.quizName })
-          }
         />
       ) : view.name === "attempt-viewer" ? (
         <AttemptViewerPage
@@ -556,6 +591,10 @@ function AdminApp() {
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
           onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
+          onManageProgress={(cert) =>
+            setView({ name: "content-overrides", certId: cert.id, origin: "certs" })
+          }
+          onArchiveCert={(cert) => setView({ name: "archive-cert", cert })}
           onOpenIndustries={() => navigate("industries")}
           onOpenAwards={() => navigate("awards")}
           onOpenFeedback={() => navigate("feedback")}
@@ -576,8 +615,8 @@ function AdminApp() {
         <QuestionBankPage
           key={bank.length}
           initialQuestions={bank}
-          onNewQuestion={(categoryPath) =>
-            setView({ name: "new-question", categoryPath })
+          onNewQuestion={(categoryPath, initialType) =>
+            setView({ name: "new-question", categoryPath, initialType })
           }
           onEditQuestion={(question) =>
             setView({ name: "edit-question", question })
@@ -586,6 +625,7 @@ function AdminApp() {
       ) : view.name === "new-question" ? (
         <NewQuestionWizard
           initialCategoryPath={view.categoryPath}
+          initialType={view.initialType}
           onCreate={(q) => handleQuestionCreated(q, view.forFormId)}
           onClose={() =>
             view.forFormId
@@ -620,6 +660,9 @@ function AdminApp() {
           onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
           onUpdateCompany={updateCompany}
           onViewEmployees={(company) => setView({ name: "users", companyFilter: company.name })}
+          onManageProgress={(company) =>
+            setView({ name: "content-overrides", cohort: company.name, origin: "companies" })
+          }
         />
       ) : view.name === "new-company" ? (
         <NewCompanyWizard
@@ -645,7 +688,9 @@ function AdminApp() {
       ) : view.name === "users" ? (
         <UsersPage
           onViewCompany={(name) => setView({ name: "companies", query: name })}
-          onManageCompletions={(userId) => setView({ name: "content-overrides", userId })}
+          onManageCompletions={(userId) =>
+            setView({ name: "content-overrides", userId, origin: "users" })
+          }
           onOpenOfferCodes={() => navigate("offer-codes")}
           onOpenScholarships={() => navigate("scholarship")}
           onOpenMergeAccounts={() => navigate("merge-accounts")}
@@ -659,7 +704,15 @@ function AdminApp() {
       ) : view.name === "name-change-requests" ? (
         <NameChangeRequestsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "content-overrides" ? (
-        <ContentOverridesPage onViewAttempts={openAttemptsForUser} initialUserId={view.userId} />
+        <ContentOverridesPage
+          onViewAttempts={openAttemptsForUser}
+          initialUserId={view.userId}
+          initialCohort={view.cohort}
+          initialCertId={view.certId}
+          initialTaskId={view.taskId}
+          backLabel={CONTENT_OVERRIDES_BACK[view.origin].label}
+          onBack={() => setView(CONTENT_OVERRIDES_BACK[view.origin].view)}
+        />
       ) : view.name === "product-config" ? (
         <ProductConfigPage initialTab={view.tab} />
       ) : view.name === "merge-accounts" ? (
@@ -721,6 +774,12 @@ function AdminApp() {
         <NewCertificationWizard
           editingCert={view.cert}
           onClose={() => setView({ name: "certs" })}
+        />
+      ) : view.name === "archive-cert" ? (
+        <ArchiveCertificationPage
+          cert={view.cert}
+          onClose={() => setView({ name: "certs" })}
+          onArchive={() => setView({ name: "certs" })}
         />
       ) : (
         <NewCertificationWizard onClose={() => setView({ name: "certs" })} />

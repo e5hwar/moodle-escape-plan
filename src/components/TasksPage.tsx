@@ -13,12 +13,13 @@ import {
 } from "./Filters";
 import type { OptionalColumn } from "../data/filters";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPaidIcon, MenuAttemptsIcon, MenuProgressIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
+import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { LandingFilterRow, LandingOverlay, BackToSearch, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's default visible columns (key,
    label, width) so the p=1 hand-off to the real table lines up. */
@@ -30,11 +31,11 @@ const LM_COLS: LandingCol[] = [
   { key: "creator", label: "Created By", width: 200 },
 ];
 
-const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; icon: () => JSX.Element; shortcut: string }[] = [
-  { key: "xapi", label: "xAPI / SCORM", icon: PackageIcon, shortcut: "X" },
-  { key: "quiz", label: "Quiz", icon: QuizIcon, shortcut: "Q" },
-  { key: "hands-on", label: "Hands-On Task", icon: HandsOnIcon, shortcut: "H" },
-  { key: "file", label: "Resource", icon: FileIcon, shortcut: "F" },
+const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; shortcut: string }[] = [
+  { key: "xapi", label: "xAPI Module", shortcut: "X" },
+  { key: "quiz", label: "Quiz", shortcut: "Q" },
+  { key: "hands-on", label: "Hands-On Task", shortcut: "H" },
+  { key: "file", label: "Resource", shortcut: "R" },
 ];
 
 const PAGE_SIZE = 50;
@@ -167,6 +168,7 @@ export function TasksPage({
   onOpenCompanyDashboard,
   onViewAttempts,
   onViewPayers,
+  onManageProgress,
   onOpenQuestionBank,
   onOpenSkills,
   extraTasks,
@@ -176,6 +178,7 @@ export function TasksPage({
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewAttempts: (task: Task) => void;
   onViewPayers: (task: Task) => void;
+  onManageProgress: (task: Task) => void;
   onOpenQuestionBank?: () => void;
   onOpenSkills?: () => void;
   /** Tasks published from the wizard this session, newest first. */
@@ -189,6 +192,15 @@ export function TasksPage({
   // Set when someone tries to edit a Task owned by a company — company Tasks are
   // managed from the B2B Dashboard, not here.
   const [blockedEdit, setBlockedEdit] = useState<Task | null>(null);
+  // The Task awaiting a Hide confirmation (Figma 667:884). Unhiding is instant;
+  // only hiding routes through the modal.
+  const [hideTarget, setHideTarget] = useState<Task | null>(null);
+  // Set when the Task can't be hidden at all — it still gates other content
+  // through an Access Restriction chain.
+  const [blockedHide, setBlockedHide] = useState<Task | null>(null);
+  // The Task awaiting a Delete confirmation — the same 667:884 shell as Hide,
+  // in its destructive variant.
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   // Search bar: committedQuery only changes on Enter. The certification filter is
   // shared with the Filters row (filters.certifications) and applies on Enter.
   const [committedQuery, setCommittedQuery] = useState("");
@@ -297,9 +309,10 @@ export function TasksPage({
   // (or any search / pill / row interaction) morphs it into the table view.
   const morph = useLandingMorph();
 
-  const topCert = useMemo(() => topValues(taskList, (t) => t.usedIn)[0], [taskList]);
-
-  const suggestedPills: LandingPill[] = [
+  // The two quick filters this page offers (user-specified): the dominant task
+  // type, and the HVAC job-readiness certification. "HVAC JobReady" is the
+  // label for the seed data's `HVAC Field Skills` certification.
+  const quickFilterPills: LandingPill[] = [
     {
       key: "hands-on",
       label: "Hands-On Task",
@@ -309,31 +322,16 @@ export function TasksPage({
       },
     },
     {
-      key: "quiz",
-      label: "Quiz",
+      key: "hvac-jobready",
+      label: "HVAC JobReady",
       onPick: () => {
-        setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "Quiz"])) }));
+        setFilters((prev) => ({
+          ...prev,
+          certifications: Array.from(new Set([...prev.certifications, "HVAC Field Skills"])),
+        }));
         morph.showTable();
       },
     },
-    {
-      key: "final-exam",
-      label: "Final Exam",
-      onPick: () => {
-        setFilters((prev) => ({ ...prev, finalExam: ["Final Exam"] }));
-        morph.showTable();
-      },
-    },
-    ...(topCert
-      ? [{
-          key: "top-cert",
-          label: topCert,
-          onPick: () => {
-            setFilters((prev) => ({ ...prev, certifications: Array.from(new Set([...prev.certifications, topCert])) }));
-            morph.showTable();
-          },
-        }]
-      : []),
   ];
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map((t) => ({
@@ -378,29 +376,27 @@ export function TasksPage({
     );
   }
 
+  function setHidden(task: Task, hidden: boolean) {
+    setTaskList((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, hidden } : t)),
+    );
+  }
+
   function toggleVisibility(task: Task) {
-    // Access Restriction chains gate other content, so the Task can't be hidden
-    // while it's still part of one. Unhiding is always allowed.
-    if (task.accessRestricted && !task.hidden) {
-      window.alert(
-        `“${task.name}” is part of an Access Restriction chain and cannot be hidden ` +
-          `until it is removed from that chain.`,
-      );
+    // Unhiding restores the Task straight away — only hiding needs confirming.
+    if (task.hidden) {
+      setHidden(task, false);
       return;
     }
-    // Hiding a Task used by multiple Certifications affects all of them — surface
-    // the full list before applying.
-    if (!task.hidden && task.usedIn.length > 1) {
-      const ok = window.confirm(
-        `“${task.name}” is used in ${task.usedIn.length} certifications:\n\n` +
-          task.usedIn.map((c) => `•  ${c}`).join("\n") +
-          `\n\nHiding it will affect all of them. Continue?`,
-      );
-      if (!ok) return;
+    // Access Restriction chains gate other content, so the Task can't be hidden
+    // while it's still part of one.
+    if (task.accessRestricted) {
+      setBlockedHide(task);
+      return;
     }
-    setTaskList((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, hidden: !t.hidden } : t)),
-    );
+    // Hiding pulls the Task out of every Certification carrying it, so the full
+    // list goes in front of the confirm (Figma 667:884).
+    setHideTarget(task);
   }
 
   function editTask(task: Task) {
@@ -414,12 +410,15 @@ export function TasksPage({
   }
 
   function deleteTask(task: Task) {
-    const ok = window.confirm(
-      `Delete “${task.name}” (${task.id})? This can’t be undone.`,
-    );
-    if (!ok) return;
+    // Deleting routes through the shared confirm modal (Figma 667:884), not the
+    // browser's own dialog.
+    setDeleteTarget(task);
+  }
+
+  function confirmDelete(task: Task) {
     setTaskList((prev) => prev.filter((t) => t.id !== task.id));
     if (selectedId === task.id) setSelectedId(null);
+    setDeleteTarget(null);
   }
 
   return (
@@ -438,9 +437,12 @@ export function TasksPage({
           <button className="cta-quiet" onClick={() => onOpenQuestionBank?.()}>
             Question Bank
           </button>
+          {/* Figma 724:1010 "Create Task Options": label + shortcut badge, no
+              icons, on the panel's own 174px shell. */}
           <Dropdown
             align="right"
-            width={220}
+            width="auto"
+            panelClass="ct-menu"
             open={createMenuOpen}
             onOpenChange={setCreateMenuOpen}
             trigger={({ toggle }) => (
@@ -452,24 +454,21 @@ export function TasksPage({
             )}
           >
             {({ close }) => (
-              <div className="menu">
-                {TASK_TYPE_OPTIONS.map(({ key, label, icon: Icon, shortcut }) => (
+              <>
+                {TASK_TYPE_OPTIONS.map(({ key, label, shortcut }) => (
                   <button
                     key={key}
-                    className="menu-item"
+                    className="ct-menu-item"
                     onClick={() => {
                       onNewTask(key);
                       close();
                     }}
                   >
-                    <span className="menu-item-icon">
-                      <Icon />
-                    </span>
-                    {label}
-                    <span className="menu-item-kbd">{shortcut}</span>
+                    <span className="ct-menu-label">{label}</span>
+                    <span className="ct-menu-kbd">{shortcut}</span>
                   </button>
                 ))}
-              </div>
+              </>
             )}
           </Dropdown>
         </div>
@@ -492,7 +491,7 @@ export function TasksPage({
             />
           </div>
 
-          <LandingFilterRow pills={suggestedPills}>
+          <LandingFilterRow pills={quickFilterPills}>
               <Filters filters={filters} setFilters={setFilters} />
             </LandingFilterRow>
 
@@ -596,11 +595,11 @@ export function TasksPage({
           task={menu.task}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onCompletionReport={() =>
-            window.alert(`Opening the Completion Report for “${menu.task.name}”…`)
-          }
-          onViewAttempts={() => onViewAttempts(menu.task)}
+          onEdit={() => editTask(menu.task)}
+          onToggleVisibility={() => toggleVisibility(menu.task)}
           onViewPayers={() => onViewPayers(menu.task)}
+          onViewAttempts={() => onViewAttempts(menu.task)}
+          onManageProgress={() => onManageProgress(menu.task)}
           onDelete={() => deleteTask(menu.task)}
         />
       )}
@@ -615,7 +614,151 @@ export function TasksPage({
           }}
         />
       )}
+
+      {hideTarget && (
+        <HideTaskModal
+          task={hideTarget}
+          onCancel={() => setHideTarget(null)}
+          onConfirm={() => {
+            setHidden(hideTarget, true);
+            setHideTarget(null);
+          }}
+        />
+      )}
+
+      {blockedHide && (
+        <HideBlockedModal task={blockedHide} onClose={() => setBlockedHide(null)} />
+      )}
+
+      {deleteTarget && (
+        <DeleteTaskModal
+          task={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => confirmDelete(deleteTarget)}
+        />
+      )}
     </div>
+  );
+}
+
+/** Hide confirmation — Figma 667:884 "General Modal". The heading names the
+ *  Task, the description states what hiding does, and the content slot lists
+ *  every Certification the Task currently sits in. */
+function HideTaskModal({
+  task,
+  onCancel,
+  onConfirm,
+}: {
+  task: Task;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title={`Hide “${task.name}”`}
+      description="Hiding the Task temporarily removes it for all users."
+      confirmLabel="Hide Task"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      {task.usedIn.length > 0 && (
+        <div className="prm-content">
+          <p>
+            This Task is currently in the following Certification(s). Hiding it removes it
+            temporarily from here.
+          </p>
+          <ul>
+            {task.usedIn.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </PrmModal>
+  );
+}
+
+/** Delete confirmation — the same Figma 667:884 "General Modal" as Hide, in its
+ *  destructive variant. The heading names the Task, and the content slot spells
+ *  out that the delete is permanent plus every Certification it will leave. */
+function DeleteTaskModal({
+  task,
+  onCancel,
+  onConfirm,
+}: {
+  task: Task;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title={`Delete “${task.name}”`}
+      description={`Deleting the Task (${task.id}) removes it permanently. This can't be undone.`}
+      confirmLabel="Delete Task"
+      danger
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      {task.usedIn.length > 0 && (
+        <div className="prm-content">
+          <p>
+            This Task is currently in the following Certification(s). Deleting it removes
+            it from every one of them.
+          </p>
+          <ul>
+            {task.usedIn.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </PrmModal>
+  );
+}
+
+/** Access Restriction chains gate other content, so a Task inside one can't be
+ *  hidden until it leaves the chain — acknowledgment only, no CTA to confirm. */
+function HideBlockedModal({ task, onClose }: { task: Task; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <PrmModal
+      title={`Can't hide “${task.name}”`}
+      description="This Task is part of an Access Restriction chain."
+      confirmLabel="Okay"
+      hideCancel
+      onCancel={onClose}
+      onConfirm={onClose}
+    >
+      <p className="prm-content">
+        Hiding it would break the content it gates. Remove the Task from that chain first,
+        then hide it.
+      </p>
+    </PrmModal>
   );
 }
 
@@ -723,12 +866,11 @@ function TableRow({
 }) {
   return (
     <tr
-      className={`${selected ? "selected" : ""} ${task.draft ? "draft" : ""} ${task.hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
+      className={`${selected ? "selected" : ""} ${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onClick}
     >
       <td className="col-name" data-tip={task.name}>
         {task.name}
-        {task.hidden && <span className="hidden-badge">Hidden</span>}
       </td>
       {cols.map((c) => (
         <td key={c.key} className={c.className} data-tip={c.tip?.(task)}>
@@ -780,17 +922,21 @@ function TaskActionsMenu({
   task,
   rect,
   onClose,
-  onCompletionReport,
-  onViewAttempts,
+  onEdit,
+  onToggleVisibility,
   onViewPayers,
+  onViewAttempts,
+  onManageProgress,
   onDelete,
 }: {
   task: Task;
   rect: DOMRect;
   onClose: () => void;
-  onCompletionReport: () => void;
-  onViewAttempts: () => void;
+  onEdit: () => void;
+  onToggleVisibility: () => void;
   onViewPayers: () => void;
+  onViewAttempts: () => void;
+  onManageProgress: () => void;
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -862,15 +1008,17 @@ function TaskActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{task.name}</div>
-        <div className="u-menu-head-id">{task.id} · {task.type}</div>
-      </div>
-      {item(<MenuPlaceholderIcon />, "Open Completion Report", onCompletionReport)}
-      {showAttempts && item(<MenuPlaceholderIcon />, "View Attempts", onViewAttempts)}
+      {item(<RowEditIcon />, "Edit Task", onEdit)}
+      {item(
+        task.hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
+        task.hidden ? "Make Visible" : "Make Hidden",
+        onToggleVisibility,
+      )}
       {/* Only paid Tasks have payers to view. */}
-      {isPaid(task) && item(<MenuPlaceholderIcon />, "View who paid", onViewPayers)}
-      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
+      {isPaid(task) && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
+      {showAttempts && item(<MenuAttemptsIcon />, "View All Attempts", onViewAttempts)}
+      {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
+      {item(<RowDeleteIcon />, "Delete Task", onDelete, true)}
     </div>
   );
 }
@@ -911,11 +1059,7 @@ function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {
 
       <div className="co-panel-pills">
         <span className="co-pill-muted">{task.type}</span>
-        {task.draft ? (
-          <span className="co-pill-muted">Draft</span>
-        ) : (
-          <span className="co-pill-muted">{task.visibility ?? "Visible · published"}</span>
-        )}
+        <span className="co-pill-muted">{task.visibility ?? "Visible · published"}</span>
         <span className="co-pill-muted">{task.createdBy}</span>
       </div>
 
