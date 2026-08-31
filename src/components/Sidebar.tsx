@@ -1,6 +1,7 @@
 import { useState } from "react";
 import skillcatLogo from "../assets/SkillCat-Logo.png";
 import { submissions } from "../data/proctoring";
+import { displayStatus, reviewSubmissions } from "../data/reviewSubmissions";
 
 type IconProps = { className?: string };
 
@@ -14,92 +15,69 @@ const HardHatLogo = ({ size = 28 }: { size?: number }) => (
   />
 );
 
+/* Nav glyphs — Figma 814:2685 / 815:1444. All eight are the same 16px stroked
+   line family (1.33 stroke, square caps); each `<g transform>` re-seats the
+   exported artwork inside the 16-square the way the Figma frame insets it. */
 const I = {
-  book: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M6 2h13a1 1 0 011 1v15H6.5a1.5 1.5 0 100 3H20v1a1 1 0 01-1 1H6.5A2.5 2.5 0 014 20.5v-16A2.5 2.5 0 016.5 2H6z" />
+  // "Icon Library" 7:442 — clipboard
+  tasks: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <g transform="translate(1.667 0)">
+        <path d="M4.80533 1.66776C4.93492 1.37026 5.14854 1.11706 5.41997 0.939225C5.6914 0.761394 6.00884 0.666667 6.33333 0.666667C6.65783 0.666667 6.97527 0.761394 7.2467 0.939225C7.51813 1.11706 7.73175 1.37026 7.86133 1.66776H12V14.3344H0.666667V1.66776H4.80533Z" />
+        <path d="M3.66667 5.33442H9M3.66667 8.00109H9M3.66667 10.6678H7" />
+      </g>
     </svg>
   ),
-  layers: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M11.55 2.11a1 1 0 01.9 0l9.5 4.75a.5.5 0 010 .9l-9.5 4.75a1 1 0 01-.9 0L2.05 7.76a.5.5 0 010-.9z" />
-      <path d="M2.55 11.55a.5.5 0 01.67-.22l8.78 4.4 8.78-4.4a.5.5 0 11.45.9l-9 4.5a1 1 0 01-.9 0l-9-4.5a.5.5 0 01-.22-.68z" />
-      <path d="M2.55 16.55a.5.5 0 01.67-.22l8.78 4.4 8.78-4.4a.5.5 0 11.45.9l-9 4.5a1 1 0 01-.9 0l-9-4.5a.5.5 0 01-.22-.68z" />
+  // "Icon Library" 7:1179 — certificate card
+  certifications: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <g transform="translate(0.667 2)">
+        <path d="M3.33333 6H6M3.33333 8.66667H11.3333M8.66667 0.666667H11.3333V4.33333L10 3.33333L8.66667 4.33333V0.666667Z" />
+        <path d="M14 0.666667V11.3333H0.666667V0.666667H14Z" />
+      </g>
     </svg>
   ),
-  award: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2a6 6 0 00-3.36 10.96l-1.13 7.18a.6.6 0 00.91.6L12 18.8l3.58 1.94a.6.6 0 00.91-.6l-1.13-7.18A6 6 0 0012 2z" />
+  // "Icon Library" 7:2978 — pencil
+  handsOn: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <g transform="translate(0.724 0.391)">
+        <path d="M2.27614 13.9428L0.942809 12.6095M13.9428 3.94281L10.9428 0.942809L2.60948 9.27614L2.27548 10.6095L4.27614 12.6095L5.60948 12.2761L13.9428 3.94281Z" />
+      </g>
     </svg>
   ),
-  message: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M5 3h14a2 2 0 012 2v10a2 2 0 01-2 2H8.41l-4.7 4.7A.6.6 0 013 21.28V5a2 2 0 012-2z" />
-    </svg>
-  ),
-  edit: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M14.7 2.79l6.5 6.5a1 1 0 010 1.41L11.4 20.5a1 1 0 01-.5.27l-6 1.2a.6.6 0 01-.71-.7l1.2-6a1 1 0 01.27-.5L15.5 5h-4.5a1 1 0 110-2h6.7l-3 .79z" />
-      <path d="M2 22l8-2H4v-6z" opacity="0" />
-    </svg>
-  ),
-  hand: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M9 4.5a2 2 0 014 0v5a.5.5 0 001 0V3.5a2 2 0 014 0v6.5a.5.5 0 001 0V6.5a2 2 0 114 0V16a6 6 0 01-6 6h-2a6 6 0 01-5.66-3.93l-3.13-3.66a2 2 0 012.91-2.74L9 13.2z" />
-    </svg>
-  ),
-  shield: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 1.6a1 1 0 00-.37.07l-8 3a1 1 0 00-.63.94v6.39c0 5.4 3.78 9.97 8.7 11.79a1 1 0 00.6 0c4.92-1.82 8.7-6.4 8.7-11.8V5.62a1 1 0 00-.63-.93l-8-3A1 1 0 0012 1.6z" />
-    </svg>
-  ),
-  spotlight: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M21.7 2.3a1 1 0 00-1.1-.22L2.4 9.55a1 1 0 00.06 1.86l7.4 2.46 2.46 7.4a1 1 0 001.86.06l7.47-18.2a1 1 0 00-.22-1.1.79.79 0 00-.2-.13L21.7 2.3z" />
-    </svg>
-  ),
-  scholarship: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M11.55 2.6a1 1 0 01.9 0l10 5a.5.5 0 010 .9L21 9.13v6.37a.5.5 0 01-1 0V9.63l-2 1V14a1 1 0 01-.49.86C16.13 15.73 14.16 16.5 12 16.5s-4.13-.77-5.51-1.64A1 1 0 016 14v-3.37L1.55 8.5a.5.5 0 010-.9z" />
-    </svg>
-  ),
-  trialExtension: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm.5 4a.75.75 0 011.5 0v5.69l3.16 2.1a.75.75 0 11-.83 1.25l-3.5-2.34A.75.75 0 0112 12V6z" />
-    </svg>
-  ),
+  // "Icon Library" 815:1297 — two people
   users: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="9" cy="7" r="4" />
-      <path d="M1.5 19A4 4 0 015.5 15h7A4 4 0 0116.5 19v1.5a.5.5 0 01-.5.5h-14a.5.5 0 01-.5-.5z" />
-      <path d="M16.2 4a4 4 0 010 6 4 4 0 003-3.87 4 4 0 00-3-3.87v1.74z" opacity="0.9" />
-      <path d="M18 14.5a4 4 0 014 4V20a.5.5 0 01-.5.5h-3.6a5 5 0 00-.95-3 5.5 5.5 0 00-1.95-1.74A.5.5 0 0116 15.4a4 4 0 012 0z" opacity="0.9" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <path d="M10.6667 13.3333V12.6667C10.6667 11.9594 10.3857 11.2811 9.88562 10.781C9.38552 10.281 8.70724 10 8 10H3.33333C2.62609 10 1.94781 10.281 1.44772 10.781C0.947618 11.2811 0.666667 11.9594 0.666667 12.6667V13.3333M10.3333 7.33333C11.0406 7.33333 11.7189 7.05238 12.219 6.55229C12.719 6.05219 13 5.37391 13 4.66667C13 3.95942 12.719 3.28115 12.219 2.78105C11.7189 2.28095 11.0406 2 10.3333 2M15.3333 13.3333V12.6667C15.3333 11.9594 15.0524 11.2811 14.5523 10.781C14.0522 10.281 13.3739 10 12.6667 10M8.33333 4.66667C8.33333 5.37391 8.05238 6.05219 7.55229 6.55229C7.05219 7.05238 6.37391 7.33333 5.66667 7.33333C4.95942 7.33333 4.28115 7.05238 3.78105 6.55229C3.28095 6.05219 3 5.37391 3 4.66667C3 3.95942 3.28095 3.28115 3.78105 2.78105C4.28115 2.28095 4.95942 2 5.66667 2C6.37391 2 7.05219 2.28095 7.55229 2.78105C8.05238 3.28115 8.33333 3.95942 8.33333 4.66667Z" />
     </svg>
   ),
+  // "Icon Library" 7:5039 — bank
   companies: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M3 21V7a1 1 0 01.55-.9l7-3.5A1 1 0 0112 3.5V9h7a2 2 0 012 2v10a1 1 0 01-1 1h-7v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4H4a1 1 0 01-1-1zM6 9.5h1v1.5H6V9.5zm0 4h1V15H6v-1.5zm0 4h1V19H6v-1.5zm9-3.5h1.5v1.5H15V14zm0 4h1.5v1.5H15V18z" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <g transform="translate(1.333 0.57)">
+        <path d="M12.6667 14.096H0.666667M2.66667 7.42931V11.4293M6.66667 7.42931V11.4293M10.6667 7.42931V11.4293M0.666667 4.09597V4.76264H12.6667V4.09597L6.66667 0.762639L0.666667 4.09597Z" />
+      </g>
     </svg>
   ),
-  idCard: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
-      <circle cx="8" cy="11" r="2.1" />
-      <path d="M13 9.5h5.5M13 13h5.5M4.8 15.4a3.4 3.4 0 016.4 0" />
+  // "video-camera" 815:1311
+  examReviews: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <path d="M10.6667 6.79998L15.3333 3.99998V12L10.6667 9.19998V6.79998Z" />
+      <path d="M0.666667 3.33333H10.6667V12.6667H0.666667V3.33333Z" />
     </svg>
   ),
-  merge: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6" cy="5" r="2.6" />
-      <circle cx="6" cy="19" r="2.6" />
-      <circle cx="18" cy="12" r="2.6" />
-      <path d="M8.4 6.2 14 10.6M8.4 17.8 14 13.4" />
+  // "Icon Library" 7:2682 — megaphone
+  spotlight: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <g transform="translate(1.334 1.588)">
+        <path d="M0.666667 6.74536V3.07869H4.66667L8.66667 1.07869V8.41202L4.66667 6.74536H0.666667ZM0.666667 6.74536V12.412H2.66667L3.33333 6.74536H0.666667ZM3.23333 9.07869H4.33333M10.8333 4.19136C11.2933 4.65136 11.2933 5.39802 10.8333 5.85802M12.2227 3.07869C13.1427 3.99869 13.1427 6.04736 12.2227 6.96802" />
+      </g>
     </svg>
   ),
-  transfer: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 8h13M13 4l4 4-4 4" />
-      <path d="M20 16H7M11 12l-4 4 4 4" />
+  // "Icon Set" 1012:14403 — wrench
+  productConfig: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.36" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.65193 6.09281H6.89281V3.85193L4.27845 1.23756C5.11477 0.838144 6.05435 0.707823 6.9678 0.864548C7.88126 1.02127 8.72366 1.45733 9.37901 2.11268C10.0344 2.76803 10.4704 3.61044 10.6271 4.52389C10.7839 5.43735 10.6536 6.37693 10.2541 7.21325L14.7359 11.695C15.0331 11.9922 15.2 12.3952 15.2 12.8155C15.2 13.2357 15.0331 13.6387 14.7359 13.9359C14.4387 14.2331 14.0357 14.4 13.6155 14.4C13.1952 14.4 12.7922 14.2331 12.495 13.9359L8.01325 9.45413C7.17693 9.85355 6.23735 9.98387 5.32389 9.82715C4.41044 9.67042 3.56803 9.23436 2.91268 8.57901C2.25733 7.92366 1.82127 7.08126 1.66455 6.1678C1.50782 5.25435 1.63814 4.31477 2.03756 3.47845L4.65193 6.09281Z" />
     </svg>
   ),
   // Figma 421:1450 — the footer collapse control ("tdesign:terminal-window").
@@ -113,9 +91,14 @@ const I = {
 
 type IconKey = keyof typeof I;
 
-/* The Exam Reviews badge counts the real queue rather than a hardcoded number,
-   so it can't drift from the page's own "Pending:" figure when seed data changes. */
-const pendingExamReviews = submissions.filter((s) => s.status === "pending").length;
+/* Both badges count the real queue rather than a hardcoded number, so they
+   can't drift from each page's own "Pending:" figure when seed data changes.
+   Figma draws them as "99+", so anything past 99 caps the same way. */
+const cap = (n: number) => (n > 99 ? "99+" : n);
+const pendingExamReviews = cap(submissions.filter((s) => s.status === "pending").length);
+const pendingHandsOn = cap(
+  reviewSubmissions.filter((s) => displayStatus(s) === "Review Pending").length,
+);
 
 type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 // Figma 421:1419 — every destination is a top-level entry; sections are plain
@@ -133,32 +116,28 @@ const sections: NavSection[] = [
   {
     label: "Content",
     items: [
-      { key: "tasks", label: "Tasks", icon: "book", navKey: "tasks" },
-      { key: "certifications", label: "Certifications", icon: "award", navKey: "certs" },
+      { key: "tasks", label: "Tasks", icon: "tasks", navKey: "tasks" },
+      { key: "certifications", label: "Certifications", icon: "certifications", navKey: "certs" },
+      // Hands-On Tasks joined Content 2026-08-31 (Figma 814:2685) — the
+      // Operations group it used to share with Exam Reviews is gone.
+      { key: "review-hands-on", label: "Hands-On Tasks", icon: "handsOn", navKey: "review-hands-on", badge: pendingHandsOn },
     ],
   },
   {
-    label: "Operations",
+    label: "Customers",
     items: [
-      { key: "review-hands-on", label: "Review Hands-On Tasks", icon: "hand", navKey: "review-hands-on" },
-      // Name Change Requests left this group 2026-08-25 — it's reached from the
-      // Proctoring Review header's "Name Changes" button now (the route stays).
-      { key: "proctoring-review", label: "Exam Reviews", icon: "shield", navKey: "proctoring-review", badge: pendingExamReviews },
-    ],
-  },
-  {
-    label: "Users",
-    items: [
-      { key: "manage-users", label: "Manage Users", icon: "users", navKey: "manage-users" },
+      { key: "manage-users", label: "Users", icon: "users", navKey: "manage-users" },
       { key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
+      // Name Change Requests left the rail 2026-08-25 — it's reached from the
+      // Exam Reviews header's "Name Changes" button now (the route stays).
+      { key: "proctoring-review", label: "Exam Reviews", icon: "examReviews", navKey: "proctoring-review", badge: pendingExamReviews },
     ],
   },
   {
     label: "System",
     items: [
       { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight" },
-      { key: "product-config", label: "Product Config", icon: "edit", navKey: "product-config" },
-      { key: "permissions", label: "Permissions", icon: "shield", navKey: "permissions" },
+      { key: "product-config", label: "Product Config", icon: "productConfig", navKey: "product-config" },
     ],
   },
 ];

@@ -840,6 +840,14 @@ export const MenuArchiveReplaceIcon = () => (
   </svg>
 );
 
+/* Speech bubble with three bars — "View Responses" in the Feedback Form row
+   menu (807:1280). Same 16px / 1.3333 square-cap library as its siblings. */
+export const MenuResponsesIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M4.667 8V8.667M8 4.667V8.667M11.333 6.667V8.667M1.667 2H14.333V11.333H4.333L1.667 13.667V2Z" />
+  </svg>
+);
+
 /* Kebab Menu - Horizontal (386:260) — three 2px square dots on the 8px
    centreline, at x 2/7/12. Figma strokes a 0.667 square with a 1.3333 cap,
    which resolves to exactly these filled rects. */

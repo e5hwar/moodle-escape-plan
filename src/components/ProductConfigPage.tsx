@@ -3,6 +3,7 @@ import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { UploadIcon, GlobeIcon, LockIcon } from "./icons";
 import { RichTextField } from "./RichTextField";
+import { PermissionsSection } from "./PermissionsPage";
 
 /* ─── Icons ─── */
 const TrashIcon = () => (
@@ -37,7 +38,7 @@ const RedirectIcon = () => (
 );
 
 /* ─── Types ─── */
-type Tab = "general" | "display" | "b2c" | "b2b" | "legal";
+type Tab = "general" | "display" | "b2c" | "b2b" | "legal" | "permissions";
 
 const TAB_LABELS: Record<Tab, string> = {
   general: "General Settings",
@@ -45,6 +46,7 @@ const TAB_LABELS: Record<Tab, string> = {
   b2c: "B2C Management",
   b2b: "B2B Management",
   legal: "Legal",
+  permissions: "Permissions",
 };
 
 type TabRow = {
@@ -939,7 +941,7 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
 
             {/* Tabs */}
             <nav className="tabbar pc-tabs">
-              {(["general", "display", "b2c", "b2b", "legal"] as Tab[]).map((t) => {
+              {(["general", "display", "b2c", "b2b", "legal", "permissions"] as Tab[]).map((t) => {
                 const label = TAB_LABELS[t];
                 return (
                   <button
@@ -1081,6 +1083,8 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
                 />
               </>
             )}
+
+            {tab === "permissions" && <PermissionsSection />}
           </div>
         </div>
       </div>

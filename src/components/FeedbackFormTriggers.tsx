@@ -29,7 +29,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
 
-  const isArchived = form.status === "archived";
+  const isDisabled = form.status === "disabled";
 
   const mappedSet = useMemo(
     () => new Set(form.triggers.map((t) => t.refId)),
@@ -37,7 +37,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
   );
 
   // Live view of the at-most-one-form rule: refId → the OTHER form holding it.
-  // Archived forms still occupy their mappings (preserved, just inactive).
+  // Disabled forms still occupy their mappings (preserved, just not firing).
   const mappedElsewhere = useMemo(() => {
     const m = new Map<string, FeedbackForm>();
     for (const f of allForms) {
@@ -80,18 +80,6 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
     return true;
   });
 
-  if (form.status === "draft") {
-    return (
-      <div className="fb-triggers-empty">
-        <div className="fb-empty-title">Activate the form to add triggers</div>
-        <div className="fb-empty-sub">
-          A form must be in <strong>Active</strong> status before it can be
-          mapped to Tasks or Certifications.
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="fb-triggers">
       <div className="fb-triggers-head">
@@ -102,7 +90,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
             Certifications.
           </p>
         </div>
-        {!isArchived && (
+        {!isDisabled && (
           <button
             className="btn-publish"
             onClick={() => setPicking((v) => !v)}
@@ -112,10 +100,10 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
         )}
       </div>
 
-      {isArchived && (
+      {isDisabled && (
         <div className="fb-archived-note">
-          This form is archived — trigger mappings are preserved but{" "}
-          <strong>inactive</strong>. Reactivate the form to resume firing them.
+          This form is disabled — trigger mappings are preserved but{" "}
+          <strong>inactive</strong>. Enable the form to resume firing them.
         </div>
       )}
 
@@ -132,7 +120,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
           {form.triggers.map((t) => (
             <div
               key={t.id}
-              className={`fb-trigger-row ${isArchived ? "is-paused" : ""}`}
+              className={`fb-trigger-row ${isDisabled ? "is-paused" : ""}`}
             >
               <span className={`fb-trigger-kind fb-trigger-kind--${t.kind}`}>
                 {t.kind === "task" ? "Task" : "Certification"}
@@ -145,7 +133,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
                     " · proctored — fires on pass, even while In-Review"}
                 </div>
               </div>
-              {isArchived ? (
+              {isDisabled ? (
                 <span className="fb-link-chip">Inactive</span>
               ) : (
                 <button
@@ -161,7 +149,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
         </div>
       )}
 
-      {picking && !isArchived && (
+      {picking && !isDisabled && (
         <div className="fb-trigger-picker">
           <div className="fb-trigger-picker-head">
             <div className="search-wrap">
@@ -196,7 +184,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
                 const isMapped = mappedSet.has(c.refId);
                 const other = mappedElsewhere.get(c.refId);
                 const otherMapping = other
-                  ? `${other.id}${other.status === "archived" ? " (archived)" : ""}`
+                  ? `${other.id}${other.status === "disabled" ? " (disabled)" : ""}`
                   : null;
                 return (
                   <button

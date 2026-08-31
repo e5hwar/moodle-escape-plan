@@ -7,14 +7,13 @@ import {
   type QuestionType,
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
-import { ArrowRightIcon, SmallXIcon, DragHandleIcon, PlusThinIcon } from "./icons";
+import { ArrowRightIcon, SmallXIcon, MoveIcon, InfoIcon, PlusThinIcon } from "./icons";
 import { SectionHeading } from "./SectionHeading";
 import { RichTextField } from "./RichTextField";
 
 /* ─────────────────  Types  ───────────────── */
 
 type QType = "mcq" | "true-false" | "match" | "short" | "file" | "scale";
-type McqMode = "single" | "multiple";
 type MatchGrading = "all-or-nothing" | "partial";
 
 type Choice = { id: string; text: string; textEs: string; grade: number };
@@ -22,7 +21,6 @@ type Pair = { id: string; left: string; right: string; leftEs: string; rightEs: 
 
 type QuestionDraft = {
   type: QType;
-  mcqMode: McqMode;
   catKey: string; // flattened key: "cat" or "cat/sub" ("" = Uncategorized)
   status: "Draft" | "Active" | "Archived";
   text: string;
@@ -77,6 +75,24 @@ const TYPE_LABELS: Record<QType, string> = {
 
 const TYPE_ORDER: QType[] = ["mcq", "true-false", "match", "short", "file", "scale"];
 
+/* The editor's page title names the type it is on (Figma 739:1504 — "New
+   Multiple-Choice Question"), so it changes with the Question Type dropdown. */
+const TYPE_TITLES: Record<QType, string> = {
+  mcq: "Multiple-Choice",
+  "true-false": "True or False",
+  match: "Match the Following",
+  short: "Short Answer",
+  file: "File Upload",
+  scale: "Linear Scale",
+};
+
+/* An MCQ is a "multiple select" as soon as more than one option carries a
+   positive grade — the per-option percentages are what say how many answers a
+   learner may pick, so there is no separate single/multiple switch. */
+function multiAnswer(choices: Choice[]): boolean {
+  return choices.filter((c) => c.grade > 0).length > 1;
+}
+
 function typeSupportsGrading(t: QType): boolean {
   return t === "mcq" || t === "true-false" || t === "match";
 }
@@ -87,24 +103,19 @@ const GRADE_STEPS = [
   16.66667, 14.28571, 12.5, 11.11111, 10, 5,
 ];
 
+/* Figma 814:1705 writes a positive share as a bare percentage ("100%") and no
+   grade as "0%"; only the negative steps carry a sign. */
 function fmtPct(v: number): string {
-  if (v === 0) return "None";
+  if (v === 0) return "0%";
   const rounded = Math.round(Math.abs(v) * 1000) / 1000;
-  return `${v > 0 ? "+" : "−"}${rounded}%`;
+  return `${v > 0 ? "" : "−"}${rounded}%`;
 }
 
 const GRADE_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: "None" },
+  { value: 0, label: "0%" },
   ...GRADE_STEPS.map((v) => ({ value: v, label: fmtPct(v) })),
   ...GRADE_STEPS.map((v) => ({ value: -v, label: fmtPct(-v) })),
 ];
-
-/* Equal share for k correct options in a multiple-answers question. */
-function equalShare(k: number): number {
-  if (k <= 1) return 100;
-  const exact = GRADE_STEPS.find((s) => Math.abs(s * k - 100) < 0.01);
-  return exact ?? Math.round((100 / k) * 100000) / 100000;
-}
 
 /* ─────────────────  Initial state  ───────────────── */
 
@@ -159,12 +170,11 @@ function buildInitial(
       : (flattenCategories(seedCategories)[0]?.key ?? "");
   const base: QuestionDraft = {
     type: initialType ? editorType(initialType) : "mcq",
-    mcqMode: "single",
     catKey: defaultCatKey,
     status: "Active",
     text: "",
     textEs: "",
-    choices: [blankChoice(100), blankChoice(-25), blankChoice(-25), blankChoice(-25)],
+    choices: [blankChoice(100), blankChoice(0), blankChoice(0), blankChoice(0)],
     otherOption: false,
     tfAnswer: true,
     pairs: [blankPair(), blankPair(), blankPair()],
@@ -193,7 +203,6 @@ function buildInitial(
   return {
     ...base,
     type: t,
-    mcqMode: editing.type === "Multiple select" ? "multiple" : "single",
     catKey: catKeyFromPath(editing.categoryPath),
     status: editing.status,
     text: editing.text,
@@ -290,7 +299,7 @@ let createdSeq = 0;
 function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
   const type: QuestionType =
     d.type === "mcq"
-      ? d.mcqMode === "multiple"
+      ? multiAnswer(d.choices)
         ? "Multiple select"
         : "Multiple choice"
       : d.type === "true-false"
@@ -387,10 +396,13 @@ export function NewQuestionWizard({
   const esComplete = filled.length > 0 && esDone === filled.length;
 
   const version = editingQuestion?.version ?? 0;
-  const title = isEditing ? "Edit Question" : "New Question";
+  /* Figma 739:1504 titles the screen by type and drops the subtext on a new
+     question — the versioning sentence is the only thing left to say, and it
+     only applies to an edit. */
+  const title = `${isEditing ? "Edit" : "New"} ${TYPE_TITLES[data.type]} Question`;
   const desc = isEditing
     ? `Saving creates v${version + 1} in ${catLabel}. Quizzes and feedback forms using this question move to the new version; past attempts keep v${version}.`
-    : "Write the question and its answers. Type, category and grading live in the panel on the right.";
+    : "";
 
   /* The Task wizard's two-column shell (.wizard-body: main pane + rail),
      mirrored — the question itself runs in the main pane on the LEFT with the
@@ -402,8 +414,8 @@ export function NewQuestionWizard({
       <div className="wizard-body">
         <div className="wizard-main">
           <div className="wizard-content">
-            <h1 className="wizard-title">{title}</h1>
-            <p className="wizard-desc">{desc}</p>
+            <h1 className={`wizard-title${desc ? "" : " qed-title-solo"}`}>{title}</h1>
+            {desc && <p className="wizard-desc">{desc}</p>}
 
             <QuestionTextSection data={data} update={update} />
 
@@ -510,45 +522,32 @@ function SetupSection({
     });
   };
 
-  const toSingle = () => {
-    // Keep the first correct option at +100%; the rest turn into wrong answers.
-    let kept = false;
-    update({
-      mcqMode: "single",
-      choices: data.choices.map((c) => {
-        if (c.grade > 0 && !kept) {
-          kept = true;
-          return { ...c, grade: 100 };
-        }
-        return c.grade > 0 ? { ...c, grade: -25 } : c;
-      }),
-    });
-  };
-
-  const toMultiple = () => {
-    const correct = data.choices.filter((c) => c.grade > 0);
-    const share = equalShare(Math.max(1, correct.length));
-    update({
-      mcqMode: "multiple",
-      choices: data.choices.map((c) => (c.grade > 0 ? { ...c, grade: share } : c)),
-    });
-  };
+  /* Archived / Active, in the Figma order. "Draft" is not one of the design's
+     segments — it only appears when a question already saved as a draft is
+     being edited, so its state stays representable. */
+  const statuses: QuestionDraft["status"][] =
+    data.status === "Draft" ? ["Draft", "Archived", "Active"] : ["Archived", "Active"];
 
   return (
     <>
-      <SectionHeading label="Question setup" />
       <div className="wizard-fields">
         <div className="form-group">
-          <label className="form-label">Status</label>
-          <Select
-            value={data.status}
-            onChange={(v) => update({ status: v as QuestionDraft["status"] })}
-            options={[
-              { value: "Draft", label: "Draft" },
-              { value: "Active", label: "Active" },
-              ...(isEditing ? [{ value: "Archived", label: "Archived" }] : []),
-            ]}
-          />
+          <label className="form-label">
+            Question Status <span className="req">*</span>
+          </label>
+          {/* Single-Select (Figma 359:2373), accent-active variant */}
+          <div className="seg-control">
+            {statuses.map((st) => (
+              <button
+                key={st}
+                className={`seg-btn ${data.status === st ? "active accent" : ""}`}
+                onClick={() => update({ status: st })}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+          <p className="form-help">Archived questions are not shown to users</p>
         </div>
 
         <div className="form-group">
@@ -563,11 +562,12 @@ function SetupSection({
               label: o.label.replace(" > ", " / "),
             }))}
           />
+          <p className="form-help">Where it goes in the Question Bank</p>
         </div>
 
         <div className="form-group">
           <label className="form-label">
-            Question type <span className="req">*</span>
+            Question Type <span className="req">*</span>
           </label>
           <Select
             value={data.type}
@@ -579,28 +579,6 @@ function SetupSection({
             <p className="form-help">Type can't change on a saved question.</p>
           )}
         </div>
-
-        {data.type === "mcq" && (
-          <div className="form-group">
-            <label className="form-label">Answers</label>
-            {/* Single-Select (Figma 359:2373) */}
-            <div className="seg-control">
-              <button
-                className={`seg-btn ${data.mcqMode === "single" ? "active" : ""}`}
-                onClick={toSingle}
-              >
-                Single answer
-              </button>
-              <button
-                className={`seg-btn ${data.mcqMode === "multiple" ? "active" : ""}`}
-                onClick={toMultiple}
-              >
-                Multiple answers
-              </button>
-            </div>
-            <p className="form-help">How many options a learner can pick.</p>
-          </div>
-        )}
       </div>
     </>
   );
@@ -656,6 +634,9 @@ function McqSection({
     update({ choices: choices.filter((c) => c.id !== id) });
   };
 
+  /* Figma 814:1679 "Create Question - MCQ" — one boxed table: an
+     OPTION / GRADE header, a row per option (drag handle, letter, dual-language
+     field, grade, remove), then a footer row holding the add CTA. */
   return (
     <div className="wizard-fields">
       <div className="form-group">
@@ -663,78 +644,101 @@ function McqSection({
           Options <span className="req">*</span>
         </label>
 
-          <div className="qed-rows">
-            {choices.map((c, i) => (
-              <div className="qed-row" key={c.id}>
-                <span className="qed-row-grip" aria-hidden>
-                  <DragHandleIcon />
+        <div className="qed-tbl">
+          <div className="qed-tbl-hd">
+            <span className="qed-tbl-ord" aria-hidden />
+            <span className="qed-tbl-hd-opt">OPTION</span>
+            {grading && (
+              <span className="qed-tbl-hd-grade">
+                GRADE
+                <span
+                  className="qed-tbl-info"
+                  title="Share of the question's mark this option earns."
+                >
+                  <InfoIcon />
                 </span>
-                {/* Figma 414:427 labels each option A, B, C… — the score
+              </span>
+            )}
+          </div>
+
+          {choices.map((c, i) => (
+            <div className="qed-tbl-row" key={c.id}>
+              <span className="qed-tbl-ord">
+                <span className="qed-tbl-grip" aria-hidden>
+                  <MoveIcon />
+                </span>
+                {/* Figma 814:1695 labels each option A, B, C… — the grade
                     dropdown is what marks an option correct, so there is no
                     separate radio/checkbox. */}
-                <span className="qed-row-letter" aria-hidden>
+                <span className="qed-tbl-letter" aria-hidden>
                   {OPTION_LETTERS[i] ?? i + 1}
                 </span>
+              </span>
+              <div className="qed-tbl-field">
                 <RichTextField
                   en={c.text}
                   es={c.textEs}
                   onChangeEn={(v) => setChoice(c.id, { text: v })}
                   onChangeEs={(v) => setChoice(c.id, { textEs: v })}
-                  placeholderEn="Option text…"
-                  placeholderEs="Texto de la opción…"
+                  placeholderEn={`Option ${OPTION_LETTERS[i] ?? i + 1}…`}
+                  placeholderEs={`Opción ${OPTION_LETTERS[i] ?? i + 1}…`}
                 />
-                {grading && (
-                  <GradeSelect value={c.grade} onChange={(v) => setChoice(c.id, { grade: v })} />
-                )}
-                <button
-                  className="qed-row-remove"
-                  aria-label="Remove option"
-                  disabled={choices.length <= 2}
-                  onClick={() => removeChoice(c.id)}
-                >
-                  <SmallXIcon />
-                </button>
               </div>
-            ))}
+              {grading && (
+                <GradeSelect value={c.grade} onChange={(v) => setChoice(c.id, { grade: v })} />
+              )}
+              <button
+                className="qed-tbl-x"
+                aria-label="Remove option"
+                disabled={choices.length <= 2}
+                onClick={() => removeChoice(c.id)}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          ))}
 
-            {!grading && data.otherOption && (
-              <div className="qed-row qed-row--other">
-                <span className="qed-row-grip" aria-hidden>
-                  <DragHandleIcon />
+          {!grading && data.otherOption && (
+            <div className="qed-tbl-row">
+              <span className="qed-tbl-ord">
+                <span className="qed-tbl-grip" aria-hidden>
+                  <MoveIcon />
                 </span>
-                <span className="qed-row-static">
-                  Other — learner types a free-text answer
+                <span className="qed-tbl-letter" aria-hidden>
+                  {OPTION_LETTERS[choices.length] ?? choices.length + 1}
                 </span>
-                <button
-                  className="qed-row-remove"
-                  aria-label="Remove Other option"
-                  onClick={() => update({ otherOption: false })}
-                >
-                  <SmallXIcon />
-                </button>
-              </div>
-            )}
-          </div>
+              </span>
+              <span className="qed-tbl-static">
+                Other — learner types a free-text answer
+              </span>
+              <button
+                className="qed-tbl-x"
+                aria-label="Remove Other option"
+                onClick={() => update({ otherOption: false })}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          )}
 
-          {/* Figma 416:578 puts the add row directly under the options, with
-              the rule text closing the section beneath it. */}
-          <div className="qed-row-adds">
-            <AddCard
-              label={
-                choices.length < TARGET_OPTIONS
-                  ? `Add ${TARGET_OPTIONS - choices.length} More`
-                  : "Add option"
-              }
+          <div className="qed-tbl-foot">
+            <button
+              className="cta-primary"
               onClick={addChoice}
               disabled={choices.length >= MAX_OPTIONS}
-            />
+            >
+              {choices.length < TARGET_OPTIONS
+                ? `Add ${TARGET_OPTIONS - choices.length} More`
+                : "Add option"}
+            </button>
           </div>
+        </div>
 
-          <p className="form-help">
-            {grading
-              ? "The total of all percentages must be 100%."
-              : "Ungraded — responses are collected, not scored."}
-          </p>
+        <p className="form-help">
+          {grading
+            ? "The total of all percentages must be 100%"
+            : "Ungraded — responses are collected, not scored."}
+        </p>
       </div>
     </div>
   );
@@ -1112,40 +1116,40 @@ function GradingSection({
       ? `Used in ${usedInQuizzes} quiz${usedInQuizzes === 1 ? "" : "zes"} — remove it from them first`
       : lockedByOther
         ? "Remove the “Other” option to enable grading"
-        : "Required for use in quizzes";
+        : "Required for use in Quizzes";
 
   const canRandomise = data.type === "mcq" || data.type === "match";
 
+  /* Figma 739:1504 runs the three switches as a plain stack at the foot of the
+     rail — no section heading over them. */
   return (
-    <>
-      <SectionHeading label="Grading" />
-      <div className="wizard-fields">
+    <div className="wizard-fields">
+      {canRandomise && (
         <ToggleRow
-          checked={grading}
-          disabled={gradingDisabled}
-          onChange={(v) => update({ grading: v })}
-          label="Grading"
-          sub={gradingSub}
+          checked={data.randomise}
+          onChange={(v) => update({ randomise: v })}
+          label="Randomize Options"
+          sub="New order on every attempt"
         />
-        {canRandomise && (
-          <ToggleRow
-            checked={data.randomise}
-            onChange={(v) => update({ randomise: v })}
-            label="Randomise options"
-            sub="New order on every attempt or prompt"
-          />
-        )}
-        {data.type === "mcq" && (
-          <ToggleRow
-            checked={data.otherOption}
-            disabled={grading}
-            onChange={(v) => update({ otherOption: v })}
-            label="“Other” free-text option"
-            sub="Only when grading is off"
-          />
-        )}
-      </div>
-    </>
+      )}
+      <ToggleRow
+        checked={grading}
+        disabled={gradingDisabled}
+        onChange={(v) => update({ grading: v })}
+        label="Grading"
+        sub={gradingSub}
+      />
+      {data.type === "mcq" && (
+        <ToggleRow
+          checked={data.otherOption}
+          disabled={grading}
+          onChange={(v) => update({ otherOption: v })}
+          label="“Other” Free-Text Option"
+          sub="Only when grading is off"
+          info="A learner who picks it types their own answer, so the question can't be auto-graded."
+        />
+      )}
+    </div>
   );
 }
 
@@ -1157,16 +1161,16 @@ function FeedbackSection({
   update: (p: Partial<QuestionDraft>) => void;
 }) {
   const singleAnswer =
-    data.type === "true-false" || (data.type === "mcq" && data.mcqMode === "single");
-  /* Figma 416:832 — one "Combined Feedback" heading over three bordered rows,
-     each a 62px label column beside the field, then a single closing subtext. */
+    data.type === "true-false" || (data.type === "mcq" && !multiAnswer(data.choices));
+  /* Figma 814:1770 — the same boxed table as the options, with a fixed label
+     column instead of the handle, and one closing subtext under the card. */
   return (
     <div className="wizard-fields">
       <div className="form-group">
         <label className="form-label">Combined Feedback</label>
-        <div className="qed-rows">
+        <div className="qed-tbl">
           <FeedbackRow
-            label="Correct Response"
+            label="For Correct Response"
             en={data.fbCorrect}
             es={data.fbCorrectEs}
             onEn={(v) => update({ fbCorrect: v })}
@@ -1175,7 +1179,7 @@ function FeedbackSection({
             esPlaceholder="Se muestra en una respuesta correcta…"
           />
           <FeedbackRow
-            label="Partially Correct Response"
+            label="For Partially Correct Response"
             en={singleAnswer ? "" : data.fbPartial}
             es={singleAnswer ? "" : data.fbPartialEs}
             onEn={(v) => update({ fbPartial: v })}
@@ -1189,7 +1193,7 @@ function FeedbackSection({
             esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
           />
           <FeedbackRow
-            label="Incorrect Response"
+            label="For Incorrect Response"
             en={data.fbIncorrect}
             es={data.fbIncorrectEs}
             onEn={(v) => update({ fbIncorrect: v })}
@@ -1199,7 +1203,7 @@ function FeedbackSection({
           />
         </div>
         <p className="form-help">
-          Combined feedback shown to the user when reviewing their Quiz Attempt.
+          Combined feedback shown to the user when reviewing their Quiz Attempt
         </p>
       </div>
     </div>
@@ -1226,17 +1230,19 @@ function FeedbackRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="qed-row">
+    <div className="qed-tbl-row">
       <span className="qed-fb-label">{label}</span>
-      <RichTextField
-        en={en}
-        es={es}
-        onChangeEn={onEn}
-        onChangeEs={onEs}
-        placeholderEn={placeholder}
-        placeholderEs={esPlaceholder}
-        disabled={disabled}
-      />
+      <div className="qed-tbl-field">
+        <RichTextField
+          en={en}
+          es={es}
+          onChangeEn={onEn}
+          onChangeEs={onEs}
+          placeholderEn={placeholder}
+          placeholderEs={esPlaceholder}
+          disabled={disabled}
+        />
+      </div>
     </div>
   );
 }
@@ -1301,32 +1307,44 @@ function ToggleRow({
   onChange,
   label,
   sub,
+  info,
   disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
   sub?: string;
+  /** Tooltip on an info glyph beside the note (Figma 814:1829). */
+  info?: string;
   disabled?: boolean;
 }) {
   return (
-    /* Figma 373:233 / 362:2440 — label, then the switch beside the state it's
-       in, then the note. */
-    <div className={`toggle-field ${disabled ? "is-disabled" : ""}`}>
-      <span className="form-label">{label}</span>
-      <div className="toggle-switch-row">
-        <button
-          type="button"
-          className={`toggle ${checked ? "on" : ""}`}
-          disabled={disabled}
-          onClick={() => !disabled && onChange(!checked)}
-          aria-pressed={checked}
-        >
-          <span className="toggle-knob" />
-        </button>
-        <span className="toggle-state">{checked ? "Yes" : "No"}</span>
+    /* Figma 739:1821/739:1827 — the switch leads, with the title over its note
+       beside it. (The stacked `.toggle-field` variant is what the rest of the
+       app uses; this screen's rail is the switch-first row.) */
+    <div className={`toggle-row inline qed-toggle ${disabled ? "disabled" : ""}`}>
+      <button
+        type="button"
+        className={`toggle ${checked ? "on" : ""}`}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        aria-pressed={checked}
+      >
+        <span className="toggle-knob" />
+      </button>
+      <div className="toggle-text">
+        <span className="toggle-label">{label}</span>
+        {sub && (
+          <p className="toggle-sub">
+            {sub}
+            {info && (
+              <span className="qed-tbl-info" title={info}>
+                <InfoIcon />
+              </span>
+            )}
+          </p>
+        )}
       </div>
-      {sub && <p className="toggle-sub">{sub}</p>}
     </div>
   );
 }
@@ -1377,7 +1395,7 @@ function GradeSelect({
     : [{ value, label: label(value) }, ...GRADE_OPTIONS];
   return (
     <select
-      className={`form-select qed-grade ${value > 0 ? "is-pos" : value < 0 ? "is-neg" : ""}`}
+      className="form-select qed-grade"
       value={String(value)}
       onChange={(e) => onChange(Number(e.target.value))}
     >

@@ -191,10 +191,10 @@ a {
 }
 
 .sidebar-host--wide {
-  /* Figma is 228px, but its sample labels are shorter than this app's real page
-     names ("Review Hands-On Tasks" needs 140px). Every other token is as drawn;
-     only the rail widens so no name truncates. */
-  width: 258px;
+  /* Figma 814:2685 — 270px wide with 24px gutters. The old 258px override (for
+     the long "Review Hands-On Tasks" label) is gone: that entry is "Hands-On
+     Tasks" now, so every name fits the drawn width. */
+  width: 270px;
 }
 
 .sidebar {
@@ -205,7 +205,8 @@ a {
   flex-shrink: 0;
   width: 100%;
   height: 100%;
-  padding: 20px;
+  /* Figma 814:2685: 40px top/bottom, 24px gutters. */
+  padding: 40px 24px;
 }
 
 .sidebar--collapsed {
@@ -218,10 +219,7 @@ a {
   top: 0;
   left: 0;
   bottom: 0;
-  /* Figma is 228px, but its sample labels are shorter than this app's real page
-     names ("Review Hands-On Tasks" needs 140px). Every other token is as drawn;
-     only the rail widens so no name truncates. */
-  width: 258px;
+  width: 270px;
   z-index: 50;
   background: #181818;
   box-shadow: 8px 0 28px rgba(0, 0, 0, 0.55);
@@ -670,6 +668,18 @@ a {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
+}
+
+/* Subtext + tooltip glyph (Figma 742:1061): a 14px info glyph 4px after the
+   page subtext. The row's own 6px gap is trimmed by 2px to land on the 4px. */
+.tasks-subtitle-info {
+  margin-left: -2px;
+  color: #a8a8a8;
+}
+
+.tasks-subtitle-info svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* "* Required Fields" hint (Figma node 46:322): 12px Fira Sans Medium, accent
@@ -1618,10 +1628,13 @@ button.breadcrumb-item:hover {
   gap: 4px;
 }
 
+/* Both sort states are #fff in Figma (79:445) — the unsorted double chevron is
+   NOT a dimmed affordance, it reads at the same weight as the label. That also
+   means there is no hover brighten left to do. */
 .sort-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--text-muted);
+  color: #fff;
 }
 
 .sort-icon svg {
@@ -1632,8 +1645,22 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-.table thead th:hover .sort-icon:not(.sort-icon--active) {
-  color: var(--text);
+/* Date-scoped columns (Figma 79:445, the "Seats" header) — the Icon Library
+   calendar (7:891, already exported as CalendarIcon) sits BEFORE the label and
+   marks a column whose values are counted inside the Date Range filter, so the
+   number moves when the range does. It is the brand orange #f05523, NOT white
+   like the label and the sort chevron — the colour is the whole signal. 14px
+   and the 4px gap come from `.th-content`; `flex:none` stops it squeezing in a
+   narrow header. */
+.th-date-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: #f05523;
+}
+
+.th-date-icon svg {
+  display: block;
 }
 
 .table thead th .caret {
@@ -1830,10 +1857,6 @@ button.breadcrumb-item:hover {
   color: var(--text-muted);
   width: 130px;
   white-space: nowrap;
-}
-/* Date values read one step smaller than other secondary cells (Figma 435:521). */
-.table tbody td.col-date {
-  font-size: 14px;
 }
 
 .col-actions {
@@ -7273,21 +7296,6 @@ button.breadcrumb-item:hover {
   border-color: var(--border-strong);
 }
 
-.replace-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.replace-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
 .form-subsection-title {
   font-family: var(--font-sans);
   font-size: 14pt;
@@ -7305,12 +7313,14 @@ button.breadcrumb-item:hover {
   min-height: 0;
   background: var(--bg);
 }
+/* The 32px page gutter, same box as the shared `.rail` (which also keeps a
+   shorter 16px bottom so the last row doesn't float off the edge). */
 .cert-split-tree {
   width: 280px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--bg-sidebar);
-  padding: 18px 14px;
+  padding: 32px 32px 16px;
   overflow-y: auto;
 }
 .cert-split-back {
@@ -7319,7 +7329,7 @@ button.breadcrumb-item:hover {
   font-weight: 400;
   color: var(--text-muted);
   padding: 4px 6px;
-  margin-bottom: 14px;
+  margin: 0 0 14px -6px;
 }
 .cert-split-back:hover { color: var(--text); }
 .cert-split-tree-body {
@@ -7404,7 +7414,7 @@ button.breadcrumb-item:hover {
   padding: 8px 8px 4px;
 }
 .cert-split-add {
-  margin-top: 8px;
+  margin: 8px 0 0 -8px;
   padding: 6px 8px;
   text-align: left;
   color: var(--text-muted);
@@ -7412,127 +7422,6 @@ button.breadcrumb-item:hover {
   font-size: 12pt;
 }
 .cert-split-add:hover { color: var(--text); }
-
-.cert-split-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-.cert-split-header {
-  padding: 24px 36px 0;
-  border-bottom: 1px solid var(--border);
-}
-.cert-split-task-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: var(--font-sans);
-  font-size: 24pt;
-  font-weight: 700;
-  margin: 0 0 16px;
-  letter-spacing: -0.01em;
-}
-.cert-split-task-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #7a3a18;
-  color: #ffd2b3;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14pt;
-  font-weight: 700;
-}
-.cert-split-quiz-badge {
-  margin-left: 6px;
-  padding: 2px 10px;
-  background: rgba(233,114,55,0.16);
-  color: var(--accent-strong);
-  border-radius: 4px;
-  font-size: 10pt;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-.cert-split-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding-bottom: 0;
-}
-.cert-split-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px 14px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  border-bottom: 2px solid transparent;
-  position: relative;
-}
-.cert-split-tab .cert-split-tab-num {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
-  font-size: 11pt;
-}
-.cert-split-tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.cert-split-tab.active .cert-split-tab-num {
-  background: var(--bg-pill-strong);
-  color: var(--text);
-}
-.cert-split-tab.done .cert-split-tab-num {
-  background: #2ea872;
-  border-color: #2ea872;
-  color: #fff;
-}
-.cert-split-tab.done {
-  color: var(--text);
-}
-.cert-split-tab-sep {
-  position: absolute;
-  right: -1px;
-  top: 50%;
-  width: 28px;
-  height: 1px;
-  background: var(--border);
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.cert-split-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 28px 36px 36px;
-  min-height: 0;
-}
-.cert-split-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 36px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-}
-.cert-split-footer-left {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
 
 /* Tweak: cert page footer New Certification button reuses .new-task styles */
 
@@ -7641,53 +7530,17 @@ button.breadcrumb-item:hover {
 
 /* =============================================================
  * Content Links — built on the shared design-system components:
- * .tasks shell + .rvc-crumbs header, shared .search-wrap bar with a
- * .dropdown/.ms-menu results panel, SectionHeading columns with
+ * .tasks shell + .rvc-crumbs header, the shared .usearch combobox bar
+ * (2026-08-30 — was .search-wrap + a .dropdown panel), SectionHeading columns with
  * .cta-quiet actions, PrmModal picker, Spotlights .sp-save-footer.
  * (.cl-modal-* below is the shared picker-modal pattern other pages
  * still use — this page itself moved to PrmModal.)
  * ============================================================= */
 
+/* The bar itself is the shared .usearch combobox (2026-08-30); .lc-search only
+   makes it share the toolbar row. */
 .lc-search {
-  position: relative;
   flex: 1;
-}
-
-/* Applied state ✕ — same glyph/colour as .usearch-clear, positioned where the
-   shared bar parks its ⌘K badge. */
-.lc-search-clear {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-/* The results panel is the shared .dropdown/.ms-menu chrome, pinned to the
-   bar's full width. */
-.lc-search-menu {
-  left: 0;
-  right: 0;
-}
-
-.lc-search-menu .dropdown-item {
-  gap: 12px;
-}
-
-.lc-search-empty {
-  padding: 6px 8px;
-  font-size: 14px;
-  color: #a8a8a8;
-}
-
-/* Right-aligned row meta — the .ss-menu .dropdown-item-detail treatment,
-   re-scoped for the two Content Links lists. */
-.lc-search-menu .dropdown-item-detail,
-.lc-pick .dropdown-item-detail {
-  flex-shrink: 0;
-  margin-left: auto;
-  font-size: 14px;
-  font-weight: 400;
-  color: #a8a8a8;
 }
 
 .lc-item-name {
@@ -7708,7 +7561,8 @@ button.breadcrumb-item:hover {
   padding-bottom: 32px;
 }
 
-/* ---- Three link columns ---- */
+/* ---- The three link sections (Figma 802:2260) — a titled panel per link
+   kind, each holding a CERTIFICATION / LINK STRENGTH table. ---- */
 .lc-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -7716,65 +7570,118 @@ button.breadcrumb-item:hover {
   align-items: start;
 }
 
-/* Stack the columns before they get too narrow to read. */
+/* Stack before the 130px strength track squeezes the name out of the row. */
 @media (max-width: 1080px) {
   .lc-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.lc-col {
+.lc-sec {
   min-width: 0;
 }
 
-/* The SectionHeading supplies the label; the column owns the rhythm. */
-.lc-col .section-heading {
-  margin: 0;
-  width: 100%;
-}
-
-.lc-add {
-  margin-left: auto;
-}
-
-.lc-cards {
+/* Title row (802:2255): 20px SemiBold title, 24px plus parked on the far edge. */
+.lc-sec-head {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 24px;
+  margin-bottom: 8px;
 }
 
-.lc-col-empty {
-  padding: 12px 0;
+.lc-sec-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.lc-sec-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* The 24px plus is PlusThinIcon scaled up — same 1:12 stroke ratio as 802:2257. */
+.lc-sec-add svg {
+  width: 24px;
+  height: 24px;
+}
+
+.lc-sec-add:hover {
+  color: #f05523;
+}
+
+/* Panel (801:2099) — the DS wash over #0d0d0d, 12px radius, rows clipped to it. */
+.lc-panel {
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+}
+
+/* The header cell and the row's strength cell share one 130px track so the
+   input + ✕ sit exactly under the LINK STRENGTH label (98 + 16 gap + 16 ✕). */
+.lc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px 13px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.lc-row:last-child {
+  border-bottom: none;
+}
+
+.lc-row-head {
+  padding: 8px 16px 9px;
+}
+
+.lc-hcell {
+  min-width: 0;
   font-size: 14px;
+  font-weight: 400;
   color: #a8a8a8;
 }
 
-/* ---- Link card — the design-system card wash over #0d0d0d. ---- */
-.lc-card {
+.lc-hcell-str {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
-  border: 0.5px solid rgba(64, 64, 64, 0.5);
+  gap: 4px;
 }
 
-.lc-card-main {
-  flex: 1;
-  min-width: 0;
+.lc-info {
+  display: inline-flex;
+  align-items: center;
+  color: #a8a8a8;
+}
+
+.lc-row-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 0;
-  background: transparent;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0;
   border: none;
+  background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.lc-card-name {
+.lc-row-name {
+  max-width: 100%;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
@@ -7785,17 +7692,18 @@ button.breadcrumb-item:hover {
 }
 
 /* Link hover = underline, per the crumb/link hover convention. */
-.lc-card-main:hover .lc-card-name {
+.lc-row-main:hover .lc-row-name {
   text-decoration: underline;
 }
 
-.lc-card-swap {
+.lc-row-swap {
   font-size: 14px;
   font-weight: 400;
   color: #a8a8a8;
 }
 
-.lc-card-meta {
+.lc-row-meta {
+  max-width: 100%;
   font-size: 14px;
   font-weight: 400;
   color: #a8a8a8;
@@ -7804,20 +7712,27 @@ button.breadcrumb-item:hover {
   text-overflow: ellipsis;
 }
 
-/* Strength (0–100) — the shared input-shell tokens (1px #404040, r8) at a
-   compact 32px. */
+.lc-row-imp {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Link Strength (0–100) — the "Plain Text Input - Single Language" shell (801:2221):
+   98×37, 1px #404040, r8, 16px centred. */
 .lc-strength {
   flex: none;
-  width: 56px;
-  height: 32px;
+  width: 98px;
+  height: 37px;
   box-sizing: border-box;
+  padding: 8px 12px;
   border: 1px solid #404040;
   border-radius: 8px;
   background: transparent;
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
   text-align: center;
   -moz-appearance: textfield;
   appearance: textfield;
@@ -7834,23 +7749,33 @@ button.breadcrumb-item:hover {
   outline: none;
 }
 
-.lc-card-remove {
+.lc-row-remove {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   border: none;
-  border-radius: 8px;
   background: transparent;
   color: #a8a8a8;
   cursor: pointer;
 }
 
-.lc-card-remove:hover {
+.lc-row-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.lc-row-remove:hover {
   color: #fff;
-  background: rgba(115, 115, 115, 0.1);
+}
+
+.lc-panel-empty {
+  padding: 16px;
+  font-size: 14px;
+  color: #a8a8a8;
 }
 
 /* ---- Referenced by ---- */
@@ -7928,44 +7853,6 @@ button.breadcrumb-item:hover {
 }
 
 /* ---- Add-link picker (inside PrmModal) ---- */
-.lc-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-
-.lc-pick-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.lc-pick .dropdown-item {
-  gap: 12px;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-}
-
-.lc-pick .dropdown-item:hover {
-  background: #2c2c2f;
-}
-
-/* Single-select convention: the picked row is the SemiBold one. */
-.lc-pick .dropdown-item.is-current .lc-item-name {
-  font-weight: 600;
-}
-
-.lc-pick-empty {
-  padding: 6px 8px;
-  font-size: 14px;
-  color: #a8a8a8;
-}
-
 /* ---------- Picker modal ---------- */
 .cl-modal-overlay {
   position: fixed;
@@ -12908,187 +12795,6 @@ a.rh-crumb-link:hover {
 
 .fb-faint {
   color: var(--text-faint);
-}
-
-/* ----- New Feedback Form Modal ----- */
-
-.fb-modal-scrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 32px;
-}
-
-.fb-modal {
-  width: 100%;
-  max-width: 620px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-.fb-modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.fb-modal-body {
-  padding: 22px 24px;
-  overflow: auto;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.fb-modal-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-sidebar);
-}
-
-.fb-modal-footer-right {
-  display: flex;
-  gap: 10px;
-}
-
-.fb-mode-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.fb-mode-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 22px 18px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.fb-mode-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-pill-strong);
-}
-
-.fb-mode-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: rgba(233, 114, 55, 0.12);
-  color: var(--accent-strong);
-  margin-bottom: 4px;
-}
-
-.fb-mode-title {
-  font-size: 12.5pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.fb-mode-desc {
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-
-.fb-dup-search {
-  margin-bottom: 12px;
-}
-
-.fb-dup-list {
-  max-height: 280px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.fb-dup-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: var(--text);
-}
-
-.fb-dup-item:hover {
-  background: var(--bg-row-hover);
-}
-
-.fb-dup-item.is-selected {
-  background: rgba(233, 114, 55, 0.08);
-  border-color: rgba(233, 114, 55, 0.35);
-}
-
-.fb-dup-radio {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.fb-dup-item.is-selected .fb-dup-radio {
-  border-color: var(--accent);
-}
-
-.fb-dup-radio-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.fb-dup-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.fb-dup-name {
-  font-size: 11.5pt;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.fb-dup-sub {
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  margin-top: 2px;
 }
 
 /* ----- Detail page ----- */
@@ -20581,6 +20287,18 @@ a.rh-crumb-link:hover {
   margin-top: 40px;
 }
 
+/* The type-titled header (Figma 739:1508) carries no subtext on a new
+   question, so the title takes over .wizard-desc's 28px bottom gap. */
+.qed-title-solo {
+  margin-bottom: 28px;
+}
+
+/* Rail groups sit 32px apart — the shared field rhythm — now that the
+   section headings between them are gone. */
+.qed-side > .wizard-fields + .wizard-fields {
+  margin-top: 32px;
+}
+
 .qed-side > .section-heading {
   margin: 24px 0 12px;
 }
@@ -20656,15 +20374,17 @@ a.rh-crumb-link:hover {
   min-width: 0;
 }
 
-/* Combined Feedback rows (Figma 416:832) — a fixed 62px label column beside
-   the field, centred against it, rather than a label stacked above. */
+/* Combined Feedback rows (Figma 814:1774) — a fixed 98px label column beside
+   the field, centred against it, rather than a label stacked above. Wraps to
+   two or three lines, so the leading is specified. */
 .qed-fb-label {
   flex: none;
-  width: 62px;
+  width: 98px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: #a8a8a8;
+  line-height: 19px;
+  color: #fff;
 }
 
 .qed-row-grip {
@@ -20724,21 +20444,151 @@ a.rh-crumb-link:hover {
   color: #a8a8a8;
 }
 
-/* Per-option grade — a .form-select sized for the row, tinted by sign. */
+/* Per-option grade (Figma 814:1703) — the design-system dropdown at its own
+   12px inset, sized so the grade + gap + remove icon add up to the 122px the
+   GRADE header column reserves (90 + 16 + 16). It reads as a plain white
+   value: the sign-tinted variant this had was dropped with the re-sync. */
 .qed-grade {
-  width: 120px;
+  width: 90px;
   min-width: 0;
   flex: none;
-  padding: 10px 30px 10px 12px;
+  padding: 12px 30px 12px 12px;
+}
+
+/* ─── Options / Combined Feedback card (Figma 814:1679 "Create Question -
+ * MCQ", 814:1770) ───
+ * The same boxed table as the Quiz wizard's questions card (.qz, 750:1672):
+ * rgba(122,122,122,.1) on a 12px radius, 16px gutters, rows split by a
+ * rgba(64,64,64,.5) hairline that also closes the bottom edge. Header cells
+ * are 14px muted; the rows carry the real controls. */
+.qed-tbl {
+  display: flex;
+  flex-direction: column;
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+.qed-tbl-hd,
+.qed-tbl-row,
+.qed-tbl-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.qed-tbl-hd {
+  padding: 8px 16px 9px;
   font-size: 14px;
+  color: #a8a8a8;
 }
 
-.qed-grade.is-pos {
-  color: #14b867;
+.qed-tbl-row,
+.qed-tbl-foot {
+  padding: 12px 16px 13px;
 }
 
-.qed-grade.is-neg {
-  color: #ff1f31;
+.qed-tbl-hd-opt {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Covers the rows' grade dropdown + remove icon (90 + 16 + 16). */
+.qed-tbl-hd-grade {
+  width: 122px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The 11px info glyph, lifted 1px so it optically centres on the label rather
+   than sagging below its baseline. */
+.qed-tbl-info {
+  display: inline-flex;
+  position: relative;
+  top: -1px;
+  margin-left: 4px;
+  color: #a8a8a8;
+}
+
+/* Drag handle + letter gutter: 16px "move" (751:2524) + 4px + the letter. */
+.qed-tbl-ord {
+  width: 36px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qed-tbl-grip {
+  display: inline-flex;
+  color: #a8a8a8;
+  cursor: grab;
+}
+
+.qed-tbl-grip:active {
+  cursor: grabbing;
+}
+
+.qed-tbl-letter {
+  width: 16px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.qed-tbl-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.qed-tbl-static {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  color: #a8a8a8;
+}
+
+.qed-tbl-x {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+
+.qed-tbl-x:hover:not(:disabled) {
+  color: #fff;
+}
+
+.qed-tbl-x:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ─── Rail toggles ─── */
+/* The switch-first row (Figma 739:1821): 8px to the text, and the title sits
+   flush on its note rather than the 4px the stacked variant uses. */
+.qed-toggle {
+  gap: 8px;
+}
+
+.qed-toggle .toggle-text {
+  gap: 0;
+}
+
+.qed-toggle.disabled {
+  opacity: 0.45;
 }
 
 .qed-row-adds {
@@ -21809,61 +21659,6 @@ a.rh-crumb-link:hover {
   border-color: var(--text-faint);
 }
 
-/* ─── Feedback Form wizard (rail + footer shell) ─── */
-/* Status pill pinned under the step rail (Form ID · status). */
-.wizard-progress .wizard-fb-status {
-  margin-left: 10px;
-  vertical-align: middle;
-}
-
-.fb-details-status {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.fb-details-status-desc {
-  margin: 0;
-  font-size: 11pt;
-  line-height: 1.5;
-  color: var(--text-muted);
-  max-width: 620px;
-}
-
-.fb-details-meta {
-  margin: 0;
-  max-width: 620px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.fb-details-meta-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.fb-details-meta-row:last-child {
-  border-bottom: none;
-}
-
-.fb-details-meta-row dt {
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-
-.fb-details-meta-row dd {
-  margin: 0;
-  font-size: 11pt;
-  color: var(--text);
-  font-family: var(--font-mono);
-  text-align: right;
-}
-
 .fb-picker-row.is-selected {
   background: rgba(233, 114, 55, 0.08);
 }
@@ -22073,20 +21868,26 @@ a.rh-crumb-link:hover {
 }
 
 /* ── header (Figma 293:849) ──
-   Breadcrumb over the DS page header (title + subtitle), no bottom rule. The
+   Breadcrumb over the DS page header (title + subtitle), no bottom rule, on
+   the app's even 32px page gutter (the 32px down to the body comes from
+   `.rvc-stagecol`'s own top padding, so this header has none). The
    task and submitter now live here, which is why there's no separate submission
    bar; the attempt switcher rides on the right of the same row. */
 .rvc-header {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 24px 40px;
+  padding: 32px 32px 0;
   flex: none;
 }
 /* In the split layout the column owns the gutter, so the header only keeps the
    28px down to the submission's write-up (756:3783 → 756:3140). */
 .rvc-hor .rvc-header { padding: 0 0 28px; }
-.rvc-pagehead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* The crumb row owns the 12px down to the title; a container `gap` would also
+   land between the title and its subtext and override the DS 2px, leaving these
+   crumbed pages looser than every plain .tasks-title page. */
+.rvc-pagehead { display: flex; flex-direction: column; min-width: 0; }
+.rvc-pagehead > .rvc-crumbs { margin-bottom: 12px; }
 .rvc-crumbs { display: flex; align-items: center; gap: 4px; }
 .rvc-crumb {
   font-family: var(--font-sans);
@@ -22400,7 +22201,7 @@ span.rvc-crumb--current { cursor: default; }
 .rvc-stagecol {
   flex: 1;
   min-width: 0;
-  padding: 0 32px 24px;
+  padding: 32px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -25135,6 +24936,46 @@ span.rvc-crumb--current { cursor: default; }
   background: transparent;
 }
 
+/* ── Select Certifications (Content Links → a section's "+") ──
+   The same chrome once more, over the Certification catalog. Name, Industry
+   and Level can all run long, so the body cells ellipsise to keep 40px rows
+   (body only — these classes sit on the th too, and truncating there would
+   clip the header label). */
+.scm-table tbody td.scm-col-name,
+.scm-table tbody td.scm-col-industry,
+.scm-table tbody td.scm-col-level {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Counts read against the header rather than the cell beside them. */
+.scm-table .scm-col-tasks,
+.scm-table .scm-col-enrolled {
+  text-align: right;
+  padding-right: 20px !important;
+}
+.scm-table th.scm-col-tasks .th-content,
+.scm-table th.scm-col-enrolled .th-content {
+  justify-content: flex-end;
+}
+
+/* Certifications already linked in this section (and the one being edited)
+   stay visible — ticked but locked — so the admin can see what's taken. */
+.scm-table tbody tr.is-locked {
+  opacity: 0.45;
+  cursor: default;
+}
+.scm-table tbody tr.is-locked:hover {
+  background: transparent;
+}
+
+/* The pagination row is justify-end, so the count takes the left edge. */
+.scm-picked {
+  margin-right: auto;
+  color: var(--text-muted);
+}
+
 /* ═══════════ Proctoring Review landing — Claude Design "User Reviews 6B" ═══════════
    The Proctoring page runs on the same landing morph as Tasks (useLandingMorph
    + LandingOverlay + the .tasks.lm rules above), but its hero is the
@@ -25834,6 +25675,34 @@ span.rvc-crumb--current { cursor: default; }
 .qz-pt-suffix {
   font-size: 16px;
   color: #a8a8a8;
+}
+
+/* MANDATORY takes the POINTS column's slot on Feedback Forms (Figma 810:1285):
+   a 98px cell holding a centred toggle, with the remove ✕ as the row's last
+   16px cell — so both tables share the same right-hand gutter. The header runs
+   125px to cover the toggle cell plus that ✕ and its 16px gap. */
+.qz-hd-mand {
+  justify-content: flex-start;
+  width: 125px;
+}
+
+.qz-mand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 98px;
+  flex-shrink: 0;
+}
+
+/* Inactive links keep their text but drop the ORDER gutter — they aren't
+   shown to users and can't be reordered, only reactivated. */
+.qz-row--inactive {
+  justify-content: space-between;
+  color: var(--text-muted);
+}
+
+.qz-row--inactive .qz-q-title {
+  color: var(--text-muted);
 }
 
 .qz-x {

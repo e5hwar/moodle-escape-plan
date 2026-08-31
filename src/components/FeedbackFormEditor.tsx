@@ -1,14 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type FeedbackForm,
   type FormQuestionLink,
 } from "../data/feedbackForms";
-import {
-  shortQuestionType,
-  type Question,
-  type QuestionType,
-} from "../data/questionBank";
-import { SearchIcon, SmallXIcon, CheckIcon, AddIcon } from "./icons";
+import { type Question, type QuestionType } from "../data/questionBank";
+import { InfoTipIcon, MoveIcon, SmallXIcon } from "./icons";
+import { SelectQuestionsModal } from "./SelectQuestionsModal";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type Props = {
   form: FeedbackForm;
@@ -19,9 +18,28 @@ type Props = {
 
 const TODAY = "2026-07-09";
 
+/* The row's second line names the question's shape in full (Figma 810:1285) —
+   the Bank's short codes (T/F, Scale, Short) read as jargon here. */
+const TYPE_LABEL: Record<QuestionType, string> = {
+  "Multiple choice": "Multiple Choice",
+  "Multiple select": "Multiple Select",
+  "True/False": "True or False",
+  "Match the following": "Match the Following",
+  "Short answer": "Text Input",
+  "File upload": "File Upload",
+  "Linear scale": "Linear Scale",
+};
+
+/* The Quiz wizard's ordered Questions table (Figma 750:1672), reused verbatim
+ * for Feedback Forms: one `.qz` list with drag-to-reorder rows and the Add
+ * Question menu (752:2708) in the footer. The differences are the ones the two
+ * features genuinely disagree on — a form has no points and no random pools, so
+ * the POINTS column becomes a MANDATORY toggle (810:1285), and the menu drops
+ * "Add Random Set". */
 export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: Props) {
   const [picking, setPicking] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const addWrapRef = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(bank.map((q) => [q.id, q])), [bank]);
   const actives = form.questions.filter((l) => l.status === "active");
@@ -30,15 +48,6 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
   // Keep the array normalized as [active links in display order, inactive links].
   function commit(nextActives: FormQuestionLink[], nextInactives: FormQuestionLink[]) {
     onUpdate([...nextActives, ...nextInactives]);
-  }
-
-  function moveActive(questionId: string, dir: -1 | 1) {
-    const idx = actives.findIndex((l) => l.questionId === questionId);
-    const target = idx + dir;
-    if (idx < 0 || target < 0 || target >= actives.length) return;
-    const next = [...actives];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    commit(next, inactives);
   }
 
   function setMandatory(questionId: string, mandatory: boolean) {
@@ -50,8 +59,9 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
   }
 
   function removeLink(questionId: string) {
-    if (form.status === "draft") {
-      // Draft forms were never shown to users — no responses to preserve.
+    if (form.responseCount === 0) {
+      // Nothing has been answered yet — there is no response to preserve, so
+      // the link is dropped outright rather than kept as a tombstone.
       onUpdate(form.questions.filter((l) => l.questionId !== questionId));
       return;
     }
@@ -72,79 +82,217 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
     );
   }
 
-  function linkQuestion(q: Question) {
-    if (form.questions.some((l) => l.questionId === q.id)) return;
-    commit(
-      [...actives, { questionId: q.id, mandatory: false, status: "active", linkedAt: TODAY }],
-      inactives,
-    );
+  /** Bank questions arrive in selection order and join the form in that order. */
+  function addFromBank(ids: string[]) {
+    const fresh = ids
+      .filter((id) => !form.questions.some((l) => l.questionId === id))
+      .map((id) => ({
+        questionId: id,
+        mandatory: false,
+        status: "active" as const,
+        linkedAt: TODAY,
+      }));
+    commit([...actives, ...fresh], inactives);
   }
 
-  return (
-    <div className="fb-editor">
-      <div className="fb-link-banner">
-        <strong>Questions live in the Question Bank.</strong> This form links
-        them — editing a question in the bank updates every quiz and form that
-        uses it. Grading data on linked questions is ignored here; responses
-        are collected without scoring.
-      </div>
+  // Drag-to-reorder, pointer-based (HTML5 DnD is unreliable across
+  // browsers/automation): pressing a handle starts a window-level pointer drag;
+  // the row under the pointer is the drop slot.
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const rowUnder = (y: number) => {
+    let target: string | null = null;
+    rowRefs.current.forEach((el, k) => {
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) target = k;
+    });
+    return target;
+  };
+  const reorder = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const next = [...actives];
+    const from = next.findIndex((l) => l.questionId === fromId);
+    const to = next.findIndex((l) => l.questionId === toId);
+    if (from < 0 || to < 0) return;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    commit(next, inactives);
+  };
+  const startDrag = (id: string) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    setDrag(id);
+    setOver(id);
+    const onMove = (ev: PointerEvent) => setOver(rowUnder(ev.clientY));
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const target = rowUnder(ev.clientY);
+      if (target) reorder(id, target);
+      setDrag(null);
+      setOver(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  const rowRef = (id: string) => (el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(id, el);
+    else rowRefs.current.delete(id);
+  };
+  const rowDragClass = (id: string) =>
+    `${drag === id ? " dragging" : ""}${drag && over === id && drag !== id ? " drag-over" : ""}`;
 
-      <div className="fb-editor-toolbar">
-        <div className="fb-editor-toolbar-left">
-          <span className="fb-editor-count">
-            {actives.length} active question{actives.length === 1 ? "" : "s"}
-            {inactives.length > 0 && (
-              <span className="fb-faint"> · {inactives.length} inactive</span>
-            )}
+  const openCreate = () => {
+    setMenuOpen(false);
+    onCreateQuestion();
+  };
+  const openBank = () => {
+    setMenuOpen(false);
+    setPicking(true);
+  };
+
+  useCreateShortcut(() => setMenuOpen(true), !menuOpen && !picking, "q");
+
+  // While the menu is open: C / Q fire its rows, Escape and outside clicks
+  // dismiss. Escape is captured so it can't also cancel the wizard.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenuOpen(false);
+      } else if (k === "c") {
+        e.preventDefault();
+        openCreate();
+      } else if (k === "q") {
+        e.preventDefault();
+        openBank();
+      }
+    };
+    const onDown = (e: MouseEvent) => {
+      if (addWrapRef.current && !addWrapRef.current.contains(e.target as Node))
+        setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [menuOpen]);
+
+  return (
+    <>
+      <div className={`qz${drag ? " qz-dragging" : ""}`}>
+        <div className="qz-hd">
+          <span className="qz-ord-col">
+            <span className="qz-drag qz-drag--ghost" aria-hidden="true">
+              <MoveIcon />
+            </span>
+            <span className="qz-ord">ORDER</span>
+          </span>
+          <span className="qz-hd-q">QUESTION</span>
+          <span className="qz-hd-points qz-hd-mand">
+            MANDATORY
+            <span
+              className="form-help-info qz-points-info"
+              tabIndex={0}
+              role="note"
+              aria-label="If the user chooses to submit, they must answer this question. Dismissing the whole form is always allowed."
+              data-tip="If the user chooses to submit, they must answer this question. Dismissing the whole form is always allowed."
+            >
+              <InfoTipIcon />
+            </span>
           </span>
         </div>
-        <div className="fb-editor-toolbar-right">
-          <button className="btn-publish" onClick={() => setPicking(true)}>
-            <AddIcon /> Link questions
-          </button>
+
+        {actives.length === 0 && (
+          <div className="qz-empty">
+            No questions yet — Add Question below creates one or picks from the
+            Bank.
+          </div>
+        )}
+
+        {actives.map((l, i) => {
+          const q = byId.get(l.questionId);
+          return (
+            <div
+              key={l.questionId}
+              ref={rowRef(l.questionId)}
+              className={`qz-row${rowDragClass(l.questionId)}`}
+            >
+              <span className="qz-ord-col">
+                <button
+                  className="qz-drag"
+                  aria-label="Reorder"
+                  onPointerDown={startDrag(l.questionId)}
+                >
+                  <MoveIcon />
+                </button>
+                <span className="qz-ord">{i + 1}</span>
+              </span>
+              <div className="qz-q">
+                <div className="qz-q-title">
+                  {q ? q.text : `${l.questionId} — not found in the Question Bank`}
+                </div>
+                <div className="qz-q-type">{q ? TYPE_LABEL[q.type] : "—"}</div>
+              </div>
+              <span className="qz-mand">
+                <button
+                  type="button"
+                  className={`toggle ${l.mandatory ? "on" : ""}`}
+                  aria-pressed={l.mandatory}
+                  aria-label="Mandatory"
+                  onClick={() => setMandatory(l.questionId, !l.mandatory)}
+                >
+                  <span className="toggle-knob" />
+                </button>
+              </span>
+              <button
+                className="qz-x"
+                aria-label="Remove"
+                title={
+                  form.responseCount === 0
+                    ? "Remove from this form"
+                    : "Mark Inactive — stops appearing in future prompts; collected responses are preserved"
+                }
+                onClick={() => removeLink(l.questionId)}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          );
+        })}
+
+        <div className="qz-foot">
+          <div className="qz-add-wrap" ref={addWrapRef}>
+            <button
+              className="cta-primary qz-add"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              Add Question
+              <span className="qz-kbd">Q</span>
+            </button>
+            {menuOpen && (
+              <div className="u-menu qz-menu" role="menu">
+                <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
+                  <span className="qz-menu-label">Create New Question</span>
+                  <span className="qz-kbd">C</span>
+                </button>
+                <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
+                  <span className="qz-menu-label">Add from Question Bank</span>
+                  <span className="qz-kbd">Q</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {actives.length === 0 ? (
-        <div className="fb-empty fb-empty--centered">
-          <div className="fb-empty-title">No questions linked yet</div>
-          <div className="fb-empty-sub">
-            Link questions from the Question Bank, order them, and mark the
-            ones a user must answer if they choose to submit.
-          </div>
-          <button className="btn-publish" onClick={() => setPicking(true)}>
-            + Link questions
-          </button>
-        </div>
-      ) : (
-        <div className="fb-link-list">
-          {actives.map((l, i) => (
-            <LinkRow
-              key={l.questionId}
-              link={l}
-              question={byId.get(l.questionId)}
-              index={i}
-              expanded={expandedId === l.questionId}
-              onToggleExpand={() =>
-                setExpandedId(expandedId === l.questionId ? null : l.questionId)
-              }
-              onMoveUp={i > 0 ? () => moveActive(l.questionId, -1) : undefined}
-              onMoveDown={
-                i < actives.length - 1
-                  ? () => moveActive(l.questionId, +1)
-                  : undefined
-              }
-              onSetMandatory={(v) => setMandatory(l.questionId, v)}
-              onRemove={() => removeLink(l.questionId)}
-              removeTitle={
-                form.status === "draft"
-                  ? "Unlink from this draft"
-                  : "Mark Inactive — stops appearing in future prompts; collected responses are preserved"
-              }
-            />
-          ))}
-        </div>
-      )}
 
       {inactives.length > 0 && (
         <div className="fb-inactive-section">
@@ -155,360 +303,49 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
               collected against them remain attached to this form.
             </p>
           </div>
-          <div className="fb-link-list">
-            {inactives.map((l) => (
-              <LinkRow
-                key={l.questionId}
-                link={l}
-                question={byId.get(l.questionId)}
-                inactive
-                expanded={expandedId === l.questionId}
-                onToggleExpand={() =>
-                  setExpandedId(expandedId === l.questionId ? null : l.questionId)
-                }
-                onReactivate={() => reactivateLink(l.questionId)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {picking && (
-        <QuestionPickerModal
-          form={form}
-          bank={bank}
-          onLink={linkQuestion}
-          onCreateQuestion={onCreateQuestion}
-          onClose={() => setPicking(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-function LinkRow({
-  link,
-  question,
-  index,
-  inactive,
-  expanded,
-  onToggleExpand,
-  onMoveUp,
-  onMoveDown,
-  onSetMandatory,
-  onRemove,
-  removeTitle,
-  onReactivate,
-}: {
-  link: FormQuestionLink;
-  question?: Question;
-  index?: number;
-  inactive?: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  onSetMandatory?: (v: boolean) => void;
-  onRemove?: () => void;
-  removeTitle?: string;
-  onReactivate?: () => void;
-}) {
-  if (!question) {
-    return (
-      <div className="fb-link-row is-missing">
-        <div className="fb-link-main">
-          <div className="fb-link-text fb-faint">
-            {link.questionId} — question not found in the Question Bank
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`fb-link-row ${inactive ? "is-inactive" : ""}`}>
-      <div className="fb-link-head" onClick={onToggleExpand}>
-        {!inactive && <span className="fb-q-num">{(index ?? 0) + 1}</span>}
-        <div className="fb-link-main">
-          <div className="fb-link-text">{question.text}</div>
-          <div className="fb-link-meta">
-            <span className="fb-link-id">{question.id}</span>
-            <span className="fb-link-chip">{shortQuestionType(question.type)}</span>
-            <span className="fb-link-chip">
-              {question.categoryPath[question.categoryPath.length - 1]}
-            </span>
-            <span className="fb-link-id">v{question.version}</span>
-            {question.gradingEnabled && (
-              <span
-                className="fb-link-chip fb-link-chip--graded"
-                title="This question carries grading data — it is ignored in Feedback Forms"
-              >
-                Graded · ignored here
-              </span>
-            )}
-            {question.hasSpanish && <span className="fb-link-chip">EN·ES</span>}
-            {inactive && link.deactivatedAt && (
-              <span className="fb-link-id">inactive since {link.deactivatedAt}</span>
-            )}
-          </div>
-        </div>
-        <div className="fb-link-actions" onClick={(e) => e.stopPropagation()}>
-          {!inactive && onSetMandatory && (
-            <label className="fb-q-toggle" title="If the user chooses to submit, they must answer this question. Dismissing the whole form is always allowed.">
-              <input
-                type="checkbox"
-                checked={link.mandatory}
-                onChange={(e) => onSetMandatory(e.target.checked)}
-              />
-              <span>Mandatory</span>
-            </label>
-          )}
-          {!inactive && (
-            <>
-              <button
-                className="fb-q-mini-btn"
-                disabled={!onMoveUp}
-                onClick={onMoveUp}
-                title="Move up"
-              >
-                ▲
-              </button>
-              <button
-                className="fb-q-mini-btn"
-                disabled={!onMoveDown}
-                onClick={onMoveDown}
-                title="Move down"
-              >
-                ▼
-              </button>
-              <button
-                className="fb-q-mini-btn fb-q-mini-btn--danger"
-                onClick={onRemove}
-                title={removeTitle}
-              >
-                <SmallXIcon />
-              </button>
-            </>
-          )}
-          {inactive && (
-            <button className="btn-save-draft fb-reactivate-btn" onClick={onReactivate}>
-              Reactivate
-            </button>
-          )}
-        </div>
-      </div>
-      {expanded && <LinkDetail question={question} />}
-    </div>
-  );
-}
-
-function LinkDetail({ question }: { question: Question }) {
-  return (
-    <div className="fb-link-detail">
-      {(question.type === "Multiple choice" || question.type === "Multiple select") && (
-        <ul className="fb-link-options">
-          {(question.options ?? []).map((o, i) => (
-            <li key={i}>{o.text}</li>
-          ))}
-          {question.otherOption && <li className="fb-faint">Other (free text)</li>}
-        </ul>
-      )}
-      {question.type === "True/False" && (
-        <div className="fb-link-detail-line">True / False</div>
-      )}
-      {question.type === "Match the following" && (
-        <ul className="fb-link-options">
-          {(question.pairs ?? [])
-            .filter((p) => p.left)
-            .map((p, i) => (
-              <li key={i}>
-                {p.left} <span className="fb-faint">↔</span> {p.right}
-              </li>
-            ))}
-        </ul>
-      )}
-      {question.type === "Linear scale" && (
-        <div className="fb-link-detail-line">
-          Scale {question.scale?.min ?? 1}–{question.scale?.max ?? 5}
-          {(question.scale?.minLabel || question.scale?.maxLabel) &&
-            ` · "${question.scale.minLabel ?? "—"}" → "${question.scale.maxLabel ?? "—"}"`}
-        </div>
-      )}
-      {question.type === "Short answer" && (
-        <div className="fb-link-detail-line">Short-answer text</div>
-      )}
-      {question.type === "File upload" && (
-        <div className="fb-link-detail-line">
-          Up to {question.fileRules?.maxFiles ?? 1} file
-          {(question.fileRules?.maxFiles ?? 1) === 1 ? "" : "s"}, max{" "}
-          {question.fileRules?.maxSizeMb ?? 10} MB each
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------- Question Bank picker ----------------------
-
-type TypeFilter = "all" | QuestionType;
-
-const PICKER_TYPES: { key: TypeFilter; label: string }[] = [
-  { key: "all", label: "All types" },
-  { key: "Multiple choice", label: "Multiple choice" },
-  { key: "Multiple select", label: "Multiple select" },
-  { key: "True/False", label: "True/False" },
-  { key: "Match the following", label: "Match the following" },
-  { key: "Short answer", label: "Short answer" },
-  { key: "File upload", label: "File upload" },
-  { key: "Linear scale", label: "Linear scale" },
-];
-
-function QuestionPickerModal({
-  form,
-  bank,
-  onLink,
-  onCreateQuestion,
-  onClose,
-}: {
-  form: FeedbackForm;
-  bank: Question[];
-  onLink: (q: Question) => void;
-  onCreateQuestion: () => void;
-  onClose: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-
-  const linkedIds = new Set(form.questions.map((l) => l.questionId));
-  const q = query.trim().toLowerCase();
-
-  const candidates = bank.filter((question) => {
-    if (question.status !== "Active") return false;
-    if (typeFilter !== "all" && question.type !== typeFilter) return false;
-    if (
-      q &&
-      !(
-        question.text.toLowerCase().includes(q) ||
-        question.id.toLowerCase().includes(q) ||
-        question.categoryPath.join(" > ").toLowerCase().includes(q)
-      )
-    )
-      return false;
-    return true;
-  });
-
-  return (
-    <div className="fb-modal-scrim" onClick={onClose}>
-      <div
-        className="fb-modal fb-modal--picker"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="fb-modal-head">
-          <div>
-            <div className="sp-panel-eyebrow">QUESTION BANK</div>
-            <h2 className="sp-panel-title">Link questions</h2>
-            <p className="sp-panel-sub">
-              Any Active question can be linked, graded or ungraded — grading
-              data is ignored in Feedback Forms.
-            </p>
-          </div>
-          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="fb-picker-controls">
-          <div className="search-wrap fb-picker-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search by text, ID, or category…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <select
-            className="fb-q-scale-select"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-          >
-            {PICKER_TYPES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="fb-picker-list">
-          {candidates.length === 0 ? (
-            <div className="fb-empty">No matching questions.</div>
-          ) : (
-            candidates.map((question) => {
-              const isLinked = linkedIds.has(question.id);
+          <div className="qz">
+            {inactives.map((l) => {
+              const q = byId.get(l.questionId);
               return (
-                <button
-                  key={question.id}
-                  className={`fb-picker-row ${isLinked ? "is-linked" : ""}`}
-                  disabled={isLinked}
-                  onClick={() => onLink(question)}
-                >
-                  <div className="fb-link-main">
-                    <div className="fb-link-text">{question.text}</div>
-                    <div className="fb-link-meta">
-                      <span className="fb-link-id">{question.id}</span>
-                      <span className="fb-link-chip">
-                        {shortQuestionType(question.type)}
-                      </span>
-                      <span className="fb-link-chip">
-                        {question.categoryPath.join(" > ")}
-                      </span>
-                      {question.gradingEnabled && (
-                        <span className="fb-link-chip fb-link-chip--graded">
-                          Graded · ignored here
-                        </span>
-                      )}
-                      {(question.quizzes.length > 0 || question.forms.length > 0) && (
-                        <span
-                          className="fb-link-id"
-                          title={[...question.quizzes, ...question.forms].join(", ")}
-                        >
-                          used in {question.quizzes.length + question.forms.length}
-                        </span>
-                      )}
+                <div key={l.questionId} className="qz-row qz-row--inactive">
+                  <div className="qz-q">
+                    <div className="qz-q-title">
+                      {q ? q.text : `${l.questionId} — not found in the Question Bank`}
+                    </div>
+                    <div className="qz-q-type">
+                      {q ? TYPE_LABEL[q.type] : "—"}
+                      {l.deactivatedAt && ` · inactive since ${l.deactivatedAt}`}
                     </div>
                   </div>
-                  <span className="fb-trigger-pick-cta">
-                    {isLinked ? (
-                      <>
-                        <CheckIcon /> Linked
-                      </>
-                    ) : (
-                      "+ Link"
-                    )}
-                  </span>
-                </button>
+                  <button
+                    className="btn-save-draft fb-reactivate-btn"
+                    onClick={() => reactivateLink(l.questionId)}
+                  >
+                    Reactivate
+                  </button>
+                </div>
               );
-            })
-          )}
-        </div>
-
-        <div className="fb-modal-footer">
-          <button className="btn-save-draft" onClick={onCreateQuestion}>
-            + New question in the bank
-          </button>
-          <div className="fb-modal-footer-right">
-            <button className="btn-publish" onClick={onClose}>
-              Done
-            </button>
+            })}
           </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {/* Portalled to <body>: the wizard's step container is transformed, which
+          would otherwise turn the overlay's position:fixed into a local box. */}
+      {picking && createPortal(
+        <SelectQuestionsModal
+          mode="static"
+          gradedOnly={false}
+          excludeIds={form.questions.map((l) => l.questionId)}
+          value={[]}
+          onConfirm={(ids) => {
+            addFromBank(ids);
+            setPicking(false);
+          }}
+          onCancel={() => setPicking(false)}
+        />,
+        document.body,
+      )}
+    </>
   );
 }

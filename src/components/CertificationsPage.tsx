@@ -11,12 +11,13 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { KeyCommandIcon, SearchIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CertPreviewPanel } from "./CertPreviewPanel";
 import { PrmModal } from "./PrmModal";
 import { useLandingMorph } from "../hooks/useLandingMorph";
+import { CertificationsSearch } from "./CertificationsSearch";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's default visible columns (the
@@ -350,19 +351,20 @@ export function CertificationsPage({
           <div className="tasks-row">
             <div className="tasks-content">
               <div className="toolbar">
-                <div className="search-wrap">
-                  <span className="search-icon"><SearchIcon /></span>
-                  <input
-                    className="search-input"
-                    placeholder="Search Certifications"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") morph.showTable();
-                    }}
-                  />
-                  <span className="search-kbd"><span className="kbd-cmd"><KeyCommandIcon /></span><span className="kbd-letter">K</span></span>
-                </div>
+                <CertificationsSearch
+                  certifications={certList}
+                  industries={filters.industries}
+                  onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
+                  careerStages={filters.careerStages}
+                  onCareerStagesChange={(v) => setFilters((prev) => ({ ...prev, careerStages: v }))}
+                  types={filters.types}
+                  onTypesChange={(v) => setFilters((prev) => ({ ...prev, types: v }))}
+                  query={query}
+                  onCommit={(q) => {
+                    setQuery(q);
+                    morph.showTable();
+                  }}
+                />
               </div>
 
               <LandingFilterRow pills={suggested}>

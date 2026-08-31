@@ -184,7 +184,7 @@ export function FeedbackFormResponses({ form, bank, responses }: Props) {
       )}
 
       <div className="fb-retention-note">
-        Responses are never deleted — archiving the form preserves them. When a
+        Responses are never deleted — disabling the form preserves them. When a
         user deletes their account, their responses are kept for aggregate
         integrity but de-identified.
       </div>

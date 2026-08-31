@@ -3168,7 +3168,15 @@ export function ArchiveCertificationPage({
   /** Commits the archive — the caller flips the Cert's visibility to Archived. */
   onArchive: () => void;
 }) {
-  const [replacementCerts, setReplacementCerts] = useState<{ id: string; name: string }[]>([]);
+  // Replacements are a plain multi-select over Certification names — the field
+  // is the shared MultiSelect (Figma 591:1322), so the chosen Certs live as its
+  // pills rather than in a separate list. Names are unique in the catalog, so
+  // the value can stay the display string the component works in.
+  const [replacementCerts, setReplacementCerts] = useState<string[]>([]);
+  const replacementOptions = useMemo(
+    () => certifications.filter((c) => c.id !== cert.id).map((c) => c.name),
+    [cert.id],
+  );
   const [alertEn, setAlertEn] = useState("");
   const [alertEs, setAlertEs] = useState("");
   // Archiving is permanent, so the destructive CTA stays disabled until the
@@ -3220,38 +3228,13 @@ export function ArchiveCertificationPage({
 
               <div className="form-group">
                 <label className="form-label">Replacement Certifications</label>
-                <div className="replace-list">
-                  {replacementCerts.map((c) => (
-                    <div key={c.id} className="replace-row">
-                      <span className="task-kind-badge cert">C</span>
-                      <span className="cond-row-name">{c.name}</span>
-                      <button
-                        className="cond-row-x"
-                        onClick={() =>
-                          setReplacementCerts((prev) => prev.filter((x) => x.id !== c.id))
-                        }
-                      >
-                        <SmallXIcon />
-                      </button>
-                    </div>
-                  ))}
-                  <Dropdown
-                    width={340}
-                    trigger={({ toggle }) => (
-                      <button className="cond-add" onClick={toggle}>+ Add replacement Certification</button>
-                    )}
-                  >
-                    {({ close }) => (
-                      <ReplacementCertPicker
-                        exclude={[cert.id, ...replacementCerts.map((c) => c.id)]}
-                        onPick={(picked) => {
-                          setReplacementCerts((prev) => [...prev, { id: picked.id, name: picked.name }]);
-                          close();
-                        }}
-                      />
-                    )}
-                  </Dropdown>
-                </div>
+                <MultiSelect
+                  options={replacementOptions}
+                  value={replacementCerts}
+                  onChange={setReplacementCerts}
+                  placeholder="Select Certifications"
+                  searchPlaceholder="Search Certifications…"
+                />
                 <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
               </div>
 
@@ -3282,60 +3265,6 @@ export function ArchiveCertificationPage({
           </button>
         </div>
       </footer>
-    </div>
-  );
-}
-
-// Searchable Certification picker for the Archive & Replace page's replacement
-// list. The Cert being archived, and anything already chosen, are filtered out.
-function ReplacementCertPicker({
-  exclude,
-  onPick,
-}: {
-  exclude: string[];
-  onPick: (cert: Certification) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const excluded = new Set(exclude);
-  const results = useMemo(
-    () =>
-      certifications.filter(
-        (c) =>
-          !excluded.has(c.id) &&
-          (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)),
-      ),
-    [q, exclude],
-  );
-
-  return (
-    <div className="cond-picker">
-      <div className="dropdown-search">
-        <span className="dropdown-search-icon"><SearchIcon /></span>
-        <input
-          autoFocus
-          placeholder="Search Certifications…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-      <div className="dropdown-list cond-picker-list">
-        {results.length === 0 ? (
-          <div className="cond-picker-empty">
-            {exclude.length > 0 && !q
-              ? "Every Certification is already a replacement."
-              : "No Certifications match your search."}
-          </div>
-        ) : (
-          results.map((c) => (
-            <button key={c.id} className="cond-picker-item" onClick={() => onPick(c)}>
-              <span className="task-kind-badge cert">C</span>
-              <span className="cond-picker-item-name">{c.name}</span>
-              <span className="cond-picker-item-meta">{c.id}</span>
-            </button>
-          ))
-        )}
-      </div>
     </div>
   );
 }

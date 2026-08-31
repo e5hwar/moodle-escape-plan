@@ -7,20 +7,33 @@ import {
   type LinkKind,
 } from "../data/contentLinks";
 import { SectionHeading } from "./SectionHeading";
-import { PrmModal } from "./PrmModal";
+import { SelectCertificationsModal } from "./SelectCertificationsModal";
+import { SearchHints } from "./SearchPanelParts";
 import {
   KeyCommandIcon,
-  AddIcon,
   ChevronRightIcon,
+  InfoIcon,
+  InfoTipIcon,
+  PlusThinIcon,
   SearchIcon,
+  SearchClearIcon,
   SmallXIcon,
 } from "./icons";
 
 /* Content Links — rebuilt 2026-08-26 on the shared design-system components:
- * the `.tasks` list-page shell with the `.rvc-crumbs` header, the shared
- * `.search-wrap` bar with a `.dropdown` results panel, SectionHeading column
- * headings with `.cta-quiet` actions, the PrmModal add-link picker, and the
- * Spotlights `.sp-save-footer` for the dirty-state Save/Discard bar. */
+ * the `.tasks` list-page shell with the `.rvc-crumbs` header, the
+ * Certifications page's `.search-wrap` bar (with a `.dropdown` results panel),
+ * the PrmModal add-link picker, and the Spotlights `.sp-save-footer` for the
+ * dirty-state Save/Discard bar.
+ *
+ * 2026-08-30 — the three link lists were re-synced to Figma 802:2260: each
+ * column is a titled panel (title + count + a 24px plus) holding a
+ * CERTIFICATION / LINK STRENGTH table, in place of the old SectionHeading +
+ * loose-card column.
+ *
+ * 2026-08-30 — the search bar moved onto the shared `.usearch` combobox shell
+ * (the Tasks / Certifications bar) with keyboard navigation. It stays a PICKER:
+ * the panel lists content to focus, not filter scopes to apply. */
 
 type Focus = string | null;
 
@@ -31,17 +44,32 @@ const KIND_PLURAL: Record<LinkKind, string> = {
 };
 
 const KIND_ADD_TITLE: Record<LinkKind, string> = {
-  prerequisite: "Add Prerequisite",
+  prerequisite: "Add Prerequisites",
   recommended: "Add Recommended Next",
-  related: "Add Related Content",
+  related: "Add Related Certifications",
 };
 
-// One-line guidance shown under each column heading.
-const KIND_HELPER: Record<LinkKind, string> = {
-  prerequisite: "Advised before starting.",
-  recommended: "Vertical progression.",
-  related: "Two-way — reverse link automatic.",
+/* The picker's subtitle — the one-line version of what this section means. */
+const KIND_ADD_DESC: Record<LinkKind, string> = {
+  prerequisite:
+    "Certifications the user should study before starting this one. Ones already linked here are ticked",
+  recommended:
+    "Where the user should go next for more depth on this topic. Ones already linked here are ticked",
+  related:
+    "Adjacent Certifications at the same level, for exploring sideways. Ones already linked here are ticked",
 };
+
+/* What the three link kinds mean — too long for the subtext line, so it hangs
+ * off the page-subtext info glyph (Figma 742:1061). */
+const LINK_KINDS_TIP =
+  "Prerequisites - Content the user should study before starting this Certification. Without it, they may struggle to follow the concepts here.\n\n" +
+  "Recommended Next - Where the user should go to learn more about this topic after finishing. Use this for depth: the next level up on the same subject.\n\n" +
+  "Related - Adjacent topics at the same level, for users who want to explore sideways rather than go deeper.";
+
+// Tooltip on every section's LINK STRENGTH column header.
+const LINK_STRENGTH_TIP =
+  "A value between 0 and 100 that controls the order links appear in. Higher Link Strength shows first. " +
+  "Only compared against other links of the same type on this Certification - a Prerequisite at 90 and a Related at 80 don't compete with each other.";
 
 function nodeById(id: string): ContentNode | undefined {
   return allNodes.find((n) => n.id === id);
@@ -135,11 +163,6 @@ export function ContentLinksPage({
     setSearchOpen(false);
   }
 
-  function clearFocus() {
-    setFocusId(null);
-    setQuery("");
-  }
-
   function saveChanges() {
     setBaseline(links);
   }
@@ -158,17 +181,20 @@ export function ContentLinksPage({
     );
   }
 
-  function addLink(kind: LinkKind, otherId: string) {
-    if (!focusId) return;
-    const newEdge: Link =
+  function addLinks(kind: LinkKind, otherIds: string[]) {
+    if (!focusId || otherIds.length === 0) return;
+    const id = focusId;
+    const added: Link[] = otherIds.map((otherId) =>
       kind === "prerequisite"
-        ? { from: otherId, to: focusId, kind, strength: 50 }
-        : { from: focusId, to: otherId, kind, strength: 50 };
-    setLinks((prev) => [...prev, newEdge]);
+        ? { from: otherId, to: id, kind, strength: 50 }
+        : { from: id, to: otherId, kind, strength: 50 },
+    );
+    setLinks((prev) => [...prev, ...added]);
     setPicker(null);
   }
 
-  // Nodes already linked from this focus in the given kind (so we can hide them in picker)
+  // Nodes already linked from this focus in the given kind. The picker shows
+  // them ticked and locked rather than hiding them.
   function alreadyLinkedIds(kind: LinkKind): Set<string> {
     if (!groups) return new Set();
     const list =
@@ -207,10 +233,20 @@ export function ContentLinksPage({
                 <span className="rvc-crumb rvc-crumb--current">Content Links</span>
               </nav>
               <h1 className="tasks-title">Content Links</h1>
+              {/* Subtext + tooltip glyph (Figma 742:1061) — the glyph carries
+                  what each of the three sections means. */}
               <div className="tasks-subtitle">
-                {focused
-                  ? `${focused.industry ?? "—"} · Advisory only — links never block access`
-                  : "Search for content to view and edit its links"}
+                Suggest what a user should study before, after, or alongside
+                this Certification.
+                <span
+                  className="form-help-info tasks-subtitle-info"
+                  tabIndex={0}
+                  role="note"
+                  aria-label={LINK_KINDS_TIP}
+                  data-tip={LINK_KINDS_TIP}
+                >
+                  <InfoTipIcon />
+                </span>
               </div>
             </div>
           </header>
@@ -218,8 +254,7 @@ export function ContentLinksPage({
           <div className="toolbar">
             <SearchField
               value={focused ? focused.name : query}
-              placeholder="Search all Certifications…"
-              isFocusedNode={!!focused}
+              placeholder="Search Certifications…"
               onChange={(v) => {
                 setQuery(v);
                 setFocusId(null);
@@ -227,7 +262,7 @@ export function ContentLinksPage({
               }}
               onFocus={() => setSearchOpen(true)}
               onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
-              onClear={clearFocus}
+              onClose={() => setSearchOpen(false)}
               open={searchOpen && !focused}
               query={query}
               onPick={pickFocus}
@@ -238,7 +273,7 @@ export function ContentLinksPage({
             {focused && groups ? (
               <>
                 <div className="lc-grid">
-                  <LinkColumn
+                  <LinkSection
                     kind="prerequisite"
                     items={groups.prereqs}
                     onRemove={removeEdge}
@@ -246,7 +281,7 @@ export function ContentLinksPage({
                     onAdd={() => setPicker({ kind: "prerequisite" })}
                     onPickNode={pickFocus}
                   />
-                  <LinkColumn
+                  <LinkSection
                     kind="recommended"
                     items={groups.recommended}
                     onRemove={removeEdge}
@@ -254,7 +289,7 @@ export function ContentLinksPage({
                     onAdd={() => setPicker({ kind: "recommended" })}
                     onPickNode={pickFocus}
                   />
-                  <LinkColumn
+                  <LinkSection
                     kind="related"
                     items={groups.related}
                     onRemove={removeEdge}
@@ -290,11 +325,12 @@ export function ContentLinksPage({
       </div>
 
       {picker && focusId && (
-        <PickerModal
-          kind={picker.kind}
-          exclude={alreadyLinkedIds(picker.kind)}
-          onAdd={(id) => addLink(picker.kind, id)}
-          onClose={() => setPicker(null)}
+        <SelectCertificationsModal
+          title={KIND_ADD_TITLE[picker.kind]}
+          description={KIND_ADD_DESC[picker.kind]}
+          locked={alreadyLinkedIds(picker.kind)}
+          onCancel={() => setPicker(null)}
+          onConfirm={(ids) => addLinks(picker.kind, ids)}
         />
       )}
     </div>
@@ -303,29 +339,33 @@ export function ContentLinksPage({
 
 /* ----------------------------------- Search ----------------------------------- */
 
+/** The page's content picker. Same shell as the Tasks / Certifications bar
+ *  (`.usearch` combobox + `.usearch-panel`, Figma 772:1109) — but this bar
+ *  SELECTS a certification rather than filtering a table, so the panel rows are
+ *  content, not filter scopes, and Enter picks the highlighted row. */
 function SearchField({
   value,
   placeholder,
   onChange,
   onFocus,
   onBlur,
-  onClear,
   open,
   query,
   onPick,
-  isFocusedNode,
+  onClose,
 }: {
   value: string;
   placeholder: string;
-  isFocusedNode: boolean;
   onChange: (v: string) => void;
   onFocus: () => void;
   onBlur: () => void;
-  onClear: () => void;
   open: boolean;
   query: string;
   onPick: (id: string) => void;
+  onClose: () => void;
 }) {
+  const [active, setActive] = useState(-1);
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q
@@ -338,68 +378,89 @@ function SearchField({
     return list.slice(0, 8);
   }, [query]);
 
+  // A fresh result set invalidates the highlight.
+  useEffect(() => setActive(-1), [query]);
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      onFocus();
+      setActive((i) => Math.min(results.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => Math.max(-1, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = results[active >= 0 ? active : 0];
+      if (pick) onPick(pick.id);
+    } else if (e.key === "Escape") {
+      setActive(-1);
+      onClose();
+    }
+  }
+
   return (
-    <div className="lc-search">
-      <div className="search-wrap">
-        <span className="search-icon">
+    <div className="usearch lc-search">
+      <div className={`usearch-bar ${open ? "open" : ""}`}>
+        <span className="usearch-icon">
           <SearchIcon />
         </span>
         <input
-          className="search-input"
+          className="usearch-input"
           placeholder={placeholder}
           value={value}
           onFocus={onFocus}
           onBlur={onBlur}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
         />
-        {isFocusedNode ? (
-          /* Applied state — the ✕ replaces the ⌘K badge (Figma 399:216). */
+        {/* Figma 399:216 "Search Bar - Applied": once there is something to
+            clear, the ⌘K badge gives way to a ✕. */}
+        {value ? (
           <button
-            className="usearch-clear lc-search-clear"
-            aria-label="Clear focus"
-            onClick={onClear}
+            type="button"
+            className="usearch-clear"
+            aria-label="Clear search"
+            title="Clear search"
             onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange("")}
           >
-            <SmallXIcon />
+            <SearchClearIcon />
           </button>
         ) : (
-          <span className="search-kbd">
+          <span className="usearch-kbd">
             <span className="kbd-cmd"><KeyCommandIcon /></span>
             <span className="kbd-letter">K</span>
           </span>
         )}
       </div>
+
       {open && (
-        <div
-          className="dropdown ms-menu lc-search-menu"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <div className="dropdown-list">
-            {results.length === 0 ? (
-              <div className="lc-search-empty">No matches for "{query}"</div>
-            ) : (
-              <>
-                <div className="dropdown-section-label">
-                  {query.trim() ? "Results" : "All content"}
-                </div>
-                {results.map((n) => (
-                  <button
-                    key={n.id}
-                    className="dropdown-item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      onPick(n.id);
-                    }}
-                  >
-                    <span className="lc-item-name">{n.name}</span>
-                    <span className="dropdown-item-detail">
-                      {n.kind} · {n.level} · {n.tasksCount} Tasks
-                    </span>
-                  </button>
-                ))}
-              </>
-            )}
+        <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
+          <div className="usearch-head">
+            {query.trim() ? "Results" : "All content"}
           </div>
+          {results.length === 0 ? (
+            <div className="usearch-empty">No matches for “{query.trim()}”.</div>
+          ) : (
+            results.map((n, i) => (
+              <button
+                key={n.id}
+                className={`usearch-row ${active === i ? "active" : ""}`}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onPick(n.id);
+                }}
+              >
+                <span className="usearch-row-ex">{n.name}</span>
+                <span className="usearch-row-desc">
+                  {n.kind} · {n.level} · {n.tasksCount} Tasks
+                </span>
+              </button>
+            ))
+          )}
+          <SearchHints />
         </div>
       )}
     </div>
@@ -457,7 +518,7 @@ function EmptyGraph() {
 
 type GroupItem = { other: string; strength: number; edge: Link };
 
-function LinkColumn({
+function LinkSection({
   kind,
   items,
   onRemove,
@@ -473,23 +534,38 @@ function LinkColumn({
   onPickNode: (id: string) => void;
 }) {
   return (
-    <section className="lc-col">
-      <SectionHeading
-        label={`${KIND_PLURAL[kind]} · ${items.length}`}
-        trailing={
-          <button className="cta-quiet lc-add" onClick={onAdd}>
-            <AddIcon />
-            Add
-          </button>
-        }
-      />
-      <p className="form-help">{KIND_HELPER[kind]}</p>
-      <div className="lc-cards">
+    <section className="lc-sec">
+      {/* Figma 802:2255 — 20px SemiBold title with a 24px plus on the far edge. */}
+      <div className="lc-sec-head">
+        <h2 className="lc-sec-title">
+          {KIND_PLURAL[kind]} · {items.length}
+        </h2>
+        <button
+          className="lc-sec-add"
+          onClick={onAdd}
+          title={KIND_ADD_TITLE[kind]}
+          aria-label={KIND_ADD_TITLE[kind]}
+        >
+          <PlusThinIcon />
+        </button>
+      </div>
+
+      {/* Figma 801:2099 — the DS wash panel: header row + one row per link. */}
+      <div className="lc-panel">
+        <div className="lc-row lc-row-head">
+          <div className="lc-hcell">CERTIFICATION</div>
+          <div className="lc-hcell lc-hcell-str">
+            LINK STRENGTH
+            <span className="lc-info" data-tip={LINK_STRENGTH_TIP} role="note">
+              <InfoIcon />
+            </span>
+          </div>
+        </div>
         {items.map(({ other, strength, edge }) => {
           const n = nodeById(other);
           if (!n) return null;
           return (
-            <LinkCard
+            <LinkRow
               key={`${edge.from}-${edge.to}-${edge.kind}`}
               node={n}
               strength={strength}
@@ -501,14 +577,14 @@ function LinkColumn({
           );
         })}
         {items.length === 0 && (
-          <div className="lc-col-empty">Nothing linked yet.</div>
+          <div className="lc-panel-empty">Nothing linked yet.</div>
         )}
       </div>
     </section>
   );
 }
 
-function LinkCard({
+function LinkRow({
   node,
   strength,
   related,
@@ -524,32 +600,34 @@ function LinkCard({
   onPick: () => void;
 }) {
   return (
-    <div className="lc-card">
-      <button className="lc-card-main" onClick={onPick} title="Focus on this node">
-        <span className="lc-card-name">
+    <div className="lc-row">
+      {/* The name ellipsises in a narrow column, so the tooltip carries it. */}
+      <button className="lc-row-main" onClick={onPick} title={node.name}>
+        <span className="lc-row-name">
           {node.name}
-          {related && (
-            <span className="lc-card-swap" title="Two-way link"> ⇄</span>
-          )}
+          {related && <span className="lc-row-swap" title="Two-way link"> ⇄</span>}
         </span>
-        <span className="lc-card-meta">{node.industry ?? "—"}</span>
+        <span className="lc-row-meta">
+          {node.industry ?? "—"} · {node.tasksCount} Tasks
+        </span>
       </button>
-      <input
-        className="lc-strength"
-        type="number"
-        min={0}
-        max={100}
-        value={strength}
-        onChange={(e) => {
-          const next = Math.max(0, Math.min(100, Number(e.target.value || 0)));
-          onStrength(next);
-        }}
-        aria-label="Strength"
-        title="Strength (0–100)"
-      />
-      <button className="lc-card-remove" title="Remove Link" onClick={onRemove}>
-        <SmallXIcon />
-      </button>
+      <div className="lc-row-imp">
+        <input
+          className="lc-strength"
+          type="number"
+          min={0}
+          max={100}
+          value={strength}
+          onChange={(e) => {
+            const next = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+            onStrength(next);
+          }}
+          aria-label="Link Strength"
+        />
+        <button className="lc-row-remove" title="Remove Link" onClick={onRemove}>
+          <SmallXIcon />
+        </button>
+      </div>
     </div>
   );
 }
@@ -591,94 +669,5 @@ function ReferencedBy({
         {extra > 0 && <span className="lc-ref-more">+ {extra} more</span>}
       </div>
     </div>
-  );
-}
-
-/* ---------------------------------- Picker ---------------------------------- */
-
-function PickerModal({
-  kind,
-  exclude,
-  onAdd,
-  onClose,
-}: {
-  kind: LinkKind;
-  exclude: Set<string>;
-  onAdd: (id: string) => void;
-  onClose: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  // Staged single-select — the pick only lands on the column via "Add Link",
-  // the same commit-on-Continue convention as the Select Tasks modal.
-  const [picked, setPicked] = useState<string | null>(null);
-
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return allNodes
-      .filter((n) => !exclude.has(n.id))
-      .filter((n) =>
-        q
-          ? n.name.toLowerCase().includes(q) ||
-            (n.industry ?? "").toLowerCase().includes(q)
-          : true
-      )
-      .slice(0, 12);
-  }, [query, exclude]);
-
-  return (
-    <PrmModal
-      title={KIND_ADD_TITLE[kind]}
-      description="Pick a course, certification, or task to link. Links are advisory only — they never block access."
-      confirmLabel="Add Link"
-      confirmDisabled={!picked}
-      wide
-      onCancel={onClose}
-      onConfirm={() => picked && onAdd(picked)}
-    >
-      <div className="lc-pick">
-        <div className="search-wrap stm-search">
-          <span className="search-icon">
-            <SearchIcon />
-          </span>
-          <input
-            autoFocus
-            className="search-input stm-search-input"
-            placeholder="Search Content"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPicked(null);
-            }}
-          />
-        </div>
-        <div className="lc-pick-list">
-          {results.length === 0 ? (
-            <div className="lc-pick-empty">No matches.</div>
-          ) : (
-            results.map((n) => (
-              <button
-                key={n.id}
-                className={`dropdown-item${picked === n.id ? " is-current" : ""}`}
-                onClick={() => setPicked(n.id)}
-              >
-                <span className="lc-item-name">{n.name}</span>
-                <span className="dropdown-item-detail">
-                  {n.kind} · {n.level} · {n.tasksCount} Tasks
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-    </PrmModal>
   );
 }

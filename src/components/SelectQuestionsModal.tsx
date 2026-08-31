@@ -42,13 +42,23 @@ const GRADED_TYPES = [
   "Match the following",
 ];
 
+/** Feedback Forms take any Active question, graded or not — grading data on a
+ *  linked question is simply ignored, so the ungraded types come along. */
+const ALL_TYPES = [
+  ...GRADED_TYPES,
+  "Short answer",
+  "File upload",
+  "Linear scale",
+];
+
 type SortKey = "question" | "type" | "category" | "dateModified";
 type SortDir = "asc" | "desc";
 
 /** Only Active, graded Bank questions are eligible for Quizzes — both as
- *  hand-picked statics and as random-pool members. */
-function eligible(q: Question) {
-  return q.status === "Active" && q.gradingEnabled;
+ *  hand-picked statics and as random-pool members. Feedback Forms drop the
+ *  grading half of the test. */
+function eligible(q: Question, gradedOnly: boolean) {
+  return q.status === "Active" && (!gradedOnly || q.gradingEnabled);
 }
 
 function categoryOf(q: Question) {
@@ -93,6 +103,7 @@ export function SelectQuestionsModal({
   editingPool,
   excludeIds,
   value,
+  gradedOnly = true,
   onCancel,
   onConfirm,
 }: {
@@ -103,6 +114,8 @@ export function SelectQuestionsModal({
   excludeIds?: string[];
   /** Question ids already chosen — the modal opens pre-ticked. */
   value: string[];
+  /** Quizzes only take graded questions; Feedback Forms take any Active one. */
+  gradedOnly?: boolean;
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
@@ -118,6 +131,7 @@ export function SelectQuestionsModal({
   });
 
   const isPool = mode === "pool";
+  const typeOptions = gradedOnly ? GRADED_TYPES : ALL_TYPES;
   const locked = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
@@ -129,7 +143,7 @@ export function SelectQuestionsModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const pool = useMemo(() => QUESTION_BANK.filter(eligible), []);
+  const pool = useMemo(() => QUESTION_BANK.filter((q) => eligible(q, gradedOnly)), [gradedOnly]);
 
   // Category options limited to branches that actually hold graded questions.
   const allCats = useMemo(
@@ -202,7 +216,9 @@ export function SelectQuestionsModal({
       description={
         isPool
           ? "Pick the questions this pool draws from. Each attempt draws a random subset, so selection order doesn't matter"
-          : "Only Active questions with grading enabled are shown here. Questions join the Quiz in the order you pick them"
+          : gradedOnly
+            ? "Only Active questions with grading enabled are shown here. Questions join the Quiz in the order you pick them"
+            : "Every Active question in the Bank is shown here. Questions join the form in the order you pick them"
       }
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
@@ -233,7 +249,7 @@ export function SelectQuestionsModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Question Type"
-                  value={summarize(types, GRADED_TYPES)}
+                  value={summarize(types, typeOptions)}
                   open={open}
                   toggle={t}
                   onClear={() => resetPage(setTypes)([])}
@@ -242,7 +258,7 @@ export function SelectQuestionsModal({
             >
               {({ close }) => (
                 <SectionedMultiSelect
-                  sections={[{ items: GRADED_TYPES }]}
+                  sections={[{ items: typeOptions }]}
                   value={types}
                   onApply={(v) => {
                     resetPage(setTypes)(v);

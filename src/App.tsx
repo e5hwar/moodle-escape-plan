@@ -38,7 +38,6 @@ import { OfferCodesPage } from "./components/OfferCodesPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
 import { buildData, attemptsForTask } from "./data/certLookup";
 import { ProductConfigPage } from "./components/ProductConfigPage";
-import { PermissionsPage } from "./components/PermissionsPage";
 import { MergeAccountsPage } from "./components/MergeAccountsPage";
 import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
@@ -101,7 +100,7 @@ type View =
   | { name: "manage-ids" }
   | { name: "scholarship" }
   | { name: "feedback" }
-  | { name: "feedback-detail"; formId: string }
+  | { name: "feedback-detail"; formId: string; creating?: boolean }
   | { name: "feedback-responses"; formId: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
@@ -123,10 +122,9 @@ type View =
       taskId?: string;
       origin: "tasks" | "certs" | "users" | "companies";
     }
-  | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" }
+  | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" | "permissions" }
   | { name: "merge-accounts" }
-  | { name: "transfer-subscription" }
-  | { name: "permissions" };
+  | { name: "transfer-subscription" };
 
 // --- URL routing for top-level nav pages -----------------------------------
 // The app is a single-state view switcher; we give each left-nav destination
@@ -155,13 +153,16 @@ const VIEW_SLUGS: Record<string, string> = {
   companies: "companies",
   spotlight: "spotlight",
   "product-config": "product-config",
-  permissions: "permissions",
 };
 
 // URL slug -> view
-const SLUG_TO_VIEW: Record<string, View> = Object.fromEntries(
-  Object.entries(VIEW_SLUGS).map(([name, slug]) => [slug, { name } as View]),
-);
+const SLUG_TO_VIEW: Record<string, View> = {
+  ...Object.fromEntries(
+    Object.entries(VIEW_SLUGS).map(([name, slug]) => [slug, { name } as View]),
+  ),
+  // Permissions lost its own page — the old URL lands on its Product Config tab.
+  permissions: { name: "product-config", tab: "permissions" },
+};
 
 // Sidebar navKey -> view (mirrors the sidebar item navKeys)
 const NAV_KEY_TO_VIEW: Record<string, View> = {
@@ -183,7 +184,6 @@ const NAV_KEY_TO_VIEW: Record<string, View> = {
   "product-config": { name: "product-config" },
   "merge-accounts": { name: "merge-accounts" },
   "transfer-subscription": { name: "transfer-subscription" },
-  permissions: { name: "permissions" },
 };
 
 /* Manage Completions' four entry points: which sidebar entry stays lit, what
@@ -491,8 +491,6 @@ function AdminApp() {
       ? "merge-accounts"
       : view.name === "transfer-subscription"
       ? "transfer-subscription"
-      : view.name === "permissions"
-      ? "permissions"
       : "tasks";
 
   function navigate(key: string) {
@@ -719,14 +717,20 @@ function AdminApp() {
         <MergeAccountsPage onClose={() => navigate("manage-users")} />
       ) : view.name === "transfer-subscription" ? (
         <TransferSubscriptionPage onClose={() => navigate("manage-users")} />
-      ) : view.name === "permissions" ? (
-        <PermissionsPage />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
-          onOpen={(id) => setView({ name: "feedback-detail", formId: id })}
+          onOpen={(id, creating) => setView({ name: "feedback-detail", formId: id, creating })}
           onViewResponses={(id) => setView({ name: "feedback-responses", formId: id })}
           onCreate={(form) => upsertForm(form)}
+          onUpdate={(form) => upsertForm(form)}
+          /* Deleting is a tombstone, not a purge: the record stays so its
+             responses keep resolving, and the list hides Deleted forms. */
+          onDelete={(id) =>
+            setForms((prev) =>
+              prev.map((f) => (f.id === id ? { ...f, status: "deleted" as const } : f)),
+            )
+          }
           onBackToCerts={() => navigate("certs")}
         />
       ) : view.name === "feedback-responses" && activeForm ? (
@@ -738,6 +742,7 @@ function AdminApp() {
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormWizard
           form={activeForm}
+          creating={view.creating}
           allForms={forms}
           bank={bank}
           onBack={() => setView({ name: "feedback" })}
