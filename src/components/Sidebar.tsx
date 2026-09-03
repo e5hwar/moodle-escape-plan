@@ -2,6 +2,7 @@ import { useState } from "react";
 import skillcatLogo from "../assets/SkillCat-Logo.png";
 import { submissions } from "../data/proctoring";
 import { displayStatus, reviewSubmissions } from "../data/reviewSubmissions";
+import { spotlights } from "../data/spotlights";
 
 type IconProps = { className?: string };
 
@@ -91,7 +92,7 @@ const I = {
 
 type IconKey = keyof typeof I;
 
-/* Both badges count the real queue rather than a hardcoded number, so they
+/* Every badge counts the real queue rather than a hardcoded number, so they
    can't drift from each page's own "Pending:" figure when seed data changes.
    Figma draws them as "99+", so anything past 99 caps the same way. */
 const cap = (n: number) => (n > 99 ? "99+" : n);
@@ -99,6 +100,10 @@ const pendingExamReviews = cap(submissions.filter((s) => s.status === "pending")
 const pendingHandsOn = cap(
   reviewSubmissions.filter((s) => displayStatus(s) === "Review Pending").length,
 );
+/* Spotlights waiting on a decision — the rows the Spotlight page pills
+   "In-Review". Those are exactly the `pending` ones: an approved Spotlight
+   only ever moves on to Active or Ended, never back into the queue. */
+const spotlightsInReview = cap(spotlights.filter((s) => s.status === "pending").length);
 
 type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 // Figma 421:1419 — every destination is a top-level entry; sections are plain
@@ -136,7 +141,7 @@ const sections: NavSection[] = [
   {
     label: "System",
     items: [
-      { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight" },
+      { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight", badge: spotlightsInReview },
       { key: "product-config", label: "Product Config", icon: "productConfig", navKey: "product-config" },
     ],
   },

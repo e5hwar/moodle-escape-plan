@@ -650,7 +650,7 @@ function AdminApp() {
       ) : view.name === "scholarship" ? (
         <ScholarshipsPage onBack={() => navigate("manage-users")} />
       ) : view.name === "industries" ? (
-        <IndustriesPage onBackToCerts={() => navigate("certs")} />
+        <IndustriesPage />
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}

@@ -2,11 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { ShortcutHint } from "./ShortcutHint";
 
 /* ── Fullscreen viewer shell ──────────────────────────────────────────────
-   The chrome behind both fullscreen views in the Proctoring console — the ID
-   card and the webcam frames. No title bar (the content speaks for itself), a
-   bare close button top-right, and a bottom toolbar carrying Rotate plus a zoom
-   slider. Callers render the content and decide how to apply `rotation`/`zoom`,
-   since the ID card also has to fit itself to the stage first.
+   The chrome behind every fullscreen view in the app — the Proctoring console's
+   ID card and webcam frames, and the Spotlight card. No title bar (the content
+   speaks for itself), a bare close button top-right, and a bottom toolbar
+   carrying Rotate plus a zoom slider. Callers render the content and decide how
+   to apply `rotation`/`zoom`, since the ID card also has to fit itself to the
+   stage first.
+
+   `controls={false}` drops the whole zoom/rotate/pan apparatus — toolbar, R key,
+   wheel-zoom and drag — leaving the plain lightbox the Spotlight preview wants:
+   its card is already sized to the stage, and it carries a live button that a
+   drag gesture would only get in the way of.
 
    It reuses `.ncr-fs-overlay/-stage/-hint` for the shell but NOT the
    `.ncr-fs-bar/-title/-close` set — those belong to the older titled layout. ── */
@@ -45,15 +51,21 @@ const ZoomInGlyph = () => (
 
 export function FullscreenViewer({
   initialRotation = 0,
+  controls = true,
+  hint,
   onClose,
   children,
 }: {
   initialRotation?: number;
+  /** Zoom, rotate and pan. Off leaves a plain lightbox — see the note above. */
+  controls?: boolean;
+  /** Replaces the default hint line, for a viewer whose gestures differ. */
+  hint?: ReactNode;
   onClose: () => void;
-  /** Receives the live rotation. Zoom and pan are applied by the viewer itself,
-   *  on a wrapper around whatever this returns — the caller only has to place
-   *  its own content (the ID card additionally fits itself to the stage). */
-  children: (state: { rotation: number }) => ReactNode;
+  /** Receives the live rotation and the stage's own (untransformed) size, so a
+   *  caller can fit its content to the stage. Zoom and pan are applied by the
+   *  viewer itself, on a wrapper around whatever this returns. */
+  children: (state: { rotation: number; stage: { w: number; h: number } }) => ReactNode;
 }) {
   const [rotation, setRotation] = useState(initialRotation);
   /* One object, not three states: a wheel-zoom has to move the pan in the same
@@ -69,19 +81,32 @@ export function FullscreenViewer({
   /** Distinguishes a click (closes) from the end of a drag (must not). */
   const movedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
+  /** The stage's own layout size — what a caller fits its content to. Read off
+   *  offsetWidth/Height, so the content's zoom transform never feeds back in. */
+  const [stageBox, setStageBox] = useState({ w: 0, h: 0 });
 
   const rotate = () => setRotation((r) => (r + 90) % 360);
+
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setStageBox({ w: el.offsetWidth, h: el.offsetHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   /* The overlay owns the keyboard while it's open — the console's own handler
      early-returns for as long as it is — so R is free here for Rotate. */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      else if (e.key === "r" || e.key === "R") rotate();
+      else if (controls && (e.key === "r" || e.key === "R")) rotate();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [onClose, controls]);
 
   /* A narrower window shrinks the stage, which can leave an existing pan past
      the new limit — pull it back in. */
@@ -142,7 +167,7 @@ export function FullscreenViewer({
      is ignored and the browser zooms the whole page instead. */
   useEffect(() => {
     const el = stageRef.current;
-    if (!el) return;
+    if (!el || !controls) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const r = el.getBoundingClientRect();
@@ -161,10 +186,13 @@ export function FullscreenViewer({
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [controls]);
 
   function onPointerDown(e: React.PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !controls) return;
+    /* Never start a drag on something the content wants clicked — capturing the
+       pointer would retarget the click off the button and swallow it. */
+    if ((e.target as HTMLElement).closest("a, button, input, select, textarea")) return;
     dragRef.current = { sx: e.clientX, sy: e.clientY, px: view.x, py: view.y };
     movedRef.current = false;
     setDragging(true);
@@ -210,7 +238,7 @@ export function FullscreenViewer({
 
       <div
         ref={stageRef}
-        className={`idfs-stage ${dragging ? "is-dragging" : ""}`}
+        className={`idfs-stage ${dragging ? "is-dragging" : ""} ${controls ? "" : "idfs-stage--static"}`}
         onClick={onStageClick}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -222,10 +250,11 @@ export function FullscreenViewer({
           className="idfs-content"
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
         >
-          {children({ rotation })}
+          {children({ rotation, stage: stageBox })}
         </div>
       </div>
 
+      {controls && (
       <div className="idfs-toolbar" onClick={stop}>
         {/* The shared shortcut hint rather than a native title: it names the key
             as well as the action, and it flips above the control — a tooltip
@@ -264,9 +293,10 @@ export function FullscreenViewer({
           </button>
         </div>
       </div>
+      )}
 
       <div className="ncr-fs-hint idfs-hint">
-        Ctrl + Scroll to Zoom · Drag to Move · Esc or Click Outside to Close
+        {hint ?? "Ctrl + Scroll to Zoom · Drag to Move · Esc or Click Outside to Close"}
       </div>
     </div>
   );

@@ -6,7 +6,6 @@ import {
   type ScholarshipUser,
 } from "../data/scholarships";
 import {
-  KeyCommandIcon,
   SearchIcon,
   SortIcon,
   AddIcon,
@@ -17,6 +16,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { PrmModal } from "./PrmModal";
@@ -229,10 +229,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
-                <span className="search-kbd">
-                  <span className="kbd-cmd"><KeyCommandIcon /></span>
-                  <span className="kbd-letter">K</span>
-                </span>
+                <SearchTrailing active={!!query} onClear={() => setQuery("")} />
               </div>
 
               <div className="filters">

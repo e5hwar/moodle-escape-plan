@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   industries as seedIndustries,
   allCertsById,
@@ -7,11 +7,34 @@ import {
   type CareerStage,
   type IndustryCert,
 } from "../data/industries";
-import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeAddIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import {
+  SearchIcon,
+  SmallXIcon,
+  DragHandleIcon,
+  CheckIcon,
+  TreeAddIcon,
+  TreeKebabIcon,
+  RowKebabIcon,
+  RowEditIcon,
+  RowEyeIcon,
+  RowEyeOffIcon,
+  RowDeleteIcon,
+  ChevronRightIcon,
+} from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+
+/* Industries — Claude Design "Industries · Launcher + Hub" (2a / 4a).
+   The page opens as a LAUNCHER: a centred, keyboard-driven search over the
+   industries ("Where to?"), one row per industry with its certification count,
+   and "+ New industry" at the foot. Picking a row lands on the industry's HUB:
+   its sub-industries as door cards, then the core certifications tagged at the
+   industry level. A sub-industry opens the same hub shape one level down.
+   Left rail + tree retired here (the shared `.rail`/`.tree` chrome stays for
+   the Question Bank). */
 
 type Scope =
   | { kind: "industry"; industryKey: string }
@@ -29,6 +52,14 @@ type ModalState =
 // Which row's 3-dot menu is open, plus where to anchor the popover.
 type MenuState = { scope: Scope; x: number; y: number } | null;
 
+/* One row of the launcher list. Without a query it is an industry; with one,
+   sub-industries ("HVAC › Residential") and certifications join the results,
+   each opening the scope it lives in. */
+type LaunchItem =
+  | { kind: "industry"; key: string; industry: Industry; count: number }
+  | { kind: "sub"; key: string; industry: Industry; sub: SubIndustry }
+  | { kind: "cert"; key: string; cert: IndustryCert; scope: Scope; where: string };
+
 /* Cert-row remove ✕ — Figma "Icon Library" (I318:1351;7:1802): a 6.6px cross
    centred in a 16px slot, 1.333 square-cap stroke. */
 const RowCloseIcon = () => (
@@ -39,29 +70,43 @@ const RowCloseIcon = () => (
 
 const CAREER_STAGES: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
 
-export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }) {
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+const industryCertTotal = (ind: Industry) =>
+  ind.certIds.length + ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
+
+export function IndustriesPage() {
   const [industries, setIndustries] = useState<Industry[]>(seedIndustries);
-  const [scope, setScope] = useState<Scope>({ kind: "industry", industryKey: "hvac" });
-  const [openIds, setOpenIds] = useState<Set<string>>(new Set(["hvac"]));
+  // `null` is the launcher; a scope is the hub for that industry / sub-industry.
+  const [scope, setScope] = useState<Scope | null>(null);
   const [search, setSearch] = useState("");
+  const [cursor, setCursor] = useState(0);
+  /* The highlight is only DRAWN while a row is actually being driven — hovered
+     ("pointer") or walked with the arrows ("keyboard") — or while a query is
+     up, where the top hit is the ↵ target. At rest the list carries no
+     selection, so an idle launcher never looks like something is hovered. */
+  const [navMode, setNavMode] = useState<"idle" | "pointer" | "keyboard">("idle");
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [menu, setMenu] = useState<MenuState>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  // "C" opens Add Certification for whatever scope is selected; "I" opens the
-  // rail's Add Industry (both badges are shown on their buttons).
+  const quiet = modal.kind === "none" && !menu;
+
+  // "C" opens Add Certification on the hub; "I" opens New Industry on the
+  // launcher (both badges are printed on their controls).
   useCreateShortcut(
-    () => setModal({ kind: "add-certs", scope }),
-    modal.kind === "none",
+    () => scope && setModal({ kind: "add-certs", scope }),
+    quiet && scope !== null,
   );
   useCreateShortcut(
     () => setModal({ kind: "new-industry" }),
-    modal.kind === "none",
+    quiet && scope === null,
     "i",
   );
 
   const orderedIndustries = useMemo(
-    () =>
-      [...industries].sort((a, b) => a.displayPosition - b.displayPosition),
+    () => [...industries].sort((a, b) => a.displayPosition - b.displayPosition),
     [industries],
   );
 
@@ -70,62 +115,158 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
     [industries],
   );
 
-  const filteredIndustries = useMemo(() => {
+  // ─── Launcher results ─────────────────────────────────────────────────────
+  const launchItems = useMemo<LaunchItem[]>(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return orderedIndustries;
-    return orderedIndustries.filter(
-      (i) =>
-        i.name.toLowerCase().includes(q) ||
-        (i.nameEs ?? "").toLowerCase().includes(q) ||
-        i.subIndustries.some((s) => s.name.toLowerCase().includes(q)),
+    const out: LaunchItem[] = [];
+    if (!q) {
+      orderedIndustries.forEach((industry) =>
+        out.push({ kind: "industry", key: industry.key, industry, count: industryCertTotal(industry) }),
+      );
+      return out;
+    }
+    const hit = (s?: string) => !!s && s.toLowerCase().includes(q);
+    orderedIndustries.forEach((industry) => {
+      if (hit(industry.name) || hit(industry.nameEs)) {
+        out.push({ kind: "industry", key: industry.key, industry, count: industryCertTotal(industry) });
+      }
+    });
+    orderedIndustries.forEach((industry) =>
+      [...industry.subIndustries]
+        .sort((a, b) => a.displayPosition - b.displayPosition)
+        .forEach((sub) => {
+          if (hit(sub.name) || hit(sub.nameEs)) out.push({ kind: "sub", key: sub.key, industry, sub });
+        }),
     );
+    // A certification opens the first scope it is tagged in.
+    const seen = new Set<string>();
+    orderedIndustries.forEach((industry) => {
+      const consider = (id: string, sc: Scope, where: string) => {
+        const cert = allCertsById[id];
+        if (!cert || seen.has(id) || !hit(cert.name)) return;
+        seen.add(id);
+        out.push({ kind: "cert", key: `cert-${id}`, cert, scope: sc, where });
+      };
+      industry.certIds.forEach((id) =>
+        consider(id, { kind: "industry", industryKey: industry.key }, industry.name),
+      );
+      industry.subIndustries.forEach((sub) =>
+        sub.certIds.forEach((id) =>
+          consider(
+            id,
+            { kind: "sub", industryKey: industry.key, subKey: sub.key },
+            `${industry.name} › ${sub.name}`,
+          ),
+        ),
+      );
+    });
+    return out.slice(0, 40);
   }, [orderedIndustries, search]);
 
-  // Drag reordering is only safe against the full, unfiltered order.
-  const canDrag = !search.trim();
+  // The highlight goes back to the top on every new query, which also drops
+  // any pointer/keyboard mode — the top hit is the ↵ target from there.
+  useEffect(() => {
+    setCursor(0);
+    setNavMode("idle");
+  }, [search]);
+  /* Clamped on READ, not through an effect: a shrinking result list and the
+     query's own reset-to-0 would otherwise be two writes racing in the same
+     commit, and the clamp (running on the pre-reset cursor) won — typing left
+     the highlight on the last row instead of the top hit. */
+  const activeIdx = Math.min(cursor, Math.max(0, launchItems.length - 1));
+  useEffect(() => {
+    listRef.current
+      ?.querySelector<HTMLElement>(".ind-launch-row.is-active")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [cursor, scope]);
 
-  const currentIndustry =
-    industries.find((i) => i.key === scope.industryKey) ?? industries[0];
+  // Coming back to the launcher: fresh search, focus in the bar, no selection.
+  useEffect(() => {
+    if (scope === null) {
+      searchRef.current?.focus();
+      setNavMode("idle");
+    }
+  }, [scope]);
+
+  const showActive = navMode !== "idle" || !!search.trim();
+
+  function openItem(item: LaunchItem) {
+    const next: Scope =
+      item.kind === "industry"
+        ? { kind: "industry", industryKey: item.industry.key }
+        : item.kind === "sub"
+          ? { kind: "sub", industryKey: item.industry.key, subKey: item.sub.key }
+          : item.scope;
+    setSearch("");
+    setScope(next);
+  }
+
+  // ↑↓ walk the launcher, ↵ opens the highlighted row, Esc clears the query.
+  useEffect(() => {
+    if (scope !== null || !quiet) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      const inField =
+        t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      if (inField && t !== searchRef.current) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        // The first ↓ from an unselected list lands on the top row, not the second.
+        setCursor(showActive ? Math.min(launchItems.length - 1, activeIdx + 1) : 0);
+        setNavMode("keyboard");
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setCursor(showActive ? Math.max(0, activeIdx - 1) : 0);
+        setNavMode("keyboard");
+      } else if (e.key === "Enter") {
+        // Nothing is highlighted at rest, so ↵ has no target until the list is
+        // being driven — it never opens a row the eye can't see.
+        const item = showActive ? launchItems[activeIdx] : null;
+        if (!item) return;
+        e.preventDefault();
+        openItem(item);
+      } else if (e.key === "Escape" && search) {
+        e.preventDefault();
+        setSearch("");
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, quiet, launchItems, activeIdx, search, showActive]);
+
+  const currentIndustry = scope
+    ? industries.find((i) => i.key === scope.industryKey) ?? null
+    : null;
   const currentSub =
-    scope.kind === "sub"
-      ? currentIndustry.subIndustries.find((s) => s.key === scope.subKey)
+    scope?.kind === "sub" && currentIndustry
+      ? currentIndustry.subIndustries.find((s) => s.key === scope.subKey) ?? null
       : null;
 
-  function toggleOpen(key: string) {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  function pickIndustry(key: string) {
-    setScope({ kind: "industry", industryKey: key });
-  }
-
-  function pickSub(industryKey: string, subKey: string) {
-    setScope({ kind: "sub", industryKey, subKey });
-  }
+  // A scope whose target was deleted from under it falls back to the launcher.
+  useEffect(() => {
+    if (scope && (!currentIndustry || (scope.kind === "sub" && !currentSub))) setScope(null);
+  }, [scope, currentIndustry, currentSub]);
 
   // ─── Mutations ────────────────────────────────────────────────────────────
   function addIndustry(name: string, nameEs: string, hidden: boolean) {
-    setIndustries((prev) => {
-      const key = `i-${Date.now()}`;
-      const position = prev.length + 1;
-      return [
-        ...prev,
-        {
-          key,
-          name,
-          nameEs: nameEs || undefined,
-          hidden,
-          displayPosition: position,
-          certIds: [],
-          subIndustries: [],
-        },
-      ];
-    });
+    const key = `i-${Date.now()}`;
+    setIndustries((prev) => [
+      ...prev,
+      {
+        key,
+        name,
+        nameEs: nameEs || undefined,
+        hidden,
+        displayPosition: prev.length + 1,
+        certIds: [],
+        subIndustries: [],
+      },
+    ]);
+    // A new industry opens straight into its (empty) hub.
+    setSearch("");
+    setScope({ kind: "industry", industryKey: key });
   }
 
   function addSub(industryKey: string, name: string, nameEs: string, hidden: boolean) {
@@ -143,8 +284,6 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
         return { ...i, subIndustries: [...i.subIndustries, newSub] };
       }),
     );
-    // Make sure the parent is expanded so the new Sub-Industry is visible.
-    setOpenIds((prev) => new Set([...prev, industryKey]));
   }
 
   function editIndustry(key: string, name: string, nameEs: string, hidden: boolean) {
@@ -201,10 +340,7 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
             : i,
         );
     });
-    const remaining = industries.filter((i) => i.key !== key);
-    if (remaining[0]) {
-      setScope({ kind: "industry", industryKey: remaining[0].key });
-    }
+    setScope(null);
   }
 
   function deleteSub(industryKey: string, subKey: string) {
@@ -252,53 +388,15 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
     );
   }
 
-  function addCertsToScope(certIds: string[]) {
+  function updateScopeCerts(sc: Scope, fn: (ids: string[]) => string[]) {
     setIndustries((prev) =>
       prev.map((i) => {
-        if (i.key !== scope.industryKey) return i;
-        if (scope.kind === "industry") {
-          return { ...i, certIds: [...i.certIds, ...certIds] };
-        }
+        if (i.key !== sc.industryKey) return i;
+        if (sc.kind === "industry") return { ...i, certIds: fn(i.certIds) };
         return {
           ...i,
           subIndustries: i.subIndustries.map((s) =>
-            s.key === scope.subKey ? { ...s, certIds: [...s.certIds, ...certIds] } : s,
-          ),
-        };
-      }),
-    );
-  }
-
-  function reorderCertsInScope(nextIds: string[]) {
-    setIndustries((prev) =>
-      prev.map((i) => {
-        if (i.key !== scope.industryKey) return i;
-        if (scope.kind === "industry") {
-          return { ...i, certIds: nextIds };
-        }
-        return {
-          ...i,
-          subIndustries: i.subIndustries.map((s) =>
-            s.key === scope.subKey ? { ...s, certIds: nextIds } : s,
-          ),
-        };
-      }),
-    );
-  }
-
-  function removeCertFromScope(certId: string) {
-    setIndustries((prev) =>
-      prev.map((i) => {
-        if (i.key !== scope.industryKey) return i;
-        if (scope.kind === "industry") {
-          return { ...i, certIds: i.certIds.filter((c) => c !== certId) };
-        }
-        return {
-          ...i,
-          subIndustries: i.subIndustries.map((s) =>
-            s.key === scope.subKey
-              ? { ...s, certIds: s.certIds.filter((c) => c !== certId) }
-              : s,
+            s.key === sc.subKey ? { ...s, certIds: fn(s.certIds) } : s,
           ),
         };
       }),
@@ -309,13 +407,9 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
   function tagsForCert(certId: string): { industryName: string; subName?: string }[] {
     const out: { industryName: string; subName?: string }[] = [];
     for (const ind of industries) {
-      if (ind.certIds.includes(certId)) {
-        out.push({ industryName: ind.name });
-      }
+      if (ind.certIds.includes(certId)) out.push({ industryName: ind.name });
       for (const sub of ind.subIndustries) {
-        if (sub.certIds.includes(certId)) {
-          out.push({ industryName: ind.name, subName: sub.name });
-        }
+        if (sub.certIds.includes(certId)) out.push({ industryName: ind.name, subName: sub.name });
       }
     }
     return out;
@@ -330,210 +424,64 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
 
   const menuIsHidden = (() => {
     if (!menu) return false;
-    const menuScope = menu.scope;
-    const ind = industries.find((i) => i.key === menuScope.industryKey);
+    const sc = menu.scope;
+    const ind = industries.find((i) => i.key === sc.industryKey);
     if (!ind) return false;
-    if (menuScope.kind === "industry") return !!ind.hidden;
-    const sub = ind.subIndustries.find((s) => s.key === menuScope.subKey);
-    return !!sub?.hidden;
+    if (sc.kind === "industry") return !!ind.hidden;
+    return !!ind.subIndustries.find((s) => s.key === sc.subKey)?.hidden;
   })();
 
   // ─── Render ───────────────────────────────────────────────────────────────
-  const scopeCertIds =
-    scope.kind === "industry" ? currentIndustry.certIds : currentSub?.certIds ?? [];
-
-  const currentHidden =
-    scope.kind === "industry" ? !!currentIndustry.hidden : !!currentSub?.hidden;
-
-  const orderedCurrentSubs = [...currentIndustry.subIndustries].sort(
-    (a, b) => a.displayPosition - b.displayPosition,
-  );
+  const scopeCertIds = scope
+    ? scope.kind === "industry"
+      ? currentIndustry?.certIds ?? []
+      : currentSub?.certIds ?? []
+    : [];
 
   return (
     <div className="main">
       <div className="workspace">
-        <div className="ind-page">
-          {/* ─── Left rail ─── */}
-          <aside className="rail">
-            <div className="rail-head">
-              {/* This page is reached from the Certifications header button (it
-                  no longer has its own sidebar entry), so the crumb is the way back. */}
-              <nav className="rvc-crumbs ind-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Content</span>
-                <ChevronRightIcon />
-                <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
-                  Certifications
-                </button>
-                <ChevronRightIcon />
-                <span className="rvc-crumb rvc-crumb--current">Industries</span>
-              </nav>
-              <h1 className="tasks-title">Industries</h1>
-              <div className="rail-desc">
-                Learners and Companies browse content by Industry
-                <span
-                  className="rail-info"
-                  tabIndex={0}
-                  role="note"
-                  aria-label="About Industries"
-                  data-tooltip={`Placeholder copy — ${industries.length} Industries and ${totalSubIndustries} Sub-Industries make up the browse tree learners see in the app.`}
-                >
-                  <InfoFilledIcon />
-                </span>
-              </div>
-            </div>
-
-            <div className="rail-search">
-              <span className="search-icon"><SearchIcon /></span>
-              <input
-                className="search-input"
-                placeholder="Search Industries, Sub-Industries, Certifications..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-
-            <SectionHeading
-              label={`${industries.length} Industries · ${totalSubIndustries} Sub-Industries`}
-            />
-
-            <div className="tree">
-              {filteredIndustries.map((ind) => (
-                <IndustryTreeGroup
-                  key={ind.key}
-                  ind={ind}
-                  isOpen={openIds.has(ind.key)}
-                  scope={scope}
-                  canDrag={canDrag}
-                  orderedIndustries={orderedIndustries}
-                  onToggle={() => toggleOpen(ind.key)}
-                  onPickIndustry={() => pickIndustry(ind.key)}
-                  onPickSub={(subKey) => pickSub(ind.key, subKey)}
-                  onAddSub={() => setModal({ kind: "new-sub", industryKey: ind.key })}
-                  onMenu={openMenu}
-                  onReorderIndustries={reorderIndustries}
-                  onReorderSubs={(orderedKeys) => reorderSubs(ind.key, orderedKeys)}
-                />
-              ))}
-            </div>
-
-            <div className="rail-foot">
-              <button
-                className="cta-primary"
-                onClick={() => setModal({ kind: "new-industry" })}
-              >
-                Add Industry
-                <span className="cta-kbd">I</span>
-              </button>
-              <div className="rail-hint">
-                Drag ⠿ to reorder · Select an Industry/Sub-Industry to manage
-                Certifications
-              </div>
-            </div>
-          </aside>
-
-          {/* ─── Detail pane ─── */}
-          <section className="ind-detail">
-            <header className="ind-detail-head">
-              <div className="ind-detail-titleblock">
-                <div className="ind-detail-toprow">
-                  <h2 className="tasks-title ind-detail-title">
-                    {scope.kind === "industry"
-                      ? currentIndustry.name
-                      : currentSub?.name ?? "—"}
-                  </h2>
-                  {currentHidden && (
-                    <span className="ind-hidden-pill">Hidden</span>
-                  )}
-                </div>
-              </div>
-            </header>
-
-            <div className="ind-section">
-              <div className="ind-sec-head">
-                <h3 className="ind-sec-title">
-                  Certifications in “
-                  {scope.kind === "industry"
-                    ? currentIndustry.name
-                    : currentSub?.name ?? "—"}
-                  ”
-                </h3>
-                <button
-                  className="cta-primary"
-                  onClick={() => setModal({ kind: "add-certs", scope })}
-                >
-                  Add Certification
-                  <span className="cta-kbd">C</span>
-                </button>
-              </div>
-              <CertList
-                certIds={scopeCertIds}
-                onReorder={reorderCertsInScope}
-                onRemove={removeCertFromScope}
-              />
-            </div>
-
-            {scope.kind === "industry" && orderedCurrentSubs.length > 0 && (
-              <div className="ind-section">
-                <h3 className="ind-sec-title">
-                  Sub-Industries in “{currentIndustry.name}”
-                </h3>
-                <div className="ind-subcards">
-                  {orderedCurrentSubs.map((sub) => {
-                    // Up to four certs are listed in full; only a fifth and
-                    // beyond collapse into "+ N MORE".
-                    const names = sub.certIds
-                      .map((id) => allCertsById[id]?.name)
-                      .filter((n): n is string => !!n);
-                    const shown = names.slice(0, 4);
-                    const more = sub.certIds.length - shown.length;
-                    return (
-                      <button
-                        key={sub.key}
-                        className="ind-subcard"
-                        onClick={() => {
-                          pickSub(currentIndustry.key, sub.key);
-                          setOpenIds((prev) => new Set([...prev, currentIndustry.key]));
-                        }}
-                      >
-                        <span className="ind-subcard-body">
-                          <span className="ind-subcard-head">
-                            <span className="ind-subcard-name">{sub.name}</span>
-                            <span className="ind-subcard-count">
-                              · {sub.certIds.length} certification
-                              {sub.certIds.length === 1 ? "" : "s"}
-                            </span>
-                            {sub.hidden && (
-                              <span className="ind-hidden-pill">Hidden</span>
-                            )}
-                          </span>
-                          <span className="ind-subcard-list">
-                            <span className="ind-subcard-items">
-                              {shown.map((n) => (
-                                <span key={n} className="ind-subcard-item">{n}</span>
-                              ))}
-                            </span>
-                            {/* Figma keeps this line as a spacer when nothing
-                                overflows, so the cards stay the same height. */}
-                            <span className={`ind-subcard-more ${more > 0 ? "" : "is-empty"}`}>
-                              + {more} more
-                            </span>
-                          </span>
-                        </span>
-                        <span className="ind-subcard-arrow">
-                          <RowArrowIcon />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-          </section>
-        </div>
+        {scope === null || !currentIndustry ? (
+          <Launcher
+            industriesCount={industries.length}
+            subCount={totalSubIndustries}
+            search={search}
+            onSearch={setSearch}
+            searchRef={searchRef}
+            listRef={listRef}
+            items={launchItems}
+            activeIndex={showActive ? activeIdx : -1}
+            onHover={(idx) => {
+              setCursor(idx);
+              setNavMode("pointer");
+            }}
+            onLeaveList={() => setNavMode((m) => (m === "pointer" ? "idle" : m))}
+            onOpen={openItem}
+            onNewIndustry={() => setModal({ kind: "new-industry" })}
+            onMenu={openMenu}
+            onReorder={reorderIndustries}
+          />
+        ) : (
+          <Hub
+            industry={currentIndustry}
+            sub={currentSub}
+            certIds={scopeCertIds}
+            onBackToLauncher={() => setScope(null)}
+            onBackToIndustry={() =>
+              setScope({ kind: "industry", industryKey: currentIndustry.key })
+            }
+            onAddCerts={() => setModal({ kind: "add-certs", scope })}
+            onMenu={(e) => openMenu(e, scope)}
+            onNewSub={() => setModal({ kind: "new-sub", industryKey: currentIndustry.key })}
+            onOpenSub={(subKey) => setScope({ kind: "sub", industryKey: currentIndustry.key, subKey })}
+            onReorderSubs={(keys) => reorderSubs(currentIndustry.key, keys)}
+            onReorderCerts={(ids) => updateScopeCerts(scope, () => ids)}
+            onRemoveCert={(id) => updateScopeCerts(scope, (ids) => ids.filter((c) => c !== id))}
+          />
+        )}
       </div>
 
-      {/* ─── Row 3-dot menu ─── */}
+      {/* ─── Row / header 3-dot menu ─── */}
       {menu && (
         <>
           <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
@@ -548,11 +496,7 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
                 setModal(
                   menu.scope.kind === "industry"
                     ? { kind: "edit-industry", industryKey: menu.scope.industryKey }
-                    : {
-                        kind: "edit-sub",
-                        industryKey: menu.scope.industryKey,
-                        subKey: menu.scope.subKey,
-                      },
+                    : { kind: "edit-sub", industryKey: menu.scope.industryKey, subKey: menu.scope.subKey },
                 );
                 setMenu(null);
               }}
@@ -562,11 +506,8 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
             <button
               className="u-menu-item"
               onClick={() => {
-                if (menu.scope.kind === "industry") {
-                  toggleIndustryHidden(menu.scope.industryKey);
-                } else {
-                  toggleSubHidden(menu.scope.industryKey, menu.scope.subKey);
-                }
+                if (menu.scope.kind === "industry") toggleIndustryHidden(menu.scope.industryKey);
+                else toggleSubHidden(menu.scope.industryKey, menu.scope.subKey);
                 setMenu(null);
               }}
             >
@@ -683,15 +624,9 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
         const ind = industries.find((i) => i.key === dScope.industryKey);
         if (!ind) return null;
         const isIndustry = dScope.kind === "industry";
-        const sub =
-          dScope.kind === "sub"
-            ? ind.subIndustries.find((s) => s.key === dScope.subKey)
-            : null;
+        const sub = dScope.kind === "sub" ? ind.subIndustries.find((s) => s.key === dScope.subKey) : null;
         const label = isIndustry ? ind.name : `${ind.name} › ${sub?.name}`;
-        const certCount = isIndustry
-          ? ind.certIds.length +
-            ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0)
-          : sub?.certIds.length ?? 0;
+        const certCount = isIndustry ? industryCertTotal(ind) : sub?.certIds.length ?? 0;
         const subCount = isIndustry ? ind.subIndustries.length : 0;
         return (
           <DeleteConfirm
@@ -701,11 +636,8 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
             subCount={subCount}
             isIndustry={isIndustry}
             onConfirm={() => {
-              if (dScope.kind === "industry") {
-                deleteIndustry(dScope.industryKey);
-              } else {
-                deleteSub(dScope.industryKey, dScope.subKey);
-              }
+              if (dScope.kind === "industry") deleteIndustry(dScope.industryKey);
+              else deleteSub(dScope.industryKey, dScope.subKey);
               setModal({ kind: "none" });
             }}
             onCancel={() => setModal({ kind: "none" })}
@@ -713,236 +645,405 @@ export function IndustriesPage({ onBackToCerts }: { onBackToCerts?: () => void }
         );
       })()}
 
-      {modal.kind === "add-certs" && (
-        <AddCertsModal
-          scope={modal.scope}
-          industryName={currentIndustry.name}
-          subName={currentSub?.name}
-          alreadyAtScope={new Set(scopeCertIds)}
-          tagsForCert={tagsForCert}
-          onAdd={(ids) => {
-            addCertsToScope(ids);
-            setModal({ kind: "none" });
-          }}
-          onClose={() => setModal({ kind: "none" })}
-        />
-      )}
+      {modal.kind === "add-certs" && (() => {
+        const target = modal.scope;
+        const ind = industries.find((i) => i.key === target.industryKey);
+        if (!ind) return null;
+        const sub = target.kind === "sub" ? ind.subIndustries.find((s) => s.key === target.subKey) : null;
+        const already = target.kind === "industry" ? ind.certIds : sub?.certIds ?? [];
+        return (
+          <AddCertsModal
+            industryName={ind.name}
+            subName={sub?.name}
+            alreadyAtScope={new Set(already)}
+            tagsForCert={tagsForCert}
+            onAdd={(ids) => {
+              updateScopeCerts(target, (cur) => [...cur, ...ids]);
+              setModal({ kind: "none" });
+            }}
+            onClose={() => setModal({ kind: "none" })}
+          />
+        );
+      })()}
     </div>
   );
 }
 
-/* ─── Industry tree group (draggable industry + its sub list) ──────────────── */
+/* ─── Launcher (2a) ───────────────────────────────────────────────────────── */
 
-function IndustryTreeGroup({
-  ind,
-  isOpen,
-  scope,
-  canDrag,
-  orderedIndustries,
-  onToggle,
-  onPickIndustry,
-  onPickSub,
-  onAddSub,
+function Launcher({
+  industriesCount,
+  subCount,
+  search,
+  onSearch,
+  searchRef,
+  listRef,
+  items,
+  activeIndex,
+  onHover,
+  onLeaveList,
+  onOpen,
+  onNewIndustry,
   onMenu,
-  onReorderIndustries,
-  onReorderSubs,
+  onReorder,
 }: {
-  ind: Industry;
-  isOpen: boolean;
-  scope: Scope;
-  canDrag: boolean;
-  orderedIndustries: Industry[];
-  onToggle: () => void;
-  onPickIndustry: () => void;
-  onPickSub: (subKey: string) => void;
-  onAddSub: () => void;
+  industriesCount: number;
+  subCount: number;
+  search: string;
+  onSearch: (q: string) => void;
+  searchRef: React.RefObject<HTMLInputElement>;
+  listRef: React.RefObject<HTMLDivElement>;
+  items: LaunchItem[];
+  /** The row drawn as selected, or -1 while the list is idle. */
+  activeIndex: number;
+  onHover: (idx: number) => void;
+  onLeaveList: () => void;
+  onOpen: (item: LaunchItem) => void;
+  onNewIndustry: () => void;
   onMenu: (e: React.MouseEvent, scope: Scope) => void;
-  onReorderIndustries: (orderedKeys: string[]) => void;
-  onReorderSubs: (orderedKeys: string[]) => void;
+  onReorder: (orderedKeys: string[]) => void;
 }) {
-  const industryActive =
-    scope.kind === "industry" && scope.industryKey === ind.key;
-  const totalCerts =
-    ind.certIds.length +
-    ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
-  const [isOver, setIsOver] = useState(false);
+  // Drag reordering is only safe against the full, unfiltered order.
+  const canDrag = !search.trim();
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const industryKeys = items
+    .filter((i): i is Extract<LaunchItem, { kind: "industry" }> => i.kind === "industry")
+    .map((i) => i.industry.key);
 
-  const orderedSubs = [...ind.subIndustries].sort(
-    (a, b) => a.displayPosition - b.displayPosition,
-  );
-
-  function onIndustryDrop(e: React.DragEvent) {
+  function dropOn(e: React.DragEvent, toKey: string) {
     e.preventDefault();
-    setIsOver(false);
+    setOverKey(null);
     const fromKey = e.dataTransfer.getData("ind/industry");
-    if (!fromKey || fromKey === ind.key) return;
-    const keys = orderedIndustries.map((i) => i.key);
+    if (!fromKey || fromKey === toKey) return;
+    const keys = [...industryKeys];
     const from = keys.indexOf(fromKey);
-    const to = keys.indexOf(ind.key);
+    const to = keys.indexOf(toKey);
     if (from < 0 || to < 0) return;
     keys.splice(from, 1);
     keys.splice(to, 0, fromKey);
-    onReorderIndustries(keys);
+    onReorder(keys);
   }
 
+  const q = search.trim();
+  const noHits = q && items.length === 0;
+
   return (
-    <div className="tree-group">
-      <div
-        className={`tree-row ${industryActive ? "is-active" : ""} ${ind.hidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
-        onDragOver={(e) => {
-          if (!canDrag) return;
-          if (e.dataTransfer.types.includes("ind/industry")) {
-            e.preventDefault();
-            setIsOver(true);
-          }
-        }}
-        onDragLeave={() => setIsOver(false)}
-        onDrop={onIndustryDrop}
-      >
-        <span
-          className={`tree-drag ${canDrag ? "" : "is-disabled"}`}
-          draggable={canDrag}
-          onDragStart={(e) => {
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("ind/industry", ind.key);
-          }}
-          aria-hidden
-        >
-          <DragHandleIcon />
-        </span>
-        <button
-          className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
-          onClick={onToggle}
-          aria-label={isOpen ? "Collapse" : "Expand"}
-        >
-          <TreeCaretIcon />
-        </button>
-        <button className="tree-main" onClick={onPickIndustry}>
-          <span className="tree-row-label">{ind.name}</span>
-          {ind.hidden && <span className="ind-hidden-pill">Hidden</span>}
-          <span className="tree-row-count">{totalCerts}</span>
-        </button>
-        <button
-          className="tree-menu-btn"
-          aria-label="Industry options"
-          onClick={(e) => onMenu(e, { kind: "industry", industryKey: ind.key })}
-        >
-          <TreeKebabIcon />
-        </button>
+    <div className="tasks ind-launch">
+      {/* The page header the rest of the app runs, stripped to its title: no
+          crumb trail (the landing IS the top of this page, and the sidebar's
+          Certifications entry stays lit as the way back out) and no create CTA
+          — "＋ New Industry" sits on the list header, where the Question Bank
+          landing keeps its Add Category. */}
+      <header className="tasks-header">
+        <div className="rvc-pagehead">
+          <h1 className="tasks-title">Industries</h1>
+        </div>
+      </header>
+
+      {/* Figma 772:1192 "Search Bar - Large" — the Question Bank landing's hero
+          bar: the shared .search-input at 56px across 70% of the page, ⌘K badge
+          and all (App.tsx's ⌘K handler focuses the first visible .search-input). */}
+      <div className="search-wrap ind-launch-search">
+        <span className="search-icon"><SearchIcon /></span>
+        <input
+          ref={searchRef}
+          autoFocus
+          className="search-input"
+          placeholder="Search Industries, Certifications..."
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+        />
+        <SearchTrailing active={!!search} onClear={() => onSearch("")} />
       </div>
 
-      {isOpen && (
-        <div className="tree-sublist">
-          {orderedSubs.length > 0 && (
-            <div className="tree-sublist-rows">
-              {orderedSubs.map((sub) => (
-                <SubRow
-                  key={sub.key}
-                  sub={sub}
-                  industryKey={ind.key}
-                  parentHidden={!!ind.hidden}
-                  active={
-                    scope.kind === "sub" &&
-                    scope.industryKey === ind.key &&
-                    scope.subKey === sub.key
-                  }
-                  canDrag={canDrag}
-                  orderedSubs={orderedSubs}
-                  onPick={() => onPickSub(sub.key)}
-                  onMenu={onMenu}
-                  onReorderSubs={onReorderSubs}
-                />
-              ))}
-            </div>
-          )}
-          <button className="tree-add" onClick={onAddSub}>
+      {/* List header — Figma 867:2473, the Question Bank landing's index head:
+          the uppercase count label at one end and the ＋ add row at the other,
+          over the group's 1px rule. */}
+      <div className="ind-launch-head">
+        <div className="ind-launch-head-row">
+          <span className="ind-launch-head-label">
+            {industriesCount} Industries · {subCount} Sub-Industries
+          </span>
+          <button className="qbl-index-add" onClick={onNewIndustry}>
             <span className="tree-add-icon"><TreeAddIcon /></span>
-            Add Sub-Industry
+            New Industry
+            <span className="cta-kbd">I</span>
           </button>
         </div>
-      )}
+      </div>
+
+      <div className="ind-launch-list" ref={listRef} onMouseLeave={onLeaveList}>
+          {noHits && <div className="ind-launch-empty">Nothing matches “{q}”</div>}
+          {items.map((item, idx) => {
+            const active = idx === activeIndex;
+            if (item.kind === "industry") {
+              const { industry, count } = item;
+              return (
+                <div
+                  key={item.key}
+                  role="button"
+                  tabIndex={-1}
+                  className={`ind-launch-row ${active ? "is-active" : ""} ${industry.hidden ? "is-hidden-item" : ""} ${overKey === industry.key ? "is-drop-over" : ""}`}
+                  onMouseEnter={() => onHover(idx)}
+                  onClick={() => onOpen(item)}
+                  onDragOver={(e) => {
+                    if (!canDrag || !e.dataTransfer.types.includes("ind/industry")) return;
+                    e.preventDefault();
+                    setOverKey(industry.key);
+                  }}
+                  onDragLeave={() => setOverKey(null)}
+                  onDrop={(e) => dropOn(e, industry.key)}
+                >
+                  <span
+                    className={`tree-drag ${canDrag ? "" : "is-disabled"}`}
+                    draggable={canDrag}
+                    title="Drag to reorder"
+                    onClick={(e) => e.stopPropagation()}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("ind/industry", industry.key);
+                    }}
+                    aria-hidden
+                  >
+                    <DragHandleIcon />
+                  </span>
+                  <span className="ind-launch-name">{industry.name}</span>
+                  {industry.hidden && <span className="ind-hidden-pill">Hidden</span>}
+                  <span className="ind-launch-count">{plural(count, "certification")}</span>
+                  <button
+                    className="tree-menu-btn"
+                    aria-label="Industry options"
+                    onClick={(e) => onMenu(e, { kind: "industry", industryKey: industry.key })}
+                  >
+                    <TreeKebabIcon />
+                  </button>
+                </div>
+              );
+            }
+            if (item.kind === "sub") {
+              const { industry, sub } = item;
+              const hidden = !!(sub.hidden || industry.hidden);
+              return (
+                <div
+                  key={item.key}
+                  role="button"
+                  tabIndex={-1}
+                  className={`ind-launch-row ${active ? "is-active" : ""} ${hidden ? "is-hidden-item" : ""}`}
+                  onMouseEnter={() => onHover(idx)}
+                  onClick={() => onOpen(item)}
+                >
+                  <span className="tree-drag is-disabled" aria-hidden />
+                  <span className="ind-launch-name">
+                    <span className="ind-launch-parent">{industry.name} › </span>
+                    {sub.name}
+                  </span>
+                  {sub.hidden && <span className="ind-hidden-pill">Hidden</span>}
+                  <span className="ind-launch-count">{plural(sub.certIds.length, "certification")}</span>
+                  <button
+                    className="tree-menu-btn"
+                    aria-label="Sub-Industry options"
+                    onClick={(e) => onMenu(e, { kind: "sub", industryKey: industry.key, subKey: sub.key })}
+                  >
+                    <TreeKebabIcon />
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <button
+                key={item.key}
+                className={`ind-launch-row ${active ? "is-active" : ""}`}
+                onMouseEnter={() => onHover(idx)}
+                onClick={() => onOpen(item)}
+              >
+                <span className="tree-drag is-disabled" aria-hidden />
+                <span className="ind-launch-name">{item.cert.name}</span>
+                <span className="ind-launch-count">in {item.where}</span>
+              </button>
+            );
+          })}
+      </div>
     </div>
   );
 }
 
-function SubRow({
-  sub,
-  industryKey,
-  parentHidden,
-  active,
-  canDrag,
-  orderedSubs,
-  onPick,
-  onMenu,
-  onReorderSubs,
-}: {
-  sub: SubIndustry;
-  industryKey: string;
-  parentHidden: boolean;
-  active: boolean;
-  canDrag: boolean;
-  orderedSubs: SubIndustry[];
-  onPick: () => void;
-  onMenu: (e: React.MouseEvent, scope: Scope) => void;
-  onReorderSubs: (orderedKeys: string[]) => void;
-}) {
-  // A hidden Industry hides its Sub-Industries too: they take the hidden
-  // colour, but only an explicitly hidden Sub carries the pill.
-  const isHidden = sub.hidden || parentHidden;
-  const [isOver, setIsOver] = useState(false);
-  // Sub drags carry their parent key so they can't cross into another Industry.
-  const dragType = `ind/sub/${industryKey}`;
+/* ─── Hub (4a) — an industry, or a sub-industry one level down ────────────── */
 
-  function onSubDrop(e: React.DragEvent) {
+function Hub({
+  industry,
+  sub,
+  certIds,
+  onBackToLauncher,
+  onBackToIndustry,
+  onAddCerts,
+  onMenu,
+  onNewSub,
+  onOpenSub,
+  onReorderSubs,
+  onReorderCerts,
+  onRemoveCert,
+}: {
+  industry: Industry;
+  sub: SubIndustry | null;
+  certIds: string[];
+  /** Crumb targets: the launcher, and (from a sub) its parent industry. */
+  onBackToLauncher: () => void;
+  onBackToIndustry: () => void;
+  onAddCerts: () => void;
+  onMenu: (e: React.MouseEvent) => void;
+  onNewSub: () => void;
+  onOpenSub: (subKey: string) => void;
+  onReorderSubs: (orderedKeys: string[]) => void;
+  onReorderCerts: (ids: string[]) => void;
+  onRemoveCert: (id: string) => void;
+}) {
+  const name = sub ? sub.name : industry.name;
+  const hidden = sub ? !!(sub.hidden || industry.hidden) : !!industry.hidden;
+  const orderedSubs = [...industry.subIndustries].sort(
+    (a, b) => a.displayPosition - b.displayPosition,
+  );
+  const [overKey, setOverKey] = useState<string | null>(null);
+
+  function dropOn(e: React.DragEvent, toKey: string) {
     e.preventDefault();
-    setIsOver(false);
-    const fromKey = e.dataTransfer.getData(dragType);
-    if (!fromKey || fromKey === sub.key) return;
+    setOverKey(null);
+    const fromKey = e.dataTransfer.getData("ind/sub");
+    if (!fromKey || fromKey === toKey) return;
     const keys = orderedSubs.map((s) => s.key);
     const from = keys.indexOf(fromKey);
-    const to = keys.indexOf(sub.key);
+    const to = keys.indexOf(toKey);
     if (from < 0 || to < 0) return;
     keys.splice(from, 1);
     keys.splice(to, 0, fromKey);
     onReorderSubs(keys);
   }
 
+  const subtitle = sub
+    ? `${plural(sub.certIds.length, "certification")} · in ${industry.name}`
+    : `${plural(industryCertTotal(industry), "certification")} · ${plural(industry.subIndustries.length, "sub-industry").replace("sub-industrys", "sub-industries")}`;
+
   return (
-    <div
-      className={`tree-sub-row ${active ? "is-active" : ""} ${isHidden ? "is-hidden-item" : ""} ${isOver ? "is-drop-over" : ""}`}
-      onDragOver={(e) => {
-        if (!canDrag) return;
-        if (e.dataTransfer.types.includes(dragType)) {
-          e.preventDefault();
-          setIsOver(true);
-        }
-      }}
-      onDragLeave={() => setIsOver(false)}
-      onDrop={onSubDrop}
-    >
-      <span
-        className={`tree-sub-drag ${canDrag ? "" : "is-disabled"}`}
-        draggable={canDrag}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData(dragType, sub.key);
-        }}
-        aria-hidden
-      >
-        <DragHandleIcon />
-      </span>
-      <button className="tree-sub-main" onClick={onPick}>
-        <span className="tree-sub-row-label">{sub.name}</span>
-        {sub.hidden && !parentHidden && <span className="ind-hidden-pill">Hidden</span>}
-        <span className="tree-sub-row-count">{sub.certIds.length}</span>
-      </button>
-      <button
-        className="tree-menu-btn tree-sub-menu-btn"
-        aria-label="Sub-Industry options"
-        onClick={(e) => onMenu(e, { kind: "sub", industryKey, subKey: sub.key })}
-      >
-        <TreeKebabIcon />
-      </button>
+    <div className="tasks ind-hub">
+      <div className="ind-hub-col">
+        <header className="tasks-header ind-hub-head">
+          <div className="rvc-pagehead">
+            {/* The app's breadcrumb atom (.rvc-crumbs / .rvc-crumb), the same
+                trail Awards and the Question Bank run: every step above the
+                current one navigates, the last is the page itself. */}
+            <nav className="rvc-crumbs" aria-label="Breadcrumb">
+              <button
+                className="rvc-crumb"
+                onClick={onBackToLauncher}
+                title="Back to Industries"
+              >
+                Industries
+              </button>
+              <ChevronRightIcon />
+              {sub ? (
+                <>
+                  <button
+                    className="rvc-crumb"
+                    onClick={onBackToIndustry}
+                    title={`Back to ${industry.name}`}
+                  >
+                    {industry.name}
+                  </button>
+                  <ChevronRightIcon />
+                  <span className="rvc-crumb rvc-crumb--current">{sub.name}</span>
+                </>
+              ) : (
+                <span className="rvc-crumb rvc-crumb--current">{industry.name}</span>
+              )}
+            </nav>
+            <div className="ind-hub-toprow">
+              <h1 className="tasks-title">{name}</h1>
+              {hidden && <span className="ind-hidden-pill">Hidden</span>}
+            </div>
+            <div className="tasks-subtitle">{subtitle}</div>
+          </div>
+          <div className="tasks-header-actions">
+            <button className="cta-primary" onClick={onAddCerts}>
+              Add Certification
+              <span className="cta-kbd">C</span>
+            </button>
+            <button
+              className="cta-quiet cta-quiet--icon"
+              aria-label={sub ? "Sub-Industry options" : "Industry options"}
+              onClick={onMenu}
+            >
+              <RowKebabIcon />
+            </button>
+          </div>
+        </header>
+
+        {!sub && (
+          <section className="ind-section">
+            <SectionHeading
+              label="Sub-Industries"
+              trailing={
+                <button className="qbl-index-add ind-sec-action" onClick={onNewSub}>
+                  <span className="tree-add-icon"><TreeAddIcon /></span>
+                  New Sub-Industry
+                </button>
+              }
+            />
+            {orderedSubs.length === 0 ? (
+              <div className="ind-sec-empty">
+                No sub-industries yet — every certification here is shown to every {industry.name} learner.
+              </div>
+            ) : (
+              <div className="ind-subcards">
+                {orderedSubs.map((s) => (
+                  <button
+                    key={s.key}
+                    className={`ind-subcard ${overKey === s.key ? "is-drop-over" : ""}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("ind/sub", s.key);
+                    }}
+                    onDragOver={(e) => {
+                      if (!e.dataTransfer.types.includes("ind/sub")) return;
+                      e.preventDefault();
+                      setOverKey(s.key);
+                    }}
+                    onDragLeave={() => setOverKey(null)}
+                    onDrop={(e) => dropOn(e, s.key)}
+                    onClick={() => onOpenSub(s.key)}
+                  >
+                    <span className="ind-subcard-head">
+                      <span className="ind-subcard-name">{s.name}</span>
+                      <span className="ind-subcard-arrow"><ChevronRightIcon /></span>
+                    </span>
+                    <span className="ind-subcard-foot">
+                      <span className="ind-subcard-count">{plural(s.certIds.length, "certification")}</span>
+                      {s.hidden && <span className="ind-hidden-pill">Hidden</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="ind-section">
+          <SectionHeading
+            label={sub ? "Certifications" : "Core Certifications"}
+            trailing={
+              <>
+                <span className="ind-sec-note">
+                  · shown to {sub ? `${industry.name} › ${sub.name}` : `every ${industry.name}`} learner{sub ? "s" : ""}
+                </span>
+                <button className="qbl-index-add ind-sec-action ind-sec-action--end" onClick={onAddCerts}>
+                  <span className="tree-add-icon"><TreeAddIcon /></span>
+                  Add
+                </button>
+              </>
+            }
+          />
+          <CertList certIds={certIds} onReorder={onReorderCerts} onRemove={onRemoveCert} />
+        </section>
+      </div>
     </div>
   );
 }
@@ -966,19 +1067,12 @@ function CertList({
       <div className="u-empty ind-cert-empty">
         <div className="ind-cert-empty-title">No certifications tagged here yet</div>
         <div className="ind-cert-empty-sub">
-          Use <strong>Add Certifications</strong> to attach existing certifications.
+          Use <strong>Add Certification</strong> to attach existing certifications.
         </div>
       </div>
     );
   }
 
-  function onDragStart(idx: number) {
-    setDragIdx(idx);
-  }
-  function onDragOver(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    setOverIdx(idx);
-  }
   function onDrop() {
     if (dragIdx === null || overIdx === null || dragIdx === overIdx) {
       setDragIdx(null);
@@ -1005,8 +1099,11 @@ function CertList({
             key={id}
             className={`ind-ct-row ${isDragging ? "is-dragging" : ""} ${isOver ? "is-over" : ""}`}
             draggable
-            onDragStart={() => onDragStart(idx)}
-            onDragOver={(e) => onDragOver(e, idx)}
+            onDragStart={() => setDragIdx(idx)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOverIdx(idx);
+            }}
             onDrop={onDrop}
             onDragEnd={() => {
               setDragIdx(null);
@@ -1016,17 +1113,14 @@ function CertList({
             <span className="ind-ct-drag" title="Drag to reorder" aria-hidden>
               <DragHandleIcon />
             </span>
-            <span className="ind-ct-num">{idx + 1}</span>
-            <span className="ind-ct-cell">
-              <span className="ind-ct-name">{cert.name}</span>
-              <span className="ind-ct-sub">
-                {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
-              </span>
+            <span className="ind-ct-name">{cert.name}</span>
+            <span className="ind-ct-meta">
+              {cert.stage} · {cert.hours} {cert.hours === 1 ? "hr" : "hrs"}
             </span>
             <button
               className="ind-ct-x"
-              aria-label="Remove from this Industry"
-              title="Remove from this Industry"
+              aria-label="Remove from here"
+              title="Remove from here"
               onClick={() => onRemove(id)}
             >
               <RowCloseIcon />
@@ -1068,13 +1162,25 @@ function NameModal({
   const [hidden, setHidden] = useState(defaultHidden);
 
   const trimmed = name.trim();
-  const isDuplicate =
-    trimmed && existingNames.includes(trimmed.toLowerCase());
+  const isDuplicate = trimmed && existingNames.includes(trimmed.toLowerCase());
   const isValid = !!trimmed && !isDuplicate;
+
+  function submit() {
+    if (!isValid) return;
+    onSubmit(trimmed, nameEs.trim(), hidden);
+  }
 
   return (
     <div className="pm-overlay" onClick={onCancel}>
-      <div className="pm-modal ind-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pm-modal ind-modal"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onCancel();
+        }}
+      >
         <div className="pm-head">
           <h3 className="pm-title">{title}</h3>
           <p className="pm-sub">{nameHelp}</p>
@@ -1092,6 +1198,7 @@ function NameModal({
                   className="lang-field-input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
                   placeholder="Solar & Renewables"
                 />
               </div>
@@ -1102,6 +1209,7 @@ function NameModal({
                   className="lang-field-input"
                   value={nameEs}
                   onChange={(e) => setNameEs(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
                   placeholder="Solar y Energías Renovables"
                 />
               </div>
@@ -1142,14 +1250,7 @@ function NameModal({
         </div>
         <div className="pm-foot">
           <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button
-            className="btn-publish"
-            disabled={!isValid}
-            onClick={() => {
-              if (!isValid) return;
-              onSubmit(trimmed, nameEs.trim(), hidden);
-            }}
-          >
+          <button className="btn-publish" disabled={!isValid} onClick={submit}>
             {submitLabel}
           </button>
         </div>
@@ -1179,7 +1280,7 @@ function DeleteConfirm({
 }) {
   return (
     <div className="pm-overlay" onClick={onCancel}>
-      <div className="pm-modal ind-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="pm-modal ind-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="pm-head">
           <h3 className="pm-title">{title}</h3>
           <p className="pm-sub">
@@ -1217,7 +1318,6 @@ function DeleteConfirm({
 /* ─── Add certifications modal ────────────────────────────────────────────── */
 
 function AddCertsModal({
-  scope,
   industryName,
   subName,
   alreadyAtScope,
@@ -1225,7 +1325,6 @@ function AddCertsModal({
   onAdd,
   onClose,
 }: {
-  scope: Scope;
   industryName: string;
   subName?: string;
   alreadyAtScope: Set<string>;
@@ -1295,7 +1394,7 @@ function AddCertsModal({
 
   return (
     <div className="pm-overlay" onClick={onClose}>
-      <div className="pm-modal ind-addcerts" onClick={(e) => e.stopPropagation()}>
+      <div className="pm-modal ind-addcerts" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="pm-head ind-addcerts-head">
           <div>
             <h3 className="pm-title">Add Certifications</h3>
@@ -1434,7 +1533,6 @@ function AddCertsModal({
           </div>
         </div>
       </div>
-      {void scope}
     </div>
   );
 }

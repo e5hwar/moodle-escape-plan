@@ -9,7 +9,6 @@ import {
   type FormStatus,
 } from "../data/feedbackForms";
 import {
-  KeyCommandIcon,
   SearchIcon,
   SortIcon,
   AddIcon,
@@ -23,6 +22,7 @@ import {
   ChevronRightIcon,
   CalendarIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import {
   EditColumnsButton,
@@ -347,10 +347,7 @@ export function FeedbackFormsPage({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
-                  <span className="search-kbd">
-                    <span className="kbd-cmd"><KeyCommandIcon /></span>
-                    <span className="kbd-letter">K</span>
-                  </span>
+                  <SearchTrailing active={!!query} onClear={() => setQuery("")} />
                 </div>
               </div>
 

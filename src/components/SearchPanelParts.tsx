@@ -1,4 +1,4 @@
-import { SearchIcon } from "./icons";
+import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 
 // Shared dropdown footer + "search for" action used by the Tasks / Users / Review
 // search combobox panels. Matches the Figma "Expanded Search" components.
@@ -86,6 +86,44 @@ export function SearchForRow({
       <span className="usearch-searchfor-text">
         Search for <span className="q">“{query}”</span> in {scope}
       </span>
+    </button>
+  );
+}
+
+/** The search bar's trailing slot (Figma 902:3585 "Text Entered" / 772:1110
+ *  "Filter Applied"). The bar shows the ⌘K badge only while it is empty; the
+ *  moment there is something to clear — typed text OR an applied filter chip —
+ *  the badge gives way to a ✕ that clears it. The big `.usearch-*` combobox
+ *  bars already worked this way; this is the same control for the plain
+ *  `.search-wrap` bars every list page carries. */
+export function SearchTrailing({
+  active,
+  onClear,
+}: {
+  /** There is something to clear — text typed, or a filter applied. */
+  active: boolean;
+  onClear: () => void;
+}) {
+  if (!active) {
+    return (
+      <span className="search-kbd">
+        <span className="kbd-cmd"><KeyCommandIcon /></span>
+        <span className="kbd-letter">K</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="search-clear"
+      aria-label="Clear search"
+      title="Clear search"
+      /* Keep the input focused — clearing should not close a panel that is
+         open because the field has focus. */
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClear}
+    >
+      <SearchClearIcon />
     </button>
   );
 }

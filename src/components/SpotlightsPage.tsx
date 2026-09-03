@@ -8,14 +8,19 @@ import {
   SpotlightCardPreview,
   type SpotlightDraft,
 } from "./CreateSpotlightPage";
-import { QueuePositionPicker } from "./QueuePositionPicker";
-import { KeyCommandIcon, SearchIcon, AddIcon, SmallXIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
+import { PrmModal } from "./PrmModal";
+import { FullscreenViewer } from "./FullscreenViewer";
+import { SearchTrailing } from "./SearchPanelParts";
+import { SearchIcon, AddIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, RowEyeIcon, RowEyeOffIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type DisplayStatus = "active" | "pending" | "ended" | "rejected";
+
+/** The four row actions that change a Spotlight's standing, each confirmed. */
+type ConfirmKind = "approve" | "reject" | "disable" | "delete";
 
 const DISPLAY_STATUS_LABEL: Record<DisplayStatus, string> = {
   active: "Active",
@@ -67,14 +72,14 @@ const SpColGroup = () => (
     <col style={{ width: 72 + 24 }} />
     <col style={{ width: 103 + 24 }} />
     <col style={{ width: 96 + 24 }} />
-    <col style={{ width: 88 + 12 + 16 + 24 }} />
+    <col style={{ width: 103 + 12 + 16 + 24 }} />
   </colgroup>
 );
 
 /* Fixed columns + a floor for the flexible Title & Description column, which is
    the one that absorbs the page's width. Its floor is below the design's 435px —
    keeping 435 would push the actions column off-screen at normal widths. */
-const SP_TABLE_MIN = 72 + 168 + 300 + 96 + 127 + 120 + 140;
+const SP_TABLE_MIN = 72 + 168 + 300 + 96 + 127 + 120 + 155;
 
 
 /* The prototype's "today". Deactivating stamps this as the end date, so it has
@@ -88,6 +93,15 @@ function daysUntil(iso: string): number {
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
+/* The index just past the last Active / In-Review row — where a Spotlight
+   joining the queue goes in, ahead of anything archived. */
+function endOfLive(arr: Spotlight[]): number {
+  return arr.reduce((acc, s, i) => {
+    const ds = deriveStatus(s);
+    return ds === "active" || ds === "pending" ? i + 1 : acc;
+  }, 0);
+}
+
 export function SpotlightsPage() {
   // `committed` is the saved order; `list` is the working copy shown in the
   // table. Drag-reordering only touches `list`, so the order diverges until the
@@ -99,6 +113,10 @@ export function SpotlightsPage() {
   const [creating, setCreating] = useState(false);
   // Set alongside `creating` when the page was opened from a row's Edit action.
   const [editing, setEditing] = useState<Spotlight | null>(null);
+  /* The same editor, opened from an archived row's "Enable": the Spotlight's
+     end date has been and gone, so the field starts blank and a date has to be
+     picked before it can go back into the queue. */
+  const [enabling, setEnabling] = useState(false);
   const [previewing, setPreviewing] = useState<Spotlight | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   /* A just-created Spotlight, dropped into the table so its queue slot can be
@@ -107,7 +125,9 @@ export function SpotlightsPage() {
   const [placing, setPlacing] = useState<Spotlight | null>(null);
   const placingRowRef = useRef<HTMLTableRowElement | null>(null);
   const [menu, setMenu] = useState<{ item: Spotlight; rect: DOMRect } | null>(null);
-  const [approving, setApproving] = useState<Spotlight | null>(null);
+  /* Every action that changes a Spotlight's standing — approve, reject,
+     disable, delete — asks first, on the shared confirm shell. */
+  const [confirming, setConfirming] = useState<{ kind: ConfirmKind; item: Spotlight } | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   // Source row index kept in a ref so the drop handler never reads a stale value.
@@ -176,6 +196,7 @@ export function SpotlightsPage() {
   // Starting a fresh create abandons any Spotlight still awaiting placement.
   function openCreate() {
     setEditing(null);
+    setEnabling(false);
     dropPlacing();
     setCreating(true);
   }
@@ -194,6 +215,7 @@ export function SpotlightsPage() {
   function cancelCreate() {
     setCreating(false);
     setEditing(null);
+    setEnabling(false);
     dropPlacing();
   }
 
@@ -201,26 +223,44 @@ export function SpotlightsPage() {
     // Editing writes the draft back over the existing row, in place: its id,
     // status, submitter and queue slot are all unchanged.
     if (editing) {
-      applyBoth((l) =>
-        l.map((s) =>
-          s.id === editing.id
-            ? {
-                ...s,
-                headingEn: draft.headingEn || s.headingEn,
-                headingEs: draft.headingEs || undefined,
-                descriptionEn: draft.descriptionEn || undefined,
-                descriptionEs: draft.descriptionEs || undefined,
-                ctaTextEn: draft.ctaTextEn || undefined,
-                ctaTextEs: draft.ctaTextEs || undefined,
-                ctaUrl: draft.ctaUrl || undefined,
-                endDate: draft.endDate,
-                imageHint: draft.imageHint ?? s.imageHint,
-              }
-            : s,
-        ),
-      );
+      const rewrite = (s: Spotlight): Spotlight => ({
+        ...s,
+        headingEn: draft.headingEn || s.headingEn,
+        headingEs: draft.headingEs || undefined,
+        descriptionEn: draft.descriptionEn || undefined,
+        descriptionEs: draft.descriptionEs || undefined,
+        ctaTextEn: draft.ctaTextEn || undefined,
+        ctaTextEs: draft.ctaTextEs || undefined,
+        ctaUrl: draft.ctaUrl || undefined,
+        endDate: draft.endDate,
+        imageHint: draft.imageHint ?? s.imageHint,
+      });
+
+      if (enabling) {
+        /* Enabling puts an archived Spotlight back in the queue with its new
+           end date. One that was approved before (it simply ran out) goes
+           straight back to Active; a rejected one was never signed off, so it
+           returns as In-Review. Either way it re-enters at the end of the
+           queue, and the admin drags it from there. */
+        applyBoth((l) => {
+          const target = l.find((s) => s.id === editing.id);
+          if (!target) return l;
+          const revived: Spotlight = {
+            ...rewrite(target),
+            status: target.status === "rejected" ? "pending" : "approved",
+          };
+          const without = l.filter((s) => s.id !== editing.id);
+          const next = [...without];
+          next.splice(endOfLive(without), 0, revived);
+          return next;
+        });
+      } else {
+        applyBoth((l) => l.map((s) => (s.id === editing.id ? rewrite(s) : s)));
+      }
+
       setCreating(false);
       setEditing(null);
+      setEnabling(false);
       return;
     }
 
@@ -247,12 +287,8 @@ export function SpotlightsPage() {
        it from there; nothing is committed until "Submit for Review". */
     setList((l) => {
       const without = l.filter((s) => s.id !== id);
-      const lastLive = without.reduce((acc, s, i) => {
-        const ds = deriveStatus(s);
-        return ds === "active" || ds === "pending" ? i + 1 : acc;
-      }, 0);
       const next = [...without];
-      next.splice(lastLive, 0, newSpotlight);
+      next.splice(endOfLive(without), 0, newSpotlight);
       return next;
     });
     setPlacing(newSpotlight);
@@ -281,6 +317,26 @@ export function SpotlightsPage() {
     applyBoth((l) => l.filter((s) => s.id !== item.id));
   }
 
+  /* Disable — the Spotlight comes off the Home Screen now. It is not a status
+     of its own: the row stays approved and its end date is stamped with today,
+     so it reads as Ended and archives like any Spotlight that ran its course.
+     It moves to the end of the list, the way Reject does, so the stored order
+     matches where the row now shows. */
+  function disable(item: Spotlight) {
+    applyBoth((l) => [
+      ...l.filter((s) => s.id !== item.id),
+      { ...item, endDate: TODAY },
+    ]);
+  }
+
+  /* Enable — opens the editor on an archived Spotlight with its (spent) end
+     date cleared. Nothing changes until that editor is saved. */
+  function enable(item: Spotlight) {
+    setEditing(item);
+    setEnabling(true);
+    setCreating(true);
+  }
+
   // Rejecting archives the Spotlight: it moves to the end of the list so the
   // stored order matches where it now shows — behind the archived row.
   function decline(item: Spotlight) {
@@ -290,16 +346,14 @@ export function SpotlightsPage() {
     ]);
   }
 
-  // Approve `item`, moving it to `targetIndex` in the queue (index among the
-  // OTHER spotlights) before flipping its status to approved.
-  function confirmApprove(item: Spotlight, targetIndex: number) {
-    applyBoth((l) => {
-      const others = l.filter((s) => s.id !== item.id);
-      const approved: Spotlight = { ...item, status: "approved" };
-      others.splice(targetIndex, 0, approved);
-      return others;
-    });
-    setApproving(null);
+/* Approving takes the row live where it already sits. There is no position
+   step: the queue slot was chosen when the Spotlight was submitted, it is
+   visible in the Order column, and it stays draggable afterwards — so asking
+   again in a dialog only repeated a decision already made. */
+  function approve(item: Spotlight) {
+    applyBoth((l) =>
+      l.map((s) => (s.id === item.id ? { ...s, status: "approved" } : s)),
+    );
   }
 
   // ── Drag-to-reorder (working copy only, until saved) ──
@@ -353,8 +407,8 @@ export function SpotlightsPage() {
           menuOpen={menu?.item.id === s.id}
           isNew={placing?.id === s.id}
           rowRef={placing?.id === s.id ? placingRowRef : undefined}
-          onApprove={() => setApproving(s)}
-          onDecline={() => decline(s)}
+          onApprove={() => setConfirming({ kind: "approve", item: s })}
+          onDecline={() => setConfirming({ kind: "reject", item: s })}
           onDragStart={() => startDrag(idx)}
           onDragEnterRow={() => {
             if (dragIndexRef.current !== null) setOverIndex(idx);
@@ -374,6 +428,7 @@ export function SpotlightsPage() {
         onClose={cancelCreate}
         onSubmit={handleSubmit}
         editing={editing ?? undefined}
+        enabling={enabling}
         resuming={placing ?? undefined}
       />
     );
@@ -423,10 +478,7 @@ export function SpotlightsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <span className="search-kbd">
-                <span className="kbd-cmd"><KeyCommandIcon /></span>
-                <span className="kbd-letter">K</span>
-              </span>
+              <SearchTrailing active={!!query} onClear={() => setQuery("")} />
             </div>
           </div>
 
@@ -442,7 +494,7 @@ export function SpotlightsPage() {
               <thead>
                 <tr>
                   <th>Order</th>
-                  <th>Preview</th>
+                  <th>Backdrop</th>
                   <th>Title &amp; Description</th>
                   <th>Status</th>
                   <th>Created By</th>
@@ -467,8 +519,13 @@ export function SpotlightsPage() {
                 )}
 
                 {/* Archived (ended / rejected) Spotlights live behind this row
-                    at the foot of the table (564:2244). */}
-                {archived.length > 0 && (
+                    at the foot of the table (564:2244) — but not while a new
+                    Spotlight is being placed. Placement is about the live queue
+                    and nothing else, and the archive only puts rows between the
+                    dragged row and the end of the list it is being dropped
+                    into. The toggle comes back, in whatever state it was left,
+                    as soon as the placement is submitted or dropped. */}
+                {!placing && archived.length > 0 && (
                   <tr className="sp-archive-row">
                     <td colSpan={7}>
                       <button
@@ -483,7 +540,7 @@ export function SpotlightsPage() {
                   </tr>
                 )}
 
-                {showArchived && renderRows(archived)}
+                {!placing && showArchived && renderRows(archived)}
               </tbody>
             </table>
             </div>
@@ -532,13 +589,17 @@ export function SpotlightsPage() {
       {menu && (
         <SpotlightActionsMenu
           rect={menu.rect}
+          status={deriveStatus(menu.item)}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setEditing(menu.item);
+            setEnabling(false);
             setCreating(true);
           }}
+          onEnable={() => enable(menu.item)}
           onPreview={() => setPreviewing(menu.item)}
-          onDelete={() => remove(menu.item)}
+          onDisable={() => setConfirming({ kind: "disable", item: menu.item })}
+          onDelete={() => setConfirming({ kind: "delete", item: menu.item })}
         />
       )}
 
@@ -549,78 +610,105 @@ export function SpotlightsPage() {
         />
       )}
 
-      {approving && (
-        <ApproveSpotlightModal
-          item={approving}
-          list={list}
-          onClose={() => setApproving(null)}
-          onConfirm={(idx) => confirmApprove(approving, idx)}
+      {confirming && (
+        <ConfirmActionModal
+          kind={confirming.kind}
+          item={confirming.item}
+          position={positions.get(confirming.item.id) ?? null}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const { kind, item } = confirming;
+            if (kind === "approve") approve(item);
+            else if (kind === "reject") decline(item);
+            else if (kind === "disable") disable(item);
+            else remove(item);
+            setConfirming(null);
+          }}
         />
       )}
+
     </div>
   );
 }
 
-function ApproveSpotlightModal({
+/* The confirm behind Approve / Reject / Disable / Delete — the shared confirm
+   shell (Figma 483:588), one copy driven by `kind`. Reject and Delete take the
+   red CTA; Approve and Disable do not, because neither loses anything (a
+   disabled Spotlight is one Enable away from being live again). */
+function ConfirmActionModal({
+  kind,
   item,
-  list,
-  onClose,
+  position,
+  onCancel,
   onConfirm,
 }: {
+  kind: ConfirmKind;
   item: Spotlight;
-  list: Spotlight[];
-  onClose: () => void;
-  onConfirm: (targetIndex: number) => void;
+  /** The Spotlight's slot in the queue, when it is in one. */
+  position: number | null;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
-  // Queue of the OTHER spotlights; the item keeps its current slot by default.
-  const others = list.filter((s) => s.id !== item.id);
-  const currentIndex = Math.min(list.indexOf(item), others.length);
-  const [index, setIndex] = useState(currentIndex);
+  const name = item.headingEn;
+  const copy: Record<ConfirmKind, { title: string; body: React.ReactNode; cta: string; danger?: boolean }> = {
+    approve: {
+      title: "Approve Spotlight",
+      body: (
+        <>
+          “{name}” goes live on the Home Screen{position !== null ? ` at position ${position}` : ""},
+          and stays up until {formatShortDate(item.endDate)}. You can reorder or
+          disable it at any time.
+        </>
+      ),
+      cta: "Approve",
+    },
+    reject: {
+      title: "Reject Spotlight",
+      body: (
+        <>
+          “{name}” never goes live. It leaves the queue and moves to the archive,
+          where it can still be previewed or deleted.
+        </>
+      ),
+      cta: "Reject",
+      danger: true,
+    },
+    disable: {
+      title: "Disable Spotlight",
+      body: (
+        <>
+          “{name}” comes off the Home Screen now and moves to the archive. To put
+          it back, Enable it from there with a new end date.
+        </>
+      ),
+      cta: "Disable",
+    },
+    delete: {
+      title: "Delete Spotlight",
+      body: (
+        <>
+          “{name}” ({item.id}) is removed from the Spotlight list. This can't be
+          undone.
+        </>
+      ),
+      cta: "Delete",
+      danger: true,
+    },
+  };
+  const c = copy[kind];
 
   return (
-    <>
-      <div className="sp-overlay-backdrop" onClick={onClose} />
-      <div className="sp-modal" role="dialog" aria-modal="true">
-        <div className="sp-modal-header">
-          <div>
-            <div className="sp-panel-eyebrow">APPROVE SPOTLIGHT</div>
-            <h2 className="sp-modal-title">{item.headingEn}</h2>
-            <p className="sp-modal-sub">
-              Set where this Spotlight appears in the queue, then approve. It
-              goes live in the position you choose — position 1 shows first.
-            </p>
-          </div>
-          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="sp-modal-body">
-          <div className="sp-qpicker-head">
-            <label className="form-label">Queue position</label>
-          </div>
-          <QueuePositionPicker
-            items={others}
-            index={index}
-            onChange={setIndex}
-            movingLabel={item.headingEn}
-          />
-        </div>
-
-        <div className="sp-panel-footer">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-publish sp-submit sp-approve-confirm"
-            onClick={() => onConfirm(index)}
-          >
-            <CheckIcon />
-            Approve at position {index + 1}
-          </button>
-        </div>
-      </div>
-    </>
+    <PrmModal
+      title={c.title}
+      confirmLabel={c.cta}
+      danger={c.danger}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      {/* Body copy is children, not `description` — the shell's own convention
+          for a confirm (Figma 483:588). */}
+      <p className="prm-text">{c.body}</p>
+    </PrmModal>
   );
 }
 
@@ -682,8 +770,16 @@ function SpotlightRow({
       onDragEnd={canDrag ? onDragEndRow : undefined}
     >
       <td className="sp-td-pos">
-        {canDrag && (
-          <span className="sp-drag-handle" aria-hidden title="Drag to reorder">
+        {/* Every queued row reserves the handle's slot, whether or not the queue
+            can be reordered right now — dropping the element while a search is
+            on would slide the whole Order column left as you type. Filtering
+            just stops it appearing on hover. */}
+        {position !== null && (
+          <span
+            className={`sp-drag-handle${canDrag ? "" : " sp-drag-handle--off"}`}
+            aria-hidden
+            title={canDrag ? "Drag to reorder" : undefined}
+          >
             <RowDragIcon />
           </span>
         )}
@@ -707,8 +803,12 @@ function SpotlightRow({
       </td>
       <td className="sp-td-by">{s.submittedBy}</td>
       <td className="sp-td-muted">{formatShortDate(s.endDate)}</td>
-      {/* The kebab sits beside the decide buttons, not instead of them (558:2046). */}
+      {/* The kebab sits beside the decide buttons, not instead of them
+          (558:2046) — except while this row is the Spotlight being placed. That
+          one has not been submitted yet, so there is nothing to approve, edit
+          or delete; the page's footer owns it until "Submit for Review". */}
       <td className="sp-td-actions">
+        {isNew ? null : (
         <div className="sp-actions">
         {isPending && (
           <div className="sp-decide">
@@ -745,6 +845,7 @@ function SpotlightRow({
           <RowKebabIcon />
         </button>
         </div>
+        )}
       </td>
     </tr>
   );
@@ -795,23 +896,41 @@ function SpotlightPreview({ spotlight }: { spotlight: Spotlight }) {
 }
 
 /* ─────────────── Three-dot row actions menu ─────────────── */
-/* Figma 559:2206 "3-Dot Menu - Menu Clicked" — Edit / Preview / Delete on the
-   shared .u-menu chrome. Fixed-positioned so it escapes the table's scroll
-   container. */
+/* Three actions on the shared .u-menu chrome, and which three depends on where
+   the Spotlight is in its life:
+
+     Active    Edit · Preview · Disable   — live, so it can be pulled down but
+                                            not deleted out from under users
+     In-Review Edit · Preview · Delete    — nothing has shipped yet
+     Archived  Enable · Preview · Delete  — done; Enable is the way back, and
+                                            it reopens the editor for a new
+                                            end date rather than editing in
+                                            place (the old one has expired)
+
+   Fixed-positioned so it escapes the table's scroll container. */
 
 function SpotlightActionsMenu({
   rect,
+  status,
   onClose,
   onEdit,
+  onEnable,
   onPreview,
+  onDisable,
   onDelete,
 }: {
   rect: DOMRect;
+  status: DisplayStatus;
   onClose: () => void;
   onEdit: () => void;
+  onEnable: () => void;
   onPreview: () => void;
+  onDisable: () => void;
   onDelete: () => void;
 }) {
+  // Ended and Rejected are the two archived states — both sit behind the
+  // table's "Show Archived Spotlights" row, and both offer Enable.
+  const archived = status === "ended" || status === "rejected";
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -852,7 +971,9 @@ function SpotlightActionsMenu({
   return (
     <div
       ref={ref}
-      className="u-menu"
+      /* --hug, like every other row menu: three one-word labels have no use for
+         the shared panel's 210px floor. */
+      className="u-menu u-menu--hug"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -860,18 +981,33 @@ function SpotlightActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-        className="u-menu-item"
-        onClick={() => {
-          onEdit();
-          onClose();
-        }}
-      >
-        <span className="u-menu-item-icon">
-          <RowEditIcon />
-        </span>
-        Edit
-      </button>
+      {archived ? (
+        <button
+          className="u-menu-item"
+          onClick={() => {
+            onEnable();
+            onClose();
+          }}
+        >
+          <span className="u-menu-item-icon">
+            <RowEyeIcon />
+          </span>
+          Enable
+        </button>
+      ) : (
+        <button
+          className="u-menu-item"
+          onClick={() => {
+            onEdit();
+            onClose();
+          }}
+        >
+          <span className="u-menu-item-icon">
+            <RowEditIcon />
+          </span>
+          Edit
+        </button>
+      )}
       <button
         className="u-menu-item"
         onClick={() => {
@@ -884,24 +1020,49 @@ function SpotlightActionsMenu({
         </span>
         Preview
       </button>
-      <button
-        className="u-menu-item u-menu-item--danger"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
-      >
-        <span className="u-menu-item-icon">
-          <RowDeleteIcon />
-        </span>
-        Delete
-      </button>
+      {status === "active" ? (
+        <button
+          className="u-menu-item"
+          onClick={() => {
+            onDisable();
+            onClose();
+          }}
+        >
+          <span className="u-menu-item-icon">
+            <RowEyeOffIcon />
+          </span>
+          Disable
+        </button>
+      ) : (
+        <button
+          className="u-menu-item u-menu-item--danger"
+          onClick={() => {
+            onDelete();
+            onClose();
+          }}
+        >
+          <span className="u-menu-item-icon">
+            <RowDeleteIcon />
+          </span>
+          Delete
+        </button>
+      )}
     </div>
   );
 }
 
+/* How much of the stage the card is allowed to take, and how far it may be
+   blown up. The card is authored at the app's 361px phone width; 2x lands it
+   near the 630px the Home-Screen banner runs at, and past that it stops reading
+   as a banner and starts reading as a wall of type. */
+const SP_PREVIEW_FILL = 0.9;
+const SP_PREVIEW_MAX_SCALE = 2;
+
 /* Preview — the same Spotlight card the Create page shows in its preview rail
-   (556:1975), read-only, for a row that already exists. */
+   (556:1975), for a row that already exists, on the shared fullscreen viewer
+   rather than a dialog. No zoom or rotate: the card is scaled to the stage
+   already, and — unlike the ID card that viewer was built for — it is live,
+   with a button that follows the Spotlight's own re-direct. */
 function SpotlightPreviewModal({
   item,
   onClose,
@@ -909,40 +1070,62 @@ function SpotlightPreviewModal({
   item: Spotlight;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const cardRef = useRef<HTMLDivElement>(null);
+  /* The card's unscaled layout size. offsetWidth/Height, not a measured rect —
+     the element carries the fit transform, so a rect would feed the fit its own
+     output. */
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const measure = () => setNatural({ w: el.offsetWidth, h: el.offsetHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const hasCta = Boolean(item.ctaTextEn && item.ctaUrl);
 
   return (
-    <>
-      <div className="sp-overlay-backdrop" onClick={onClose} />
-      <div className="sp-modal sp-preview-modal" role="dialog" aria-modal="true">
-        <div className="sp-modal-header">
-          <div>
-            <div className="sp-panel-eyebrow">PREVIEW</div>
-            <h2 className="sp-modal-title">{item.headingEn}</h2>
-            <p className="sp-modal-sub">
-              How this Spotlight appears on the SkillCat Home Page.
-            </p>
+    <FullscreenViewer
+      controls={false}
+      hint={
+        hasCta
+          ? "Click the button to open its re-direct · Esc or Click Outside to Close"
+          : "Esc or Click Outside to Close"
+      }
+      onClose={onClose}
+    >
+      {({ stage }) => {
+        const fit =
+          natural.w && natural.h && stage.w && stage.h
+            ? Math.max(
+                1,
+                Math.min(
+                  SP_PREVIEW_MAX_SCALE,
+                  (stage.w * SP_PREVIEW_FILL) / natural.w,
+                  (stage.h * SP_PREVIEW_FILL) / natural.h,
+                ),
+              )
+            : 1;
+        return (
+          <div
+            ref={cardRef}
+            className="sp-preview-card"
+            style={{ transform: `scale(${fit})` }}
+          >
+            <SpotlightCardPreview
+              title={item.headingEn}
+              description={item.descriptionEn ?? ""}
+              cta={item.ctaTextEn ?? ""}
+              ctaEnabled={Boolean(item.ctaTextEn)}
+              ctaHref={hasCta ? item.ctaUrl : undefined}
+            />
           </div>
-          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="sp-modal-body">
-          <SpotlightCardPreview
-            title={item.headingEn}
-            description={item.descriptionEn ?? ""}
-            cta={item.ctaTextEn ?? ""}
-            ctaEnabled={Boolean(item.ctaTextEn)}
-          />
-        </div>
-      </div>
-    </>
+        );
+      }}
+    </FullscreenViewer>
   );
 }

@@ -24,7 +24,8 @@ import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filter
 import { NewAwardWizard } from "./NewAwardWizard";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
 import { AwardRecipientsPage } from "./AwardRecipientsPage";
-import { KeyCommandIcon, SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
@@ -257,7 +258,7 @@ export function AwardsPage({ onBackToCerts }: { onBackToCerts?: () => void }) {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
-                  <span className="search-kbd"><span className="kbd-cmd"><KeyCommandIcon /></span><span className="kbd-letter">K</span></span>
+                  <SearchTrailing active={!!query} onClear={() => setQuery("")} />
                 </div>
               </div>
 

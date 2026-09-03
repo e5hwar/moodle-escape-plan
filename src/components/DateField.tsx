@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { CalendarIcon, ChevronDownSquareIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -20,11 +20,9 @@ function parseISO(iso: string): Date | null {
 function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-/* Trigger value — full month name (Figma 552:1175 "October 12, 2026"). */
-function fmtLong(d: Date): string {
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-/* Shortcut parenthetical — short month (Figma 552:1507 "(Oct 7, 2026)"). */
+/* Short month — the trigger's selected value (Figma 900:3576 "Sep 17, 2026",
+   which re-specced it down from the full month name 552:1175 used) and the
+   shortcut parenthetical (552:1507 "(Oct 7, 2026)") both read this way. */
 function fmtShort(d: Date): string {
   return `${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`;
 }
@@ -56,6 +54,9 @@ export function DateField({
 }) {
   const selected = value ? parseISO(value) : null;
   const [viewMonth, setViewMonth] = useState(() => selected ?? new Date());
+  /* Which of the two caption dropdowns is open, if either (Figma 606:1746 —
+     the same month/year control the date-range filter carries). */
+  const [myMenu, setMyMenu] = useState<"month" | "year" | null>(null);
   const hasShortcuts = !!shortcuts?.length;
 
   return (
@@ -73,21 +74,36 @@ export function DateField({
           className={`date-field-trigger${open ? " is-open" : ""}${hasError ? " has-error" : ""}`}
           onClick={() => {
             setViewMonth(selected ?? new Date());
+            setMyMenu(null);
             toggle();
           }}
         >
+          {/* One layout for both states (654:926 / 900:3576): the value takes
+              the width and the calendar glyph is pinned to the right edge.
+              Only the text and its colour change when a date is picked. */}
           <span className="date-field-box">
-            <CalendarIcon />
-            <span className={selected ? "" : "date-field-placeholder"}>
-              {selected ? fmtLong(selected) : placeholder}
+            <span className={`date-field-text${selected ? "" : " date-field-placeholder"}`}>
+              {selected ? fmtShort(selected) : placeholder}
             </span>
+            <CalendarIcon />
+          </span>
+          {/* Sizing ghost, stacked under the visible layer in the same grid
+              cell: the control is always at least as wide as its empty state,
+              so picking a date can never shrink it — Figma draws the two states
+              the same width. Hidden from paint and from the a11y tree, but it
+              still contributes its width. */}
+          <span className="date-field-box date-field-ghost" aria-hidden>
+            <span className="date-field-text date-field-placeholder">{placeholder}</span>
+            <CalendarIcon />
           </span>
         </button>
       )}
     >
       {({ close }) => (
-        <div className="date-picker">
+        <div className="date-picker" onClick={() => setMyMenu(null)}>
           <CalendarBody
+            myMenu={myMenu}
+            setMyMenu={setMyMenu}
             viewMonth={viewMonth}
             setViewMonth={setViewMonth}
             selected={selected}
@@ -138,6 +154,8 @@ function CalendarBody({
   min,
   max,
   divided,
+  myMenu,
+  setMyMenu,
   onPick,
 }: {
   viewMonth: Date;
@@ -147,6 +165,9 @@ function CalendarBody({
   max?: string;
   /** Draw the hairline that separates the calendar from the Shortcuts panel. */
   divided?: boolean;
+  /** The open caption dropdown, if any. */
+  myMenu: "month" | "year" | null;
+  setMyMenu: (m: "month" | "year" | null) => void;
   onPick: (d: Date) => void;
 }) {
   const year = viewMonth.getFullYear();
@@ -170,6 +191,33 @@ function CalendarBody({
   const prevDisabled = !!min && toISO(new Date(year, month, 0)) < min;
   const nextDisabled = !!max && toISO(new Date(year, month + 1, 1)) > max;
 
+  /* The caption dropdowns offer only months and years the bounds leave
+     something to pick in — the same rule the arrows page by, so jumping by
+     caption can never land somewhere the arrows refuse to go. A month
+     qualifies when it overlaps [min, max] at all. */
+  const monthInRange = (y: number, m: number) =>
+    (!min || toISO(new Date(y, m + 1, 0)) >= min) &&
+    (!max || toISO(new Date(y, m, 1)) <= max);
+
+  const minYear = min ? Number(min.slice(0, 4)) : year - 5;
+  const maxYear = max ? Number(max.slice(0, 4)) : year + 5;
+  const years: number[] = [];
+  for (let y = Math.min(minYear, year); y <= Math.max(maxYear, year); y++) years.push(y);
+
+  /* Switching year keeps the month where it can, and slides to the nearest
+     month that still has selectable days when it can't — picking 2027 while
+     the window closes in June must not strand the view on an empty December. */
+  function goToYear(y: number) {
+    let m = month;
+    if (!monthInRange(y, m)) {
+      const fallback = [...Array(12).keys()].find((i) => monthInRange(y, i));
+      if (fallback === undefined) return;
+      m = fallback;
+    }
+    setViewMonth(new Date(y, m, 1));
+    setMyMenu(null);
+  }
+
   return (
     <div className={`date-cal${divided ? " date-cal--divided" : ""}`}>
       <div className="date-cal-head">
@@ -182,7 +230,65 @@ function CalendarBody({
         >
           <ChevronLeftIcon />
         </button>
-        <span className="date-cal-title">{MONTHS[month]} {year}</span>
+        {/* Figma 606:1746 — month and year are each their own dropdown; the
+            arrows still page one month at a time either side of them. Shares
+            the date-range picker's `.drp-my*` control so the two calendars
+            stay one control, not two lookalikes. */}
+        <div className="drp-my">
+          <button
+            type="button"
+            className="drp-my-btn"
+            aria-expanded={myMenu === "month"}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMyMenu(myMenu === "month" ? null : "month");
+            }}
+          >
+            {MONTHS[month]}
+            <ChevronDownSquareIcon />
+          </button>
+          <button
+            type="button"
+            className="drp-my-btn"
+            aria-expanded={myMenu === "year"}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMyMenu(myMenu === "year" ? null : "year");
+            }}
+          >
+            {year}
+            <ChevronDownSquareIcon />
+          </button>
+          {myMenu && (
+            <div className="drp-my-menu" onClick={(e) => e.stopPropagation()}>
+              {myMenu === "month"
+                ? MONTHS.map((name, i) => (
+                    <button
+                      type="button"
+                      key={name}
+                      className={`drp-my-item${i === month ? " is-active" : ""}`}
+                      disabled={!monthInRange(year, i)}
+                      onClick={() => {
+                        setViewMonth(new Date(year, i, 1));
+                        setMyMenu(null);
+                      }}
+                    >
+                      {name}
+                    </button>
+                  ))
+                : years.map((y) => (
+                    <button
+                      type="button"
+                      key={y}
+                      className={`drp-my-item${y === year ? " is-active" : ""}`}
+                      onClick={() => goToYear(y)}
+                    >
+                      {y}
+                    </button>
+                  ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className="date-cal-nav"

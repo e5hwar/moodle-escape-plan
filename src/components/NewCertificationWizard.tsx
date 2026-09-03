@@ -5,7 +5,7 @@ import { RichTextField } from "./RichTextField";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
-import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
@@ -70,6 +70,8 @@ type CertTask = {
   name: string;
   kind: TaskKind;
   duration: string;
+  // Question count, for Quizzes pulled from the library (drives the row meta).
+  questions?: number;
   restriction?: AccessRestriction;
   // Marks this Task as a Final Exam within the Certification. Surfaced as a flag
   // on the Add Tasks tree; a Cert can have more than one flagged Task.
@@ -206,27 +208,22 @@ const QuizTaskIcon = () => (
     </g>
   </svg>
 );
-// Resource (Figma I354:261;7:3796) — document with a folded corner.
+// Resource (Figma I894:3480;7:3815) — document with a paperclip on its corner.
 const ResourceTaskIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
     <g transform="translate(2 0.667)">
-      <path d="M7.33333 0.666667V4.66667H11.3333M7.33333 0.666667H8L11.3333 4V4.66667M7.33333 0.666667H0.666667V14H11.3333V4.66667" />
-      <path d="M8.66667 8H3.33333M8.66667 10.6667H3.33333" strokeLinecap="square" />
+      <path d="M11.3333 6.66667V4L8 0.666667H0.666667V14H6M7.33333 0.666667V4.66667H11.3333" />
+      <path d="M10.6667 12V9.66667C10.6667 9.40145 10.5613 9.1471 10.3738 8.95956C10.1862 8.77202 9.93188 8.66667 9.66667 8.66667C9.40145 8.66667 9.1471 8.77202 8.95956 8.95956C8.77202 9.1471 8.66667 9.40145 8.66667 9.66667V12.6667C8.66667 13.1971 8.87738 13.7058 9.25245 14.0809C9.62753 14.456 10.1362 14.6667 10.6667 14.6667C11.1971 14.6667 11.7058 14.456 12.0809 14.0809C12.456 13.7058 12.6667 13.1971 12.6667 12.6667V10.3333" />
     </g>
   </svg>
 );
-// Hands-On Task (Figma 354:267 "upload") — arrow rising out of a tray.
+// Hands-On Task (Figma I894:3490;7:978) — a camera.
 const HandsOnTaskIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
-    <path d="M11 5.66667L8 2.66667L5 5.66667M8 3.5V10" />
-    <path d="M13.6667 10V13.3333H2.33333V10" />
-  </svg>
-);
-// Plus, 20px slot (Figma I513:2738;7:30) — the "Add Course" / "Add Lesson" /
-// "Add Task" cards. Same glyph as PlusThinIcon, scaled 14 → 20.
-const PlusLgIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.667" strokeLinecap="square">
-    <path d="M10 4.167V15.833M15.833 10H4.167" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333">
+    <g transform="translate(0.667 1.333)">
+      <path d="M9.66667 0.666667H5L4 2.66667H0.666667V12H14V2.66667H10.6667L9.66667 0.666667Z" />
+      <path d="M10 7C10 7.70724 9.71905 8.38552 9.21895 8.88562C8.71885 9.38572 8.04058 9.66667 7.33333 9.66667C6.62609 9.66667 5.94781 9.38572 5.44772 8.88562C4.94762 8.38552 4.66667 7.70724 4.66667 7C4.66667 6.29276 4.94762 5.61448 5.44772 5.11438C5.94781 4.61428 6.62609 4.33333 7.33333 4.33333C8.04058 4.33333 8.71885 4.61428 9.21895 5.11438C9.71905 5.61448 10 6.29276 10 7Z" />
+    </g>
   </svg>
 );
 // Padlock (Figma I356:1945;7:2434) — a filled 7.08×8.75 lock centred in a 10px
@@ -297,7 +294,8 @@ function newLesson(): CertLesson {
 // Convert a Task from the library into the lightweight CertTask the tree stores.
 function libraryTaskToCertTask(t: Task): CertTask {
   const kind = TASK_TYPE_TO_KIND[t.type];
-  return { id: nodeId("t"), name: t.name, kind, duration: DURATION_BY_KIND[kind], finalExam: t.finalExam };
+  const questions = t.quizSections?.reduce((n, s) => n + s.questionCount, 0) || undefined;
+  return { id: nodeId("t"), name: t.name, kind, duration: DURATION_BY_KIND[kind], questions, finalExam: t.finalExam };
 }
 
 // Maps a stored Task's display type onto the wizard's TaskKind (used for badges).
@@ -309,10 +307,10 @@ const TASK_TYPE_TO_KIND: Record<TaskType, TaskKind> = {
 };
 
 const DURATION_BY_KIND: Record<TaskKind, string> = {
-  xapi: "10 min",
-  quiz: "15 min",
-  "hands-on": "30 min",
-  file: "5 min",
+  xapi: "10 mins",
+  quiz: "15 mins",
+  "hands-on": "30 mins",
+  file: "5 mins",
 };
 
 // Existing Certifications don't persist their structure, so when editing we
@@ -347,7 +345,7 @@ function buildSampleStructure(editing: Certification): {
           nameEs: "",
           descEn: "",
           descEs: "",
-          expanded: false,
+          expanded: true,
           hidden: false,
           tasks: lessonTasks,
         },
@@ -401,7 +399,7 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
     nameEs: "",
     descEn: `Imported from ${cert.name} (${cert.id}).`,
     descEs: "",
-    expanded: false,
+    expanded: true,
     hidden: false,
     sourceCertId: cert.id,
     sourceCertName: cert.name,
@@ -414,7 +412,7 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
           nameEs: "",
           descEn: "",
           descEs: "",
-          expanded: false,
+          expanded: true,
           hidden: false,
           tasks: lessonTasks,
         },
@@ -765,6 +763,29 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
     );
   }
 
+  // The step's title + description. Every step but Add Tasks paints it at the
+  // top of the pane — that step runs as a third full-height panel beside the
+  // nav and opens straight on the selected Course (Figma 886:1148).
+  const stepHead = (
+    <>
+      <h1 className="wizard-title">{steps[step].label}</h1>
+      <p className="wizard-desc">
+        {steps[step].desc}
+        {steps[step].tip && (
+          <span
+            className="form-help-info wizard-desc-info"
+            tabIndex={0}
+            role="note"
+            aria-label={steps[step].tip}
+            data-tip={steps[step].tip}
+          >
+            <InfoTipIcon />
+          </span>
+        )}
+      </p>
+    </>
+  );
+
   return (
     <div className="wizard">
       <div className="wizard-body">
@@ -804,24 +825,10 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
             lastStep={lastStep}
             labels={steps.map((s) => s.label)}
           />
-          <div className="wizard-content" ref={gate.scrollRef}>
+          <div className={`wizard-content ${step === 2 ? "wizard-content--flush" : ""}`} ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-              <h1 className="wizard-title">{steps[step].label}</h1>
-              <p className="wizard-desc">
-                {steps[step].desc}
-                {steps[step].tip && (
-                  <span
-                    className="form-help-info wizard-desc-info"
-                    tabIndex={0}
-                    role="note"
-                    aria-label={steps[step].tip}
-                    data-tip={steps[step].tip}
-                  >
-                    <InfoTipIcon />
-                  </span>
-                )}
-              </p>
+              {step !== 2 && stepHead}
 
               {step === 0 && (
                 <DetailsStep data={data} update={update} nameError={missing.has("name")} />
@@ -1324,6 +1331,78 @@ const KIND_GLYPH: Record<TaskKind, () => React.JSX.Element> = {
   file: ResourceTaskIcon,
 };
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// The trailing meta on a Task row: quizzes name their question count,
+// resources read "Reference", everything else shows its duration.
+function taskMeta(t: CertTask): string {
+  if (t.kind === "quiz") return t.questions ? plural(t.questions, "question") : "Quiz";
+  if (t.kind === "file") return "Reference";
+  return t.duration;
+}
+
+// Plus, 20px slot (Figma Icon Library, 886:999 "ALL COURSES" header) — adds a
+// Course from the Courses panel header. PlusThinIcon's glyph scaled 14 → 20.
+const PlusLgIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.667" strokeLinecap="square">
+    <path d="M10 4.167V15.833M15.833 10H4.167" />
+  </svg>
+);
+// Import (Figma Icon Library 7:4992) — a box with an arrow dropping into it.
+// Leads the "Import Courses" card that closes the Courses panel.
+const ImportCoursesIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <g transform="translate(1.333 1.333)">
+      <path d="M4.66667 0.666667H0.666667V12.6667H12.6667V5.33333" />
+      <path d="M12.6667 1.33333H10C9.11595 1.33333 8.2681 1.68452 7.64298 2.30964C7.01786 2.93477 6.66667 3.78261 6.66667 4.66667V8M9 6.66667L6.66667 9L4.33333 6.66667" />
+    </g>
+  </svg>
+);
+
+// The Course kebab's items — shared by the Courses panel row and the Course
+// pane header, so both open the same Edit / Hide / Delete set.
+function CourseMenuItems({
+  course,
+  required,
+  close,
+  onEdit,
+  onToggleHidden,
+  onRemove,
+}: {
+  course: CertCourse;
+  required: boolean;
+  close: () => void;
+  onEdit: () => void;
+  onToggleHidden: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="menu">
+      <button className="menu-item" onClick={() => { onEdit(); close(); }}>
+        <span className="menu-item-icon"><PencilIcon /></span>
+        Edit Course
+      </button>
+      <button className="menu-item" onClick={() => { onToggleHidden(); close(); }}>
+        <span className="menu-item-icon">{course.hidden ? <EyeOffIcon /> : <EyeIcon />}</span>
+        {course.hidden ? "Show Course" : "Hide Course"}
+      </button>
+      <div className="menu-divider" />
+      <button
+        className="menu-item danger"
+        disabled={required}
+        title={required ? "At least one Course is required" : undefined}
+        onClick={() => { onRemove(); close(); }}
+      >
+        <span className="menu-item-icon"><TrashIcon /></span>
+        Delete Course
+      </button>
+      {required && (
+        <div className="menu-note">Every Certification needs at least one Course.</div>
+      )}
+    </div>
+  );
+}
+
 function TasksStep({
   data,
   update,
@@ -1340,6 +1419,11 @@ function TasksStep({
   // Adding a Course or Lesson opens its editor immediately; only one is open at
   // a time, matching the prototype's focused inline-editing model.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The Course shown in the right pane. Falls back to the first Course whenever
+  // the selection goes stale (deleted, or replaced by an import).
+  const [selectedId, setSelectedId] = useState<string | null>(data.courses[0]?.id ?? null);
+  const course = data.courses.find((c) => c.id === selectedId) ?? data.courses[0];
+  const courseIdx = course ? data.courses.indexOf(course) : -1;
   // The item currently being dragged for reorder, or null. Held in a ref so the
   // drop handler reads the live value regardless of when its closure was created
   // (dragstart's state update wouldn't reach a same-tick drop otherwise).
@@ -1427,11 +1511,9 @@ function TasksStep({
 
     if (selected.length === 0) {
       // Plan cleared — drop imported Courses and the auto-generated completion.
-      update({
-        courses: manual.length > 0 ? manual : [newCourse()],
-        importedCerts: [],
-        conditionSets: [],
-      });
+      const courses = manual.length > 0 ? manual : [newCourse()];
+      update({ courses, importedCerts: [], conditionSets: [] });
+      setSelectedId(courses[0].id);
       return;
     }
 
@@ -1451,14 +1533,7 @@ function TasksStep({
         },
       ],
     });
-  }
-
-  function toggleCourse(id: string) {
-    update({
-      courses: data.courses.map((c) =>
-        c.id === id ? { ...c, expanded: !c.expanded } : c,
-      ),
-    });
+    setSelectedId(importedCourses[0]?.id ?? null);
   }
 
   function updateCourse(id: string, patch: Partial<CertCourse>) {
@@ -1471,16 +1546,18 @@ function TasksStep({
     // At least one Course is mandatory — never remove the last one.
     if (data.courses.length <= 1) return;
     if (editingId === id) setEditingId(null);
-    update({ courses: data.courses.filter((c) => c.id !== id) });
+    const idx = data.courses.findIndex((c) => c.id === id);
+    const rest = data.courses.filter((c) => c.id !== id);
+    update({ courses: rest });
+    // Land on the neighbour that took the deleted Course's slot.
+    if (id === course?.id) setSelectedId(rest[Math.min(idx, rest.length - 1)].id);
   }
 
   // Closing a Course editor. A freshly-added Course left completely empty is
   // dropped on cancel (unless it's the only Course); otherwise the editor closes.
-  function cancelCourseEditor(course: CertCourse) {
+  function cancelCourseEditor(c: CertCourse) {
     setEditingId(null);
-    if (data.courses.length > 1 && isEmptyCourse(course)) {
-      update({ courses: data.courses.filter((c) => c.id !== course.id) });
-    }
+    if (data.courses.length > 1 && isEmptyCourse(c)) removeCourse(c.id);
   }
 
   // Apply a transform to one Lesson nested inside a Course.
@@ -1538,7 +1615,7 @@ function TasksStep({
     update({
       courses: data.courses.map((c) =>
         c.id === courseId
-          ? { ...c, expanded: true, children: [...c.children, { kind: "lesson", lesson }] }
+          ? { ...c, children: [...c.children, { kind: "lesson", lesson }] }
           : c,
       ),
     });
@@ -1546,9 +1623,10 @@ function TasksStep({
   }
 
   function addCourse() {
-    const course = newCourse();
-    update({ courses: [...data.courses, course] });
-    setEditingId(course.id);
+    const c = newCourse();
+    update({ courses: [...data.courses, c] });
+    setSelectedId(c.id);
+    setEditingId(c.id);
   }
 
   // Remove a Task wherever it lives — directly under a Course or inside a Lesson.
@@ -1599,97 +1677,122 @@ function TasksStep({
 
   return (
     <>
-      {plan.length === 0 ? (
-        <div className="cert-lp-callout">
-          <span className="cert-lp-callout-icon"><LayersIcon /></span>
-          <div className="cert-lp-callout-text">
-            <div className="cert-lp-callout-title">Create as Learning Plan</div>
-            <div className="cert-lp-callout-desc">
-              Merge existing Certifications to form what is typically a Learning Plan.
-              Each one's Courses, Lessons, and Tasks are imported — Tasks are reused,
-              not duplicated — and completion requires all of them.
-            </div>
+      <div className="ctb">
+        {/* ── Courses panel (Figma 886:999) ── */}
+        <aside className="ctb-side">
+          <div className="ctb-side-head">
+            <span className="ctb-side-title">All Courses · {data.courses.length}</span>
+            <button className="ctb-side-add" aria-label="New course" title="New course" onClick={addCourse}>
+              <PlusLgIcon />
+            </button>
           </div>
-          <button className="cert-lp-import-btn" onClick={() => setImporting(true)}>
-            Import Other Certifications
-          </button>
-        </div>
-      ) : (
-        <div className="cert-lp-banner">
-          <span className="cert-lp-banner-icon"><LayersIcon /></span>
-          <div className="cert-lp-banner-main">
-            <div className="cert-lp-banner-title">
-              Learning Plan
-              <span className="cert-lp-count">
-                {plan.length} Certification{plan.length > 1 ? "s" : ""}
+
+          <ul className="ctb-list">
+            {data.courses.map((c) => {
+              const d = dnd("courses", c.id);
+              return (
+                <li
+                  key={c.id}
+                  className={`ctb-item ${c.id === course?.id ? "selected" : ""} ${c.hidden ? "hidden" : ""}`}
+                  onClick={() => setSelectedId(c.id)}
+                  {...d.target}
+                >
+                  <DragDots className="ctb-item-grip" {...d.handle} />
+                  <span className="ctb-item-name">{c.nameEn || "Untitled Course"}</span>
+                  {c.sourceCertName && (
+                    <span className="ctb-item-flag" title={`Imported from ${c.sourceCertName}`}>
+                      <LayersIcon />
+                    </span>
+                  )}
+                  {c.hidden && (
+                    <span className="ctb-item-flag" title="Hidden from learners"><EyeOffIcon /></span>
+                  )}
+                  <span className="ctb-item-acts" onClick={(e) => e.stopPropagation()}>
+                    <Dropdown
+                      width={232}
+                      align="right"
+                      trigger={({ toggle }) => (
+                        <button
+                          className="ctb-item-kebab"
+                          aria-label="Course actions"
+                          title="Course actions"
+                          onClick={(e) => { e.stopPropagation(); toggle(); }}
+                        >
+                          <RowKebabIcon />
+                        </button>
+                      )}
+                    >
+                      {({ close }) => (
+                        <CourseMenuItems
+                          course={c}
+                          required={data.courses.length <= 1}
+                          close={close}
+                          onEdit={() => { setSelectedId(c.id); setEditingId(c.id); }}
+                          onToggleHidden={() => updateCourse(c.id, { hidden: !c.hidden })}
+                          onRemove={() => removeCourse(c.id)}
+                        />
+                      )}
+                    </Dropdown>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* "Import Courses" — the Learning Plan flow. Once Certifications are
+              imported the card reports the plan and reopens the picker to manage it. */}
+          <button className="ctb-import" onClick={() => setImporting(true)}>
+            <span className="ctb-import-icon"><ImportCoursesIcon /></span>
+            <span className="ctb-import-text">
+              <span className="ctb-import-title">
+                {plan.length > 0 ? `Learning Plan · ${plural(plan.length, "Certification")}` : "Import Courses"}
               </span>
-            </div>
-            <div className="cert-lp-chips">
-              {plan.map((c, i) => (
-                <span key={c.id} className="cert-lp-chip">
-                  <span className="cert-lp-chip-num">{i + 1}</span>
-                  {c.name}
-                </span>
-              ))}
-            </div>
-            <div className="cert-lp-banner-sub">
-              Completion requires every imported Certification. Manage them to add,
-              remove, or reorder.
-            </div>
-          </div>
-          <button className="cert-lp-manage-btn" onClick={() => setImporting(true)}>
-            Manage
+              <span className="ctb-import-sub">
+                {plan.length > 0
+                  ? "Manage the imported Certifications"
+                  : "Copy Courses to build a Learning Plan"}
+              </span>
+            </span>
           </button>
-        </div>
-      )}
+        </aside>
 
-      <div className="cert-tasks-topline">
-        <span className="cert-tasks-topline-hint">
-          Courses hold Tasks — group with Lessons where it helps.
-        </span>
-      </div>
-
-      <div className="cert-courses">
-        {data.courses.map((course, idx) => (
-          <CourseCard
-            key={course.id}
-            course={course}
-            index={idx + 1}
-            required={data.courses.length <= 1}
-            editing={editingId === course.id}
-            editingId={editingId}
-            allTasks={allTasks}
-            dnd={dnd}
-            onUpdateTask={updateTaskById}
-            onRemoveTask={removeTaskById}
-            onToggle={() => toggleCourse(course.id)}
-            onUpdate={(patch) => updateCourse(course.id, patch)}
-            onToggleHidden={() => updateCourse(course.id, { hidden: !course.hidden })}
-            onOpenEditor={() => setEditingId(course.id)}
-            onCancelEditor={() => cancelCourseEditor(course)}
-            onSaveEditor={() => setEditingId(null)}
-            onRemove={() => removeCourse(course.id)}
-            onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
-            onAddExistingTask={() => onAddExisting(course.id, undefined)}
-            onAddLesson={() => addLesson(course.id)}
-            onCreateTaskInLesson={(lessonId, taskType) => onCreateTask(course.id, lessonId, taskType)}
-            onAddExistingTaskInLesson={(lessonId) => onAddExisting(course.id, lessonId)}
-            onUpdateLesson={(lessonId, patch) => updateLesson(course.id, lessonId, patch)}
-            onToggleLesson={(lessonId) => toggleLesson(course.id, lessonId)}
-            onToggleLessonHidden={(lessonId) =>
-              mapLesson(course.id, lessonId, (l) => ({ ...l, hidden: !l.hidden }))
-            }
-            onOpenLessonEditor={(lessonId) => setEditingId(lessonId)}
-            onCancelLessonEditor={(lesson) => cancelLessonEditor(course.id, lesson)}
-            onSaveLessonEditor={() => setEditingId(null)}
-            onRemoveLesson={(lessonId) => removeLesson(course.id, lessonId)}
-          />
-        ))}
-
-        <button className="cert-add-course" onClick={addCourse}>
-          <span className="add-card-icon"><PlusLgIcon /></span>
-          <span className="add-card-label">Add Course</span>
-        </button>
+        {/* ── Selected Course ── */}
+        <section className="ctb-main">
+          {course && (
+            <CoursePane
+              key={course.id}
+              course={course}
+              index={courseIdx + 1}
+              required={data.courses.length <= 1}
+              editing={editingId === course.id}
+              editingId={editingId}
+              allTasks={allTasks}
+              dnd={dnd}
+              onUpdateTask={updateTaskById}
+              onRemoveTask={removeTaskById}
+              onUpdate={(patch) => updateCourse(course.id, patch)}
+              onToggleHidden={() => updateCourse(course.id, { hidden: !course.hidden })}
+              onOpenEditor={() => setEditingId(course.id)}
+              onCancelEditor={() => cancelCourseEditor(course)}
+              onSaveEditor={() => setEditingId(null)}
+              onRemove={() => removeCourse(course.id)}
+              onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
+              onAddExistingTask={() => onAddExisting(course.id, undefined)}
+              onAddLesson={() => addLesson(course.id)}
+              onCreateTaskInLesson={(lessonId, taskType) => onCreateTask(course.id, lessonId, taskType)}
+              onAddExistingTaskInLesson={(lessonId) => onAddExisting(course.id, lessonId)}
+              onUpdateLesson={(lessonId, patch) => updateLesson(course.id, lessonId, patch)}
+              onToggleLesson={(lessonId) => toggleLesson(course.id, lessonId)}
+              onToggleLessonHidden={(lessonId) =>
+                mapLesson(course.id, lessonId, (l) => ({ ...l, hidden: !l.hidden }))
+              }
+              onOpenLessonEditor={(lessonId) => setEditingId(lessonId)}
+              onCancelLessonEditor={(lesson) => cancelLessonEditor(course.id, lesson)}
+              onSaveLessonEditor={() => setEditingId(null)}
+              onRemoveLesson={(lessonId) => removeLesson(course.id, lessonId)}
+            />
+          )}
+        </section>
       </div>
 
       {importing && (
@@ -1793,42 +1896,6 @@ function NodeEditor({
   );
 }
 
-// The ⋮ kebab shared by Course, Lesson and Task rows. Everything the Figma
-// header dropped — hide/show, collapse, delete, and the per-Task Final Exam and
-// Access Restriction toggles — lives behind it.
-function NodeMenu({
-  label,
-  direction = "down",
-  children,
-}: {
-  label: string;
-  direction?: "up" | "down";
-  children: (args: { close: () => void }) => React.ReactNode;
-}) {
-  return (
-    <Dropdown
-      width={232}
-      align="right"
-      direction={direction}
-      trigger={({ toggle }) => (
-        <button
-          className="cert-hdr-btn"
-          aria-label={label}
-          title={label}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggle();
-          }}
-        >
-          <TreeKebabIcon />
-        </button>
-      )}
-    >
-      {children}
-    </Dropdown>
-  );
-}
-
 // A Course's children in render order, with runs of consecutive loose Tasks
 // (Tasks pinned straight to the Course rather than to a Lesson) collected into
 // one 6px-gap list so they don't inherit the 20px gap between Lesson blocks.
@@ -1852,7 +1919,11 @@ function groupChildren(children: CourseChild[]): CourseGroup[] {
   return out;
 }
 
-function CourseCard({
+// The right pane: the selected Course's header (eyebrow · name · description ·
+// counts · kebab), its inline editor when open, then one card per group — a
+// Lesson with its Tasks, or a run of loose Tasks — each closed by a "+ Task"
+// row, and the "+ Task / + Lesson" footer.
+function CoursePane({
   course,
   index,
   required,
@@ -1862,7 +1933,6 @@ function CourseCard({
   dnd,
   onUpdateTask,
   onRemoveTask,
-  onToggle,
   onUpdate,
   onToggleHidden,
   onOpenEditor,
@@ -1891,7 +1961,6 @@ function CourseCard({
   dnd: (scope: string, id: string) => DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
-  onToggle: () => void;
   onUpdate: (patch: Partial<CertCourse>) => void;
   onToggleHidden: () => void;
   onOpenEditor: () => void;
@@ -1912,58 +1981,50 @@ function CourseCard({
   onRemoveLesson: (lessonId: string) => void;
 }) {
   const esMiss = !course.nameEs.trim();
-  const selfDnd = dnd("courses", course.id);
   const childScope = `course:${course.id}`;
   const groups = groupChildren(course.children);
   return (
-    <div className={`cert-course ${course.expanded ? "expanded" : ""} ${course.hidden ? "hidden" : ""}`}>
-      <div className="cert-course-header" onClick={onToggle} {...selfDnd.target}>
-        <DragDots {...selfDnd.handle} />
-        <div className="cert-course-titles">
-          <div className="cert-course-eyebrow">Course {index}</div>
-          <div className="cert-course-name-row">
-            <span className="cert-course-name">{course.nameEn || "Untitled Course"}</span>
+    <div className={`ctb-course ${course.hidden ? "hidden" : ""}`}>
+      {/* Header (Figma 890:3176): COURSE n · name · description, with the
+          32px "More" button at the far right. */}
+      <div className="ctb-course-head">
+        <div className="ctb-course-titles">
+          <div className="ctb-eyebrow">Course {index}</div>
+          <div className="ctb-course-name-row">
+            <h2 className="ctb-course-name">{course.nameEn || "Untitled Course"}</h2>
             {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
             {course.sourceCertName && (
               <span className="cert-source-pill"><LayersIcon />Imported</span>
             )}
             {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
           </div>
-          {course.descEn && <div className="cert-course-desc">{course.descEn}</div>}
+          {course.descEn && <p className="ctb-course-desc">{course.descEn}</p>}
         </div>
-        <div className="cert-hdr-acts" onClick={(e) => e.stopPropagation()}>
-          <NodeMenu label="Course actions">
-            {({ close }) => (
-              <div className="menu">
-                <button className="menu-item" onClick={() => { onOpenEditor(); close(); }}>
-                  <span className="menu-item-icon"><PencilIcon /></span>
-                  Edit Course
-                </button>
-                <button className="menu-item" onClick={() => { onToggle(); close(); }}>
-                  <span className={`menu-item-icon ${course.expanded ? "is-open" : ""}`}><CaretIcon /></span>
-                  {course.expanded ? "Collapse Course" : "Expand Course"}
-                </button>
-                <button className="menu-item" onClick={() => { onToggleHidden(); close(); }}>
-                  <span className="menu-item-icon">{course.hidden ? <EyeOffIcon /> : <EyeIcon />}</span>
-                  {course.hidden ? "Show Course" : "Hide Course"}
-                </button>
-                <div className="menu-divider" />
-                <button
-                  className="menu-item danger"
-                  disabled={required}
-                  title={required ? "At least one Course is required" : undefined}
-                  onClick={() => { onRemove(); close(); }}
-                >
-                  <span className="menu-item-icon"><TrashIcon /></span>
-                  Delete Course
-                </button>
-                {required && (
-                  <div className="menu-note">Every Certification needs at least one Course.</div>
-                )}
-              </div>
-            )}
-          </NodeMenu>
-        </div>
+        <Dropdown
+          width={232}
+          align="right"
+          trigger={({ toggle }) => (
+            <button
+              className="ctb-more"
+              aria-label="Course actions"
+              title="Course actions"
+              onClick={(e) => { e.stopPropagation(); toggle(); }}
+            >
+              <RowKebabIcon />
+            </button>
+          )}
+        >
+          {({ close }) => (
+            <CourseMenuItems
+              course={course}
+              required={required}
+              close={close}
+              onEdit={onOpenEditor}
+              onToggleHidden={onToggleHidden}
+              onRemove={onRemove}
+            />
+          )}
+        </Dropdown>
       </div>
 
       {editing && (
@@ -1981,74 +2042,70 @@ function CourseCard({
         />
       )}
 
-      {course.expanded && (
-        <div className="cert-course-body">
-          {course.children.length === 0 && !editing && (
-            <div className="cert-course-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
-          )}
+      <div className="ctb-groups">
+        {course.children.length === 0 && !editing && (
+          <div className="ctb-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
+        )}
 
-          {groups.map((g) =>
-            g.kind === "tasks" ? (
-              <div className="cert-task-list" key={g.key}>
-                {g.tasks.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    task={t}
-                    allTasks={allTasks}
-                    dndRow={dnd(childScope, t.id)}
-                    onUpdate={(patch) => onUpdateTask(t.id, patch)}
-                    onRemove={() => onRemoveTask(t.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <LessonCard
-                key={g.key}
-                lesson={g.lesson}
-                courseIndex={index}
-                num={g.num}
-                editing={editingId === g.lesson.id}
-                allTasks={allTasks}
-                dnd={dnd}
-                dndRow={dnd(childScope, g.lesson.id)}
-                onUpdateTask={onUpdateTask}
-                onRemoveTask={onRemoveTask}
-                onToggle={() => onToggleLesson(g.lesson.id)}
-                onUpdate={(patch) => onUpdateLesson(g.lesson.id, patch)}
-                onToggleHidden={() => onToggleLessonHidden(g.lesson.id)}
-                onOpenEditor={() => onOpenLessonEditor(g.lesson.id)}
-                onCancelEditor={() => onCancelLessonEditor(g.lesson)}
-                onSaveEditor={onSaveLessonEditor}
-                onRemove={() => onRemoveLesson(g.lesson.id)}
-                onCreateTask={(taskType) => onCreateTaskInLesson(g.lesson.id, taskType)}
-                onAddExistingTask={() => onAddExistingTaskInLesson(g.lesson.id)}
-              />
-            ),
-          )}
-
-          <div className="cert-course-foot">
-            <button className="add-card add-card--tree" onClick={onAddLesson}>
-              <span className="add-card-icon"><PlusLgIcon /></span>
-              <span className="add-card-label">Add Lesson</span>
-            </button>
-            <AddTaskMenu
-              label="Add Task"
-              onCreateNew={onCreateTask}
-              onAddExisting={onAddExistingTask}
+        {groups.map((g) =>
+          g.kind === "tasks" ? (
+            <div className="ctb-card" key={g.key}>
+              {g.tasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  allTasks={allTasks}
+                  dndRow={dnd(childScope, t.id)}
+                  onUpdate={(patch) => onUpdateTask(t.id, patch)}
+                  onRemove={() => onRemoveTask(t.id)}
+                />
+              ))}
+              <AddTaskRow onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
+            </div>
+          ) : (
+            <LessonCard
+              key={g.key}
+              lesson={g.lesson}
+              num={g.num}
+              editing={editingId === g.lesson.id}
+              allTasks={allTasks}
+              dnd={dnd}
+              dndRow={dnd(childScope, g.lesson.id)}
+              onUpdateTask={onUpdateTask}
+              onRemoveTask={onRemoveTask}
+              onToggle={() => onToggleLesson(g.lesson.id)}
+              onUpdate={(patch) => onUpdateLesson(g.lesson.id, patch)}
+              onToggleHidden={() => onToggleLessonHidden(g.lesson.id)}
+              onOpenEditor={() => onOpenLessonEditor(g.lesson.id)}
+              onCancelEditor={() => onCancelLessonEditor(g.lesson)}
+              onSaveEditor={onSaveLessonEditor}
+              onRemove={() => onRemoveLesson(g.lesson.id)}
+              onCreateTask={(taskType) => onCreateTaskInLesson(g.lesson.id, taskType)}
+              onAddExistingTask={() => onAddExistingTaskInLesson(g.lesson.id)}
             />
-          </div>
-        </div>
-      )}
+          ),
+        )}
+      </div>
+
+      {/* Course-level adds: a loose Task, or a new Lesson. Same accent row
+          treatment as a card's "Add Task". */}
+      <div className="ctb-foot">
+        <AddTaskMenu label="Add Task" onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
+        <button className="ctb-foot-btn" onClick={onAddLesson}>
+          <PlusThinIcon />
+          Add Lesson
+        </button>
+      </div>
     </div>
   );
 }
 
-// A Lesson inside a Course. Its header is the Figma "Page Break": a stub rule,
-// the name + description, a mono "· LESSON 1.1 · 3 TASKS" tag, then a hairline
-// running to the card edge. Edit / hide / delete fade in at the far right.
+// A Lesson card (Figma 894:3448 "Quiz Questions"): a tinted header row —
+// grip · LESSON n eyebrow, name, description · kebab — over its Task rows,
+// closed by an "Add Task" row that adds into this Lesson. Collapsing hides
+// everything under the header.
 function LessonCard({
   lesson,
-  courseIndex,
   num,
   editing,
   allTasks,
@@ -2067,7 +2124,6 @@ function LessonCard({
   onAddExistingTask,
 }: {
   lesson: CertLesson;
-  courseIndex: number;
   num: number;
   editing: boolean;
   allTasks: CertTask[];
@@ -2088,24 +2144,20 @@ function LessonCard({
   const esMiss = !lesson.nameEs.trim();
   const taskScope = `lesson:${lesson.id}`;
   return (
-    <div className={`cert-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
-      <div className="cert-lesson-head" onClick={onToggle} {...dndRow.target}>
-        <DragDots className="cert-grip--gutter" {...dndRow.handle} />
-        <span className="cert-lesson-stub" />
-        <div className="cert-lesson-title">
-          <div className="cert-lesson-titles">
-            <div className="cert-lesson-name-row">
-              <span className="cert-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
-              {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
-              {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
-            </div>
-            {lesson.descEn && <div className="cert-lesson-desc">{lesson.descEn}</div>}
+    <div className={`ctb-card ctb-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
+      <div className="ctb-lesson-head" onClick={onToggle} {...dndRow.target}>
+        <DragDots className="ctb-grip" {...dndRow.handle} />
+        <div className="ctb-lesson-titles">
+          <div className="ctb-lesson-eyebrow">Lesson {num}</div>
+          <div className="ctb-lesson-name-row">
+            <span className="ctb-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
+            {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
+            {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
           </div>
-          <span className="cert-lesson-eyebrow">{`· Lesson ${courseIndex}.${num}`}</span>
+          {lesson.descEn && <div className="ctb-lesson-desc">{lesson.descEn}</div>}
         </div>
-        <span className="cert-lesson-rule" />
-        <div className="cert-lesson-acts" onClick={(e) => e.stopPropagation()}>
-          <NodeMenu label="Lesson actions">
+        <span className="ctb-row-acts" onClick={(e) => e.stopPropagation()}>
+          <RowMenu label="Lesson actions">
             {({ close }) => (
               <div className="menu">
                 <button className="menu-item" onClick={() => { onOpenEditor(); close(); }}>
@@ -2127,8 +2179,8 @@ function LessonCard({
                 </button>
               </div>
             )}
-          </NodeMenu>
-        </div>
+          </RowMenu>
+        </span>
       </div>
 
       {editing && (
@@ -2147,7 +2199,7 @@ function LessonCard({
       )}
 
       {lesson.expanded && (
-        <div className="cert-lesson-tasks">
+        <>
           {lesson.tasks.map((t) => (
             <TaskRow
               key={t.id}
@@ -2158,75 +2210,75 @@ function LessonCard({
               onRemove={() => onRemoveTask(t.id)}
             />
           ))}
-          <LessonAddRow
-            tag={`Add to Lesson ${courseIndex}.${num}`}
-            onCreateNew={onCreateTask}
-            onAddExisting={onAddExistingTask}
-          />
-        </div>
+          <AddTaskRow onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
+        </>
       )}
     </div>
   );
 }
 
-// The add row that closes a Lesson's task list (Figma "Course Card" 513:2586).
-// A page break split by two accent actions — "New Task" opens the type picker,
-// "Existing Task" opens the library — with the destination Lesson named in mono
-// at the far right, so the row says where the Task will land.
-function LessonAddRow({
-  tag,
+// The 16px horizontal kebab on Lesson and Task rows (Figma "Kebab Menu -
+// Horizontal"), wrapping the shared Dropdown.
+function RowMenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: (args: { close: () => void }) => React.ReactNode;
+}) {
+  return (
+    <Dropdown
+      width={232}
+      align="right"
+      trigger={({ toggle }) => (
+        <button
+          className="ctb-row-kebab"
+          aria-label={label}
+          title={label}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+        >
+          <RowKebabIcon />
+        </button>
+      )}
+    >
+      {children}
+    </Dropdown>
+  );
+}
+
+// The "Add Task" row that closes every card (Figma 894:3500). Opens the shared
+// picker: pull from the library, or create a new Task of a chosen type.
+function AddTaskRow({
   onCreateNew,
   onAddExisting,
 }: {
-  tag: string;
   onCreateNew: (t: TaskTypeKey) => void;
   onAddExisting: () => void;
 }) {
   return (
-    <div className="cert-addrow">
-      <span className="cert-addrow-rule" />
-      <div className="cert-addrow-acts">
-        <Dropdown
-          width={260}
-          direction="up"
-          trigger={({ toggle }) => (
-            <button className="cert-addrow-btn" onClick={toggle}>
-              <span className="cert-addrow-icon"><PlusThinIcon /></span>
-              New Task
-            </button>
-          )}
-        >
-          {({ close }) => (
-            <div className="menu">
-              {TASK_TYPE_OPTIONS.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  className="menu-item"
-                  onClick={() => { onCreateNew(key); close(); }}
-                >
-                  <span className="menu-item-icon"><Icon /></span>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </Dropdown>
-        <span className="cert-addrow-sep" />
-        <button className="cert-addrow-btn" onClick={onAddExisting}>
-          <span className="cert-addrow-icon"><SearchIcon /></span>
-          Existing Task
+    <Dropdown
+      width={280}
+      trigger={({ toggle }) => (
+        <button className="ctb-add-row" onClick={toggle}>
+          <PlusThinIcon />
+          Add Task
         </button>
-      </div>
-      <span className="cert-addrow-rule" />
-      <span className="cert-addrow-tag">{tag}</span>
-    </div>
+      )}
+    >
+      {({ close }) => (
+        <AddTaskMenuContent
+          onCreateNew={(t) => { onCreateNew(t); close(); }}
+          onAddExisting={() => { onAddExisting(); close(); }}
+        />
+      )}
+    </Dropdown>
   );
 }
 
-// A Task card on the cert tree: type glyph, name, and the mono "·xAPI" suffix.
-// The Final Exam flag and the Access Restriction editor live in the row's kebab.
-// A Task whose restriction is configured wears the gate banner above the card
-// (Figma "Access Restriction Task" 356:1934), which names its prerequisites.
+// A Task row (Figma 894:3459): grip · type glyph · name · state pills · meta ·
+// kebab. The Final Exam flag and the Access Restriction editor live in the
+// kebab. A Task whose restriction is configured carries the gate pill under
+// the row (Figma 894:3496 "Secondary Button"), naming its prerequisites.
 function TaskRow({
   task,
   allTasks,
@@ -2257,12 +2309,44 @@ function TaskRow({
   const verb = mode === "all" && prereqs.length > 1 ? "are completed" : "is completed";
 
   return (
-    <>
-      <div className={`cert-task-wrap ${prereqs.length > 0 ? "has-gate" : ""}`}>
+    <div className={`ctb-task-wrap ${prereqs.length > 0 ? "has-gate" : ""}`}>
+      <div className="ctb-task" {...dndRow.target}>
+        <DragDots className="ctb-grip" {...dndRow.handle} />
+        <span className="ctb-task-glyph" title={KIND_MONO[task.kind]}><Glyph /></span>
+        <span className="ctb-task-name">{task.name}</span>
+        {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
+        {/* Restriction switched on but no prerequisite picked yet — the gate has
+            nothing to name, so flag the half-configured state instead. */}
+        {restricted && prereqs.length === 0 && (
+          <span className="cert-restricted-pill">Restricted</span>
+        )}
+        <span className="ctb-row-meta">{taskMeta(task)}</span>
+        <span className="ctb-row-acts">
+          <RowMenu label="Task actions">
+            {({ close }) => (
+              <div className="menu">
+                <button className="menu-item" onClick={() => { onUpdate({ finalExam: !finalExam }); close(); }}>
+                  <span className={`menu-item-icon ${finalExam ? "is-on" : ""}`}><FlagIcon /></span>
+                  {finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
+                </button>
+                <button className="menu-item" onClick={() => { setOpen((o) => !o); close(); }}>
+                  <span className={`menu-item-icon ${restricted ? "is-on" : ""}`}><LockIcon /></span>
+                  {open ? "Hide access restrictions" : "Access restrictions"}
+                </button>
+                <div className="menu-divider" />
+                <button className="menu-item danger" onClick={() => { onRemove(); close(); }}>
+                  <span className="menu-item-icon"><TrashIcon /></span>
+                  Remove from Course
+                </button>
+              </div>
+            )}
+          </RowMenu>
+        </span>
+      </div>
       {prereqs.length > 0 && (
-        <div className="cert-task-gate">
-          <span className="cert-task-gate-icon"><RestrictionLockIcon /></span>
-          <p className="cert-task-gate-text">
+        <div className="ctb-task-gate">
+          <span className="ctb-task-gate-icon"><RestrictionLockIcon /></span>
+          <p className="ctb-task-gate-text">
             Not Available Unless:{" "}
             {prereqs.map((name, i) => (
               <Fragment key={i}>
@@ -2274,42 +2358,12 @@ function TaskRow({
           </p>
         </div>
       )}
-      <div className="cert-task" {...dndRow.target}>
-        <DragDots className="cert-grip--gutter" {...dndRow.handle} />
-        <span className="cert-task-icon" title={KIND_MONO[task.kind]}><Glyph /></span>
-        <span className="cert-task-name">{task.name}</span>
-        {finalExam &&<span className="cert-final-pill"><FlagIcon />Final Exam</span>}
-        {/* Restriction switched on but no prerequisite picked yet — the gate has
-            nothing to name, so flag the half-configured state instead. */}
-        {restricted && prereqs.length === 0 && (
-          <span className="cert-restricted-pill">Restricted</span>
-        )}
-        <span className="cert-task-spacer" />
-        <NodeMenu label="Task actions">
-          {({ close }) => (
-            <div className="menu">
-              <button className="menu-item" onClick={() => { onUpdate({ finalExam: !finalExam }); close(); }}>
-                <span className={`menu-item-icon ${finalExam ? "is-on" : ""}`}><FlagIcon /></span>
-                {finalExam ? "Unmark as Final Exam" : "Mark as Final Exam"}
-              </button>
-              <button className="menu-item" onClick={() => { setOpen((o) => !o); close(); }}>
-                <span className={`menu-item-icon ${restricted ? "is-on" : ""}`}><LockIcon /></span>
-                {open ? "Hide access restrictions" : "Access restrictions"}
-              </button>
-              <div className="menu-divider" />
-              <button className="menu-item danger" onClick={() => { onRemove(); close(); }}>
-                <span className="menu-item-icon"><TrashIcon /></span>
-                Remove from Course
-              </button>
-            </div>
-          )}
-        </NodeMenu>
-      </div>
-      </div>
       {open && (
-        <AccessRestrictionEditor task={task} allTasks={allTasks} onUpdate={onUpdate} />
+        <div className="ctb-task-restrict">
+          <AccessRestrictionEditor task={task} allTasks={allTasks} onUpdate={onUpdate} />
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -2428,9 +2482,9 @@ function AddTaskMenu({
       width={300}
       direction="up"
       trigger={({ toggle }) => (
-        <button className="add-card add-card--tree" onClick={toggle}>
-          <span className="add-card-icon"><PlusLgIcon /></span>
-          <span className="add-card-label">{label}</span>
+        <button className="ctb-foot-btn" onClick={toggle}>
+          <PlusThinIcon />
+          {label}
         </button>
       )}
     >

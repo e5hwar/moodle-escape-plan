@@ -23,6 +23,10 @@ type Props = {
   /** Editing an existing Spotlight rather than creating one: the fields start
    *  from it and saving writes back over it in place. */
   editing?: Spotlight;
+  /** That edit is an archived Spotlight being switched back on. Same form, but
+   *  its end date has already been and gone, so the field starts empty and a
+   *  fresh one — inside the create window — has to be picked. */
+  enabling?: boolean;
   /** Coming back from the queue-placement step via "Continue Editing": seeds
    *  the fields the same way, but this is still a create. */
   resuming?: Spotlight;
@@ -48,7 +52,7 @@ const END_DATE_SHORTCUTS: DateShortcut[] = [
    image the admin picked. */
 type PickedImage = { name: string; size: number; url: string };
 
-export function CreateSpotlightPage({ onClose, onSubmit, editing, resuming }: Props) {
+export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, resuming }: Props) {
   // Both paths seed the same fields; only `editing` changes the page's copy and
   // what saving does.
   const seed = editing ?? resuming;
@@ -62,7 +66,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, resuming }: Pr
   const [ctaTextEn, setCtaTextEn] = useState(seed?.ctaTextEn ?? "");
   const [ctaTextEs, setCtaTextEs] = useState(seed?.ctaTextEs ?? "");
   const [ctaUrl, setCtaUrl] = useState(seed?.ctaUrl ?? "");
-  const [endDate, setEndDate] = useState(seed?.endDate ?? "");
+  const [endDate, setEndDate] = useState(enabling ? "" : seed?.endDate ?? "");
   const [image, setImage] = useState<PickedImage | null>(null);
 
   // Only revoke on unmount / replacement, never on every render.
@@ -96,8 +100,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, resuming }: Pr
       : []),
     { valid: endDate.trim().length > 0, message: "Set an end date to continue." },
     /* An existing Spotlight's date may already sit outside the create window
-       (it was set months ago); only a CHANGED date has to fall inside it. */
-    { valid: !endDate || endDate === seed?.endDate || (endDate >= MIN_END && endDate <= MAX_END), message: `End date must be between ${formatShortDate(MIN_END)} and ${formatShortDate(MAX_END)}.` },
+       (it was set months ago); only a CHANGED date has to fall inside it. An
+       enable is always a change — the old date is exactly what expired. */
+    { valid: !endDate || (!enabling && endDate === seed?.endDate) || (endDate >= MIN_END && endDate <= MAX_END), message: `End date must be between ${formatShortDate(MIN_END)} and ${formatShortDate(MAX_END)}.` },
   ];
   const valid = checks.every((c) => c.valid);
   const ctaTooltip = checks.find((c) => !c.valid)?.message ?? "";
@@ -125,12 +130,14 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, resuming }: Pr
       <div className="wizard-body">
         <div className="wizard-content spc-form">
           <h1 className="wizard-title">
-            {editing ? "Edit Spotlight" : "Create Spotlight"}
+            {enabling ? "Enable Spotlight" : editing ? "Edit Spotlight" : "Create Spotlight"}
           </h1>
           <p className="wizard-desc">
-            {editing
-              ? "Shown on the SkillCat Home Page. It keeps its place in the queue."
-              : "Shown on the SkillCat Home Page. You'll place it in the queue next."}
+            {enabling
+              ? "Set a new end date to put this Spotlight back on the SkillCat Home Page."
+              : editing
+                ? "Shown on the SkillCat Home Page. It keeps its place in the queue."
+                : "Shown on the SkillCat Home Page. You'll place it in the queue next."}
           </p>
 
           <div className="form-group">
@@ -320,7 +327,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, resuming }: Pr
                step to continue to — it saves straight away. */
             onClick={handleSubmit}
           >
-            {editing ? "Save Changes" : "Continue"}
+            {enabling ? "Enable Spotlight" : editing ? "Save Changes" : "Continue"}
           </button>
         </div>
       </footer>
@@ -338,12 +345,17 @@ export function SpotlightCardPreview({
   description,
   cta,
   ctaEnabled,
+  ctaHref,
   imageUrl,
 }: {
   title: string;
   description: string;
   cta: string;
   ctaEnabled: boolean;
+  /** Makes the button live, pointing at the Spotlight's re-direct. The form's
+   *  own preview leaves this off — there the card is a picture of the result,
+   *  and the URL field's "Test It Out" is what follows the link. */
+  ctaHref?: string;
   imageUrl?: string;
 }) {
   return (
@@ -364,9 +376,19 @@ export function SpotlightCardPreview({
               {description || "Description appears here..."}
             </div>
           </div>
-          {ctaEnabled && (
-            <span className="spc-hero-pill">{cta || "Button Name..."}</span>
-          )}
+          {ctaEnabled &&
+            (ctaHref ? (
+              <a
+                className="spc-hero-pill spc-hero-pill--link"
+                href={ctaHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {cta || "Button Name..."}
+              </a>
+            ) : (
+              <span className="spc-hero-pill">{cta || "Button Name..."}</span>
+            ))}
         </div>
         <span className="spc-hero-close" aria-hidden>
           <CloseXIcon />

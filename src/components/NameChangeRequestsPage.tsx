@@ -5,7 +5,8 @@ import {
 } from "../data/nameChangeRequests";
 import { users } from "../data/users";
 import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
-import { KeyCommandIcon, SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SearchIcon, SortIcon, CheckBoldIcon, RowArrowIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 const PAGE_SIZE = 25;
 
@@ -133,10 +134,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
-                <span className="search-kbd">
-                  <span className="kbd-cmd"><KeyCommandIcon /></span>
-                  <span className="kbd-letter">K</span>
-                </span>
+                <SearchTrailing active={!!query} onClear={() => setQuery("")} />
               </div>
 
               <div className="tasks-scroll">
