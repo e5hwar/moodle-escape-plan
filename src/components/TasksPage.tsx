@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { tasks as allTasks, discoverableLabel, finalExamLabel, isPaid, type Task, type TaskType } from "../data/tasks";
+import { tasks as allTasks, discoverableLabel, subscriptionLabel, isPaid, type Task, type TaskType } from "../data/tasks";
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
@@ -12,8 +12,8 @@ import {
   type ColumnState,
 } from "./Filters";
 import type { OptionalColumn } from "../data/filters";
-import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
-import { SortIcon, PackageIcon, QuizIcon, HandsOnIcon, FileIcon, AddIcon, SmallXIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPaidIcon, MenuAttemptsIcon, MenuProgressIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPaidIcon, MenuAttemptsIcon, MenuProgressIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
@@ -52,7 +52,7 @@ type SortKey =
   | "createdBy"
   | "tradeTag"
   | "partnershipTag"
-  | "userTypeTag"
+  | "audience"
   | "dateCreated"
   | "dateModified";
 type SortDir = "asc" | "desc";
@@ -76,8 +76,8 @@ function compare(a: Task, b: Task, key: SortKey): number {
       return (pickTag(a.tags, TRADE_TAGS) ?? "").localeCompare(pickTag(b.tags, TRADE_TAGS) ?? "");
     case "partnershipTag":
       return (pickTag(a.tags, PARTNERSHIP_TAGS) ?? "").localeCompare(pickTag(b.tags, PARTNERSHIP_TAGS) ?? "");
-    case "userTypeTag":
-      return (pickTag(a.tags, USER_TYPE_TAGS) ?? "").localeCompare(pickTag(b.tags, USER_TYPE_TAGS) ?? "");
+    case "audience":
+      return audienceOf(a.tags).localeCompare(audienceOf(b.tags));
     case "dateCreated":
       return (Date.parse(a.dateCreated ?? "") || 0) - (Date.parse(b.dateCreated ?? "") || 0);
     case "dateModified":
@@ -89,21 +89,19 @@ function compare(a: Task, b: Task, key: SortKey): number {
 /* ─────────── Column registry ───────────
    One entry per optional column: width, cell class, sortability, and how the
    cell renders. The table walks `orderedColumns(...)` so dragging a row in the
-   Edit Columns menu moves the real column. `keepCompact` marks the columns that
-   survive the side-panel's compact mode. */
+   Edit Columns menu moves the real column. */
 type TaskColMeta = {
   key: OptionalColumn;
   label: string;
   className: string;
   width: number;
   sortable?: boolean;
-  keepCompact?: boolean;
   tip?: (t: Task) => string | undefined;
   render: (t: Task) => React.ReactNode;
 };
 
 const TASK_COLS: TaskColMeta[] = [
-  { key: "id", label: "ID", className: "col-id", width: 100, keepCompact: true, render: (t) => t.id },
+  { key: "id", label: "ID", className: "col-id", width: 100, render: (t) => t.id },
   { key: "type", label: "Type", className: "col-type", width: 160, render: (t) => t.type },
   {
     key: "paid", label: "Paid", className: "col-type", width: 110,
@@ -141,8 +139,8 @@ const TASK_COLS: TaskColMeta[] = [
     render: (t) => <TagText tags={pickTags(t.tags, PARTNERSHIP_TAGS)} />,
   },
   {
-    key: "userTypeTag", label: "User Type Tag", className: "col-tags", width: 150, sortable: false,
-    render: (t) => pickTag(t.tags, USER_TYPE_TAGS) ?? "—",
+    key: "audience", label: "Audience", className: "col-tags", width: 150, sortable: false,
+    render: (t) => audienceOf(t.tags),
   },
   { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated ?? "—" },
   { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified ?? "—" },
@@ -188,7 +186,6 @@ export function TasksPage({
   const [taskList, setTaskList] = useState<Task[]>(() => [...(extraTasks ?? []), ...allTasks]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   // Set when someone tries to edit a Task owned by a company — company Tasks are
   // managed from the B2B Dashboard, not here.
   const [blockedEdit, setBlockedEdit] = useState<Task | null>(null);
@@ -208,7 +205,7 @@ export function TasksPage({
     creators: ["SkillCat"],
     certifications: [],
     discoverable: [],
-    finalExam: [],
+    subscription: [],
     types: [],
     visibilities: [],
     tags: [],
@@ -221,7 +218,7 @@ export function TasksPage({
     createdBy: true,
     tradeTag: false,
     partnershipTag: false,
-    userTypeTag: false,
+    audience: false,
     dateCreated: false,
     dateModified: false,
   });
@@ -244,9 +241,9 @@ export function TasksPage({
       if (filters.creators.length && !filters.creators.includes(t.createdBy)) return false;
       if (filters.certifications.length && !t.usedIn.some((c) => filters.certifications.includes(c))) return false;
       if (filters.discoverable.length && !filters.discoverable.includes(discoverableLabel(t))) return false;
-      if (filters.finalExam.length && !filters.finalExam.includes(finalExamLabel(t))) return false;
+      if (filters.subscription.length && !filters.subscription.includes(subscriptionLabel(t))) return false;
       if (filters.types.length && !filters.types.includes(t.type)) return false;
-      if (filters.tags.length && !(t.tags ?? []).some((tag) => filters.tags.includes(tag))) return false;
+      if (filters.tags.length && !matchesTagFilter(t.tags, filters.tags)) return false;
       return true;
     });
   }, [committedQuery, filters, taskList]);
@@ -352,19 +349,14 @@ export function TasksPage({
     },
   }));
 
-  const selected = selectedId ? taskList.find((t) => t.id === selectedId) ?? null : null;
-  const panelOpen = selected !== null;
-
   // Column display order — reordered by dragging in the Edit Columns menu.
-  // The side panel's compact mode drops every column that isn't `keepCompact`.
   const visibleCols = useMemo(
-    () => orderedColumns(TASK_COLS, order, columns).filter((c) => !panelOpen || c.keepCompact),
-    [columns, order, panelOpen],
+    () => orderedColumns(TASK_COLS, order, columns),
+    [columns, order],
   );
 
   // Natural table width so columns scroll horizontally instead of crushing on a
-  // narrow page. Mirrors the visible columns in <ColGroup>; optional columns are
-  // hidden while the side panel is open (compact mode), so they don't count then.
+  // narrow page. Mirrors the visible columns in <ColGroup>.
   const tableMin =
     240 /* name */ + 40 /* actions */ + visibleCols.reduce((sum, c) => sum + c.width, 0);
 
@@ -417,7 +409,6 @@ export function TasksPage({
 
   function confirmDelete(task: Task) {
     setTaskList((prev) => prev.filter((t) => t.id !== task.id));
-    if (selectedId === task.id) setSelectedId(null);
     setDeleteTarget(null);
   }
 
@@ -502,10 +493,7 @@ export function TasksPage({
             columns={LM_COLS}
             rows={landingRows}
             onShowAll={morph.showTable}
-            onRowClick={(row) => {
-              setSelectedId(row.key);
-              morph.showTable();
-            }}
+            onRowClick={() => morph.showTable()}
           />
           <div className="lm-table">
           <div className="co-table-row">
@@ -547,9 +535,7 @@ export function TasksPage({
                       <TableRow
                         key={task.id}
                         task={task}
-                        selected={task.id === selectedId}
                         cols={visibleCols}
-                        onClick={() => setSelectedId(task.id === selectedId ? null : task.id)}
                         onEdit={() => editTask(task)}
                         onToggleVisibility={() => toggleVisibility(task)}
                         onOpenMenu={(rect) => setMenu({ task, rect })}
@@ -581,9 +567,6 @@ export function TasksPage({
               </div>
             </div>
 
-            {selected && (
-              <TaskPanel task={selected} onClose={() => setSelectedId(null)} />
-            )}
           </div>
           </div>
           </div>
@@ -845,19 +828,15 @@ function SortableHeader({
 
 function TableRow({
   task,
-  selected,
   cols,
-  onClick,
   onEdit,
   onToggleVisibility,
   onOpenMenu,
   menuOpen,
 }: {
   task: Task;
-  selected: boolean;
   /** Visible optional columns, already in the user's order. */
   cols: TaskColMeta[];
-  onClick: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
@@ -865,10 +844,7 @@ function TableRow({
   menuOpen: boolean;
 }) {
   return (
-    <tr
-      className={`${selected ? "selected" : ""} ${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
-      onClick={onClick}
-    >
+    <tr className={`${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className="col-name" data-tip={task.name}>
         {task.name}
       </td>
@@ -1023,90 +999,3 @@ function TaskActionsMenu({
   );
 }
 
-/* ─────────────── Task preview side panel ─────────────── */
-
-const TYPE_ICON: Record<TaskType, () => JSX.Element> = {
-  xAPI: PackageIcon,
-  Quiz: QuizIcon,
-  "Hands-On Task": HandsOnIcon,
-  Resource: FileIcon,
-};
-
-function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {
-  const TypeIcon = TYPE_ICON[task.type] ?? FileIcon;
-
-  const detail = (label: string, value: React.ReactNode) => (
-    <div className="co-dt-item">
-      <div className="co-dt-label">{label}</div>
-      <div className="co-dt-value">{value}</div>
-    </div>
-  );
-
-  return (
-    <aside className="co-panel">
-      <div className="co-panel-head">
-        <div className="co-drawer-title-row">
-          <div className="co-drawer-avatar"><TypeIcon /></div>
-          <div className="co-drawer-titles">
-            <div className="co-drawer-name">{task.name}</div>
-            <div className="co-drawer-id">{task.id} · {task.type}</div>
-          </div>
-        </div>
-        <button className="co-drawer-close" aria-label="Close" onClick={onClose}>
-          <SmallXIcon />
-        </button>
-      </div>
-
-      <div className="co-panel-pills">
-        <span className="co-pill-muted">{task.type}</span>
-        <span className="co-pill-muted">{task.visibility ?? "Visible · published"}</span>
-        <span className="co-pill-muted">{task.createdBy}</span>
-      </div>
-
-      <div className="co-panel-body">
-        {task.description && <p className="task-panel-desc">{task.description}</p>}
-
-        <div className="co-detail-grid">
-          {detail("Created by", task.createdBy)}
-          {detail("Type", task.type)}
-          {detail("Date created", task.dateCreated ?? "—")}
-          {detail("Date modified", task.dateModified ?? "—")}
-          {detail("Time to complete", task.timeToComplete ?? "—")}
-          {detail("Submissions", task.submissions ?? "—")}
-        </div>
-
-        <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>
-          Used in
-          <span className="co-section-meta">{task.usedIn.length} certification{task.usedIn.length === 1 ? "" : "s"}</span>
-        </div>
-        {task.usedIn.length === 0 ? (
-          <div className="co-dt-value">Not used in any certification yet.</div>
-        ) : (
-          <div className="task-panel-chips">
-            {task.usedIn.map((c) => (
-              <span className="task-panel-chip" key={c}>{c}</span>
-            ))}
-          </div>
-        )}
-
-        {task.tags && task.tags.length > 0 && (
-          <>
-            <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>Tags</div>
-            <div className="task-panel-chips">
-              {task.tags.map((t) => (
-                <span className="task-panel-chip" key={t}>{t}</span>
-              ))}
-            </div>
-          </>
-        )}
-
-        {task.requirements && (
-          <>
-            <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>Requirements</div>
-            <p className="task-panel-desc">{task.requirements}</p>
-          </>
-        )}
-      </div>
-    </aside>
-  );
-}

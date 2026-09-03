@@ -31,7 +31,11 @@ const ramp = (t: number, a: number, b: number) => clamp((t - a) / (b - a));
 // Smoothstep removes the velocity kink where a phase's linear ramp begins/ends.
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
-export function useLandingMorph(startAtTable = false) {
+/* `wheelGesture: false` keeps the morph but drops the wheel/keyboard gesture
+   that drives it — the page then moves between the two states only through its
+   own affordances (the Question Bank: a category, a committed search, the
+   "Question Bank" crumb). The landing's own scrollers keep the wheel natively. */
+export function useLandingMorph(startAtTable = false, wheelGesture = true) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   // The root element also lives in state so the effects below re-bind when the
   // page's DOM is unmounted and remounted around a full-screen sub-view (the
@@ -117,9 +121,22 @@ export function useLandingMorph(startAtTable = false) {
     function onWheel(e: WheelEvent) {
       // Wheel inside an open overlay (a filter/date-range dropdown, the search
       // suggestion panel) scrolls that surface — it never drives the morph.
-      if ((e.target as Element | null)?.closest?.(".dropdown, .usearch-panel")) return;
+      const at = e.target as Element | null;
+      if (at?.closest?.(".dropdown, .usearch-panel")) return;
       const dy = e.deltaY;
       if (dy === 0) return;
+      // A landing surface that scrolls on its own (`.lm-scroll` — the Question
+      // Bank's category tree) keeps the wheel while it has room to scroll that
+      // way; at its end the wheel falls through to the morph, so "keep
+      // scrolling" past the tree still reaches the table.
+      const own = at?.closest?.(".lm-scroll") as HTMLElement | null;
+      if (own) {
+        const room =
+          dy > 0
+            ? own.scrollTop + own.clientHeight < own.scrollHeight - 1
+            : own.scrollTop > 0;
+        if (room) return;
+      }
       const p = current.current;
       const sc = scroller();
       const atTop = !sc || sc.scrollTop <= 0;
@@ -171,20 +188,30 @@ export function useLandingMorph(startAtTable = false) {
       kick();
     }
 
-    el.addEventListener("wheel", onWheel, { passive: false });
-    document.addEventListener("keydown", onKey);
+    // Gesture off: the easing loop and every programmatic snapTo still run —
+    // only the wheel/keyboard drive is unbound, so the landing's own scrollers
+    // keep the wheel natively and nothing else about the morph changes.
+    if (wheelGesture) {
+      el.addEventListener("wheel", onWheel, { passive: false });
+      document.addEventListener("keydown", onKey);
+    }
     return () => {
       el.removeEventListener("wheel", onWheel);
       document.removeEventListener("keydown", onKey);
       if (raf.current != null) cancelAnimationFrame(raf.current);
     };
-  }, [rootEl, apply, kick]);
+  }, [rootEl, apply, kick, wheelGesture]);
 
   const showTable = useCallback(() => snapTo(1), [snapTo]);
   const showLanding = useCallback(() => {
     rootRef.current
       ?.querySelector<HTMLElement>(".table-xscroll, .tasks-scroll")
       ?.scrollTo({ top: 0, behavior: "smooth" });
+    // A landing surface with its own scroll (`.lm-scroll`) comes back at its
+    // top too, so "Back to search" restores the landing as it first opened.
+    rootRef.current
+      ?.querySelectorAll<HTMLElement>(".lm-scroll")
+      .forEach((el) => el.scrollTo({ top: 0, behavior: "smooth" }));
     snapTo(0);
   }, [snapTo]);
 

@@ -53,6 +53,14 @@ export const PlusThinIcon = () => (
   </svg>
 );
 
+/* Thin minus — the same Icon Library pair as the plus above, at the 12px size
+   the Condition Set header uses (Figma 856:1854). Same 1:12 stroke ratio. */
+export const MinusThinIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M9.5 6H2.5" />
+  </svg>
+);
+
 /* Stepper glyphs (Figma 618:1266 / 618:1270): a 16px box holding a 9.33px
    stroke. The node draws its minus shorter than its plus bar; they are matched
    here so the two ends of one control balance. */
@@ -558,11 +566,20 @@ export const InfoFilledIcon = () => (
   </svg>
 );
 
-/* Tree caret (I314:2057;7:1537) — a 3.21×6.42 chevron with a 1.167 square-cap
-   stroke, centred in a 14px slot. Rotated 90° by `.tree-caret-btn.is-open`. */
+/* Tree caret — the Figma Tree's 16px Icon Library triangle (861:2277 closed,
+   859:2235 open). One glyph: the closed right-pointing triangle, which
+   `.tree-caret-btn.is-open` rotates 90° into the exact open asset. */
 export const TreeCaretIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.167" strokeLinecap="square">
-    <path d="M5.54 3.79L8.75 7l-3.21 3.21" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M10 8L6.33333 4.33333V11.6667L10 8Z" />
+  </svg>
+);
+
+/* Tree add row plus (861:2264) — the thin Icon Library plus at the tree's
+   16px icon size (1.333 stroke, square caps). */
+export const TreeAddIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M8 3.33333V12.6667M12.6667 8H3.33333" />
   </svg>
 );
 

@@ -5,26 +5,26 @@ import {
   type FormResponse,
   type ResponseAnswer,
 } from "../data/feedbackForms";
-import { type Question } from "../data/questionBank";
-import { SearchIcon, SmallXIcon } from "./icons";
-
-type View = "summary" | "individual";
+import { type Question, type QuestionType } from "../data/questionBank";
+import { InfoTipIcon, SearchIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import {
+  DateRangePill,
+  dateRangeIncludes,
+  defaultDateRange,
+  type DateRangeState,
+} from "./DateRangeFilter";
 
 /* A question row = the form's link + the live Question Bank record.
    Inactive links are kept — their responses stay visible to Admins. */
-type QRow = {
+export type QRow = {
   link: FormQuestionLink;
   question: Question;
   label: string; // "Q1", "Q2", … actives numbered first
 };
 
-type Props = {
-  form: FeedbackForm;
-  bank: Question[];
-  responses: FormResponse[];
-};
-
-function buildRows(form: FeedbackForm, bank: Question[]): QRow[] {
+export function buildRows(form: FeedbackForm, bank: Question[]): QRow[] {
   const byId = new Map(bank.map((q) => [q.id, q]));
   const actives = form.questions.filter((l) => l.status === "active");
   const inactives = form.questions.filter((l) => l.status === "inactive");
@@ -36,150 +36,239 @@ function buildRows(form: FeedbackForm, bank: Question[]): QRow[] {
   return rows;
 }
 
-export function FeedbackFormResponses({ form, bank, responses }: Props) {
-  const [view, setView] = useState<View>("summary");
-  const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState<string | null>(null);
+/* Viewer headers name the question's shape in full — the Bank's short codes
+   (T/F, Scale, Short) read as jargon here. */
+const TYPE_LABEL: Record<QuestionType, string> = {
+  "Multiple choice": "Multiple Choice",
+  "Multiple select": "Multiple Select",
+  "True/False": "True/False",
+  "Match the following": "Match the Following",
+  "Short answer": "Short Answer",
+  "File upload": "File Upload",
+  "Linear scale": "Linear Scale",
+};
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}`;
+}
+
+function fmtFull(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+/* "Marcus Okafor" → "M. Okafor" — the compact byline on summary quotes. */
+function shortName(r: FormResponse): string {
+  if (r.anonymized) return "Deleted user";
+  const parts = r.userName.trim().split(/\s+/);
+  if (parts.length < 2) return r.userName;
+  return `${parts[0][0]}. ${parts[parts.length - 1]}`;
+}
+
+/* ─────────────── Plain-text answers (detail pane + CSV export) ─────────────── */
+
+export function answerText(q: Question, a?: ResponseAnswer): string {
+  if (!a) return "";
+  switch (q.type) {
+    case "Multiple choice":
+    case "Multiple select": {
+      const labels: string[] = [];
+      for (const idx of a.optionIndexes ?? []) {
+        const opt = q.options?.[idx];
+        if (opt) labels.push(opt.text);
+      }
+      if (a.otherText) labels.push(`Other: "${a.otherText}"`);
+      return labels.join(" · ");
+    }
+    case "True/False":
+      return a.tfValue === undefined ? "" : a.tfValue ? "True" : "False";
+    case "Match the following":
+      return (a.matches ?? []).map((m) => `${m.left} → ${m.right}`).join(" · ");
+    case "Linear scale":
+      return a.scaleValue === undefined ? "" : String(a.scaleValue);
+    case "Short answer":
+      return a.text ? `"${a.text}"` : "";
+    case "File upload":
+      return (a.files ?? []).map((f) => `${f.name} (${f.sizeMb} MB)`).join(" · ");
+  }
+}
+
+function csvCell(v: string): string {
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+
+function download(name: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportFormCsv(form: FeedbackForm, rows: QRow[], responses: FormResponse[]) {
+  const head = [
+    "Response ID", "Name", "Email", "Trigger", "Submitted",
+    ...rows.map((r) => `${r.label} ${r.question.text}`),
+  ];
+  const lines = [head.map(csvCell).join(",")];
+  for (const r of responses) {
+    lines.push(
+      [
+        r.id,
+        r.userName,
+        r.anonymized ? `de-identified · ${r.userId}` : r.userEmail,
+        r.triggerName,
+        r.submittedAt,
+        ...rows.map((row) =>
+          answerText(row.question, r.answers.find((a) => a.questionId === row.question.id)),
+        ),
+      ].map(csvCell).join(","),
+    );
+  }
+  download(`${form.id}-responses.csv`, lines.join("\n"));
+}
+
+export function exportResponseCsv(rows: QRow[], r: FormResponse) {
+  const lines = [["Question", "Answer"].map(csvCell).join(",")];
+  for (const row of rows) {
+    const a = r.answers.find((x) => x.questionId === row.question.id);
+    if (row.link.status === "inactive" && !a) continue;
+    lines.push([`${row.label} ${row.question.text}`, answerText(row.question, a)].map(csvCell).join(","));
+  }
+  download(`${r.id}.csv`, lines.join("\n"));
+}
+
+/* ═══════════════════════════ Overview tab ═══════════════════════════ */
+
+/* Prompted / dismissed / median aren't in the response records — they live in
+   the (mocked) prompt log. Derived deterministically so the tiles stay stable. */
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+type Props = {
+  form: FeedbackForm;
+  bank: Question[];
+  responses: FormResponse[];
+};
+
+export function FormOverview({ form, bank, responses }: Props) {
   const rows = useMemo(() => buildRows(form, bank), [form, bank]);
+  const [triggerSel, setTriggerSel] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
+  const [showInactive, setShowInactive] = useState(true);
+
+  const triggerOptions = useMemo(
+    () => [...new Set([...form.triggers.map((t) => t.refName), ...responses.map((r) => r.triggerName)])],
+    [form.triggers, responses],
+  );
+
+  /* The trigger filter scopes everything below the stat tiles; the Date Range
+     scopes the question summaries (the chart plots its own window). */
+  const byTrigger = useMemo(
+    () => responses.filter((r) => triggerSel.length === 0 || triggerSel.includes(r.triggerName)),
+    [responses, triggerSel],
+  );
+  const filtered = useMemo(
+    () => byTrigger.filter((r) => dateRangeIncludes(dateRange, r.submittedAt)),
+    [byTrigger, dateRange],
+  );
+
+  const submitted = form.responseCount;
+  const prompted = submitted === 0 ? 0 : Math.round(submitted / 0.261);
+  const stats = [
+    { label: "Prompted", value: prompted.toLocaleString(), note: "Users shown the form" },
+    { label: "Submitted", value: submitted.toLocaleString(), note: "One per user, ever" },
+    {
+      label: "Submission Rate",
+      value: prompted === 0 ? "—" : `${((submitted / prompted) * 100).toFixed(1)}%`,
+      note: "Submitted ÷ prompted",
+    },
+    { label: "Dismissed", value: (prompted - submitted).toLocaleString(), note: "Re-eligible on next trigger" },
+    {
+      label: "Median Time",
+      value: submitted === 0 ? "—" : `${40 + (hashCode(form.id) % 25)}s`,
+      note: "Open to submit",
+    },
+  ];
+
   const activeRows = rows.filter((r) => r.link.status === "active");
   const inactiveRows = rows.filter((r) => r.link.status === "inactive");
 
-  const q = query.trim().toLowerCase();
-  const filtered = useMemo(
-    () =>
-      responses.filter((r) => {
-        if (!q) return true;
-        return (
-          r.userName.toLowerCase().includes(q) ||
-          r.userEmail.toLowerCase().includes(q) ||
-          r.triggerName.toLowerCase().includes(q) ||
-          r.id.toLowerCase().includes(q)
-        );
-      }),
-    [responses, q],
-  );
-
-  const active = activeId
-    ? responses.find((r) => r.id === activeId)
-    : null;
-
-  if (responses.length === 0) {
-    return (
-      <div className="fb-empty fb-empty--centered">
-        <div className="fb-empty-title">No responses yet</div>
-        <div className="fb-empty-sub">
-          Once users complete a trigger, their feedback will show up here.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fb-responses">
-      <div className="fb-responses-head">
-        <div className="fb-responses-stats">
-          <div className="fb-stat">
-            <div className="fb-stat-num">{responses.length}</div>
-            <div className="fb-stat-label">Recent responses shown</div>
+    <div className="fb-viewer">
+      <div className="fb-ov-stats">
+        {stats.map((s) => (
+          <div key={s.label} className="fb-ov-stat">
+            <div className="fb-ov-stat-label">{s.label}</div>
+            <div className="fb-ov-stat-num">{s.value}</div>
+            <div className="fb-ov-stat-note">{s.note}</div>
           </div>
-          <div className="fb-stat">
-            <div className="fb-stat-num">
-              {form.responseCount.toLocaleString()}
-            </div>
-            <div className="fb-stat-label">All-time responses</div>
-          </div>
-          <div className="fb-stat">
-            <div className="fb-stat-num">{activeRows.length}</div>
-            <div className="fb-stat-label">Active questions</div>
-          </div>
-        </div>
-        <div className="fb-responses-tabs">
-          <button
-            className={`sp-tab ${view === "summary" ? "is-active" : ""}`}
-            onClick={() => setView("summary")}
-          >
-            Summary
-          </button>
-          <button
-            className={`sp-tab ${view === "individual" ? "is-active" : ""}`}
-            onClick={() => setView("individual")}
-          >
-            Individual responses
-            <span className="sp-tab-count">{responses.length}</span>
-          </button>
-        </div>
+        ))}
       </div>
 
-      {view === "summary" && (
+      <TrendCard range={dateRange} responses={byTrigger} />
+
+      <div className="fb-q-toolbar">
+        <span className="fb-q-toolbar-title">Questions</span>
+        <Dropdown
+          width={260}
+          trigger={({ open, toggle }) => (
+            <PillTrigger
+              label="Trigger"
+              value={summarize(triggerSel, triggerOptions)}
+              open={open}
+              toggle={toggle}
+              onClear={() => setTriggerSel([])}
+            />
+          )}
+        >
+          {({ close }) => (
+            <SectionedMultiSelect
+              sections={[{ items: triggerOptions }]}
+              value={triggerSel}
+              onApply={(v) => {
+                setTriggerSel(v);
+                close();
+              }}
+            />
+          )}
+        </Dropdown>
+        <DateRangePill value={dateRange} onChange={setDateRange} />
+        <label className="fb-inactive-check">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          Show Inactive Questions
+        </label>
+      </div>
+
+      {responses.length === 0 ? (
+        <div className="fb-empty fb-empty--centered">
+          <div className="fb-empty-title">No responses yet</div>
+          <div className="fb-empty-sub">
+            Once users complete a trigger, their feedback will show up here.
+          </div>
+        </div>
+      ) : (
         <div className="fb-summary">
           {activeRows.map((row) => (
-            <QuestionSummary key={row.question.id} row={row} responses={responses} />
+            <QuestionSummary key={row.question.id} row={row} responses={filtered} />
           ))}
-          {inactiveRows.length > 0 && (
-            <>
-              <div className="fb-inactive-head fb-summary-divider">
-                <h3 className="fb-section-title">Inactive questions</h3>
-                <p className="fb-section-sub">
-                  No longer shown to users. Responses collected while they were
-                  active are preserved indefinitely.
-                </p>
-              </div>
-              {inactiveRows.map((row) => (
-                <QuestionSummary
-                  key={row.question.id}
-                  row={row}
-                  responses={responses}
-                />
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {view === "individual" && (
-        <div className="fb-individual">
-          <div className="search-wrap fb-resp-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search by name, email, trigger, or response ID…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="fb-resp-list">
-            {filtered.length === 0 ? (
-              <div className="fb-empty">No responses match.</div>
-            ) : (
-              filtered.map((r) => (
-                <button
-                  key={r.id}
-                  className="fb-resp-row"
-                  onClick={() => setActiveId(r.id)}
-                >
-                  <div className="fb-resp-user">
-                    <div className={`fb-resp-name ${r.anonymized ? "fb-anon" : ""}`}>
-                      {r.userName}
-                    </div>
-                    <div className="fb-resp-email">
-                      {r.anonymized ? `de-identified · ${r.userId}` : r.userEmail}
-                    </div>
-                  </div>
-                  <div className="fb-resp-trigger">
-                    <span className={`fb-trigger-kind fb-trigger-kind--${r.triggerKind}`}>
-                      {r.triggerKind === "task" ? "Task" : "Cert"}
-                    </span>
-                    <span>{r.triggerName}</span>
-                  </div>
-                  <div className="fb-resp-date">{r.submittedAt}</div>
-                  <div className="fb-resp-id">{r.id}</div>
-                </button>
-              ))
-            )}
-          </div>
+          {showInactive &&
+            inactiveRows.map((row) => (
+              <QuestionSummary key={row.question.id} row={row} responses={filtered} />
+            ))}
         </div>
       )}
 
@@ -188,76 +277,111 @@ export function FeedbackFormResponses({ form, bank, responses }: Props) {
         user deletes their account, their responses are kept for aggregate
         integrity but de-identified.
       </div>
-
-      {active && (
-        <IndividualResponseDrawer
-          response={active}
-          rows={rows}
-          onClose={() => setActiveId(null)}
-        />
-      )}
     </div>
   );
 }
 
-function QuestionSummary({
-  row,
-  responses,
-}: {
-  row: QRow;
-  responses: FormResponse[];
-}) {
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+
+/* Submissions Over Time — weekly buckets across the selected Date Range (wide
+   ranges coarsen so the card never exceeds 12 columns). */
+function TrendCard({ range, responses }: { range: DateRangeState; responses: FormResponse[] }) {
+  const { buckets, label } = useMemo(() => {
+    const s = Date.parse(range.start);
+    const e = Date.parse(range.end) + DAY_MS - 1;
+    const weeks = Math.max(1, Math.ceil((e - s) / WEEK_MS));
+    const size = weeks <= 12 ? WEEK_MS : Math.ceil((e - s) / 12);
+    const n = Math.ceil((e - s) / size);
+    const counts = new Array<number>(n).fill(0);
+    for (const r of responses) {
+      const t = Date.parse(r.submittedAt);
+      if (Number.isNaN(t) || t < s || t > e) continue;
+      counts[Math.min(n - 1, Math.floor((t - s) / size))] += 1;
+    }
+    return {
+      buckets: counts.map((c, i) => ({
+        n: c,
+        from: fmtDay(new Date(s + i * size).toISOString().slice(0, 10)),
+      })),
+      label: `${weeks <= 12 ? "Weekly" : `${Math.round(size / DAY_MS)}-day periods`} · ${fmtDay(range.start)} – ${fmtDay(range.end)}`,
+    };
+  }, [range, responses]);
+
+  const max = Math.max(1, ...buckets.map((b) => b.n));
+  return (
+    <div className="fb-trend">
+      <div className="fb-trend-head">
+        <span className="fb-trend-title">Submissions Over Time</span>
+        <span className="fb-trend-range">{label}</span>
+      </div>
+      <div className="fb-trend-grid" style={{ gridTemplateColumns: `repeat(${buckets.length}, 1fr)` }}>
+        {buckets.map((b, i) => (
+          <div
+            key={i}
+            className="fb-trend-bar"
+            title={`Week of ${b.from}: ${b.n}`}
+            style={{ height: `${Math.max(2, Math.round((b.n / max) * 100))}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Answers joined to the response that carried them — the summaries that show
+   bylines/dates (Short Answer) read the pair, the rest read the answer alone. */
+type Entry = { r: FormResponse; a: ResponseAnswer };
+
+function QuestionSummary({ row, responses }: { row: QRow; responses: FormResponse[] }) {
   const { question, link, label } = row;
-  const answers = responses
-    .map((r) => r.answers.find((a) => a.questionId === question.id))
-    .filter((a): a is ResponseAnswer => !!a);
+  const entries: Entry[] = [];
+  for (const r of responses) {
+    const a = r.answers.find((x) => x.questionId === question.id);
+    if (a) entries.push({ r, a });
+  }
+  const answers = entries.map((e) => e.a);
+  const inactive = link.status === "inactive";
 
   return (
-    <div className={`fb-summary-card ${link.status === "inactive" ? "is-inactive" : ""}`}>
+    <div className={`fb-summary-card ${inactive ? "is-inactive" : ""}`}>
       <div className="fb-summary-card-head">
-        <span className="fb-q-num">{label.slice(1)}</span>
         <div className="fb-summary-q">
+          <div className="fb-summary-q-tags">
+            <span className="fb-q-kicker">{label}</span>
+            <span className="fb-type-pill">{TYPE_LABEL[question.type]}</span>
+            {link.mandatory && !inactive && <span className="fb-req-pill">Mandatory</span>}
+            {inactive && (
+              <span className="fb-inactive-pill">
+                Inactive{link.deactivatedAt ? ` since ${fmtDay(link.deactivatedAt)}` : ""}
+              </span>
+            )}
+          </div>
           <div className="fb-summary-q-text">{question.text}</div>
           <div className="fb-summary-q-meta">
-            <span>{question.type}</span>
+            <span className="fb-mono">{answers.length}</span>
+            <span>answers</span>
             <span className="tasks-subtitle-dot" />
             <span className="fb-link-id">{question.id}</span>
-            {link.mandatory && link.status === "active" && (
-              <>
-                <span className="tasks-subtitle-dot" />
-                <span className="fb-req-pill">Mandatory</span>
-              </>
-            )}
-            {link.status === "inactive" && (
-              <>
-                <span className="tasks-subtitle-dot" />
-                <span className="fb-inactive-pill">Inactive</span>
-              </>
-            )}
             {question.gradingEnabled && (
               <>
                 <span className="tasks-subtitle-dot" />
-                <span title="Grading data is ignored in Feedback Forms">
-                  graded · ignored here
-                </span>
+                <span>Graded in the Question Bank — grading ignored in Feedback Forms</span>
               </>
             )}
-            <span className="tasks-subtitle-dot" />
-            <span>{answers.length} answers</span>
           </div>
         </div>
       </div>
 
       <div className="fb-summary-card-body">
-        {(question.type === "Multiple choice" ||
-          question.type === "Multiple select") && (
+        {(question.type === "Multiple choice" || question.type === "Multiple select") && (
           <ChoiceSummary question={question} answers={answers} />
         )}
         {question.type === "True/False" && <TfSummary answers={answers} />}
         {question.type === "Linear scale" && (
           <ScaleSummary question={question} answers={answers} />
         )}
-        {question.type === "Short answer" && <ShortSummary answers={answers} />}
+        {question.type === "Short answer" && <ShortSummary entries={entries} />}
         {question.type === "File upload" && <FileSummary answers={answers} />}
         {question.type === "Match the following" && (
           <MatchSummary question={question} answers={answers} />
@@ -267,13 +391,7 @@ function QuestionSummary({
   );
 }
 
-function ChoiceSummary({
-  question,
-  answers,
-}: {
-  question: Question;
-  answers: ResponseAnswer[];
-}) {
+function ChoiceSummary({ question, answers }: { question: Question; answers: ResponseAnswer[] }) {
   const options = question.options ?? [];
   const total = answers.length;
   const counts = new Map<number, number>();
@@ -309,9 +427,7 @@ function ChoiceSummary({
           <div className="fb-bar-track">
             <div
               className="fb-bar-fill fb-bar-fill--other"
-              style={{
-                width: `${total === 0 ? 0 : (otherCount / total) * 100}%`,
-              }}
+              style={{ width: `${total === 0 ? 0 : (otherCount / total) * 100}%` }}
             />
           </div>
           <div className="fb-bar-value">
@@ -339,43 +455,31 @@ function ChoiceSummary({
   );
 }
 
+/* True/False — the design's single split bar rather than two stacked rows. */
 function TfSummary({ answers }: { answers: ResponseAnswer[] }) {
-  const total = answers.length;
+  const total = answers.filter((a) => a.tfValue !== undefined).length;
   const trueCount = answers.filter((a) => a.tfValue === true).length;
-  const falseCount = answers.filter((a) => a.tfValue === false).length;
+  const falseCount = total - trueCount;
+  const pct = total === 0 ? 0 : Math.round((trueCount / total) * 100);
   return (
-    <div className="fb-choice-summary">
-      {[
-        { label: "True", c: trueCount },
-        { label: "False", c: falseCount },
-      ].map(({ label, c }) => (
-        <div key={label} className="fb-bar-row">
-          <div className="fb-bar-label">{label}</div>
-          <div className="fb-bar-track">
-            <div
-              className="fb-bar-fill"
-              style={{ width: `${total === 0 ? 0 : (c / total) * 100}%` }}
-            />
-          </div>
-          <div className="fb-bar-value">
-            {c}{" "}
-            <span className="fb-faint">
-              ({total === 0 ? 0 : ((c / total) * 100).toFixed(0)}%)
-            </span>
-          </div>
-        </div>
-      ))}
+    <div className="fb-tf-summary">
+      <div className="fb-tf-bar">
+        <div className="fb-tf-true" style={{ width: `${pct}%` }} />
+        <div className="fb-tf-false" />
+      </div>
+      <div className="fb-tf-legend">
+        <span>
+          True — <span className="fb-mono">{trueCount} ({pct}%)</span>
+        </span>
+        <span className="fb-faint">
+          False — <span className="fb-mono">{falseCount} ({total === 0 ? 0 : 100 - pct}%)</span>
+        </span>
+      </div>
     </div>
   );
 }
 
-function MatchSummary({
-  question,
-  answers,
-}: {
-  question: Question;
-  answers: ResponseAnswer[];
-}) {
+function MatchSummary({ question, answers }: { question: Question; answers: ResponseAnswer[] }) {
   const pairs = (question.pairs ?? []).filter((p) => p.left);
   const total = answers.length;
   return (
@@ -407,13 +511,7 @@ function MatchSummary({
   );
 }
 
-function ScaleSummary({
-  question,
-  answers,
-}: {
-  question: Question;
-  answers: ResponseAnswer[];
-}) {
+function ScaleSummary({ question, answers }: { question: Question; answers: ResponseAnswer[] }) {
   const min = question.scale?.min ?? 1;
   const max = question.scale?.max ?? 5;
   const points: number[] = [];
@@ -448,15 +546,13 @@ function ScaleSummary({
           const h = (c / maxCount) * 100;
           return (
             <div key={p} className="fb-hist-col">
+              <div className="fb-hist-pct">
+                {n === 0 ? 0 : Math.round((c / n) * 100)}%
+              </div>
               <div className="fb-hist-bar-wrap">
-                <div
-                  className="fb-hist-bar"
-                  style={{ height: `${h}%` }}
-                  title={`${c} responses`}
-                />
+                <div className="fb-hist-bar" style={{ height: `${h}%` }} title={`${c} responses`} />
               </div>
               <div className="fb-hist-num">{p}</div>
-              <div className="fb-hist-count">{c}</div>
             </div>
           );
         })}
@@ -471,219 +567,221 @@ function ScaleSummary({
   );
 }
 
-function ShortSummary({ answers }: { answers: ResponseAnswer[] }) {
-  const texts = answers
-    .map((a) => a.text)
-    .filter((t): t is string => !!t && t.length > 0);
+/* Short answers — latest first with date + byline, per the design. */
+function ShortSummary({ entries }: { entries: Entry[] }) {
+  const texts = entries
+    .filter((e) => !!e.a.text)
+    .sort((x, y) => y.r.submittedAt.localeCompare(x.r.submittedAt));
 
   if (texts.length === 0) {
     return <div className="fb-faint">No text responses yet.</div>;
   }
 
+  const head = texts.slice(0, 3);
+  const rest = texts.slice(3);
+  const line = (e: Entry, i: number) => (
+    <div key={i} className="fb-short-row">
+      <span className="fb-short-date">{fmtDay(e.r.submittedAt)}</span>
+      <span className="fb-short-text">"{e.a.text}"</span>
+      <span className="fb-short-who">{shortName(e.r)}</span>
+    </div>
+  );
+
   return (
     <div className="fb-short-summary">
-      <div className="fb-short-summary-meta">
-        {texts.length} response{texts.length === 1 ? "" : "s"} ·{" "}
-        {Math.round(
-          texts.reduce((acc, t) => acc + t.length, 0) / texts.length,
-        )}{" "}
-        chars avg
-      </div>
-      <ul className="fb-short-list">
-        {texts.slice(0, 6).map((t, i) => (
-          <li key={i}>"{t}"</li>
-        ))}
-        {texts.length > 6 && (
-          <li className="fb-faint">+{texts.length - 6} more — open Individual responses to view all</li>
-        )}
-      </ul>
+      <div className="fb-short-summary-meta">Latest first</div>
+      <div className="fb-short-rows">{head.map(line)}</div>
+      {rest.length > 0 && (
+        <details className="fb-other-list">
+          <summary>View All {texts.length} Answers</summary>
+          <div className="fb-short-rows">{rest.map(line)}</div>
+        </details>
+      )}
     </div>
   );
 }
 
+/* File uploads — a chip per file, name + size, like the design. */
 function FileSummary({ answers }: { answers: ResponseAnswer[] }) {
-  const withFiles = answers.filter((a) => (a.files?.length ?? 0) > 0);
-  const totalFiles = withFiles.reduce(
-    (acc, a) => acc + (a.files?.length ?? 0),
-    0,
-  );
+  const files = answers.flatMap((a) => a.files ?? []);
+  const totalMb = Math.round(files.reduce((acc, f) => acc + f.sizeMb, 0));
+  const shown = files.slice(0, 6);
   return (
-    <div className="fb-file-summary">
-      <div className="fb-file-summary-stat">
-        <strong>{withFiles.length}</strong>
-        <span className="fb-faint">
-          {" "}of {answers.length} responses included files
-        </span>
+    <div className="fb-file-summary-v2">
+      <div className="fb-short-summary-meta">
+        <span className="fb-mono">{files.length}</span> uploads ·{" "}
+        <span className="fb-mono">{totalMb} MB</span> total
       </div>
-      <div className="fb-file-summary-stat">
-        <strong>{totalFiles}</strong>
-        <span className="fb-faint"> files uploaded total</span>
-      </div>
-    </div>
-  );
-}
-
-function IndividualResponseDrawer({
-  response,
-  rows,
-  onClose,
-}: {
-  response: FormResponse;
-  rows: QRow[];
-  onClose: () => void;
-}) {
-  return (
-    <div className="fb-drawer-scrim" onClick={onClose}>
-      <aside
-        className="fb-drawer"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="fb-drawer-head">
-          <div>
-            <div className="sp-panel-eyebrow">RESPONSE</div>
-            <h2 className={`sp-panel-title ${response.anonymized ? "fb-anon" : ""}`}>
-              {response.userName}
-            </h2>
-            <p className="sp-panel-sub">
-              {response.anonymized
-                ? `${response.userId} · account deleted — response de-identified`
-                : `${response.userEmail} · ${response.id}`}{" "}
-              · submitted {response.submittedAt}
-            </p>
-            <div className="fb-drawer-tags">
-              <span className={`fb-trigger-kind fb-trigger-kind--${response.triggerKind}`}>
-                {response.triggerKind === "task" ? "Task" : "Cert"}
-              </span>
-              <span>{response.triggerName}</span>
-            </div>
-          </div>
-          <button
-            className="sp-panel-close"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <SmallXIcon />
-          </button>
-        </div>
-        <div className="fb-drawer-body">
-          {rows.map((row) => {
-            const a = response.answers.find(
-              (x) => x.questionId === row.question.id,
-            );
-            // Every question the user answered stays visible — including ones
-            // marked Inactive since. Unanswered inactive questions are noise.
-            if (row.link.status === "inactive" && !a) return null;
-            return (
-              <div key={row.question.id} className="fb-drawer-q">
-                <div className="fb-drawer-q-num">{row.label.slice(1)}</div>
-                <div className="fb-drawer-q-text">
-                  {row.question.text}
-                  {row.link.status === "inactive" && (
-                    <span
-                      className="fb-inactive-pill"
-                      title={
-                        row.link.deactivatedAt
-                          ? `Marked Inactive on ${row.link.deactivatedAt}`
-                          : undefined
-                      }
-                    >
-                      Inactive
-                    </span>
-                  )}
-                  {a && a.questionVersion !== row.question.version && (
-                    <span
-                      className="fb-link-id fb-answered-version"
-                      title="The question was edited after this answer — the response references the version the user actually saw"
-                    >
-                      answered v{a.questionVersion} · now v{row.question.version}
-                    </span>
-                  )}
-                </div>
-                <div className="fb-drawer-q-answer">
-                  <AnswerView question={row.question} answer={a} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function AnswerView({
-  question,
-  answer,
-}: {
-  question: Question;
-  answer?: ResponseAnswer;
-}) {
-  if (!answer) return <span className="fb-faint">— not answered —</span>;
-  switch (question.type) {
-    case "Multiple choice":
-    case "Multiple select": {
-      const labels: string[] = [];
-      for (const idx of answer.optionIndexes ?? []) {
-        const opt = question.options?.[idx];
-        if (opt) labels.push(opt.text);
-      }
-      if (answer.otherText) labels.push(`Other: "${answer.otherText}"`);
-      if (labels.length === 0)
-        return <span className="fb-faint">— not answered —</span>;
-      return (
-        <ul className="fb-drawer-answer-list">
-          {labels.map((l, i) => (
-            <li key={i}>{l}</li>
-          ))}
-        </ul>
-      );
-    }
-    case "True/False":
-      return answer.tfValue === undefined ? (
-        <span className="fb-faint">— not answered —</span>
-      ) : (
-        <span>{answer.tfValue ? "True" : "False"}</span>
-      );
-    case "Match the following":
-      if (!answer.matches || answer.matches.length === 0)
-        return <span className="fb-faint">— not answered —</span>;
-      return (
-        <ul className="fb-drawer-answer-list">
-          {answer.matches.map((m, i) => (
-            <li key={i}>
-              {m.left} <span className="fb-faint">→</span> {m.right}
-            </li>
-          ))}
-        </ul>
-      );
-    case "Linear scale":
-      return (
-        <span className="fb-drawer-scale">
-          {answer.scaleValue ?? "—"}{" "}
-          <span className="fb-faint">
-            (of {question.scale?.min ?? 1}–{question.scale?.max ?? 5})
+      <div className="fb-file-chips">
+        {shown.map((f, i) => (
+          <span key={i} className="fb-file-chip">
+            {f.name} <span className="fb-file-chip-size">{f.sizeMb} MB</span>
           </span>
-        </span>
-      );
-    case "Short answer":
-      return answer.text ? (
-        <span>"{answer.text}"</span>
-      ) : (
-        <span className="fb-faint">— not answered —</span>
-      );
-    case "File upload":
-      if (!answer.files || answer.files.length === 0)
-        return <span className="fb-faint">— no files —</span>;
-      return (
-        <ul className="fb-drawer-answer-list">
-          {answer.files.map((f, i) => (
-            <li key={i}>
-              {f.name} <span className="fb-faint">({f.sizeMb} MB)</span>
-            </li>
-          ))}
-        </ul>
-      );
+        ))}
+        {files.length > shown.length && (
+          <span className="fb-faint">+ {files.length - shown.length} more</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ Responses tab ═══════════════════════════ */
+
+export function FormResponsesSplit({ form, bank, responses }: Props) {
+  const rows = useMemo(() => buildRows(form, bank), [form, bank]);
+  const [query, setQuery] = useState("");
+  const [selId, setSelId] = useState<string | null>(null);
+
+  const sorted = useMemo(
+    () => [...responses].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
+    [responses],
+  );
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(
+    () =>
+      sorted.filter(
+        (r) =>
+          !q ||
+          r.userName.toLowerCase().includes(q) ||
+          r.userEmail.toLowerCase().includes(q) ||
+          r.id.toLowerCase().includes(q),
+      ),
+    [sorted, q],
+  );
+
+  const sel = filtered.find((r) => r.id === selId) ?? filtered[0] ?? null;
+
+  if (responses.length === 0) {
+    return (
+      <div className="fb-empty fb-empty--centered">
+        <div className="fb-empty-title">No responses yet</div>
+        <div className="fb-empty-sub">
+          Once users complete a trigger, their feedback will show up here.
+        </div>
+      </div>
+    );
   }
+
+  return (
+    <div className="fb-split">
+      <div className="fb-split-left">
+        <div className="fb-split-search">
+          <div className="search-wrap fb-resp-search">
+            <span className="search-icon">
+              <SearchIcon />
+            </span>
+            <input
+              className="search-input"
+              placeholder="Search by Name or Email"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="fb-split-counts">
+            <span>
+              <span className="fb-mono">{filtered.length.toLocaleString()}</span> Responses
+            </span>
+            <span>Newest First</span>
+          </div>
+        </div>
+        <div className="fb-split-list">
+          {filtered.length === 0 ? (
+            <div className="fb-empty">No responses match.</div>
+          ) : (
+            filtered.map((r) => (
+              <button
+                key={r.id}
+                className={`fb-resp-item ${sel?.id === r.id ? "is-active" : ""}`}
+                onClick={() => setSelId(r.id)}
+              >
+                <div className="fb-resp-item-top">
+                  <span className={`fb-resp-item-name ${r.anonymized ? "fb-anon" : ""}`}>
+                    {r.anonymized ? `Deleted User · ${r.userId}` : r.userName}
+                  </span>
+                  <span className="fb-resp-item-date">{fmtDay(r.submittedAt)}</span>
+                </div>
+                <div className="fb-resp-item-trigger">{r.triggerName}</div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="fb-split-detail">
+        {sel && (
+          <>
+            <div className="fb-detail-head">
+              <div>
+                <div className={`fb-detail-name ${sel.anonymized ? "fb-anon" : ""}`}>
+                  {sel.anonymized ? `Deleted User · ${sel.userId}` : sel.userName}
+                </div>
+                <div className="fb-detail-meta">
+                  {sel.anonymized ? "De-identified" : sel.userEmail} · Submitted{" "}
+                  {fmtFull(sel.submittedAt)} · Trigger:{" "}
+                  <span className={`fb-trigger-kind fb-trigger-kind--${sel.triggerKind}`}>
+                    {sel.triggerKind === "task" ? "Task" : "Cert"}
+                  </span>{" "}
+                  {sel.triggerName}
+                </div>
+                {sel.anonymized && (
+                  <div className="fb-detail-note">
+                    <InfoTipIcon />
+                    Account deleted — response retained against an anonymized
+                    reference; PII stripped.
+                  </div>
+                )}
+              </div>
+              <button className="btn-secondary" onClick={() => exportResponseCsv(rows, sel)}>
+                Export Response
+              </button>
+            </div>
+
+            <div className="fb-detail-answers">
+              {rows.map((row) => {
+                const a = sel.answers.find((x) => x.questionId === row.question.id);
+                // Every question the user answered stays visible — including
+                // ones marked Inactive since. Unanswered inactive rows are noise.
+                if (row.link.status === "inactive" && !a) return null;
+                const kicker = [
+                  row.label,
+                  TYPE_LABEL[row.question.type],
+                  row.link.mandatory && row.link.status === "active" ? "Mandatory" : null,
+                  row.link.status === "inactive"
+                    ? `Inactive${row.link.deactivatedAt ? ` since ${fmtDay(row.link.deactivatedAt)}` : ""}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <div key={row.question.id} className="fb-detail-qa">
+                    <div className="fb-detail-kicker">
+                      {kicker}
+                      {a && a.questionVersion !== row.question.version && (
+                        <span
+                          className="fb-answered-version"
+                          title="The question was edited after this answer — the response references the version the user actually saw"
+                        >
+                          answered v{a.questionVersion} · now v{row.question.version}
+                        </span>
+                      )}
+                    </div>
+                    <div className="fb-detail-q">{row.question.text}</div>
+                    <div className={`fb-detail-answer ${a ? "" : "is-empty"}`}>
+                      {a ? answerText(row.question, a) || <em>— not answered —</em> : "Not answered"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="fb-split-footnote">
+              A response is a fixed record of the question versions the user was
+              shown. Questions since marked Inactive still appear here.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

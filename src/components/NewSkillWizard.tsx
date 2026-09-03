@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { SmallXIcon, ChevronDownIcon } from "./icons";
 import { MultiSelect } from "./NewCompanyWizard";
 import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
 import { RichTextField } from "./RichTextField";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { tasks, type Task } from "../data/tasks";
 import {
@@ -116,6 +117,13 @@ export function NewSkillWizard(props: Props) {
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
   const gate = useEdgeLineGate({ step, setStep, lastStep });
+  // Rail glyphs: a step passed with its mandatory field still empty shows the
+  // red alert circle rather than a check.
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: STEPS.length,
+    incomplete: (i) => (i === 0 ? !nameValid : !criteriaValid),
+  });
 
   function handleSave() {
     const now = "Apr 28, 2026";
@@ -175,7 +183,7 @@ export function NewSkillWizard(props: Props) {
 
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
-              const status = i === step ? "active" : i < step ? "done" : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.label}
@@ -403,7 +411,10 @@ function TaskPicker({
         </div>
       </div>
 
-      {open && (
+      {/* Portalled to <body>: the wizard's step container is transformed, which
+          would otherwise turn the overlay's position:fixed into a local box and
+          centre the card on the pane instead of the window. */}
+      {open && createPortal(
         <SelectTasksModal
           value={selected}
           onCancel={() => setOpen(false)}
@@ -411,7 +422,8 @@ function TaskPicker({
             onChange(ids);
             setOpen(false);
           }}
-        />
+        />,
+        document.body,
       )}
     </>
   );

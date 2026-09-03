@@ -7,7 +7,7 @@ import {
   type CareerStage,
   type IndustryCert,
 } from "../data/industries";
-import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import { SearchIcon, SmallXIcon, DragHandleIcon, RowArrowIcon, CheckIcon, InfoFilledIcon, TreeCaretIcon, TreeAddIcon, TreeKebabIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
@@ -856,6 +856,7 @@ function IndustryTreeGroup({
             </div>
           )}
           <button className="tree-add" onClick={onAddSub}>
+            <span className="tree-add-icon"><TreeAddIcon /></span>
             Add Sub-Industry
           </button>
         </div>

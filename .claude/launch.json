@@ -6,7 +6,14 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
-      "autoPort": true
+      "url": "http://localhost:5173"
+    },
+    {
+      "name": "dev-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5178", "--strictPort", "--host", "127.0.0.1"],
+      "port": 5178,
+      "url": "http://localhost:5178"
     }
   ]
 }

@@ -142,7 +142,7 @@ function MoreFiltersPill({ filters }: { filters: QueueFilter[] }) {
       trigger={({ open, toggle }) => (
         <PillTrigger
           label="More Filters"
-          value={activeCount > 0 ? `${activeCount} active` : null}
+          value={activeCount > 0 ? `${activeCount} Active` : null}
           open={open}
           toggle={toggle}
           onClear={() => filters.forEach((f) => f.onApply([]))}

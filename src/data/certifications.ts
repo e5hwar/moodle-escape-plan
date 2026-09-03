@@ -29,7 +29,7 @@ export type Certification = {
   // Free-form keywords matched by the Keyword filter (under More filters).
   keywords?: string[];
   // Category tags — at most one Trade, one Partnership, and one User Type tag.
-  // See TRADE_TAGS / PARTNERSHIP_TAGS / USER_TYPE_TAGS in data/filters.
+  // See TRADE_TAGS / PARTNERSHIP_TAGS / AUDIENCE_TAGS in data/filters.
   tags?: string[];
 };
 
@@ -57,16 +57,16 @@ const C = (
 });
 
 export const certifications: Certification[] = [
-  C("C-0421", "EPA 608 Universal", "HVAC", "2.4", 13, "SkillCat", "Mar 04, 2024", "Apr 28, 2026", { careerStage: "Journeyman", type: "Credential", payment: "Non-consumable", keywords: ["epa", "608", "refrigerant", "universal"], tags: ["B2B-Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"] }),
+  C("C-0421", "EPA 608 Universal", "HVAC", "2.4", 13, "SkillCat", "Mar 04, 2024", "Apr 28, 2026", { careerStage: "Journeyman", type: "Credential", payment: "Non-consumable", keywords: ["epa", "608", "refrigerant", "universal"], tags: ["B2B Companies Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"] }),
   C("C-0420", "EPA 608 Type I", "HVAC › Residential", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", resetsProgress: true, keywords: ["epa", "608", "type i", "refrigerant"], tags: ["Residential HVAC"] }),
-  C("C-0419", "EPA 608 Type II", "HVAC › Commercial", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Journeyman", type: "Unit", payment: "Consumable", keywords: ["epa", "608", "type ii", "refrigerant"], tags: ["B2B-Only", "Commercial HVAC"] }),
+  C("C-0419", "EPA 608 Type II", "HVAC › Commercial", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Journeyman", type: "Unit", payment: "Consumable", keywords: ["epa", "608", "type ii", "refrigerant"], tags: ["B2B Companies Only", "Commercial HVAC"] }),
   C("C-0418", "EPA 608 Type III", "HVAC › Commercial", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Master", type: "Unit", keywords: ["epa", "608", "type iii", "refrigerant"], tags: ["Commercial HVAC"] }),
   C("C-0417", "EPA 609", "HVAC", "0.6", 4, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", keywords: ["epa", "609", "mvac", "automotive", "refrigerant"], tags: ["HVACR", "Residential HVAC"] }),
   C("C-0410", "NATE Ready-to-Work", "HVAC", "1.6", 9, "SkillCat", "Feb 12, 2024", "Apr 14, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["nate", "entry", "rtw"], tags: ["NexStar", "HVACR", "Residential HVAC", "Commercial HVAC"] }),
   C("C-0405", "Refrigerant Safety Bundle", "HVAC › Residential", "1.2", 7, "SkillCat", "Jan 20, 2024", "Apr 02, 2026", { careerStage: "Journeyman", type: "Bundle", payment: "Non-consumable", keywords: ["refrigerant", "safety", "bundle"], tags: ["Residential HVAC"] }),
-  C("C-0398", "HVAC Field Skills", "HVAC", "2.0", 11, "SkillCat", "Jan 08, 2024", "Mar 30, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["hvac", "field", "skills"], tags: ["B2B-Only", "Commercial HVAC"] }),
+  C("C-0398", "HVAC Field Skills", "HVAC", "2.0", 11, "SkillCat", "Jan 08, 2024", "Mar 30, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["hvac", "field", "skills"], tags: ["B2B Companies Only", "Commercial HVAC"] }),
   C("C-0376", "Brazing Fundamentals", "Welding", "0.6", 4, "SkillCat", "Nov 14, 2023", "Feb 22, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["brazing", "welding", "fundamentals"] }),
-  C("C-0341", "OSHA 10 — General Industry", "OSHA & Safety › General Industry", "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B-Only"] }),
+  C("C-0341", "OSHA 10 — General Industry", "OSHA & Safety › General Industry", "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B Companies Only"] }),
   C("C-0322", "Plumbing Apprentice Year 1", "Plumbing", "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], tags: ["Residential Plumbing"] }),
   C("C-0298", "Electrical Code Refresher", "Electrical", "1.4", 8, "SkillCat", "May 30, 2023", "Nov 18, 2025", { careerStage: "Journeyman", type: "Unit", visibility: "Hidden", keywords: ["electrical", "code", "nec", "refresher"] }),
   // Blank career stage — exercises the "No Career Stage" filter. Archived too.
@@ -89,8 +89,8 @@ export const CERT_TYPES: CertType[] = ["Unit", "Credential", "Program", "Bundle"
 export const CERT_VISIBILITIES: CertVisibility[] = ["Visible", "Hidden", "Archived"];
 
 // Sentinel option labels for filtering certifications that have no value set.
-export const NO_CAREER_STAGE = "No Career Stage";
-export const NO_TYPE = "No Type";
+export const NO_CAREER_STAGE = "None";
+export const NO_TYPE = "None";
 
 // ─── Table column config (mirrors data/filters.ts for Tasks) ──────────────────
 export type CertColumn =
@@ -104,7 +104,7 @@ export type CertColumn =
   | "createdBy"
   | "tradeTag"
   | "partnershipTag"
-  | "userTypeTag"
+  | "audience"
   | "visibility"
   | "dateCreated"
   | "dateModified";
@@ -120,7 +120,7 @@ export const CERT_OPTIONAL_COLUMNS: { key: CertColumn; label: string }[] = [
   { key: "createdBy", label: "Created By" },
   { key: "tradeTag", label: "Trade Tag" },
   { key: "partnershipTag", label: "Partnership Tag" },
-  { key: "userTypeTag", label: "User Type Tag" },
+  { key: "audience", label: "Audience" },
   { key: "visibility", label: "Visibility" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },

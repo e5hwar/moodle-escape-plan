@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckBoldIcon, SearchIcon, CheckIcon } from "./icons";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { certifications } from "../data/certifications";
 import {
@@ -73,6 +73,13 @@ export function NewAwardWizard(props: Props) {
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
   const gate = useEdgeLineGate({ step, setStep, lastStep });
+  // Rail glyphs: a step passed without its mandatory choice made shows the red
+  // alert circle rather than a check.
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: STEPS.length,
+    incomplete: (i) => (i === 0 ? !certValid : !appearanceValid),
+  });
 
   function handleSave() {
     const now = "Apr 28, 2026";
@@ -107,7 +114,7 @@ export function NewAwardWizard(props: Props) {
 
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
-              const status = i === step ? "active" : i < step ? "done" : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.label}

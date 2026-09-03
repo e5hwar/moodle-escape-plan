@@ -30,12 +30,22 @@ export const VISIBILITIES = ["Hidden", "Visible"];
 
 export const DISCOVERABLE_OPTIONS = ["Discoverable", "Not discoverable"];
 
-export const FINAL_EXAM_OPTIONS = ["Final Exam", "Not Final Exam"];
+/** Options for the "Requires Subscription?" filter — the same wording the Task
+ * wizard's paywall step uses. */
+export const SUBSCRIPTION_OPTIONS = [
+  "No: Can Access on Free Trial",
+  "Yes: Requires Subscription",
+];
 
 // Tags are split into three independent categories. A record carries at most one
-// tag per category. "All-User" is no longer a tag — it's the default (blank) user
-// type, so User Type tags are only "B2B-Only".
-export const USER_TYPE_TAGS = ["B2B-Only"];
+// tag per category. Audience is a two-way split that isn't stored symmetrically:
+// only "B2B Companies Only" is ever tagged, and an untagged record is "All Users".
+export const AUDIENCE_ALL_USERS = "All Users";
+export const AUDIENCE_B2B_ONLY = "B2B Companies Only";
+/** The audience tag records actually carry. */
+export const AUDIENCE_TAGS = [AUDIENCE_B2B_ONLY];
+/** Both sides of the split, as the filter menu offers them. */
+export const AUDIENCE_OPTIONS = [AUDIENCE_ALL_USERS, AUDIENCE_B2B_ONLY];
 export const PARTNERSHIP_TAGS = ["NexStar", "HVACR"];
 export const TRADE_TAGS = [
   "Residential HVAC",
@@ -47,10 +57,31 @@ export const TRADE_TAGS = [
 ];
 
 export const TAG_GROUPS: { label: string; tags: string[] }[] = [
-  { label: "USER TYPE", tags: USER_TYPE_TAGS },
+  { label: "AUDIENCE", tags: AUDIENCE_OPTIONS },
   { label: "PARTNERSHIP", tags: PARTNERSHIP_TAGS },
   { label: "TRADE", tags: TRADE_TAGS },
 ];
+
+/** A record's audience. Untagged means it reaches everyone, so this always
+ * resolves to one of the two AUDIENCE_OPTIONS — there is no "no audience". */
+export function audienceOf(tags: string[] | undefined): string {
+  return (tags ?? []).includes(AUDIENCE_B2B_ONLY)
+    ? AUDIENCE_B2B_ONLY
+    : AUDIENCE_ALL_USERS;
+}
+
+/** Does a record match a selection from the "Audience/B2B Tags" menu? Every
+ * tag is a plain membership test except "All Users", which is the absence of the
+ * B2B tag rather than a tag of its own. */
+export function matchesTagFilter(
+  tags: string[] | undefined,
+  selected: readonly string[],
+): boolean {
+  const list = tags ?? [];
+  return selected.some((t) =>
+    t === AUDIENCE_ALL_USERS ? !list.includes(AUDIENCE_B2B_ONLY) : list.includes(t),
+  );
+}
 
 /** The tag a record carries within a category, or undefined if none. */
 export function pickTag(
@@ -77,7 +108,7 @@ export type OptionalColumn =
   | "createdBy"
   | "tradeTag"
   | "partnershipTag"
-  | "userTypeTag"
+  | "audience"
   | "dateCreated"
   | "dateModified";
 
@@ -89,7 +120,7 @@ export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
   { key: "createdBy", label: "Created By" },
   { key: "tradeTag", label: "Trade Tag" },
   { key: "partnershipTag", label: "Partnership Tag" },
-  { key: "userTypeTag", label: "User Type Tag" },
+  { key: "audience", label: "Audience" },
   { key: "dateCreated", label: "Date Created" },
   { key: "dateModified", label: "Date Modified" },
 ];

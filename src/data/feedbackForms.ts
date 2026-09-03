@@ -45,6 +45,38 @@ export function activeLinks(form: FeedbackForm): FormQuestionLink[] {
   return form.questions.filter((l) => l.status === "active");
 }
 
+export function nextFormId(taken: FeedbackForm[]): string {
+  let id: string;
+  do {
+    const n = Math.floor(Math.random() * 9000) + 1000;
+    id = `FB-${String(n).padStart(4, "0")}`;
+  } while (taken.some((f) => f.id === id));
+  return id;
+}
+
+/* Duplicate links the SAME Question Bank questions, same order, same mandatory
+   flags. The two forms' lists are fully independent after this copy; triggers
+   do NOT carry over per spec. */
+export function makeDuplicateForm(all: FeedbackForm[], src: FeedbackForm): FeedbackForm {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    id: nextFormId(all),
+    name: `${src.name || "Untitled form"} (copy)`,
+    status: "active",
+    questions: activeLinks(src).map((l) => ({
+      questionId: l.questionId,
+      mandatory: l.mandatory,
+      status: "active" as const,
+      linkedAt: today,
+    })),
+    triggers: [],
+    createdBy: "You",
+    createdAt: today,
+    updatedAt: today,
+    responseCount: 0,
+  };
+}
+
 export function inactiveLinks(form: FeedbackForm): FormQuestionLink[] {
   return form.questions.filter((l) => l.status === "inactive");
 }

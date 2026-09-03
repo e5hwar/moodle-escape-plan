@@ -33,8 +33,8 @@ import {
 
 /** Wheel distance (px) that fully charges a step change. Raised 420 → 630
  * (1.5×) on 2026-08-28 — 420 tripped on a single trackpad flick, which made
- * step changes feel accidental. */
-export const GATE_DISTANCE = 630;
+ * step changes feel accidental. Raised again 630 → 960 → 1060 on 2026-09-01. */
+export const GATE_DISTANCE = 1060;
 /** Wheel events are swallowed for this long after a gated step change, so
  * scroll momentum doesn't immediately scroll (or re-gate) the new step. */
 export const GATE_COOLDOWN_MS = 750;
@@ -42,6 +42,18 @@ export const GATE_COOLDOWN_MS = 750;
 const GATE_DECAY_IDLE_MS = 420;
 /** Charge drained per animation frame once decay starts (~0.33s from full). */
 const GATE_DECAY_PER_FRAME = 0.05;
+/** A pause in wheel events longer than this starts a new gesture. The gate
+ * only charges for gestures that BEGAN with the pane already at the edge — a
+ * long mid-page scroll snaps to the edge and stops there; stepping requires a
+ * fresh gesture from the edge. */
+const GATE_GESTURE_GAP_MS = 300;
+/** A wheel delta this many times the previous one (and above the floor below)
+ * also starts a new gesture. Trackpad momentum only ever decays, and its tail
+ * can trickle events for over a second with sub-300ms gaps — without this, a
+ * deliberate new flick during the tail would still count as the old (unarmed)
+ * gesture and be swallowed at the edge. */
+const GATE_SPIKE_RATIO = 3;
+const GATE_SPIKE_MIN_PX = 24;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -58,6 +70,13 @@ type GateState = {
    * backwards lands at the bottom — you re-enter the previous page where you
    * left it, at its end. */
   land: GateLand;
+  /** Timestamp of the last wheel event of any kind, used to segment gestures. */
+  lastAny: number;
+  /** |deltaY| of the last wheel event, for momentum-tail spike detection. */
+  lastMag: number;
+  /** Whether the current gesture began with the pane at the top / bottom. */
+  armedTop: boolean;
+  armedBottom: boolean;
 };
 
 /** Derived from the hook so the ref types track whichever React typings the
@@ -89,7 +108,18 @@ export function useEdgeLineGate({
   const nextCapRef = useRef<HTMLSpanElement>(null);
   const backFillRef = useRef<HTMLSpanElement>(null);
   const nextFillRef = useRef<HTMLSpanElement>(null);
-  const gate = useRef<GateState>({ charge: 0, dir: 0, lastWheel: 0, coolUntil: 0, raf: 0, land: "top" });
+  const gate = useRef<GateState>({
+    charge: 0,
+    dir: 0,
+    lastWheel: 0,
+    coolUntil: 0,
+    raf: 0,
+    land: "top",
+    lastAny: 0,
+    lastMag: 0,
+    armedTop: false,
+    armedBottom: false,
+  });
 
   // Charge is painted straight onto the DOM every wheel tick — routing it
   // through state would re-render the whole step per tick.
@@ -184,11 +214,28 @@ export function useEdgeLineGate({
 
     const onWheel = (e: WheelEvent) => {
       const now = performance.now();
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1);
+      const mag = Math.abs(dy);
+      // A gesture ends on a pause OR on a delta spike — a deliberate flick
+      // thrown while the previous gesture's momentum tail is still trickling.
+      const newGesture =
+        now - g.lastAny > GATE_GESTURE_GAP_MS ||
+        (mag >= GATE_SPIKE_MIN_PX && mag > g.lastMag * GATE_SPIKE_RATIO);
+      g.lastAny = now;
+      g.lastMag = mag;
       if (now < g.coolUntil) {
         e.preventDefault();
         return;
       }
-      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1);
+      const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;
+      const atTop = sc.scrollTop <= 1;
+      // The gate arms per gesture: only a gesture that STARTS at an edge may
+      // charge it. A long scroll from mid-page snaps at the edge and its
+      // remaining momentum is swallowed — a fresh gesture is needed to step.
+      if (newGesture) {
+        g.armedTop = atTop;
+        g.armedBottom = atBottom;
+      }
       // A nested scroller (question picker, dropdown list) that can still
       // consume the wheel owns it — never charge the gate over its content.
       for (let el = e.target as HTMLElement | null; el && el !== sc; el = el.parentElement) {
@@ -201,14 +248,12 @@ export function useEdgeLineGate({
             return;
         }
       }
-      const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;
-      const atTop = sc.scrollTop <= 1;
       if (dy > 0 && atBottom && stepRef.current < lastStep && canGoNextRef.current) {
         e.preventDefault();
-        addCharge(1, dy, now);
+        if (g.armedBottom) addCharge(1, dy, now);
       } else if (dy < 0 && atTop && stepRef.current > 0) {
         e.preventDefault();
-        addCharge(-1, -dy, now);
+        if (g.armedTop) addCharge(-1, -dy, now);
       } else if (g.charge > 0) {
         g.charge = 0;
         g.dir = 0;

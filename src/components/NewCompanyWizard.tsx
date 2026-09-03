@@ -17,7 +17,7 @@ import { CheckIcon, CheckBoldIcon, SmallXIcon, ChevronDownIcon, ArrowUpRightIcon
 import { Stepper } from "./Stepper";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 
@@ -271,6 +271,8 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       : []),
   ];
 
+  /** Mandatory fields still empty on each step — feeds the rail's error glyph. */
+  const stepChecks = [step0Checks, step1Checks, step2Checks];
   const companyValid = step0Checks.every((c) => c.valid);
   const adminValid = step1Checks.every((c) => c.valid);
   const detailsValid = companyValid && adminValid;
@@ -336,9 +338,18 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     lastStep,
     // detailsOnly / subscriptionOnly lock the wizard to a single step.
     enabled: !detailsOnly && !subscriptionOnly,
-    // Same guards the footer's Continue button enforces — the wheel must not
-    // walk past a step the button won't leave.
-    canGoNext: step === 0 ? companyValid : step === 1 ? adminValid : true,
+    // No canGoNext guard. The wheel walks the steps freely, the way it does in
+    // every other wizard — refusing to scroll off an incomplete step read as
+    // the gesture being broken here. A step left with a mandatory field still
+    // empty is reported by the rail instead (stepStatuses below).
+  });
+
+  // Rail glyphs: a step passed (or skipped from the rail) with a mandatory
+  // field still empty shows the red alert circle instead of a check.
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: STEPS.length,
+    incomplete: (i) => (stepChecks[i] ?? []).some((c) => !c.valid),
   });
 
   // Details-only edit: patch the identity & segmentation fields onto the
@@ -479,7 +490,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
 
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
-              const status = i === step ? "active" : i < step ? "done" : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.id}
@@ -584,21 +595,23 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           )}
           {step === 0 ? (
             <button
-              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
+              className={`btn-publish${detailsOnly ? "" : " wizard-gate-btn"}${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!companyValid}
               data-tooltip={ctaTooltip}
               onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
             >
-              {detailsOnly ? "Save changes" : "Continue"}
+              {!detailsOnly && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
+              <span className="wizard-gate-btn-inner">{detailsOnly ? "Save changes" : "Continue"}</span>
             </button>
           ) : step === 1 ? (
             <button
-              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
+              className={`btn-publish wizard-gate-btn${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!adminValid}
               data-tooltip={ctaTooltip}
               onClick={() => gate.goStep(2)}
             >
-              Continue
+              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+              <span className="wizard-gate-btn-inner">Continue</span>
             </button>
           ) : (
             <button

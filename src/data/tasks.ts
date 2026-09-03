@@ -66,7 +66,7 @@ export const tasks: Task[] = [
   T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", [], "Feb 21, 2024", "Apr 03, 2026"),
   T("T-1654", "HVAC Field Tools Walkthrough", "xAPI",
     ["HVAC Field Skills", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
-    "SkillCat", ["B2B-Only", "HVACR"], "Jan 28, 2024", "Apr 19, 2026"),
+    "SkillCat", ["B2B Companies Only", "HVACR"], "Jan 28, 2024", "Apr 19, 2026"),
   T("T-1543", "Refrigerant Pressure Chart", "Resource", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC", "Commercial HVAC"], "Dec 02, 2023", "Mar 14, 2026"),
   T("T-1432", "Field Visit – Brazing Joints", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat",
     ["HVAC", "Field", "Brazing"], "Apr 09, 2024", "Apr 28, 2026", {
@@ -84,7 +84,7 @@ export const tasks: Task[] = [
   T("T-1385", "MVAC Refrigerant Handling", "xAPI", ["EPA 609"], "SkillCat", ["HVACR"], "Mar 08, 2024", "Apr 10, 2026"),
   T("T-1362", "Automotive A/C Recovery", "Hands-On Task", ["EPA 609"], "SkillCat", ["HVAC", "Refrigerant"], "Mar 12, 2024", "Apr 16, 2026"),
   T("T-1344", "R-1234yf Safety Overview", "Resource", ["EPA 609"], "SkillCat", [], "Mar 15, 2024", "Mar 30, 2026"),
-  T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B-Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
+  T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B Companies Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
   T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", [], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
   T("T-1198", "EPA 608 Universal Final Exam", "Quiz", ["EPA 608 Universal"], "SkillCat", [], "Feb 14, 2024", "Apr 20, 2026", {
     finalExam: true,
@@ -149,7 +149,7 @@ export const tasks: Task[] = [
   T("T-1055", "Igniter Replacement Module", "Hands-On Task", ["HVAC Field Skills"], "NexTech", [], "Feb 18, 2026", "Apr 25, 2026"),
   T("T-1021", "Hotel Maintenance Walkthrough", "xAPI", [], "Premium HVAC Services", [], "Feb 26, 2026", "Apr 27, 2026"),
   T("T-0988", "MultiFamily Service Visit", "Hands-On Task", [], "ARS", [], "Mar 06, 2026", "Apr 29, 2026"),
-  T("T-0955", "NexStar Onboarding", "Resource", [], "SkillCat", ["B2B-Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
+  T("T-0955", "NexStar Onboarding", "Resource", [], "SkillCat", ["B2B Companies Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
 
   /* The Hands-On Tasks that the review queue draws submissions from — every
      task name in data/reviewSubmissions.ts resolves to one of these, so the
@@ -185,6 +185,21 @@ for (const t of tasks) {
   }
 }
 
+// Tasks available during the Free Trial. Everything else needs a paid
+// subscription, so `requiresSubscription` defaults to true.
+const FREE_TRIAL = new Set([
+  "T-2350", // Refrigerant Charging Procedure
+  "T-2165", // Thermostat Wiring Lab
+  "T-1855", // Recovery Machine Setup
+  "T-1689", // Superheat Reading Lab
+  "T-1555", // PVC Pipe Joining Lab
+  "T-1488", // Sweat Soldering Lab
+  "T-0234", // Government ID Upload
+]);
+for (const t of tasks) {
+  if (t.requiresSubscription === undefined) t.requiresSubscription = !FREE_TRIAL.has(t.id);
+}
+
 // Tasks that act as a prerequisite gate in an Access Restriction chain. These
 // can't be hidden until they're removed from the chain.
 const ACCESS_RESTRICTED = new Set([
@@ -200,9 +215,11 @@ export function discoverableLabel(task: Task): string {
   return task.discoverable ? "Discoverable" : "Not discoverable";
 }
 
-/** Label used by the Final Exam filter. */
-export function finalExamLabel(task: Task): string {
-  return task.finalExam ? "Final Exam" : "Not Final Exam";
+/** Label used by the "Requires Subscription?" filter. */
+export function subscriptionLabel(task: Task): string {
+  return task.requiresSubscription
+    ? "Yes: Requires Subscription"
+    : "No: Can Access on Free Trial";
 }
 
 /** Only Quiz Tasks can have a paywall defined. */

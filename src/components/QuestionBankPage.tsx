@@ -8,6 +8,7 @@ import {
   shortQuestionType,
   QUESTION_TYPE_MENU,
   QUESTION_TYPE_OPTIONS,
+  TRADE_GROUPS,
   supportsGrading,
   versionHistory,
   type Category,
@@ -17,27 +18,31 @@ import {
   type QuestionVersion,
   type Subcategory,
 } from "../data/questionBank";
-import { ArrowRightUpIcon, ChevronLeftIcon, InfoFilledIcon, MenuArchiveIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeCaretIcon, TreeKebabIcon, UploadTrayIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import { ChevronLeftIcon, MenuArchiveIcon, MenuHistoryIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
+import { SelectField } from "./SelectField";
 import { QuestionSearch } from "./QuestionSearch";
-import { QuestionPreviewPanel } from "./QuestionPreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
 
 const PAGE_SIZE = 50;
 
-/* The seed set is a sample of a much larger bank, so the rail's "All Questions"
-   total is the mock figure the category counts add up to — not `questions.length`. */
-const TOTAL_QUESTIONS = "1,089";
+/* The seed set is a sample of a much larger bank, so the landing's counts are
+   the mock figures the category counts add up to — not `questions.length`. */
+const formatCount = (n: number) => n.toLocaleString("en-US");
 
 /* Every filter is a multi-select, matching the Tasks row: empty = unapplied,
    values inside one filter OR together, filters AND together. */
 const TYPE_OPTIONS = QUESTION_TYPE_OPTIONS;
 const STATUS_OPTIONS: QuestionStatus[] = ["Active", "Archived", "Draft"];
 const GRADING_OPTIONS = ["Graded", "Ungraded"];
+
+/* The landing's RECENT row opens with these until the user has opened three
+   categories of their own (mock — a real bank would remember per user). */
+const SEED_RECENT = ["Commercial Refrigeration", "Plumbing Code > Water Heaters", "Solar"];
+const RECENT_MAX = 3;
 
 /* Toggleable table columns (Question is fixed). */
 type QbColumn =
@@ -59,17 +64,6 @@ const QB_FIXED_COLUMNS = [{ label: "Question" }];
 // Roomy, because the question text is allowed to run to a second line.
 const QUESTION_COL_WIDTH = 420;
 const ACTIONS_COL_WIDTH = 40;
-
-/* Landing-morph columns — mirror the table's default visible columns (key,
-   label, width) so the p=1 hand-off to the real table lines up. Type is the
-   landing's visible meta column (the design's right-aligned "category · type"
-   label, which crossfades into the plain Type cell as the table forms), so its
-   LANDING track is wider than the 170px column it becomes. */
-const QB_LM_COLS: LandingCol[] = [
-  { key: "type", label: "Type", width: 170, fixed: true, landingWidth: 280 },
-  { key: "version", label: "Version", width: 84 },
-  { key: "status", label: "Status", width: 108 },
-];
 
 function isGraded(q: Question): boolean {
   return q.gradingEnabled && supportsGrading(q.type);
@@ -112,20 +106,102 @@ function compareQuestions(a: Question, b: Question, key: QSortKey): number {
   }
 }
 
-// 3-dot menu target — a category or a subcategory row.
+// Row-menu target — a category or a subcategory row.
 type CatTarget =
   | { kind: "category"; categoryKey: string }
   | { kind: "subcategory"; categoryKey: string; subKey: string };
 
 type CatMenuState = { target: CatTarget; x: number; y: number } | null;
 
+/* Rename and delete run in the shared modal; CREATING is lighter — a new
+   subcategory is typed inline in the tree and a new category in the rail's
+   popover. */
 type CatModalState =
   | { kind: "none" }
-  | { kind: "new-category" }
-  | { kind: "new-sub"; categoryKey: string }
   | { kind: "edit-category"; categoryKey: string }
   | { kind: "edit-sub"; categoryKey: string; subKey: string }
   | { kind: "delete"; target: CatTarget };
+
+/* The landing's alphabetical index — categories A→Z under letter headings.
+   Sparse neighbouring letters share a heading ("G · H") so no group is a
+   lone row; a heading takes the next letter while both sides are short. */
+type IndexGroup = { letter: string; items: Category[] };
+const INDEX_MERGE_BELOW = 3;
+
+function buildIndex(cats: Category[]): IndexGroup[] {
+  const byLetter = new Map<string, Category[]>();
+  [...cats]
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .forEach((c) => {
+      const letter = (c.label.match(/[a-z0-9]/i)?.[0] ?? "#").toUpperCase();
+      byLetter.set(letter, [...(byLetter.get(letter) ?? []), c]);
+    });
+  const groups: IndexGroup[] = [];
+  for (const [letter, items] of byLetter) {
+    const last = groups[groups.length - 1];
+    if (last && last.items.length < INDEX_MERGE_BELOW && items.length < INDEX_MERGE_BELOW) {
+      last.letter += ` · ${letter}`;
+      last.items.push(...items);
+    } else {
+      groups.push({ letter, items: [...items] });
+    }
+  }
+  return groups;
+}
+
+/* The index runs in INDEX_COLUMNS columns, read down-then-across. A group is
+   never split or carried over, so each column is a contiguous run of whole
+   groups — which makes balancing them a linear-partition problem: split the
+   A→Z run into EXACTLY this many parts, minimising the tallest one.
+
+   Exactly, not "at most": the cheaper "at most k" packing hits the same
+   optimal height while leaving trailing columns empty, which is the thing to
+   avoid. Height is counted in rows — a group costs its categories plus one for
+   its letter head. (CSS `column-count` can do neither: it balances by measured
+   height, so it both empties the last column and, once the list outgrows the
+   viewport, breaks a group across a column boundary.) */
+const INDEX_COLUMNS = 4;
+
+function balanceIndex(groups: IndexGroup[], columns = INDEX_COLUMNS): IndexGroup[][] {
+  const n = groups.length;
+  // Fewer groups than columns — one each, and the remainder stay empty.
+  if (n <= columns) {
+    return Array.from({ length: columns }, (_, i) => (i < n ? [groups[i]] : []));
+  }
+
+  const cost = groups.map((g) => g.items.length + 1);
+  const prefix = [0];
+  cost.forEach((c) => prefix.push(prefix[prefix.length - 1] + c));
+
+  // best[j][i] — the smallest achievable tallest column when the first i
+  // groups fill exactly j columns; cut[j][i] is the split that got there.
+  const best = Array.from({ length: columns + 1 }, () => new Array(n + 1).fill(Infinity));
+  const cut = Array.from({ length: columns + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= n; i++) best[1][i] = prefix[i];
+  for (let j = 2; j <= columns; j++) {
+    for (let i = j; i <= n; i++) {
+      for (let m = j - 1; m < i; m++) {
+        const height = Math.max(best[j - 1][m], prefix[i] - prefix[m]);
+        // `<=` keeps the LAST equally-good cut, which fills earlier columns
+        // first — a full first column tapering off reads better than the
+        // reverse, and every tie here is the same tallest column either way.
+        if (height <= best[j][i]) {
+          best[j][i] = height;
+          cut[j][i] = m;
+        }
+      }
+    }
+  }
+
+  const cols: IndexGroup[][] = [];
+  let end = n;
+  for (let j = columns; j >= 1; j--) {
+    const start = j === 1 ? 0 : cut[j][end];
+    cols.unshift(groups.slice(start, end));
+    end = start;
+  }
+  return cols;
+}
 
 /* ─────────── Column registry ───────────
    One entry per optional column — replaced the parallel label/width lists and
@@ -183,33 +259,49 @@ const QB_COLS: QbColMeta[] = [
 export function QuestionBankPage({
   onNewQuestion,
   onEditQuestion,
+  onBackToTasks,
   initialQuestions,
 }: {
   onNewQuestion?: (categoryPath?: string[], type?: QuestionType) => void;
   onEditQuestion?: (question: Question) => void;
+  onBackToTasks?: () => void;
   initialQuestions?: Question[];
 } = {}) {
   const [categories, setCategories] = useState<Category[]>(seedCategories);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions ?? allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
   // Row-click preview panel + version-history modal
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [historyQ, setHistoryQ] = useState<Question | null>(null);
   // Category is a multi-select like every other filter — labels from
   // flattenCategories ("EPA 608" / "EPA 608 > Universal"). Empty = all questions.
   const [selection, setSelection] = useState<string[]>([]);
+  // Every category opens collapsed in the rail's tree.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // The rail's own tree filter (table state only) — the landing finds
+  // categories through the main search or its A→Z index instead.
   const [categorySearch, setCategorySearch] = useState("");
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "epa-608": true,
-  });
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  // The row kebab's Edit / Delete menu and the modals it opens.
   const [catMenu, setCatMenu] = useState<CatMenuState>(null);
   const [catModal, setCatModal] = useState<CatModalState>({ kind: "none" });
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  // The last few categories opened — the landing's RECENT row.
+  const [recent, setRecent] = useState<string[]>(SEED_RECENT);
+  // Category being given a new subcategory inline in the tree (its key).
+  const [inlineSub, setInlineSub] = useState<string | null>(null);
+  // The New Category popover, anchored to the rail's "+ New category" row.
+  const [catPop, setCatPop] = useState<DOMRect | null>(null);
+  const newCatBtnRef = useRef<HTMLButtonElement | null>(null);
+  // …and the landing's own "+ Add category", in the index header.
+  const landingCatBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  // Landing morph — the right pane opens as the search-first landing (Claude
-  // Design "Question Bank Landing 1C") and the wheel morphs it into the table.
-  // The rail is outside the morph root, so it stays put in both states.
-  const morph = useLandingMorph();
+  // Landing morph — the page opens as the category browser (the hero search
+  // over the A→Z category index) and a category click, a committed search, or
+  // the "Question Bank" crumb moves it to and from the questions table.
+  // NO wheel gesture here (unlike the other landing pages): the index is a
+  // long scrolling list people read, so the wheel has to stay its own — an
+  // accidental morph at the foot of the A→Z would be a page they didn't ask for.
+  const morph = useLandingMorph(false, false);
+  const atTable = morph.atTable;
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -221,11 +313,13 @@ export function QuestionBankPage({
   const [quizFilter, setQuizFilter] = useState<string[]>([]);
   const [formFilter, setFormFilter] = useState<string[]>([]);
 
+  // Question (fixed) + Type is the whole default row — everything else is
+  // opt-in from Edit Columns.
   const [columns, setColumns] = useState<QbColumnState>({
     id: false,
     type: true,
-    version: true,
-    status: true,
+    version: false,
+    status: false,
     category: false,
     grading: false,
     quizzes: false,
@@ -259,16 +353,17 @@ export function QuestionBankPage({
     [questions],
   );
 
+  // The open category is navigation, not a filter — it has no pill, so it is
+  // neither counted here nor dropped by Clear Filters (that would silently
+  // throw you back to All Questions). Leaving a category is the rail's job.
   const appliedCount =
     typeFilter.length +
     statusFilter.length +
     gradingFilter.length +
     quizFilter.length +
-    formFilter.length +
-    selection.length;
+    formFilter.length;
 
   function clearFilters() {
-    setSelection([]);
     setTypeFilter([]);
     setStatusFilter([]);
     setGradingFilter([]);
@@ -327,31 +422,6 @@ export function QuestionBankPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  // Landing list — same order as the table, so the morph reads as "the list
-  // becomes the table". The Type cell carries the design's landing meta
-  // ("{category} · {type}", right-aligned) via the shared swap crossfade.
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((q) => {
-    const leaf = q.categoryPath[q.categoryPath.length - 1] ?? "—";
-    const type = longQuestionType(q.type);
-    return {
-      key: q.id,
-      name: q.text,
-      dim: q.status === "Archived",
-      cells: {
-        type: (
-          <span className="prl-swap">
-            <span className="prl-swap-real">{type}</span>
-            <span className="prl-swap-wait">
-              {leaf} · {type}
-            </span>
-          </span>
-        ),
-        version: `v${q.version}`,
-        status: q.status,
-      },
-    };
-  });
-
   function toggleSort(key: QSortKey) {
     setSort((prev) =>
       prev.key === key
@@ -359,24 +429,6 @@ export function QuestionBankPage({
         : { key, dir: "asc" },
     );
   }
-
-  // The question shown in the preview panel — read from state so archive
-  // toggles and restores update the open panel live.
-  const selected = selectedId
-    ? questions.find((q) => q.id === selectedId) ?? null
-    : null;
-
-  // Esc closes the preview panel (unless a modal or menu is handling it).
-  useEffect(() => {
-    if (!selectedId) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      if (historyQ || rowMenu || catMenu) return;
-      setSelectedId(null);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [selectedId, historyQ, rowMenu, catMenu]);
 
   // Restoring an old version creates a NEW version with its content.
   function restoreVersion(id: string) {
@@ -393,18 +445,31 @@ export function QuestionBankPage({
     onNewQuestion?.(path, type);
   }
 
-  // "C" opens the right pane's Create Question menu; "A" opens the rail's Add
-  // Category (both badges are shown on their buttons). Neither fires while a
-  // category modal is open, and A is parked while the type menu is up.
-  useCreateShortcut(
-    () => setCreateMenuOpen(true),
-    catModal.kind === "none" && !createMenuOpen,
-  );
-  useCreateShortcut(
-    () => setCatModal({ kind: "new-category" }),
-    catModal.kind === "none" && !createMenuOpen,
-    "a",
-  );
+  // Opening a category (from the index, the RECENT row, or the rail's tree)
+  // scopes the table to it and moves it to the front of RECENT.
+  function openCategory(label: string) {
+    setSelection([label]);
+    setRecent((prev) => [label, ...prev.filter((l) => l !== label)].slice(0, RECENT_MAX));
+    morph.showTable();
+  }
+
+  // The New Category popover hangs off whichever add-category affordance is on
+  // screen: the rail's "Add Category" foot row at the table, the index header's
+  // "+ Add category" at the landing.
+  function openNewCategory() {
+    const btn = (atTable ? newCatBtnRef : landingCatBtnRef).current;
+    if (btn) setCatPop(btn.getBoundingClientRect());
+  }
+
+  // Nothing else is mid-flight: no menu, popover, inline editor or modal.
+  const idle =
+    catModal.kind === "none" && !catMenu && !createMenuOpen && catPop == null && inlineSub == null;
+
+  // "C" opens the Create Question menu on every screen; "A" opens the New
+  // Category popover on both — the landing's index header carries the same
+  // affordance the rail does.
+  useCreateShortcut(() => setCreateMenuOpen(true), idle);
+  useCreateShortcut(openNewCategory, idle, "a");
 
   // With the menu open, each question type's letter (M, T, F, …) launches that
   // editor — the same pattern as the Tasks page's Create Task menu.
@@ -455,11 +520,11 @@ export function QuestionBankPage({
   }
 
   // ─── Category mutations ───────────────────────────────────────────────────
-  function addCategory(label: string) {
+  function addCategory(label: string, tradeGroup?: string) {
     // New categories append to the bottom of the list.
     setCategories((prev) => [
       ...prev,
-      { key: `cat-${Date.now()}`, label, count: 0, subcategories: [] },
+      { key: `cat-${Date.now()}`, label, count: 0, subcategories: [], tradeGroup },
     ]);
   }
 
@@ -503,9 +568,9 @@ export function QuestionBankPage({
     setCategories((prev) => prev.filter((c) => c.key !== key));
     const label = categories.find((c) => c.key === key)?.label;
     if (label) {
-      setSelection((prev) =>
-        prev.filter((l) => l !== label && !l.startsWith(`${label} > `)),
-      );
+      const drop = (l: string) => l !== label && !l.startsWith(`${label} > `);
+      setSelection((prev) => prev.filter(drop));
+      setRecent((prev) => prev.filter(drop));
     }
   }
 
@@ -524,6 +589,7 @@ export function QuestionBankPage({
     if (cat && sub) {
       const label = `${cat.label} > ${sub.label}`;
       setSelection((prev) => prev.filter((l) => l !== label));
+      setRecent((prev) => prev.filter((l) => l !== label));
     }
   }
 
@@ -538,13 +604,36 @@ export function QuestionBankPage({
     setCatMenu({ target, x: r.right, y: r.bottom });
   }
 
-  // Rail totals + the search-filtered tree. A category matches on its own label
-  // or on any of its subcategories', so a subcategory hit keeps its parent row.
+  // Rows are role="button" divs (the kebab inside them is the real button),
+  // so Enter / Space act like the click.
+  const rowKeys = (act: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      act();
+    }
+  };
+
+  // Landing totals — the eyebrow over the hero search.
   const totalSubcategories = useMemo(
     () => categories.reduce((n, c) => n + (c.subcategories?.length ?? 0), 0),
     [categories],
   );
+  const totalQuestions = useMemo(
+    () => categories.reduce((n, c) => n + c.count, 0),
+    [categories],
+  );
 
+  // The landing's A→Z index of every category.
+  const indexColumns = useMemo(() => balanceIndex(buildIndex(categories)), [categories]);
+
+  // RECENT shows only labels that still exist (a rename drops its entry).
+  const recentShown = useMemo(
+    () => recent.filter((l) => categoryLabels.includes(l)),
+    [recent, categoryLabels],
+  );
+
+  // The rail's search-filtered tree. A category matches on its own label or on
+  // any of its subcategories', so a subcategory hit keeps its parent row.
   const filteredCategories = useMemo(() => {
     const q = categorySearch.trim().toLowerCase();
     if (!q) return categories;
@@ -555,9 +644,145 @@ export function QuestionBankPage({
     );
   }, [categories, categorySearch]);
 
-  // CSV dropzone — purely visual + accept handler
+  // ─── Working-screen header: the open category (or subcategory) is the page
+  // title — the landing keeps the page's own name and the eyebrow carries the
+  // totals. The status breakdown that used to sit under the title is gone; the
+  // pagination row already carries the count. ───
+  const single = selection.length === 1 ? selection[0] : null;
+  const scopeName = single ? single.split(" > ").pop()! : null;
+  const pageTitle = !atTable
+    ? "Question Bank"
+    : selection.length === 0
+      ? "All Questions"
+      : scopeName ?? `${selection.length} Categories`;
+
+  // The rail's category tree (table state only) — Figma 862:2372: "All
+  // Questions" (the caret-less row, 862:2391) then every category, each
+  // expandable and, when open, ending in an inline "Add Sub-Category" row.
+  // Picking a row is a table interaction.
+  function renderTree(cats: Category[]) {
+    const showAll = () => {
+      setSelection([]);
+      morph.showTable();
+    };
+    const pickCategory = (cat: Category, isActive: boolean) => {
+      if (isActive) {
+        toggleGroup(cat.key);
+      } else {
+        openCategory(cat.label);
+        setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
+      }
+    };
+    return (
+      <div className="tree lm-scroll">
+        <div
+          className={`tree-row tree-row--all ${selection.length === 0 ? "is-active" : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={showAll}
+          onKeyDown={rowKeys(showAll)}
+        >
+          <span className="tree-main">
+            <span className="tree-row-label">All Questions</span>
+          </span>
+        </div>
+
+        {cats.map((cat) => {
+          const isOpen = !!openGroups[cat.key];
+          const isActiveCat = selection.includes(cat.label);
+          return (
+            <div key={cat.key} className="tree-group">
+              {/* The whole row is the control: a click selects the category and
+                  opens its sublist; once it is the selection, further clicks
+                  toggle the sublist. The kebab (Figma 865:2443, hover only)
+                  is the row's one real button, so the row is a role=button. */}
+              <div
+                className={`tree-row ${isActiveCat ? "is-active" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                onClick={() => pickCategory(cat, isActiveCat)}
+                onKeyDown={rowKeys(() => pickCategory(cat, isActiveCat))}
+              >
+                <span className={`tree-caret-btn ${isOpen ? "is-open" : ""}`} aria-hidden>
+                  <TreeCaretIcon />
+                </span>
+                <span className="tree-main">
+                  <span className="tree-row-label">{cat.label}</span>
+                </span>
+                <button
+                  className={`tree-menu-btn ${catMenu?.target.kind === "category" && catMenu.target.categoryKey === cat.key ? "is-open" : ""}`}
+                  aria-label="Category options"
+                  onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: cat.key })}
+                >
+                  <RowKebabIcon />
+                </button>
+              </div>
+
+              {isOpen && (
+                <div className="tree-sublist">
+                  {!!cat.subcategories?.length && (
+                    <div className="tree-sublist-rows">
+                      {cat.subcategories.map((sub) => {
+                        const subLabel = `${cat.label} > ${sub.label}`;
+                        const isActive = selection.includes(subLabel);
+                        return (
+                          <div
+                            key={sub.key}
+                            className={`tree-sub-row ${isActive ? "is-active" : ""}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openCategory(subLabel)}
+                            onKeyDown={rowKeys(() => openCategory(subLabel))}
+                          >
+                            <span className="tree-sub-row-label">{sub.label}</span>
+                            <button
+                              className={`tree-menu-btn ${catMenu?.target.kind === "subcategory" && catMenu.target.subKey === sub.key ? "is-open" : ""}`}
+                              aria-label="Subcategory options"
+                              onClick={(e) =>
+                                openCatMenu(e, {
+                                  kind: "subcategory",
+                                  categoryKey: cat.key,
+                                  subKey: sub.key,
+                                })
+                              }
+                            >
+                              <RowKebabIcon />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {inlineSub === cat.key ? (
+                    <TreeInlineAdd
+                      existingNames={(cat.subcategories ?? []).map((s) => s.label.toLowerCase())}
+                      onSave={(label) => {
+                        addSubcategory(cat.key, label);
+                        setInlineSub(null);
+                      }}
+                      onCancel={() => setInlineSub(null)}
+                    />
+                  ) : (
+                    <button className="tree-add-link" onClick={() => setInlineSub(cat.key)}>
+                      <span className="tree-add-icon"><TreeAddIcon /></span>
+                      Add Sub-Category
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Bulk import — the header's Import CSV opens the picker; at the landing the
+  // whole page is also a drop target (the footer line says so). Visual only.
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [dropzoneActive, setDropzoneActive] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+  const draggingFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
   // Version history opens as its own full page (replacing the list), not a modal.
   if (historyQ) {
@@ -576,199 +801,139 @@ export function QuestionBankPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="qb-page">
-          {/* Left rail — categories. Shared design-system rail + tree chrome
-              (`.rail*`/`.tree*`), the same elements the Industries page uses. */}
-          <aside className="rail">
-            <div className="rail-head">
-              <h1 className="tasks-title">Question Bank</h1>
-              <div className="rail-desc">
-                Categories group the Questions used by Quizzes and Feedback Forms
-                <span
-                  className="rail-info"
-                  tabIndex={0}
-                  role="note"
-                  aria-label="About the Question Bank"
-                  data-tooltip={`Placeholder copy — ${categories.length} Categories and ${totalSubcategories} Subcategories organise the ${TOTAL_QUESTIONS} Questions authors pick from.`}
-                >
-                  <InfoFilledIcon />
-                </span>
-              </div>
-            </div>
-
+        {/* The whole page is the landing-morph root, so the rail can ride the
+            same progress as everything else. It opens as the category browser
+            — page heading + Import CSV + Create CTA, the totals eyebrow, the
+            hero search, the RECENT row, then the A→Z category index — and the
+            wheel (or a search, "All Questions", or a category click) morphs it
+            into the questions table with the category rail sliding in beside
+            it; "↑ Back to search" returns to the index. The shared `.tasks.lm`
+            chrome does the motion, `.qb-lm` holds this page's overrides. */}
+        <div
+          className={`qb-page tasks lm qb-lm ${dropActive ? "is-drop-active" : ""}`}
+          ref={morph.rootRef}
+          onDragOver={(e) => {
+            if (atTable || !draggingFiles(e)) return;
+            e.preventDefault();
+            setDropActive(true);
+          }}
+          onDragLeave={(e) => {
+            // Only when the drag actually leaves the page, not a child element.
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropActive(false);
+          }}
+          onDrop={(e) => {
+            if (atTable) return;
+            e.preventDefault();
+            setDropActive(false);
+          }}
+        >
+          {/* ─── Rail (table state) — Figma 859:1867 "Left Panel": the shared
+              `.rail` + `.tree` chrome with no header — search, the count
+              heading, the tree, and the Add Category row pinned at the foot
+              behind a hairline. ─── */}
+          <aside className="rail qb-rail">
             <div className="rail-search">
               <span className="search-icon"><SearchIcon /></span>
-              {/* Deliberately NOT `.search-input`: ⌘K belongs to the question
-                  search in the right pane, and it grabs the first match in DOM
-                  order. */}
+              {/* Deliberately NOT `.search-input`: ⌘K belongs to the main
+                  question search, and it grabs the first match in DOM order. */}
               <input
-                placeholder="Search Categories, Subcategories..."
+                placeholder="Search Categories..."
                 value={categorySearch}
                 onChange={(e) => setCategorySearch(e.target.value)}
               />
             </div>
-
-            <SectionHeading
-              label={`${categories.length} Categories · ${totalSubcategories} Subcategories`}
-            />
-
-            <div className="tree">
-              <div className={`tree-row ${selection.length === 0 ? "is-active" : ""}`}>
-                {/* Caret-sized spacer keeps this label on the category column. */}
-                <span className="tree-caret-btn" aria-hidden />
-                <button className="tree-main" onClick={() => setSelection([])}>
-                  <span className="tree-row-label">All Questions</span>
-                  <span className="tree-row-count">{TOTAL_QUESTIONS}</span>
-                </button>
-              </div>
-
-              {filteredCategories.map((cat) => {
-                const isOpen = !!openGroups[cat.key];
-                const isActiveCat = selection.includes(cat.label);
-                return (
-                  <div key={cat.key} className="tree-group">
-                    <div className={`tree-row ${isActiveCat ? "is-active" : ""}`}>
-                      {/* Every category is expandable so subcategories can be added inside it. */}
-                      <button
-                        className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
-                        onClick={() => toggleGroup(cat.key)}
-                        aria-label={isOpen ? "Collapse" : "Expand"}
-                      >
-                        <TreeCaretIcon />
-                      </button>
-                      <button
-                        className="tree-main"
-                        onClick={() => {
-                          setSelection([cat.label]);
-                          // Scoping to a category is a table interaction — the
-                          // landing snaps into the (filtered) table view.
-                          morph.showTable();
-                        }}
-                      >
-                        <span className="tree-row-label">{cat.label}</span>
-                        <span className="tree-row-count">{cat.count}</span>
-                      </button>
-                      <button
-                        className="tree-menu-btn"
-                        aria-label="Category options"
-                        onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: cat.key })}
-                      >
-                        <TreeKebabIcon />
-                      </button>
-                    </div>
-
-                    {isOpen && (
-                      <div className="tree-sublist">
-                        {!!cat.subcategories?.length && (
-                          <div className="tree-sublist-rows">
-                            {cat.subcategories.map((sub) => {
-                              const subLabel = `${cat.label} > ${sub.label}`;
-                              const isActive = selection.includes(subLabel);
-                              return (
-                                <div
-                                  key={sub.key}
-                                  className={`tree-sub-row ${isActive ? "is-active" : ""}`}
-                                >
-                                  <button
-                                    className="tree-sub-main"
-                                    onClick={() => {
-                                      setSelection([subLabel]);
-                                      morph.showTable();
-                                    }}
-                                  >
-                                    <span className="tree-sub-row-label">{sub.label}</span>
-                                    <span className="tree-sub-row-count">{sub.count}</span>
-                                  </button>
-                                  <button
-                                    className="tree-menu-btn tree-sub-menu-btn"
-                                    aria-label="Subcategory options"
-                                    onClick={(e) =>
-                                      openCatMenu(e, {
-                                        kind: "subcategory",
-                                        categoryKey: cat.key,
-                                        subKey: sub.key,
-                                      })
-                                    }
-                                  >
-                                    <TreeKebabIcon />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <button
-                          className="tree-add"
-                          onClick={() => setCatModal({ kind: "new-sub", categoryKey: cat.key })}
-                        >
-                          Add Subcategory
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="rail-foot">
-              <button
-                className="cta-primary"
-                onClick={() => setCatModal({ kind: "new-category" })}
-              >
-                Add Category
-                <span className="cta-kbd">A</span>
-              </button>
-              <div className="rail-hint">
-                Select a Category/Subcategory to filter the Questions beside it
-              </div>
-            </div>
+            <SectionHeading label={`Categories · ${categories.length}`} />
+            {/* `.lm-scroll`: the wheel scrolls the rail while it has room, and
+                only falls through to the morph (back to the landing) at its top. */}
+            {renderTree(filteredCategories)}
+            {/* 862:2425 — the New Category popover anchors here. */}
+            <button
+              ref={newCatBtnRef}
+              className={`tree-add-link qb-rail-add ${catPop ? "is-open" : ""}`}
+              onClick={openNewCategory}
+            >
+              <span className="tree-add-icon"><TreeAddIcon /></span>
+              Add Category
+            </button>
           </aside>
 
-          {/* Right pane — the landing-morph root. It opens as the search-first
-              landing (Claude Design "Question Bank Landing 1C") and the wheel
-              morphs it into the unchanged table view; the shared `.tasks.lm`
-              chrome does the motion, `.qb-lm` holds this page's overrides. */}
-          <section className="qb-content tasks lm qb-lm" ref={morph.rootRef}>
-            {/* The Create CTA holds the pane's top-right in both states (the
-                design's top row) — it used to sit on the filters row, which is
-                collapsed at the landing. Figma 724:1010 menu, one row per
-                question type. */}
-            <div className="qb-head">
-              <Dropdown
-                align="right"
-                width="auto"
-                panelClass="ct-menu"
-                open={createMenuOpen}
-                onOpenChange={setCreateMenuOpen}
-                trigger={({ toggle }) => (
-                  <button className="cta-primary" onClick={toggle}>
-                    Create Question
-                    <span className="cta-kbd">C</span>
+          <section className="qb-content">
+            <header className="tasks-header">
+              {/* Table-state crumb only — the landing IS the Question Bank, so
+                  it keeps its bare title and the trail unfolds with the table
+                  chrome (the `.qbl-meta` collapse recipe). Question Bank has no
+                  sidebar entry — it is reached from the Tasks header — so
+                  "Tasks" is the way back, and "Question Bank" returns to the
+                  category index in place of the footer's old "Back to search". */}
+              <div className="rvc-pagehead">
+                <nav className="rvc-crumbs qb-crumbs" aria-label="Breadcrumb">
+                  <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+                    Tasks
                   </button>
-                )}
-              >
-                {({ close }) => (
-                  <>
-                    {QUESTION_TYPE_MENU.map(({ type, label, shortcut }) => (
-                      <button
-                        key={type}
-                        className="ct-menu-item"
-                        onClick={() => {
-                          startCreate(type);
-                          close();
-                        }}
-                      >
-                        <span className="ct-menu-label">{label}</span>
-                        <span className="ct-menu-kbd">{shortcut}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </Dropdown>
-            </div>
+                  <ChevronRightIcon />
+                  <button
+                    className="rvc-crumb"
+                    onClick={morph.showLanding}
+                    title="Back to the category index"
+                  >
+                    Question Bank
+                  </button>
+                </nav>
+                <h1 className="tasks-title">{pageTitle}</h1>
+              </div>
+              <div className="tasks-header-actions">
+                {/* Landing only — bulk import lives here, not on the working
+                    screens (it fades with the landing chrome). */}
+                <button className="cta-quiet qb-import" onClick={() => fileRef.current?.click()}>
+                  Import CSV
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv"
+                  hidden
+                  onChange={() => {/* noop in mock */}}
+                />
+                {/* Figma 724:1010 menu, one row per question type. */}
+                <Dropdown
+                  align="right"
+                  width="auto"
+                  panelClass="ct-menu"
+                  open={createMenuOpen}
+                  onOpenChange={setCreateMenuOpen}
+                  trigger={({ toggle }) => (
+                    <button className="cta-primary" onClick={toggle}>
+                      Create Question
+                      <span className="cta-kbd">C</span>
+                    </button>
+                  )}
+                >
+                  {({ close }) => (
+                    <>
+                      {QUESTION_TYPE_MENU.map(({ type, label, shortcut }) => (
+                        <button
+                          key={type}
+                          className="ct-menu-item"
+                          onClick={() => {
+                            startCreate(type);
+                            close();
+                          }}
+                        >
+                          <span className="ct-menu-label">{label}</span>
+                          <span className="ct-menu-kbd">{shortcut}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </Dropdown>
+              </div>
+            </header>
 
-            {/* Landing hero — collapses away as the table forms. */}
-            <div className="qbl-title">Find a question</div>
+            {/* Landing eyebrow over the hero search. */}
+            <div className="qbl-meta">
+              {formatCount(totalQuestions)} Questions · {categories.length} Categories ·{" "}
+              {totalSubcategories} Subcategories
+            </div>
 
             <div className="toolbar">
               <QuestionSearch
@@ -787,59 +952,34 @@ export function QuestionBankPage({
                   setQuery(q);
                   morph.showTable();
                 }}
+                placeholder={
+                  atTable && scopeName
+                    ? `Search in ${scopeName}…`
+                    : "Search Question, Categories..."
+                }
               />
             </div>
 
-            <div className="qbl-meta">
-              {TOTAL_QUESTIONS} Questions · {categories.length} Categories
-            </div>
+            {/* Landing only: the last categories opened. */}
+            {recentShown.length > 0 && (
+              <div className="qbl-recent">
+                <span className="qbl-recent-label">Recent</span>
+                {recentShown.map((label, i) => (
+                  <span key={label} className="qbl-recent-item">
+                    {i > 0 && <span className="qbl-recent-dot">·</span>}
+                    <button className="qbl-recent-link" onClick={() => openCategory(label)}>
+                      {label.split(" > ").pop()}
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
 
-            <label
-              className={`drop-primary qb-bulk-upload ${dropzoneActive ? "is-active" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDropzoneActive(true);
-              }}
-              onDragLeave={() => setDropzoneActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDropzoneActive(false);
-              }}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv"
-                hidden
-                onChange={() => {/* noop in mock */}}
-              />
-              <span className="drop-primary-icon"><UploadTrayIcon /></span>
-              <span className="drop-primary-text">
-                <span className="drop-primary-title">Bulk Upload Questions</span>
-                <span className="drop-primary-sub">
-                  Drag and drop, or click to upload.{" "}
-                  {/* preventDefault also stops the label from opening the file picker. */}
-                  <a
-                    className="drop-primary-link"
-                    onClick={(e) => e.preventDefault()}
-                    href="#"
-                  >
-                    Download Template
-                    <ArrowRightUpIcon />
-                  </a>
-                </span>
-              </span>
-            </label>
-
+            {/* ─── Table-only chrome: unfolds with the table ─── */}
             <div className="qb-filters-row">
               <div className="qb-filters">
-                <MultiSelectPill
-                  label="Category"
-                  options={categoryLabels}
-                  value={selection}
-                  onApply={setSelection}
-                  searchPlaceholder="Search categories…"
-                />
+                {/* No Category pill: the open category is navigation here, not
+                    a filter — the rail, the title and the crumb carry it. */}
                 <MultiSelectPill
                   label="Type"
                   options={TYPE_OPTIONS}
@@ -852,18 +992,14 @@ export function QuestionBankPage({
                   value={statusFilter}
                   onApply={setStatusFilter}
                 />
-                <MultiSelectPill
-                  label="Grading"
-                  options={GRADING_OPTIONS}
-                  value={gradingFilter}
-                  onApply={setGradingFilter}
-                />
                 <QbMoreFiltersPill
+                  grading={gradingFilter}
                   quizzes={quizFilter}
                   forms={formFilter}
                   quizNames={quizNames}
                   formNames={formNames}
                   onApply={(v) => {
+                    setGradingFilter(v.grading);
                     setQuizFilter(v.quizzes);
                     setFormFilter(v.forms);
                   }}
@@ -877,150 +1013,139 @@ export function QuestionBankPage({
             </div>
 
             <div className="lm-stage">
-            <LandingOverlay
-              caption="Questions A–Z"
-              total={sorted.length}
-              columns={QB_LM_COLS}
-              rows={landingRows}
-              nameLabel="Question"
-              nameWidth={QUESTION_COL_WIDTH}
-              footer={
-                /* The design's slim landing CSV bar — the full-width
-                   .qb-bulk-upload zone it stands in for fades in with the
-                   table chrome instead. */
-                <div className="qbl-csv-wrap">
-                  <label
-                    className={`qbl-csv ${dropzoneActive ? "is-active" : ""}`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDropzoneActive(true);
-                    }}
-                    onDragLeave={() => setDropzoneActive(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDropzoneActive(false);
-                    }}
-                  >
-                    <input type="file" accept=".csv" hidden onChange={() => {/* noop in mock */}} />
-                    <UploadTrayIcon />
-                    <span className="qbl-csv-text">
-                      Bulk Upload — drop a CSV or click
-                      <a
-                        className="qbl-csv-link"
-                        onClick={(e) => e.preventDefault()}
-                        href="#"
-                      >
-                        Download Template
-                        <ArrowRightUpIcon />
-                      </a>
+              {/* ─── Landing layer: the A→Z category index, and the drop-a-CSV
+                  line pinned under it ─── */}
+              <div className="lm-land qbl-land">
+                {/* Index header — Figma 867:2473: "ALL CATEGORIES · n" and the
+                    landing's Add Category affordance over the group hairline.
+                    It sits OUTSIDE `.qbl-index` (the scroller) so it holds
+                    while a bank with hundreds of categories scrolls under it. */}
+                <div className="qbl-index-head">
+                  <div className="qbl-index-head-row">
+                    <span className="qbl-index-head-label">
+                      All Categories · {formatCount(categories.length)}
                     </span>
-                  </label>
+                    <button
+                      ref={landingCatBtnRef}
+                      className={`qbl-index-add ${catPop && !atTable ? "is-open" : ""}`}
+                      onClick={openNewCategory}
+                    >
+                      <span className="tree-add-icon"><TreeAddIcon /></span>
+                      Add Category
+                    </button>
+                  </div>
                 </div>
-              }
-              onShowAll={morph.showTable}
-              onRowClick={(row) => {
-                setSelectedId(row.key);
-                morph.showTable();
-              }}
-            />
-            <div className="lm-table">
-            <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-            <table className="table table-head qb-q-table">
-              <QbColGroup cols={visibleCols} />
-              <thead>
-                <tr>
-                  <QbHeader col="question" label="Question" sort={sort} toggle={toggleSort} />
-                  {visibleCols.map((c) =>
-                    c.sortable === false ? (
-                      <th key={c.key} className={`${c.className} no-sort`}>
-                        <span className="th-content">{c.label}</span>
-                      </th>
-                    ) : (
-                      <QbHeader
-                        key={c.key}
-                        col={c.key as QSortKey}
-                        label={c.label}
-                        sort={sort}
-                        toggle={toggleSort}
-                      />
-                    ),
-                  )}
-                  <th className="col-actions">
-                    <EditColumnsButton
-                      columns={columns}
-                      setColumns={setColumns}
-                      optional={QB_COLS}
-                      fixed={QB_FIXED_COLUMNS}
-                      order={order}
-                      onOrderChange={setOrder}
-                    />
-                  </th>
-                </tr>
-              </thead>
-            </table>
-
-            <div className="tasks-scroll">
-              <table className="table table-body qb-q-table">
-                <QbColGroup cols={visibleCols} />
-                <tbody>
-                  {paged.map((q) => (
-                    <QuestionRow
-                      key={q.id}
-                      q={q}
-                      cols={visibleCols}
-                      selected={q.id === selectedId}
-                      onSelect={() =>
-                        setSelectedId((cur) => (cur === q.id ? null : q.id))
-                      }
-                      onEdit={() => onEditQuestion?.(q)}
-                      onOpenMenu={(rect) => setRowMenu({ q, rect })}
-                      menuOpen={rowMenu?.q.id === q.id}
-                    />
+                <div className="qbl-index lm-scroll">
+                  {indexColumns.map((col, i) => (
+                    <div key={i} className="qbl-index-col">
+                      {col.map((g) => (
+                        <div key={g.letter} className="qbl-index-group">
+                          <div className="qbl-index-letter">{g.letter}</div>
+                          {g.items.map((c) => (
+                            <button
+                              key={c.key}
+                              className="qbl-index-row"
+                              onClick={() => openCategory(c.label)}
+                            >
+                              <span className="qbl-index-name">{c.label}</span>
+                              <span className="qbl-index-count">{formatCount(c.count)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   ))}
-                  {paged.length === 0 && (
-                    <tr className="qb-empty-row">
-                      <td colSpan={visibleColCount}>
-                        <div className="qb-empty">No questions match the current filters.</div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            </div>
+                </div>
+                <div className="qbl-drop-hint">
+                  {dropActive
+                    ? "Drop the CSV to import questions"
+                    : "Bulk upload: drop a CSV anywhere on this page, or use Import CSV"}
+                </div>
+              </div>
 
-            <div className="pagination qb-pagination">
-              <BackToSearch onClick={morph.showLanding} />
-              <span>
-                Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-              </span>
-              <div className="pagination-controls">
-                <button
-                  className="page-btn"
-                  disabled={visiblePage === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                ><ChevronLeftIcon /></button>
-                <button
-                  className="page-btn"
-                  disabled={visiblePage === totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                ><ChevronRightIcon /></button>
+              {/* ─── Table ─── */}
+              <div className="lm-table">
+              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
+              <table className="table table-head qb-q-table">
+                <QbColGroup cols={visibleCols} />
+                <thead>
+                  <tr>
+                    <QbHeader col="question" label="Question" sort={sort} toggle={toggleSort} />
+                    {visibleCols.map((c) =>
+                      c.sortable === false ? (
+                        <th key={c.key} className={`${c.className} no-sort`}>
+                          <span className="th-content">{c.label}</span>
+                        </th>
+                      ) : (
+                        <QbHeader
+                          key={c.key}
+                          col={c.key as QSortKey}
+                          label={c.label}
+                          sort={sort}
+                          toggle={toggleSort}
+                        />
+                      ),
+                    )}
+                    <th className="col-actions">
+                      <EditColumnsButton
+                        columns={columns}
+                        setColumns={setColumns}
+                        optional={QB_COLS}
+                        fixed={QB_FIXED_COLUMNS}
+                        order={order}
+                        onOrderChange={setOrder}
+                      />
+                    </th>
+                  </tr>
+                </thead>
+              </table>
+
+              <div className="tasks-scroll">
+                <table className="table table-body qb-q-table">
+                  <QbColGroup cols={visibleCols} />
+                  <tbody>
+                    {paged.map((q) => (
+                      <QuestionRow
+                        key={q.id}
+                        q={q}
+                        cols={visibleCols}
+                        onEdit={() => onEditQuestion?.(q)}
+                        onOpenMenu={(rect) => setRowMenu({ q, rect })}
+                        menuOpen={rowMenu?.q.id === q.id}
+                      />
+                    ))}
+                    {paged.length === 0 && (
+                      <tr className="qb-empty-row">
+                        <td colSpan={visibleColCount}>
+                          <div className="qb-empty">No questions match the current filters.</div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              </div>
+
+              <div className="pagination qb-pagination">
+                <span>
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                </span>
+                <div className="pagination-controls">
+                  <button
+                    className="page-btn"
+                    disabled={visiblePage === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  ><ChevronLeftIcon /></button>
+                  <button
+                    className="page-btn"
+                    disabled={visiblePage === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  ><ChevronRightIcon /></button>
+                </div>
+              </div>
               </div>
             </div>
-            </div>
-            </div>
           </section>
-
-          {/* ─── Row-click preview panel ─── */}
-          {selected && (
-            <QuestionPreviewPanel
-              q={selected}
-              onClose={() => setSelectedId(null)}
-              onEdit={() => onEditQuestion?.(selected)}
-              onHistory={() => setHistoryQ(selected)}
-              onToggleArchive={() => toggleArchive(selected.id)}
-            />
-          )}
         </div>
       </div>
 
@@ -1032,12 +1157,11 @@ export function QuestionBankPage({
           onClose={() => setRowMenu(null)}
           onEdit={() => onEditQuestion?.(rowMenu.q)}
           onArchive={() => toggleArchive(rowMenu.q.id)}
-          onPreview={() => setSelectedId(rowMenu.q.id)}
           onVersionHistory={() => setHistoryQ(rowMenu.q)}
         />
       )}
 
-      {/* ─── Category 3-dot menu ─── */}
+      {/* ─── Row kebab menu ─── */}
       {catMenu && (() => {
         const target = catMenu.target;
         const cat = categories.find((c) => c.key === target.categoryKey);
@@ -1088,39 +1212,7 @@ export function QuestionBankPage({
         );
       })()}
 
-      {/* ─── Category add / edit / delete modals ─── */}
-      {catModal.kind === "new-category" && (
-        <CatNameModal
-          title="New Category"
-          submitLabel="Create Category"
-          defaultValue=""
-          existingNames={categories.map((c) => c.label.toLowerCase())}
-          onSubmit={(label) => {
-            addCategory(label);
-            setCatModal({ kind: "none" });
-          }}
-          onCancel={() => setCatModal({ kind: "none" })}
-        />
-      )}
-
-      {catModal.kind === "new-sub" && (() => {
-        const parent = categories.find((c) => c.key === catModal.categoryKey);
-        if (!parent) return null;
-        return (
-          <CatNameModal
-            title={`New Subcategory in ${parent.label}`}
-            submitLabel="Create Subcategory"
-            defaultValue=""
-            existingNames={(parent.subcategories ?? []).map((s) => s.label.toLowerCase())}
-            onSubmit={(label) => {
-              addSubcategory(catModal.categoryKey, label);
-              setCatModal({ kind: "none" });
-            }}
-            onCancel={() => setCatModal({ kind: "none" })}
-          />
-        );
-      })()}
-
+      {/* ─── Category rename / delete modals ─── */}
       {catModal.kind === "edit-category" && (() => {
         const cat = categories.find((c) => c.key === catModal.categoryKey);
         if (!cat) return null;
@@ -1186,6 +1278,174 @@ export function QuestionBankPage({
           />
         );
       })()}
+
+      {/* ─── New Category popover (design S4) ─── */}
+      {catPop && (
+        <NewCategoryPopover
+          anchor={catPop}
+          existingNames={categories.map((c) => c.label.toLowerCase())}
+          onCreate={(label, tradeGroup) => {
+            addCategory(label, tradeGroup);
+            setCatPop(null);
+          }}
+          onCancel={() => setCatPop(null)}
+        />
+      )}
+
+    </div>
+  );
+}
+
+/* Inline subcategory editor (design S4): a bordered input in the sub-list's
+   place, ⏎ saves and Esc (or clicking away) cancels. Names must be unique
+   within the parent. */
+function TreeInlineAdd({
+  existingNames,
+  onSave,
+  onCancel,
+}: {
+  existingNames: string[];
+  onSave: (label: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const trimmed = value.trim();
+  const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
+
+  return (
+    <div className={`tree-inline ${isDuplicate ? "is-invalid" : ""}`}>
+      <input
+        autoFocus
+        className="tree-inline-input"
+        placeholder="Subcategory name"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && trimmed && !isDuplicate) onSave(trimmed);
+          else if (e.key === "Escape") onCancel();
+        }}
+        onBlur={onCancel}
+      />
+      <span className="tree-inline-hint">
+        {isDuplicate ? "A subcategory with this name already exists" : "⏎ save · esc cancel"}
+      </span>
+    </div>
+  );
+}
+
+/* New Category popover (design S4): a small card hanging off the rail's
+   "+ New category" row — Name, an optional trade group, Cancel / Create. Esc
+   or a click outside dismisses it; the card is kept on screen when the row
+   sits near the bottom of the rail. */
+function NewCategoryPopover({
+  anchor,
+  existingNames,
+  onCreate,
+  onCancel,
+}: {
+  anchor: DOMRect;
+  existingNames: string[];
+  onCreate: (label: string, tradeGroup?: string) => void;
+  onCancel: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [name, setName] = useState("");
+  const [group, setGroup] = useState<string>("");
+  const trimmed = name.trim();
+  const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
+  const isValid = !!trimmed && !isDuplicate;
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const h = el.offsetHeight;
+    const w = el.offsetWidth;
+    // Bottom edge level with the trigger row, hanging off the rail's right
+    // edge (the row spans the rail) so it opens over the content pane like
+    // the design. A trigger in the TOP half of the page — the landing index
+    // header's "+ Add category" — drops below instead and right-aligns to the
+    // trigger rather than hanging past it, so the card opens into the empty
+    // index rather than back over the page header. Both are clamped so the
+    // card never leaves the viewport.
+    const openDown = anchor.top < window.innerHeight / 2;
+    const top = openDown ? anchor.bottom + 8 : anchor.bottom - h;
+    const rightAligned = anchor.left > window.innerWidth / 2;
+    const left = rightAligned ? anchor.right - w : anchor.right - 20;
+    setPos({
+      top: Math.max(8, Math.min(top, window.innerHeight - h - 8)),
+      left: Math.max(8, Math.min(left, window.innerWidth - w - 8)),
+    });
+  }, [anchor]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Element | null;
+      // The trade-group menu is portalled to the body — a click in it stays "inside".
+      if (ref.current?.contains(t) || t?.closest(".dropdown")) return;
+      onCancel();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onCancel]);
+
+  function submit() {
+    if (isValid) onCreate(trimmed, group || undefined);
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="qb-catpop"
+      style={{
+        top: pos ? pos.top : anchor.top,
+        left: pos ? pos.left : anchor.left,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="qb-catpop-title">New category</div>
+      <div className="qb-catpop-field">
+        <label className="qb-catpop-label">Name</label>
+        <input
+          autoFocus
+          className="form-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          placeholder="Commercial Kitchen Equipment"
+        />
+        {isDuplicate && (
+          <div className="pm-error">A category with this name already exists.</div>
+        )}
+      </div>
+      <div className="qb-catpop-field">
+        <label className="qb-catpop-label">
+          Trade group <span className="qb-catpop-optional">(optional)</span>
+        </label>
+        <SelectField
+          value={group}
+          options={TRADE_GROUPS}
+          onChange={setGroup}
+          placeholder="Select a trade group"
+          popupMenu
+        />
+      </div>
+      <div className="qb-catpop-foot">
+        <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
+        <button className="btn-publish" disabled={!isValid} onClick={submit}>
+          Create
+        </button>
+      </div>
     </div>
   );
 }
@@ -1499,8 +1759,6 @@ function UsageNames({ items }: { items: string[] }) {
 function QuestionRow({
   q,
   cols,
-  selected,
-  onSelect,
   onEdit,
   onOpenMenu,
   menuOpen,
@@ -1508,8 +1766,6 @@ function QuestionRow({
   q: Question;
   /** Visible optional columns, already in the user's order. */
   cols: QbColMeta[];
-  selected: boolean;
-  onSelect: () => void;
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
@@ -1518,10 +1774,7 @@ function QuestionRow({
   const isArchived = q.status === "Archived";
   const dates = questionDates(q);
   return (
-    <tr
-      className={`qb-row ${isArchived ? "is-archived" : ""} ${selected ? "is-selected" : ""} ${menuOpen ? "menu-open" : ""}`}
-      onClick={onSelect}
-    >
+    <tr className={`qb-row ${isArchived ? "is-archived" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className="qb-col-question">
         <div className="qb-q-text">{q.text}</div>
       </td>
@@ -1573,7 +1826,6 @@ function QuestionActionsMenu({
   onClose,
   onEdit,
   onArchive,
-  onPreview,
   onVersionHistory,
 }: {
   q: Question;
@@ -1581,7 +1833,6 @@ function QuestionActionsMenu({
   onClose: () => void;
   onEdit: () => void;
   onArchive: () => void;
-  onPreview: () => void;
   onVersionHistory: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -1665,11 +1916,10 @@ function QuestionActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Figma 388:354 is the exact item list for this menu — four rows, no
-          heading and no dividers. The open row is already identified by its
-          held hover state, so the Q-id header the menu used to carry is gone. */}
+      {/* Based on Figma 388:354, minus the Preview row — questions no longer
+          have a preview panel. No heading and no dividers; the open row is
+          identified by its held hover state. */}
       {item(<RowEditIcon />, "Edit Question", onEdit)}
-      {item(<MenuPreviewIcon />, "Preview", onPreview)}
       {/* Nothing to show yet — version 1 has no prior versions. */}
       {q.version > 1 && item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
       {item(
@@ -1691,53 +1941,58 @@ function QuestionActionsMenu({
 /* "More filters" — Quizzes and Feedback Forms, each searchable (Figma 24:16115
    minus its subheadings — CascadingMultiSelect's per-section search). */
 function QbMoreFiltersPill({
+  grading,
   quizzes,
   forms,
   quizNames,
   formNames,
   onApply,
 }: {
+  grading: string[];
   quizzes: string[];
   forms: string[];
   quizNames: string[];
   formNames: string[];
-  onApply: (v: { quizzes: string[]; forms: string[] }) => void;
+  onApply: (v: { grading: string[]; quizzes: string[]; forms: string[] }) => void;
 }) {
-  const count = quizzes.length + forms.length;
-  const value = useMemo(() => ({ quizzes, forms }), [quizzes, forms]);
+  const count = grading.length + quizzes.length + forms.length;
+  const value = useMemo(() => ({ grading, quizzes, forms }), [grading, quizzes, forms]);
 
   return (
     <Dropdown
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More filters"
-          value={count > 0 ? `${count} active` : null}
+          label="More Filters"
+          value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ quizzes: [], forms: [] })}
+          onClear={() => onApply({ grading: [], quizzes: [], forms: [] })}
         />
       )}
     >
       {({ close }) => (
         <CascadingMultiSelect
           sections={[
+            // Grading leads — it kept its slot from the pill row, and its two
+            // fixed options need no search box.
+            { key: "grading", label: "Grading", groups: [{ items: GRADING_OPTIONS }] },
             {
               key: "quizzes",
               label: "Quizzes",
               groups: [{ items: quizNames }],
-              searchPlaceholder: "Search quizzes…",
+              searchPlaceholder: "Search Quizzes…",
             },
             {
               key: "forms",
               label: "Feedback Forms",
               groups: [{ items: formNames }],
-              searchPlaceholder: "Search feedback forms…",
+              searchPlaceholder: "Search Feedback Forms…",
             },
           ]}
           value={value}
           onApply={(v) => {
-            onApply({ quizzes: v.quizzes, forms: v.forms });
+            onApply({ grading: v.grading, quizzes: v.quizzes, forms: v.forms });
             close();
           }}
         />

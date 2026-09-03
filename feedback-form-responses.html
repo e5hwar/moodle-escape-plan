@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EPA 608 — Post-Cert Satisfaction — Responses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* Feedback Response Viewer — Overview tab.
+   Rules lifted from the app's src/index.css, trimmed to the classes this page
+   actually uses. */
+
+:root {
+  --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --bg-panel: #0f0f10;
+  --bg-pill: #161618;
+  --bg-pill-strong: #1d1d20;
+  --border: #2e2e33;
+  --border-strong: #3d3d43;
+  --text: #e7e7e8;
+  --text-muted: #8b8b8f;
+  --text-faint: #5a5a5e;
+  --accent: #e97237;
+  --accent-strong: #f08043;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0d0d0d;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 12pt;
+  line-height: 1.45;
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ===== Scrollbars (translucent, hover-revealed) ===== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+
+/* ===== Page shell ===== */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.workspace {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tasks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 32px 32px 0 32px;
+  position: relative;
+}
+
+.fb-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ===== Page header ===== */
+.tasks-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.tasks-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.tasks-header .new-task {
+  width: auto;
+  height: 32px;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
+  border: 0.5px solid rgba(240, 85, 35, 0.15);
+  box-shadow: none;
+}
+
+.new-task {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-family: var(--font-sans);
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: filter 0.12s ease, transform 0.05s ease;
+}
+
+.new-task:hover {
+  filter: brightness(1.08);
+}
+
+.new-task:active {
+  transform: translateY(1px);
+}
+
+.tasks-header .cta-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 32px;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.2) 0%, rgba(122, 122, 122, 0.2) 100%),
+    #0d0d0d;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tasks-header .cta-quiet:hover {
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.3) 0%, rgba(122, 122, 122, 0.3) 100%),
+    #0d0d0d;
+}
+
+.tasks-title {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 2px 0;
+  line-height: 1.15;
+}
+
+.tasks-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #a8a8a8;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.tasks-subtitle-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  display: inline-block;
+}
+
+/* Breadcrumb (Figma 275:2108). */
+.rvc-pagehead {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rvc-pagehead > .rvc-crumbs {
+  margin-bottom: 12px;
+}
+
+.rvc-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rvc-crumb {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.rvc-crumb--current {
+  color: #fff;
+}
+
+button.rvc-crumb {
+  cursor: pointer;
+}
+
+button.rvc-crumb:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+span.rvc-crumb--current {
+  cursor: default;
+}
+
+.rvc-crumbs svg {
+  width: 12px;
+  height: 12px;
+  color: #a8a8a8;
+  flex: none;
+}
+
+/* Status pill. */
+.fb-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-strong);
+}
+
+.fb-status--active {
+  background: rgba(74, 222, 128, 0.1);
+  color: #6ee7a3;
+  border-color: rgba(110, 231, 163, 0.3);
+}
+
+/* ===== Tabbar ===== */
+.tabbar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #404040;
+}
+
+.tabbar .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 20px;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+
+.tabbar .tab:hover {
+  color: #f05523;
+}
+
+.tabbar .tab.is-active {
+  color: #f05523;
+  border-bottom-color: #f05523;
+}
+
+.tabbar .tab.is-disabled,
+.tabbar .tab.is-disabled:hover {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* ===== Filter pills ===== */
+.filter-pill-dashed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px dashed #404040;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+
+.filter-pill-dashed:hover {
+  background: var(--bg-pill);
+  border-color: var(--text-faint);
+}
+
+.filter-pill-dashed .icon {
+  color: #a8a8a8;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-pill-dashed .icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.filter-applied {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  background: transparent;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.filter-applied-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.filter-applied-main .label {
+  font-weight: 500;
+  color: #a8a8a8;
+}
+
+.filter-applied-main .sep {
+  width: 1px;
+  height: 20px;
+  background: #404040;
+}
+
+.filter-applied-main .value {
+  font-weight: 500;
+  color: #f05523;
+}
+
+.filter-applied-main .caret {
+  display: none;
+}
+
+.drp-pill .filter-applied-main {
+  padding-left: 12px;
+}
+
+.drp-pill .caret {
+  display: inline-flex;
+  align-items: center;
+  color: #a8a8a8;
+}
+
+.drp-pill .caret svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Viewer body ===== */
+.fb-viewer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}
+
+.fb-viewer-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fb-viewer-tabs {
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.fb-viewer {
+  display: flex;
+  flex-direction: column;
+  max-width: 1180px;
+}
+
+.fb-mono {
+  font-family: var(--font-mono);
+}
+
+.fb-faint {
+  color: var(--text-faint);
+}
+
+/* Stat tiles. */
+.fb-ov-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.fb-ov-stat {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.fb-ov-stat-label {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.fb-ov-stat-num {
+  font-family: var(--font-mono);
+  font-size: 18pt;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+
+.fb-ov-stat-note {
+  font-size: 10pt;
+  color: var(--text-faint);
+  margin-top: 8px;
+}
+
+/* Submissions Over Time — hollow accent bars on a baseline hairline. */
+.fb-trend {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+
+.fb-trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.fb-trend-title {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fb-trend-range {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-muted);
+}
+
+.fb-trend-grid {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+  height: 96px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-trend-bar {
+  border-radius: 3px 3px 0 0;
+  background: rgba(240, 110, 60, 0.22);
+  border: 1px solid rgba(240, 110, 60, 0.45);
+  border-bottom: none;
+}
+
+/* Questions toolbar. */
+.fb-q-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fb-q-toolbar-title {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.fb-inactive-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5pt;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fb-inactive-check input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ===== Summary cards ===== */
+.fb-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fb-summary-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.fb-summary-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-summary-q {
+  flex: 1;
+}
+
+.fb-summary-q-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fb-q-kicker {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-faint);
+}
+
+.fb-type-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border);
+  font-size: 9.5pt;
+  color: #a8a8a8;
+}
+
+.fb-req-pill {
+  display: inline-flex;
+  padding: 1px 7px;
+  background: rgba(233, 114, 55, 0.15);
+  color: var(--accent-strong);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+}
+
+.fb-inactive-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 8.5pt;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-left: 8px;
+}
+
+.fb-summary-q-text {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fb-summary-q-meta {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5pt;
+  color: var(--text-muted);
+}
+
+.fb-link-id {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+}
+
+.fb-summary-card-body {
+  padding: 14px;
+}
+
+.fb-summary-card.is-inactive {
+  opacity: 0.78;
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.fb-summary-card.is-inactive .fb-summary-q-text {
+  color: #a8a8a8;
+}
+
+/* Choice bars. */
+.fb-choice-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fb-bar-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 110px;
+  gap: 12px;
+  align-items: center;
+  font-size: 11pt;
+}
+
+.fb-bar-label {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-bar-track {
+  height: 10px;
+  background: var(--bg-pill);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.fb-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.fb-bar-fill--other {
+  background: linear-gradient(90deg, #6b7280, #9ca3af);
+}
+
+.fb-bar-value {
+  font-family: var(--font-mono);
+  font-size: 10.5pt;
+  color: var(--text);
+  text-align: right;
+}
+
+.fb-other-list {
+  margin-top: 10px;
+  font-size: 10.5pt;
+}
+
+.fb-other-list summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 10.5pt;
+}
+
+.fb-other-list ul {
+  list-style: disc;
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+  color: var(--text-muted);
+  font-size: 11pt;
+}
+
+/* True/False split bar. */
+.fb-tf-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fb-tf-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.fb-tf-true {
+  background: rgba(240, 110, 60, 0.22);
+  border: 1px solid rgba(240, 110, 60, 0.45);
+  border-radius: 4px 0 0 4px;
+}
+
+.fb-tf-false {
+  flex: 1;
+  background: var(--bg-pill-strong);
+}
+
+.fb-tf-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5pt;
+  color: var(--text);
+}
+
+/* Linear scale histogram. */
+.fb-scale-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fb-scale-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.fb-scale-stat-num {
+  font-family: var(--font-mono);
+  font-size: 18pt;
+  color: var(--text);
+}
+
+.fb-scale-stat-label {
+  font-size: 10pt;
+  color: var(--text-muted);
+}
+
+.fb-scale-histogram {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  height: 120px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.fb-hist-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fb-hist-pct {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-muted);
+}
+
+.fb-hist-bar-wrap {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.fb-hist-bar {
+  width: 100%;
+  max-width: 28px;
+  background: linear-gradient(180deg, var(--accent), rgba(233, 114, 55, 0.4));
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: height 0.2s ease;
+}
+
+.fb-hist-num {
+  font-family: var(--font-mono);
+  font-size: 10pt;
+  color: var(--text-muted);
+}
+
+.fb-scale-labels-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 10pt;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Short answers. */
+.fb-short-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fb-short-summary-meta {
+  font-size: 10.5pt;
+  color: var(--text-muted);
+}
+
+.fb-short-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.fb-short-row {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-short-row:last-child {
+  border-bottom: none;
+}
+
+.fb-short-date {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  width: 60px;
+}
+
+.fb-short-text {
+  font-size: 11pt;
+  color: var(--text);
+  flex: 1;
+}
+
+.fb-short-who {
+  font-size: 9.5pt;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.fb-retention-note {
+  margin-top: 4px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5pt;
+  color: var(--text-faint);
+}
+
+</style>
+</head>
+<body>
+<div class="main">
+  <div class="workspace">
+    <div class="tasks fb-page">
+      <header class="tasks-header">
+        <div class="rvc-pagehead">
+          <nav class="rvc-crumbs" aria-label="Breadcrumb">
+            <button class="rvc-crumb" title="Back to Feedback Forms">Feedback Forms</button>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+            <span class="rvc-crumb rvc-crumb--current">EPA 608 — Post-Cert Satisfaction</span>
+          </nav>
+          <div class="fb-viewer-titlerow">
+            <h1 class="tasks-title">EPA 608 — Post-Cert Satisfaction</h1>
+            <span class="fb-status fb-status--active">Active</span>
+          </div>
+          <div class="tasks-subtitle">
+            <span>Triggers: EPA 608 Universal · EPA 608 Type I · EPA 608 Type II</span>
+            <span class="tasks-subtitle-dot"></span>
+            <span>One submission per user, ever</span>
+          </div>
+        </div>
+        <div class="tasks-header-actions">
+          <button class="cta-quiet">Export CSV</button>
+          <button class="cta-quiet">Duplicate</button>
+          <button class="new-task">Edit Form</button>
+        </div>
+      </header>
+
+      <div class="tabbar fb-viewer-tabs">
+        <button class="tab is-active">Overview</button>
+        <button class="tab">Responses</button>
+        <span class="tab is-disabled" title="Managed in Edit Form">Questions</span>
+        <span class="tab is-disabled" title="Managed in Edit Form">Triggers</span>
+      </div>
+
+      <div class="fb-viewer-scroll">
+        <div class="fb-viewer">
+          <div class="fb-ov-stats">
+            <div class="fb-ov-stat">
+              <div class="fb-ov-stat-label">Prompted</div>
+              <div class="fb-ov-stat-num">4,920</div>
+              <div class="fb-ov-stat-note">Users shown the form</div>
+            </div>
+            <div class="fb-ov-stat">
+              <div class="fb-ov-stat-label">Submitted</div>
+              <div class="fb-ov-stat-num">1,284</div>
+              <div class="fb-ov-stat-note">One per user, ever</div>
+            </div>
+            <div class="fb-ov-stat">
+              <div class="fb-ov-stat-label">Submission Rate</div>
+              <div class="fb-ov-stat-num">26.1%</div>
+              <div class="fb-ov-stat-note">Submitted ÷ prompted</div>
+            </div>
+            <div class="fb-ov-stat">
+              <div class="fb-ov-stat-label">Dismissed</div>
+              <div class="fb-ov-stat-num">3,636</div>
+              <div class="fb-ov-stat-note">Re-eligible on next trigger</div>
+            </div>
+            <div class="fb-ov-stat">
+              <div class="fb-ov-stat-label">Median Time</div>
+              <div class="fb-ov-stat-num">60s</div>
+              <div class="fb-ov-stat-note">Open to submit</div>
+            </div>
+          </div>
+
+          <div class="fb-trend">
+            <div class="fb-trend-head">
+              <span class="fb-trend-title">Submissions Over Time</span>
+              <span class="fb-trend-range">Weekly · Aug 3 – Sep 1</span>
+            </div>
+            <div class="fb-trend-grid" style="grid-template-columns:repeat(5, 1fr)"><div class="fb-trend-bar" title="Week of Aug 3: 2" style="height:25%"></div><div class="fb-trend-bar" title="Week of Aug 10: 3" style="height:38%"></div><div class="fb-trend-bar" title="Week of Aug 17: 2" style="height:25%"></div><div class="fb-trend-bar" title="Week of Aug 24: 8" style="height:100%"></div><div class="fb-trend-bar" title="Week of Aug 31: 1" style="height:13%"></div></div>
+          </div>
+
+          <div class="fb-q-toolbar">
+            <span class="fb-q-toolbar-title">Questions</span>
+            <button class="filter-pill-dashed">
+              <span class="icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5" /><path d="M12 7v10M7 12h10" stroke-width="2.4" /></svg></span>
+              <span class="label">Trigger</span>
+            </button>
+            <span class="filter-applied drp-pill">
+              <button class="filter-applied-main">
+                <span class="label">Date Range</span>
+                <span class="sep"></span>
+                <span class="value">Last 30 Days</span>
+                <span class="caret"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3333" stroke-linecap="square"><path d="M11.667 6.333L8 10L4.333 6.333" /></svg></span>
+              </button>
+            </span>
+            <label class="fb-inactive-check">
+              <input type="checkbox" checked />
+              Show Inactive Questions
+            </label>
+          </div>
+
+          <div class="fb-summary">
+            <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q1</span>
+              <span class="fb-type-pill">Linear Scale</span>
+              <span class="fb-req-pill">Mandatory</span>
+              </div>
+              <div class="fb-summary-q-text">How satisfied are you with this certification course?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">16</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10450</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-scale-summary">
+            <div class="fb-scale-stats">
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">7.3</div><div class="fb-scale-stat-label">Average</div></div>
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">16</div><div class="fb-scale-stat-label">Responses</div></div>
+            </div>
+            <div class="fb-scale-histogram">
+              <div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">1</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">2</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">3</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">4</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">25%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:66.66666666666666%" title="4 responses"></div></div>
+                <div class="fb-hist-num">5</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">19%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="3 responses"></div></div>
+                <div class="fb-hist-num">6</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">13%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:33.33333333333333%" title="2 responses"></div></div>
+                <div class="fb-hist-num">7</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">8</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">38%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:100%" title="6 responses"></div></div>
+                <div class="fb-hist-num">9</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">6%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:16.666666666666664%" title="1 responses"></div></div>
+                <div class="fb-hist-num">10</div>
+              </div>
+            </div>
+            <div class="fb-scale-labels-row"><span>Extremely disappointed</span><span>Extremely satisfied</span></div>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q2</span>
+              <span class="fb-type-pill">Multiple Select</span>
+              </div>
+              <div class="fb-summary-q-text">Which parts of the course were most useful?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">13</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10451</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-choice-summary">
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Video lessons</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:30.76923076923077%"></div></div>
+            <div class="fb-bar-value">4 <span class="fb-faint">(31%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Practice quizzes</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:23.076923076923077%"></div></div>
+            <div class="fb-bar-value">3 <span class="fb-faint">(23%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Hands-on tasks</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:30.76923076923077%"></div></div>
+            <div class="fb-bar-value">4 <span class="fb-faint">(31%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Reference materials</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:69.23076923076923%"></div></div>
+            <div class="fb-bar-value">9 <span class="fb-faint">(69%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Proctored exam</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:46.15384615384615%"></div></div>
+            <div class="fb-bar-value">6 <span class="fb-faint">(46%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Other</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill fb-bar-fill--other" style="width:0%"></div></div>
+            <div class="fb-bar-value">0 <span class="fb-faint">(0%)</span></div>
+          </div>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q3</span>
+              <span class="fb-type-pill">Linear Scale</span>
+              <span class="fb-req-pill">Mandatory</span>
+              </div>
+              <div class="fb-summary-q-text">How likely are you to recommend SkillCat to a friend or colleague?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">16</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10452</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-scale-summary">
+            <div class="fb-scale-stats">
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">7.1</div><div class="fb-scale-stat-label">Average</div></div>
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">16</div><div class="fb-scale-stat-label">Responses</div></div>
+            </div>
+            <div class="fb-scale-histogram">
+              <div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">0</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">1</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">2</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">3</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">6%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:25%" title="1 responses"></div></div>
+                <div class="fb-hist-num">4</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">13%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="2 responses"></div></div>
+                <div class="fb-hist-num">5</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">25%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:100%" title="4 responses"></div></div>
+                <div class="fb-hist-num">6</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">13%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="2 responses"></div></div>
+                <div class="fb-hist-num">7</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">25%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:100%" title="4 responses"></div></div>
+                <div class="fb-hist-num">8</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">6%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:25%" title="1 responses"></div></div>
+                <div class="fb-hist-num">9</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">13%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="2 responses"></div></div>
+                <div class="fb-hist-num">10</div>
+              </div>
+            </div>
+            <div class="fb-scale-labels-row"><span>Not at all likely</span><span>Extremely likely</span></div>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q4</span>
+              <span class="fb-type-pill">Multiple Choice</span>
+              <span class="fb-req-pill">Mandatory</span>
+              </div>
+              <div class="fb-summary-q-text">Did you face any issues during the exam?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">16</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10453</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-choice-summary">
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">No issues</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:56.25%"></div></div>
+            <div class="fb-bar-value">9 <span class="fb-faint">(56%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Technical issues (audio, video, app)</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:12.5%"></div></div>
+            <div class="fb-bar-value">2 <span class="fb-faint">(13%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Content was unclear</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:6.25%"></div></div>
+            <div class="fb-bar-value">1 <span class="fb-faint">(6%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Proctoring felt too strict</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:18.75%"></div></div>
+            <div class="fb-bar-value">3 <span class="fb-faint">(19%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Other</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill fb-bar-fill--other" style="width:6.25%"></div></div>
+            <div class="fb-bar-value">1 <span class="fb-faint">(6%)</span></div>
+          </div>
+          <details class="fb-other-list"><summary>Show 1 "Other" responses</summary><ul><li>Custom response from user</li></ul></details>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q5</span>
+              <span class="fb-type-pill">Multiple Choice</span>
+              </div>
+              <div class="fb-summary-q-text">Which topic did you find most difficult?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">13</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10439</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-choice-summary">
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Refrigerant classes</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:23.076923076923077%"></div></div>
+            <div class="fb-bar-value">3 <span class="fb-faint">(23%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Leak rates and thresholds</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:15.384615384615385%"></div></div>
+            <div class="fb-bar-value">2 <span class="fb-faint">(15%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Recovery procedures</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:53.84615384615385%"></div></div>
+            <div class="fb-bar-value">7 <span class="fb-faint">(54%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Safety classifications</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill" style="width:0%"></div></div>
+            <div class="fb-bar-value">0 <span class="fb-faint">(0%)</span></div>
+          </div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-label">Other</div>
+            <div class="fb-bar-track"><div class="fb-bar-fill fb-bar-fill--other" style="width:7.6923076923076925%"></div></div>
+            <div class="fb-bar-value">1 <span class="fb-faint">(8%)</span></div>
+          </div>
+          <details class="fb-other-list"><summary>Show 1 "Other" responses</summary><ul><li>Custom response from user</li></ul></details>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q6</span>
+              <span class="fb-type-pill">True/False</span>
+              </div>
+              <div class="fb-summary-q-text">Recovery cylinders must be evacuated to 5 inHg before initial use.</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">15</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10423</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-tf-summary">
+            <div class="fb-tf-bar"><div class="fb-tf-true" style="width:53%"></div><div class="fb-tf-false"></div></div>
+            <div class="fb-tf-legend">
+              <span>True — <span class="fb-mono">8 (53%)</span></span>
+              <span class="fb-faint">False — <span class="fb-mono">7 (47%)</span></span>
+            </div>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q7</span>
+              <span class="fb-type-pill">Short Answer</span>
+              </div>
+              <div class="fb-summary-q-text">Anything else you'd like us to know?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">7</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10454</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-short-summary">
+            <div class="fb-short-summary-meta">Latest first</div>
+            <div class="fb-short-rows"><div class="fb-short-row">
+                <span class="fb-short-date">Aug 28</span>
+                <span class="fb-short-text">"Honestly the proctoring made me nervous but the content was solid."</span>
+                <span class="fb-short-who">S. Garcia</span>
+              </div><div class="fb-short-row">
+                <span class="fb-short-date">Aug 27</span>
+                <span class="fb-short-text">"Honestly the proctoring made me nervous but the content was solid."</span>
+                <span class="fb-short-who">H. Tanaka</span>
+              </div><div class="fb-short-row">
+                <span class="fb-short-date">Aug 21</span>
+                <span class="fb-short-text">"Great course overall, learned a lot!"</span>
+                <span class="fb-short-who">N. Adams</span>
+              </div></div>
+            <details class="fb-other-list"><summary>View All 7 Answers</summary><div class="fb-short-rows"><div class="fb-short-row">
+                <span class="fb-short-date">Aug 20</span>
+                <span class="fb-short-text">"Honestly the proctoring made me nervous but the content was solid."</span>
+                <span class="fb-short-who">C. Mendez</span>
+              </div><div class="fb-short-row">
+                <span class="fb-short-date">Aug 12</span>
+                <span class="fb-short-text">"Felt rushed at the end. Could use more time on refrigerant types."</span>
+                <span class="fb-short-who">K. O'Brien</span>
+              </div><div class="fb-short-row">
+                <span class="fb-short-date">Aug 9</span>
+                <span class="fb-short-text">"Nothing to add, it was solid."</span>
+                <span class="fb-short-who">M. Johnson</span>
+              </div><div class="fb-short-row">
+                <span class="fb-short-date">Aug 3</span>
+                <span class="fb-short-text">"Felt rushed at the end. Could use more time on refrigerant types."</span>
+                <span class="fb-short-who">Deleted user</span>
+              </div></div></details>
+          </div>
+          </div>
+        </div>
+        <div class="fb-summary-card is-inactive">
+          <div class="fb-summary-card-head">
+            <div class="fb-summary-q">
+              <div class="fb-summary-q-tags">
+              <span class="fb-q-kicker">Q8</span>
+              <span class="fb-type-pill">Linear Scale</span>
+              <span class="fb-inactive-pill">Inactive since Aug 25</span>
+              </div>
+              <div class="fb-summary-q-text">How confident are you in refrigerant recovery procedures after this course?</div>
+              <div class="fb-summary-q-meta">
+                <span class="fb-mono">7</span>
+                <span>answers</span>
+                <span class="tasks-subtitle-dot"></span>
+                <span class="fb-link-id">Q-10440</span>
+              </div>
+            </div>
+          </div>
+          <div class="fb-summary-card-body">
+            <div class="fb-scale-summary">
+            <div class="fb-scale-stats">
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">7.3</div><div class="fb-scale-stat-label">Average</div></div>
+              <div class="fb-scale-stat"><div class="fb-scale-stat-num">7</div><div class="fb-scale-stat-label">Responses</div></div>
+            </div>
+            <div class="fb-scale-histogram">
+              <div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">1</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">2</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">3</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">0%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:0%" title="0 responses"></div></div>
+                <div class="fb-hist-num">4</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">14%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="1 responses"></div></div>
+                <div class="fb-hist-num">5</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">29%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:100%" title="2 responses"></div></div>
+                <div class="fb-hist-num">6</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">14%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="1 responses"></div></div>
+                <div class="fb-hist-num">7</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">14%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="1 responses"></div></div>
+                <div class="fb-hist-num">8</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">14%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="1 responses"></div></div>
+                <div class="fb-hist-num">9</div>
+              </div><div class="fb-hist-col">
+                <div class="fb-hist-pct">14%</div>
+                <div class="fb-hist-bar-wrap"><div class="fb-hist-bar" style="height:50%" title="1 responses"></div></div>
+                <div class="fb-hist-num">10</div>
+              </div>
+            </div>
+            <div class="fb-scale-labels-row"><span>Not confident at all</span><span>Extremely confident</span></div>
+          </div>
+          </div>
+        </div>
+          </div>
+
+          <div class="fb-retention-note">
+            Responses are never deleted — disabling the form preserves them. When a
+            user deletes their account, their responses are kept for aggregate
+            integrity but de-identified.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

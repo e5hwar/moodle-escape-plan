@@ -18,7 +18,7 @@ import {
   type SignUpChannel,
 } from "../data/companies";
 import {
-  SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
+  CalendarIcon, SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
   MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
   MenuProgressIcon,
 } from "./icons";
@@ -336,7 +336,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                     {columns.seatsRemoved && <SortableHeader col="seatsRemoved" label="Removed" className="col-seats-removed" sort={sort} toggle={toggleSort} />}
                     {columns.industry && <SortableHeader col="industry" label="Industry" className="col-industry" sort={sort} toggle={toggleSort} />}
                     {columns.partnership && <SortableHeader col="partnership" label="Partnership" className="col-partnership" sort={sort} toggle={toggleSort} />}
-                    {columns.createdOn && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} />}
+                    {columns.createdOn && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} dateScoped />}
                     {columns.canceledOn && <SortableHeader col="canceledOn" label="Canceled On" className="col-canceled" sort={sort} toggle={toggleSort} />}
                     {columns.trialEndDate && <SortableHeader col="trialEndDate" label="Trial End Date" className="col-trial-end" sort={sort} toggle={toggleSort} />}
                     {columns.dashboardLastAccess && (
@@ -481,21 +481,29 @@ function ColGroup({ columns }: { columns: CompanyColumnState }) {
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle, sortable = true, tip,
+  col, label, className, sort, toggle, sortable = true, tip, dateScoped = false,
 }: {
   col: SortKey; label: string; className?: string; sort: { key: SortKey; dir: SortDir }; toggle: (k: SortKey) => void; sortable?: boolean; tip?: string;
+  /* Marks the column the Date Range filter narrows the table by — it renders
+     the calendar glyph ahead of the label, same treatment as Feedback Forms. */
+  dateScoped?: boolean;
 }) {
+  const thTip = tip ?? (dateScoped ? "Counted within the selected date range" : undefined);
+  const mark = dateScoped ? (
+    <span className="th-date-icon"><CalendarIcon /></span>
+  ) : null;
   if (!sortable) {
     return (
-      <th className={`${className ?? ""} no-sort`.trim()} data-tip={tip}>
-        <span className="th-content">{label}</span>
+      <th className={`${className ?? ""} no-sort`.trim()} data-tip={thTip}>
+        <span className="th-content">{mark}{label}</span>
       </th>
     );
   }
   const active = sort.key === col;
   return (
-    <th className={className} onClick={() => toggle(col)} data-tip={tip}>
+    <th className={className} onClick={() => toggle(col)} data-tip={thTip}>
       <span className="th-content">
+        {mark}
         {label}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>

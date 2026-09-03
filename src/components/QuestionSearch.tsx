@@ -49,9 +49,12 @@ export function QuestionSearch({
   onFormsChange,
   query,
   onCommit,
+  placeholder,
 }: {
   categoryOptions: string[];
   questions: Question[];
+  /** Empty-bar prompt — the landing asks for "a Question or Category". */
+  placeholder?: string;
   /** Filters currently applied to the table — all four are shared with the Filters row. */
   selection: string[];
   onSelectionChange: (next: string[]) => void;
@@ -161,6 +164,18 @@ export function QuestionSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formQuery, formCounts, draft, forms]);
 
+  // Free text also matches categories ("Find a Question or Category…"): the
+  // hits sit between the suggested filters and the "Search for" row, and pick
+  // like a Category: token.
+  const freeCategoryResults = useMemo(() => {
+    const q = freeQuery.trim().toLowerCase();
+    if (!q) return [];
+    return categoryOptions
+      .filter((l) => !selection.includes(l) && l.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [freeQuery, categoryOptions, selection]);
+  const searchRow = FILTER_ROWS + freeCategoryResults.length;
+
   // Options available to keyboard navigation, in render order.
   const optionCount = inCategoryMode
     ? categoryResults.length
@@ -170,7 +185,7 @@ export function QuestionSearch({
         ? quizResults.length
         : inFormMode
           ? formResults.length
-          : FILTER_ROWS + (hasQuery ? 1 : 0);
+          : searchRow + (hasQuery ? 1 : 0);
 
   function optionAt(i: number): Opt | null {
     if (inCategoryMode) {
@@ -193,14 +208,16 @@ export function QuestionSearch({
     if (i === 1) return { kind: "type-filter" };
     if (i === 2) return { kind: "quiz-filter" };
     if (i === 3) return { kind: "form-filter" };
-    if (i === FILTER_ROWS && hasQuery) return { kind: "search" };
+    const cat = freeCategoryResults[i - FILTER_ROWS];
+    if (cat) return { kind: "pick", token: { kind: "category", name: cat } };
+    if (i === searchRow && hasQuery) return { kind: "search" };
     return null;
   }
 
   // Preselect the "Search for…" row when free text is entered so Enter searches.
   useEffect(() => {
-    setActive(!inMode && hasQuery ? FILTER_ROWS : -1);
-  }, [text, draft.length, inMode, hasQuery]);
+    setActive(!inMode && hasQuery ? searchRow : -1);
+  }, [text, draft.length, inMode, hasQuery, searchRow]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
      query, so a bar left showing half-typed text would be lying about what the
@@ -311,8 +328,8 @@ export function QuestionSearch({
     }
   }
 
-  const placeholder = !scoped
-    ? "Search Questions by Text or ID"
+  const barPlaceholder = !scoped
+    ? placeholder ?? "Search Questions by Text or ID"
     : draft.length === 1
       ? `Search within ${draft[0].name}…`
       : `Search within ${draft.length} filters…`;
@@ -336,7 +353,7 @@ export function QuestionSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder={placeholder}
+          placeholder={barPlaceholder}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -515,12 +532,29 @@ export function QuestionSearch({
             </>
           )}
 
+          {!inMode && freeCategoryResults.length > 0 && (
+            <>
+              <div className="usearch-head">Categories</div>
+              {freeCategoryResults.map((label, i) => (
+                <OptionRow
+                  key={label}
+                  active={active === FILTER_ROWS + i}
+                  onHover={() => setActive(FILTER_ROWS + i)}
+                  onClick={() => addToken({ kind: "category", name: label })}
+                >
+                  <span className="usearch-chip">Category:</span>
+                  <span className="usearch-row-ex">{label}</span>
+                </OptionRow>
+              ))}
+            </>
+          )}
+
           {!inMode && hasQuery ? (
             <SearchForRow
               query={freeQuery.trim()}
               scope="Question Bank"
-              active={active === FILTER_ROWS}
-              onHover={() => setActive(FILTER_ROWS)}
+              active={active === searchRow}
+              onHover={() => setActive(searchRow)}
               onClick={commit}
             />
           ) : (

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
-import { ColumnsBody } from "./Filters";
+import { ColumnsBody, sameSelection, dismissesSubmenu } from "./Filters";
 import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import { companies } from "../data/companies";
 
@@ -245,7 +245,7 @@ function summarize(values: string[], all: string[]): string | null {
   if (values.length === 0) return null;
   if (values.length === 1) return values[0];
   if (values.length === all.length) return "All";
-  return `${values.length} selected`;
+  return `${values.length} Selected`;
 }
 
 export function MultiPill({
@@ -312,8 +312,8 @@ function MoreFiltersPill({
       width={300}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More filters"
-          value={count > 0 ? `${count} active` : null}
+          label="More Filters"
+          value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
           onClear={() => onApply({ roles: [], goals: [], industries: [] })}
@@ -388,7 +388,11 @@ function SimpleMultiSelect({
         </div>
       </div>
       <div className="dropdown-footer">
-        <button className="btn-apply" onClick={() => onApply(draft)}>
+        <button
+          className="btn-apply"
+          disabled={sameSelection(draft, value)}
+          onClick={() => onApply(draft)}
+        >
           Apply
         </button>
       </div>
@@ -422,7 +426,10 @@ function MoreFiltersBody({
   }
 
   return (
-    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
+    <div
+      className="cascading-menu"
+      onClick={(e) => dismissesSubmenu(e) && setHovered(null)}
+    >
       <div className="cascading-root">
         <div className="dropdown-list">
           <SubmenuRow label="Role" count={draftRoles.length} active={hovered === "role"} onHover={(top) => { setHovered("role"); setHoveredTop(top); }} />
@@ -430,14 +437,22 @@ function MoreFiltersBody({
           <SubmenuRow label="Industry Preference" count={draftIndustries.length} active={hovered === "industry"} onHover={(top) => { setHovered("industry"); setHoveredTop(top); }} />
         </div>
         <div className="dropdown-footer">
-          <button className="btn-apply" onClick={() => onApply({ roles: draftRoles, goals: draftGoals, industries: draftIndustries })}>
+          <button
+            className="btn-apply"
+            disabled={
+              sameSelection(draftRoles, roles) &&
+              sameSelection(draftGoals, goals) &&
+              sameSelection(draftIndustries, industries)
+            }
+            onClick={() => onApply({ roles: draftRoles, goals: draftGoals, industries: draftIndustries })}
+          >
             Apply
           </button>
         </div>
       </div>
 
       {hovered && (
-        <div className="cascading-sub" style={{ top: hoveredTop }} onMouseEnter={() => setHovered(hovered)}>
+        <div className="cascading-sub" style={{ top: hoveredTop }}>
           <div className="dropdown-list">
             {hovered === "role" && (
               <div className="dropdown-section">
@@ -490,7 +505,7 @@ function SubmenuRow({
     onHover(top);
   }
   return (
-    <button className={`dropdown-submenu-row ${active ? "active" : ""}`} onMouseEnter={handle} onFocus={handle}>
+    <button className={`dropdown-submenu-row ${active ? "active" : ""}`} onMouseEnter={handle} onClick={handle} onFocus={handle}>
       <span className="dropdown-submenu-label">{label}</span>
       {count > 0 && <span className="dropdown-submenu-count">{count}</span>}
       <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>

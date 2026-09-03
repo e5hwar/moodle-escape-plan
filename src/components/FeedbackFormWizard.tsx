@@ -8,7 +8,7 @@ import {
 import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 
 type Props = {
@@ -50,6 +50,13 @@ export function FeedbackFormWizard({
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
   const gate = useEdgeLineGate({ step, setStep, lastStep });
+  // Rail glyphs: the form name is the only mandatory field in the wizard, so
+  // Details passed unnamed shows the red alert circle rather than a check.
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: STEPS.length,
+    incomplete: (i) => i === 0 && form.name.trim().length === 0,
+  });
 
   // Everything saves live (the prototype holds forms in App state), so the
   // footer buttons only handle status transitions and navigation.
@@ -85,8 +92,7 @@ export function FeedbackFormWizard({
 
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
-              const status =
-                i === step ? "active" : i < step ? "done" : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.id}

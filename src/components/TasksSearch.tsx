@@ -60,7 +60,7 @@ export function TasksSearch({
   }, [tasks]);
 
   const scoped = draft.length > 0;
-  const scopeName = draft.length === 1 ? draft[0] : `${draft.length} selected`;
+  const scopeName = draft.length === 1 ? draft[0] : `${draft.length} Selected`;
   const scopeLabel = draft.length === 1 ? "Certification:" : "Certifications:";
 
   // Prefix detection (case-insensitive) puts the box into a filter-selection mode.
@@ -228,7 +228,7 @@ export function TasksSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Tasks"
+          placeholder="Search Tasks..."
           value={text}
           onChange={(e) => {
             setText(e.target.value);

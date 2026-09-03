@@ -3,6 +3,8 @@ import {
   activeLinks,
   feedbackForms as seedForms,
   formResponses,
+  makeDuplicateForm,
+  nextFormId,
   type FeedbackForm,
   type FormStatus,
 } from "../data/feedbackForms";
@@ -184,15 +186,6 @@ function compare(
   }
 }
 
-function nextId(taken: FeedbackForm[]): string {
-  let id: string;
-  do {
-    const n = Math.floor(Math.random() * 9000) + 1000;
-    id = `FB-${String(n).padStart(4, "0")}`;
-  } while (taken.some((f) => f.id === id));
-  return id;
-}
-
 type Props = {
   forms: FeedbackForm[];
   onOpen: (id: string, creating?: boolean) => void;
@@ -293,7 +286,7 @@ export function FeedbackFormsPage({
   function createBlank() {
     const today = new Date().toISOString().slice(0, 10);
     handleCreated({
-      id: nextId(forms),
+      id: nextFormId(forms),
       name: "",
       status: "active",
       questions: [],
@@ -306,25 +299,7 @@ export function FeedbackFormsPage({
   }
 
   function duplicateForm(src: FeedbackForm) {
-    const today = new Date().toISOString().slice(0, 10);
-    handleCreated({
-      id: nextId(forms),
-      name: `${src.name || "Untitled form"} (copy)`,
-      status: "active",
-      // Links the SAME Question Bank questions, same order, same mandatory
-      // flags. The two forms' lists are fully independent after this copy.
-      questions: activeLinks(src).map((l) => ({
-        questionId: l.questionId,
-        mandatory: l.mandatory,
-        status: "active" as const,
-        linkedAt: today,
-      })),
-      triggers: [], // triggers do NOT carry over per spec
-      createdBy: "You",
-      createdAt: today,
-      updatedAt: today,
-      responseCount: 0,
-    });
+    handleCreated(makeDuplicateForm(forms, src));
   }
 
   function setStatus(form: FeedbackForm, status: FormStatus) {

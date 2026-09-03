@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { UploadIcon } from "./icons";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import type { AwardDesignTemplate } from "../data/awards";
 
@@ -58,12 +58,16 @@ export function NewDesignTemplateWizard(props: Props) {
   const bgValid = data.background.trim().length > 0;
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
-  const gate = useEdgeLineGate({
+  // No canGoNext guard: the wheel walks the steps freely, as in every other
+  // wizard. Details left incomplete are reported by the rail, not by refusing
+  // to scroll.
+  const gate = useEdgeLineGate({ step, setStep, lastStep });
+  // Rail glyphs: Details passed without a name or background shows the red
+  // alert circle rather than a check. Field positioning has nothing mandatory.
+  const stepStatuses = useWizardStepStatuses({
     step,
-    setStep,
-    lastStep,
-    // Same guard the footer's Next button enforces.
-    canGoNext: nameValid && bgValid,
+    count: STEPS.length,
+    incomplete: (i) => i === 0 && !(nameValid && bgValid),
   });
 
   function handleSave() {
@@ -96,12 +100,12 @@ export function NewDesignTemplateWizard(props: Props) {
 
           <ol className="wizard-steps">
             {STEPS.map((s, i) => {
-              const status = i === step ? "active" : i < step ? "done" : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.label}
                   className={`wizard-step ${status}`}
-                  onClick={() => (i === 0 || nameValid ? gate.goStep(i) : undefined)}
+                  onClick={() => gate.goStep(i)}
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">

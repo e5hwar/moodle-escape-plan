@@ -48,6 +48,7 @@ import {
   activeLinks,
   feedbackForms as seedForms,
   inactiveLinks,
+  makeDuplicateForm,
   type FeedbackForm,
 } from "./data/feedbackForms";
 import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
@@ -619,6 +620,7 @@ function AdminApp() {
           onEditQuestion={(question) =>
             setView({ name: "edit-question", question })
           }
+          onBackToTasks={() => navigate("tasks")}
         />
       ) : view.name === "new-question" ? (
         <NewQuestionWizard
@@ -738,6 +740,12 @@ function AdminApp() {
           form={activeForm}
           bank={bank}
           onBack={() => setView({ name: "feedback" })}
+          onEdit={() => setView({ name: "feedback-detail", formId: activeForm.id })}
+          onDuplicate={() => {
+            const copy = makeDuplicateForm(forms, activeForm);
+            upsertForm(copy);
+            setView({ name: "feedback-detail", formId: copy.id, creating: true });
+          }}
         />
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormWizard

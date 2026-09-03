@@ -187,7 +187,10 @@ a {
 }
 
 .sidebar-host--narrow {
-  width: 64px;
+  /* Figma 815:1444 — 100px, *not* a thin 64px rail. The collapsed state keeps
+     the same 24px gutters as the expanded one (24 + 48 nav + 24), which is what
+     holds every icon at the identical x through the collapse. */
+  width: 100px;
 }
 
 .sidebar-host--wide {
@@ -209,10 +212,8 @@ a {
   padding: 40px 24px;
 }
 
-.sidebar--collapsed {
-  align-items: center;
-  padding: 20px 6px;
-}
+/* Collapsed shares the expanded shell verbatim — same 40px/24px padding, same
+   header and footer. Only .sidebar__nav-collapsed differs (Figma 815:1444). */
 
 .sidebar--overlay {
   position: absolute;
@@ -236,10 +237,12 @@ a {
 }
 
 /* expanded — header */
+/* Figma 814:2686 — the 33px mark sits on 8px side padding and the rule clears
+   it by 25px, giving the 58px header band. */
 .sidebar__header {
   display: flex;
   align-items: center;
-  padding: 0 8px 1px;
+  padding: 0 8px 25px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
@@ -256,10 +259,6 @@ a {
   width: 100%;
   padding-top: 24px;
   border-top: 1px solid #404040;
-}
-
-.sidebar--collapsed .sidebar__footer {
-  justify-content: center;
 }
 
 .sidebar__collapse-icon {
@@ -283,7 +282,9 @@ a {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 24px 4px 24px 0;
+  /* Figma 814:2693 — 24px above the first section label and nothing below; the
+     footer's own 24px carries the bottom gap. */
+  padding-top: 24px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -311,23 +312,29 @@ a {
 
 .sidebar__section {
   font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 12px;
+  font-weight: 600;
+  /* Figma 814:2957 — 14px on an 18px line. The line box stays 18px whatever the
+     size, which is what the collapsed rail's 58px offsets are measured against;
+     changing this size must not change that. */
+  font-size: 14px;
   line-height: 18px;
   text-transform: uppercase;
-  color: #7a7a7a;
+  color: #a8a8a8;
 }
 
 .sidebar__link {
   display: flex;
   align-items: center;
   gap: 16px;
+  /* Figma 815:1323 — 8/16 padding around a 19px line makes the 35px row. */
   padding: 8px 16px;
   border-radius: 8px;
-  color: #7a7a7a;
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: 13px;
+  /* Figma 815:1327 — SemiBold, not Medium: the rail's labels carry the same
+     weight whether the row is active or not, only the colour changes. */
+  font-weight: 600;
+  font-size: 16px;
   line-height: normal;
   text-align: left;
   transition: background 0.12s ease, color 0.12s ease;
@@ -335,7 +342,7 @@ a {
 
 .sidebar__link:hover {
   background: rgba(122, 122, 122, 0.08);
-  color: #a8a8a8;
+  color: #d4d4d4;
 }
 
 .sidebar__link.is-active {
@@ -361,23 +368,26 @@ a {
 }
 
 /* collapsed */
+/* Figma 815:1445 — the mark keeps the expanded header's 8px inset and 25px
+   clearance, so it doesn't shift when the rail collapses. */
 .sidebar__top-collapsed {
   display: flex;
   align-items: center;
-  justify-content: center;
   width: 100%;
-  padding-bottom: 1px;
+  padding: 0 8px 25px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
+/* Figma 815:1450 — the 58px lead-in and 58px group gaps are the expanded
+   24px + the 18px section label + its 16px gap. Dropping the labels this way
+   leaves every icon on the exact same baseline as in the expanded state. */
 .sidebar__nav-collapsed {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 0;
+  gap: 58px;
+  padding-top: 58px;
   overflow-y: auto;
   width: 100%;
   scrollbar-width: none;
@@ -395,33 +405,27 @@ a {
 .sidebar__group-collapsed {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
   width: 100%;
 }
 
-.sidebar__divider-collapsed {
-  width: 24px;
-  height: 1px;
-  background: rgba(64, 64, 64, 0.5);
-  margin-bottom: 8px;
-  flex-shrink: 0;
-}
-
+/* Figma 815:1455 — 48x35, the same 8/16 padding box as the expanded row with
+   the label removed, so the glyph lands on the identical x and y. */
 .sidebar__icon-btn {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 35px;
+  padding: 8px 16px;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #7a7a7a;
+  color: #a8a8a8;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
 .sidebar__icon-btn:hover {
   background: rgba(122, 122, 122, 0.08);
-  color: #a8a8a8;
+  color: #d4d4d4;
 }
 
 .sidebar__icon-btn.is-active {
@@ -1001,32 +1005,17 @@ button.breadcrumb-item:hover {
 }
 
 /* Certifications Industry filter — indent Sub-Industry rows under their parent */
-.cert-ind-suboption {
-  padding-left: 16px;
-}
-
-/* Certifications "More filters" — free-text CEU + Keyword fields */
-.cert-morefilters {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 12px;
-}
-
-.cert-morefilter-field {
+/* A free-text row inside a "More Filters" cascading submenu (Certifications'
+   CEUs and Keyword). The row's own label is the submenu row, so the panel holds
+   just the field and its one-line help. */
+.filter-textfield {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 12px;
 }
 
-.cert-morefilter-label {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.cert-morefilter-input {
+.filter-textfield-input {
   height: 34px;
   padding: 0 12px;
   background: rgba(0, 0, 0, 0.5);
@@ -1039,15 +1028,15 @@ button.breadcrumb-item:hover {
   outline: none;
 }
 
-.cert-morefilter-input:focus {
+.filter-textfield-input:focus {
   border-color: var(--border-strong);
 }
 
-.cert-morefilter-input::placeholder {
+.filter-textfield-input::placeholder {
   color: var(--text-faint);
 }
 
-.cert-morefilter-help {
+.filter-textfield-help {
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-faint);
@@ -1555,6 +1544,17 @@ button.breadcrumb-item:hover {
   filter: brightness(1.08);
 }
 
+/* Nothing to apply: every filter menu holds a draft, and Apply only lights up
+   once that draft differs from what's already applied. */
+.btn-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn-apply:disabled:hover {
+  filter: none;
+}
+
 /* ===== Table ===== */
 .table {
   /* The table FILLS its container, but never shrinks below the column-width sum
@@ -1868,9 +1868,27 @@ button.breadcrumb-item:hover {
   position: sticky;
   right: 0;
   z-index: 3;
-  text-align: center;
+  /* Right, not centre. A fixed-layout table hands its leftover width to every
+     column in proportion, so this 40px cell renders far wider whenever few
+     columns are on — with a single column it measures ~160px. The controls keep
+     to the rightmost 40px of the cell instead of drifting inward with it, so the
+     Edit Columns gear and the row kebabs sit at the table's right edge in every
+     column configuration. */
+  text-align: right;
   vertical-align: middle;
   background: var(--actions-bg);
+}
+
+/* The 40px control box the cell right-aligns — identical to the old centred
+   rendering when the column is at its 40px, and glued to the right edge when
+   the column has stretched. The hover bar is positioned, not laid out, so it
+   sits this one out. */
+.table .col-actions > *:not(.row-action-bar) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  vertical-align: middle;
 }
 /* The atom's row wash (79:446 / 435:516) — the ONLY copy of it: a 50px ramp
    peaking at the atom's exact 2% grey against the sticky column's left edge.
@@ -1881,7 +1899,9 @@ button.breadcrumb-item:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 100%;
+  /* Meets the 40px control gutter rather than the cell's left edge, which sits
+     further out whenever the fixed layout has stretched the column. */
+  right: 40px;
   width: 50px;
   background: linear-gradient(to right, rgba(122, 122, 122, 0), rgba(122, 122, 122, 0.02));
   pointer-events: none;
@@ -1893,7 +1913,7 @@ button.breadcrumb-item:hover {
 .table thead .col-actions {
   z-index: 6;
   background: var(--actions-bg);
-  text-align: center;
+  text-align: right;
 }
 
 /* A hidden Task reads as one flat grey row — no badge on the name, every value
@@ -2203,17 +2223,15 @@ button.breadcrumb-item:hover {
 .row-action-bar {
   position: absolute;
   /* Placed so the bar's kebab lands EXACTLY on the resting `.lone-dots` glyph.
-     The lone kebab is CENTRED in the actions cell (inline button in a
-     text-align:center td), and the cell's rendered width varies: a table wider
-     than its container keeps the colgroup's 40px, but a narrower one stretches
-     every fixed-layout column. So anchor to the cell's centre, not its edge:
-     the bar's last glyph sits 17px from the bar's right edge (8px cell padding
-     + 0.5px border + 8px half-icon = 16.5, and half-pixel borders round up).
-     50% of the cell minus that puts the two glyphs on the same centre at ANY
-     cell width. Figma confirms it independently: in 762:4663 the pill is 115
+     The lone kebab is centred in the 40px control box the cell right-aligns, so
+     its glyph centre is 20px from the cell's right edge whatever width the
+     fixed layout gave the column. The bar's last glyph sits 17px from the bar's
+     right edge (8px cell padding + 0.5px border + 8px half-icon = 16.5, and
+     half-pixel borders round up), so 20 - 17 = 3 puts the two on the same
+     centre. Figma confirms the 17 independently: in 762:4663 the pill is 115
      wide with its 16px glyph at x=90, so the glyph centre is 115-98 = 17 from
-     the right edge. MOVE THIS whenever the cell's side padding changes. */
-  right: calc(50% - 17px);
+     the right edge. MOVE THIS whenever the control box's width changes. */
+  right: 3px;
   top: 50%;
   transform: translateY(-50%);
   display: none;
@@ -6926,178 +6944,239 @@ button.breadcrumb-item:hover {
   font-size: 12pt;
 }
 
-.cond-card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-  padding: 14px 16px;
+/* Completion Criteria — Figma 853:1553 "Combination of Components - Input
+   Field". A Condition Set is one DS panel: the rgba(122,122,122,0.1) wash over
+   #0d0d0d, 12px radius, rows clipped to it and divided by the half-strength
+   #404040 hairline. The set header, its requirement rows and the
+   "+ Add Requirement" action are all rows of that one panel; sets are OR'd by a
+   labelled rule between panels, and "Add Condition Set" is a panel of its own. */
+.cc-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-width: none;
 }
-.cond-header {
+
+/* Sets sit 4px apart; the OR rule adds its own 4px either side. */
+.cc-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cc-panel {
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+}
+
+.cc-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
-.cond-num {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  display: inline-flex;
+
+.cc-row:last-child {
+  border-bottom: none;
+}
+
+/* The header sits tighter than a content row — 8 against 12. */
+.cc-row-head {
+  padding: 8px 16px;
+}
+
+.cc-head-text {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: var(--text);
-  font-size: 11pt;
-}
-.cond-title {
+  gap: 4px;
   flex: 1;
+  min-width: 0;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: #a8a8a8;
 }
-.cond-remove {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+
+/* "COMPLETE ALL OF THESE" — only ALL carries the weight. */
+.cc-head-text strong {
+  font-weight: 600;
+  color: #a8a8a8;
+}
+
+.cc-row-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cc-row-name {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cc-row-meta {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: #a8a8a8;
+}
+
+/* The header's remove control is the 12px Icon Library minus (856:1854), a size
+   down from the 16px ✕ that drops a single requirement. */
+.cc-head-x {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
 }
-.cond-remove:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-.cond-mode-row {
+
+.cc-head-x:hover {
+  color: #fff;
+}
+
+/* 16px ✕ on a requirement row. */
+.cc-row-x {
+  flex: none;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+
+.cc-row-x:hover {
+  color: #fff;
+}
+
+/* The picker's portal wrapper is a block box, so the body's 1.45 leading would
+   add a 5px strut to the 19px button and push the row past its 43px. */
+.cc-row-foot .dropdown-wrap {
+  display: flex;
+}
+
+/* Both "+" actions are a 16px glyph beside a 16px SemiBold label — a step above
+   the Medium of the requirement names they sit under. The in-panel one is the
+   accent; Add Condition Set stays muted until hover. */
+.cc-add-req,
+.cc-add-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 19px;
+  cursor: pointer;
+}
+
+.cc-add-req {
+  color: #f05523;
+}
+
+/* Add Condition Set (853:1674) is no longer a filled panel: transparent inside
+   a 1px dashed #404040, same 12px radius. The border sits outside the 12/16
+   padding, which is the 45px height and the 17px text inset in the node. */
+.cc-add-set {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px dashed #404040;
+  border-radius: 12px;
+  background: transparent;
+  color: #a8a8a8;
+  text-align: left;
+}
+
+.cc-add-set:hover:not(:disabled) {
+  color: #f05523;
+}
+
+.cc-add-set:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.cc-add-set.has-error {
+  border-color: #ff1f31;
+}
+
+.cc-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.cc-add-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* OR rule between Condition Sets (853:1649 "Page Break"): the width splits into
+   two equal halves 8px apart, and the label closes the LEFT half — so it sits
+   13.5px left of true centre, with the right rule that much longer. It is a row
+   of the 4px stack and carries no margin of its own. */
+.cc-or {
+  display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  color: var(--text-muted);
-  font-size: 12pt;
 }
-.cond-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cond-row {
+
+.cc-or-lead {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 8px;
+  flex: 1;
 }
-.cond-row-name {
-  color: var(--text);
-  font-weight: 600;
-}
-.cond-row-rule {
-  color: var(--text-muted);
-}
-.cond-row-x {
-  margin-left: auto;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-.cond-row-x:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 
-.cond-add {
-  align-self: flex-start;
-  color: #79bbff;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  padding: 4px 0;
-  background: transparent;
-  border: none;
-}
-.cond-add:hover { color: #a9d3ff; }
-
-/* Completion — Condition Sets (spec 7.3.7.1) */
-.cond-intro { margin-top: 0; margin-bottom: 14px; max-width: none; }
-
-.cond-sets {
-  display: flex;
-  flex-direction: column;
-  max-width: none;
-  margin-bottom: 14px;
-}
-/* Raise the cards off the page so the OR separators read clearly */
-.cond-sets .cond-card { background: var(--bg-pill); }
-
-.cond-or-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 0;
-}
-.cond-or-divider::before,
-.cond-or-divider::after {
+.cc-or-lead::before,
+.cc-or::after {
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--border);
-}
-.cond-or-divider span {
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  padding: 2px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-pill-strong);
+  background: rgba(64, 64, 64, 0.5);
 }
 
-.cond-and-note {
+.cc-or span {
   font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text-muted);
-}
-.cond-and-note strong { color: var(--text); }
-
-.cond-empty {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-style: italic;
-  color: var(--text-faint);
-  padding: 4px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 17px;
+  color: #a8a8a8;
 }
 
-.cond-set-foot {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.cond-qs-note {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-faint);
-  line-height: 1.4;
-}
-
-.cond-add-set-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 4px;
-}
-.cond-cap-note {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-faint);
+/* The node's label is a 19px line box; the 1.45 body leading would push the
+   8px gap under it to 10. Scoped to this field rather than every .form-label. */
+.form-label.cc-label {
+  line-height: 19px;
 }
 
 /* Searchable "+ Add item" picker (Tasks / Certifications) */
@@ -7445,6 +7524,8 @@ button.breadcrumb-item:hover {
   top: -1px;
   margin-left: 6px;
   width: 280px;
+  /* Width/gap are mirrored by SUBMENU_WIDTH / SUBMENU_GAP in Filters.tsx,
+     which measures them to decide the side — keep the three in step. */
   max-height: 440px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
@@ -7456,12 +7537,23 @@ button.breadcrumb-item:hover {
   z-index: 110;
 }
 
+/* Pill near the right edge — the submenu opens on the other side instead of
+   off-screen (an overflowing panel widens the document and scrolls the page). */
+.cascading-sub.is-left {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 6px;
+}
+
 .dropdown-submenu-row {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px 8px;
+  /* Figma 28:16538 — 4/8 around the 19px label makes the 27px row (was 6/8,
+     a 31px row). The list's own 8px gap carries the separation between them. */
+  padding: 4px 8px;
   border-radius: 6px;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -7990,18 +8082,20 @@ button.breadcrumb-item:hover {
 /* =============================================================
  * Question Bank
  * ============================================================= */
-.qb-page {
-  flex: 1;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
+/* The page root is `.qb-page.tasks.lm` — the shared `.tasks.lm` list-page
+   chrome laid out as a ROW so the category rail (shared `.rail` + `.tree`
+   chrome, "Rail + tree" section) can sit beside the content pane and ride the
+   same morph progress; the motion lives in the "Question Bank landing"
+   section. Disabled Delete in the category row menu (non-empty category) is
+   covered by the shared `.u-menu :disabled` rules. */
+.qb-page.tasks.lm {
+  flex-direction: row;
+  padding: 0;
+  /* Clips the rail as it slides in from the left. */
+  overflow: hidden;
 }
 
-/* The left rail is the shared `.rail`/`.tree` chrome — see the "Rail + tree"
-   section. Disabled Delete in the row menu (non-empty category) is covered by
-   the shared `.u-menu :disabled` rules. */
-
-/* ─── Right pane ─── */
+/* ─── Content pane ─── */
 .qb-content {
   flex: 1;
   display: flex;
@@ -8245,9 +8339,12 @@ button.breadcrumb-item:hover {
   display: inline-flex;
 }
 
-/* Question Bank search combobox — same spacing the plain input used to have. */
+/* Question Bank search combobox. No bottom margin of its own: it sits inside
+   the shared `.toolbar`, whose 14px carries the gap down to the filters — the
+   same rhythm Tasks and every other list page runs (the margin here predates
+   the move into `.toolbar` and used to double it to 28px). */
 .qb-search {
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 /* Single-select rows inside the Category / Type / Status / Used-in pill menus. */
@@ -10131,12 +10228,14 @@ button.breadcrumb-item:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
+  /* Figma 815:1403 — a fixed 24px circle; "99+" is allowed to fill it edge to
+     edge rather than widening the pill. */
+  width: 24px;
   height: 24px;
-  padding: 0 6px;
+  flex-shrink: 0;
   border-radius: 100px;
-  background: rgba(122, 122, 122, 0.15);
-  color: #7a7a7a;
+  background: rgba(168, 168, 168, 0.15);
+  color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 500;
@@ -13934,25 +14033,42 @@ a.rh-crumb-link:hover {
   margin: 0 0 12px;
 }
 
-/* Inline "Add Sub-Industry" — Figma's dashed Secondary Button (314:2121). */
-.tree-add {
+/* "Add Sub-Industry" / "Add Sub-Category" — Figma Tree 860:2256: a plain
+   32px row on the sub-row inset (pl 28 / pr 8, 4px gap), the 16px thin plus
+   then 16px Regular #a8a8a8; it takes the row hover fill. The Question Bank's
+   `.tree-add-link` is the same row (its root-level "New Category" variant
+   sits on the category inset). */
+.tree-add,
+.tree-add-link {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
   width: 100%;
-  height: 28px;
-  padding: 0 16px;
-  border: 0.5px dashed rgba(122, 122, 122, 0.5);
+  height: 32px;
+  padding: 0 8px 0 28px;
+  border: 0;
   border-radius: 8px;
-  color: #fff;
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.1s ease, color 0.1s ease;
 }
-
-.tree-add:hover {
-  border-color: rgba(122, 122, 122, 0.9);
-  background: rgba(217, 217, 217, 0.04);
+.tree-add:hover,
+.tree-add-link:hover,
+.tree-add-link.is-open {
+  color: #fff;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+.tree-add-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* Rail footer (313:807) — full-bleed sticky block: 2px top rule, centred
@@ -14007,36 +14123,68 @@ a.rh-crumb-link:hover {
   flex-direction: column;
 }
 
-/* Industry row — Figma "Tree - Collapsed/Expanded" states (314:2239):
-   32px tall, 6px/4px padding, 8px radius, 8px gap, white 16px Medium label. */
+/* The tree is a flex column that scrolls, and a flex column squeezes its
+   items before it overflows: rows with a fixed 32px height can shrink toward
+   their text height (19px) the moment the list outgrows the rail, so opening
+   a group compressed the rows above it and everything jumped up under the
+   heading. Nothing in the tree may shrink — growth only ever scrolls. */
+.tree-group,
+.tree-row,
+.tree-sub-row,
+.tree-sublist,
+.tree-sublist-rows,
+.tree-add,
+.tree-add-link,
+.tree-inline {
+  flex-shrink: 0;
+}
+
+/* Category / industry row — Figma Tree 861:2267 (collapsed) / 859:2185
+   (expanded): 32px tall, 8px padding, 4px gap, 8px radius, 16px Regular
+   white label. */
 .tree-row {
   display: flex;
   align-items: center;
-  /* Figma nests two gaps: 2px drag→caret→label (314:2069/2072), 8px
-     label→count→kebab (314:2068/2067). */
-  gap: 2px;
+  gap: 4px;
   height: 32px;
-  padding: 6px 4px;
+  padding: 0 8px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 600;
-  transition: background 0.1s ease;
+  font-weight: 400;
+  transition: background 0.1s ease, box-shadow 0.1s ease;
 }
 
-/* Hover 314:2051, Selected 314:2169 (selected wins on hover — this rule order
-   is what makes Selected + Hover keep the flat fill). */
+/* The Question Bank's rows are role=button divs (their kebab is the real
+   button inside), so they take the pointer themselves. */
+.tree-row[role="button"],
+.tree-sub-row[role="button"] {
+  cursor: pointer;
+}
+
+/* Hover (861:2289): rgba(122,122,122,.2) over the rgba(13,13,13,.75) ground.
+   Selected (861:2281): rgba(240,85,35,.1) over that ground inside a 0.5px
+   rgba(240,85,35,.75) stroke — drawn as an inset ring so the row stays 32px
+   — with the label SemiBold #f05523 and the count #f05523. Selected wins on
+   hover: this rule order keeps the orange fill flat. */
 .tree-row:hover {
-  background: linear-gradient(
-    to right,
-    rgba(217, 217, 217, 0.05) 50%,
-    rgba(115, 115, 115, 0.05) 100%
-  );
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
 }
 
 .tree-row.is-active {
-  background: rgba(115, 115, 115, 0.15);
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)),
+    rgba(13, 13, 13, 0.75);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.75);
+  color: #f05523;
+  font-weight: 600;
+}
+.tree-row.is-active .tree-row-count,
+.tree-row.is-active .tree-caret-btn {
+  color: #f05523;
 }
 
 .tree-row.is-drop-over {
@@ -14088,8 +14236,8 @@ a.rh-crumb-link:hover {
 }
 
 .tree-caret-btn {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -14109,9 +14257,6 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 8px;
   height: 100%;
-  /* 2px row gap + 2px = the 4px Figma now leaves between caret and label
-     (314:2056 gap-[4px]; was 2px). */
-  margin-left: 2px;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -14125,50 +14270,42 @@ a.rh-crumb-link:hover {
   white-space: nowrap;
 }
 
-/* Count column — 28px, right-aligned (314:2075). */
+/* Count — 14px Regular #a8a8a8 sized to its digits (859:2242), right-aligned
+   so the kebab slot after it holds a straight edge. */
 .tree-row-count,
 .tree-sub-row-count {
-  width: 28px;
+  min-width: 24px;
   text-align: right;
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   flex-shrink: 0;
 }
 
-/* 3-dot menu trigger on each row — glyph only, revealed on row hover. */
+/* Row kebab — Figma 865:2443 "Kebab Menu - Horizontal": a 16px glyph at the
+   row's end that exists only while the row is hovered (or its menu is open),
+   so the label keeps the full width otherwise; white, #f05523 on the selected
+   row. */
 .tree-menu-btn {
-  width: 14px;
-  height: 14px;
-  /* 2px row gap + 6px = the 8px Figma leaves between the count and the kebab. */
-  margin-left: 6px;
-  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  display: none;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #a8a8a8;
-  opacity: 0;
-  transition: opacity 0.1s ease, color 0.1s ease;
-}
-
-.tree-sub-menu-btn {
-  width: 12px;
-  height: 12px;
-}
-
-.tree-sub-menu-btn svg {
-  width: 12px;
-  height: 12px;
+  color: #fff;
 }
 
 .tree-row:hover .tree-menu-btn,
-.tree-sub-row:hover .tree-menu-btn {
-  opacity: 1;
+.tree-sub-row:hover .tree-menu-btn,
+.tree-menu-btn.is-open {
+  display: inline-flex;
 }
 
-.tree-menu-btn:hover {
-  color: #fff;
+.tree-row.is-active .tree-menu-btn,
+.tree-sub-row.is-active .tree-menu-btn {
+  color: #f05523;
 }
 
 /* "Hidden" tag — Figma "Tags" 320:1437: no border, tinted fill, 40px radius. */
@@ -14186,62 +14323,50 @@ a.rh-crumb-link:hover {
   color: #737373;
 }
 
-/* Sub-list (314:2091): a 4px-gap column of [rows block, add button]. The rows
-   block is indented 24px and carries the 1px vertical divider; rows themselves
-   start 6px further in (divider 2px + 4px gap). The divider spans the rows
-   only — never the add button. */
+/* Sub-list — Figma Tree 860:2255: the sub rows and the add row stack flush
+   under the category row at the 32px pitch; no gaps, no divider. */
 .tree-sublist {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px 0 10px;
 }
 
 .tree-sublist-rows {
-  position: relative;
   display: flex;
   flex-direction: column;
-  /* 314:2095 gained py-4 + gap-4 — the divider spans the padded block. */
-  gap: 4px;
-  margin-left: 24px;
-  padding: 4px 0 4px 6px;
 }
 
-.tree-sublist-rows::before {
-  content: "";
-  position: absolute;
-  left: 0.5px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(122, 122, 122, 0.5);
-}
-
+/* Sub row (859:2243): 32px, pl 28 / pr 8, 4px gap, 8px radius, 16px Regular. */
 .tree-sub-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   height: 32px;
-  padding: 0 4px;
+  padding: 0 8px 0 28px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
-  transition: background 0.1s ease;
+  transition: background 0.1s ease, box-shadow 0.1s ease;
 }
 
 .tree-sub-row:hover {
-  background: linear-gradient(
-    to right,
-    rgba(217, 217, 217, 0.05) 50%,
-    rgba(115, 115, 115, 0.05) 100%
-  );
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
 }
 
+/* Same selected treatment as the category row. */
 .tree-sub-row.is-active {
-  background: rgba(115, 115, 115, 0.15);
-  font-weight: 500;
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)),
+    rgba(13, 13, 13, 0.75);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.75);
+  color: #f05523;
+  font-weight: 600;
+}
+.tree-sub-row.is-active .tree-sub-row-count {
+  color: #f05523;
 }
 
 .tree-sub-row.is-drop-over {
@@ -14271,13 +14396,6 @@ a.rh-crumb-link:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Inside a sub-list the add button sits inset from both edges
-   (314:2120: pl 42 / pr 22). */
-.tree-sublist .tree-add {
-  width: auto;
-  margin: 0 22px 0 42px;
 }
 
 /* =============================================================
@@ -18086,10 +18204,11 @@ a.rh-crumb-link:hover {
 
 /* ─────────────── Date field (calendar dropdown) ─────────────── */
 
-/* ===== Date field trigger (Figma 552:1173 filled / 556:1820 empty) =====
-   A 1px #404040 shell around a #1e1e20 block: 14px calendar glyph + the value,
-   on a 19px line so the control is 45px tall in BOTH states (43px inside the
-   border). Sized to its content, not the column. */
+/* ===== Date field trigger (Figma 654:926 / 552:1173 filled / 556:1820 empty) =
+   Unfilled, like every other input in the app (.form-input, .drp-input): a 1px
+   #404040 shell over the page, 1px of padding, then the 14px calendar glyph +
+   the value on a 19px line, so the control is 45px tall in BOTH states (43px
+   inside the border). Sized to its content, not the column. */
 .date-field-trigger {
   display: inline-flex;
   align-items: center;
@@ -18108,7 +18227,7 @@ a.rh-crumb-link:hover {
   min-width: 0;
   padding: 12px;
   border-radius: 7px;
-  background: #1e1e20;
+  background: transparent;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -18122,10 +18241,12 @@ a.rh-crumb-link:hover {
   box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.14);
 }
 .date-field-trigger.has-error { border-color: var(--danger, #e5484d); }
-/* No selection yet (Figma 556:1828): 16px Regular #a8a8a8 — lighter and a step
-   larger than the 14px Medium white value it is replaced by. */
+/* No selection yet (Figma 654:929): 16px Regular #404040 — the form-field
+   placeholder grey (.form-input, .drp-input), a step larger than the 14px
+   Medium white value it is replaced by. Search bars use #a8a8a8 because they
+   sit on a #1e1e20 fill; this control has none, so it takes the darker grey. */
 .date-field-placeholder {
-  color: #a8a8a8;
+  color: #404040;
   font-size: 16px;
   font-weight: 400;
 }
@@ -18557,11 +18678,6 @@ a.rh-crumb-link:hover {
 /* Footer rides the shared .dropdown-footer/.btn-apply; Clear is the Secondary
    Button (607:1955): 32px, 20% grey wash over #0d0d0d, 0.5px 10% border. */
 .drp-footer { gap: 8px; }
-.drp-footer .btn-apply:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.drp-footer .btn-apply:disabled:hover { filter: none; }
 .drp-btn-clear {
   display: inline-flex;
   align-items: center;
@@ -21598,6 +21714,478 @@ a.rh-crumb-link:hover {
   border-top: 1px solid var(--border);
   font-size: 10.5pt;
   color: var(--text-faint);
+}
+
+/* ─────────────── Feedback Response Viewer v2 ─────────────── */
+/* One page header + .tabbar over two views: the aggregate Overview and the
+   master–detail Responses browser (design "Feedback Response Viewer v2"). */
+
+/* The viewer's own scrollport — the .tasks shell already pads the sides, so
+   only the bottom needs breathing room. */
+.fb-viewer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}
+
+.fb-viewer-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fb-viewer-tabs {
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+/* Questions / Triggers are managed in Edit Form — present but inert, like the
+   design's grey tabs. */
+.tabbar .tab.is-disabled,
+.tabbar .tab.is-disabled:hover {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.fb-viewer {
+  display: flex;
+  flex-direction: column;
+  max-width: 1180px;
+}
+
+.fb-mono {
+  font-family: var(--font-mono);
+}
+
+/* Stat tiles — label on top, mono value, faint note (design 5-up grid). */
+.fb-ov-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.fb-ov-stat {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.fb-ov-stat-label {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.fb-ov-stat-num {
+  font-family: var(--font-mono);
+  font-size: 18pt;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+
+.fb-ov-stat-note {
+  font-size: 10pt;
+  color: var(--text-faint);
+  margin-top: 8px;
+}
+
+/* Submissions Over Time — hollow accent bars on a baseline hairline. */
+.fb-trend {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+
+.fb-trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.fb-trend-title {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fb-trend-range {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-muted);
+}
+
+.fb-trend-grid {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+  height: 96px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-trend-bar {
+  border-radius: 3px 3px 0 0;
+  background: rgba(240, 110, 60, 0.22);
+  border: 1px solid rgba(240, 110, 60, 0.45);
+  border-bottom: none;
+}
+
+/* Questions toolbar — title, Trigger + Date pills, inactive toggle. */
+.fb-q-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fb-q-toolbar-title {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.fb-inactive-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5pt;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fb-inactive-check input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Summary card headers — Q kicker + type / mandatory / inactive pills. */
+.fb-summary-q-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fb-q-kicker {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-faint);
+}
+
+.fb-type-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border);
+  font-size: 9.5pt;
+  color: #a8a8a8;
+}
+
+.fb-summary-card.is-inactive {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.fb-summary-card.is-inactive .fb-summary-q-text {
+  color: #a8a8a8;
+}
+
+/* True/False split bar. */
+.fb-tf-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fb-tf-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.fb-tf-true {
+  background: rgba(240, 110, 60, 0.22);
+  border: 1px solid rgba(240, 110, 60, 0.45);
+  border-radius: 4px 0 0 4px;
+}
+
+.fb-tf-false {
+  flex: 1;
+  background: var(--bg-pill-strong);
+}
+
+.fb-tf-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5pt;
+  color: var(--text);
+}
+
+/* Scale histogram: with the % row on top each column owns the full card
+   height, so the flex:1 bar wrap can resolve its percentage bars. */
+.fb-scale-histogram {
+  align-items: stretch;
+}
+
+.fb-hist-pct {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-muted);
+}
+
+/* Short answers — date · quote · byline rows. */
+.fb-short-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.fb-short-row {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-short-row:last-child {
+  border-bottom: none;
+}
+
+.fb-short-date {
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  width: 60px;
+}
+
+.fb-short-text {
+  font-size: 11pt;
+  color: var(--text);
+  flex: 1;
+}
+
+.fb-short-who {
+  font-size: 9.5pt;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* File uploads — chips with name + size. */
+.fb-file-summary-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fb-file-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.fb-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 9.5pt;
+  color: var(--text);
+}
+
+.fb-file-chip-size {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+}
+
+/* Responses tab — master–detail split. */
+.fb-split {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  min-height: 620px;
+  overflow: hidden;
+}
+
+.fb-split-left {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.fb-split-search {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-split-counts {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5pt;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
+.fb-split-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.fb-resp-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--bg-pill-strong);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.fb-resp-item:hover {
+  background: var(--bg-row-hover);
+}
+
+.fb-resp-item.is-active {
+  background: var(--bg-row-selected);
+  border-left-color: var(--accent);
+}
+
+.fb-resp-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.fb-resp-item-name {
+  font-size: 11pt;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-resp-item-date {
+  font-family: var(--font-mono);
+  font-size: 8.5pt;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.fb-resp-item-trigger {
+  font-size: 9.5pt;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.fb-split-detail {
+  padding: 24px 28px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.fb-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.fb-detail-name {
+  font-size: 15pt;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fb-detail-meta {
+  font-size: 10.5pt;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.fb-detail-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10pt;
+  color: var(--accent-strong);
+  margin-top: 8px;
+}
+
+.fb-detail-note svg {
+  flex-shrink: 0;
+}
+
+.fb-detail-qa {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-detail-kicker {
+  font-family: var(--font-mono);
+  font-size: 8.5pt;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.fb-detail-kicker .fb-answered-version {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.fb-detail-q {
+  font-size: 11pt;
+  color: #a8a8a8;
+  margin-bottom: 8px;
+}
+
+.fb-detail-answer {
+  font-size: 11pt;
+  color: var(--text);
+  border-left: 2px solid var(--accent);
+  padding-left: 12px;
+  line-height: 1.5;
+}
+
+.fb-detail-answer.is-empty {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.fb-split-footnote {
+  font-size: 9.5pt;
+  color: var(--text-faint);
+  margin-top: 16px;
 }
 
 /* ─────────────── Award recipients page ─────────────── */
@@ -25299,196 +25887,444 @@ span.rvc-crumb--current { cursor: default; }
   font-weight: 500;
 }
 
-/* ═══════════ Question Bank landing — Claude Design "Question Bank Landing 1C" ═══════════
-   The QB RIGHT PANE (`.qb-content`) is the morph root — the category rail sits
-   outside it and stays put in both states. The hero is the oversized search
-   (the shared `.tasks.lm` treatment), fronted by this page's own pieces: a
-   "Find a question" title and counts line above/below the bar, the bulk-upload
-   zone and the filters row collapsed away (they fade in with the table chrome,
-   the `.lm-cards` recipe), and a slim landing CSV bar above the "keep
-   scrolling" rule. The Create CTA rides its own `.qb-head` top row so it holds
-   the pane's top-right in both states. */
+/* ═══════════ Question Bank landing — Claude Design "Question Bank Screens" ═══════════
+   The WHOLE page is the morph root (`.tasks.lm.qb-lm`). The landing is the
+   category browser: page heading + Import CSV + Create CTA on the shared
+   `.tasks-header`, a totals eyebrow, the hero search (shared `.tasks.lm`
+   treatment), a RECENT row, then the A→Z category index in the landing layer
+   with the drop-a-CSV line pinned under it. The working screens are the
+   table beside the category rail (shared `.rail` + `.tree`, no header — the
+   tree and ⌘K carry navigation); the filters row unfolds with the table (the
+   `.lm-cards` recipe) and the index fades as the table chrome forms. */
 
-.qb-head {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
-  flex-shrink: 0;
-}
-
-/* The hero title supplies the landing's top offset, so the shared 56px toolbar
-   margin is retired here (kept a constant — see the `.lm-cards` note on why an
-   animated margin above the toolbar must never mix ramps). */
+/* The header's own 22px bottom margin spaces the hero bar (the design has no
+   title between them), so the shared 56px toolbar lead is retired here (kept
+   a constant — see the `.lm-cards` note on why an animated margin above the
+   toolbar must never mix ramps). */
 .tasks.lm.qb-lm .toolbar {
   margin-top: 0;
 }
 
-/* "Find a question" — collapses on the linear --lm, fades early like the
-   caption row. */
-.qbl-title {
-  height: calc(31px * (1 - var(--lm)));
-  margin-top: calc(40px * (1 - var(--lm)));
-  margin-bottom: calc(18px * (1 - var(--lm)));
-  opacity: calc(1 - 2.4 * var(--lm));
-  overflow: hidden;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 31px;
-  color: #a8a8a8;
-  flex-shrink: 0;
-}
-
-/* "1,089 Questions · 13 Categories" — sits in the toolbar's standard 14px
-   bottom gap, so it needs no margin of its own. */
+/* "1,797 QUESTIONS · 15 CATEGORIES · 55 SUBCATEGORIES" — the eyebrow between
+   the header and the hero search: 44px under the header (the header's own
+   22px + 22px here), 20px down to the bar. Every dimension collapses on the
+   linear --lm; the text fades early like the caption row. */
 .qbl-meta {
-  height: calc(20px * (1 - var(--lm)));
+  max-height: calc(38px * (1 - var(--lm)));
+  padding-top: calc(22px * (1 - var(--lm)));
+  margin-bottom: calc(20px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
   overflow: hidden;
   text-align: center;
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--text-faint);
   flex-shrink: 0;
 }
 
-/* The bulk-upload zone and the filter pills belong to the EXPANDED table view
-   only. HEIGHT rides --lm, VISIBILITY rides --lmt — the `.lm-cards` split that
-   keeps everything below strictly monotonic through the gesture. */
-.tasks.lm.qb-lm:not([data-lm="table"]) .qb-bulk-upload,
+/* "Tasks › Question Bank" — the working screens' crumb trail. The landing is
+   the Question Bank itself, so the trail belongs to the table only: HEIGHT
+   rides --lm and VISIBILITY rides --lmt (the `.lm-cards` split), so the title
+   sits flush at the top of the landing and the crumb unfolds above it as the
+   table forms rather than snapping in. */
+.tasks.lm.qb-lm .qb-crumbs {
+  max-height: calc(22px * var(--lm));
+  overflow: hidden;
+  opacity: var(--lmt);
+}
+.tasks.lm.qb-lm .rvc-pagehead > .qb-crumbs {
+  margin-bottom: calc(12px * var(--lm));
+}
+.tasks.lm.qb-lm:not([data-lm="table"]) .qb-crumbs {
+  pointer-events: none;
+}
+.tasks.lm.qb-lm[data-lm="landing"] .qb-crumbs {
+  visibility: hidden;
+}
+
+/* Landing-only header action — Import CSV fades with the landing chrome and
+   keeps its slot (hidden, not removed) so the Create CTA never shifts. */
+.tasks.lm.qb-lm .qb-import {
+  opacity: calc(1 - var(--lmf));
+}
+.tasks.lm.qb-lm:not([data-lm="landing"]) .qb-import {
+  pointer-events: none;
+}
+.tasks.lm.qb-lm[data-lm="table"] .qb-import {
+  visibility: hidden;
+}
+
+/* RECENT — "RECENT  Commercial Refrigeration · Water Heaters · Solar", 16px
+   under the bar. Collapses with the eyebrow's recipe. */
+.qbl-recent {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 9px;
+  max-height: calc(36px * (1 - var(--lm)));
+  padding-top: calc(16px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  overflow: hidden;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  color: #a8a8a8;
+}
+.tasks.lm.qb-lm[data-lm="table"] .qbl-recent {
+  display: none;
+}
+.qbl-recent-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.qbl-recent-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.qbl-recent-dot {
+  color: #404040;
+}
+.qbl-recent-link {
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+.qbl-recent-link:hover {
+  color: var(--accent);
+}
+
+/* The landing layer holds the tree column. It fades on the filter-row ramp
+   (--lmf) rather than the shared 0.25s crossfade at the table boundary, so
+   the tree is gone before the table forms under it — and it stays anchored
+   to the stage bottom (no footer to clear until the table is there). */
+.tasks.lm.qb-lm .lm-land {
+  bottom: 0;
+  opacity: calc(1 - var(--lmf));
+  transition: none;
+}
+.tasks.lm.qb-lm[data-lm="table"] .lm-land {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+/* The landing layer stretches (the shared .lm-land centres its children) so
+   the index can run the pane's width and the drop line can pin to its foot. */
+.tasks.lm.qb-lm .lm-land {
+  align-items: stretch;
+}
+
+/* A→Z category index — four masonry-style columns of letter groups, each a
+   letter heading over a hairline and its categories (name left, count
+   right). It is its own scroller (`.lm-scroll`) for a bank with hundreds of
+   categories; the wheel morphs to the table only once it is at its top. */
+/* Index header — Figma 867:2473: a 4px/8px row under a 1px #404040 rule,
+   "ALL CATEGORIES · n" (Medium 14) at one end and the Add Category row (the
+   16px plus over SemiBold 14) at the other, both #a8a8a8. The outer element
+   carries the index's centred 1180px measure and 32px gutters — so the rule
+   lines up with the columns beneath and clears the row's 8px inset exactly as
+   the letter rules clear theirs — plus the animated lead the index used to own
+   (it is the first thing in the layer now, so the collapse starts here). */
+.qbl-index-head {
+  flex: none;
+  align-self: center;
+  width: 100%;
+  max-width: 1180px;
+  padding: calc(24px * (1 - var(--lm))) 32px 0;
+}
+.qbl-index-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #404040;
+}
+.qbl-index-head-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #a8a8a8;
+}
+/* Not the rail's full-width filled row — the same icon + label on open space. */
+.qbl-index-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #a8a8a8;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+.qbl-index-add:hover,
+.qbl-index-add.is-open {
+  color: #fff;
+}
+
+.qbl-index {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-self: center;
+  width: 100%;
+  max-width: 1180px;
+  /* Four REAL columns, filled by `balanceIndex` — not `column-count`, which
+     balances by measured height and so both leaves trailing columns empty and
+     breaks a group across a boundary once the list is long. */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: 0 36px;
+  padding: 12px 32px 16px;
+}
+.qbl-index-col {
+  min-width: 0;
+}
+.qbl-index-group {
+  margin-bottom: 18px;
+}
+/* Letter group — Figma 867:2472: the "E · F · G" head (SemiBold 12 #a8a8a8) on
+   a 4px/8px row over a 0.5px #404040 rule, then 4px down to its rows. */
+.qbl-index-letter {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: #a8a8a8;
+  border-bottom: 0.5px solid #404040;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+/* Category row — the same 32px-tree geometry the rail runs (8px inset, 8px
+   radius, 4px gap), so the hover fill lands on a rounded row: Regular 14 white
+   name, Regular 12 #a8a8a8 count. */
+.qbl-index-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #fff;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+.qbl-index-row:hover {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+.qbl-index-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qbl-index-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* "Bulk upload: drop a CSV anywhere on this page, or use Import CSV" — pinned
+   under the index; lights up while a file is dragged over the page. */
+.qbl-drop-hint {
+  flex-shrink: 0;
+  padding: 8px 0 24px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-faint);
+  opacity: calc(1 - 2.4 * var(--lm));
+}
+.qb-page.is-drop-active .qbl-drop-hint {
+  color: var(--accent);
+}
+
+/* ─── Rail — Figma 859:1867 "Left Panel" ───
+   355px at 32px padding (the shared .rail is 380 with a 16px foot), the
+   content pane's rgba(122,122,122,.5) hairline as its right edge, 28px from
+   the search box to the CATEGORIES heading and 8px from that to the tree.
+   The search box is the shared .rail-search geometry with the node's
+   unfilled, rgba(64,64,64,.5)-stroked shell. */
+.qb-rail {
+  width: 355px;
+  padding: 32px;
+  border-right-color: rgba(122, 122, 122, 0.5);
+}
+.qb-rail .rail-search {
+  margin-bottom: 28px;
+  background: transparent;
+  border-color: rgba(64, 64, 64, 0.5);
+}
+/* 859:2090 / 859:2091: a 16px glyph and 16px Medium text (the shared box is 14/14). */
+.qb-rail .rail-search .search-icon,
+.qb-rail .rail-search .search-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.qb-rail .rail-search > input,
+.qb-rail .rail-search > input::placeholder {
+  font-size: 16px;
+}
+.qb-rail .section-heading {
+  margin: 0 0 8px;
+}
+/* 862:2372: rows stack flush at the 32px pitch across the panel's content
+   width — no group gaps, and no hover-fill bleed past the padding. The list
+   still scrolls (the wheel reaches the morph only at its top) but draws no
+   scrollbar — the panel has none in the design. */
+.qb-rail .tree {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  scrollbar-width: none;
+}
+.qb-rail .tree::-webkit-scrollbar {
+  display: none;
+}
+/* Add Category (862:2425) — the add row pinned at the panel's foot, 8px under
+   the tree, square-cornered behind a rgba(64,64,64,.5) hairline. Its
+   category-level inset (pl 8) is the shared row's own padding. */
+.qb-rail-add {
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding-left: 8px;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 0;
+}
+
+
+/* Inline subcategory editor (design S4): an accent-bordered box in the
+   sub-list, the name on one line and "⏎ save · esc cancel" under it. */
+.tree-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* On the sub-row inset, in the add row's place. */
+  margin: 2px 8px 2px 28px;
+  padding: 7px 10px;
+  background: #1a1a1c;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+.tree-inline.is-invalid {
+  border-color: #e8675f;
+}
+.tree-inline-input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+.tree-inline-input::placeholder {
+  color: #7a7a7a;
+}
+.tree-inline-hint {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: #7a7a7a;
+}
+.tree-inline.is-invalid .tree-inline-hint {
+  color: #e8675f;
+}
+
+/* New Category popover (design S4): the .u-menu surface at 330px with a
+   title, two fields and a right-aligned Cancel / Create foot. */
+.qb-catpop {
+  position: fixed;
+  z-index: 200;
+  width: 330px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
+    #0d0d0d;
+  border: 0.5px solid #404040;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  font-family: var(--font-sans);
+}
+.qb-catpop-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.qb-catpop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.qb-catpop-label {
+  font-size: 12px;
+  color: #a8a8a8;
+}
+.qb-catpop-optional {
+  color: #7a7a7a;
+}
+.qb-catpop-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* The rail belongs to the TABLE state. It rides the linear --lm from
+   off-canvas (-355px, its own width) to its place beside the content pane,
+   fading in with the table chrome (--lmt); at the landing it is fully out of
+   the way and inert. The content pane's landing widths are percentages of
+   the pane, so they simply re-centre as the rail takes its 355px. */
+.qb-page.tasks.lm > .rail {
+  margin-left: calc(-355px * (1 - var(--lm)));
+  opacity: var(--lmt);
+}
+.qb-page.tasks.lm:not([data-lm="table"]) > .rail {
+  pointer-events: none;
+}
+.qb-page.tasks.lm[data-lm="landing"] > .rail {
+  visibility: hidden;
+}
+
+/* The filter pills belong to the EXPANDED table view only. HEIGHT rides
+   --lm, VISIBILITY rides --lmt — the `.lm-cards` split that keeps everything
+   below strictly monotonic through the gesture. The cap sits ABOVE the row's
+   tallest natural height (the pills wrap to a second line once a couple of
+   filters are applied — ~52–72px): the row is invisible until --lmt anyway,
+   so an early arrival at natural height can't be seen, and a cap BELOW
+   natural would snap the clipped rows open at the data-lm="table" boundary.
+   min(cap, natural) stays monotonic in --lm either way. */
 .tasks.lm.qb-lm:not([data-lm="table"]) .qb-filters-row {
   opacity: var(--lmt);
   overflow: hidden;
   pointer-events: none;
-}
-/* = the zone's natural height: 20px padding ×2 + 19px title + 4px gap + 17px sub. */
-.tasks.lm.qb-lm:not([data-lm="table"]) .qb-bulk-upload {
-  max-height: calc(80px * var(--lm));
-  margin-bottom: calc(18px * var(--lm));
-}
-/* The cap sits ABOVE the row's tallest natural height (the pills wrap to a
-   second line once a couple of filters are applied — ~52–72px), unlike the
-   bulk zone's exact 80: the row is invisible until --lmt anyway, so an early
-   arrival at natural height can't be seen, and a cap BELOW natural would snap
-   the clipped rows open at the data-lm="table" boundary. min(cap, natural)
-   stays monotonic in --lm either way. */
-.tasks.lm.qb-lm:not([data-lm="table"]) .qb-filters-row {
   max-height: calc(96px * var(--lm));
   margin-bottom: calc(14px * var(--lm));
 }
 
-/* The landing widths are percentages of the pane (70/72%), so the rail-narrowed
-   Question Bank pane needs no special clamp — the cap is kept as a backstop. */
-.tasks.lm.qb-lm .toolbar,
-.tasks.lm.qb-lm .lm-caption,
-.tasks.lm.qb-lm .lm-list,
-.tasks.lm.qb-lm .lm-hint-wrap {
-  max-width: 100%;
-}
-
-/* The hero meta line (20px) + the toolbar gap already pad the stage top, so
-   the caption sits closer than the shared 65px. */
-.tasks.lm.qb-lm .lm-caption {
-  margin-top: calc(33px * (1 - var(--lm)));
-}
-
-/* The Question cell is the app's one WRAPPING table cell (two-line clamp), so
-   the landing rows must wrap identically — with fixed 40px landing rows, every
-   row below a wrapped one would shear sideways during the p=1 crossfade.
-   Height is content-driven over the table's 40px floor; as the tracks widen
-   each frame the text reflows continuously, so tall rows settle into the
-   table's own heights by the hand-off. */
-.tasks.lm.qb-lm .lm-row {
-  height: auto;
-  min-height: 40px;
-}
-.tasks.lm.qb-lm .lm-cell--name {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: normal;
-  /* The real cell's metrics: regular weight (only the color stands out — per
-     the 2026-08-06 pass on td.qb-col-question) and 6px vertical insets. */
-  font-weight: 400;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-/* The table's Type column is var(--text) (td.qb-col-type), not the landing's
-   muted #a8a8a8 — match it so the crossfade doesn't brighten the column. */
-.tasks.lm.qb-lm .prl-swap-real {
-  color: var(--text);
-}
-
-/* The row-click preview panel belongs to the TABLE view. It sits OUTSIDE the
-   morph root (the third pane of .qb-page), so at the landing it would squeeze
-   the hero into the leftover width — instead it joins the table's own
-   appearing/disappearing boundary: hidden the moment the pane leaves the
-   table state, back when a landing row click's morph completes. */
-.qb-content.qb-lm:not([data-lm="table"]) ~ .qprev {
-  display: none;
-}
-
-/* ── Slim landing CSV bar (the design's "Bulk upload — drop a CSV or click").
-   Stands in for the collapsed .qb-bulk-upload zone; sits between the list and
-   the keep-scrolling rule, and collapses away like the hint bar. ── */
-.qbl-csv-wrap {
-  height: calc(58px * (1 - var(--lm)));
-  opacity: calc(1 - 2.6 * var(--lm));
-  overflow: hidden;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-  flex-shrink: 0;
-}
-.qbl-csv {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: 640px;
-  max-width: 100%;
-  height: 42px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease;
-}
-.qbl-csv > svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-.qbl-csv:hover,
-.qbl-csv.is-active {
-  border-color: rgba(233, 114, 55, 0.5);
-  color: var(--accent);
-}
-.qbl-csv-text {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.qbl-csv-link {
-  display: inline-flex;
-  align-items: center;
-  color: #f05523;
-}
-.qbl-csv-link:hover {
-  text-decoration: underline;
-}
-.qbl-csv-link svg {
-  flex-shrink: 0;
-  transform: translateY(-1px);
-}
 
 /* =============================================================
  * Quiz Questions card — Figma 750:1672 "Quiz Questions".

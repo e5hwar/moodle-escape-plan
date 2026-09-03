@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
 import { ChevronRightIcon, EditColumnsIcon } from "./icons";
-import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
+import { PillTrigger, summarize, sameSelection, dismissesSubmenu, SectionedMultiSelect, CheckRow } from "./Filters";
 import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
 import {
   TIERS,
@@ -261,14 +261,14 @@ function MoreFiltersPill({
   onApply: (v: { signUps: string[]; billingCycles: string[]; paymentMethods: string[] }) => void;
 }) {
   const count = signUps.length + billingCycles.length + paymentMethods.length;
-  const summary = count > 0 ? `${count} active` : null;
+  const summary = count > 0 ? `${count} Active` : null;
 
   return (
     <Dropdown
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More filters"
+          label="More Filters"
           value={summary}
           open={open}
           toggle={toggle}
@@ -323,7 +323,10 @@ function MoreFiltersBody({
   }
 
   return (
-    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
+    <div
+      className="cascading-menu"
+      onClick={(e) => dismissesSubmenu(e) && setHovered(null)}
+    >
       <div className="cascading-root">
         <div className="dropdown-list">
           <SubmenuRow
@@ -345,6 +348,11 @@ function MoreFiltersBody({
         <div className="dropdown-footer">
           <button
             className="btn-apply"
+            disabled={
+              sameSelection(draftSignUps, signUps) &&
+              sameSelection(draftCycles, billingCycles) &&
+              sameSelection(draftPayments, paymentMethods)
+            }
             onClick={() => onApply({ signUps: draftSignUps, billingCycles: draftCycles, paymentMethods: draftPayments })}
           >
             Apply
@@ -356,7 +364,6 @@ function MoreFiltersBody({
         <div
           className="cascading-sub"
           style={{ top: hoveredTop }}
-          onMouseEnter={() => setHovered(hovered)}
         >
           <div className="dropdown-list">
             {hovered === "signUp" && (
@@ -426,6 +433,7 @@ function SubmenuRow({
     <button
       className={`dropdown-submenu-row ${active ? "active" : ""}`}
       onMouseEnter={handle}
+      onClick={handle}
       onFocus={handle}
     >
       <span className="dropdown-submenu-label">{label}</span>

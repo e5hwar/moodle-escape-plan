@@ -5,8 +5,8 @@ import { RichTextField } from "./RichTextField";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
-import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, PencilIcon } from "./icons";
-import { WizardStepRail } from "./WizardStepRail";
+import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, TreeKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
@@ -284,6 +284,10 @@ const nodeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${nodeS
 
 function newCourse(): CertCourse {
   return { id: nodeId("co"), nameEn: "", nameEs: "", descEn: "", descEs: "", expanded: true, hidden: false, children: [] };
+}
+
+function newConditionSet(): ConditionSet {
+  return { id: nodeId("cs"), items: [] };
 }
 
 function newLesson(): CertLesson {
@@ -583,8 +587,10 @@ const BLANK_DATA: WizardData = {
 // Structural data (courses, completion) isn't stored on the list record, so for
 // existing Certifications we populate plausible sample data instead.
 function buildInitialData(editing?: Certification): WizardData {
-  // Every Certification must contain at least one Course, so seed one by default.
-  if (!editing) return { ...BLANK_DATA, courses: [newCourse()] };
+  // Every Certification must contain at least one Course and one Condition Set,
+  // so seed one of each by default. The Condition Set opens empty — the Admin
+  // fills it from "+ Add Requirement".
+  if (!editing) return { ...BLANK_DATA, courses: [newCourse()], conditionSets: [newConditionSet()] };
   const vis = editing.visibility ?? "Visible";
   const sample = buildSampleStructure(editing);
   return {
@@ -687,13 +693,21 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
     [attemptedSubmit, collectMissing, data],
   );
 
-  /** Steps that still hold a flagged empty field — drives the rail's error state. */
-  const errorSteps = useMemo(() => {
-    const out = new Set<number>();
-    if (!attemptedSubmit) return out;
-    for (const g of collectMissing(data)) out.add(g.step);
-    return out;
-  }, [attemptedSubmit, collectMissing, data]);
+  /** Steps that still hold an empty mandatory field. */
+  const gapSteps = useMemo(
+    () => new Set(collectMissing(data).map((g) => g.step)),
+    [collectMissing, data],
+  );
+
+  /* The rail's error state. A step flags "needs input" once you've moved past
+     it — or skipped it from the rail — with a mandatory field still empty; a
+     publish attempt flags every gap, steps you never opened included. */
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: steps.length,
+    incomplete: (i) => gapSteps.has(i),
+    flagAll: attemptedSubmit,
+  });
 
   /* Publish / Save changes: check every mandatory field on every step first. A
      gap sends you to the step that owns the first one with it flagged. A clean
@@ -766,13 +780,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
 
           <ol className="wizard-steps">
             {steps.map((s, i) => {
-              const status = errorSteps.has(i)
-                ? "error"
-                : i === step
-                ? "active"
-                : i < step
-                ? "done"
-                : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.id}
@@ -2663,11 +2671,7 @@ function CompletionStep({
 
   function addConditionSet() {
     if (atCap) return;
-    update({ conditionSets: [...sets, { id: `cs-${Date.now()}`, items: [] }] });
-  }
-
-  function removeConditionSet(id: string) {
-    update({ conditionSets: sets.filter((s) => s.id !== id) });
+    update({ conditionSets: [...sets, newConditionSet()] });
   }
 
   function addItem(setId: string, item: CompletionItem) {
@@ -2678,69 +2682,77 @@ function CompletionStep({
     });
   }
 
+  function removeConditionSet(id: string) {
+    update({ conditionSets: sets.filter((s) => s.id !== id) });
+  }
+
+  // Clearing out a Condition Set's last requirement drops the set too, the same
+  // as its header minus. A set added but never filled in stays put, so there is
+  // somewhere to add the first requirement.
   function removeItem(setId: string, itemId: string) {
     update({
-      conditionSets: sets.map((s) =>
-        s.id === setId ? { ...s, items: s.items.filter((i) => i.id !== itemId) } : s,
-      ),
+      conditionSets: sets.flatMap((s) => {
+        if (s.id !== setId) return [s];
+        const items = s.items.filter((i) => i.id !== itemId);
+        return items.length > 0 ? [{ ...s, items }] : [];
+      }),
     });
   }
 
   return (
     <>
       <div className="form-group">
-        <label className="form-label">
-          Completion criteria <span className="req">*</span>
+        <label className="form-label cc-label">
+          Completion Criteria <span className="req">*</span>
         </label>
         <CompletionCriteriaGate locked={criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-          {sets.length === 0 ? (
-            <div className={`cert-empty-hint${missing ? " has-error" : ""}`}>
-              No Condition Sets yet. Add one to define how this Certification is completed — most
-              Certifications have a single set with one item (the final exam).
-            </div>
-          ) : (
-            <div className="cond-sets">
-              {sets.map((set, idx) => (
-                <div key={set.id}>
-                  {idx > 0 && (
-                    <div className="cond-or-divider"><span>OR</span></div>
-                  )}
-                  <ConditionSetCard
-                    set={set}
-                    index={idx + 1}
-                    onRemove={() => removeConditionSet(set.id)}
-                    onAddItem={(item) => addItem(set.id, item)}
-                    onRemoveItem={(itemId) => removeItem(set.id, itemId)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="cond-add-set-row">
-            <button className="cert-add-course inline" onClick={addConditionSet} disabled={atCap}>
-              + Add Condition Set
-            </button>
-            {atCap && (
-              <span className="cond-cap-note">
-                Up to {MAX_CONDITION_SETS} Condition Sets (temporary limit).
-              </span>
+          <div className="cc-stack">
+            {sets.length > 0 && (
+              <div className="cc-sets">
+                {sets.map((set, idx) => (
+                  <Fragment key={set.id}>
+                    {idx > 0 && (
+                      <div className="cc-or">
+                        <div className="cc-or-lead">
+                          <span>OR</span>
+                        </div>
+                      </div>
+                    )}
+                    <ConditionSetCard
+                      set={set}
+                      index={idx + 1}
+                      onRemove={() => removeConditionSet(set.id)}
+                      onAddItem={(item) => addItem(set.id, item)}
+                      onRemoveItem={(itemId) => removeItem(set.id, itemId)}
+                    />
+                  </Fragment>
+                ))}
+              </div>
             )}
+
+            <button
+              type="button"
+              className={`cc-add-set${missing && sets.length === 0 ? " has-error" : ""}`}
+              onClick={addConditionSet}
+              disabled={atCap}
+            >
+              <span className="cc-add-icon">
+                <PlusThinIcon />
+              </span>
+              Add Condition Set
+            </button>
           </div>
         </CompletionCriteriaGate>
 
         {missing && (
           <p className="form-error-text">
-            Add at least one Condition Set with an item to publish.
+            Add at least one Condition Set with a requirement to publish.
           </p>
         )}
 
-        <p className="form-help cond-intro">
-          The Certification is complete when a learner satisfies <strong>any one</strong> Condition
-          Set in full. Within a Condition Set, <strong>all</strong> items must be completed.
-        </p>
         <p className="form-help">
-          Any change to completion criteria resets completion data for all enrolled users. Awards already issued are not revoked.
+          Learner must satisfy any one Condition Set in full. Within the Condition Set, all items
+          must be completed.
         </p>
       </div>
     </>
@@ -2812,12 +2824,27 @@ function CompletionCriteriaGate({
   );
 }
 
-function CompletionItemBadge({ item }: { item: CompletionItem }) {
-  if (item.kind === "task") return <TaskKindBadge kind={item.taskKind} />;
-  if (item.kind === "quiz-section") return <span className="task-kind-badge quiz">QS</span>;
-  return <span className="task-kind-badge cert">C</span>;
+// The muted suffix that trails a requirement's name on its row ("· Quiz Task"),
+// per Figma 853:1553. Every requirement names its own type, so the old coloured
+// letter badge is gone.
+const ITEM_TASK_META: Record<TaskKind, string> = {
+  xapi: "xAPI Task",
+  quiz: "Quiz Task",
+  "hands-on": "Hands-On Task",
+  file: "Resource Task",
+};
+
+function itemMeta(item: CompletionItem): string {
+  if (item.kind === "task") return ITEM_TASK_META[item.taskKind];
+  if (item.kind === "quiz-section") return "Quiz Section";
+  return "Certification";
 }
 
+// One Condition Set = one panel. The header names the set (and, once it holds
+// more than one requirement, spells out that ALL of them are required), the
+// body lists the requirements, and the last row is the "+ Add Requirement"
+// action — every one of them a row of the same clipped surface. The header's
+// 12px minus drops the whole set; the 16px ✕ on a row drops that requirement.
 function ConditionSetCard({
   set,
   index,
@@ -2832,59 +2859,67 @@ function ConditionSetCard({
   onRemoveItem: (itemId: string) => void;
 }) {
   return (
-    <div className="cond-card">
-      <div className="cond-header">
-        <span className="cond-num">{index}</span>
-        <span className="cond-title">Condition Set {index}</span>
-        <button className="cond-remove" onClick={onRemove} aria-label="Remove Condition Set">
-          <SmallXIcon />
+    <div className="cc-panel">
+      <div className="cc-row cc-row-head">
+        <div className="cc-head-text">
+          <span>CONDITION SET {index}</span>
+          {set.items.length > 1 && (
+            <span>
+              · COMPLETE <strong>ALL</strong> OF THESE:
+            </span>
+          )}
+        </div>
+        <button
+          className="cc-head-x"
+          onClick={onRemove}
+          title="Remove Condition Set"
+          aria-label={`Remove Condition Set ${index}`}
+        >
+          <MinusThinIcon />
         </button>
       </div>
 
-      <div className="cond-and-note">
-        Learner must complete <strong>all</strong> of these items:
-      </div>
+      {set.items.map((item) => (
+        <div key={item.id} className="cc-row">
+          <div className="cc-row-main">
+            <span className="cc-row-name">{item.name}</span>
+            <span className="cc-row-meta">· {itemMeta(item)}</span>
+          </div>
+          <button
+            className="cc-row-x"
+            onClick={() => onRemoveItem(item.id)}
+            aria-label={`Remove ${item.name}`}
+          >
+            <SmallXIcon />
+          </button>
+        </div>
+      ))}
 
-      <div className="cond-list">
-        {set.items.length === 0 ? (
-          <div className="cond-empty">No items yet — add a Task or Certification below.</div>
-        ) : (
-          set.items.map((item) => (
-            <div key={item.id} className="cond-row">
-              <CompletionItemBadge item={item} />
-              <span className="cond-row-name">{item.name}</span>
-              {item.kind === "quiz-section" && (
-                <span className="cond-row-rule">· Quiz-Section in {item.quizName}</span>
-              )}
-              {item.kind === "cert" && <span className="cond-row-rule">· Certification</span>}
-              <button
-                className="cond-row-x"
-                onClick={() => onRemoveItem(item.id)}
-                aria-label={`Remove ${item.name}`}
-              >
-                <SmallXIcon />
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="cond-set-foot">
+      <div className="cc-row cc-row-foot">
+        {/* Portalled: the panel is clipped to 12px, so an in-flow menu would be
+            cut off by it. */}
         <Dropdown
+          overlay
+          constrainHeight
           width={340}
           trigger={({ toggle }) => (
-            <button className="cond-add" onClick={toggle}>+ Add item</button>
+            <button className="cc-add-req" onClick={toggle}>
+              <span className="cc-add-icon">
+                <PlusThinIcon />
+              </span>
+              Add Requirement
+            </button>
           )}
         >
           {({ close }) => (
             <ConditionItemPicker
-              onPick={(item) => { onAddItem(item); close(); }}
+              onPick={(item) => {
+                onAddItem(item);
+                close();
+              }}
             />
           )}
         </Dropdown>
-        <span className="cond-qs-note">
-          Quiz-Section conditions (EPA and other rare cases) are configured via the database.
-        </span>
       </div>
     </div>
   );

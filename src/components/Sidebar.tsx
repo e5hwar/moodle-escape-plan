@@ -184,8 +184,10 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
           </div>
           <nav className="sidebar__nav-collapsed">
             {sections.map((section, idx) => (
+              // Figma 815:1444 draws no divider between collapsed groups — the
+              // 58px gap (the expanded label's height plus its gap) is the
+              // separator, and it keeps icons aligned across both states.
               <div key={section.label ?? idx} className="sidebar__group-collapsed">
-                {idx > 0 && <div className="sidebar__divider-collapsed" aria-hidden="true" />}
                 {section.items.map((item) => (
                   <button
                     key={item.key}

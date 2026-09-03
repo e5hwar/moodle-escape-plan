@@ -8,7 +8,7 @@ import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, M
 import { NewQuestionWizard } from "./NewQuestionWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
-import { WizardStepRail } from "./WizardStepRail";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -588,14 +588,22 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     return new Set([...missingKeys].filter((k) => still.has(k)));
   }, [missingKeys, collectMissing, data]);
 
-  /** Steps that still hold a flagged empty field — drives the quiet rail. */
-  const errorSteps = useMemo(() => {
-    const out = new Set<number>();
-    if (showNameError) out.add(0);
-    if (missingKeys.size === 0) return out;
-    for (const g of collectMissing(data)) if (missingKeys.has(g.key)) out.add(g.step);
-    return out;
-  }, [showNameError, missingKeys, collectMissing, data]);
+  /** Steps that still hold an empty mandatory field, whatever owns it. */
+  const gapSteps = useMemo(
+    () => new Set(collectMissing(data).map((g) => g.step)),
+    [collectMissing, data],
+  );
+
+  /* The quiet rail. A step flags "needs input" once you've moved past it — or
+     skipped it from the rail — with a mandatory field still empty, never while
+     you're filling it in for the first time. A publish attempt flags every gap,
+     including ones on steps you never opened. */
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: steps.length,
+    incomplete: (i) => gapSteps.has(i),
+    flagAll: attemptedSubmit,
+  });
 
   /* "Save & Publish" and the last step's "Publish" are the same action: check
      every mandatory field on every step, then create the Task with whatever
@@ -638,14 +646,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
           <ol className="wizard-steps">
             {steps.map((s, i) => {
-              const status =
-                errorSteps.has(i)
-                  ? "error"
-                  : i === step
-                  ? "active"
-                  : i < step
-                  ? "done"
-                  : "upcoming";
+              const status = stepStatuses[i];
               return (
                 <li
                   key={s.id}

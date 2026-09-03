@@ -2,10 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   tasks as taskLibrary,
   discoverableLabel,
-  finalExamLabel,
-  isPaid,
+  subscriptionLabel,
   type Task,
-  type TaskType,
 } from "../data/tasks";
 import { certifications } from "../data/certifications";
 import {
@@ -22,14 +20,14 @@ import { SortIcon, CheckIcon, SmallXIcon, SearchIcon } from "./icons";
 /* The library Task picker for the Certification wizard's Add Tasks step. It is a
  * full table view rather than a dropdown: same search bar, filter pills, sorting
  * and column vocabulary as the standalone Tasks page, plus the two things the
- * wizard needs that the page doesn't — multi-select and a per-row Preview. */
+ * wizard needs that the page doesn't — multi-select, and a per-row Preview that
+ * opens the Task in its own tab (the same ?editTask= route the Hands-On review
+ * screen uses) rather than in a side panel. */
 
-const KIND_BY_TYPE: Record<TaskType, { letter: string; cls: string }> = {
-  xAPI: { letter: "X", cls: "xapi" },
-  Quiz: { letter: "Q", cls: "quiz" },
-  "Hands-On Task": { letter: "H", cls: "handson" },
-  Resource: { letter: "R", cls: "file" },
-};
+/** Opens one of the app's standalone, full-tab pages. */
+function openInNewTab(query: string) {
+  window.open(`${window.location.origin}${window.location.pathname}?${query}`, "_blank", "noopener");
+}
 
 // A Task has no Industry of its own — it inherits the Industries of every
 // Certification it is used in. The Industries column checks those against the
@@ -102,7 +100,7 @@ export function AddExistingTasksModal({
     creators: [],
     certifications: [],
     discoverable: [],
-    finalExam: [],
+    subscription: [],
     types: [],
     visibilities: [],
     tags: [],
@@ -113,7 +111,6 @@ export function AddExistingTasksModal({
     dir: "asc",
   });
   const [picked, setPicked] = useState<string[]>([]);
-  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const already = useMemo(() => new Set(existingNames), [existingNames]);
   const certIndustrySet = useMemo(() => new Set(certIndustries), [certIndustries]);
@@ -146,7 +143,7 @@ export function AddExistingTasksModal({
         return false;
       if (filters.discoverable.length && !filters.discoverable.includes(discoverableLabel(t)))
         return false;
-      if (filters.finalExam.length && !filters.finalExam.includes(finalExamLabel(t)))
+      if (filters.subscription.length && !filters.subscription.includes(subscriptionLabel(t)))
         return false;
       if (filters.types.length && !filters.types.includes(t.type)) return false;
       if (filters.tags.length && !(t.tags ?? []).some((tag) => filters.tags.includes(tag)))
@@ -187,17 +184,14 @@ export function AddExistingTasksModal({
     );
   }
 
-  const preview = previewId ? taskLibrary.find((t) => t.id === previewId) ?? null : null;
-  const panelOpen = preview !== null;
-
-  // Natural table width — mirrors <ColGroup>. The cert-derived columns collapse
-  // while the preview panel is open, the way the Tasks page compacts its table.
+  // Natural table width — mirrors <ColGroup>.
   const tableMin =
     44 /* check */ +
     240 /* name */ +
-    (panelOpen ? 0 : 190 /* used in */ + 120 /* cert type */) +
+    190 /* used in */ +
+    120 /* cert type */ +
     150 /* task type */ +
-    (panelOpen ? 0 : 190 /* industries */) +
+    190 /* industries */ +
     104 /* preview */;
 
   function confirm() {
@@ -253,7 +247,7 @@ export function AddExistingTasksModal({
               style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
             >
               <table className="table table-head">
-                <ColGroup panelOpen={panelOpen} />
+                <ColGroup />
                 <thead>
                   <tr>
                     <th className="aet-col-check no-sort">
@@ -273,24 +267,20 @@ export function AddExistingTasksModal({
                       sort={sort}
                       toggle={toggleSort}
                     />
-                    {!panelOpen && (
-                      <SortableHeader
-                        col="usedIn"
-                        label="Certifications Used In"
-                        className="aet-col-used"
-                        sort={sort}
-                        toggle={toggleSort}
-                      />
-                    )}
-                    {!panelOpen && (
-                      <SortableHeader
-                        col="certType"
-                        label="Type"
-                        className="aet-col-certtype"
-                        sort={sort}
-                        toggle={toggleSort}
-                      />
-                    )}
+                    <SortableHeader
+                      col="usedIn"
+                      label="Certifications Used In"
+                      className="aet-col-used"
+                      sort={sort}
+                      toggle={toggleSort}
+                    />
+                    <SortableHeader
+                      col="certType"
+                      label="Type"
+                      className="aet-col-certtype"
+                      sort={sort}
+                      toggle={toggleSort}
+                    />
                     <SortableHeader
                       col="type"
                       label="Task Type"
@@ -298,15 +288,13 @@ export function AddExistingTasksModal({
                       sort={sort}
                       toggle={toggleSort}
                     />
-                    {!panelOpen && (
-                      <SortableHeader
-                        col="industries"
-                        label="Industries"
-                        className="aet-col-inds"
-                        sort={sort}
-                        toggle={toggleSort}
-                      />
-                    )}
+                    <SortableHeader
+                      col="industries"
+                      label="Industries"
+                      className="aet-col-inds"
+                      sort={sort}
+                      toggle={toggleSort}
+                    />
                     <th className="aet-col-preview no-sort" />
                   </tr>
                 </thead>
@@ -314,11 +302,11 @@ export function AddExistingTasksModal({
 
               <div className="tasks-scroll">
                 <table className="table table-body">
-                  <ColGroup panelOpen={panelOpen} />
+                  <ColGroup />
                   <tbody>
                     {sorted.length === 0 ? (
                       <tr className="aet-empty-row">
-                        <td colSpan={panelOpen ? 4 : 7}>
+                        <td colSpan={7}>
                           No Tasks match your search and filters.
                         </td>
                       </tr>
@@ -327,15 +315,11 @@ export function AddExistingTasksModal({
                         <Row
                           key={t.id}
                           task={t}
-                          panelOpen={panelOpen}
                           picked={picked.includes(t.id)}
                           added={already.has(t.name)}
-                          previewing={previewId === t.id}
                           certIndustries={certIndustrySet}
                           onToggle={() => toggle(t)}
-                          onPreview={() =>
-                            setPreviewId((id) => (id === t.id ? null : t.id))
-                          }
+                          onPreview={() => openInNewTab(`editTask=${t.id}`)}
                         />
                       ))
                     )}
@@ -349,16 +333,6 @@ export function AddExistingTasksModal({
             </div>
           </div>
 
-          {preview && (
-            <TaskPreviewPanel
-              task={preview}
-              certIndustries={certIndustrySet}
-              added={already.has(preview.name)}
-              picked={picked.includes(preview.id)}
-              onToggle={() => toggle(preview)}
-              onClose={() => setPreviewId(null)}
-            />
-          )}
         </div>
 
         <div className="cl-modal-foot aet-foot">
@@ -386,15 +360,15 @@ export function AddExistingTasksModal({
   );
 }
 
-function ColGroup({ panelOpen }: { panelOpen: boolean }) {
+function ColGroup() {
   return (
     <colgroup>
       <col style={{ width: 44 }} />
       <col style={{ width: 240 }} />
-      {!panelOpen && <col style={{ width: 190 }} />}
-      {!panelOpen && <col style={{ width: 120 }} />}
+      <col style={{ width: 190 }} />
+      <col style={{ width: 120 }} />
       <col style={{ width: 150 }} />
-      {!panelOpen && <col style={{ width: 190 }} />}
+      <col style={{ width: 190 }} />
       <col style={{ width: 104 }} />
     </colgroup>
   );
@@ -426,19 +400,15 @@ function SortableHeader({
 
 function Row({
   task,
-  panelOpen,
   picked,
   added,
-  previewing,
   certIndustries,
   onToggle,
   onPreview,
 }: {
   task: Task;
-  panelOpen: boolean;
   picked: boolean;
   added: boolean;
-  previewing: boolean;
   certIndustries: Set<string>;
   onToggle: () => void;
   onPreview: () => void;
@@ -448,7 +418,7 @@ function Row({
 
   return (
     <tr
-      className={`aet-row ${picked ? "picked" : ""} ${added ? "added" : ""} ${previewing ? "selected" : ""}`}
+      className={`aet-row ${picked ? "picked" : ""} ${added ? "added" : ""}`}
       onClick={onToggle}
     >
       <td className="aet-col-check">
@@ -473,58 +443,52 @@ function Row({
         {task.finalExam && <span className="aet-flag">Final Exam</span>}
         {added && <span className="aet-added">Added</span>}
       </td>
-      {!panelOpen && (
-        <td
-          className="aet-col-used"
-          data-tip={task.usedIn.length ? task.usedIn.join("\n") : undefined}
-        >
-          {task.usedIn.length === 0 ? (
-            "—"
-          ) : (
-            <>
-              {task.usedIn[0]}
-              {task.usedIn.length > 1 && (
-                <span className="used-extra">+{task.usedIn.length - 1}</span>
-              )}
-            </>
-          )}
-        </td>
-      )}
-      {!panelOpen && (
-        <td
-          className="aet-col-certtype"
-          data-tip={certTypes.length ? certTypes.join("\n") : undefined}
-        >
-          {certTypes.length === 0 ? (
-            "—"
-          ) : (
-            <>
-              {certTypes[0]}
-              {certTypes.length > 1 && (
-                <span className="used-extra">+{certTypes.length - 1}</span>
-              )}
-            </>
-          )}
-        </td>
-      )}
+      <td
+        className="aet-col-used"
+        data-tip={task.usedIn.length ? task.usedIn.join("\n") : undefined}
+      >
+        {task.usedIn.length === 0 ? (
+          "—"
+        ) : (
+          <>
+            {task.usedIn[0]}
+            {task.usedIn.length > 1 && (
+              <span className="used-extra">+{task.usedIn.length - 1}</span>
+            )}
+          </>
+        )}
+      </td>
+      <td
+        className="aet-col-certtype"
+        data-tip={certTypes.length ? certTypes.join("\n") : undefined}
+      >
+        {certTypes.length === 0 ? (
+          "—"
+        ) : (
+          <>
+            {certTypes[0]}
+            {certTypes.length > 1 && (
+              <span className="used-extra">+{certTypes.length - 1}</span>
+            )}
+          </>
+        )}
+      </td>
       {/* Plain text, per the shared table convention — no type badge in a cell. */}
       <td className="aet-col-type">{task.type}</td>
-      {!panelOpen && (
-        <td className="aet-col-inds" data-tip={inds.length ? inds.join("\n") : undefined}>
-          {inds.length === 0 ? (
-            <span className="aet-ind-none">—</span>
-          ) : (
-            <span className="aet-inds">
-              {inds.map((i) => (
-                <IndustryChip key={i} name={i} match={certIndustries.has(i)} />
-              ))}
-            </span>
-          )}
-        </td>
-      )}
+      <td className="aet-col-inds" data-tip={inds.length ? inds.join("\n") : undefined}>
+        {inds.length === 0 ? (
+          <span className="aet-ind-none">—</span>
+        ) : (
+          <span className="aet-inds">
+            {inds.map((i) => (
+              <IndustryChip key={i} name={i} match={certIndustries.has(i)} />
+            ))}
+          </span>
+        )}
+      </td>
       <td className="aet-col-preview">
         <button
-          className={`aet-preview-btn ${previewing ? "on" : ""}`}
+          className="aet-preview-btn"
           onClick={(e) => {
             e.stopPropagation();
             onPreview();
@@ -586,140 +550,5 @@ function IndustryPill({
         />
       )}
     </Dropdown>
-  );
-}
-
-/* ─────────────── Preview panel ─────────────── */
-
-function TaskPreviewPanel({
-  task,
-  certIndustries,
-  added,
-  picked,
-  onToggle,
-  onClose,
-}: {
-  task: Task;
-  certIndustries: Set<string>;
-  added: boolean;
-  picked: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-}) {
-  const kind = KIND_BY_TYPE[task.type];
-  const inds = taskIndustries(task);
-
-  const detail = (label: string, value: React.ReactNode) => (
-    <div className="co-dt-item">
-      <div className="co-dt-label">{label}</div>
-      <div className="co-dt-value">{value}</div>
-    </div>
-  );
-
-  return (
-    <aside className="co-panel aet-panel">
-      <div className="co-panel-head">
-        <div className="co-drawer-title-row">
-          <span className={`task-kind-badge ${kind.cls}`}>{kind.letter}</span>
-          <div className="co-drawer-titles">
-            <div className="co-drawer-name">{task.name}</div>
-            <div className="co-drawer-id">
-              {task.id} · {task.type}
-            </div>
-          </div>
-        </div>
-        <button className="co-drawer-close" aria-label="Close preview" onClick={onClose}>
-          <SmallXIcon />
-        </button>
-      </div>
-
-      <div className="co-panel-pills">
-        <span className="co-pill-muted">{task.createdBy}</span>
-        <span className="co-pill-muted">{isPaid(task) ? "Paid" : "Free"}</span>
-        {task.finalExam && <span className="co-pill-muted">Final Exam</span>}
-      </div>
-
-      <div className="co-panel-body">
-        {task.description && <p className="task-panel-desc">{task.description}</p>}
-
-        <div className="co-detail-grid">
-          {detail("Task Type", task.type)}
-          {detail("Created by", task.createdBy)}
-          {detail("Time to complete", task.timeToComplete ?? "—")}
-          {detail("Submissions", task.submissions ?? "—")}
-          {detail("Date created", task.dateCreated ?? "—")}
-          {detail("Date modified", task.dateModified ?? "—")}
-        </div>
-
-        <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>
-          Certifications Used In
-          <span className="co-section-meta">{task.usedIn.length}</span>
-        </div>
-        {task.usedIn.length === 0 ? (
-          <div className="co-dt-value">Not used in any Certification yet.</div>
-        ) : (
-          <div className="task-panel-chips">
-            {task.usedIn.map((c) => (
-              <span className="task-panel-chip" key={c}>
-                {c}
-                <span className="aet-chip-meta">{CERT_TYPE.get(c) ?? "—"}</span>
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>
-          Industries
-        </div>
-        {inds.length === 0 ? (
-          <div className="co-dt-value">
-            No Industry yet — this Task isn't used in any Certification.
-          </div>
-        ) : (
-          <span className="aet-inds">
-            {inds.map((i) => (
-              <IndustryChip key={i} name={i} match={certIndustries.has(i)} />
-            ))}
-          </span>
-        )}
-
-        {task.tags && task.tags.length > 0 && (
-          <>
-            <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>
-              Tags
-            </div>
-            <div className="task-panel-chips">
-              {task.tags.map((t) => (
-                <span className="task-panel-chip" key={t}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
-
-        {task.requirements && (
-          <>
-            <div className="co-section-title" style={{ marginTop: 18, marginBottom: 10 }}>
-              Requirements
-            </div>
-            <p className="task-panel-desc">{task.requirements}</p>
-          </>
-        )}
-      </div>
-
-      <div className="aet-panel-foot">
-        {added ? (
-          <span className="aet-panel-added">Already in this Certification</span>
-        ) : (
-          <button
-            className={picked ? "btn-save-draft" : "btn-publish"}
-            onClick={onToggle}
-          >
-            {picked ? "Remove from selection" : "Add to selection"}
-          </button>
-        )}
-      </div>
-    </aside>
   );
 }

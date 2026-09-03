@@ -320,7 +320,14 @@ function DateRangePanel({
         </button>
         <button
           className="btn-apply"
-          disabled={!draft.start || !draft.end}
+          disabled={
+            !draft.start ||
+            !draft.end ||
+            // Nothing moved — same days, same preset (or same lack of one).
+            (draft.start === applied.start &&
+              draft.end === applied.end &&
+              (draft.preset ?? "") === (applied.preset ?? ""))
+          }
           onClick={() => onApply(draft)}
         >
           Apply

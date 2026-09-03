@@ -3,18 +3,19 @@ import {
   certifications as allCerts,
   NO_CAREER_STAGE,
   NO_TYPE,
+  CERT_OPTIONAL_COLUMNS,
+  CERT_FIXED_COLUMNS,
   type Certification,
 } from "../data/certifications";
 import {
   CertFilters,
-  CertEditColumnsButton,
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
+import { EditColumnsButton } from "./Filters";
 import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
-import { pickTag, pickTags, TRADE_TAGS, PARTNERSHIP_TAGS, USER_TYPE_TAGS } from "../data/filters";
+import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { CertPreviewPanel } from "./CertPreviewPanel";
 import { PrmModal } from "./PrmModal";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { CertificationsSearch } from "./CertificationsSearch";
@@ -70,7 +71,7 @@ type SortKey =
   | "createdBy"
   | "tradeTag"
   | "partnershipTag"
-  | "userTypeTag"
+  | "audience"
   | "visibility"
   | "dateCreated"
   | "dateModified";
@@ -101,7 +102,7 @@ function compare(a: Certification, b: Certification, key: SortKey): number {
     case "createdBy": return a.createdBy.localeCompare(b.createdBy);
     case "tradeTag": return (pickTag(a.tags, TRADE_TAGS) ?? "").localeCompare(pickTag(b.tags, TRADE_TAGS) ?? "");
     case "partnershipTag": return (pickTag(a.tags, PARTNERSHIP_TAGS) ?? "").localeCompare(pickTag(b.tags, PARTNERSHIP_TAGS) ?? "");
-    case "userTypeTag": return (pickTag(a.tags, USER_TYPE_TAGS) ?? "").localeCompare(pickTag(b.tags, USER_TYPE_TAGS) ?? "");
+    case "audience": return audienceOf(a.tags).localeCompare(audienceOf(b.tags));
     case "visibility": return (a.visibility ?? "").localeCompare(b.visibility ?? "");
     case "dateCreated": return (Date.parse(a.dateCreated ?? "") || 0) - (Date.parse(b.dateCreated ?? "") || 0);
     case "dateModified": return (Date.parse(a.dateModified ?? "") || 0) - (Date.parse(b.dateModified ?? "") || 0);
@@ -144,7 +145,6 @@ export function CertificationsPage({
   // Local working copy so visibility/archive/delete persist in-session.
   const [certList, setCertList] = useState<Certification[]>(allCerts);
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   // Set when someone tries to edit a Certification owned by a company — company
   // certifications are managed from the B2B Dashboard, not here.
@@ -158,6 +158,7 @@ export function CertificationsPage({
     types: [],
     creators: ["SkillCat"],
     visibilities: [],
+    tags: [],
     ceu: "",
     keyword: "",
   });
@@ -172,7 +173,7 @@ export function CertificationsPage({
     createdBy: true,
     tradeTag: false,
     partnershipTag: false,
-    userTypeTag: false,
+    audience: false,
     visibility: false,
     dateCreated: false,
     dateModified: false,
@@ -205,6 +206,7 @@ export function CertificationsPage({
       }
       if (filters.creators.length && !filters.creators.includes(c.createdBy)) return false;
       if (filters.visibilities.length && !filters.visibilities.includes(c.visibility ?? "Visible")) return false;
+      if (filters.tags.length && !matchesTagFilter(c.tags, filters.tags)) return false;
       if (ceuMin !== null && !Number.isNaN(ceuMin) && parseFloat(c.ceus) < ceuMin) return false;
       if (kw && !(c.keywords ?? []).some((k) => k.toLowerCase().includes(kw))) return false;
       return true;
@@ -265,10 +267,7 @@ export function CertificationsPage({
     },
   }));
 
-  const selected = selectedId ? certList.find((c) => c.id === selectedId) ?? null : null;
-
-  // Natural table width so columns scroll horizontally instead of crushing —
-  // including while the preview panel is open (all columns stay, table scrolls).
+  // Natural table width so columns scroll horizontally instead of crushing.
   const tableMin =
     240 /* name */ +
     40 /* actions */ +
@@ -282,7 +281,7 @@ export function CertificationsPage({
     (columns.createdBy ? 180 : 0) +
     (columns.tradeTag ? 210 : 0) +
     (columns.partnershipTag ? 160 : 0) +
-    (columns.userTypeTag ? 150 : 0) +
+    (columns.audience ? 150 : 0) +
     (columns.visibility ? 120 : 0) +
     (columns.dateCreated ? 130 : 0) +
     (columns.dateModified ? 130 : 0);
@@ -315,7 +314,6 @@ export function CertificationsPage({
 
   function deleteCert(cert: Certification) {
     setCertList((prev) => prev.filter((c) => c.id !== cert.id));
-    if (selectedId === cert.id) setSelectedId(null);
     setDeleting(null);
   }
 
@@ -379,10 +377,7 @@ export function CertificationsPage({
                 leadColumns={LM_LEAD_COLS}
                 rows={landingRows}
                 onShowAll={morph.showTable}
-                onRowClick={(row) => {
-                  setSelectedId(row.key);
-                  morph.showTable();
-                }}
+                onRowClick={() => morph.showTable()}
               />
               <div className="lm-table">
               <div className="co-table-row">
@@ -403,12 +398,17 @@ export function CertificationsPage({
                           {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
                           {columns.tradeTag && <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
                           {columns.partnershipTag && <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                          {columns.userTypeTag && <SortableHeader col="userTypeTag" label="User Type Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                          {columns.audience && <SortableHeader col="audience" label="Audience" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
                           {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
                           {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
                           <th className="col-actions">
-                            <CertEditColumnsButton columns={columns} setColumns={setColumns} />
+                            <EditColumnsButton
+                              columns={columns}
+                              setColumns={setColumns}
+                              optional={CERT_OPTIONAL_COLUMNS}
+                              fixed={CERT_FIXED_COLUMNS}
+                            />
                           </th>
                         </tr>
                       </thead>
@@ -422,9 +422,7 @@ export function CertificationsPage({
                             <CertRow
                               key={cert.id}
                               cert={cert}
-                              selected={cert.id === selectedId}
                               columns={columns}
-                              onClick={() => setSelectedId(cert.id === selectedId ? null : cert.id)}
                               onEdit={() => editCert(cert)}
                               onToggleVisibility={() => toggleHidden(cert)}
                               onOpenMenu={(rect) => setMenu({ cert, rect })}
@@ -448,9 +446,6 @@ export function CertificationsPage({
                   </div>
                 </div>
 
-                {selected && (
-                  <CertPreviewPanel cert={selected} onClose={() => setSelectedId(null)} />
-                )}
               </div>
               </div>
               </div>
@@ -538,7 +533,7 @@ function CertColGroup({ columns }: { columns: CertColumnState }) {
       {columns.createdBy && <col style={{ width: 180 }} />}
       {columns.tradeTag && <col style={{ width: 210 }} />}
       {columns.partnershipTag && <col style={{ width: 160 }} />}
-      {columns.userTypeTag && <col style={{ width: 150 }} />}
+      {columns.audience && <col style={{ width: 150 }} />}
       {columns.visibility && <col style={{ width: 120 }} />}
       {columns.dateCreated && <col style={{ width: 130 }} />}
       {columns.dateModified && <col style={{ width: 130 }} />}
@@ -549,18 +544,14 @@ function CertColGroup({ columns }: { columns: CertColumnState }) {
 
 function CertRow({
   cert,
-  selected,
   columns,
-  onClick,
   onEdit,
   onToggleVisibility,
   onOpenMenu,
   menuOpen,
 }: {
   cert: Certification;
-  selected: boolean;
   columns: CertColumnState;
-  onClick: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
@@ -571,8 +562,7 @@ function CertRow({
   const hidden = vis === "Hidden";
   return (
     <tr
-      className={`${selected ? "selected" : ""} ${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
-      onClick={onClick}
+      className={`${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
     >
       {columns.id && <td className="col-id">{cert.id}</td>}
       <td className="col-name" data-tip={cert.name}>
@@ -598,7 +588,7 @@ function CertRow({
       {columns.createdBy && <td className="col-creator" data-tip={cert.createdBy}>{cert.createdBy}</td>}
       {columns.tradeTag && <TagCell tags={pickTags(cert.tags, TRADE_TAGS)} />}
       {columns.partnershipTag && <TagCell tags={pickTags(cert.tags, PARTNERSHIP_TAGS)} />}
-      {columns.userTypeTag && <td className="col-tags">{pickTag(cert.tags, USER_TYPE_TAGS) ?? "—"}</td>}
+      {columns.audience && <td className="col-tags">{audienceOf(cert.tags)}</td>}
       {columns.visibility && <td className="col-type">{vis}</td>}
       {columns.dateCreated && <td className="col-date">{cert.dateCreated ?? "—"}</td>}
       {columns.dateModified && <td className="col-date">{cert.dateModified ?? "—"}</td>}

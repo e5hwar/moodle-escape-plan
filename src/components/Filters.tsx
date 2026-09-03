@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
 import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import {
@@ -6,7 +6,7 @@ import {
   CREATED_BY_B2B,
   CERTIFICATIONS,
   DISCOVERABLE_OPTIONS,
-  FINAL_EXAM_OPTIONS,
+  SUBSCRIPTION_OPTIONS,
   TASK_TYPES,
   VISIBILITIES,
   TAG_GROUPS,
@@ -19,7 +19,8 @@ export type FilterState = {
   creators: string[];
   certifications: string[];
   discoverable: string[];
-  finalExam: string[];
+  /** "Requires Subscription?" — see SUBSCRIPTION_OPTIONS. */
+  subscription: string[];
   types: string[];
   visibilities: string[];
   tags: string[];
@@ -45,13 +46,15 @@ export function Filters({
   onClearExtra,
 }: Props) {
   const moreCount =
-    filters.types.length + filters.visibilities.length + filters.tags.length;
+    filters.visibilities.length +
+    filters.subscription.length +
+    filters.tags.length +
+    filters.discoverable.length;
 
   const hasFilters =
     filters.creators.length +
       filters.certifications.length +
-      filters.discoverable.length +
-      filters.finalExam.length +
+      filters.types.length +
       moreCount +
       extraActive >
     0;
@@ -61,7 +64,7 @@ export function Filters({
       creators: [],
       certifications: [],
       discoverable: [],
-      finalExam: [],
+      subscription: [],
       types: [],
       visibilities: [],
       tags: [],
@@ -71,33 +74,31 @@ export function Filters({
 
   return (
     <div className="filters">
-      <CreatedByPill
-        value={filters.creators}
-        onApply={(v) => setFilters({ ...filters, creators: v })}
+      <TaskTypePill
+        value={filters.types}
+        onApply={(v) => setFilters({ ...filters, types: v })}
       />
       <CertificationsPill
         value={filters.certifications}
         onApply={(v) => setFilters({ ...filters, certifications: v })}
       />
-      <DiscoverablePill
-        value={filters.discoverable}
-        onApply={(v) => setFilters({ ...filters, discoverable: v })}
-      />
-      <FinalExamPill
-        value={filters.finalExam}
-        onApply={(v) => setFilters({ ...filters, finalExam: v })}
+      <CreatedByPill
+        value={filters.creators}
+        onApply={(v) => setFilters({ ...filters, creators: v })}
       />
       <MoreFiltersPill
-        types={filters.types}
         visibilities={filters.visibilities}
+        subscription={filters.subscription}
         tags={filters.tags}
+        discoverable={filters.discoverable}
         count={moreCount}
         onApply={(v) =>
           setFilters({
             ...filters,
-            types: v.types,
             visibilities: v.visibilities,
+            subscription: v.subscription,
             tags: v.tags,
+            discoverable: v.discoverable,
           })
         }
       />
@@ -160,11 +161,33 @@ export function PillTrigger({
   );
 }
 
+/* Every filter menu holds a draft and commits it on Apply. Apply is only live
+   while the draft actually differs from what's applied — an untouched menu (or
+   one toggled back to where it started) leaves the button disabled, which is
+   how filter menus behave everywhere else. Selection order is meaningless, so
+   the comparison is set-wise. */
+export function sameSelection(a: readonly string[], b: readonly string[]) {
+  if (a.length !== b.length) return false;
+  const seen = new Set(a);
+  return b.every((x) => seen.has(x));
+}
+
+/* Cascading "More filters" menus open a submenu on hover but never close one
+   on hover-out — a pointer wandering off is not a dismissal, and cutting a
+   corner on the way to the submenu used to swallow it. Dismissal is a click:
+   inside the card, anywhere that is neither a row nor the open submenu puts the
+   submenu away; outside the card, the Dropdown's own outside-click closes both
+   at once. True when this click should close the open submenu. */
+export function dismissesSubmenu(e: React.MouseEvent) {
+  const el = e.target as HTMLElement;
+  return !el.closest(".cascading-sub") && !el.closest(".dropdown-submenu-row");
+}
+
 export function summarize(values: string[], all: string[]): string | null {
   if (values.length === 0) return null;
   if (values.length === 1) return values[0];
   if (values.length === all.length) return "All";
-  return `${values.length} selected`;
+  return `${values.length} Selected`;
 }
 
 /* ─────────────────────────────────────────────────────────────── */
@@ -208,7 +231,7 @@ export function CreatedByPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search creators…"
+          searchPlaceholder="Search Creators…"
         />
       )}
     </Dropdown>
@@ -246,28 +269,28 @@ function CertificationsPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search certifications…"
+          searchPlaceholder="Search Certifications…"
         />
       )}
     </Dropdown>
   );
 }
 
-function DiscoverablePill({
+function TaskTypePill({
   value,
   onApply,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
 }) {
-  const summary = summarize(value, DISCOVERABLE_OPTIONS);
+  const summary = summarize(value, TASK_TYPES);
 
   return (
     <Dropdown
       width={220}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Discoverable"
+          label="Task Type"
           value={summary}
           open={open}
           toggle={toggle}
@@ -277,7 +300,7 @@ function DiscoverablePill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: DISCOVERABLE_OPTIONS }]}
+          sections={[{ items: [...TASK_TYPES] }]}
           value={value}
           onApply={(v) => {
             onApply(v);
@@ -289,75 +312,47 @@ function DiscoverablePill({
   );
 }
 
-function FinalExamPill({
-  value,
-  onApply,
-}: {
-  value: string[];
-  onApply: (v: string[]) => void;
-}) {
-  const summary = summarize(value, FINAL_EXAM_OPTIONS);
-
-  return (
-    <Dropdown
-      width={220}
-      trigger={({ open, toggle }) => (
-        <PillTrigger
-          label="Final Exam"
-          value={summary}
-          open={open}
-          toggle={toggle}
-          onClear={() => onApply([])}
-        />
-      )}
-    >
-      {({ close }) => (
-        <SectionedMultiSelect
-          sections={[{ items: FINAL_EXAM_OPTIONS }]}
-          value={value}
-          onApply={(v) => {
-            onApply(v);
-            close();
-          }}
-        />
-      )}
-    </Dropdown>
-  );
-}
+type MoreFilterValues = {
+  visibilities: string[];
+  subscription: string[];
+  tags: string[];
+  discoverable: string[];
+};
 
 function MoreFiltersPill({
-  types,
   visibilities,
+  subscription,
   tags,
+  discoverable,
   count,
   onApply,
-}: {
-  types: string[];
-  visibilities: string[];
-  tags: string[];
+}: MoreFilterValues & {
   count: number;
-  onApply: (v: { types: string[]; visibilities: string[]; tags: string[] }) => void;
+  onApply: (v: MoreFilterValues) => void;
 }) {
-  const summary = count > 0 ? `${count} active` : null;
+  const summary = count > 0 ? `${count} Active` : null;
 
   return (
     <Dropdown
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More filters"
+          label="More Filters"
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ types: [], visibilities: [], tags: [] })}
+          onClear={() =>
+            onApply({ visibilities: [], subscription: [], tags: [], discoverable: [] })
+          }
         />
       )}
     >
       {({ close }) => (
         <MoreFiltersBody
-          types={types}
           visibilities={visibilities}
+          subscription={subscription}
           tags={tags}
+          discoverable={discoverable}
           onApply={(v) => {
             onApply(v);
             close();
@@ -547,7 +542,11 @@ export function SectionedMultiSelect({
         ))}
       </div>
       <div className="dropdown-footer">
-        <button className="btn-apply" onClick={() => onApply(draft)}>
+        <button
+          className="btn-apply"
+          disabled={sameSelection(draft, value)}
+          onClick={() => onApply(draft)}
+        >
           Apply
         </button>
       </div>
@@ -555,19 +554,34 @@ export function SectionedMultiSelect({
   );
 }
 
-/** One row of a "More filters" menu — hovering it opens its checklist alongside. */
+/* A stable default for `texts` — an inline {} would be a new object every
+   render, and the effect that syncs the draft would never settle. */
+const EMPTY_TEXTS: Record<string, string> = {};
+
+/* Geometry of the cascading submenu, mirroring `.cascading-sub` in index.css —
+   the flip decision has to know how much room the panel will want before it
+   renders, so these two must stay in step with the stylesheet. */
+const SUBMENU_WIDTH = 280;
+const SUBMENU_GAP = 6;
+const VIEWPORT_MARGIN = 8;
+
+/** One row of a "More Filters" menu — hovering it opens its checklist alongside. */
 export type CascadingSection = {
   key: string;
   label: string;
-  /** A group with a label renders as a titled subsection (e.g. the tag groups). */
-  groups: { label?: string; items: string[] }[];
+  /** A group with a label renders as a titled subsection (e.g. the tag groups).
+     Omit when the row is a `text` field instead of a checklist. */
+  groups?: { label?: string; items: string[] }[];
+  /** Makes the submenu a single free-text field (e.g. Certifications' CEUs and
+     Keyword) rather than a checklist. Its value lives in `texts`, not `value`. */
+  text?: { placeholder?: string; help?: string; numeric?: boolean };
   /** Adds a search box above this section's checklist (Figma 24:16115) — for
      long option lists (e.g. Quizzes, Feedback Forms) where scanning unaided
      doesn't scale. Omit for short, fixed option sets like Tasks' Type/Visibility. */
   searchPlaceholder?: string;
 };
 
-/* The shared "More filters" body: a list of submenu rows, each revealing its own
+/* The shared "More Filters" body: a list of submenu rows, each revealing its own
    checklist. Used by the Tasks and Question Bank filter rows — pass the sections
    and a {key: values} map.
    Apply lives in the SUBMENU, not on the root list (Figma 28:16530 has no footer;
@@ -577,18 +591,43 @@ export type CascadingSection = {
 export function CascadingMultiSelect({
   sections,
   value,
+  texts = EMPTY_TEXTS,
   onApply,
 }: {
   sections: CascadingSection[];
   value: Record<string, string[]>;
-  onApply: (v: Record<string, string[]>) => void;
+  /** Applied values for the `text` sections, keyed the same way. */
+  texts?: Record<string, string>;
+  onApply: (v: Record<string, string[]>, texts: Record<string, string>) => void;
 }) {
   const [draft, setDraft] = useState<Record<string, string[]>>(value);
+  const [textDraft, setTextDraft] = useState<Record<string, string>>(texts);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
   const [query, setQuery] = useState("");
+  // The submenu opens alongside the root panel — to its right by default, and
+  // to its LEFT when the pill sits close enough to the window edge that the
+  // right side would overflow. Without the flip an off-screen submenu widens
+  // the document and scrolls the whole page sideways.
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [flip, setFlip] = useState(false);
 
   useEffect(() => setDraft(value), [value]);
+  useEffect(() => setTextDraft(texts), [texts]);
+
+  /* Text fields are trimmed on apply, so trailing whitespace isn't a change. */
+  const trimmedTexts = () =>
+    Object.fromEntries(
+      Object.entries(textDraft).map(([k, v]) => [k, v.trim()]),
+    ) as Record<string, string>;
+
+  const unchanged = sections.every((s) =>
+    s.text
+      ? (textDraft[s.key] ?? "").trim() === (texts[s.key] ?? "")
+      : sameSelection(draft[s.key] ?? [], value[s.key] ?? []),
+  );
+
+  const apply = () => onApply(draft, trimmedTexts());
 
   function toggleIn(sectionKey: string, item: string) {
     setDraft((d) => {
@@ -611,8 +650,22 @@ export function CascadingMultiSelect({
   const openSection = sections.find((s) => s.key === hovered);
   const q = query.trim().toLowerCase();
 
+  // Measured before paint, so the submenu never shows on the wrong side first.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!hovered || !el) return;
+    const { right, left } = el.getBoundingClientRect();
+    const needed = SUBMENU_WIDTH + SUBMENU_GAP + VIEWPORT_MARGIN;
+    // Only flip when the left side actually has the room the right side lacks.
+    setFlip(right + needed > window.innerWidth && left - needed >= 0);
+  }, [hovered]);
+
   return (
-    <div className="cascading-menu" onMouseLeave={() => setHovered(null)}>
+    <div
+      ref={menuRef}
+      className="cascading-menu"
+      onClick={(e) => dismissesSubmenu(e) && setHovered(null)}
+    >
       <div className="cascading-root">
         <div className="dropdown-list">
           {sections.map((s) => (
@@ -628,57 +681,81 @@ export function CascadingMultiSelect({
 
       {openSection && (() => {
         const groups = q
-          ? openSection.groups
+          ? (openSection.groups ?? [])
               .map((g) => ({ ...g, items: g.items.filter((i) => i.toLowerCase().includes(q)) }))
               .filter((g) => g.items.length > 0)
-          : openSection.groups;
+          : openSection.groups ?? [];
         return (
           <div
-            className="cascading-sub"
+            className={`cascading-sub ${flip ? "is-left" : ""}`}
             style={{ top: hoveredTop }}
-            onMouseEnter={() => setHovered(openSection.key)}
           >
-            {openSection.searchPlaceholder && (
-              <div className="dropdown-search">
-                <span className="dropdown-search-icon">
-                  <SearchIcon />
-                </span>
+            {openSection.text ? (
+              <div className="dropdown-list filter-textfield">
                 <input
+                  className="filter-textfield-input"
                   autoFocus
-                  placeholder={openSection.searchPlaceholder}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  inputMode={openSection.text.numeric ? "decimal" : undefined}
+                  placeholder={openSection.text.placeholder}
+                  value={textDraft[openSection.key] ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const next = openSection.text?.numeric
+                      ? raw.replace(/[^0-9.]/g, "")
+                      : raw;
+                    setTextDraft((d) => ({ ...d, [openSection.key]: next }));
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && !unchanged && apply()}
                 />
+                {openSection.text.help && (
+                  <div className="filter-textfield-help">{openSection.text.help}</div>
+                )}
               </div>
-            )}
-            <div className="dropdown-list">
-              {groups.length === 0 ? (
-                <div className="cols-empty">
-                  {q ? `No matches for "${query.trim()}".` : "Nothing to filter by yet"}
+            ) : (
+              <>
+              {openSection.searchPlaceholder && (
+                <div className="dropdown-search">
+                  <span className="dropdown-search-icon">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    autoFocus
+                    placeholder={openSection.searchPlaceholder}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
                 </div>
-              ) : (
-                groups.map((group, i) => (
-                  <div
-                    key={group.label ?? i}
-                    className={group.label ? "dropdown-subsection" : "dropdown-section"}
-                  >
-                    {group.label && (
-                      <div className="dropdown-subsection-label">{group.label}</div>
-                    )}
-                    {group.items.map((item) => (
-                      <CheckRow
-                        key={item}
-                        label={item}
-                        checked={(draft[openSection.key] ?? []).includes(item)}
-                        onChange={() => toggleIn(openSection.key, item)}
-                      />
-                    ))}
-                  </div>
-                ))
               )}
-            </div>
+              <div className="dropdown-list">
+                {groups.length === 0 ? (
+                  <div className="cols-empty">
+                    {q ? `No matches for "${query.trim()}".` : "Nothing to filter by yet"}
+                  </div>
+                ) : (
+                  groups.map((group, i) => (
+                    <div
+                      key={group.label ?? i}
+                      className={group.label ? "dropdown-subsection" : "dropdown-section"}
+                    >
+                      {group.label && (
+                        <div className="dropdown-subsection-label">{group.label}</div>
+                      )}
+                      {group.items.map((item) => (
+                        <CheckRow
+                          key={item}
+                          label={item}
+                          checked={(draft[openSection.key] ?? []).includes(item)}
+                          onChange={() => toggleIn(openSection.key, item)}
+                        />
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+              </>
+            )}
             <div className="dropdown-footer">
-              <button className="btn-apply" onClick={() => onApply(draft)}>
+              <button className="btn-apply" disabled={unchanged} onClick={apply}>
                 Apply
               </button>
             </div>
@@ -690,35 +767,45 @@ export function CascadingMultiSelect({
 }
 
 function MoreFiltersBody({
-  types,
   visibilities,
+  subscription,
   tags,
+  discoverable,
   onApply,
-}: {
-  types: string[];
-  visibilities: string[];
-  tags: string[];
-  onApply: (v: { types: string[]; visibilities: string[]; tags: string[] }) => void;
-}) {
+}: MoreFilterValues & { onApply: (v: MoreFilterValues) => void }) {
   const value = useMemo(
-    () => ({ types, visibilities, tags }),
-    [types, visibilities, tags],
+    () => ({ visibilities, subscription, tags, discoverable }),
+    [visibilities, subscription, tags, discoverable],
   );
 
   return (
     <CascadingMultiSelect
       sections={[
-        { key: "types", label: "Task Type", groups: [{ items: [...TASK_TYPES] }] },
         { key: "visibilities", label: "Visibility", groups: [{ items: [...VISIBILITIES] }] },
         {
+          key: "subscription",
+          label: "Requires Subscription?",
+          groups: [{ items: [...SUBSCRIPTION_OPTIONS] }],
+        },
+        {
           key: "tags",
-          label: "Content/Trade Tags",
+          label: "Audience/B2B Tags",
           groups: TAG_GROUPS.map((g) => ({ label: g.label, items: [...g.tags] })),
+        },
+        {
+          key: "discoverable",
+          label: "Discoverable",
+          groups: [{ items: [...DISCOVERABLE_OPTIONS] }],
         },
       ]}
       value={value}
       onApply={(v) =>
-        onApply({ types: v.types, visibilities: v.visibilities, tags: v.tags })
+        onApply({
+          visibilities: v.visibilities,
+          subscription: v.subscription,
+          tags: v.tags,
+          discoverable: v.discoverable,
+        })
       }
     />
   );
@@ -749,6 +836,7 @@ function SubmenuRow({
     <button
       className={`dropdown-submenu-row ${active ? "active" : ""}`}
       onMouseEnter={handle}
+      onClick={handle}
       onFocus={handle}
     >
       <span className="dropdown-submenu-label">{label}</span>

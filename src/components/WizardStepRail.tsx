@@ -5,6 +5,8 @@
    16px SemiBold title. The active step is white; done steps recede to #7a7a7a;
    an error step goes red — glyph AND title. */
 
+import { useRef } from "react";
+
 export type WizardStepStatus = "active" | "done" | "upcoming" | "error";
 
 // Complete step: the 16px grey check (Figma 625:1557). The glyph sits in the
@@ -56,4 +58,52 @@ export function WizardStepRail({ status, num }: { status: WizardStepStatus; num:
       )}
     </span>
   );
+}
+
+/* ─────────────── Shared rail statuses ───────────────
+   Every wizard rail derives its glyphs from this hook rather than the old
+   `i === step ? "active" : i < step ? "done" : "upcoming"` line, which handed a
+   check to any step you had walked past — including one you left with a
+   mandatory field empty, or skipped outright by clicking further down the rail.
+
+   A step reads `error` (the red alert circle) once you have *passed* it — opened
+   it and moved on, or jumped over it — while a required field on it is still
+   blank. The check is reserved for steps that are genuinely complete. Steps you
+   have never reached stay numbered, so the rail never accuses you of skipping
+   something you haven't seen yet.
+
+   `flagAll` is the failed-publish case: a submit attempt flags every incomplete
+   step, the one in view and the untouched ones included. */
+export function useWizardStepStatuses({
+  step,
+  count,
+  incomplete,
+  flagAll = false,
+}: {
+  step: number;
+  count: number;
+  /** True when step `i` still has a mandatory field empty. */
+  incomplete: (i: number) => boolean;
+  flagAll?: boolean;
+}): WizardStepStatus[] {
+  // Which steps have actually been opened. A ref, not state — it only ever
+  // grows, and every change to it rides along with the step change that caused
+  // it, so it never needs a render of its own.
+  const visited = useRef<Set<number>>(new Set());
+  visited.current.add(step);
+  const out: WizardStepStatus[] = [];
+  for (let i = 0; i < count; i++) {
+    // Passed = behind the cursor, or opened at some point and left behind.
+    const passed = i < step || visited.current.has(i);
+    out.push(
+      incomplete(i) && (flagAll || (passed && i !== step))
+        ? "error"
+        : i === step
+          ? "active"
+          : passed
+            ? "done"
+            : "upcoming",
+    );
+  }
+  return out;
 }

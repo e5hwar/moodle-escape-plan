@@ -130,7 +130,22 @@ export type Category = {
   label: string;
   count: number;
   subcategories?: Subcategory[];
+  /** Optional grouping picked when the category is created (design S4). */
+  tradeGroup?: string;
 };
+
+/** Trade groups a new category can be filed under — the New Category
+ * popover's optional select. */
+export const TRADE_GROUPS: readonly string[] = [
+  "HVAC",
+  "Plumbing",
+  "Electrical",
+  "Appliance",
+  "Solar",
+  "Property Maintenance",
+  "Safety & Compliance",
+  "General",
+];
 
 // A category-tree selection, shared by the left rail, the "Category" filter pill,
 // and the search box's CATEGORY: token. `all` means no category filter is applied.
@@ -261,11 +276,148 @@ export const categories: Category[] = [
       { key: "universal", label: "Universal", count: 74 },
     ],
   },
-  { key: "hvac-fundamentals", label: "HVAC Fundamentals", count: 312 },
-  { key: "nate-core", label: "NATE Core", count: 184 },
-  { key: "osha-safety", label: "OSHA & Safety", count: 96 },
-  { key: "plumbing-code", label: "Plumbing Code", count: 138 },
-  { key: "electrical-code", label: "Electrical Code", count: 112 },
+  {
+    key: "hvac-fundamentals",
+    label: "HVAC Fundamentals",
+    count: 312,
+    subcategories: [
+      { key: "refrigeration-cycle", label: "Refrigeration Cycle", count: 88 },
+      { key: "airflow-ductwork", label: "Airflow & Ductwork", count: 71 },
+      { key: "heat-pumps", label: "Heat Pumps", count: 64 },
+      { key: "controls-thermostats", label: "Controls & Thermostats", count: 52 },
+      { key: "troubleshooting", label: "Troubleshooting", count: 37 },
+    ],
+  },
+  {
+    key: "nate-core",
+    label: "NATE Core",
+    count: 184,
+    subcategories: [
+      { key: "nate-safety", label: "Safety", count: 41 },
+      { key: "nate-tools", label: "Tools & Instruments", count: 38 },
+      { key: "nate-electrical", label: "Basic Electrical", count: 57 },
+      { key: "nate-science", label: "Basic Science", count: 48 },
+    ],
+  },
+  {
+    key: "osha-safety",
+    label: "OSHA & Safety",
+    count: 96,
+    subcategories: [
+      { key: "ppe", label: "PPE", count: 24 },
+      { key: "ladders-fall", label: "Ladders & Fall Protection", count: 29 },
+      { key: "lockout-tagout", label: "Lockout / Tagout", count: 22 },
+      { key: "hazcom", label: "Hazard Communication", count: 21 },
+    ],
+  },
+  {
+    key: "plumbing-code",
+    label: "Plumbing Code",
+    count: 138,
+    subcategories: [
+      { key: "dwv", label: "Drain, Waste & Vent", count: 46 },
+      { key: "water-supply", label: "Water Supply", count: 39 },
+      { key: "fixtures", label: "Fixtures & Fittings", count: 31 },
+      { key: "water-heaters", label: "Water Heaters", count: 22 },
+    ],
+  },
+  {
+    key: "electrical-code",
+    label: "Electrical Code",
+    count: 112,
+    subcategories: [
+      { key: "wiring-methods", label: "Wiring Methods", count: 34 },
+      { key: "grounding-bonding", label: "Grounding & Bonding", count: 29 },
+      { key: "overcurrent", label: "Overcurrent Protection", count: 27 },
+      { key: "motors-controls", label: "Motors & Controls", count: 22 },
+    ],
+  },
+  {
+    key: "appliance-repair",
+    label: "Appliance Repair",
+    count: 121,
+    subcategories: [
+      { key: "laundry", label: "Washers & Dryers", count: 38 },
+      { key: "refrigerators", label: "Refrigerators", count: 33 },
+      { key: "dishwashers", label: "Dishwashers", count: 26 },
+      { key: "ranges-ovens", label: "Ranges & Ovens", count: 24 },
+    ],
+  },
+  {
+    key: "solar",
+    label: "Solar",
+    count: 94,
+    subcategories: [
+      { key: "pv-basics", label: "PV Basics", count: 31 },
+      { key: "inverters", label: "Inverters", count: 24 },
+      { key: "mounting-racking", label: "Mounting & Racking", count: 21 },
+      { key: "solar-safety", label: "Site Safety", count: 18 },
+    ],
+  },
+  {
+    key: "multifamily-maintenance",
+    label: "Multifamily Maintenance",
+    count: 106,
+    subcategories: [
+      { key: "make-ready", label: "Make-Ready", count: 34 },
+      { key: "work-orders", label: "Work Orders", count: 28 },
+      { key: "grounds-common", label: "Grounds & Common Areas", count: 25 },
+      { key: "preventive", label: "Preventive Maintenance", count: 19 },
+    ],
+  },
+  {
+    key: "gas-combustion",
+    label: "Gas & Combustion",
+    count: 78,
+    subcategories: [
+      { key: "gas-piping", label: "Gas Piping", count: 27 },
+      { key: "combustion-analysis", label: "Combustion Analysis", count: 24 },
+      { key: "venting", label: "Venting", count: 16 },
+      { key: "leak-detection", label: "Leak Detection", count: 11 },
+    ],
+  },
+  {
+    key: "boilers-hydronics",
+    label: "Boilers & Hydronics",
+    count: 83,
+    subcategories: [
+      { key: "boiler-types", label: "Boiler Types", count: 26 },
+      { key: "hydronic-piping", label: "Hydronic Piping", count: 24 },
+      { key: "pumps-zoning", label: "Pumps & Zoning", count: 19 },
+      { key: "boiler-controls", label: "Boiler Controls", count: 14 },
+    ],
+  },
+  {
+    key: "commercial-refrigeration",
+    label: "Commercial Refrigeration",
+    count: 89,
+    subcategories: [
+      { key: "walk-ins", label: "Walk-Ins", count: 27 },
+      { key: "reach-ins", label: "Reach-Ins", count: 22 },
+      { key: "ice-machines", label: "Ice Machines", count: 23 },
+      { key: "rack-systems", label: "Rack Systems", count: 17 },
+    ],
+  },
+  {
+    key: "pool-spa",
+    label: "Pool & Spa",
+    count: 64,
+    subcategories: [
+      { key: "water-chemistry", label: "Water Chemistry", count: 24 },
+      { key: "pumps-filters", label: "Pumps & Filters", count: 21 },
+      { key: "pool-heaters", label: "Heaters", count: 19 },
+    ],
+  },
+  {
+    key: "soft-skills",
+    label: "Soft Skills & Career",
+    count: 57,
+    subcategories: [
+      { key: "customer-service", label: "Customer Service", count: 22 },
+      { key: "communication", label: "Communication", count: 19 },
+      { key: "job-readiness", label: "Job Readiness", count: 16 },
+    ],
+  },
   { key: "learner-feedback", label: "Learner Feedback", count: 16 },
 ];
 

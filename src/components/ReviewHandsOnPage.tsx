@@ -753,7 +753,7 @@ function MoreFiltersPill({
       trigger={({ open, toggle }) => (
         <PillTrigger
           label="More Filters"
-          value={count > 0 ? `${count} active` : null}
+          value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
           onClear={() => {
