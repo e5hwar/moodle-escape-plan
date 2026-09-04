@@ -945,8 +945,8 @@ export function ContentOverridesPage({
                       return (
                         <tr key={a.attemptNumber}>
                           <td className="mc-col-attnum">#{a.attemptNumber}</td>
-                          <td className="mc-col-grade">{a.grade != null ? `${a.grade}%` : "—"}</td>
-                          <td>{a.completedAt ?? "—"}</td>
+                          <td className="mc-col-grade">{a.grade != null ? `${a.grade}%` : ""}</td>
+                          <td>{a.completedAt ?? ""}</td>
                           <td className="mc-col-result">
                             <span className={`co-status-pill co-status-pill--${pass ? "green" : "red"}`}>
                               {pass ? "Pass" : "Fail"}
@@ -1005,7 +1005,7 @@ export function ContentOverridesPage({
           {viewAttempt && detailAttempt && attTask && attUser && (
             <PrmModal
               title={`Attempt #${detailAttempt.attemptNumber} · ${
-                detailAttempt.grade != null ? `${detailAttempt.grade}%` : "—"
+                detailAttempt.grade != null ? `${detailAttempt.grade}%` : ""
               }`}
               description={`${attTask.name} · ${attUser.name} · Submitted ${detailAttempt.completedAt ?? "—"}`}
               confirmLabel="Close"
@@ -1256,7 +1256,7 @@ function AttemptsCell({ uid, task, ctx }: { uid: string; task: CertTask; ctx: Ro
   const grant = ctx.stagedGrant(uid, task.id);
   return (
     <span className="mc-attcell">
-      {ai.hasLimit ? `${ai.attemptsUsed} of ${ai.totalAllowed}` : "—"}
+      {ai.hasLimit ? `${ai.attemptsUsed} of ${ai.totalAllowed}` : ""}
       {grant && <span className="co-status-pill co-status-pill--accent">+{grant.n} Staged</span>}
     </span>
   );
@@ -1332,8 +1332,8 @@ function TaskTable({ uid, tasks, ctx }: { uid: string; tasks: CertTask[]; ctx: R
               <td className="mc-col-status">
                 <TaskStatusPill task={t} cell={cell} staged={staged} />
               </td>
-              <td className="mc-col-date">{cell.status === "complete" ? fmtDT(cell.completedAt) : "—"}</td>
-              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : "—"}</td>
+              <td className="mc-col-date">{cell.status === "complete" ? fmtDT(cell.completedAt) : ""}</td>
+              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : ""}</td>
               <td className="mc-col-tries">
                 <AttemptsCell uid={uid} task={t} ctx={ctx} />
               </td>
@@ -1410,7 +1410,7 @@ function CohortCertTable({
                     <span className="mc-pct">{ps.pct}%</span>
                   )}
                 </td>
-                <td className="mc-col-date">{ps.certified ? fmtD(ps.certAt) : "—"}</td>
+                <td className="mc-col-date">{ps.certified ? fmtD(ps.certAt) : ""}</td>
                 <td className="mc-col-certact">
                   {!ps.certified &&
                     (stagedCert ? (
@@ -1504,12 +1504,12 @@ function CohortTaskTable({
               <td className="mc-col-status">
                 <TaskStatusPill task={task} cell={cell} staged={staged} />
               </td>
-              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : "—"}</td>
+              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : ""}</td>
               <td className="mc-col-tries">
                 <AttemptsCell uid={u.id} task={task} ctx={ctx} />
               </td>
-              <td className="mc-col-date">{cell.status === "complete" ? fmtD(cell.completedAt) : "—"}</td>
-              <td className="mc-col-marked">{cell.markedBy ?? "—"}</td>
+              <td className="mc-col-date">{cell.status === "complete" ? fmtD(cell.completedAt) : ""}</td>
+              <td className="mc-col-marked">{cell.markedBy ?? ""}</td>
               <td className="mc-col-act2">
                 <TaskRowActions uid={u.id} task={task} ctx={ctx} />
               </td>
@@ -1617,13 +1617,13 @@ function UserTaskCard({
 
       <div className="mc-taskcard-body">
         <div className="mc-metrics">
-          {metric("Completed On", done ? fmtDT(cell.completedAt) : "—")}
-          {metric("Marked Complete By", cell.markedBy ?? "—")}
-          {metric("Highest Grade", cell.grade != null ? `${cell.grade}%` : "—")}
+          {metric("Completed On", done ? fmtDT(cell.completedAt) : "")}
+          {metric("Marked Complete By", cell.markedBy ?? "")}
+          {metric("Highest Grade", cell.grade != null ? `${cell.grade}%` : "")}
           {metric(
             ai.hasLimit ? `Attempts (Max. ${ai.totalAllowed})` : "Attempts",
             <span className="mc-attcell">
-              {ai.hasLimit ? String(ai.attemptsUsed) : "—"}
+              {ai.hasLimit ? String(ai.attemptsUsed) : ""}
               {exhausted && <span className="co-status-pill co-status-pill--red">Exhausted</span>}
               {grant && <span className="co-status-pill co-status-pill--accent">+{grant.n} Staged</span>}
             </span>,

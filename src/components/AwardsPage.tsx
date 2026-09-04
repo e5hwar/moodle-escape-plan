@@ -834,8 +834,12 @@ function ColumnsMenu({
   value: Record<string, boolean>;
   onChange: (v: Record<string, boolean>) => void;
 }) {
+  // Available columns read alphabetically — it is a lookup list, not an
+  // ordering (see ColumnsBody in Filters.tsx).
   const active = optional.filter((c) => value[c.key]);
-  const available = optional.filter((c) => !value[c.key]);
+  const available = optional
+    .filter((c) => !value[c.key])
+    .sort((a, b) => a.label.localeCompare(b.label));
   return (
     <Dropdown
       width={240}

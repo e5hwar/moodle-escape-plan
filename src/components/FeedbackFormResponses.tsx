@@ -189,13 +189,13 @@ export function FormOverview({ form, bank, responses }: Props) {
     { label: "Submitted", value: submitted.toLocaleString(), note: "One per user, ever" },
     {
       label: "Submission Rate",
-      value: prompted === 0 ? "—" : `${((submitted / prompted) * 100).toFixed(1)}%`,
+      value: prompted === 0 ? "" : `${((submitted / prompted) * 100).toFixed(1)}%`,
       note: "Submitted ÷ prompted",
     },
     { label: "Dismissed", value: (prompted - submitted).toLocaleString(), note: "Re-eligible on next trigger" },
     {
       label: "Median Time",
-      value: submitted === 0 ? "—" : `${40 + (hashCode(form.id) % 25)}s`,
+      value: submitted === 0 ? "" : `${40 + (hashCode(form.id) % 25)}s`,
       note: "Open to submit",
     },
   ];

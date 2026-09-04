@@ -188,10 +188,10 @@ export function flattenCategories(cats: Category[]): CategoryOption[] {
 export function selectionLabel(sel: CategorySelection, cats: Category[]): string {
   if (sel.kind === "all") return "All Questions";
   const cat = cats.find((c) => c.key === sel.categoryKey);
-  if (!cat) return "—";
+  if (!cat) return "";
   if (sel.kind === "category") return cat.label;
   const sub = cat.subcategories?.find((s) => s.key === sel.subKey);
-  return `${cat.label} > ${sub?.label ?? "—"}`;
+  return `${cat.label} > ${sub?.label ?? ""}`;
 }
 
 /* ─── Version history ───

@@ -746,7 +746,7 @@ function StatusBadge({ status }: { status: Skill["status"] }) {
 
 /** First name in a list, plus a "+N" pill when there are more. */
 function NamesCell({ names }: { names: string[] }) {
-  if (names.length === 0) return <>—</>;
+  if (names.length === 0) return null;
   const extra = names.length - 1;
   return (
     <span className="sk-tasks-cell">
@@ -1062,8 +1062,12 @@ function ColumnsMenu({
   value: Record<string, boolean>;
   onChange: (v: Record<string, boolean>) => void;
 }) {
+  // Available columns read alphabetically — it is a lookup list, not an
+  // ordering (see ColumnsBody in Filters.tsx).
   const active = optional.filter((c) => value[c.key]);
-  const available = optional.filter((c) => !value[c.key]);
+  const available = optional
+    .filter((c) => !value[c.key])
+    .sort((a, b) => a.label.localeCompare(b.label));
   return (
     <Dropdown
       width={240}

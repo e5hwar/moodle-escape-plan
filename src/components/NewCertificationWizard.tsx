@@ -6,6 +6,7 @@ import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { DropdownSearch } from "./SearchPanelParts";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
@@ -3018,15 +3019,12 @@ function ConditionItemPicker({ onPick }: { onPick: (item: CompletionItem) => voi
         </button>
       </div>
 
-      <div className="dropdown-search">
-        <span className="dropdown-search-icon"><SearchIcon /></span>
-        <input
-          autoFocus
-          placeholder={tab === "task" ? "Search Tasks…" : "Search Certifications…"}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+      <DropdownSearch
+        autoFocus
+        placeholder={tab === "task" ? "Search Tasks…" : "Search Certifications…"}
+        value={query}
+        onChange={setQuery}
+      />
 
       <div className="dropdown-list cond-picker-list">
         {tab === "task" ? (

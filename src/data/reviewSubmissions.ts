@@ -191,7 +191,7 @@ function buildSubmissions(): TaskSubmission[] {
         userType: u.userType,
         companyName: u.companyName,
         taskName,
-        taskId: taskRecord?.id ?? "—",
+        taskId: taskRecord?.id ?? "",
         certifications: taskRecord?.usedIn ?? [],
         submittedOn: isoDaysAgo(submittedDaysAgo),
         // Who created the Task, straight from the Tasks library — SkillCat for

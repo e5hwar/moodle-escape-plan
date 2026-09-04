@@ -1330,6 +1330,22 @@ button.breadcrumb-item:hover {
   flex-shrink: 0;
 }
 
+.dropdown-search-clear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.dropdown-search-clear:hover { color: #fff; }
+.dropdown-search-clear svg { display: block; width: 16px; height: 16px; }
+
 .dropdown-search-icon {
   color: #a8a8a8;
   display: inline-flex;
@@ -1338,6 +1354,10 @@ button.breadcrumb-item:hover {
 
 .dropdown-search input {
   flex: 1;
+  /* A flex item's default min-width is its intrinsic size, so in a narrow panel
+     the placeholder would push the header wider than the menu and spill past
+     its edge. */
+  min-width: 0;
   background: transparent;
   border: none;
   color: var(--text);
@@ -3364,15 +3384,18 @@ button.breadcrumb-item:hover {
    #0d0d0d. It holds the billing timeline alone — the plan-summary card and the
    two page-break headers it sat under were dropped. */
 .cw-impact {
-  width: 420px;
+  /* Figma 616:969 — the preview rail is 401px wide. */
+  width: 401px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 28px;
   padding: 32px;
   overflow-y: auto;
+  /* Figma 616:969 — a 0.1 grey wash over #0d0d0d. The summary card inside it
+     carries its own 0.1 (616:1111) on top of this, which is what raises it. */
   background:
-    linear-gradient(90deg, rgba(122, 122, 122, 0.15) 0%, rgba(122, 122, 122, 0.15) 100%),
+    linear-gradient(90deg, rgba(122, 122, 122, 0.1) 0%, rgba(122, 122, 122, 0.1) 100%),
     linear-gradient(90deg, #0d0d0d 0%, #0d0d0d 100%);
 }
 .cw-impact-title {
@@ -3401,6 +3424,8 @@ button.breadcrumb-item:hover {
    fill with one row per value, hairline-split, old value struck through where
    there is a prior one. */
 .sub-summary {
+  /* Figma 616:1111 — a 0.10 grey wash. It still lifts off the rail because it
+     stacks ON the rail's own 0.10, exactly as the node nests it. */
   background: rgba(122, 122, 122, 0.1);
   border-radius: 8px;
   padding: 0 12px;
@@ -3448,7 +3473,8 @@ button.breadcrumb-item:hover {
   color: #a8a8a8;
 }
 .sub-summary-new {
-  font-weight: 600;
+  /* Medium, not SemiBold — Figma 616:1151. */
+  font-weight: 500;
   color: #fff;
 }
 
@@ -3509,13 +3535,13 @@ button.breadcrumb-item:hover {
   font-weight: 500;
   color: #a8a8a8;
 }
-.sub-timeline-item:last-child .sub-timeline-date {
-  color: #7a7a7a;
-}
+/* Both dates read #a8a8a8 in Figma 616:1052 / 616:1060 — the trailing entry is
+   no longer a muted "onward" footnote, it is the recurring charge itself. */
 .sub-timeline-amount {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 24px;
+  /* 20px SemiBold — Figma 616:1053. */
+  font-size: 20px;
   font-weight: 600;
   color: #f4f4f5;
 }
@@ -3865,7 +3891,7 @@ button.breadcrumb-item:hover {
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #a8a8a8;
+  color: #fff;
   pointer-events: none;
 }
 
@@ -3875,16 +3901,14 @@ button.breadcrumb-item:hover {
   display: flex;
   gap: 8px;
 }
-.phone-field-code {
-  flex: 0 0 auto;
-  width: 132px;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  background: transparent;
-  padding: 0 12px;
-}
-.phone-field-code:focus-within {
-  border-color: var(--border-strong);
+/* The dial-code picker is the shared SelectField, so its chrome comes from
+   `.select-field`. The width is pinned on the WRAPPER, not the button: inside
+   the wizard `.company-wizard .select-field` sets the control to width:100%
+   and outranks any class on the button itself, so the button inherits this
+   168px rather than fighting it. The menu is measured off the trigger, so this
+   one number sizes both the field and the dropdown (Figma 938:961). */
+.phone-field > .selectfield {
+  flex: 0 0 168px;
 }
 .phone-field > .form-input {
   flex: 1 1 auto;
@@ -8517,10 +8541,6 @@ button.breadcrumb-item:hover {
   box-shadow: 0 0 0 2px rgba(245, 211, 107, 0.18);
 }
 
-.qb-usage-empty {
-  color: var(--text-faint);
-  font-style: italic;
-}
 
 .qb-usage-extra {
   color: var(--accent-strong);
@@ -14983,8 +15003,28 @@ a.rh-crumb-link:hover {
 
 .table .col-seats {
   color: var(--text);
-  width: 70px;
+  width: 86px;
   white-space: nowrap;
+}
+
+/* Assigned owners — internal names, so they read like the muted metadata
+   columns rather than like table content. */
+.table .col-sales-rep,
+.table .col-csm {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Account Holder cell — the trigger for the shared user-details card (Figma
+   436:572). It underlines on hover the way the Change Account Holder modal's
+   "Current: {name}" trigger does, so the cell reads as peekable; the card
+   itself is portalled, so nothing here can clip it. */
+.co-holder-cell {
+  cursor: default;
+}
+.co-holder-cell:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .table .col-industry {
@@ -15010,11 +15050,8 @@ a.rh-crumb-link:hover {
   white-space: nowrap;
 }
 
-.co-tier--free-trial {
-  background: rgba(120, 120, 130, 0.15);
-  color: #aaaaaf;
-}
-
+/* Three plans only — Free Trial and Free Access are subscription STATUSES now,
+   so they wear a `.co-status-pill`, not a tier chip. */
 .co-tier--essentials {
   background: rgba(59, 130, 246, 0.15);
   color: #7ab8ff;
@@ -15025,14 +15062,9 @@ a.rh-crumb-link:hover {
   color: #6ee7a3;
 }
 
-.co-tier--pro {
+.co-tier--professional {
   background: rgba(233, 114, 55, 0.16);
   color: #f5a46f;
-}
-
-.co-tier--free-access {
-  background: rgba(167, 139, 250, 0.15);
-  color: #c4b5fd;
 }
 
 /* Add Company modal */
@@ -15075,7 +15107,7 @@ a.rh-crumb-link:hover {
 }
 
 .table .col-u-type {
-  width: 92px;
+  width: 114px;
   white-space: nowrap;
 }
 
@@ -15095,16 +15127,13 @@ a.rh-crumb-link:hover {
 }
 
 /* Optional profile columns (Edit Columns) */
-.table .col-u-lang { width: 100px; white-space: nowrap; }
+.table .col-u-lang { width: 114px; white-space: nowrap; }
 .table .col-u-stage { width: 130px; white-space: nowrap; }
 .table .col-u-attr { width: 160px; white-space: nowrap; }
 .table .col-u-zip { width: 100px; white-space: nowrap; }
-.table .col-u-industry { width: 165px; white-space: nowrap; }
+.table .col-u-industry { width: 188px; white-space: nowrap; }
 .table .col-u-date { width: 130px; white-space: nowrap; }
 
-.u-muted {
-  color: var(--text-faint);
-}
 
 /* Email/phone cell with verified checkmark */
 .u-vcell {
@@ -15800,8 +15829,7 @@ a.rh-crumb-link:hover {
      body's 1.45 has to be turned off or each one runs ~3px tall. */
   line-height: normal;
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.533px;
+  font-weight: 600;
   color: #fff;
   text-transform: uppercase;
 }
@@ -15924,15 +15952,19 @@ a.rh-crumb-link:hover {
 .usearch-searchfor-text .q { color: #f05523; }
 
 /* Keyboard hints footer — shown when the box is empty. Figma 21:15979: it sits
-   on the panel's 8px column gap behind a 0.5px #7a7a7a hairline, and the panel
-   no longer pads, so it spans the full width on its own. */
+   on the panel's 8px column gap behind a 0.5px #404040 hairline, and the panel
+   no longer pads, so it spans the full width on its own. The bar is a fixed
+   43px with its 20px hint row centred on it (the node's 11.75px top offset is
+   that centring plus the hairline) — reading its padding as 8.5/8 instead left
+   the bar 37px and the whole panel six short. */
 .usearch-foot {
   display: flex;
   align-items: center;
   gap: 16px;
   margin: 8px 0 0;
-  padding: 8.5px 18px 8px;
-  border-top: 0.5px solid rgba(122, 122, 122, 0.5);
+  height: 43px;
+  padding: 0 18px;
+  border-top: 0.5px solid #404040;
   line-height: normal;
 }
 .usearch-hint {
@@ -16929,31 +16961,36 @@ a.rh-crumb-link:hover {
   color: var(--text);
 }
 
-/* Status pills — the shared "Table Pills" set (Figma 109:1237). First used in
-   the Manage Companies status column; also used as the generic status/verdict
-   pill elsewhere (e.g. the Hands-On review console). Bordered, tinted-fill
-   pills with a coloured label, no dot. */
+/* Status pills — the shared "Table Pills" set (Figma 652:925: 80:483 green,
+   83:510 red, 83:512 grey, 83:514 yellow, 107:1132 accent, 109:1238 purple,
+   109:1240 white/secondary). First used in the Manage Companies status column;
+   also the generic status/verdict pill elsewhere (e.g. the Hands-On review
+   console). A tinted block with a coloured label and NO border: every variant
+   is the same colour at 10% behind that colour at full strength. The set used
+   to be drawn as an outlined 24px capsule at 12px — the re-sync drops the
+   border, squares the radius to 8px and moves the label up to 14px Medium.
+   The 17px line-height is the node's own leading (Figma's leading-normal on
+   Fira Sans at 14px), pinned rather than left to `normal` because the local
+   font resolves that to ~18.4px and floated the pill to 30.4px. 6 + 17 + 6 is
+   the node's 29px exactly, so the height needs no separate declaration. */
 .co-status-pill {
   display: inline-flex;
   align-items: center;
-  /* Every pill in the set is 24px tall (109:1237), whatever its label. */
-  height: 24px;
-  padding: 1px 9px;
-  border: 1px solid;
-  border-radius: 999px;
+  padding: 6px 10px;
+  border-radius: 8px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 17px;
   white-space: nowrap;
 }
-.co-status-pill--green     { color: #14b867; border-color: #14b867; background: rgba(20, 184, 103, 0.1); }
-.co-status-pill--red       { color: #ff1f31; border-color: #ff1f31; background: rgba(255, 31, 49, 0.1); }
-.co-status-pill--yellow    { color: #ffc524; border-color: #ffc524; background: rgba(255, 197, 36, 0.1); }
-.co-status-pill--grey      { color: #737373; border-color: #737373; background: rgba(115, 115, 115, 0.1); }
-.co-status-pill--purple    { color: #6944ff; border-color: #6944ff; background: rgba(105, 68, 255, 0.1); }
-.co-status-pill--secondary { color: #a8a8a8; border-color: #a8a8a8; background: rgba(168, 168, 168, 0.1); }
-.co-status-pill--accent    { color: #f05527; border-color: #f05527; background: rgba(240, 85, 39, 0.1); }
+.co-status-pill--green     { color: #14b867; background: rgba(20, 184, 103, 0.1); }
+.co-status-pill--red       { color: #ff1f31; background: rgba(255, 31, 49, 0.1); }
+.co-status-pill--yellow    { color: #ffc524; background: rgba(255, 197, 36, 0.1); }
+.co-status-pill--grey      { color: #737373; background: rgba(115, 115, 115, 0.1); }
+.co-status-pill--purple    { color: #6944ff; background: rgba(105, 68, 255, 0.1); }
+.co-status-pill--secondary { color: #a8a8a8; background: rgba(168, 168, 168, 0.1); }
+.co-status-pill--accent    { color: #f05527; background: rgba(240, 85, 39, 0.1); }
 
 /* The plain-text-column rule strips chrome from spans inside data cells; this
    re-enables the pill chrome for the status column specifically. The extra
@@ -16961,20 +16998,21 @@ a.rh-crumb-link:hover {
 .table tbody td.col-status:not(.col-actions) .co-status-pill {
   display: inline-flex !important;
   align-items: center !important;
-  height: 24px !important;
-  padding: 1px 9px !important;
-  border: 1px solid !important;
-  border-radius: 999px !important;
-  font-size: 12px !important;
+  padding: 6px 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
   font-weight: 500 !important;
+  line-height: 17px !important;
   white-space: nowrap !important;
 }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--green     { color: #14b867 !important; border-color: #14b867 !important; background: rgba(20, 184, 103, 0.1) !important; }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--red       { color: #ff1f31 !important; border-color: #ff1f31 !important; background: rgba(255, 31, 49, 0.1) !important; }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--yellow    { color: #ffc524 !important; border-color: #ffc524 !important; background: rgba(255, 197, 36, 0.1) !important; }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--grey      { color: #737373 !important; border-color: #737373 !important; background: rgba(115, 115, 115, 0.1) !important; }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--purple    { color: #6944ff !important; border-color: #6944ff !important; background: rgba(105, 68, 255, 0.1) !important; }
-.table tbody td.col-status:not(.col-actions) .co-status-pill--secondary { color: #a8a8a8 !important; border-color: #a8a8a8 !important; background: rgba(168, 168, 168, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--green     { color: #14b867 !important; background: rgba(20, 184, 103, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--red       { color: #ff1f31 !important; background: rgba(255, 31, 49, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--yellow    { color: #ffc524 !important; background: rgba(255, 197, 36, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--grey      { color: #737373 !important; background: rgba(115, 115, 115, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--purple    { color: #6944ff !important; background: rgba(105, 68, 255, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--secondary { color: #a8a8a8 !important; background: rgba(168, 168, 168, 0.1) !important; }
+.table tbody td.col-status:not(.col-actions) .co-status-pill--accent    { color: #f05527 !important; background: rgba(240, 85, 39, 0.1) !important; }
 
 /* Sign-up channel pill (Self vs Internal) */
 .co-signup {
@@ -17355,17 +17393,45 @@ a.rh-crumb-link:hover {
   line-height: 1.5;
 }
 
-/* seats-added / seats-removed table cells */
-.co-seats-added {
-  font-family: var(--font-mono);
+/* Seat Changes cell (Figma 927:950) — the period's seat movement as ONE figure,
+   the number tight against its arrow (2px). Green + up when the account grew,
+   red + down when it shrank; the Figma frame shows both to document the two
+   states, but an account only ever moves one way. The arrow inherits
+   `currentColor` from the delta, which is why one icon pair serves both
+   directions. The green/red are the status-pill hues (109:1237), not the softer
+   #6ee7a3/#ff8d8d the two old split columns used. */
+.co-seat-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-sans);
   font-size: 11pt;
-  color: #6ee7a3;
+  font-weight: 500;
+  white-space: nowrap;
 }
-.co-seats-removed {
-  font-family: var(--font-mono);
-  font-size: 11pt;
-  color: #ff8d8d;
+.co-seat-delta svg {
+  /* The exported glyph is a 16px box; the row's text sits at 11pt, so the
+     arrow is scaled to match the cap height rather than tower over it. */
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
+.co-seat-delta--up { color: #14b867; }
+.co-seat-delta--down { color: #ff1f31; }
+
+/* …and the carve-out from the "Plain-text columns" block far above, which
+   !important's every span inside a data cell down to inline grey text. The
+   Status column already carves itself out the same way; Seat Changes has to
+   because the arrow and the red/green ARE the information here, not chrome. */
+.table tbody td.col-seat-changes:not(.col-actions) .co-seat-delta {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 2px;
+  font: inherit !important;
+  font-weight: 500 !important;
+}
+.table tbody td.col-seat-changes:not(.col-actions) .co-seat-delta--up { color: #14b867 !important; }
+.table tbody td.col-seat-changes:not(.col-actions) .co-seat-delta--down { color: #ff1f31 !important; }
 
 /* inline side panel (replaces the overlay drawer) */
 /* Table + side-panel row: panel sits adjacent to the table only, while the
@@ -17680,7 +17746,7 @@ a.rh-crumb-link:hover {
 }
 .multiselect-tag-remove:hover { opacity: 1; }
 
-/* 16px box holding the 11px chevron glyph — the address rows' `.address-chevron`
+/* 16px box holding the 14px solid caret (Figma 101:278) — the address rows' `.address-chevron`
    under a name the plain fields can share. */
 .field-chevron {
   flex-shrink: 0;
@@ -17689,7 +17755,7 @@ a.rh-crumb-link:hover {
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #a8a8a8;
+  color: #fff;
   pointer-events: none;
 }
 
@@ -17790,6 +17856,17 @@ a.rh-crumb-link:hover {
    SemiBold row — and a #2c2c2f fill on hover / keyboard focus. */
 /* Above .pr-confirm-overlay (400): the Change Account Holder modal opens a
    SelectField, and at 300 the panel's top half hid behind the modal card. */
+/* The select menus are NOT the filter-panel surface. Figma 591:1382 and 668:943
+   carry no grey wash over #0d0d0d, a FULL-strength #404040 hairline (not the
+   half-strength one the filter panels use) and a deeper 40px-blur shadow — so
+   they override `.dropdown`'s shell rather than inheriting it. */
+.ss-menu,
+.ms-menu {
+  background: #0d0d0d;
+  border-color: #404040;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
 .ss-menu { z-index: 500; }
 .ss-menu .dropdown-list { padding: 8px; }
 .ss-menu .dropdown-list .dropdown-item {
@@ -17814,6 +17891,32 @@ a.rh-crumb-link:hover {
   font-weight: 400;
   color: #a8a8a8;
 }
+/* Countries menu — Figma 938:961. A 4px inset rather than the 8px the other
+   single-selects use, and the name is allowed to wrap onto a second line
+   ("Turks and Caicos Islands") instead of being cut with an ellipsis. Its
+   search header sits on a 12px gutter and a full-strength hairline, where the
+   filter panels' is 16px over a 0.5px one. */
+/* Figma 938:961 "Dropdown Menu - Countries" re-synced: the search header and
+   the list both sit on a 16px / 8px inset, where they used to be pulled in to
+   12px and 4px. The 1px divider stays (938:1005 draws a full border-b, unlike
+   the 0.5px the filter panels use). */
+.ss-menu--countries .dropdown-search {
+  padding: 8px 16px 9px;
+  border-bottom: 1px solid #404040;
+}
+.ss-menu--countries .dropdown-list { padding: 8px; }
+.ss-menu--countries .dropdown-item {
+  align-items: center;
+  gap: 12px;
+  /* 938:990 is an even 8px inset, so a single-line row stands 35px tall. */
+  padding: 8px;
+}
+.ss-menu--countries .dropdown-item-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 /* The list takes focus so the arrow keys work; the row highlight is the visible
    cursor, so the UA ring around the whole panel would only be noise. */
 .ss-menu .dropdown-list:focus { outline: none; }
@@ -17882,123 +17985,153 @@ a.rh-crumb-link:hover {
 .co-price-create-btn:hover { background: rgba(233, 114, 55, 0.08); border-color: var(--accent); }
 
 /* ─── Create-price modal: per-currency rate rows ─── */
+/* Figma 940:1013 "Paywall - Single Price" — a tinted card (10% grey, r12, 16px
+   inset, 16px gap) of currency+amount rows over an "Add Currency" action. */
 .cp-rate-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(122, 122, 122, 0.1);
 }
 .cp-rate-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-pill);
+  gap: 8px;
 }
-.cp-rate-row.is-primary {
-  border-color: var(--accent);
-  background: rgba(233, 114, 55, 0.06);
+/* 941:1058 — one #404040 shell split by a hairline: a fixed 120px currency
+   cell and the amount filling the rest. The shell owns the border and radius,
+   so neither cell draws its own. */
+.cp-rate-control {
+  flex: 1 0 0;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  overflow: hidden;
 }
+.cp-rate-control > .selectfield { flex: none; }
+/* 941:1059 — the code and its caret pushed apart in a fixed cell, sized to
+   match the Step 3 currency cell (620:1419) at 146px. The
+   shell owns the border, so the cell draws only the dividing hairline. */
 .cp-rate-cur {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  width: 168px;
-  flex: none;
+  width: 146px;
   min-width: 0;
+  padding: 12px;
+  border: 0;
+  border-right: 1px solid #404040;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  text-align: left;
+  cursor: pointer;
 }
-.cp-rate-code {
-  font-family: var(--font-mono);
-  font-size: 12pt;
-  font-weight: 500;
-  color: var(--text);
+
+/* Currency menu — Figma 941:1115. Rows are one string ("USD - United States
+   Dollar"), so a long name wraps rather than being cut. */
+.ss-menu--currency .dropdown-item {
+  padding: 8px;
 }
-.cp-rate-name {
-  font-size: 10.5pt;
-  color: var(--text-muted);
+.ss-menu--currency .dropdown-item-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+/* 941:1204 — the amount and its unit share one 12px-padded cell on a 12px gap;
+   only the amount is typable. */
+.cp-rate-amount-cell {
+  flex: 1 0 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+.cp-rate-amount {
+  flex: 1 0 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: normal;
+  outline: none;
+}
+.cp-rate-amount::placeholder { color: #404040; }
+.cp-rate-unit {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: normal;
+  color: rgba(168, 168, 168, 0.67);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.cp-rate-tag {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 8.5pt;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent-strong);
-  background: rgba(233, 114, 55, 0.15);
-  padding: 2px 6px;
-  border-radius: 5px;
-}
-.cp-rate-input { flex: 1; min-width: 0; }
+/* The remove glyph sits OUTSIDE the shell (941:1078), a bare 16px icon. */
 .cp-rate-remove {
   flex: none;
-  width: 26px;
-  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--text-faint);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8a8a8;
   cursor: pointer;
 }
-.cp-rate-remove:hover { background: var(--bg-pill-strong); color: var(--text); }
-.cp-rate-remove-spacer { width: 26px; flex: none; }
+.cp-rate-remove:hover:not(:disabled) { color: #fff; }
+.cp-rate-remove:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.cp-add-wrap { position: relative; margin-top: 10px; }
+/* 940:1043 — an icon + SemiBold 16px #a8a8a8 label on a 4px gap. Not a pill:
+   the node gives it no border, background or padding of its own. */
 .cp-add-btn {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 7px;
-  border: 1px dashed var(--border-strong);
+  gap: 4px;
+  padding: 0;
+  border: 0;
   background: transparent;
-  color: var(--accent-strong);
-  font-size: 11pt;
+  color: #a8a8a8;
+  font-family: var(--font-sans);
+  font-size: 16px;
   font-weight: 600;
+  line-height: normal;
   cursor: pointer;
 }
-.cp-add-btn:hover:not(:disabled) { background: rgba(233, 114, 55, 0.08); border-color: var(--accent); }
+.cp-add-btn svg { display: block; }
+.cp-add-btn:hover:not(:disabled) { color: #fff; }
 .cp-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.cp-add-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 220px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-  padding: 5px;
-}
-.cp-add-opt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 11px;
-  border-radius: 7px;
-  cursor: pointer;
-  background: transparent;
-  text-align: left;
-}
-.cp-add-opt:hover { background: var(--bg-row-hover); }
 
 /* ─────── Per-seat price: combined currency + price dropdown ─────── */
 .cw-price {
   position: relative;
-  max-width: 460px;
+  /* Figma 620:1418 is `size-full` — the combined field runs the full column
+     width like every other dropdown on the form, not the 460px it was capped
+     at. */
 }
 /* Currency + seat price (Figma 618:1248): two cells inside one #404040 shell,
    split by a single hairline. The value cell holds the amount, the unit and the
    menu caret together — there is no divider before the caret. Transparent, and
    45px like every other control on the form. */
 .cw-price-field {
+  /* Menus anchor to `.cw-price-seg` inside, not here — but this stays
+     positioned as the backstop. It is also what keeps the 6px drop measured
+     off the control: left to `.cw-price`, the menus resolved against the
+     wrapper that also holds the form-help line and opened a couple of lines
+     clear of the field. */
+  position: relative;
   display: flex;
   align-items: stretch;
   border: 1px solid #404040;
@@ -18016,7 +18149,7 @@ a.rh-crumb-link:hover {
 .cw-price-cell {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 0;
   padding: 12px;
   background: transparent;
   font-family: var(--font-sans);
@@ -18024,7 +18157,31 @@ a.rh-crumb-link:hover {
   font-weight: 400;
   line-height: normal;
 }
+/* One half of the shell. Positioned, so the menu it holds sizes to this cell
+   rather than to the whole field; `--grow` is the amount side, which takes the
+   leftover width. */
+.cw-price-seg {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.cw-price-seg--grow {
+  flex: 1;
+  min-width: 0;
+}
+/* The currency half is a SelectField now, so its `.selectfield` wrapper stands
+   where `.cw-price-seg` used to — it must not stretch, and it must not add a
+   box of its own between the shell and the cell. */
+.cw-price-field > .selectfield {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+}
 .cw-price-cur {
+  /* 620:1419 — a fixed 146px cell with the code and caret pushed apart, so the
+     price side takes every remaining pixel of the full-width shell. */
+  width: 146px;
+  justify-content: space-between;
   border-right: 1px solid #404040;
   border-radius: 8px 0 0 8px;
   cursor: pointer;
@@ -18033,43 +18190,52 @@ a.rh-crumb-link:hover {
 .cw-price-cell {
   flex: 1;
   min-width: 0;
+  border: 0;
+  text-align: left;
   border-radius: 0 8px 8px 0;
   cursor: pointer;
 }
 .cw-price-cur-code { color: #fff; }
 .cw-price-caret {
   flex-shrink: 0;
+  margin-left: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
-  color: #a8a8a8;
+  /* Figma 618:1251 / 618:1256 — the Icon Set caret is exported fill="white",
+     not the #a8a8a8 the muted glyphs elsewhere on the form use. Both cells of
+     the field carry the same one. */
+  color: #fff;
 }
+/* The prefix sits flush against the amount so "$" + "55" reads as "$55"; a
+   currency with no symbol supplies its own non-breaking space ("JPY 79").
+   Hence the cell spaces its parts with explicit margins rather than a flex gap,
+   which would push the two apart. */
 .cw-price-sym {
   flex-shrink: 0;
   color: #fff;
 }
-.cw-price-input {
+/* The chosen amount. Not typable — the price comes from the menu — so this is
+   a span, and the unpicked state prints the placeholder in the same #404040 the
+   text inputs use for theirs. */
+.cw-price-value {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
-  /* Cancels the cell's 11px gap so the symbol and amount read as one "$55". */
-  padding: 0;
-  margin-left: -11px;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #fff;
 }
-.cw-price-input::placeholder { color: #404040; }
-.cw-price-input:focus { outline: none; }
+.cw-price-value.is-placeholder { color: #404040; }
 .cw-price-unit {
   flex-shrink: 0;
-  font-size: 14px;
-  color: #404040;
+  margin-left: 12px;
+  /* Figma 618:1258 — 16px like the amount beside it, in a 67% #a8a8a8 that
+     reads as a unit rather than the near-black #404040 it used to be. */
+  font-size: 16px;
+  color: rgba(168, 168, 168, 0.67);
   white-space: nowrap;
 }
 
@@ -18087,38 +18253,61 @@ a.rh-crumb-link:hover {
   max-height: 280px;
   overflow-y: auto;
 }
-.cw-price-menu--cur { left: 0; width: 220px; }
-.cw-price-menu--list { left: 0; right: 0; min-width: 300px; }
+/* Both menus span the field exactly. The -1px pulls them out over its 1px
+   border: an absolute child resolves left/right against the PADDING box, so
+   plain 0 would sit 2px narrow and a hair inboard of the field's outer edge. */
+/* Each menu spans its own cell. The -1px reaches out over the field's 1px
+   border on the outer side; the inner side stops on the divider between the
+   two cells. */
+
+/* Figma 619:1332 "Dropdown Menu - Stripe Prices": a p-px shell holding three
+   bands — search, the scrolling list, "Add New Price" — divided by #404040
+   hairlines. Padding and scrolling belong to the list band, not the shell. */
+.cw-price-menu--list {
+  left: 0;
+  right: -1px;
+  display: flex;
+  flex-direction: column;
+  padding: 1px;
+  max-height: none;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+/* The prices menu wears the shared `.dropdown-search` header. Figma 934:1117
+   draws its divider at a full 1px — the filter panels' 24:16116 is 0.5px — so
+   it lines up with this menu's own 1px footer rule. */
+.cw-price-menu--list .dropdown-search {
+  border-bottom-width: 1px;
+}
+/* Four rows, then scroll — the same rule the Country/State selects use, where
+   the row height plus the list's own padding sets the cap, so the cut-off fifth
+   row reads as "there is more below". A row is 35px (8 + a 19px line + 8) and
+   the list pads 8px top and bottom: 4 x 35 + 16. Fewer results just make it
+   shorter. The search header and the "Add New Price" footer are flex:none
+   siblings of this band, so only the rows scroll and both stay in view. */
+.cw-price-list {
+  padding: 8px;
+  overflow-y: auto;
+  max-height: 156px;
+}
 
 .cw-price-opt {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px;
   border-radius: 6px;
   cursor: pointer;
   background: transparent;
   text-align: left;
 }
-.cw-price-opt:hover,
-.cw-price-opt.is-active { background: #2c2c2f; }
-/* The currency menu shares the prices menu's shell, so its rows read the same
-   way: 16px white code, 14px grey name. */
-.cw-price-opt-code {
-  flex: none;
-  width: 44px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
-  color: #fff;
-}
-.cw-price-opt.is-active .cw-price-opt-code { font-weight: 600; }
-.cw-price-opt-name {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: #a8a8a8;
-}
+/* #2c2c2f is the HOVER fill and nothing else (Figma 619:1332 tints exactly one
+   row — the pointed-at one). The row that is currently chosen is marked by
+   weight instead, the same way the saved-price rows do it below; giving it the
+   fill too meant the open currency menu showed two lit rows at once, one under
+   the cursor and one that just sat there. */
+.cw-price-opt:hover { background: #2c2c2f; }
 /* Saved-price rows read price-first, with the price's own name as a trailing
    note (Figma 619:1332). The row for the price currently in the field is
    SemiBold, the same way the single-select marks its current value. */
@@ -18154,17 +18343,20 @@ a.rh-crumb-link:hover {
 }
 /* Not in node 619:1332 — that sample is three plain rows — but the only way to
    save an unlisted price, so it sits in the list as one more row of it. */
+/* Figma 620:1446 — a full-width band under a hairline, white like the rows
+   (it reads as one more thing you can pick, not an accent call to action). */
 .cw-price-create {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
   width: 100%;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 9px 16px 8px;
+  border-top: 1px solid #404040;
   background: transparent;
   cursor: pointer;
   text-align: left;
-  color: var(--accent-strong);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
@@ -18176,28 +18368,9 @@ a.rh-crumb-link:hover {
   align-items: center;
   justify-content: center;
   width: 16px;
-  font-size: 16px;
-  line-height: 1;
+  height: 16px;
+  color: #fff;
 }
-.cw-price-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 11pt;
-}
-.cw-price-note-mark { font-size: 12pt; font-weight: 700; }
-.cw-price-note--saved .cw-price-note-mark { color: #6ee7a3; }
-.cw-price-note--error .cw-price-note-mark { color: var(--danger, #e5484d); }
-.cw-price-note-lead { color: var(--text-muted); }
-.cw-price-note-label { color: var(--text); font-weight: 600; }
-
-.cw-price-error {
-  margin: 6px 0 0;
-  font-size: 11pt;
-  color: var(--danger, #e5484d);
-}
-
 /* ─────────────── Date field (calendar dropdown) ─────────────── */
 
 /* ===== Date field trigger (Figma 654:926 empty / 900:3576 filled) ===========
@@ -18751,6 +18924,92 @@ a.rh-crumb-link:hover {
 .wizard-success-icon--review {
   background: rgba(233, 114, 55, 0.14);
   color: var(--accent);
+}
+/* ===== Confirmation review cards (Figma 945:1974) =====
+   One card per wizard step, side by side. The node fixes each column at 439px;
+   they flex here so three of them still fit a narrower window, wrapping rather
+   than overflowing. */
+.confirm-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px;
+  margin-top: 24px;
+  text-align: left;
+}
+.confirm-card {
+  flex: 1 1 360px;
+  max-width: 439px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.confirm-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.confirm-card-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+}
+/* 945:1830 — a bare 16px pencil, no button chrome of its own. */
+.confirm-card-edit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.confirm-card-edit:hover { color: var(--accent-strong, #f05523); }
+/* 943:1676 — the same tinted card as the plan preview: 10% grey, r8, and a
+   12px side gutter with the rows supplying their own vertical padding. */
+.confirm-card-body {
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  padding: 0 12px;
+  overflow: hidden;
+}
+.confirm-card-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0 13px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+}
+.confirm-card-row:last-child {
+  border-bottom: none;
+  padding-bottom: 12px;
+}
+/* The label column is a fixed 140px (943:1679), so every value in the card
+   starts on the same line however long its label runs. */
+.confirm-card-label {
+  flex: none;
+  width: 140px;
+  color: #a8a8a8;
+}
+.confirm-card-value {
+  flex: 1 1 0;
+  min-width: 0;
+  color: #fff;
+  word-break: break-word;
 }
 .success-summary {
   margin-top: 24px;
@@ -23760,7 +24019,6 @@ span.rvc-crumb--current { cursor: default; }
   align-items: center;
   color: #f0854f;
 }
-.aet-ind-none { color: var(--text-faint); }
 
 /* Data cells are stripped to plain text by the shared table reset, so the chip
    chrome drops away inside the table — but the match accent is the whole point
@@ -25034,6 +25292,23 @@ span.rvc-crumb--current { cursor: default; }
   margin-left: 0;
   flex: 1;
 }
+/* …but only the SETTLED table gets that full-width flow, so mid-morph a
+   .filters-end pill sits packed against the last filter and then snaps to the
+   right edge at p=1. Anchor it to the slot for the whole gesture instead: it
+   fades up (--lmf) already on the right edge, and at p=1 the in-flow
+   margin-left:auto lands it in exactly the same place, so the hand-off is
+   invisible. Its containing block is the slot — outside the flow's clip and
+   outside its opacity group — so it escapes both; the explicit opacity and the
+   flow's inherited pointer-events keep it hidden and inert at the landing. */
+.tasks.lm .lm-filter-slot {
+  position: relative;
+}
+.tasks.lm:not([data-lm="table"]) .lm-filters-flow .filters-end {
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: var(--lmf);
+}
 .tasks.lm .lm-filters-flow > .filters {
   padding-bottom: 0;
   flex-shrink: 0;
@@ -25045,32 +25320,10 @@ span.rvc-crumb--current { cursor: default; }
   flex: none;
 }
 
-/* Exam Reviews' kind pills (`.prl-kinds`) — the one remaining user of this
-   solid-bordered variant; it rides the persistent filters flow, not the
-   collapsing quick-filter track. */
-.lm-pill {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  height: 28px;
-  padding: 0 14px;
-  border: 1px solid #404040;
-  border-radius: 999px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: #a8a8a8;
-  white-space: nowrap;
-}
-.lm-pill svg {
-  color: #a8a8a8;
-}
-.lm-pill:hover {
-  border-color: rgba(233, 114, 55, 0.5);
-  color: var(--accent);
-}
+/* The solid-bordered `.lm-pill` variant was retired 2026-09-04: Exam Reviews
+   was its last user, and its kind pills are now one "Status" pill on the shared
+   `.filters` row (.filter-pill-dashed / .filter-applied like every other list
+   page). */
 
 /* ── Stage: the landing layer sits over the real table block and they
    crossfade over the last part of the gesture (--lmt). ── */
@@ -25138,9 +25391,14 @@ span.rvc-crumb--current { cursor: default; }
   transition: opacity 0.25s ease, visibility 0s 0.25s;
 }
 
-/* Minimal-state header row — Figma 760:4642: a 40px row, label left and the
-   "ALL n ↓" affordance right, both centred on it. Shared by every landing that
-   uses the minimal table. */
+/* Minimal-state header row — Figma 760:4642 "Atomic Component - Minimal State
+   - Header Row": a 40px row holding ONE left-aligned page description. This is
+   the table's header row while the page is still the landing; it collapses to
+   0 height as --lm drives the morph into the real header (79:445). The design
+   used to pair the label with an "ALL n ↓" jump on the right — that was removed
+   from the component, so the row is a single flex item now and `.lm-hint`
+   ("keep scrolling to see the table") is the only click-through left. Shared by
+   every landing that uses the minimal table. */
 .lm-caption {
   width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   margin-top: calc(65px * (1 - var(--lm)));
@@ -25149,7 +25407,6 @@ span.rvc-crumb--current { cursor: default; }
   overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 2px;
   flex-shrink: 0;
 }
@@ -25163,24 +25420,6 @@ span.rvc-crumb--current { cursor: default; }
   color: #a8a8a8;
   white-space: nowrap;
 }
-/* Right half of 760:4642: the count and its 14px arrow, 4px apart, in the same
-   14px Medium #a8a8a8 as the label opposite. The icon takes currentColor, so it
-   follows the button into accent on hover. */
-.lm-caption-all {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: #a8a8a8;
-  white-space: nowrap;
-}
-.lm-caption-all:hover {
-  color: var(--accent);
-}
-
 .lm-list {
   width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   flex: 1;
@@ -25289,14 +25528,17 @@ span.rvc-crumb--current { cursor: default; }
   color: var(--text-faint);
 }
 
-/* "Keep scrolling" — Figma 716:1648. A full-width bar closing the collapsed
-   list: a #404040 top rule, then a 16px double chevron and the label, centred.
-   (It replaced a pill, so there is no border/radius/fill any more.) */
+/* "View full table" — Figma 716:1648 "Atomic Component - Minimal State - Keep
+   Scrolling". A full-width bar closing the collapsed list: the label then a
+   12px down arrow, 4px apart and centred on the row. The design dropped the
+   #404040 top rule this bar used to carry, so it is now unruled — the list's
+   own fade mask is what ends the rows. */
 .lm-hint-wrap {
-  /* The bar is exactly the node's 40px tall, and exactly as wide as the list
-     rows above it — same width expression as .lm-list, so it lines up with the
-     row edges in both states instead of running the full page width. */
-  height: calc(40px * (1 - var(--lm)));
+  /* The bar is exactly the node's 30px tall (its 14px label row inside 8px
+     top/bottom padding), and exactly as wide as the list rows above it — same
+     width expression as .lm-list, so it lines up with the row edges in both
+     states instead of running the full page width. */
+  height: calc(30px * (1 - var(--lm)));
   width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
@@ -25311,13 +25553,11 @@ span.rvc-crumb--current { cursor: default; }
   justify-content: center;
   gap: 4px;
   width: 100%;
-  /* 40px including the 1px rule; Figma's pt-px sits inside it. */
-  height: 40px;
-  border-top: 1px solid #404040;
-  padding: 1px 12px 0;
+  height: 30px;
+  padding: 0 12px;
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   color: #a8a8a8;
   text-transform: uppercase;
   white-space: nowrap;
@@ -25670,18 +25910,9 @@ span.rvc-crumb--current { cursor: default; }
   display: none;
 }
 
-/* The kind filter is this page's entire pill row, so it rides in the persistent
-   `.lm-filters-flow` slot where other pages put their <Filters/> row. */
-.prl-kinds {
-  gap: 8px;
-}
-/* Active kind — the pill keeps its chrome in both states; colorway is the
-   shared .co-status-pill--accent trio. */
-.lm-pill.is-active {
-  border-color: #f05527;
-  color: #f05527;
-  background: rgba(240, 85, 39, 0.1);
-}
+/* The kind pill row (`.prl-kinds`) went away with the Status pill — this page
+   carries the plain shared `.filters` row now, which the .lm-cards rules above
+   already fold away on the landing. */
 
 /* The wait ↔ Submitted On cell: at the landing the column shows a right-
    aligned "Waiting 4 days" (the minimal view's second column, sitting at the

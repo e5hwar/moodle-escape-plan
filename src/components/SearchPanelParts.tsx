@@ -127,3 +127,58 @@ export function SearchTrailing({
     </button>
   );
 }
+
+/** The search header inside a dropdown panel (Figma 934:1117): a search glyph,
+ *  the query, and — once anything is typed — an X that clears it. Shared by the
+ *  SelectField / filter / picker menus so the searched state looks and behaves
+ *  the same in all of them.
+ *
+ *  `onChange` is called with "" when the X is hit, so the owner's own filtering
+ *  resets through the one path it already has. The mousedown is prevented so
+ *  clearing never blurs the field and closes the menu underneath. */
+export function DropdownSearch({
+  value,
+  onChange,
+  placeholder,
+  inputRef,
+  onKeyDown,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  inputRef?: React.MutableRefObject<HTMLInputElement | null>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="dropdown-search">
+      <span className="dropdown-search-icon">
+        <SearchIcon />
+      </span>
+      <input
+        ref={inputRef}
+        autoFocus={autoFocus}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+      />
+      {value !== "" && (
+        <button
+          type="button"
+          className="dropdown-search-clear"
+          aria-label="Clear search"
+          title="Clear search"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onChange("");
+            inputRef?.current?.focus();
+          }}
+        >
+          <SearchClearIcon />
+        </button>
+      )}
+    </div>
+  );
+}

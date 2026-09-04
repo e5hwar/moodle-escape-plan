@@ -156,7 +156,7 @@ export function Notice({
 export type CompareRow = { k: string; a: ReactNode; b: ReactNode };
 
 /** Placeholder for a side that has not been picked yet. */
-const EMPTY = "—";
+const EMPTY = "";
 
 /** The five identity rows, with either side allowed to be empty. */
 export function accountCompareRows(a: MergeUser | null, b: MergeUser | null): CompareRow[] {

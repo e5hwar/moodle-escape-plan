@@ -4,24 +4,39 @@ import {
   TIERS,
   SUBSCRIPTION_STATUSES,
   COMPANY_INDUSTRIES,
+  COMPANY_PARTNERSHIPS,
   type Company,
 } from "../data/companies";
 import { KeyCommandIcon, SearchIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-const TIER_PREFIX = "Tier:";
-const STATUS_PREFIX = "Status:";
-const INDUSTRY_PREFIX = "Industry:";
+
+/* One facet the bar can scope by. All four behave identically — a "Name:"
+ * prefix puts the panel into selection mode, picking a value appends it to the
+ * filter the Filters row also writes — so they are described as data rather
+ * than repeated as four parallel branches. Order here IS the order of the
+ * "Suggested filters" rows and of keyboard navigation. */
+type Facet = {
+  /** Label on the chip, the panel heading, and the "<label>:" typed prefix. */
+  label: string;
+  /** Sample value shown on the suggested-filter row ("Tier: Growth"). */
+  example: string;
+  desc: string;
+  /** Plural noun for the "No <plural> match …" empty state. */
+  plural: string;
+  /** Empty state when the query is blank — long lists ask the user to type. */
+  emptyHint: string;
+  values: readonly string[];
+  applied: string[];
+  onChange: (next: string[]) => void;
+  counts: Map<string, number>;
+};
 
 type Opt =
-  | { kind: "tier-filter" }
-  | { kind: "status-filter" }
-  | { kind: "industry-filter" }
-  | { kind: "search" }
-  | { kind: "tier"; name: string }
-  | { kind: "status"; name: string }
-  | { kind: "industry"; name: string };
+  | { kind: "facet"; facet: Facet }
+  | { kind: "value"; facet: Facet; name: string }
+  | { kind: "search" };
 
 export function CompaniesSearch({
   companies,
@@ -31,6 +46,8 @@ export function CompaniesSearch({
   onStatusesChange,
   industries: appliedIndustries,
   onIndustriesChange,
+  partnerships: appliedPartnerships,
+  onPartnershipsChange,
   query,
   onCommit,
 }: {
@@ -42,6 +59,8 @@ export function CompaniesSearch({
   onStatusesChange: (next: string[]) => void;
   industries: string[];
   onIndustriesChange: (next: string[]) => void;
+  partnerships: string[];
+  onPartnershipsChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
 }) {
@@ -53,89 +72,109 @@ export function CompaniesSearch({
 
   useEffect(() => setText(query), [query]);
 
-  const tierCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    companies.forEach((c) => m.set(c.tier, (m.get(c.tier) ?? 0) + 1));
-    return m;
+  // "N companies" per value, on the rows. Status comes from derived billing, so
+  // it is counted the same way the table renders it.
+  const counts = useMemo(() => {
+    const tally = (pick: (c: Company) => string) => {
+      const m = new Map<string, number>();
+      companies.forEach((c) => {
+        const v = pick(c);
+        if (v) m.set(v, (m.get(v) ?? 0) + 1);
+      });
+      return m;
+    };
+    return {
+      tier: tally((c) => c.tier ?? ""),
+      status: tally((c) => getCompanyBilling(c).status),
+      industry: tally((c) => c.industry),
+      partnership: tally((c) => c.partnership),
+    };
   }, [companies]);
 
-  const statusCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    companies.forEach((c) => {
-      const s = getCompanyBilling(c).status;
-      m.set(s, (m.get(s) ?? 0) + 1);
-    });
-    return m;
-  }, [companies]);
+  const facets: Facet[] = [
+    {
+      label: "Tier",
+      example: "Growth",
+      desc: "Filter Companies by Tier",
+      plural: "tiers",
+      emptyHint: "All tiers are already applied.",
+      values: TIERS,
+      applied: appliedTiers,
+      onChange: onTiersChange,
+      counts: counts.tier,
+    },
+    {
+      label: "Status",
+      example: "Active",
+      desc: "Filter by Subscription Status",
+      plural: "statuses",
+      emptyHint: "All statuses are already applied.",
+      values: SUBSCRIPTION_STATUSES,
+      applied: appliedStatuses,
+      onChange: onStatusesChange,
+      counts: counts.status,
+    },
+    {
+      label: "Industry",
+      example: "HVAC",
+      desc: "Filter by Industry",
+      plural: "industries",
+      emptyHint: "Start typing an industry name…",
+      values: COMPANY_INDUSTRIES,
+      applied: appliedIndustries,
+      onChange: onIndustriesChange,
+      counts: counts.industry,
+    },
+    {
+      label: "Partnership",
+      example: "Preferred Partner",
+      desc: "Filter by Partnership",
+      plural: "partnerships",
+      emptyHint: "All partnerships are already applied.",
+      values: COMPANY_PARTNERSHIPS,
+      applied: appliedPartnerships,
+      onChange: onPartnershipsChange,
+      counts: counts.partnership,
+    },
+  ];
 
-  const industryCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    companies.forEach((c) => {
-      if (c.industry) m.set(c.industry, (m.get(c.industry) ?? 0) + 1);
-    });
-    return m;
-  }, [companies]);
+  // A leading "<Label>:" (case-insensitive) puts the box into that facet's
+  // selection mode; anything else is free text for the table.
+  const prefix = /^\s*([A-Za-z]+):\s*(.*)$/.exec(text);
+  const prefixed = prefix
+    ? facets.find((f) => f.label.toLowerCase() === prefix[1].toLowerCase())
+    : undefined;
+  const mode = prefixed && prefix ? { facet: prefixed, query: prefix[2] } : null;
+  const inMode = mode != null;
 
-  // Prefix detection (case-insensitive) puts the box into a filter-selection mode.
-  const tierMatch = text.match(/^\s*tier:\s*(.*)$/i);
-  const statusMatch = text.match(/^\s*status:\s*(.*)$/i);
-  const industryMatch = text.match(/^\s*industry:\s*(.*)$/i);
-  const inTierMode = tierMatch != null;
-  const inStatusMode = !inTierMode && statusMatch != null;
-  const inIndustryMode = !inTierMode && !inStatusMode && industryMatch != null;
-  const inMode = inTierMode || inStatusMode || inIndustryMode;
-  const tierQuery = tierMatch ? tierMatch[1] : "";
-  const statusQuery = statusMatch ? statusMatch[1] : "";
-  const industryQuery = industryMatch ? industryMatch[1] : "";
   const companyQuery = inMode ? "" : text;
   const hasQuery = companyQuery.trim().length > 0;
 
-  const tierResults = useMemo(() => {
-    const q = tierQuery.trim().toLowerCase();
-    return TIERS.filter(
-      (t) => !appliedTiers.includes(t) && t.toLowerCase().includes(q),
-    ).slice(0, MAX_RESULTS);
-  }, [tierQuery, appliedTiers]);
-
-  const statusResults = useMemo(() => {
-    const q = statusQuery.trim().toLowerCase();
-    return SUBSCRIPTION_STATUSES.filter(
-      (s) => !appliedStatuses.includes(s) && s.toLowerCase().includes(q),
-    ).slice(0, MAX_RESULTS);
-  }, [statusQuery, appliedStatuses]);
-
-  const industryResults = useMemo(() => {
-    const q = industryQuery.trim().toLowerCase();
-    return COMPANY_INDUSTRIES.filter(
-      (i) => !appliedIndustries.includes(i) && i.toLowerCase().includes(q),
-    ).slice(0, MAX_RESULTS);
-  }, [industryQuery, appliedIndustries]);
+  const results = mode
+    ? mode.facet.values
+        .filter(
+          (v) =>
+            !mode.facet.applied.includes(v) &&
+            v.toLowerCase().includes(mode.query.trim().toLowerCase()),
+        )
+        .slice(0, MAX_RESULTS)
+    : [];
 
   // Options available to keyboard navigation, in render order.
-  const optionCount = inTierMode
-    ? tierResults.length
-    : inStatusMode
-      ? statusResults.length
-      : inIndustryMode
-        ? industryResults.length
-        : 3 + (hasQuery ? 1 : 0);
+  const optionCount = mode ? results.length : facets.length + (hasQuery ? 1 : 0);
 
   function optionAt(i: number): Opt | null {
-    if (inTierMode) return tierResults[i] ? { kind: "tier", name: tierResults[i] } : null;
-    if (inStatusMode) return statusResults[i] ? { kind: "status", name: statusResults[i] } : null;
-    if (inIndustryMode) return industryResults[i] ? { kind: "industry", name: industryResults[i] } : null;
-    if (i === 0) return { kind: "tier-filter" };
-    if (i === 1) return { kind: "status-filter" };
-    if (i === 2) return { kind: "industry-filter" };
-    if (i === 3 && hasQuery) return { kind: "search" };
+    if (mode) return results[i] ? { kind: "value", facet: mode.facet, name: results[i] } : null;
+    if (i < facets.length) return { kind: "facet", facet: facets[i] };
+    if (i === facets.length && hasQuery) return { kind: "search" };
     return null;
   }
 
   // When the user has typed free text, preselect the "Search for…" row (the last
   // option) so pressing Enter searches immediately; arrowing moves the highlight off it.
   useEffect(() => {
-    setActive(!inMode && hasQuery ? 3 : -1);
-  }, [text, inMode, hasQuery]);
+    setActive(!inMode && hasQuery ? facets.length : -1);
+  }, [text, inMode, hasQuery, facets.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -146,24 +185,8 @@ export function CompaniesSearch({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  function addTier(name: string) {
-    onTiersChange(Array.from(new Set([...appliedTiers, name])));
-    setText("");
-    setActive(-1);
-    setOpen(true);
-    inputRef.current?.focus();
-  }
-
-  function addStatus(name: string) {
-    onStatusesChange(Array.from(new Set([...appliedStatuses, name])));
-    setText("");
-    setActive(-1);
-    setOpen(true);
-    inputRef.current?.focus();
-  }
-
-  function addIndustry(name: string) {
-    onIndustriesChange(Array.from(new Set([...appliedIndustries, name])));
+  function addValue(facet: Facet, name: string) {
+    facet.onChange(Array.from(new Set([...facet.applied, name])));
     setText("");
     setActive(-1);
     setOpen(true);
@@ -176,24 +199,12 @@ export function CompaniesSearch({
   }
 
   function activate(opt: Opt) {
-    if (opt.kind === "tier-filter") {
-      setText(TIER_PREFIX);
+    if (opt.kind === "facet") {
+      setText(`${opt.facet.label}:`);
       setActive(-1);
       inputRef.current?.focus();
-    } else if (opt.kind === "status-filter") {
-      setText(STATUS_PREFIX);
-      setActive(-1);
-      inputRef.current?.focus();
-    } else if (opt.kind === "industry-filter") {
-      setText(INDUSTRY_PREFIX);
-      setActive(-1);
-      inputRef.current?.focus();
-    } else if (opt.kind === "tier") {
-      addTier(opt.name);
-    } else if (opt.kind === "status") {
-      addStatus(opt.name);
-    } else if (opt.kind === "industry") {
-      addIndustry(opt.name);
+    } else if (opt.kind === "value") {
+      addValue(opt.facet, opt.name);
     } else {
       commitSearch(companyQuery);
     }
@@ -213,16 +224,8 @@ export function CompaniesSearch({
         const opt = optionAt(active);
         if (opt) return activate(opt);
       }
-      if (inTierMode) {
-        if (tierResults[0]) return addTier(tierResults[0]);
-        return;
-      }
-      if (inStatusMode) {
-        if (statusResults[0]) return addStatus(statusResults[0]);
-        return;
-      }
-      if (inIndustryMode) {
-        if (industryResults[0]) return addIndustry(industryResults[0]);
+      if (mode) {
+        if (results[0]) return addValue(mode.facet, results[0]);
         return;
       }
       commitSearch(companyQuery);
@@ -240,7 +243,7 @@ export function CompaniesSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Companies"
+          placeholder="Search Companies..."
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -257,90 +260,58 @@ export function CompaniesSearch({
 
       {open && (
         <div className="usearch-panel">
-          {!inMode && (
+          {!mode && (
             <>
               <div className="usearch-head">Suggested filters</div>
-              <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "tier-filter" })}>
-                <span className="usearch-chip">Tier:</span>
-                <span className="usearch-row-ex">Tier: Growth</span>
-                <span className="usearch-row-desc">Filter Companies by Tier</span>
-              </OptionRow>
-              <OptionRow active={active === 1} onHover={() => setActive(1)} onClick={() => activate({ kind: "status-filter" })}>
-                <span className="usearch-chip">Status:</span>
-                <span className="usearch-row-ex">Status: Active</span>
-                <span className="usearch-row-desc">Filter by Subscription Status</span>
-              </OptionRow>
-              <OptionRow active={active === 2} onHover={() => setActive(2)} onClick={() => activate({ kind: "industry-filter" })}>
-                <span className="usearch-chip">Industry:</span>
-                <span className="usearch-row-ex">Industry: HVAC</span>
-                <span className="usearch-row-desc">Filter by Industry</span>
-              </OptionRow>
+              {facets.map((facet, i) => (
+                <OptionRow
+                  key={facet.label}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => activate({ kind: "facet", facet })}
+                >
+                  <span className="usearch-chip">{facet.label}:</span>
+                  <span className="usearch-row-ex">{facet.label}: {facet.example}</span>
+                  <span className="usearch-row-desc">{facet.desc}</span>
+                </OptionRow>
+              ))}
             </>
           )}
 
-          {inTierMode && (
+          {mode && (
             <>
-              <div className="usearch-head">Tier</div>
-              {tierResults.length === 0 ? (
+              <div className="usearch-head">{mode.facet.label}</div>
+              {results.length === 0 ? (
                 <div className="usearch-empty">
-                  {tierQuery.trim() ? `No tiers match “${tierQuery.trim()}”.` : "All tiers are already applied."}
+                  {mode.query.trim()
+                    ? `No ${mode.facet.plural} match “${mode.query.trim()}”.`
+                    : mode.facet.emptyHint}
                 </div>
               ) : (
-                tierResults.map((name, i) => (
-                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "tier", name })}>
-                    <span className="usearch-chip">Tier:</span>
+                results.map((name, i) => (
+                  <OptionRow
+                    key={name}
+                    active={active === i}
+                    onHover={() => setActive(i)}
+                    onClick={() => activate({ kind: "value", facet: mode.facet, name })}
+                  >
+                    <span className="usearch-chip">{mode.facet.label}:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{tierCounts.get(name) ?? 0} companies</span>
+                    <span className="usearch-row-desc">
+                      {mode.facet.counts.get(name) ?? 0} companies
+                    </span>
                   </OptionRow>
                 ))
               )}
             </>
           )}
 
-          {inStatusMode && (
-            <>
-              <div className="usearch-head">Status</div>
-              {statusResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {statusQuery.trim() ? `No statuses match “${statusQuery.trim()}”.` : "All statuses are already applied."}
-                </div>
-              ) : (
-                statusResults.map((name, i) => (
-                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "status", name })}>
-                    <span className="usearch-chip">Status:</span>
-                    <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{statusCounts.get(name) ?? 0} companies</span>
-                  </OptionRow>
-                ))
-              )}
-            </>
-          )}
-
-          {inIndustryMode && (
-            <>
-              <div className="usearch-head">Industry</div>
-              {industryResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {industryQuery.trim() ? `No industries match “${industryQuery.trim()}”.` : "Start typing an industry name…"}
-                </div>
-              ) : (
-                industryResults.map((name, i) => (
-                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "industry", name })}>
-                    <span className="usearch-chip">Industry:</span>
-                    <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{industryCounts.get(name) ?? 0} companies</span>
-                  </OptionRow>
-                ))
-              )}
-            </>
-          )}
-
-          {!inMode && hasQuery ? (
+          {!mode && hasQuery ? (
             <SearchForRow
               query={companyQuery.trim()}
               scope="Companies"
-              active={active === 3}
-              onHover={() => setActive(3)}
+              active={active === facets.length}
+              onHover={() => setActive(facets.length)}
               onClick={() => commitSearch(companyQuery)}
             />
           ) : (

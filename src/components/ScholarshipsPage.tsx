@@ -47,7 +47,7 @@ function daysFromToday(iso: string): number {
 }
 
 function contactOf(user: ScholarshipUser): string {
-  return user.email ?? user.phone ?? "—";
+  return user.email ?? user.phone ?? "";
 }
 
 function formatDate(iso: string): string {

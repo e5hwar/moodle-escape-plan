@@ -264,14 +264,14 @@ export const attempts: Attempt[] = [...buildAttempts(), ...buildProctoredAttempt
 /** Minutes elapsed for an attempt, derived from its start/complete stamps.
  *  Stored alongside so the table can show Duration without re-parsing labels. */
 export function attemptDuration(a: Attempt): string {
-  if (a.status === "In Progress" || !a.completedAt) return "—";
+  if (a.status === "In Progress" || !a.completedAt) return "";
   const parse = (s: string) => {
     // "May 3, 2026 · 9:42 AM"
     const [datePart, timePart] = s.split(" · ");
     return new Date(`${datePart} ${timePart}`).getTime();
   };
   const ms = parse(a.completedAt) - parse(a.startedAt);
-  if (Number.isNaN(ms) || ms < 0) return "—";
+  if (Number.isNaN(ms) || ms < 0) return "";
   return durationLabel(Math.round(ms / 60000));
 }
 

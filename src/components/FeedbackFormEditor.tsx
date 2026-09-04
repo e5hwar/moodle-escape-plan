@@ -238,7 +238,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
                 <div className="qz-q-title">
                   {q ? q.text : `${l.questionId} — not found in the Question Bank`}
                 </div>
-                <div className="qz-q-type">{q ? TYPE_LABEL[q.type] : "—"}</div>
+                <div className="qz-q-type">{q ? TYPE_LABEL[q.type] : ""}</div>
               </div>
               <span className="qz-mand">
                 <button
@@ -313,7 +313,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
                       {q ? q.text : `${l.questionId} — not found in the Question Bank`}
                     </div>
                     <div className="qz-q-type">
-                      {q ? TYPE_LABEL[q.type] : "—"}
+                      {q ? TYPE_LABEL[q.type] : ""}
                       {l.deactivatedAt && ` · inactive since ${l.deactivatedAt}`}
                     </div>
                   </div>

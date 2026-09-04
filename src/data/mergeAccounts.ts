@@ -130,7 +130,7 @@ const baseMergeUsers: MergeUser[] = [
     role: "Self-Learner",
     subscription: "Starter",
     company: null,
-    sub: { plan: "Free", detail: "No active subscription", price: "—", active: false },
+    sub: { plan: "Free", detail: "No active subscription", price: "", active: false },
     addons: [],
     data: { "Task completions": 34, "Quiz attempts": 9, "Quiz-Section completions": 15, "Hands-On Task submissions": 4, Skills: 3, Awards: 1, "Path entries": 1 },
   },
@@ -162,7 +162,7 @@ const baseMergeUsers: MergeUser[] = [
     role: "Self-Learner",
     subscription: "Starter",
     company: null,
-    sub: { plan: "Free", detail: "No active subscription", price: "—", active: false },
+    sub: { plan: "Free", detail: "No active subscription", price: "", active: false },
     addons: [],
     data: { "Task completions": 12, "Quiz attempts": 3, "Quiz-Section completions": 6, "Hands-On Task submissions": 1, Skills: 2, Awards: 0, "Path entries": 1 },
   },
@@ -234,11 +234,11 @@ function planFor(status: SubscriptionStatus, company: string | null, k: number):
         ? { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true }
         : { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true };
     case "Free Trial":
-      return { plan: "Free trial", detail: `Trial · ${3 + (k % 11)} days left`, price: "—", active: false };
+      return { plan: "Free trial", detail: `Trial · ${3 + (k % 11)} days left`, price: "", active: false };
     case "Scholarship":
       return { plan: "Scholarship", detail: "Active · sponsored seat", price: "$0", active: true };
     case "Starter":
-      return { plan: "Free", detail: "No active subscription", price: "—", active: false };
+      return { plan: "Free", detail: "No active subscription", price: "", active: false };
   }
 }
 

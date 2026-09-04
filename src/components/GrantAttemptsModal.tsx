@@ -7,7 +7,7 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import {
   CheckIcon,
-  ChevronDownIcon,
+  DropdownCaretIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   SmallXIcon,
@@ -160,7 +160,7 @@ export function GrantAttemptsModal({
                   </div>
                 )}
                 <span className="field-chevron">
-                  <ChevronDownIcon />
+                  <DropdownCaretIcon />
                 </span>
               </div>
             </div>
@@ -562,7 +562,7 @@ function SelectGrantUsersModal({
                               it on specificity. */}
                           <td className="gam-col-name col-name">{u.name}</td>
                           <td className="gam-col-email">{u.email}</td>
-                          <td className="gam-col-company">{companyOf(u) || "—"}</td>
+                          <td className="gam-col-company">{companyOf(u) || ""}</td>
                           <td className="gam-col-role">{u.role}</td>
                           <td className="gam-col-plan">{u.subscriptionStatus}</td>
                           <td className="gam-col-attempts">{attemptsOf(u.id)}</td>

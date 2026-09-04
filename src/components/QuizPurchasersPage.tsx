@@ -83,7 +83,7 @@ const EMPTY_FILTERS: UserFilterState = {
 };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso
@@ -129,10 +129,10 @@ const COLS: ColMeta[] = [
   { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
   { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 145, tip: ({ p }) => (p.grantDate && p.grantedBy ? `Granted by ${p.grantedBy}` : undefined), render: ({ p }) => formatDate(p.grantDate), sortValue: ({ p }) => p.grantDate ?? "" },
   { key: "attemptStatus", label: "Attempt Status", className: "col-qp-status", width: 170, render: ({ p }) => p.status, sortValue: ({ p }) => STATUS_ORDER[p.status] },
-  { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => (p.score == null ? "—" : `${p.score}%`), sortValue: ({ p }) => (p.score ?? -1) },
-  { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => (p.passed == null ? "—" : p.passed ? "Pass" : "Fail"), sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
+  { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => (p.score == null ? "" : `${p.score}%`), sortValue: ({ p }) => (p.score ?? -1) },
+  { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => (p.passed == null ? "" : p.passed ? "Pass" : "Fail"), sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
   { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
-  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : "—"), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
+  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : ""), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
   { key: "language", label: "Language", className: "col-u-lang", width: 120, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },

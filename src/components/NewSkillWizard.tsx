@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { SmallXIcon, ChevronDownIcon } from "./icons";
+import { SmallXIcon, DropdownCaretIcon } from "./icons";
 import { MultiSelect } from "./NewCompanyWizard";
 import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
@@ -407,7 +407,7 @@ function TaskPicker({
               )}
             </div>
           )}
-          <span className="field-chevron"><ChevronDownIcon /></span>
+          <span className="field-chevron"><DropdownCaretIcon /></span>
         </div>
       </div>
 

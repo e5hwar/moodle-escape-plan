@@ -15,10 +15,10 @@ type Opt =
 
 /**
  * The Proctoring queue's search — the Users / Hands-On Task combobox, with the
- * two scopes this page filters on (Quiz, Company). There are no filter pills on
- * this page, so unlike ReviewSearch the applied scopes stay in the bar as chips
- * after Enter and are removed from there; that bar is the only place an applied
- * filter is visible.
+ * two scopes this page filters on (Quiz, Company). Quiz has a filter pill on the
+ * page, so its applied values leave the bar on Enter and are shown (and cleared)
+ * there, the way ReviewSearch hands its scopes to the pills. Company has no pill,
+ * so its applied chips stay in the bar — that is where they are removed from.
  *
  * The panel offers filters only — no live result rows. The table filters on the
  * COMMITTED query, so a list that updated per keystroke would be showing results
@@ -153,14 +153,15 @@ export function ProctoringSearch({
     // `query`/drafts are deps so the handler always reverts to current state.
   }, [open, query, draftExams, draftCompanies]);
 
-  // Clear the applied search outright — no Enter needed.
+  /* Clear the applied search outright — no Enter needed. It clears what the bar
+     itself is showing: the text, this session's drafts, and the applied Company
+     chips. Applied quizzes belong to the Quiz pill and are left alone. */
   function clearSearch() {
     setText("");
     setDraftExams([]);
     setDraftCompanies([]);
     setActive(-1);
     setOpen(false);
-    onExamsChange([]);
     onCompaniesChange([]);
     onCommit("");
   }
@@ -243,15 +244,17 @@ export function ProctoringSearch({
     } else if (e.key === "Escape") {
       revert();
     } else if (e.key === "Backspace" && text === "") {
+      // Only what the bar actually shows is backspace-able.
       const lastCompany = scopedCompanies[scopedCompanies.length - 1];
-      const lastExam = scopedExams[scopedExams.length - 1];
+      const lastExam = draftExams[draftExams.length - 1];
       if (lastCompany) removeCompany(lastCompany);
       else if (lastExam) removeQuiz(lastExam);
     }
   }
 
   const scopeChips = [
-    ...scopedExams.map((name) => ({ kind: "Quiz", name, remove: () => removeQuiz(name) })),
+    // Drafts only for Quiz: once applied it is the Quiz pill's to display.
+    ...draftExams.map((name) => ({ kind: "Quiz", name, remove: () => removeQuiz(name) })),
     ...scopedCompanies.map((name) => ({ kind: "Company", name, remove: () => removeCompany(name) })),
   ];
 

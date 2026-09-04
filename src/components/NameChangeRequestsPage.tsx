@@ -170,8 +170,8 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                         <td className="col-name" data-tip={r.requestedName}>
                           {r.requestedName}
                         </td>
-                        <td className="col-u-email">{c?.email ?? "—"}</td>
-                        <td className="col-u-phone">{c?.phone ?? "—"}</td>
+                        <td className="col-u-email">{c?.email ?? ""}</td>
+                        <td className="col-u-phone">{c?.phone ?? ""}</td>
                         <td>{formatDate(r.submittedOn)}</td>
                         <td className="ncr-col-open">
                           <button

@@ -82,7 +82,7 @@ const EMPTY_FILTERS: UserFilterState = {
 };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso
@@ -129,7 +129,7 @@ const COLS: ColMeta[] = [
   { key: "completion", label: "Completion", className: "col-cp-completion", width: 145, render: ({ p }) => (p.completed ? "Complete" : "In Progress"), sortValue: ({ p }) => (p.completed ? 1 : 0) },
   { key: "accessEnded", label: "Access Ended", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.accessEndedDate), sortValue: ({ p }) => p.accessEndedDate ?? "" },
   { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
-  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : "—"), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
+  { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : ""), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
   { key: "language", label: "Language", className: "col-u-lang", width: 120, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },

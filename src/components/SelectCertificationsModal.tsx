@@ -290,11 +290,11 @@ export function SelectCertificationsModal({
                               non-Name cell" rule excludes. Without it that rule
                               (five :not()s deep) silently wins. */}
                           <td className="scm-col-name col-name">{n.name}</td>
-                          <td className="scm-col-industry">{n.industry ?? "—"}</td>
+                          <td className="scm-col-industry">{n.industry ?? ""}</td>
                           <td className="scm-col-level">{n.level}</td>
                           <td className="scm-col-tasks">{n.tasksCount}</td>
                           <td className="scm-col-enrolled">
-                            {n.enrolled?.toLocaleString() ?? "—"}
+                            {n.enrolled?.toLocaleString() ?? ""}
                           </td>
                         </tr>
                       );

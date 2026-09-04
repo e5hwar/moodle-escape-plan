@@ -36,7 +36,7 @@ const TIER_HEX: Record<MeritTier, string> = {
 };
 
 function formatDate(iso?: string): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   // Parse YYYY-MM-DD as local time so the date doesn't shift a day in TZs behind UTC.
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
@@ -315,7 +315,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
               <Field label="Language" value={p.fields.language} />
               <Field label="Goal" value={p.fields.goal} />
               <Field label="Industry Preference" value={p.fields.industryPreference} />
-              <Field label="Current Company" value={p.fields.currentCompany ?? "—"} />
+              <Field label="Current Company" value={p.fields.currentCompany ?? ""} />
               <Field
                 label="Zip Code"
                 value={
@@ -448,7 +448,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                   )
                 }
               />
-              <Field label="Platform" value={p.subscription.platform ?? "—"} />
+              <Field label="Platform" value={p.subscription.platform ?? ""} />
               <Field label="Started" value={formatDate(p.subscription.startedOn)} />
               <Field
                 label={subCanceled ? "Access Until" : "Renews"}
@@ -1154,7 +1154,7 @@ function certStatusPill(pu: Purchase) {
         {when ? `Revoked · ${when}` : "Revoked"}
       </span>
     );
-  return <span>—</span>;
+  return null;
 }
 
 function attemptStatusPill(pu: Purchase) {
@@ -1166,6 +1166,6 @@ function attemptStatusPill(pu: Purchase) {
     case "Completed":
       return <span className="co-status-pill co-status-pill--grey">Used · Completed</span>;
     default:
-      return <span>—</span>;
+      return null;
   }
 }

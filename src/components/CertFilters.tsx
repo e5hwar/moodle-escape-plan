@@ -374,8 +374,12 @@ function CertColumnsBody({
   value: CertColumnState;
   onApply: (v: CertColumnState) => void;
 }) {
+  // Available columns read alphabetically — it is a lookup list, not an
+  // ordering (see ColumnsBody in Filters.tsx).
   const active = CERT_OPTIONAL_COLUMNS.filter((c) => value[c.key]);
-  const available = CERT_OPTIONAL_COLUMNS.filter((c) => !value[c.key]);
+  const available = CERT_OPTIONAL_COLUMNS.filter((c) => !value[c.key]).sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
   return (
     <div className="dropdown-list cols-menu">
       <div className="dropdown-section">

@@ -158,7 +158,7 @@ export function certForAward(award: Award): Certification | undefined {
 
 /** Certification name, always resolved live (names are never frozen at issuance). */
 export function certName(award: Award): string {
-  return certById[award.certificationId]?.name ?? "—";
+  return certById[award.certificationId]?.name ?? "";
 }
 
 export function templateById(

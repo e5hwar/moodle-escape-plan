@@ -345,7 +345,7 @@ export function SelectUsersModal({
                               it on specificity. */}
                           <td className="sum-col-name col-name">{u.name}</td>
                           <td className="sum-col-email">{u.email}</td>
-                          <td className="sum-col-company">{u.company ?? "—"}</td>
+                          <td className="sum-col-company">{u.company ?? ""}</td>
                           <td className="sum-col-role">{u.role}</td>
                           <td className="sum-col-plan">{u.subscription}</td>
                         </tr>

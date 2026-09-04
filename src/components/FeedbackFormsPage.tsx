@@ -123,7 +123,7 @@ const FB_COLS: FbColMeta[] = [
     sortable: false,
     render: (f) =>
       f.triggers.length === 0 ? (
-        <span className="fb-faint">—</span>
+        null
       ) : (
         <>
           {f.triggers[0].refName}
@@ -135,7 +135,7 @@ const FB_COLS: FbColMeta[] = [
     key: "responses",
     label: "Responses",
     className: "col-type",
-    width: 140,
+    width: 144,
     dateScoped: true,
     render: (f, range) => responsesInRange(f, range).toLocaleString(),
   },
@@ -150,7 +150,7 @@ const FB_COLS: FbColMeta[] = [
     key: "lastModified",
     label: "Last Modified",
     className: "col-date",
-    width: 140,
+    width: 144,
     render: (f) => formatDate(f.updatedAt),
   },
   {

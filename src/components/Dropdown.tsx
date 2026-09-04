@@ -38,26 +38,31 @@ type Props = {
 const GAP = 8;
 const EDGE = 4;
 
-/** Rect the overlay panel must stay inside: the trigger's nearest scrollable
- *  ancestor, clipped to the viewport. Falls back to the viewport. */
+/** Rect the overlay panel must stay inside.
+ *
+ *  Horizontally that is the trigger's nearest scrollable ancestor, clipped to
+ *  the viewport, so a panel can't slide out past a scrolling column's edge.
+ *  Vertically it is the whole viewport: the panel is portalled and `fixed`, so
+ *  nothing actually clips it, and holding it inside the scrollport only forced
+ *  a field near the bottom of a form to flip its menu upwards. Letting it run
+ *  on means a menu opens downward and lies over the footer instead. */
 function boundsFor(el: HTMLElement): DOMRect {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  let left = 0;
+  let right = vw;
   let node: HTMLElement | null = el.parentElement;
   while (node) {
     const oy = getComputedStyle(node).overflowY;
     if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
       const r = node.getBoundingClientRect();
-      return new DOMRect(
-        Math.max(0, r.left),
-        Math.max(0, r.top),
-        Math.min(vw, r.right) - Math.max(0, r.left),
-        Math.min(vh, r.bottom) - Math.max(0, r.top),
-      );
+      left = Math.max(0, r.left);
+      right = Math.min(vw, r.right);
+      break;
     }
     node = node.parentElement;
   }
-  return new DOMRect(0, 0, vw, vh);
+  return new DOMRect(left, 0, right - left, vh);
 }
 
 export function Dropdown({

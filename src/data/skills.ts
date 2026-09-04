@@ -198,7 +198,7 @@ export function criteriaSummary(skill: Skill): string {
 
 /** All/Any rule for a Skill's awarding criteria — only meaningful with 2+ Tasks. */
 export function criteriaRule(skill: Skill): string {
-  if (skill.taskIds.length <= 1) return "—";
+  if (skill.taskIds.length <= 1) return "";
   return skill.rule === "all" ? "All" : "Any";
 }
 

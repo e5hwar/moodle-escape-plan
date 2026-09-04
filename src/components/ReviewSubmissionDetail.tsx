@@ -11,7 +11,7 @@ import { RteToolbar } from "./RteToolbar";
 import { AutoTextarea } from "./AutoTextarea";
 
 function formatDate(iso: string): string {
-  if (!iso || iso === "—") return "—";
+  if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso

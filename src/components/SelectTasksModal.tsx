@@ -278,8 +278,8 @@ export function SelectTasksModal({
                               (five :not()s deep) silently wins. */}
                           <td className="stm-col-name col-name">{t.name}</td>
                           <td className="stm-col-type">{t.type}</td>
-                          <td className="stm-col-certs">{certsOf(t) || "—"}</td>
-                          <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
+                          <td className="stm-col-certs">{certsOf(t) || ""}</td>
+                          <td className="stm-col-edited">{t.dateModified ?? ""}</td>
                         </tr>
                       );
                     })

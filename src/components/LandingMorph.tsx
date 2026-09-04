@@ -17,7 +17,7 @@
  *   </div>
  */
 
-import { CaptionAllIcon, KeepScrollingIcon, PlusCircleIcon } from "./icons";
+import { FullTableIcon, PlusCircleIcon } from "./icons";
 
 export type LandingPill = { key: string; label: string; onPick: () => void };
 
@@ -106,7 +106,6 @@ export function LandingFilterRow({
  * replaces it only at p=1, via a short aligned crossfade in CSS. */
 export function LandingOverlay({
   caption,
-  total,
   rows,
   columns,
   leadColumns = [],
@@ -118,7 +117,6 @@ export function LandingOverlay({
   onRowClick,
 }: {
   caption: string;
-  total: number;
   rows: LandingRow[];
   /** Data columns after Name, in the real table's order. */
   columns: LandingCol[];
@@ -182,12 +180,13 @@ export function LandingOverlay({
 
   return (
     <div className="lm-land" style={{ "--lmtw": totalWidth } as React.CSSProperties}>
+      {/* Figma 760:4642 "Atomic Component - Minimal State - Header Row" — the
+          40px header row in its landing state carries ONE left-aligned page
+          description and nothing opposite. The "all n" jump it used to hold was
+          dropped from the design; `.lm-hint` below is the remaining
+          click-through into the table. */}
       <div className="lm-caption">
         <span className="lm-caption-label">{caption}</span>
-        <button className="lm-caption-all" onClick={onShowAll}>
-          all {total}
-          <CaptionAllIcon />
-        </button>
       </div>
       <div className="lm-list">
         <div className="lm-head" style={{ gridTemplateColumns: template }}>
@@ -215,11 +214,14 @@ export function LandingOverlay({
       </div>
       {footer}
       <div className="lm-hint-wrap">
-        {/* Figma 716:1648 "Minimal State - Keep Scrolling" — a full-width bar
-            with a top rule, not the pill it replaced. */}
+        {/* Figma 716:1648 "Atomic Component - Minimal State - Keep Scrolling" —
+            a 30px bar closing the collapsed list, its label and 12px down arrow
+            centred on it. The design dropped both the top rule and the wordier
+            "keep scrolling" copy, so this now reads as the jump into the table
+            that the header row used to offer. */}
         <button className="lm-hint" onClick={onShowAll}>
-          <KeepScrollingIcon />
-          Keep scrolling to see the table
+          View full table
+          <FullTableIcon />
         </button>
       </div>
     </div>

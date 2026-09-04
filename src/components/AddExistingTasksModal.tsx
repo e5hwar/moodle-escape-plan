@@ -448,7 +448,7 @@ function Row({
         data-tip={task.usedIn.length ? task.usedIn.join("\n") : undefined}
       >
         {task.usedIn.length === 0 ? (
-          "—"
+          null
         ) : (
           <>
             {task.usedIn[0]}
@@ -463,7 +463,7 @@ function Row({
         data-tip={certTypes.length ? certTypes.join("\n") : undefined}
       >
         {certTypes.length === 0 ? (
-          "—"
+          null
         ) : (
           <>
             {certTypes[0]}
@@ -477,7 +477,7 @@ function Row({
       <td className="aet-col-type">{task.type}</td>
       <td className="aet-col-inds" data-tip={inds.length ? inds.join("\n") : undefined}>
         {inds.length === 0 ? (
-          <span className="aet-ind-none">—</span>
+          null
         ) : (
           <span className="aet-inds">
             {inds.map((i) => (

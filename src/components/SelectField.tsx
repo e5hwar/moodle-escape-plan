@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
-import { ChevronDownIcon, SearchIcon } from "./icons";
+import { DropdownCaretIcon } from "./icons";
+import { DropdownSearch } from "./SearchPanelParts";
 
 /**
  * Single-select menu — Figma 591:1382 "Dropdown Menu - Single-Select".
@@ -29,6 +30,10 @@ export function SelectField<T extends string>({
   searchPlaceholder,
   optionDetail,
   popupMenu = false,
+  maxVisibleOptions,
+  menuWidth,
+  panelClass,
+  onOpenChange,
 }: {
   value: T | "";
   options: readonly T[];
@@ -51,6 +56,19 @@ export function SelectField<T extends string>({
   /** Set when the field sits on a modal/popup — the panel takes the
    *  popup-context surface (Figma 668:972) so it separates from the card. */
   popupMenu?: boolean;
+  /** Caps the list at this many rows, so a long option set (countries, states)
+   *  scrolls inside a menu the size of a short one instead of filling the
+   *  screen. The search header, when there is one, sits above the cap. */
+  maxVisibleOptions?: number;
+  /** Opens the panel at this width instead of the trigger's. For a control too
+   *  narrow to host a search header (the phone dial-code picker) — the menu
+   *  still aligns to the trigger's left edge. */
+  menuWidth?: number;
+  /** Extra class on the panel, for a menu with its own row layout. */
+  panelClass?: string;
+  /** Notified as the panel opens and closes, for a caller that styles the
+   *  surrounding control while its menu is up. */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
@@ -75,8 +93,11 @@ export function SelectField<T extends string>({
       <Dropdown
         overlay
         constrainHeight
-        width={width || 220}
-        panelClass={`ss-menu${popupMenu ? " ss-menu--popup" : ""}`}
+        onOpenChange={onOpenChange}
+        width={menuWidth ?? (width || 220)}
+        panelClass={`ss-menu${popupMenu ? " ss-menu--popup" : ""}${
+          panelClass ? ` ${panelClass}` : ""
+        }`}
         trigger={({ open, toggle }) =>
           renderTrigger ? (
             renderTrigger({ open, toggle, label, isPlaceholder })
@@ -101,7 +122,7 @@ export function SelectField<T extends string>({
                   <span key={o}>{o}</span>
                 ))}
               </span>
-              <span className="field-chevron"><ChevronDownIcon /></span>
+              <span className="field-chevron"><DropdownCaretIcon /></span>
             </button>
           )
         }
@@ -113,6 +134,7 @@ export function SelectField<T extends string>({
             onChange={onChange}
             searchPlaceholder={searchPlaceholder}
             optionDetail={optionDetail}
+            maxVisibleOptions={maxVisibleOptions}
             // Hand the keyboard back to the trigger, the way a native select does.
             close={() => {
               close();
@@ -132,6 +154,7 @@ function SelectMenu<T extends string>({
   close,
   searchPlaceholder,
   optionDetail,
+  maxVisibleOptions,
 }: {
   value: T | "";
   options: readonly T[];
@@ -139,6 +162,7 @@ function SelectMenu<T extends string>({
   close: () => void;
   searchPlaceholder?: string;
   optionDetail?: (option: T) => ReactNode;
+  maxVisibleOptions?: number;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -204,10 +228,30 @@ function SelectMenu<T extends string>({
     }
   }
 
+  // The cap is measured off a real row rather than assumed, because row height
+  // varies by menu (the countries menu's rows are an 8px inset where the others
+  // are 6px). N rows land exactly on the Nth row's edge, so the cut-off row
+  // that would follow reads as "there is more below".
+  const [maxHeight, setMaxHeight] = useState<number | undefined>();
+  useLayoutEffect(() => {
+    if (!maxVisibleOptions) return;
+    const list = listRef.current;
+    const rowEls = list?.querySelectorAll<HTMLElement>(".dropdown-item");
+    if (!list || !rowEls?.length) return;
+    // The SHORTEST row, not the first: in a narrow menu a long label wraps to
+    // two or three lines, and measuring whichever row happens to lead would
+    // scale the cap by that row's wrapping rather than by the row count.
+    const unit = Math.min(...[...rowEls].map((r) => r.offsetHeight));
+    const cs = getComputedStyle(list);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    setMaxHeight(unit * maxVisibleOptions + pad);
+  }, [maxVisibleOptions]);
+
   const list = (
     <div
       className="dropdown-list"
       role="listbox"
+      style={maxHeight ? { maxHeight } : undefined}
       ref={listRef}
       tabIndex={searchPlaceholder ? undefined : -1}
       onKeyDown={searchPlaceholder ? undefined : onKeyDown}
@@ -242,7 +286,11 @@ function SelectMenu<T extends string>({
           </button>
         );
       })}
-      {shown.length === 0 && <div className="ms-menu-empty">No matches</div>}
+      {shown.length === 0 && (
+        <div className="ms-menu-empty">
+          {query.trim() ? `No matches for “${query.trim()}”` : "No matches"}
+        </div>
+      )}
     </div>
   );
 
@@ -250,21 +298,16 @@ function SelectMenu<T extends string>({
 
   return (
     <>
-      <div className="dropdown-search">
-        <span className="dropdown-search-icon">
-          <SearchIcon />
-        </span>
-        <input
-          ref={searchRef}
-          placeholder={searchPlaceholder}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setActive(-1);
-          }}
-          onKeyDown={onKeyDown}
-        />
-      </div>
+      <DropdownSearch
+        inputRef={searchRef}
+        placeholder={searchPlaceholder}
+        value={query}
+        onChange={(v: string) => {
+          setQuery(v);
+          setActive(-1);
+        }}
+        onKeyDown={onKeyDown}
+      />
       {list}
     </>
   );

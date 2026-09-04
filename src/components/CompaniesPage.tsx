@@ -9,6 +9,16 @@ import {
   getDashboardLastAccessDays,
   getCompanyPrice,
   getCompanyPriceValue,
+  getCancelEffectiveDate,
+  getStatusTip,
+  getAssignedCsm,
+  getAssignedSalesRep,
+  getCompanyPhone,
+  isBilledStatus,
+  TIERS,
+  COMPANY_DEFAULT_COLUMNS,
+  COMPANY_OPTIONAL_COLUMNS,
+  type CompanyColumn,
   getStripeCustomerId,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
@@ -20,31 +30,32 @@ import {
 import {
   CalendarIcon, SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
   MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
-  MenuProgressIcon,
+  MenuProgressIcon, RunMoveUpIcon, RunMoveDownIcon,
 } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
   CompanyFilters,
   CompanyEditColumnsButton,
+  EMPTY_MORE_FILTERS,
   type CompanyFilterState,
   type CompanyColumnState,
 } from "./CompanyFilters";
+import { useColumnOrder, orderedColumns } from "./Filters";
 import { CompaniesSearch } from "./CompaniesSearch";
 import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
-/* Landing-morph columns — mirror the table's default visible columns (key,
-   label, width) so the p=1 hand-off to the real table lines up. */
+/* Landing-morph columns — mirror the table's DEFAULT visible columns (key,
+   label, width) so the p=1 hand-off to the real table lines up. Edit Columns
+   changes are a table-state concern; the landing always shows the default set,
+   which is why this list is static rather than derived from `visibleCols`. */
 const LM_COLS: LandingCol[] = [
-  { key: "email", label: "Email", width: 195 },
+  { key: "status", label: "Status", width: 232 },
+  { key: "accountHolder", label: "Account Holder", width: 195 },
   { key: "tier", label: "Tier", width: 130, fixed: true },
-  { key: "status", label: "Status", width: 190 },
-  { key: "signUp", label: "Sign-Up", width: 130 },
-  { key: "cycle", label: "Billing Cycle", width: 140 },
-  { key: "seats", label: "Seats", width: 64 },
-  { key: "industry", label: "Industry", width: 145 },
-  { key: "partnership", label: "Partnership", width: 155 },
+  { key: "seats", label: "Seats", width: 86 },
+  { key: "lastAccess", label: "Last Access", width: 150 },
 ];
 import { PrmModal } from "./PrmModal";
 import { RadioCard } from "./NewCompanyWizard";
@@ -53,35 +64,114 @@ import { UserDetailsHover } from "./UserDetailsHover";
 
 const PAGE_SIZE = 50;
 
-type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "seats" | "industry" | "partnership" | "seatsAdded" | "seatsRemoved" | "createdOn" | "canceledOn" | "trialEndDate" | "dashboardLastAccess" | "price";
+type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "payment" | "seats" | "industry" | "partnership" | "seatChanges" | "createdOn" | "canceledOn" | "trialEndDate" | "dashboardLastAccess" | "price" | "salesRep" | "csm";
 type SortDir = "asc" | "desc";
 
+// Cheapest plan first, so sorting Tier reads as a ladder rather than A–Z.
 const TIER_ORDER: Record<Tier, number> = {
-  "Free Trial": 0,
-  Essentials: 1,
-  Growth: 2,
-  Pro: 3,
-  "Free Access": 4,
+  Essentials: 0,
+  Growth: 1,
+  Professional: 2,
 };
+
+/* Trials and Free Access grants are on no plan at all, so they sort after
+   every tier rather than ahead of Essentials. */
+const tierRank = (c: Company) => (c.tier ? TIER_ORDER[c.tier] : TIERS.length);
+
+/* Seat Changes sorts on the signed move, so the accounts that shed seats sit at
+   one end, the ones that grew at the other, and flat accounts in between. */
+const seatChangeOf = (c: Company) => getCompanyBilling(c).seatChange;
+
+/* The two fixed columns bracket every optional one, so their widths are named
+   rather than repeated between the colgroup and the natural-width sum. */
+const NAME_WIDTH = 220;
+/* Wide enough for the longest status pill: "Free Trial Ends Sep 30, 2026"
+   measures 196px, plus the cell's 12px padding either side, plus slack. The
+   dated pills (652:925) run far longer than the plain ones, and the table's row
+   rule clips with an ellipsis rather than wrapping — so a column sized for
+   "Active" quietly eats the end of a trial date. */
+const STATUS_WIDTH = 232;
+const ACTIONS_WIDTH = 40;
+
+/* How the table DRAWS each optional column. The key, the label and the default
+   order live with the data (COMPANY_OPTIONAL_COLUMNS) so the Edit Columns menu
+   and the table can never disagree about what exists; this map adds only what
+   the table itself needs. On-screen order is the `order` state in the component
+   — a column switched on joins at the end, and dragging in the menu moves it. */
+type CompanyCol = {
+  key: CompanyColumn;
+  label: string;
+  className: string;
+  /** Body-cell classes, when they differ from the header's. */
+  cellClassName?: string;
+  width: number;
+  sortKey: SortKey;
+  sortable?: boolean;
+  tip?: string;
+  dateScoped?: boolean;
+  render: (c: Company, b: CompanyBilling) => React.ReactNode;
+};
+
+const COL_DRAW: Record<CompanyColumn, Omit<CompanyCol, "key" | "label">> = {
+  accountHolder: {
+    className: "col-email", width: 195, sortKey: "email", sortable: false,
+    render: (c) => <AccountHolderCell company={c} />,
+  },
+  tier: { className: "col-tier", width: 130, sortKey: "tier", render: (c) => <TierPill tier={c.tier} /> },
+  seats: { className: "col-seats", width: 86, sortKey: "seats", render: (c) => c.seats.toLocaleString() },
+  signUp: {
+    className: "col-signup", width: 160, sortKey: "signUp",
+    render: (_c, b) => <SignUpPill signUp={b.signUp} />,
+  },
+  billingCycle: { className: "col-cycle", width: 140, sortKey: "billingCycle", render: (_c, b) => billingCycleLabel(b) },
+  payment: {
+    className: "col-payment", width: 160, sortKey: "payment",
+    render: (_c, b) => paymentLabel(b),
+  },
+  seatChanges: {
+    className: "col-seat-changes", width: 160, sortKey: "seatChanges",
+    render: (_c, b) => <SeatChangesCell change={b.seatChange} />,
+  },
+  industry: { className: "col-industry", width: 145, sortKey: "industry", render: (c) => c.industry || "—" },
+  partnership: { className: "col-partnership", width: 155, sortKey: "partnership", render: (c) => c.partnership || "—" },
+  createdOn: {
+    className: "col-created", width: 144, sortKey: "createdOn", dateScoped: true,
+    render: (_c, b) => b.createdOn,
+  },
+  canceledOn: { className: "col-canceled", width: 136, sortKey: "canceledOn", render: (_c, b) => getCanceledOn(b) },
+  trialEndDate: { className: "col-trial-end", width: 146, sortKey: "trialEndDate", render: (_c, b) => getTrialEndDate(b) },
+  price: { className: "col-price", width: 110, sortKey: "price", render: (c) => getCompanyPrice(c) },
+  salesRep: { className: "col-sales-rep", width: 175, sortKey: "salesRep", render: (c) => getAssignedSalesRep(c) },
+  csm: { className: "col-csm", width: 165, sortKey: "csm", render: (c) => getAssignedCsm(c) },
+  dashboardLastAccess: {
+    className: "col-dashboard-access", width: 150, sortKey: "dashboardLastAccess",
+    tip: "Last time a Manager/Admin viewed the Dashboard",
+    render: (c) => getDashboardLastAccess(c),
+  },
+};
+
+const COLS: CompanyCol[] = COMPANY_OPTIONAL_COLUMNS.map((d) => ({ ...d, ...COL_DRAW[d.key] }));
 
 function compare(a: Company, b: Company, key: SortKey): number {
   switch (key) {
     case "name": return a.name.localeCompare(b.name);
     case "email": return a.email.localeCompare(b.email);
-    case "tier": return TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
+    case "tier": return tierRank(a) - tierRank(b);
     case "status": return getCompanyBilling(a).status.localeCompare(getCompanyBilling(b).status);
     case "signUp": return getCompanyBilling(a).signUp.localeCompare(getCompanyBilling(b).signUp);
     case "billingCycle": return getCompanyBilling(a).billingCycle.localeCompare(getCompanyBilling(b).billingCycle);
+    case "payment": return paymentLabel(getCompanyBilling(a)).localeCompare(paymentLabel(getCompanyBilling(b)));
     case "seats": return a.seats - b.seats;
     case "industry": return a.industry.localeCompare(b.industry);
     case "partnership": return a.partnership.localeCompare(b.partnership);
-    case "seatsAdded": return getCompanyBilling(a).seatsAdded - getCompanyBilling(b).seatsAdded;
-    case "seatsRemoved": return getCompanyBilling(a).seatsRemoved - getCompanyBilling(b).seatsRemoved;
+    case "seatChanges": return seatChangeOf(a) - seatChangeOf(b);
     case "createdOn": return (Date.parse(getCompanyBilling(a).createdOn) || 0) - (Date.parse(getCompanyBilling(b).createdOn) || 0);
     case "canceledOn": return (Date.parse(getCanceledOn(getCompanyBilling(a))) || 0) - (Date.parse(getCanceledOn(getCompanyBilling(b))) || 0);
     case "trialEndDate": return (Date.parse(getTrialEndDate(getCompanyBilling(a))) || 0) - (Date.parse(getTrialEndDate(getCompanyBilling(b))) || 0);
     case "dashboardLastAccess": return (getDashboardLastAccessDays(a) ?? Infinity) - (getDashboardLastAccessDays(b) ?? Infinity);
     case "price": return (getCompanyPriceValue(a) ?? -1) - (getCompanyPriceValue(b) ?? -1);
+    case "salesRep": return getAssignedSalesRep(a).localeCompare(getAssignedSalesRep(b));
+    case "csm": return getAssignedCsm(a).localeCompare(getAssignedCsm(b));
   }
 }
 
@@ -106,28 +196,34 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
     industries: [],
     partnerships: [],
     statuses: ["Active"],
-    signUps: [],
-    billingCycles: [],
-    paymentMethods: [],
+    ...EMPTY_MORE_FILTERS,
   });
   // Companies are filtered on Created On; the range always has a value
   // (default Last 30 Days), so this is a standing filter, not an optional one.
   const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
-  const [columns, setColumns] = useState<CompanyColumnState>({
-    signUp: true,
-    billingCycle: true,
-    seats: true,
-    seatsAdded: false,
-    seatsRemoved: false,
-    industry: true,
-    partnership: true,
-    createdOn: false,
-    canceledOn: false,
-    trialEndDate: false,
-    dashboardLastAccess: false,
-    price: false,
+  const [columns, setColumns] = useState<CompanyColumnState>(COMPANY_DEFAULT_COLUMNS);
+  /* Display order of the optional columns, independent of which are switched
+     on. It starts at the data module's order, which is what puts Last Access
+     last in the default view. */
+  const [order, setOrder] = useColumnOrder(COLS);
+  const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [order, columns]);
+
+  /* Switching a column ON moves it to the END of the row — that is where you
+     expect a column you just added to appear. Dragging it in the Edit Columns
+     menu afterwards overrides that, and switching one off leaves the order
+     alone, so toggling it back on returns it to where you put it. */
+  function applyColumns(next: CompanyColumnState) {
+    const added = COLS.filter((c) => next[c.key] && !columns[c.key]).map((c) => c.key);
+    if (added.length) setOrder((o) => [...o.filter((k) => !added.includes(k)), ...added]);
+    setColumns(next);
+  }
+
+  // Most recently active first — ascending days-since-access; companies that
+  // have never opened the dashboard fall to the bottom.
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+    key: "dashboardLastAccess",
+    dir: "asc",
   });
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [menu, setMenu] = useState<{ company: Company; rect: DOMRect } | null>(null);
   const [holderModal, setHolderModal] = useState<Company | null>(null);
@@ -145,30 +241,29 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         c.email.toLowerCase().includes(q) ||
         c.industry.toLowerCase().includes(q) ||
         c.partnership.toLowerCase().includes(q) ||
-        c.tier.toLowerCase().includes(q)
+        (c.tier?.toLowerCase().includes(q) ?? false)
       )) return false;
-      if (filters.tiers.length && !filters.tiers.includes(c.tier)) return false;
+      if (filters.tiers.length && !(c.tier && filters.tiers.includes(c.tier))) return false;
       if (filters.industries.length && !filters.industries.includes(c.industry)) return false;
       if (filters.partnerships.length && !filters.partnerships.includes(c.partnership)) return false;
       if (filters.statuses.length && !filters.statuses.includes(getCompanyBilling(c).status)) return false;
       if (filters.signUps.length && !filters.signUps.includes(getCompanyBilling(c).signUp)) return false;
       if (filters.billingCycles.length) {
-        // Match on the displayed cycle; non-billed tiers (Free Trial / Free Access
-        // Access) read "—" in the column, so they never match Monthly/Annual.
-        const cycle =
-          c.tier === "Free Trial" || c.tier === "Free Access"
-            ? null
-            : getCompanyBilling(c).billingCycle;
-        if (!cycle || !filters.billingCycles.includes(cycle)) return false;
+        // Match on the displayed cycle; a company that isn't billed reads "—"
+        // in the column, so it never matches Monthly/Annual.
+        const billing = getCompanyBilling(c);
+        if (!isBilledStatus(billing.status)) return false;
+        if (!filters.billingCycles.includes(billing.billingCycle)) return false;
       }
       if (filters.paymentMethods.length) {
-        // Free Trial / Free Access companies never collect payment, so they never
-        // match an Automatic/Manual filter.
-        const payment =
-          c.tier === "Free Trial" || c.tier === "Free Access"
-            ? null
-            : getCompanyBilling(c).payment;
-        if (!payment || !filters.paymentMethods.includes(payment)) return false;
+        // Match on the displayed method, so a company whose Payment Method cell
+        // reads "—" never matches Automatic/Invoice.
+        const shown = paymentLabel(getCompanyBilling(c));
+        if (!filters.paymentMethods.includes(shown)) return false;
+      }
+      if (filters.csms.length && !filters.csms.includes(getAssignedCsm(c))) return false;
+      if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c))) {
+        return false;
       }
       if (!dateRangeIncludes(dateRange, getCompanyBilling(c).createdOn)) return false;
       return true;
@@ -225,14 +320,11 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       name: c.name,
       dim: billing.status === "Canceled",
       cells: {
-        email: c.email,
-        tier: c.tier,
         status: <span className={`co-status-pill co-status-pill--${status.tone}`}>{status.label}</span>,
-        signUp: billing.signUp === "Self Sign-Up" ? "Self" : "Internal",
-        cycle: billingCycleLabel(c, billing),
+        accountHolder: c.email,
+        tier: c.tier ?? "",
         seats: c.seats.toLocaleString(),
-        industry: c.industry || "—",
-        partnership: c.partnership || "—",
+        lastAccess: getDashboardLastAccess(c),
       },
     };
   });
@@ -246,22 +338,10 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   // Natural table width so columns scroll horizontally instead of crushing on a
   // narrow page. Mirrors the visible columns in <ColGroup>.
   const tableMin =
-    220 /* name */ +
-    40 /* actions */ +
-    195 + 130 /* email + tier */ +
-    190 /* status */ +
-    (columns.signUp ? 130 : 0) +
-    (columns.billingCycle ? 140 : 0) +
-    (columns.seats ? 64 : 0) +
-    (columns.seatsAdded ? 72 : 0) +
-    (columns.seatsRemoved ? 82 : 0) +
-    (columns.industry ? 145 : 0) +
-    (columns.partnership ? 155 : 0) +
-    (columns.createdOn ? 130 : 0) +
-    (columns.canceledOn ? 130 : 0) +
-    (columns.trialEndDate ? 140 : 0) +
-    (columns.dashboardLastAccess ? 170 : 0) +
-    (columns.price ? 110 : 0);
+    NAME_WIDTH +
+    STATUS_WIDTH +
+    ACTIONS_WIDTH +
+    visibleCols.reduce((sum, c) => sum + c.width, 0);
 
   return (
     <div className="main">
@@ -291,6 +371,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                   onStatusesChange={(v) => setFilters((prev) => ({ ...prev, statuses: v }))}
                   industries={filters.industries}
                   onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
+                  partnerships={filters.partnerships}
+                  onPartnershipsChange={(v) => setFilters((prev) => ({ ...prev, partnerships: v }))}
                   query={query}
                   onCommit={(q) => {
                     setQuery(q);
@@ -311,7 +393,6 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
               <div className="lm-stage">
               <LandingOverlay
                 caption="Companies A–Z"
-                total={sorted.length}
                 columns={LM_COLS}
                 nameLabel="Company"
                 nameWidth={220}
@@ -322,36 +403,32 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
               <div className="lm-table">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
-                <ColGroup columns={columns} />
+                <ColGroup cols={visibleCols} />
                 <thead>
                   <tr>
+                    {/* The fixed columns lead the table: Company, then Status. */}
                     <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
-                    <SortableHeader col="email" label="Email" className="col-email" sort={sort} toggle={toggleSort} sortable={false} />
-                    <SortableHeader col="tier" label="Tier" className="col-tier" sort={sort} toggle={toggleSort} />
                     <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
-                    {columns.signUp && <SortableHeader col="signUp" label="Sign-Up" className="col-signup" sort={sort} toggle={toggleSort} />}
-                    {columns.billingCycle && <SortableHeader col="billingCycle" label="Billing Cycle" className="col-cycle" sort={sort} toggle={toggleSort} />}
-                    {columns.seats && <SortableHeader col="seats" label="Seats" className="col-seats" sort={sort} toggle={toggleSort} />}
-                    {columns.seatsAdded && <SortableHeader col="seatsAdded" label="Added" className="col-seats-added" sort={sort} toggle={toggleSort} />}
-                    {columns.seatsRemoved && <SortableHeader col="seatsRemoved" label="Removed" className="col-seats-removed" sort={sort} toggle={toggleSort} />}
-                    {columns.industry && <SortableHeader col="industry" label="Industry" className="col-industry" sort={sort} toggle={toggleSort} />}
-                    {columns.partnership && <SortableHeader col="partnership" label="Partnership" className="col-partnership" sort={sort} toggle={toggleSort} />}
-                    {columns.createdOn && <SortableHeader col="createdOn" label="Created On" className="col-created" sort={sort} toggle={toggleSort} dateScoped />}
-                    {columns.canceledOn && <SortableHeader col="canceledOn" label="Canceled On" className="col-canceled" sort={sort} toggle={toggleSort} />}
-                    {columns.trialEndDate && <SortableHeader col="trialEndDate" label="Trial End Date" className="col-trial-end" sort={sort} toggle={toggleSort} />}
-                    {columns.dashboardLastAccess && (
+                    {visibleCols.map((c) => (
                       <SortableHeader
-                        col="dashboardLastAccess"
-                        label="Dashboard Last Access"
-                        className="col-dashboard-access"
+                        key={c.key}
+                        col={c.sortKey}
+                        label={c.label}
+                        className={c.className}
                         sort={sort}
                         toggle={toggleSort}
-                        tip="Last time a Manager/Admin viewed the Dashboard"
+                        sortable={c.sortable !== false}
+                        tip={c.tip}
+                        dateScoped={c.dateScoped}
                       />
-                    )}
-                    {columns.price && <SortableHeader col="price" label="Price" className="col-price" sort={sort} toggle={toggleSort} />}
+                    ))}
                     <th className="col-actions">
-                      <CompanyEditColumnsButton columns={columns} setColumns={setColumns} />
+                      <CompanyEditColumnsButton
+                        columns={columns}
+                        setColumns={applyColumns}
+                        order={order}
+                        onOrderChange={setOrder}
+                      />
                     </th>
                   </tr>
                 </thead>
@@ -359,13 +436,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
               <div className="tasks-scroll">
                 <table className="table table-body">
-                  <ColGroup columns={columns} />
+                  <ColGroup cols={visibleCols} />
                   <tbody>
                     {paged.map((c) => (
                       <CompanyRow
                         key={c.id}
                         company={c}
-                        columns={columns}
+                        cols={visibleCols}
                         onEdit={() => onEditCompany(c)}
                         onManageSubscription={() => onManageSubscription(c)}
                         onOpenMenu={(rect) => setMenu({ company: c, rect })}
@@ -443,7 +520,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
             onUpdateCompany({
               ...cancelModal,
               status: "Canceled",
-              cancelsOn: getCompanyBilling(cancelModal).nextBillingDate,
+              cancelsOn: getCancelEffectiveDate(getCompanyBilling(cancelModal)),
+              cancellationReason: reason,
             });
             setCancelModal(null);
             window.alert(
@@ -456,26 +534,16 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   );
 }
 
-function ColGroup({ columns }: { columns: CompanyColumnState }) {
+function ColGroup({ cols }: { cols: CompanyCol[] }) {
   return (
     <colgroup>
-      <col style={{ width: 220 }} />
-      <col style={{ width: 195 }} />
-      <col style={{ width: 130 }} />
-      <col style={{ width: 190 }} />
-      {columns.signUp && <col style={{ width: 130 }} />}
-      {columns.billingCycle && <col style={{ width: 140 }} />}
-      {columns.seats && <col style={{ width: 64 }} />}
-      {columns.seatsAdded && <col style={{ width: 72 }} />}
-      {columns.seatsRemoved && <col style={{ width: 82 }} />}
-      {columns.industry && <col style={{ width: 145 }} />}
-      {columns.partnership && <col style={{ width: 155 }} />}
-      {columns.createdOn && <col style={{ width: 130 }} />}
-      {columns.canceledOn && <col style={{ width: 130 }} />}
-      {columns.trialEndDate && <col style={{ width: 140 }} />}
-      {columns.dashboardLastAccess && <col style={{ width: 170 }} />}
-      {columns.price && <col style={{ width: 110 }} />}
-      <col style={{ width: 40 }} />
+      {/* The fixed columns lead the table: Company, then Status. */}
+      <col style={{ width: NAME_WIDTH }} />
+      <col style={{ width: STATUS_WIDTH }} />
+      {cols.map((c) => (
+        <col key={c.key} style={{ width: c.width }} />
+      ))}
+      <col style={{ width: ACTIONS_WIDTH }} />
     </colgroup>
   );
 }
@@ -511,21 +579,84 @@ function SortableHeader({
   );
 }
 
-function TierPill({ tier }: { tier: Tier }) {
+function TierPill({ tier }: { tier?: Tier }) {
+  // A trial or a Free Access grant is on no plan at all — a dash, not a chip.
+  if (!tier) return null;
   const slug = tier.toLowerCase().replace(/\s+/g, "-");
   return <span className={`co-tier co-tier--${slug}`}>{tier}</span>;
 }
 
-function StatusPill({ billing }: { billing: CompanyBilling }) {
-  const { tone, label } = getStatusPill(billing);
-  return <span className={`co-status-pill co-status-pill--${tone}`}>{label}</span>;
+/* Account Holder cell — the column prints the holder's email, and hovering it
+ * peeks at who that is (Figma 436:572: name, email, phone, with the header's
+ * external-link opening their full profile). No `onEditName`, so the name row
+ * carries no pencil: renaming an account holder is the row menu's "Change
+ * Account Holder" flow, not an inline edit. */
+function AccountHolderCell({ company }: { company: Company }) {
+  const holder = currentHolder(company);
+  const holderUser = getCompanyUsers(company).find((u) => u.email === company.email);
+  return (
+    <UserDetailsHover
+      user={{
+        userId: holderUser?.id,
+        userName: holder.name,
+        email: holder.email,
+        phone: holder.phone,
+      }}
+      onOpenProfile={(id) =>
+        window.open(
+          `${window.location.origin}${window.location.pathname}?profile=${encodeURIComponent(id)}`,
+          "_blank",
+          "noopener",
+        )
+      }
+    >
+      <span className="co-holder-cell">{company.email}</span>
+    </UserDetailsHover>
+  );
 }
 
-// Billing cycle only applies to paid subscriptions; Free Trial and
-// Free Access tiers aren't billed, so they read "—".
-function billingCycleLabel(company: Company, billing: CompanyBilling): string {
-  if (company.tier === "Free Trial" || company.tier === "Free Access") return "—";
-  return billing.billingCycle;
+/* Seat Changes cell (Figma 927:950) — how the company's seat count moved over
+ * the period: "+3 ↑" in green when it grew, "−3 ↓" in red when it shrank, the
+ * number hugging its arrow. The Figma frame shows both chips at once to
+ * document the two states; a real account only ever moves one way, so only one
+ * renders. No movement reads "—", like every other empty cell. */
+function SeatChangesCell({ change }: { change: number }) {
+  if (change === 0) return <>—</>;
+  const up = change > 0;
+  return (
+    <span className={`co-seat-delta ${up ? "co-seat-delta--up" : "co-seat-delta--down"}`}>
+      {up ? `+${change}` : `−${Math.abs(change)}`}
+      {up ? <RunMoveUpIcon /> : <RunMoveDownIcon />}
+    </span>
+  );
+}
+
+function StatusPill({ billing }: { billing: CompanyBilling }) {
+  const { tone, label } = getStatusPill(billing);
+  // Why it was cancelled / how long until access is cut — the shared `data-tip`
+  // tooltip picks this up; statuses with nothing to add render a bare pill.
+  const tip = getStatusTip(billing);
+  return (
+    <span className={`co-status-pill co-status-pill--${tone}`} data-tip={tip ?? undefined}>
+      {label}
+    </span>
+  );
+}
+
+// Billing cycle only applies while the subscription bills; a trial or a
+// complimentary grant is on no plan and pays nothing, so it reads "—".
+function billingCycleLabel(billing: CompanyBilling): string {
+  return isBilledStatus(billing.status) ? billing.billingCycle : "—";
+}
+
+/* Payment Method shows only where money is actually being collected: an Active
+ * subscription, or a cancelled one (scheduled or already in effect — it still
+ * settles a final invoice). Deliberately NOT Past Due: that account is defined
+ * by the payment that did NOT go through, so naming a method there would read
+ * as if collection were working. Every other status is unbilled entirely. */
+function paymentLabel(billing: CompanyBilling): string {
+  const collects = billing.status === "Active" || billing.status === "Canceled";
+  return collects ? billing.payment : "—";
 }
 
 function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
@@ -538,9 +669,12 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, columns, onEdit, onManageSubscription, onOpenMenu, menuOpen,
+  company, cols, onEdit, onManageSubscription, onOpenMenu, menuOpen,
 }: {
-  company: Company; columns: CompanyColumnState; onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
+  company: Company;
+  /** The visible optional columns, in the user's order. */
+  cols: CompanyCol[];
+  onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
@@ -548,21 +682,12 @@ function CompanyRow({
   return (
     <tr className={menuOpen ? "menu-open" : ""}>
       <td className="col-name">{company.name}</td>
-      <td className="col-email">{company.email}</td>
-      <td className="col-tier"><TierPill tier={company.tier} /></td>
       <td className="col-status"><StatusPill billing={billing} /></td>
-      {columns.signUp && <td className="col-signup"><SignUpPill signUp={billing.signUp} /></td>}
-      {columns.billingCycle && <td className="col-cycle">{billingCycleLabel(company, billing)}</td>}
-      {columns.seats && <td className="col-seats">{company.seats.toLocaleString()}</td>}
-      {columns.seatsAdded && <td className="col-seats-added co-seats-added">+{billing.seatsAdded}</td>}
-      {columns.seatsRemoved && <td className="col-seats-removed co-seats-removed">−{billing.seatsRemoved}</td>}
-      {columns.industry && <td className="col-industry">{company.industry || "—"}</td>}
-      {columns.partnership && <td className="col-partnership">{company.partnership || "—"}</td>}
-      {columns.createdOn && <td className="col-created">{billing.createdOn}</td>}
-      {columns.canceledOn && <td className="col-canceled">{getCanceledOn(billing)}</td>}
-      {columns.trialEndDate && <td className="col-trial-end">{getTrialEndDate(billing)}</td>}
-      {columns.dashboardLastAccess && <td className="col-dashboard-access">{getDashboardLastAccess(company)}</td>}
-      {columns.price && <td className="col-price">{getCompanyPrice(company)}</td>}
+      {cols.map((c) => (
+        <td key={c.key} className={c.cellClassName ?? c.className}>
+          {c.render(company, billing)}
+        </td>
+      ))}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -725,7 +850,7 @@ function currentHolder(company: Company): Holder {
   return {
     name: derivedName,
     email: company.email,
-    phone: company.phone ?? "",
+    phone: getCompanyPhone(company),
   };
 }
 
@@ -934,8 +1059,9 @@ function CancelSubscriptionModal({
   const [reason, setReason] = useState("");
   const [step, setStep] = useState<"form" | "confirm">("form");
 
-  // Net seats added this cycle still bill (prorated) on the upcoming invoice.
-  const pendingSeats = billing.seatsAdded;
+  // Seats ADDED this cycle still bill (prorated) on the upcoming invoice;
+  // a company that shed seats has nothing pending.
+  const pendingSeats = Math.max(0, billing.seatChange);
   const pendingCharge = pendingSeats * billing.ratePerSeat;
 
   return step === "form" ? (

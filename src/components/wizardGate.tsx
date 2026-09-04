@@ -47,13 +47,27 @@ const GATE_DECAY_PER_FRAME = 0.05;
  * long mid-page scroll snaps to the edge and stops there; stepping requires a
  * fresh gesture from the edge. */
 const GATE_GESTURE_GAP_MS = 300;
-/** A wheel delta this many times the previous one (and above the floor below)
- * also starts a new gesture. Trackpad momentum only ever decays, and its tail
- * can trickle events for over a second with sub-300ms gaps — without this, a
- * deliberate new flick during the tail would still count as the old (unarmed)
- * gesture and be swallowed at the edge. */
-const GATE_SPIKE_RATIO = 3;
-const GATE_SPIKE_MIN_PX = 24;
+/** A flick-sized delta (≥ SPIKE_MIN) arriving right after a tail-sized one
+ * (≤ TAIL_MAX) also starts a new gesture. Trackpad momentum only ever decays,
+ * and its tail can trickle events for over a second with sub-300ms gaps —
+ * without this, a deliberate new flick during the tail would still count as
+ * the old (unarmed) gesture and be swallowed at the edge. Both bounds must be
+ * strict: a looser ratio-based rule misread the ramp-up jitter of ordinary
+ * active scrolling (8px → 40px) as a new flick, which let one hard scroll
+ * from the bottom re-arm itself on arrival at the top and step back. */
+const GATE_SPIKE_MIN_PX = 60;
+const GATE_TAIL_MAX_PX = 20;
+/** Open panels that render the gate inert while they exist in the DOM. Most
+ * menus go through the shared Dropdown component (`.dropdown`); the rest are
+ * hand-rolled panels and inline modals whose wheel events still bubble through
+ * the wizard scroller. Add a new popup's class here if it doesn't use Dropdown. */
+const GATE_BLOCKING_SELECTOR = [
+  ".dropdown", // shared Dropdown / SelectField / MultiSelect panels
+  ".cw-price-menu", // Company wizard's hand-rolled currency + saved-price menus
+  ".u-menu", // hand-rolled action menus (Add Question, row menus)
+  ".fb-modal-scrim", // inline modals (trigger-task picker)
+  ".cl-modal-overlay", // inline modals (content list pickers)
+].join(", ");
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -72,8 +86,9 @@ type GateState = {
   land: GateLand;
   /** Timestamp of the last wheel event of any kind, used to segment gestures. */
   lastAny: number;
-  /** |deltaY| of the last wheel event, for momentum-tail spike detection. */
-  lastMag: number;
+  /** deltaY of the last wheel event (signed), for momentum-tail spike and
+   * direction-reversal detection. */
+  lastDy: number;
   /** Whether the current gesture began with the pane at the top / bottom. */
   armedTop: boolean;
   armedBottom: boolean;
@@ -116,7 +131,7 @@ export function useEdgeLineGate({
     raf: 0,
     land: "top",
     lastAny: 0,
-    lastMag: 0,
+    lastDy: 0,
     armedTop: false,
     armedBottom: false,
   });
@@ -216,15 +231,29 @@ export function useEdgeLineGate({
       const now = performance.now();
       const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1);
       const mag = Math.abs(dy);
-      // A gesture ends on a pause OR on a delta spike — a deliberate flick
-      // thrown while the previous gesture's momentum tail is still trickling.
+      const lastMag = Math.abs(g.lastDy);
+      // A gesture ends on a pause, a direction reversal, or a delta spike — a
+      // flick-sized delta right after a tail-sized one, which momentum alone
+      // (it only ever decays) cannot produce.
       const newGesture =
         now - g.lastAny > GATE_GESTURE_GAP_MS ||
-        (mag >= GATE_SPIKE_MIN_PX && mag > g.lastMag * GATE_SPIKE_RATIO);
+        (dy !== 0 && g.lastDy !== 0 && (dy > 0) !== (g.lastDy > 0)) ||
+        (mag >= GATE_SPIKE_MIN_PX && lastMag > 0 && lastMag <= GATE_TAIL_MAX_PX);
       g.lastAny = now;
-      g.lastMag = mag;
+      g.lastDy = dy;
       if (now < g.coolUntil) {
         e.preventDefault();
+        return;
+      }
+      // Any open dropdown or overlay owns the wheel outright — the gate must
+      // not charge under it even at an edge. Each of these panels only exists
+      // in the DOM while open, so presence means open.
+      if (document.querySelector(GATE_BLOCKING_SELECTOR)) {
+        if (g.charge > 0) {
+          g.charge = 0;
+          g.dir = 0;
+          paintCharge();
+        }
         return;
       }
       const atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;

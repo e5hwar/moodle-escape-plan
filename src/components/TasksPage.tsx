@@ -142,8 +142,8 @@ const TASK_COLS: TaskColMeta[] = [
     key: "audience", label: "Audience", className: "col-tags", width: 150, sortable: false,
     render: (t) => audienceOf(t.tags),
   },
-  { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated ?? "—" },
-  { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified ?? "—" },
+  { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated ?? "" },
+  { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified ?? "" },
 ];
 
 function tagTip(tags: string[]): string | undefined {
@@ -151,7 +151,7 @@ function tagTip(tags: string[]): string | undefined {
 }
 
 function TagText({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <>—</>;
+  if (tags.length === 0) return null;
   return (
     <>
       {tags[0]}
@@ -341,7 +341,7 @@ export function TasksPage({
       paid: isPaid(t) ? "Paid" : "Free",
       used:
         t.usedIn.length === 0
-          ? "—"
+          ? ""
           : t.usedIn.length === 1
             ? t.usedIn[0]
             : `${t.usedIn[0]} +${t.usedIn.length - 1}`,
@@ -489,7 +489,6 @@ export function TasksPage({
           <div className="lm-stage">
           <LandingOverlay
             caption="Recently created"
-            total={sorted.length}
             columns={LM_COLS}
             rows={landingRows}
             onShowAll={morph.showTable}

@@ -83,15 +83,15 @@ const DEFAULT_SUPPORT_LINKS: SupportLink[] = [
   { id: "sup-message", label: "Send Us A Message", url: "" },
   { id: "sup-news", label: "News", url: "" },
 ];
-type Tier = "Essentials" | "Growth" | "Pro";
+type Tier = "Essentials" | "Growth" | "Professional";
 type Cycle = "Monthly" | "Annual";
 
 type PriceIds = Record<Tier, Record<Cycle, string>>;
 
 const DEFAULT_PRICE_IDS: PriceIds = {
-  Essentials: { Monthly: "", Annual: "" },
-  Growth:     { Monthly: "", Annual: "" },
-  Pro:        { Monthly: "", Annual: "" },
+  Essentials:   { Monthly: "", Annual: "" },
+  Growth:       { Monthly: "", Annual: "" },
+  Professional: { Monthly: "", Annual: "" },
 };
 
 type Platform = "Google" | "Apple" | "Stripe";
@@ -132,7 +132,7 @@ function PaywallPricing({
   priceIds: PriceIds;
   onChange: (ids: PriceIds) => void;
 }) {
-  const tiers: Tier[] = ["Essentials", "Growth", "Pro"];
+  const tiers: Tier[] = ["Essentials", "Growth", "Professional"];
   const cycles: Cycle[] = ["Monthly", "Annual"];
 
   function set(tier: Tier, cycle: Cycle, val: string) {

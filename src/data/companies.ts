@@ -1,16 +1,21 @@
 import type { User } from "./users";
 
-export type Tier =
-  | "Free Trial"
-  | "Essentials"
-  | "Growth"
-  | "Pro"
-  | "Free Access";
+/* The paid PLAN a company is on. Free Trial and Free Access are NOT tiers —
+ * they are subscription STATUSES (see SubscriptionStatus), and a company in one
+ * of those states carries no tier at all (Company.tier is optional). */
+export type Tier = "Essentials" | "Growth" | "Professional";
 
 export type BillingCycle = "Monthly" | "Annual";
-export type Currency = "USD" | "CAD";
+/** An ISO 4217 code. The platform publishes default rates in USD and CAD only
+ *  (see DEFAULT_RATES), but a company can be billed in any currency, so this is
+ *  the open code rather than that pair — `defaultRate` and `currencySymbol`
+ *  each fall back for a currency the rate table doesn't cover. */
+export type Currency = string;
 export type SignUpChannel = "Self Sign-Up" | "Internal Sign-Up";
-export type PaymentCollection = "Automatic" | "Manual";
+/* How the company pays. "Invoice" is billed by emailed invoice rather than a
+ * card on file — it was called "Manual" until the Payment Method column named
+ * the two options for admins. */
+export type PaymentCollection = "Automatic" | "Invoice";
 export type TaxStatus = "Taxable" | "Tax Exempt" | "Reverse Charge";
 export type SubscriptionStatus =
   | "Active"
@@ -41,7 +46,10 @@ export type Company = {
   id: string;
   name: string;
   email: string;
-  tier: Tier;
+  /** Absent exactly when the subscription doesn't bill — a company on a trial
+   *  (running or ended) or a Free Access grant (running or ended) is on no
+   *  plan at all, so its Tier cell reads "—". See isBilledStatus. */
+  tier?: Tier;
   seats: number;
   industry: string;
   partnership: string;
@@ -69,13 +77,17 @@ export type Company = {
   seatsUsed?: number;
   ratePerSeat?: number;
   taxStatus?: TaxStatus;
-  /** Date a scheduled cancellation takes effect (e.g. "Aug 27"). Set when a
-   *  subscription is cancelled through the UI; until that date the status pill
-   *  reads "Cancels on …", after it reads "Canceled". */
+  /** Date a scheduled cancellation takes effect, as "Mon D, YYYY" (e.g.
+   *  "Aug 27, 2026"). Set when a subscription is cancelled through the UI. The
+   *  date is the source of truth for which pill shows: before it the status
+   *  reads "Cancels Aug 27, 2026", on or after it just "Canceled". */
   cancelsOn?: string;
   /** End date for a Free Access grant (e.g. "Aug 27, 2026"). Required whenever
-   *  tier is "Free Access". */
+   *  status is "Free Access". */
   freeAccessEndDate?: string;
+  /** Why the subscription was cancelled — one of CANCELLATION_REASONS, picked
+   *  in the Cancel Subscription flow. Surfaced on the status pill's hover. */
+  cancellationReason?: string;
   /** Customer Success Manager assigned to this account. */
   assignedCsm?: string;
   /** Sales representative assigned to this account. */
@@ -84,13 +96,7 @@ export type Company = {
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
 
-export const TIERS: Tier[] = [
-  "Free Trial",
-  "Essentials",
-  "Growth",
-  "Pro",
-  "Free Access",
-];
+export const TIERS: Tier[] = ["Essentials", "Growth", "Professional"];
 
 export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Active",
@@ -102,16 +108,43 @@ export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Canceled",
 ];
 
+/* Statuses that actually collect money. Everything else — a running trial, an
+ * expired one, a complimentary grant, a grant that has ended — pays nothing and
+ * is on no plan at all, so its Tier, Billing Cycle, Payment Method and Price
+ * all read "—" (Company.tier is absent for exactly these). A Canceled
+ * subscription billed right up to its effective date, so it counts. */
+export function isBilledStatus(status: SubscriptionStatus): boolean {
+  return status === "Active" || status === "Past Due" || status === "Canceled";
+}
+
 export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign-Up"];
 
-export const PAYMENT_COLLECTIONS: PaymentCollection[] = ["Automatic", "Manual"];
+/* Internal owners assignable to an account (Figma 101:337 — Company details).
+ * They live here rather than in the wizard so the Companies table's Assigned
+ * CSM / Assigned Sales Rep columns can seed a value for companies created
+ * before the fields existed. */
+// Alphabetical, the way the pickers list them.
+export const CSM_OPTIONS = ["Corinne Hayes", "Leanna Olbinsky", "Simran Phulwani"];
+export const SALES_REP_OPTIONS = ["Brendan Arsenault", "Elliot Ling", "Ruchir Shah"];
 
-/* Columns shown in the Manage Companies table. Company / Email / Tier / Status
- * always render; the rest are toggleable via the Edit Columns button. */
+export const PAYMENT_COLLECTIONS: PaymentCollection[] = ["Automatic", "Invoice"];
+
+/* How long an overdue account keeps working before access is cut off. Drives
+ * the Past Due pill's hover ("45 days past due. Company loses access on …"),
+ * so the two halves of that sentence can never disagree. */
+export const PAST_DUE_GRACE_DAYS = 60;
+
+/* Columns shown in the Manage Companies table. Only Company and Status are
+ * fixed; everything else is toggleable via the Edit Columns button. Fixed
+ * columns always lead the table, so the optional ones follow them — Account
+ * Holder, Tier and Seats are optional but ON by default, which makes the
+ * default table read Company · Status · Account Holder · Tier · Seats. */
 export type CompanyColumn =
+  | "accountHolder"
+  | "tier"
   | "seats"
-  | "seatsAdded"
-  | "seatsRemoved"
+  | "seatChanges"
+  | "payment"
   | "industry"
   | "partnership"
   | "signUp"
@@ -120,29 +153,57 @@ export type CompanyColumn =
   | "canceledOn"
   | "trialEndDate"
   | "dashboardLastAccess"
-  | "price";
+  | "price"
+  | "salesRep"
+  | "csm";
 
+/* Listed in the order the table renders them — after the fixed columns — so
+ * the Edit Columns menu reads left-to-right the way the table does. */
 export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] = [
-  { key: "signUp", label: "Sign-Up" },
-  { key: "billingCycle", label: "Billing Cycle" },
+  { key: "accountHolder", label: "Account Holder" },
+  { key: "tier", label: "Tier" },
   { key: "seats", label: "Seats" },
-  { key: "seatsAdded", label: "Added" },
-  { key: "seatsRemoved", label: "Removed" },
+  { key: "signUp", label: "Sign-Up Method" },
+  { key: "billingCycle", label: "Billing Cycle" },
+  { key: "payment", label: "Payment Method" },
+  { key: "seatChanges", label: "Seat Changes" },
   { key: "industry", label: "Industry" },
   { key: "partnership", label: "Partnership" },
   { key: "createdOn", label: "Created On" },
   { key: "canceledOn", label: "Canceled On" },
   { key: "trialEndDate", label: "Trial End Date" },
-  { key: "dashboardLastAccess", label: "Dashboard Last Access" },
   { key: "price", label: "Price" },
+  { key: "salesRep", label: "Assigned Sales Rep" },
+  { key: "csm", label: "Assigned CSM" },
+  { key: "dashboardLastAccess", label: "Last Access" },
 ];
 
 export const COMPANY_FIXED_COLUMNS: { label: string }[] = [
   { label: "Company" },
-  { label: "Email" },
-  { label: "Tier" },
   { label: "Status" },
 ];
+
+/* The table's starting columns — Account Holder, Tier, Seats and the trailing
+ * Last Access on, the rest off. Exported so the page and the landing-morph
+ * preview can't drift apart. */
+export const COMPANY_DEFAULT_COLUMNS: Record<CompanyColumn, boolean> = {
+  accountHolder: true,
+  tier: true,
+  seats: true,
+  signUp: false,
+  billingCycle: false,
+  payment: false,
+  seatChanges: false,
+  industry: false,
+  partnership: false,
+  createdOn: false,
+  canceledOn: false,
+  trialEndDate: false,
+  price: false,
+  salesRep: false,
+  csm: false,
+  dashboardLastAccess: true,
+};
 
 // Reasons an admin can pick when cancelling a B2B subscription. Editable under
 // Product Config → B2B Management; the Cancel Subscription flow reads the same list.
@@ -160,7 +221,7 @@ export const companies: Company[] = [
     id: "CO-001",
     name: "ARS Cooling & Heating",
     email: "admin@arscooling.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 120,
     industry: "HVAC",
     partnership: "Preferred Partner",
@@ -187,7 +248,7 @@ export const companies: Company[] = [
     id: "CO-004",
     name: "Delta Electrical Group",
     email: "ops@deltaelectrical.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 200,
     industry: "Electrical",
     partnership: "Elite Partner",
@@ -205,10 +266,10 @@ export const companies: Company[] = [
     id: "CO-006",
     name: "FastFix Appliance Repair",
     email: "team@fastfixappliance.com",
-    tier: "Free Trial",
     seats: 5,
     industry: "Appliance Repair",
     partnership: "",
+    status: "Free Trial",
   },
   {
     id: "CO-007",
@@ -223,7 +284,7 @@ export const companies: Company[] = [
     id: "CO-008",
     name: "Harbor City Mechanical",
     email: "hr@harborcitymech.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 85,
     industry: "HVAC",
     partnership: "Preferred Partner",
@@ -232,7 +293,6 @@ export const companies: Company[] = [
     id: "CO-009",
     name: "Integrity Roofing",
     email: "admin@integrityroofing.com",
-    tier: "Free Trial",
     seats: 8,
     industry: "Roofing",
     partnership: "",
@@ -260,10 +320,10 @@ export const companies: Company[] = [
     id: "CO-012",
     name: "LightPath Solar Co.",
     email: "admin@lightpathsolar.com",
-    tier: "Free Access",
     seats: 10,
     industry: "Solar",
     partnership: "NGO Partner",
+    status: "Free Access",
   },
   {
     id: "CO-013",
@@ -278,7 +338,7 @@ export const companies: Company[] = [
     id: "CO-014",
     name: "NorthStar Refrigeration",
     email: "hr@northstarrefrig.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 95,
     industry: "Refrigeration",
     partnership: "Elite Partner",
@@ -296,10 +356,10 @@ export const companies: Company[] = [
     id: "CO-016",
     name: "PeakFit Construction",
     email: "learn@peakfitconstruction.com",
-    tier: "Free Trial",
     seats: 3,
     industry: "Construction",
     partnership: "",
+    status: "Free Trial",
   },
   {
     id: "CO-017",
@@ -314,7 +374,7 @@ export const companies: Company[] = [
     id: "CO-018",
     name: "Reliable Fire Protection",
     email: "training@reliablefire.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 130,
     industry: "Fire Protection",
     partnership: "Preferred Partner",
@@ -323,10 +383,10 @@ export const companies: Company[] = [
     id: "CO-019",
     name: "Sunridge Utilities",
     email: "ops@sunridgeutils.com",
-    tier: "Free Access",
     seats: 15,
     industry: "Utilities",
     partnership: "NGO Partner",
+    status: "Free Access",
   },
   {
     id: "CO-020",
@@ -341,7 +401,7 @@ export const companies: Company[] = [
     id: "CO-021",
     name: "United Mechanical",
     email: "admin@unitedmechanical.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 175,
     industry: "HVAC",
     partnership: "Elite Partner",
@@ -359,7 +419,6 @@ export const companies: Company[] = [
     id: "CO-023",
     name: "Wattwise Energy",
     email: "learn@wattwise.com",
-    tier: "Free Trial",
     seats: 6,
     industry: "Solar",
     partnership: "",
@@ -378,7 +437,7 @@ export const companies: Company[] = [
     id: "CO-025",
     name: "Zephyr Climate Control",
     email: "hr@zephyrclimate.com",
-    tier: "Pro",
+    tier: "Professional",
     seats: 110,
     industry: "HVAC",
     partnership: "Preferred Partner",
@@ -394,7 +453,20 @@ export const companies: Company[] = [
     industry: "HVAC",
     partnership: "",
     status: "Canceled",
-    cancelsOn: "Aug 27",
+    cancelsOn: "Aug 27, 2026",
+  },
+  {
+    // Cancellation that has already taken effect — demonstrates the plain
+    // "Canceled" pill (same grey tone as the scheduled "Cancels …" one above).
+    id: "CO-029",
+    name: "Bluecrest Plumbing Co.",
+    email: "accounts@bluecrestplumbing.com",
+    tier: "Essentials",
+    seats: 18,
+    industry: "Plumbing",
+    partnership: "",
+    status: "Canceled",
+    cancelsOn: "Mar 12, 2026",
   },
   {
     // Free Access grant that has run past its end date — demonstrates the
@@ -402,20 +474,20 @@ export const companies: Company[] = [
     id: "CO-027",
     name: "Cascade Roofing Collective",
     email: "admin@cascaderoofing.com",
-    tier: "Free Access",
     seats: 8,
     industry: "Roofing",
     partnership: "NGO Partner",
+    status: "Free Access",
     freeAccessEndDate: "2026-03-01",
   },
   {
     id: "CO-028",
     name: "Ironclad Fire & Safety",
     email: "training@ironcladfire.com",
-    tier: "Free Access",
     seats: 12,
     industry: "Fire Protection",
     partnership: "Preferred Partner",
+    status: "Free Access",
     freeAccessEndDate: "2026-05-15",
   },
 ];
@@ -432,14 +504,14 @@ export const COMPANY_PARTNERSHIPS = Array.from(
 
 /* ───────────────── Pricing (Default Rates, per seat) ─────────────────
  * Section 21.3: set per Tier, per cycle, per currency. Annual rates are the
- * effective monthly per-seat cost when billed annually. Free Trial and
- * Free Access are non-billed. */
-export const PAID_TIERS: Tier[] = ["Essentials", "Growth", "Pro"];
+ * effective monthly per-seat cost when billed annually. Every tier is a paid
+ * plan; whether a company is actually billed is a matter of STATUS, not tier
+ * (see isBilledStatus) — a trialing company is on a plan it doesn't pay for. */
 export const BILLING_CYCLES: BillingCycle[] = ["Monthly", "Annual"];
 export const CURRENCIES: Currency[] = ["USD", "CAD"];
 
 export const DEFAULT_RATES: Record<
-  "Essentials" | "Growth" | "Pro",
+  Tier,
   Record<BillingCycle, Record<Currency, number>>
 > = {
   Essentials: {
@@ -450,20 +522,28 @@ export const DEFAULT_RATES: Record<
     Monthly: { USD: 79, CAD: 105 },
     Annual: { USD: 63, CAD: 84 },
   },
-  Pro: {
+  Professional: {
     Monthly: { USD: 119, CAD: 159 },
     Annual: { USD: 95, CAD: 127 },
   },
 };
 
+/** The published rate, falling back to USD for a currency the table doesn't
+ *  price — those are set by hand on the company, not defaulted. */
 export function defaultRate(tier: Tier, cycle: BillingCycle, currency: Currency): number {
-  if (tier === "Essentials" || tier === "Growth" || tier === "Pro") {
-    return DEFAULT_RATES[tier][cycle][currency];
-  }
-  return 0;
+  const byCurrency = DEFAULT_RATES[tier][cycle];
+  return byCurrency[currency] ?? byCurrency.USD;
 }
 
 export const CURRENCY_SYMBOL: Record<Currency, string> = { USD: "$", CAD: "CA$" };
+
+/** The prefix to print an amount with. A currency with no symbol on file shows
+ *  its code instead ("JPY 82.00") rather than an empty prefix. The separator is
+ *  a NON-BREAKING space: the per-seat field renders the prefix as its own flex
+ *  item, where a trailing ordinary space would collapse to "JPY82.00". */
+export function currencySymbol(currency: Currency): string {
+  return CURRENCY_SYMBOL[currency] ?? `${currency} `;
+}
 
 export const REGIONS = ["Headquarters", "North", "South", "East", "West", "Field Crews"];
 
@@ -483,21 +563,29 @@ export type CompanyBilling = {
   ratePerSeat: number;
   seatsUsed: number;
   seatsTotal: number;
-  seatsAdded: number;
-  seatsRemoved: number;
+  /** Seat movement over the period, signed: positive when the company took on
+   *  seats, negative when it gave them up, 0 when it held flat. An account
+   *  moves one way or the other in a period, never both — which is why this is
+   *  one number rather than an added/removed pair. */
+  seatChange: number;
   nextBillingDate: string;
   createdOn: string;
   monthlyTotal: number;
   regions: { name: string; seats: number }[];
-  /** Days the latest invoice is overdue (drives the red "X Days Past Due" pill). */
-  daysPastDue: number;
-  /** Date a free trial ends, e.g. "Aug 27" (drives the yellow "Trial Ends On …" pill). */
+  /** Date a free trial ends, e.g. "Oct 27, 2026" (drives the yellow
+   *  "Free Trial Ends …" pill). */
   trialEndsOn: string;
-  /** Effective date of a scheduled cancellation, e.g. "Aug 27". */
+  /** Effective date of a cancellation, e.g. "Aug 27, 2026". */
   cancelsOn: string;
-  /** True when a cancellation is scheduled but the effective date hasn't passed
-   *  ("Cancels on …"); false once it has taken effect ("Canceled"). */
+  /** True while `cancelsOn` is still in the future ("Cancels Aug 27, 2026");
+   *  false once that date has passed ("Canceled"). */
   cancelScheduled: boolean;
+  /** Why the subscription was cancelled — shown on the status pill's hover. */
+  cancellationReason: string;
+  /** How many days the latest invoice is overdue (Past Due accounts). */
+  daysPastDue: number;
+  /** Date a Past Due account loses access if the invoice stays unpaid. */
+  accessEndsOn: string;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -506,43 +594,62 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // used to tell whether a Free Access grant has run past its end date.
 const APP_TODAY = new Date(2026, 5, 24);
 
+/* Every company date the UI prints carries its year — "Aug 27, 2026", not
+ * "Aug 27" (Figma 652:925). One formatter/parser pair so the status pills, the
+ * Canceled On / Trial End Date columns and the stored `cancelsOn` all agree. */
+function fmtDate(d: Date): string {
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+}
+/** Reads a "Mon D, YYYY" string back into a Date; null if it isn't one. */
+function parseDate(s: string): Date | null {
+  const m = /^([A-Za-z]{3})\w* (\d{1,2}), (\d{4})$/.exec(s.trim());
+  const mo = m ? MONTHS.indexOf(m[1]) : -1;
+  return m && mo >= 0 ? new Date(Number(m[3]), mo, Number(m[2])) : null;
+}
+
 export function getCompanyBilling(c: Company): CompanyBilling {
   const h = hash(c.id);
 
-  // A Free Access grant past its end date reads "Free Access Ended" even if the
-  // company record still carries the "Free Access" status — the date is the
-  // source of truth once it's set.
-  const freeAccessEnded =
-    c.tier === "Free Access" && !!c.freeAccessEndDate && new Date(c.freeAccessEndDate) < APP_TODAY;
+  // Tier says which PLAN a company is on, never whether it pays — so a trial or
+  // a complimentary grant is a status the record carries explicitly, and seed
+  // companies without one fall to the paying spread.
+  const declared: SubscriptionStatus =
+    c.status ?? (h % 17 === 0 ? "Canceled" : h % 7 === 0 ? "Past Due" : "Active");
 
-  const status: SubscriptionStatus =
-    freeAccessEnded
-      ? "Free Access Ended"
-      : c.status ??
-        (c.tier === "Free Trial"
-          ? "Free Trial"
-          : c.tier === "Free Access"
-          ? "Free Access"
-          : h % 17 === 0
-          ? "Canceled"
-          : h % 7 === 0
-          ? "Past Due"
-          : "Active");
+  // A Free Access grant past its end date reads "Free Access Ended" even if the
+  // record still says "Free Access" — the date is the source of truth once set.
+  const freeAccessEnded =
+    declared === "Free Access" &&
+    !!c.freeAccessEndDate &&
+    new Date(c.freeAccessEndDate) < APP_TODAY;
+
+  const status: SubscriptionStatus = freeAccessEnded ? "Free Access Ended" : declared;
 
   const billingCycle: BillingCycle = c.billingCycle ?? (h % 3 === 0 ? "Annual" : "Monthly");
   const currency: Currency = c.currency ?? (h % 4 === 0 ? "CAD" : "USD");
   const signUp: SignUpChannel = c.signUp ?? (c.partnership ? "Internal Sign-Up" : h % 2 === 0 ? "Self Sign-Up" : "Internal Sign-Up");
   const payment: PaymentCollection =
-    c.payment ?? (signUp === "Internal Sign-Up" && h % 3 === 1 ? "Manual" : "Automatic");
+    c.payment ?? (signUp === "Internal Sign-Up" && h % 3 === 1 ? "Invoice" : "Automatic");
 
-  const ratePerSeat = c.ratePerSeat ?? defaultRate(c.tier, billingCycle, currency);
+  // No tier means no plan and so no rate — Price reads "—" for those anyway.
+  const ratePerSeat = c.ratePerSeat ?? (c.tier ? defaultRate(c.tier, billingCycle, currency) : 0);
   const seatsTotal = c.seats;
   const seatsUsed = c.seatsUsed ?? Math.max(1, Math.min(seatsTotal, Math.round(seatsTotal * (0.55 + (h % 35) / 100))));
-  const seatsAdded = (h >> 2) % 25;
-  const seatsRemoved = (h >> 6) % 15;
+  /* Roughly two thirds of accounts grew over the period, a sixth shrank, and
+     the rest held flat — an account moves one way or the other, never both.
+     Salted: the sequential CO-nnn ids leave `h`'s own bits too correlated, and
+     reusing them here lands every company on the same handful of numbers.
+     `hash` is unsigned, so the shift has to be `>>>` — a plain `>>` coerces
+     anything past 2^31 to a negative int32 and flips the sign of the result. */
+  const hs = hash(c.id + "seatchange");
+  const seatMove = hs % 6;
+  const seatChange =
+    seatMove === 0 ? 0 : seatMove === 1 ? -(1 + ((hs >>> 3) % 12)) : 1 + ((hs >>> 3) % 24);
 
-  const billed = status === "Active";
-  const monthlyTotal = billed ? ratePerSeat * seatsTotal : 0;
+  const monthlyTotal = status === "Active" ? ratePerSeat * seatsTotal : 0;
 
   // Everyone bills on the 1st (Section 21.5).
   const nextBillingDate =
@@ -588,16 +695,35 @@ export function getCompanyBilling(c: Company): CompanyBilling {
     if (remaining <= 0) break;
   }
 
-  // A short month-day date derived from the hash, reused by the status pills.
-  const pillDate = `${MONTHS[(h >> 4) % 12]} ${1 + ((h >> 9) % 27)}`;
+  // Status-pill dates sit on the right side of "today": a trial that is still
+  // running ends in the future, and a cancellation is either still scheduled
+  // (future) or already in effect (past).
+  // Salted: the sequential CO-nnn ids leave `h`'s high bits too correlated, so
+  // reusing them here lands every trial on the same day.
+  const ht = hash(c.id + "trial");
+  const trialEndsOn = fmtDate(addDays(APP_TODAY, 1 + (ht % 75)));
+  // A cancellation set through the UI carries its own effective date; seed data
+  // alternates between the two cases. Either way the DATE decides which pill
+  // shows, so a stored cancelsOn that has since passed reads "Canceled".
+  const hx = hash(c.id + "cancel");
+  const cancelsOn =
+    c.cancelsOn ??
+    // `>>>`, not `>>`: hash is unsigned, and a signed shift past 2^31 would
+    // flip the offset's sign and put a "scheduled" cancellation in the past.
+    fmtDate(addDays(APP_TODAY, hx % 2 === 0 ? 1 + ((hx >>> 3) % 60) : -(1 + ((hx >>> 3) % 400))));
+  const cancelScheduled = (parseDate(cancelsOn)?.getTime() ?? 0) > APP_TODAY.getTime();
 
-  // Past Due: invoices fall 1–89 days overdue.
-  const daysPastDue = 1 + (h % 89);
-  const trialEndsOn = pillDate;
-  // A scheduled cancellation set through the UI carries its own effective date;
-  // otherwise seed data alternates between scheduled ("Cancels on …") and ended.
-  const cancelsOn = c.cancelsOn ?? pillDate;
-  const cancelScheduled = c.cancelsOn ? true : (h >> 5) % 2 === 0;
+  // Why the subscription ended. Set explicitly by the Cancel Subscription flow;
+  // seed companies get a deterministic one so the pill's hover always has a
+  // reason to show.
+  const cancellationReason =
+    c.cancellationReason ?? CANCELLATION_REASONS[hash(c.id + "reason") % CANCELLATION_REASONS.length];
+
+  // How overdue the latest invoice is, and the date access is cut off if it
+  // stays unpaid — the grace period runs PAST_DUE_GRACE_DAYS from the due date,
+  // so an account 45 days down has 15 left.
+  const daysPastDue = 1 + (hash(c.id + "overdue") % PAST_DUE_GRACE_DAYS);
+  const accessEndsOn = fmtDate(addDays(APP_TODAY, PAST_DUE_GRACE_DAYS - daysPastDue));
 
   return {
     status,
@@ -608,23 +734,27 @@ export function getCompanyBilling(c: Company): CompanyBilling {
     ratePerSeat,
     seatsUsed,
     seatsTotal,
-    seatsAdded,
-    seatsRemoved,
+    seatChange,
     nextBillingDate,
     createdOn,
     monthlyTotal,
     regions,
-    daysPastDue,
     trialEndsOn,
     cancelsOn,
     cancelScheduled,
+    cancellationReason,
+    daysPastDue,
+    accessEndsOn,
   };
 }
 
-/* Status pill shown in the Manage Companies table (Figma 109:1237). Maps a
- * subscription status to a colour tone and the label text to print. Only the
- * four statuses below are finalised; the rest fall back to a neutral grey pill
- * until their designs are confirmed. */
+/* Status pill shown in the Manage Companies table (Figma 109:1237, labels
+ * re-synced from 652:925). Maps a subscription status to a colour tone and the
+ * label to print. Pills that carry a date print it in full — the year matters
+ * when a cancellation or a trial end is months out. Both ENDED states (Trial
+ * Ended, Free Access Ended) and both CANCELLED ones (still scheduled, already
+ * in effect) share the grey tone: they all mean "no access", so the tone reads
+ * as the outcome and the label supplies the detail. */
 export type StatusPillTone = "green" | "red" | "yellow" | "grey" | "purple" | "secondary";
 
 export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; label: string } {
@@ -632,34 +762,60 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
     case "Active":
       return { tone: "green", label: "Active" };
     case "Past Due":
-      return {
-        tone: "red",
-        label: `${billing.daysPastDue} ${billing.daysPastDue === 1 ? "Day" : "Days"} Past Due`,
-      };
+      return { tone: "red", label: "Past Due" };
     case "Free Trial":
-      return { tone: "yellow", label: `Trial Ends On ${billing.trialEndsOn}` };
+      return { tone: "yellow", label: `Free Trial Ends ${billing.trialEndsOn}` };
     case "Trial Expired":
-      return { tone: "purple", label: "Trial Ended" };
+      return { tone: "grey", label: "Trial Ended" };
     case "Free Access":
       return { tone: "secondary", label: "Free Access" };
     case "Free Access Ended":
       return { tone: "grey", label: "Free Access Ended" };
     case "Canceled":
       return billing.cancelScheduled
-        ? { tone: "grey", label: `Cancels on ${billing.cancelsOn}` }
+        ? { tone: "grey", label: `Cancels ${billing.cancelsOn}` }
         : { tone: "grey", label: "Canceled" };
     default:
       return { tone: "grey", label: billing.status };
   }
 }
 
+/* Detail behind a status pill, shown on hover (the shared `data-tip` tooltip).
+ * Only the statuses that carry a "why" or a "what happens next" have one; the
+ * rest return null and the pill stays a plain label. */
+export function getStatusTip(billing: CompanyBilling): string | null {
+  switch (billing.status) {
+    case "Past Due":
+      return `${billing.daysPastDue} ${billing.daysPastDue === 1 ? "day" : "days"} past due. Company loses access on ${billing.accessEndsOn}`;
+    case "Canceled":
+      return `Reason: ${billing.cancellationReason}`;
+    default:
+      return null;
+  }
+}
+
 /* "Canceled On" column (Manage Companies) — the date a subscription actually
  * ended. Only set once cancellation has taken effect; a subscription that's
- * merely scheduled to cancel ("Cancels on …") hasn't ended yet, so it reads
+ * merely scheduled to cancel ("Cancels …") hasn't ended yet, so it reads
  * "—" here until that date passes. */
 export function getCanceledOn(billing: CompanyBilling): string {
   if (billing.status === "Canceled" && !billing.cancelScheduled) return billing.cancelsOn;
   return "—";
+}
+
+/* Effective date of a cancellation taken "at the end of the current billing
+ * cycle" — the next occurrence of the billing day, as a full "Mon D, YYYY" so
+ * the stored `cancelsOn` can be compared against today. `nextBillingDate` is
+ * kept year-less for the wizard's cycle maths, hence the resolve here. */
+export function getCancelEffectiveDate(billing: CompanyBilling): string {
+  const mo = MONTHS.indexOf(billing.nextBillingDate.slice(0, 3));
+  if (mo < 0) return fmtDate(addDays(APP_TODAY, 30));
+  const thisYear = new Date(APP_TODAY.getFullYear(), mo, 1);
+  return fmtDate(
+    thisYear.getTime() > APP_TODAY.getTime()
+      ? thisYear
+      : new Date(APP_TODAY.getFullYear() + 1, mo, 1),
+  );
 }
 
 /* "Trial End Date" column (Manage Companies) — only meaningful while a
@@ -684,12 +840,36 @@ export function getDashboardLastAccess(company: Company): string {
 }
 
 /* "Price" column (Manage Companies) — the per-seat rate a company pays, same
- * value shown on its Manage Subscription page. Only meaningful for companies
- * on a paid B2B subscription (Essentials/Growth/Pro); Free Trial and Free
- * Access companies aren't billed, so the column reads "—" for them. */
+ * value shown on its Manage Subscription page. Only meaningful while the
+ * subscription actually bills; a trial or a complimentary grant reads "—". */
 export function getCompanyPriceValue(company: Company): number | null {
-  if (!PAID_TIERS.includes(company.tier as (typeof PAID_TIERS)[number])) return null;
-  return getCompanyBilling(company).ratePerSeat;
+  const billing = getCompanyBilling(company);
+  return isBilledStatus(billing.status) ? billing.ratePerSeat : null;
+}
+
+/* "Assigned CSM" / "Assigned Sales Rep" columns. The wizard stores an explicit
+ * choice; seed companies (and any record created before the fields existed)
+ * fall back to a deterministic owner so the columns are never empty. */
+export function getAssignedCsm(company: Company): string {
+  return company.assignedCsm ?? CSM_OPTIONS[hash(company.id + "csm") % CSM_OPTIONS.length];
+}
+
+/* The account holder's phone. The create/edit wizard captures one; seed
+ * companies mostly have nothing on file, so about two in three get a
+ * deterministic number and the rest stay blank — the user-details hover card
+ * drops its Phone row entirely when there is none (Figma 436:572). */
+export function getCompanyPhone(company: Company): string {
+  if (company.phone) return company.phone;
+  const h = hash(company.id + "phone");
+  if (h % 3 === 0) return "";
+  return `+1 (${212 + (h % 700)}) 555-01${String(h % 100).padStart(2, "0")}`;
+}
+
+export function getAssignedSalesRep(company: Company): string {
+  return (
+    company.assignedSalesRep ??
+    SALES_REP_OPTIONS[hash(company.id + "rep") % SALES_REP_OPTIONS.length]
+  );
 }
 
 export function getCompanyPrice(company: Company): string {

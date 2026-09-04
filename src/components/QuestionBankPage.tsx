@@ -1743,7 +1743,7 @@ function QuestionHistoryPage({
 // truncated to the first name with a "+N more" tail (full list in the tooltip).
 function UsageNames({ items }: { items: string[] }) {
   if (items.length === 0) {
-    return <span className="qb-usage-empty">—</span>;
+    return null;
   }
   const [first, ...rest] = items;
   return (

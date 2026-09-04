@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { ChevronRightIcon, EditColumnsIcon } from "./icons";
-import { PillTrigger, summarize, sameSelection, dismissesSubmenu, SectionedMultiSelect, CheckRow } from "./Filters";
+import { PillTrigger, summarize, SectionedMultiSelect, CascadingMultiSelect, EditColumnsButton } from "./Filters";
 import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
 import {
   TIERS,
@@ -13,6 +11,8 @@ import {
   SIGN_UP_CHANNELS,
   BILLING_CYCLES,
   PAYMENT_COLLECTIONS,
+  CSM_OPTIONS,
+  SALES_REP_OPTIONS,
   type CompanyColumn,
 } from "../data/companies";
 
@@ -24,6 +24,29 @@ export type CompanyFilterState = {
   signUps: string[];
   billingCycles: string[];
   paymentMethods: string[];
+  csms: string[];
+  salesReps: string[];
+};
+
+/* The filters that live behind "More Filters" rather than on their own pill —
+ * a slice of the state above, passed around as one object so adding a section
+ * is a one-line change here instead of another prop threaded three deep. */
+export const MORE_FILTER_KEYS = [
+  "signUps",
+  "billingCycles",
+  "paymentMethods",
+  "csms",
+  "salesReps",
+] as const;
+
+export type CompanyMoreFilters = Pick<CompanyFilterState, (typeof MORE_FILTER_KEYS)[number]>;
+
+export const EMPTY_MORE_FILTERS: CompanyMoreFilters = {
+  signUps: [],
+  billingCycles: [],
+  paymentMethods: [],
+  csms: [],
+  salesReps: [],
 };
 
 export type CompanyColumnState = Record<CompanyColumn, boolean>;
@@ -36,15 +59,7 @@ type Props = {
 };
 
 export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }: Props) {
-  const hasFilters =
-    filters.tiers.length +
-      filters.industries.length +
-      filters.partnerships.length +
-      filters.statuses.length +
-      filters.signUps.length +
-      filters.billingCycles.length +
-      filters.paymentMethods.length >
-    0;
+  const hasFilters = Object.values(filters).some((v) => v.length > 0);
 
   function clearAll() {
     setFilters({
@@ -52,9 +67,7 @@ export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }:
       industries: [],
       partnerships: [],
       statuses: [],
-      signUps: [],
-      billingCycles: [],
-      paymentMethods: [],
+      ...EMPTY_MORE_FILTERS,
     });
   }
 
@@ -77,17 +90,8 @@ export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }:
         onApply={(v) => setFilters({ ...filters, partnerships: v })}
       />
       <MoreFiltersPill
-        signUps={filters.signUps}
-        billingCycles={filters.billingCycles}
-        paymentMethods={filters.paymentMethods}
-        onApply={(v) =>
-          setFilters({
-            ...filters,
-            signUps: v.signUps,
-            billingCycles: v.billingCycles,
-            paymentMethods: v.paymentMethods,
-          })
-        }
+        value={filters}
+        onApply={(v) => setFilters({ ...filters, ...v })}
       />
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
@@ -250,17 +254,13 @@ function PartnershipPill({
 }
 
 function MoreFiltersPill({
-  signUps,
-  billingCycles,
-  paymentMethods,
+  value,
   onApply,
 }: {
-  signUps: string[];
-  billingCycles: string[];
-  paymentMethods: string[];
-  onApply: (v: { signUps: string[]; billingCycles: string[]; paymentMethods: string[] }) => void;
+  value: CompanyMoreFilters;
+  onApply: (v: CompanyMoreFilters) => void;
 }) {
-  const count = signUps.length + billingCycles.length + paymentMethods.length;
+  const count = MORE_FILTER_KEYS.reduce((n, k) => n + value[k].length, 0);
   const summary = count > 0 ? `${count} Active` : null;
 
   return (
@@ -272,15 +272,13 @@ function MoreFiltersPill({
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ signUps: [], billingCycles: [], paymentMethods: [] })}
+          onClear={() => onApply(EMPTY_MORE_FILTERS)}
         />
       )}
     >
       {({ close }) => (
         <MoreFiltersBody
-          signUps={signUps}
-          billingCycles={billingCycles}
-          paymentMethods={paymentMethods}
+          value={value}
           onApply={(v) => {
             onApply(v);
             close();
@@ -291,241 +289,61 @@ function MoreFiltersPill({
   );
 }
 
+/* "More Filters" is a MENU, not a filter panel of its own: each row opens the
+   respective filter's dropdown, and Apply lives in THAT submenu — Figma 772:1108
+   shows the root list (28:16530) with no footer, while the submenu states
+   (774:1243 / 774:1298) each carry the Apply CTA. Shared with the Tasks and
+   Certifications rows so all three behave identically. */
 function MoreFiltersBody({
-  signUps,
-  billingCycles,
-  paymentMethods,
-  onApply,
-}: {
-  signUps: string[];
-  billingCycles: string[];
-  paymentMethods: string[];
-  onApply: (v: { signUps: string[]; billingCycles: string[]; paymentMethods: string[] }) => void;
-}) {
-  const [draftSignUps, setDraftSignUps] = useState(signUps);
-  const [draftCycles, setDraftCycles] = useState(billingCycles);
-  const [draftPayments, setDraftPayments] = useState(paymentMethods);
-  const [hovered, setHovered] = useState<"signUp" | "billingCycle" | "paymentMethod" | null>(null);
-  const [hoveredTop, setHoveredTop] = useState(0);
-
-  useEffect(() => setDraftSignUps(signUps), [signUps]);
-  useEffect(() => setDraftCycles(billingCycles), [billingCycles]);
-  useEffect(() => setDraftPayments(paymentMethods), [paymentMethods]);
-
-  function toggleSignUp(item: string) {
-    setDraftSignUps((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
-  }
-  function toggleCycle(item: string) {
-    setDraftCycles((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
-  }
-  function togglePayment(item: string) {
-    setDraftPayments((d) => (d.includes(item) ? d.filter((x) => x !== item) : [...d, item]));
-  }
-
-  return (
-    <div
-      className="cascading-menu"
-      onClick={(e) => dismissesSubmenu(e) && setHovered(null)}
-    >
-      <div className="cascading-root">
-        <div className="dropdown-list">
-          <SubmenuRow
-            label="Sign-Up"
-            active={hovered === "signUp"}
-            onHover={(top) => { setHovered("signUp"); setHoveredTop(top); }}
-          />
-          <SubmenuRow
-            label="Billing Cycle"
-            active={hovered === "billingCycle"}
-            onHover={(top) => { setHovered("billingCycle"); setHoveredTop(top); }}
-          />
-          <SubmenuRow
-            label="Payment Method"
-            active={hovered === "paymentMethod"}
-            onHover={(top) => { setHovered("paymentMethod"); setHoveredTop(top); }}
-          />
-        </div>
-        <div className="dropdown-footer">
-          <button
-            className="btn-apply"
-            disabled={
-              sameSelection(draftSignUps, signUps) &&
-              sameSelection(draftCycles, billingCycles) &&
-              sameSelection(draftPayments, paymentMethods)
-            }
-            onClick={() => onApply({ signUps: draftSignUps, billingCycles: draftCycles, paymentMethods: draftPayments })}
-          >
-            Apply
-          </button>
-        </div>
-      </div>
-
-      {hovered && (
-        <div
-          className="cascading-sub"
-          style={{ top: hoveredTop }}
-        >
-          <div className="dropdown-list">
-            {hovered === "signUp" && (
-              <div className="dropdown-section">
-                {SIGN_UP_CHANNELS.map((s) => (
-                  <CheckRow
-                    key={s}
-                    label={s}
-                    checked={draftSignUps.includes(s)}
-                    onChange={() => toggleSignUp(s)}
-                  />
-                ))}
-              </div>
-            )}
-            {hovered === "billingCycle" && (
-              <div className="dropdown-section">
-                {BILLING_CYCLES.map((cy) => (
-                  <CheckRow
-                    key={cy}
-                    label={cy}
-                    checked={draftCycles.includes(cy)}
-                    onChange={() => toggleCycle(cy)}
-                  />
-                ))}
-              </div>
-            )}
-            {hovered === "paymentMethod" && (
-              <div className="dropdown-section">
-                {PAYMENT_COLLECTIONS.map((p) => (
-                  <CheckRow
-                    key={p}
-                    label={p}
-                    checked={draftPayments.includes(p)}
-                    onChange={() => togglePayment(p)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SubmenuRow({
-  label,
-  active,
-  onHover,
-}: {
-  label: string;
-  active: boolean;
-  onHover: (top: number) => void;
-}) {
-  function handle(e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>) {
-    const btn = e.currentTarget;
-    const parent = btn.offsetParent as HTMLElement | null;
-    let top = btn.offsetTop;
-    let el: HTMLElement | null = btn.parentElement;
-    while (el && el !== parent) {
-      top += el.offsetTop;
-      el = el.parentElement;
-    }
-    onHover(top);
-  }
-  return (
-    <button
-      className={`dropdown-submenu-row ${active ? "active" : ""}`}
-      onMouseEnter={handle}
-      onClick={handle}
-      onFocus={handle}
-    >
-      <span className="dropdown-submenu-label">{label}</span>
-      <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>
-    </button>
-  );
-}
-
-/* ──────────── Edit Columns ──────────── */
-
-export function CompanyEditColumnsButton({
-  columns,
-  setColumns,
-}: {
-  columns: CompanyColumnState;
-  setColumns: (c: CompanyColumnState) => void;
-}) {
-  return (
-    <Dropdown
-      width={300}
-      align="right"
-      trigger={({ toggle }) => (
-        <button
-          className="edit-columns-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggle();
-          }}
-          aria-label="Edit columns"
-          data-tooltip="Edit Columns"
-        >
-          <EditColumnsIcon />
-        </button>
-      )}
-    >
-      {() => <CompanyColumnsBody value={columns} onApply={(c) => setColumns(c)} />}
-    </Dropdown>
-  );
-}
-
-function CompanyColumnsBody({
   value,
   onApply,
 }: {
-  value: CompanyColumnState;
-  onApply: (v: CompanyColumnState) => void;
+  value: CompanyMoreFilters;
+  onApply: (v: CompanyMoreFilters) => void;
 }) {
-  const active = COMPANY_OPTIONAL_COLUMNS.filter((c) => value[c.key]);
-  const available = COMPANY_OPTIONAL_COLUMNS.filter((c) => !value[c.key]);
   return (
-    <div className="dropdown-list cols-menu">
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Fixed columns</div>
-        {COMPANY_FIXED_COLUMNS.map(({ label }) => (
-          <div key={label} className="cols-fixed-row">
-            {label}
-          </div>
-        ))}
-      </div>
+    <CascadingMultiSelect
+      sections={[
+        { key: "signUps", label: "Sign-Up Method", groups: [{ items: [...SIGN_UP_CHANNELS] }] },
+        { key: "billingCycles", label: "Billing Cycle", groups: [{ items: [...BILLING_CYCLES] }] },
+        { key: "paymentMethods", label: "Payment Method", groups: [{ items: [...PAYMENT_COLLECTIONS] }] },
+        { key: "csms", label: "Assigned CSM", groups: [{ items: [...CSM_OPTIONS] }] },
+        { key: "salesReps", label: "Assigned Sales Rep", groups: [{ items: [...SALES_REP_OPTIONS] }] },
+      ]}
+      value={value}
+      onApply={(v) =>
+        onApply(
+          Object.fromEntries(MORE_FILTER_KEYS.map((k) => [k, v[k]])) as CompanyMoreFilters,
+        )
+      }
+    />
+  );
+}
 
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Active columns</div>
-        {active.length === 0 ? (
-          <div className="cols-empty">No active columns</div>
-        ) : (
-          active.map(({ key, label }) => (
-            <CheckRow
-              key={key}
-              label={label}
-              checked
-              draggable
-              onChange={() => onApply({ ...value, [key]: false })}
-            />
-          ))
-        )}
-      </div>
 
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Available columns</div>
-        {available.length === 0 ? (
-          <div className="cols-empty">All columns are active</div>
-        ) : (
-          available.map(({ key, label }) => (
-            <CheckRow
-              key={key}
-              label={label}
-              checked={false}
-              onChange={() => onApply({ ...value, [key]: true })}
-            />
-          ))
-        )}
-      </div>
-    </div>
+/* Edit Columns — the shared control (Filters.tsx), which already carries the
+ * ALL / NONE bulk toggles every other table’s menu has. Companies used to
+ * carry its own copy of the body without them. */
+export function CompanyEditColumnsButton({
+  columns,
+  setColumns,
+  order,
+  onOrderChange,
+}: {
+  columns: CompanyColumnState;
+  setColumns: (c: CompanyColumnState) => void;
+  /** Pass both to enable drag-to-reorder in the menu. */
+  order?: CompanyColumn[];
+  onOrderChange?: (next: CompanyColumn[]) => void;
+}) {
+  return (
+    <EditColumnsButton
+      columns={columns}
+      setColumns={setColumns}
+      optional={COMPANY_OPTIONAL_COLUMNS}
+      fixed={COMPANY_FIXED_COLUMNS}
+      order={order}
+      onOrderChange={onOrderChange}
+    />
   );
 }

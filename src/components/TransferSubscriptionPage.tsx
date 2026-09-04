@@ -419,9 +419,9 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                     }
                     rightTone={dst ? (dst.sub.active ? "yellow" : "green") : "grey"}
                     rows={[
-                      { k: "Plan", a: src ? src.sub.plan : "—", b: dst ? dst.sub.plan : "—" },
-                      { k: "Status", a: src ? src.sub.detail : "—", b: dst ? dst.sub.detail : "—" },
-                      { k: "Price", a: src ? src.sub.price : "—", b: dst ? dst.sub.price : "—" },
+                      { k: "Plan", a: src ? src.sub.plan : "", b: dst ? dst.sub.plan : "" },
+                      { k: "Status", a: src ? src.sub.detail : "", b: dst ? dst.sub.detail : "" },
+                      { k: "Price", a: src ? src.sub.price : "", b: dst ? dst.sub.price : "" },
                     ]}
                   />
                 </>

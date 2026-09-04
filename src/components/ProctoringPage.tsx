@@ -9,6 +9,13 @@ import {
 } from "../data/proctoring";
 import { nameChangeRequests } from "../data/nameChangeRequests";
 import { ProctoringConsole } from "./ProctoringConsole";
+import { MultiPill } from "./UsersFilters";
+import {
+  DateRangePill,
+  allTimeDateRange,
+  dateRangeIncludes,
+  type DateRangeState,
+} from "./DateRangeFilter";
 import { ProctoringSearch } from "./ProctoringSearch";
 import { SectionHeading } from "./SectionHeading";
 import { useLandingMorph } from "../hooks/useLandingMorph";
@@ -24,15 +31,16 @@ import {
 
 const PAGE_SIZE = 50;
 
-type FilterKey = "all" | ProctoringKind;
-
 export type SortKey = "candidate" | "email" | "exam" | "submittedAt";
 export type SortDir = "asc" | "desc";
 
 // submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
 // the ordinal suffix so Date.parse can read it.
+function readableDate(s: string): string {
+  return s.replace(/(\d+)(st|nd|rd|th)/, "$1");
+}
 function parseSubmittedAt(s: string): number {
-  return Date.parse(s.replace(/(\d+)(st|nd|rd|th)/, "$1")) || 0;
+  return Date.parse(readableDate(s)) || 0;
 }
 
 /* The run card names the types the way Figma 300:363 does — "Proctored Exams",
@@ -76,15 +84,23 @@ function compareRows(a: Submission, b: Submission, key: SortKey): number {
   return 0;
 }
 
-/* The kind filter — a pill per tab, always visible beside the search bar (the
-   "User Reviews 6B" reference's one-row filter; it replaced the stat-card
-   tiles). */
-const FILTER_LABEL: Record<FilterKey, string> = {
-  all: "All",
+/* The kind filter is the "Review Type" pill on the filters row — the shared
+   PillTrigger multi-select every other list page uses. It replaced the
+   pill-per-kind tab row (which had itself replaced the stat-card tiles): one
+   pill holding the same three kinds, so the Quiz filter can sit beside it on
+   the same line. No selection means every kind, the way an unapplied filter
+   reads everywhere else. Named for the kinds it holds, NOT for the Status
+   COLUMN further down, which says something else entirely (Requested vs To
+   Review on a re-upload). */
+const REVIEW_TYPE_LABEL: Record<ProctoringKind, string> = {
   proctoring: "Proctoring",
   "id-review": "ID Reviews",
   "id-reupload": "ID Re-uploads",
 };
+const REVIEW_TYPE_OPTIONS: string[] = TYPE_SEQUENCE.map((k) => REVIEW_TYPE_LABEL[k]);
+const KIND_BY_REVIEW_TYPE = new Map<string, ProctoringKind>(
+  TYPE_SEQUENCE.map((k) => [REVIEW_TYPE_LABEL[k], k]),
+);
 
 /** The landing's wait column: "Waiting 20 hours" under a day, "Waiting 4 days"
  *  from there up. */
@@ -112,11 +128,17 @@ const LM_COLS: LandingCol[] = [
 
 export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }) {
   const [list, setList] = useState<Submission[]>(seedSubmissions);
-  const [filter, setFilter] = useState<FilterKey>("all");
+  // The Review Type pill's applied kinds, as labels — empty means every kind.
+  const [reviewTypeFilter, setReviewTypeFilter] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  // Both filters are applied from inside the search bar — this page has no pills.
+  // Quiz has a pill on the filters row now; Company is still applied from
+  // inside the search bar, which is where its applied chips stay.
   const [examFilter, setExamFilter] = useState<string[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string[]>([]);
+  /* All Time, not the shared Last 30 Days default: this is a backlog queue, and
+     a rolling window would open the page with the longest-waiting submissions —
+     the ones it exists to surface — already hidden. */
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
   const [page, setPage] = useState(1);
   const [activeId, setActiveId] = useState<string | null>(null);
   // Longest waiting first — the landing's framing, and the default review-run
@@ -188,13 +210,19 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   }, [typeOrder]);
 
   // Once a submission is accepted/rejected it's off the review queue entirely. A
-  // requested reupload doesn't count toward the pill counts — only true "pending"
-  // items do — and it only surfaces under the ID Re-uploads tab, never under "All".
+  // requested reupload doesn't count toward the run cards' counts — only true
+  // "pending" items do — and it only surfaces when the Review Type filter asks
+  // for ID Re-uploads, never in the unfiltered list.
   const pending = useMemo(() => list.filter((s) => s.status === "pending"), [list]);
+
+  /** The Review Type pill's labels resolved back to kinds. */
+  const kinds = useMemo(
+    () => reviewTypeFilter.flatMap((label) => KIND_BY_REVIEW_TYPE.get(label) ?? []),
+    [reviewTypeFilter],
+  );
 
   const counts = useMemo(() => {
     return {
-      all: pending.length,
       proctoring: pending.filter((s) => s.kind === "proctoring").length,
       "id-review": pending.filter((s) => s.kind === "id-review").length,
       "id-reupload": pending.filter((s) => s.kind === "id-reupload").length,
@@ -210,6 +238,20 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
     return [...byQuiz.entries()].sort((a, b) => b[1] - a[1]);
   }, [pending]);
 
+  /** Every quiz with something pending — the Quiz pill's option list. */
+  const examNames = useMemo(
+    () => quizRanked.map(([name]) => name).sort((a, b) => a.localeCompare(b)),
+    [quizRanked],
+  );
+
+  const hasFilters = reviewTypeFilter.length + examFilter.length + companyFilter.length > 0;
+
+  function clearFilters() {
+    setReviewTypeFilter([]);
+    setExamFilter([]);
+    setCompanyFilter([]);
+  }
+
   /** Start a run: clear the filters, order the whole pending queue by the run's
    * grouping (longest wait first within each group), and open the console on
    * its first submission. The console's queue IS the table's filtered+sorted
@@ -222,9 +264,10 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
         parseSubmittedAt(a.submittedAt) - parseSubmittedAt(b.submittedAt),
     )[0];
     if (!first) return;
-    setFilter("all");
+    setReviewTypeFilter([]);
     setExamFilter([]);
     setCompanyFilter([]);
+    setDateRange(allTimeDateRange());
     setQuery("");
     setSort({ key: "submittedAt", dir: "asc" });
     setRunOrder(order);
@@ -235,19 +278,22 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
     const q = query.trim().toLowerCase();
     return list.filter((s) => {
       if (s.status === "pending") {
-        if (filter !== "all" && s.kind !== filter) return false;
+        if (kinds.length > 0 && !kinds.includes(s.kind)) return false;
       } else if (s.status === "id-requested") {
-        if (filter !== "id-reupload") return false;
+        // Waiting on the candidate, not on us — it shows only when the Review
+        // Type filter actually asks for re-uploads.
+        if (!kinds.includes("id-reupload")) return false;
       } else {
         return false;
       }
+      if (!dateRangeIncludes(dateRange, readableDate(s.submittedAt))) return false;
       if (examFilter.length > 0 && !examFilter.includes(s.exam)) return false;
       if (companyFilter.length > 0 && !(s.companyName && companyFilter.includes(s.companyName)))
         return false;
       if (q && !matchesQuery(s, q)) return false;
       return true;
     });
-  }, [list, filter, query, examFilter, companyFilter]);
+  }, [list, kinds, query, examFilter, companyFilter, dateRange]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -267,16 +313,20 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
      rarely fills a page, but the "Showing x–y of n" line is the table's standard
      footer, so it's here whatever the count is. */
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, filter, examFilter, companyFilter, sort, runOrder]);
+  useEffect(
+    () => setPage(1),
+    [query, reviewTypeFilter, examFilter, companyFilter, dateRange, sort, runOrder],
+  );
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   /* Status is a re-uploads-only column: it distinguishes "we've asked, the
-     candidate hasn't sent it" from "sent, waiting on us". On All (and the other
-     tabs) there's nothing to distinguish — only the To Review ones appear there
-     — so the column would be a single repeated value, and it's dropped. */
-  const showStatus = filter === "id-reupload";
+     candidate hasn't sent it" from "sent, waiting on us". Without ID Re-uploads
+     in the Review Type filter there's nothing to distinguish — only the To
+     Review ones are listed — so the column would be a single repeated value,
+     and it's dropped. */
+  const showStatus = kinds.includes("id-reupload");
 
   const active = activeId ? sorted.find((s) => s.id === activeId) ?? null : null;
 
@@ -547,8 +597,8 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
               {/* Search and filters belong to the EXPANDED table only — the
                   collapsed view is the run cards plus the list, and both rows
                   fade in with the table chrome (see `.tasks.lm.pr-page` in
-                  index.css). The Quiz/Company scopes are applied from inside
-                  the bar; the kind pills are the rest of the filter row. */}
+                  index.css). Company is the one scope still applied from inside the
+                  bar — Quiz has a pill on the filter row below it. */}
               <div className="toolbar">
                 <ProctoringSearch
                   submissions={pending}
@@ -564,23 +614,44 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                 />
               </div>
 
-              <div className="filters prl-kinds">
-                {(Object.keys(FILTER_LABEL) as FilterKey[]).map((k) => (
-                  <button
-                    key={k}
-                    className={`lm-pill ${filter === k ? "is-active" : ""}`}
-                    aria-pressed={filter === k}
-                    onClick={() => setFilter(k)}
-                  >
-                    {FILTER_LABEL[k]} {counts[k]}
+              {/* The same filter row every other list page carries: shared
+                  PillTrigger pills over one Clear Filters link. */}
+              <div className="filters">
+                <MultiPill
+                  label="Review Type"
+                  all={REVIEW_TYPE_OPTIONS}
+                  value={reviewTypeFilter}
+                  onApply={setReviewTypeFilter}
+                />
+                <MultiPill
+                  label="Quiz"
+                  all={examNames}
+                  value={examFilter}
+                  onApply={setExamFilter}
+                  searchable
+                  searchPlaceholder="Search quizzes…"
+                  width={300}
+                />
+                {hasFilters && (
+                  <button className="filter-clear-link" onClick={clearFilters}>
+                    Clear Filters
                   </button>
-                ))}
+                )}
+                {/* Date Range holds the row's right edge, as on Companies. It
+                    always has a value and cannot be removed, so Clear Filters
+                    leaves it alone — its own Clear resets it to All Time. */}
+                <span className="filters-end">
+                  <DateRangePill
+                    value={dateRange}
+                    onChange={setDateRange}
+                    defaultValue={allTimeDateRange()}
+                  />
+                </span>
               </div>
 
               <div className="lm-stage">
                 <LandingOverlay
                   caption="Longest waiting"
-                  total={sorted.length}
                   columns={lmCols}
                   rows={landingRows}
                   nameLabel="User's Name"

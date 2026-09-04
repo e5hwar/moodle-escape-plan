@@ -529,11 +529,11 @@ export function attemptsForTask(
 /* ──────────────────────────── formatting ───────────────────────────── */
 
 export function fmtD(ts: number | null): string {
-  if (!ts) return "—";
+  if (!ts) return "";
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 export function fmtDT(ts: number | null): string {
-  if (!ts) return "—";
+  if (!ts) return "";
   const d = new Date(ts);
   return (
     d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
@@ -542,7 +542,7 @@ export function fmtDT(ts: number | null): string {
   );
 }
 export function rel(ts: number | null): string {
-  if (!ts) return "—";
+  if (!ts) return "";
   const diff = NOW - ts;
   const d = Math.floor(diff / DAY);
   if (d <= 0) return "today";
@@ -552,7 +552,7 @@ export function rel(ts: number | null): string {
   return m + (m === 1 ? " month" : " months");
 }
 export function fmtDur(min: number): string {
-  if (!min) return "—";
+  if (!min) return "";
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h ? h + "h " + m + "m" : m + "m";
@@ -635,9 +635,9 @@ export function buildDetail(cells: CellMap, uid: string, task: CertTask): TaskDe
   else footerNote = "Not yet submitted — you can mark it complete manually for this employee.";
 
   return {
-    gradeStr: c.grade ? c.grade + "/100" : "—",
+    gradeStr: c.grade ? c.grade + "/100" : "",
     grade: c.grade,
-    completedStr: c.completedAt ? fmtD(c.completedAt) : "—",
+    completedStr: c.completedAt ? fmtD(c.completedAt) : "",
     durStr: fmtDur(c.timeSpent),
     attemptsStr: ai.hasLimit ? ai.attemptsUsed + " / " + ai.totalAllowed : c.attempts ? String(c.attempts) : "0",
     timeline: tl,

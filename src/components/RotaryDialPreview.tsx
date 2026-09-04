@@ -31,9 +31,9 @@ type Facet = {
 };
 
 function buildFacets(task: Task): Facet[] {
-  const primary = task.usedIn[0] ?? "—";
-  const secondary = task.usedIn[1] ?? "—";
-  const tags = task.tags && task.tags.length ? task.tags.join(" · ") : "—";
+  const primary = task.usedIn[0] ?? "";
+  const secondary = task.usedIn[1] ?? "";
+  const tags = task.tags && task.tags.length ? task.tags.join(" · ") : "";
   return [
     {
       id: "type",
@@ -83,7 +83,7 @@ function buildFacets(task: Task): Facet[] {
       subtext: task.updated ? `Updated ${task.updated}` : task.dateModified ? `Updated ${task.dateModified}` : "Updated recently",
       detail: [
         ["Created", `${task.dateCreated ?? "—"} · ${task.createdBy}`],
-        ["Updated", task.dateModified ?? task.updated ?? "—"],
+        ["Updated", task.dateModified ?? task.updated ?? ""],
         ["Owner", `${task.createdBy} curriculum team`],
       ],
       secondary: {

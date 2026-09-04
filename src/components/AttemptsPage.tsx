@@ -68,14 +68,14 @@ const COLS: ColMeta[] = [
     render: (a) => a.status,
   },
   { key: "startedAt", label: "Started", className: "att-col-date", width: 200, render: (a) => a.startedAt },
-  { key: "completedAt", label: "Completed", className: "att-col-date", width: 200, render: (a) => a.completedAt ?? "—" },
+  { key: "completedAt", label: "Completed", className: "att-col-date", width: 200, render: (a) => a.completedAt ?? "" },
   { key: "duration", label: "Duration", className: "att-col-duration", width: 110, render: (a) => attemptDuration(a) },
   /* Sized to the header, not the data: a grade is at most "100%". The mini
      progress bar this cell used to draw was inert anyway — the plain-text
      column convention flattens any span inside a data cell. */
   {
     key: "grade", label: "Grade", className: "att-col-grade", width: 90,
-    render: (a) => (a.grade === null ? "—" : `${a.grade}%`),
+    render: (a) => (a.grade === null ? "" : `${a.grade}%`),
   },
 ];
 

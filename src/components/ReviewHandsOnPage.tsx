@@ -135,7 +135,7 @@ const COLS: ColMeta[] = [
     tip: (s) => (s.certifications.length ? s.certifications.join("\n") : undefined),
     render: (s) =>
       s.certifications.length === 0 ? (
-        "—"
+        null
       ) : (
         <>
           {s.certifications[0]}
@@ -154,9 +154,9 @@ const COLS: ColMeta[] = [
   { key: "email", label: "User's Email", className: "col-rh-email", width: 220, sortable: false, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
   { key: "phone", label: "User's Phone", className: "col-rh-phone", width: 170, sortable: false, render: (s) => s.phone, sortValue: (s) => s.phone },
   { key: "userType", label: "User Type", className: "col-rh-usertype", width: 120, sortable: false, render: (s) => s.userType, sortValue: (s) => s.userType },
-  { key: "company", label: "User's Company", className: "col-rh-company", width: 200, sortable: false, render: (s) => s.companyName ?? "—", sortValue: (s) => (s.companyName ?? "").toLowerCase() },
+  { key: "company", label: "User's Company", className: "col-rh-company", width: 200, sortable: false, render: (s) => s.companyName ?? "", sortValue: (s) => (s.companyName ?? "").toLowerCase() },
   { key: "attempt", label: "Attempt #", className: "col-rh-attempt", width: 110, render: (s) => attemptNumber(s), sortValue: (s) => attemptNumber(s) },
-  { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : "—"), sortValue: (s) => s.dueDate ?? "" },
+  { key: "dueDate", label: "Due Date", className: "col-rh-date", width: 150, render: (s) => (s.dueDate ? formatDate(s.dueDate) : ""), sortValue: (s) => s.dueDate ?? "" },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
@@ -595,7 +595,6 @@ export function ReviewHandsOnPage() {
               <div className="lm-stage">
               <LandingOverlay
                 caption="Longest waiting"
-                total={sorted.length}
                 columns={LM_COLS}
                 rows={landingRows}
                 nameLabel="User's Name"

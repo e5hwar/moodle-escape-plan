@@ -21,11 +21,11 @@ import { useLandingMorph } from "../hooks/useLandingMorph";
 import { CertificationsSearch } from "./CertificationsSearch";
 import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
-/* Landing-morph columns — mirror the table's default visible columns (the
-   Certifications table leads with ID before Name) so the p=1 hand-off to the
-   real table lines up. */
-const LM_LEAD_COLS: LandingCol[] = [{ key: "id", label: "ID", width: 100 }];
+/* Landing-morph columns — mirror the table’s default visible columns so the
+   p=1 hand-off to the real table lines up. The fixed Name column leads (see
+   `nameLabel`), so the optional ID follows it like every other column. */
 const LM_COLS: LandingCol[] = [
+  { key: "id", label: "ID", width: 100 },
   { key: "industry", label: "Industry", width: 190, fixed: true },
   { key: "careerStage", label: "Career Stage", width: 140 },
   { key: "payment", label: "Payment", width: 150 },
@@ -260,7 +260,7 @@ export function CertificationsPage({
     cells: {
       id: c.id,
       industry: c.industry,
-      careerStage: c.careerStage ?? "—",
+      careerStage: c.careerStage ?? "",
       payment: c.payment ?? "Free",
       tasks: c.tasks,
       creator: c.createdBy,
@@ -372,9 +372,7 @@ export function CertificationsPage({
               <div className="lm-stage">
               <LandingOverlay
                 caption="Recently created"
-                total={sorted.length}
                 columns={LM_COLS}
-                leadColumns={LM_LEAD_COLS}
                 rows={landingRows}
                 onShowAll={morph.showTable}
                 onRowClick={() => morph.showTable()}
@@ -387,8 +385,8 @@ export function CertificationsPage({
                       <CertColGroup columns={columns} />
                       <thead>
                         <tr>
-                          {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
                           <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
+                          {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
                           {columns.industry && <SortableHeader col="industry" label="Industry" className="col-used" sort={sort} toggle={toggleSort} />}
                           {columns.careerStage && <SortableHeader col="careerStage" label="Career Stage" className="col-type" sort={sort} toggle={toggleSort} />}
                           {columns.type && <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />}
@@ -508,7 +506,7 @@ function TagCell({ tags }: { tags: string[] }) {
   return (
     <td className="col-tags" data-tip={tags.length ? tags.join("\n") : undefined}>
       {tags.length === 0 ? (
-        "—"
+        null
       ) : (
         <>
           {tags[0]}
@@ -522,8 +520,8 @@ function TagCell({ tags }: { tags: string[] }) {
 function CertColGroup({ columns }: { columns: CertColumnState }) {
   return (
     <colgroup>
-      {columns.id && <col style={{ width: 100 }} />}
       <col style={{ width: 240 }} />
+      {columns.id && <col style={{ width: 100 }} />}
       {columns.industry && <col style={{ width: 190 }} />}
       {columns.careerStage && <col style={{ width: 140 }} />}
       {columns.type && <col style={{ width: 130 }} />}
@@ -564,14 +562,14 @@ function CertRow({
     <tr
       className={`${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
     >
-      {columns.id && <td className="col-id">{cert.id}</td>}
       <td className="col-name" data-tip={cert.name}>
         {cert.name}
         {vis !== "Visible" && <span className="hidden-badge">{vis}</span>}
       </td>
+      {columns.id && <td className="col-id">{cert.id}</td>}
       {columns.industry && <td className="col-used" data-tip={cert.industry}>{cert.industry}</td>}
-      {columns.careerStage && <td className="col-type">{cert.careerStage ?? "—"}</td>}
-      {columns.type && <td className="col-type">{cert.type ?? "—"}</td>}
+      {columns.careerStage && <td className="col-type">{cert.careerStage ?? ""}</td>}
+      {columns.type && <td className="col-type">{cert.type ?? ""}</td>}
       {columns.payment && (
         <td className="col-type">
           {cert.payment ? (
@@ -590,8 +588,8 @@ function CertRow({
       {columns.partnershipTag && <TagCell tags={pickTags(cert.tags, PARTNERSHIP_TAGS)} />}
       {columns.audience && <td className="col-tags">{audienceOf(cert.tags)}</td>}
       {columns.visibility && <td className="col-type">{vis}</td>}
-      {columns.dateCreated && <td className="col-date">{cert.dateCreated ?? "—"}</td>}
-      {columns.dateModified && <td className="col-date">{cert.dateModified ?? "—"}</td>}
+      {columns.dateCreated && <td className="col-date">{cert.dateCreated ?? ""}</td>}
+      {columns.dateModified && <td className="col-date">{cert.dateModified ?? ""}</td>}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"

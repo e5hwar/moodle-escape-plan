@@ -107,6 +107,20 @@ function buildPresets(today: Date): Preset[] {
         end: new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0),
       }),
     },
+    /* "All Time" sits last in the rail, below the calendar-month entries
+       (Figma 606:1688), and is title-cased in both the list and the pill — the
+       one preset whose label reads as a proper name rather than a sentence.
+
+       It is a bounded window, not an open one: every control here — the two
+       calendars, the Start/End inputs, Apply's "is there a range?" guard —
+       assumes both ends exist, and 20 years back reaches past any record the
+       admin holds. */
+    {
+      key: "all",
+      label: "All Time",
+      pillLabel: "All Time",
+      range: (t) => ({ start: new Date(t.getFullYear() - 20, 0, 1), end: t }),
+    },
   ];
 }
 
@@ -120,6 +134,12 @@ function resolvePreset(key: string): DateRangeState {
 /** The filter's default value — Last 30 Days. */
 export function defaultDateRange(): DateRangeState {
   return resolvePreset("last30");
+}
+
+/** The everything-window default, for lists that must open showing their whole
+ *  backlog (the review queues). */
+export function allTimeDateRange(): DateRangeState {
+  return resolvePreset("all");
 }
 
 /** Whether a date string (any Date.parse-able format) falls inside the range,
@@ -140,9 +160,13 @@ export function dateRangeIncludes(range: DateRangeState, date: string): boolean 
 export function DateRangePill({
   value,
   onChange,
+  defaultValue,
 }: {
   value: DateRangeState;
   onChange: (v: DateRangeState) => void;
+  /** What the panel's Clear resets to. Defaults to Last 30 Days — pass the
+   *  page's own default when it opens on a different window. */
+  defaultValue?: DateRangeState;
 }) {
   const preset = value.preset
     ? buildPresets(startOfToday()).find((p) => p.key === value.preset)
@@ -183,6 +207,7 @@ export function DateRangePill({
       {({ close }) => (
         <DateRangePanel
           applied={value}
+          fallback={defaultValue}
           onApply={(v) => {
             onChange(v);
             close();
@@ -199,9 +224,11 @@ type MyMenu = { cal: 0 | 1; kind: "month" | "year" };
 
 function DateRangePanel({
   applied,
+  fallback,
   onApply,
 }: {
   applied: DateRangeState;
+  fallback?: DateRangeState;
   onApply: (v: DateRangeState) => void;
 }) {
   const today = startOfToday();
@@ -311,7 +338,7 @@ function DateRangePanel({
         <button
           className="drp-btn-clear"
           onClick={() => {
-            const v = defaultDateRange();
+            const v = fallback ?? defaultDateRange();
             setDraft(v);
             setViewMonth(startOfMonth(parseISO(v.start)!));
           }}

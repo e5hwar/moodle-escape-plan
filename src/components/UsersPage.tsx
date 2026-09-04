@@ -28,7 +28,7 @@ import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type Landing
 const LM_COLS: LandingCol[] = [
   { key: "email", label: "Email", width: 190 },
   { key: "phone", label: "Phone", width: 165 },
-  { key: "userType", label: "User Type", width: 96 },
+  { key: "userType", label: "User Type", width: 114 },
   { key: "company", label: "Company", width: 175 },
   { key: "role", label: "Role", width: 130 },
   { key: "subscription", label: "Subscription", width: 195, fixed: true },
@@ -111,17 +111,17 @@ type ColMeta = {
 const COLS: ColMeta[] = [
   { key: "email", label: "Email", className: "col-u-email", width: 190, render: (u) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: (u) => u.email.toLowerCase() },
   { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: (u) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: (u) => u.phone },
-  { key: "userType", label: "User Type", className: "col-u-type", width: 96, render: (u) => <TypePill type={u.userType} />, sortValue: (u) => u.userType },
-  { key: "company", label: "Company", className: "col-u-company", width: 175, render: (u) => (u.userType === "B2B" && u.companyName ? u.companyName : <span className="u-muted">—</span>), sortValue: (u) => (u.companyName ?? "").toLowerCase() },
+  { key: "userType", label: "User Type", className: "col-u-type", width: 114, render: (u) => <TypePill type={u.userType} />, sortValue: (u) => u.userType },
+  { key: "company", label: "Company", className: "col-u-company", width: 175, render: (u) => (u.userType === "B2B" && u.companyName ? u.companyName : null), sortValue: (u) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: (u) => u.role, sortValue: (u) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: (u) => <SubscriptionCell user={u} />, sortValue: (u) => SUB_ORDER[u.subscriptionStatus] },
-  { key: "language", label: "Language", className: "col-u-lang", width: 100, render: (_u, f) => f.language, sortValue: (_u, f) => f.language },
+  { key: "language", label: "Language", className: "col-u-lang", width: 114, render: (_u, f) => f.language, sortValue: (_u, f) => f.language },
   { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: (_u, f) => f.goal, sortValue: (_u, f) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
   { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: (_u, f) => f.zipCode, sortValue: (_u, f) => f.zipCode },
-  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 165, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 130, render: (u) => formatDate(u.lastAccess), sortValue: (u) => u.lastAccess },
-  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 150, render: (u) => (u.dashboardLastAccess ? formatDate(u.dashboardLastAccess) : <span className="u-muted">—</span>), sortValue: (u) => u.dashboardLastAccess ?? "" },
+  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 188, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
+  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 160, render: (u) => formatDate(u.lastAccess), sortValue: (u) => u.lastAccess },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 210, render: (u) => (u.dashboardLastAccess ? formatDate(u.dashboardLastAccess) : null), sortValue: (u) => u.dashboardLastAccess ?? "" },
   { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: (u) => formatDate(u.joinedOn), sortValue: (u) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
@@ -299,7 +299,7 @@ export function UsersPage({
       email: u.email,
       phone: u.phone,
       userType: u.userType,
-      company: u.userType === "B2B" && u.companyName ? u.companyName : "—",
+      company: u.userType === "B2B" && u.companyName ? u.companyName : "",
       role: u.role,
       subscription: u.subscriptionStatus,
     },
@@ -372,7 +372,6 @@ export function UsersPage({
               <div className="lm-stage">
               <LandingOverlay
                 caption="Users A–Z"
-                total={sorted.length}
                 columns={LM_COLS}
                 nameWidth={200}
                 rows={landingRows}

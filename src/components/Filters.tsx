@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
-import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { DropdownSearch } from "./SearchPanelParts";
 import {
   CREATED_BY_IN_HOUSE,
   CREATED_BY_B2B,
@@ -504,17 +505,12 @@ export function SectionedMultiSelect({
   return (
     <>
       {searchable && (
-        <div className="dropdown-search">
-          <span className="dropdown-search-icon">
-            <SearchIcon />
-          </span>
-          <input
-            autoFocus
-            placeholder={searchPlaceholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <DropdownSearch
+          autoFocus
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={setQuery}
+        />
       )}
       <div className="dropdown-list">
         {filteredSections.map((s, i) => (
@@ -714,17 +710,12 @@ export function CascadingMultiSelect({
             ) : (
               <>
               {openSection.searchPlaceholder && (
-                <div className="dropdown-search">
-                  <span className="dropdown-search-icon">
-                    <SearchIcon />
-                  </span>
-                  <input
-                    autoFocus
-                    placeholder={openSection.searchPlaceholder}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </div>
+                <DropdownSearch
+                  autoFocus
+                  placeholder={openSection.searchPlaceholder}
+                  value={query}
+                  onChange={setQuery}
+                />
               )}
               <div className="dropdown-list">
                 {groups.length === 0 ? (
@@ -870,8 +861,14 @@ export function ColumnsBody<C extends Record<string, boolean>>({
     if (!seq.includes(c.key)) inOrder.push(c);
   });
 
+  /* Active columns keep the TABLE's order — the list doubles as the reorder
+     handle, so it has to mirror what you see. Available columns have no order
+     to preserve, so they read alphabetically: it's a lookup list, and hunting
+     for a column name down an arbitrary sequence is the slow way to use it. */
   const active = inOrder.filter((c) => value[c.key]);
-  const available = inOrder.filter((c) => !value[c.key]);
+  const available = inOrder
+    .filter((c) => !value[c.key])
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   /* Drag-to-reorder, same HTML5 pattern the Spotlights queue uses. The source
      key lives in a ref as well as state: state drives the row styling, but the

@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
-import { ColumnsBody, sameSelection, dismissesSubmenu } from "./Filters";
-import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { ColumnsBody, sameSelection, CascadingMultiSelect } from "./Filters";
+import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { DropdownSearch } from "./SearchPanelParts";
 import { companies } from "../data/companies";
 
 /* ── Columns: every profile field is an optional column. Name is fixed. ── */
@@ -368,17 +369,12 @@ function SimpleMultiSelect({
   return (
     <>
       {searchable && (
-        <div className="dropdown-search">
-          <span className="dropdown-search-icon">
-            <SearchIcon />
-          </span>
-          <input
-            autoFocus
-            placeholder={searchPlaceholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <DropdownSearch
+          autoFocus
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={setQuery}
+        />
       )}
       <div className="dropdown-list">
         <div className="dropdown-section">
@@ -400,6 +396,11 @@ function SimpleMultiSelect({
   );
 }
 
+/* "More Filters" is a MENU, not a filter panel of its own: each row opens the
+   respective filter's dropdown, and Apply lives in THAT submenu — Figma 772:1108
+   shows the root list (28:16530) with no footer, while the submenu states
+   (774:1243 / 774:1298) each carry the Apply CTA. Shared with the Tasks and
+   Certifications rows so all three behave identically. */
 function MoreFiltersBody({
   roles,
   goals,
@@ -411,105 +412,22 @@ function MoreFiltersBody({
   industries: string[];
   onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
-  const [draftRoles, setDraftRoles] = useState(roles);
-  const [draftGoals, setDraftGoals] = useState(goals);
-  const [draftIndustries, setDraftIndustries] = useState(industries);
-  const [hovered, setHovered] = useState<"role" | "goal" | "industry" | null>(null);
-  const [hoveredTop, setHoveredTop] = useState(0);
-
-  useEffect(() => setDraftRoles(roles), [roles]);
-  useEffect(() => setDraftGoals(goals), [goals]);
-  useEffect(() => setDraftIndustries(industries), [industries]);
-
-  function toggleIn(list: string[], setList: (v: string[]) => void, item: string) {
-    setList(list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
-  }
+  /* Memoised: CascadingMultiSelect re-seeds its draft whenever `value` changes
+     identity, so a fresh object each render would wipe an in-progress tick. */
+  const value = useMemo(() => ({ roles, goals, industries }), [roles, goals, industries]);
 
   return (
-    <div
-      className="cascading-menu"
-      onClick={(e) => dismissesSubmenu(e) && setHovered(null)}
-    >
-      <div className="cascading-root">
-        <div className="dropdown-list">
-          <SubmenuRow label="Role" count={draftRoles.length} active={hovered === "role"} onHover={(top) => { setHovered("role"); setHoveredTop(top); }} />
-          <SubmenuRow label="Goal" count={draftGoals.length} active={hovered === "goal"} onHover={(top) => { setHovered("goal"); setHoveredTop(top); }} />
-          <SubmenuRow label="Industry Preference" count={draftIndustries.length} active={hovered === "industry"} onHover={(top) => { setHovered("industry"); setHoveredTop(top); }} />
-        </div>
-        <div className="dropdown-footer">
-          <button
-            className="btn-apply"
-            disabled={
-              sameSelection(draftRoles, roles) &&
-              sameSelection(draftGoals, goals) &&
-              sameSelection(draftIndustries, industries)
-            }
-            onClick={() => onApply({ roles: draftRoles, goals: draftGoals, industries: draftIndustries })}
-          >
-            Apply
-          </button>
-        </div>
-      </div>
-
-      {hovered && (
-        <div className="cascading-sub" style={{ top: hoveredTop }}>
-          <div className="dropdown-list">
-            {hovered === "role" && (
-              <div className="dropdown-section">
-                {ROLES.map((r) => (
-                  <CheckRow key={r} label={r} checked={draftRoles.includes(r)} onChange={() => toggleIn(draftRoles, setDraftRoles, r)} />
-                ))}
-              </div>
-            )}
-            {hovered === "goal" && (
-              <div className="dropdown-section">
-                {GOALS.map((g) => (
-                  <CheckRow key={g} label={g} checked={draftGoals.includes(g)} onChange={() => toggleIn(draftGoals, setDraftGoals, g)} />
-                ))}
-              </div>
-            )}
-            {hovered === "industry" && (
-              <div className="dropdown-section">
-                {INDUSTRIES.map((i) => (
-                  <CheckRow key={i} label={i} checked={draftIndustries.includes(i)} onChange={() => toggleIn(draftIndustries, setDraftIndustries, i)} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SubmenuRow({
-  label,
-  count,
-  active,
-  onHover,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onHover: (top: number) => void;
-}) {
-  function handle(e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>) {
-    const btn = e.currentTarget;
-    const parent = btn.offsetParent as HTMLElement | null;
-    let top = btn.offsetTop;
-    let el: HTMLElement | null = btn.parentElement;
-    while (el && el !== parent) {
-      top += el.offsetTop;
-      el = el.parentElement;
-    }
-    onHover(top);
-  }
-  return (
-    <button className={`dropdown-submenu-row ${active ? "active" : ""}`} onMouseEnter={handle} onClick={handle} onFocus={handle}>
-      <span className="dropdown-submenu-label">{label}</span>
-      {count > 0 && <span className="dropdown-submenu-count">{count}</span>}
-      <span className="dropdown-submenu-chevron"><ChevronRightIcon /></span>
-    </button>
+    <CascadingMultiSelect
+      sections={[
+        { key: "roles", label: "Role", groups: [{ items: [...ROLES] }] },
+        { key: "goals", label: "Goal", groups: [{ items: [...GOALS] }] },
+        { key: "industries", label: "Industry Preference", groups: [{ items: [...INDUSTRIES] }] },
+      ]}
+      value={value}
+      onApply={(v) =>
+        onApply({ roles: v.roles, goals: v.goals, industries: v.industries })
+      }
+    />
   );
 }
 

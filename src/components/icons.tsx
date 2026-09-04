@@ -289,7 +289,11 @@ export const ArrowDownIcon = () => (
 /* Reorder arrows for the review-run cards (Figma 714:1496 down / 714:1502 up).
    Transcribed from the exported assets — a 16px box, 1.33333 stroke, SQUARE
    caps. Deliberately NOT the ArrowUp/ArrowDownIcon pair above, which is a
-   rounded 12px keycap glyph on a 24px viewBox. */
+   rounded 12px keycap glyph on a 24px viewBox.
+
+   The Companies table's Seat Changes cell (Figma 927:950) exports this exact
+   same pair — identical path, box, stroke and caps — so it reuses these rather
+   than adding a second copy under a seats-flavoured name. */
 export const RunMoveUpIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M11.6667 7L8 3.33333L4.33333 7M8 4.16667V12.8333" />
@@ -302,20 +306,14 @@ export const RunMoveDownIcon = () => (
   </svg>
 );
 
-/* The "ALL 30 ↓" affordance on the minimal-state header row (Figma 760:4649).
-   Same Icon Library glyph as RunMoveDownIcon, exported at 14px — the geometry
-   and the 1.33333 stroke scale by 14/16 (→ 1.16667), square caps kept. */
-export const CaptionAllIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
-    <path d="M10.2083 7.93333L7 11.1417L3.79167 7.93333M7 10.4125V2.82917" />
-  </svg>
-);
-
-/* Double chevron for the landing's "keep scrolling" bar (Figma 716:1656) —
-   transcribed from the exported asset: 16px box, 1.33333 stroke, square caps. */
-export const KeepScrollingIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
-    <path d="M11 4.66667L8 7.66667L5 4.66667M11 9L8 12L5 9" />
+/* Down arrow closing the landing's "FULL TABLE" bar (Figma 716:1648 → the
+   916:947 Icon Library instance) — transcribed from the exported asset: same
+   glyph as RunMoveDownIcon at 12px, so the 1.33333 stroke scales by 12/16 to 1.
+   It replaced the 16px double chevron the bar used to carry. Takes
+   currentColor, so it follows the button into accent on hover. */
+export const FullTableIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M8.75 6.8L6 9.55L3.25 6.8M6 8.925V2.425" />
   </svg>
 );
 
@@ -577,6 +575,15 @@ export const TreeCaretIcon = () => (
 
 /* Tree add row plus (861:2264) — the thin Icon Library plus at the tree's
    16px icon size (1.333 stroke, square caps). */
+/* Icon Library close (941:1078) — the 16px / 1.333 / square-cap ×, the remove
+   affordance beside a removable row. Pairs with TreeAddIcon on the same grid;
+   distinct from `SmallXIcon`, which is a 13px rounded-cap glyph. */
+export const RemoveRowIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.3 4.7L8 8M8 8L4.7 11.3M8 8L11.3 11.3M8 8L4.7 4.7" />
+  </svg>
+);
+
 export const TreeAddIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M8 3.33333V12.6667M12.6667 8H3.33333" />
@@ -873,6 +880,21 @@ export const RowKebabIcon = () => (
     <rect x="2" y="7" width="2" height="2" />
     <rect x="7" y="7" width="2" height="2" />
     <rect x="12" y="7" width="2" height="2" />
+  </svg>
+);
+
+/* The caret on a dropdown field (101:278, the "Icon Set" instance inside
+   Figma 101:272 "Dropdown - No Selection") — a SOLID 14px wedge, not one of the
+   stroked chevrons. Path is the Figma export verbatim; the fill is
+   currentColor so the field can tint it. */
+export const DropdownCaretIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M7.58324 9.79585L12.25 5.1291L11.0835 3.96261L7 8.04613L2.91648 3.96261L1.75 5.1291L6.41676 9.79585C6.57146 9.95051 6.78125 10.0374 7 10.0374C7.21875 10.0374 7.42854 9.95051 7.58324 9.79585Z"
+      fill="currentColor"
+    />
   </svg>
 );
 
