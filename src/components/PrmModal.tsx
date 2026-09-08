@@ -47,7 +47,7 @@ export function PrmModal({
   /** Destructive confirm — the CTA takes the red variant of the button's own
    *  gradient recipe (Figma 495:2247). */
   danger?: boolean;
-  /** A form-carrying modal runs wider than the 560px confirm shell. */
+  /** A form-carrying modal runs wider than the 640px confirm shell. */
   wide?: boolean;
   /** A table picker — Figma 682:2321's fixed 884px shell, sized to its content
    *  rather than pinned to `wide`'s viewport-height card. */

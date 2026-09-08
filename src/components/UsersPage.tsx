@@ -8,6 +8,7 @@ import {
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
+import { nameChangeRequests } from "../data/nameChangeRequests";
 import { IdModal } from "./IdModal";
 import { PrmModal } from "./PrmModal";
 import {
@@ -49,7 +50,7 @@ const DEFAULT_COLUMNS: UserColumnState = {
   attribution: false,
   zipCode: false,
   industryPreference: false,
-  lastAccess: false,
+  lastAccess: true,
   dashboardLastAccess: false,
   joinedOn: false,
 };
@@ -143,6 +144,7 @@ export function UsersPage({
   onManageCompletions,
   onOpenOfferCodes,
   onOpenScholarships,
+  onOpenNameChanges,
   onOpenMergeAccounts,
   onOpenTransferSubscription,
   initialCompanyFilter,
@@ -151,6 +153,7 @@ export function UsersPage({
   onManageCompletions: (userId: string) => void;
   onOpenOfferCodes?: () => void;
   onOpenScholarships?: () => void;
+  onOpenNameChanges?: () => void;
   onOpenMergeAccounts?: () => void;
   onOpenTransferSubscription?: () => void;
   initialCompanyFilter?: string;
@@ -172,7 +175,7 @@ export function UsersPage({
   // Search bar: committedQuery only changes on Enter. The company filter is shared
   // with the Filters row (filters.companies) and applies immediately.
   const [committedQuery, setCommittedQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "lastAccess", dir: "desc" });
   const [page, setPage] = useState(1);
   const [menu, setMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
   // Page-level 3-dot menu (Figma 677:1956), anchored to the header kebab.
@@ -330,8 +333,17 @@ export function UsersPage({
               </div>
             </div>
             {/* Offer Codes and Scholarships used to live in the sidebar's Users
-                group; they are now reached from here, with O / S shortcuts. */}
+                group; they are now reached from here, with O / S shortcuts.
+                Name Changes moved here off the Exam Reviews header — the
+                requests are about a user's profile, not about an exam — and
+                carries the open-request count rather than a shortcut. */}
             <div className="tasks-header-actions">
+              <button className="cta-quiet" onClick={() => onOpenNameChanges?.()}>
+                Name Changes
+                <span className="co-status-pill co-status-pill--accent">
+                  {nameChangeRequests.length}
+                </span>
+              </button>
               <button className="cta-quiet" onClick={() => onOpenOfferCodes?.()}>
                 Offer Codes
                 <span className="cta-kbd">O</span>
@@ -365,13 +377,13 @@ export function UsersPage({
                 />
               </div>
 
-              <LandingFilterRow pills={suggested}>
+              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <UsersFilters filters={filters} setFilters={setFilters} />
                 </LandingFilterRow>
 
               <div className="lm-stage">
               <LandingOverlay
-                caption="Users A–Z"
+                caption="Recently Active Users"
                 columns={LM_COLS}
                 nameWidth={200}
                 rows={landingRows}

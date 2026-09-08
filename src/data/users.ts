@@ -108,3 +108,12 @@ export const users: User[] = baseUsers.map((u) => {
     dashboardLastAccess: isDashboardUser ? isoDaysAgo(k % 91) : undefined,
   };
 });
+
+/* The one place a user's name is changed at runtime. The mock has no server:
+   every page seeds its own state from this roster at mount, so an admin renaming
+   someone must write back HERE or the change is invisible the moment they
+   navigate away. Mutates in place because `users` is what every page reads. */
+export function renameUser(userId: string, name: string): void {
+  const u = users.find((x) => x.id === userId);
+  if (u) u.name = name;
+}

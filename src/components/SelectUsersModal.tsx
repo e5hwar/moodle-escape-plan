@@ -172,7 +172,7 @@ export function SelectUsersModal({
             </span>
             <input
               className="search-input stm-search-input"
-              placeholder="Search Users"
+              placeholder="Search Users..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);

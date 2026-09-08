@@ -6,11 +6,13 @@ import {
   getCanceledOn,
   getTrialEndDate,
   getDashboardLastAccess,
+  getOutstandingBalance,
   getDashboardLastAccessDays,
   getCompanyPrice,
   getCompanyPriceValue,
   getCancelEffectiveDate,
   getStatusTip,
+  getSeatEvents,
   getAssignedCsm,
   getAssignedSalesRep,
   getCompanyPhone,
@@ -20,6 +22,7 @@ import {
   COMPANY_OPTIONAL_COLUMNS,
   type CompanyColumn,
   getStripeCustomerId,
+  stripePaymentLink,
   CURRENCY_SYMBOL,
   CANCELLATION_REASONS,
   type Company,
@@ -28,9 +31,11 @@ import {
   type SignUpChannel,
 } from "../data/companies";
 import {
-  CalendarIcon, SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, ChevronLeftIcon, ChevronRightIcon,
+  CalendarIcon, SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, RowDeleteIcon, CopyIcon, ChevronLeftIcon, ChevronRightIcon,
   MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
-  MenuProgressIcon, RunMoveUpIcon, RunMoveDownIcon,
+  RunMoveUpIcon, RunMoveDownIcon,
+  AlertCircleFilledIcon,
+  ArrowUpRightIcon,
 } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
@@ -44,21 +49,25 @@ import { useColumnOrder, orderedColumns } from "./Filters";
 import { CompaniesSearch } from "./CompaniesSearch";
 import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's DEFAULT visible columns (key,
    label, width) so the p=1 hand-off to the real table lines up. Edit Columns
    changes are a table-state concern; the landing always shows the default set,
-   which is why this list is static rather than derived from `visibleCols`. */
+   which is why this list is static rather than derived from `visibleCols`.
+   Last Access is the `fixed` column — the one the minimal (landing) table
+   shows beside Name; Tier and the rest grow in as the list becomes the table. */
 const LM_COLS: LandingCol[] = [
   { key: "status", label: "Status", width: 232 },
   { key: "accountHolder", label: "Account Holder", width: 195 },
-  { key: "tier", label: "Tier", width: 130, fixed: true },
+  { key: "tier", label: "Tier", width: 130 },
   { key: "seats", label: "Seats", width: 86 },
-  { key: "lastAccess", label: "Last Access", width: 150 },
+  { key: "seatChanges", label: "Seat Changes", width: 160 },
+  { key: "lastAccess", label: "Last Access", width: 150, fixed: true },
 ];
 import { PrmModal } from "./PrmModal";
-import { RadioCard } from "./NewCompanyWizard";
+import { CopiedToast } from "./CopiedToast";
+import { MultiSelect, RadioCard } from "./NewCompanyWizard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
 
@@ -78,9 +87,35 @@ const TIER_ORDER: Record<Tier, number> = {
    every tier rather than ahead of Essentials. */
 const tierRank = (c: Company) => (c.tier ? TIER_ORDER[c.tier] : TIERS.length);
 
-/* Seat Changes sorts on the signed move, so the accounts that shed seats sit at
-   one end, the ones that grew at the other, and flat accounts in between. */
-const seatChangeOf = (c: Company) => getCompanyBilling(c).seatChange;
+/* The company's net seat movement WITHIN the selected Date Range — the Seat
+   Changes column's whole point. Sums only the movements that fall in the
+   window, so a narrower range reports a smaller move and a window the account
+   didn't move in reports nothing at all. */
+/** Whether a company has a seat count at all. Only a billed subscription does
+ *  — Free Trial, Trial Expired, Free Access and Free Access Ended carry no
+ *  seats and no seat movements. */
+function hasSeats(billing: CompanyBilling): boolean {
+  return isBilledStatus(billing.status);
+}
+
+/** Sort value for Seats: -1 for companies with no seat count, so they land
+ *  below a genuine zero-seat subscription instead of tying with it. */
+function seatsValue(c: Company): number {
+  return hasSeats(getCompanyBilling(c)) ? c.seats : -1;
+}
+
+/** Sort value for Seat Changes, on the same rule. Seat movements can be
+ *  negative, so seatless companies sort below the most negative real change. */
+function seatChangeValue(c: Company, range: DateRangeState): number {
+  return hasSeats(getCompanyBilling(c)) ? seatChangeIn(c, range) : -Infinity;
+}
+
+function seatChangeIn(c: Company, range: DateRangeState): number {
+  return getSeatEvents(c).reduce(
+    (n, e) => (dateRangeIncludes(range, e.date) ? n + e.delta : n),
+    0,
+  );
+}
 
 /* The two fixed columns bracket every optional one, so their widths are named
    rather than repeated between the colgroup and the natural-width sum. */
@@ -98,6 +133,10 @@ const ACTIONS_WIDTH = 40;
    and the table can never disagree about what exists; this map adds only what
    the table itself needs. On-screen order is the `order` state in the component
    — a column switched on joins at the end, and dragging in the menu moves it. */
+/** Page state a cell may need beyond the company itself — currently just the
+ *  Date Range, which the Seat Changes column reports within. */
+type ColContext = { dateRange: DateRangeState };
+
 type CompanyCol = {
   key: CompanyColumn;
   label: string;
@@ -107,9 +146,13 @@ type CompanyCol = {
   width: number;
   sortKey: SortKey;
   sortable?: boolean;
+  /** Header tooltip. */
   tip?: string;
+  /** Per-ROW tooltip on the body cell, for cells that abbreviate their value
+   *  (the multi-value Industry / Partnership cells list the full set). */
+  cellTip?: (c: Company) => string | undefined;
   dateScoped?: boolean;
-  render: (c: Company, b: CompanyBilling) => React.ReactNode;
+  render: (c: Company, b: CompanyBilling, ctx: ColContext) => React.ReactNode;
 };
 
 const COL_DRAW: Record<CompanyColumn, Omit<CompanyCol, "key" | "label">> = {
@@ -118,7 +161,14 @@ const COL_DRAW: Record<CompanyColumn, Omit<CompanyCol, "key" | "label">> = {
     render: (c) => <AccountHolderCell company={c} />,
   },
   tier: { className: "col-tier", width: 130, sortKey: "tier", render: (c) => <TierPill tier={c.tier} /> },
-  seats: { className: "col-seats", width: 86, sortKey: "seats", render: (c) => c.seats.toLocaleString() },
+  /* Seats are a property of a SUBSCRIPTION: a Free Trial (running or expired)
+     or a Free Access grant (running or ended) has no seat count and no seat
+     movements, so both columns read an em dash for them — the same billed /
+     not-billed split the Tier, Billing Cycle and Payment Method cells use. */
+  seats: {
+    className: "col-seats", width: 86, sortKey: "seats",
+    render: (c, b) => (hasSeats(b) ? c.seats.toLocaleString() : "—"),
+  },
   signUp: {
     className: "col-signup", width: 160, sortKey: "signUp",
     render: (_c, b) => <SignUpPill signUp={b.signUp} />,
@@ -129,20 +179,31 @@ const COL_DRAW: Record<CompanyColumn, Omit<CompanyCol, "key" | "label">> = {
     render: (_c, b) => paymentLabel(b),
   },
   seatChanges: {
-    className: "col-seat-changes", width: 160, sortKey: "seatChanges",
-    render: (_c, b) => <SeatChangesCell change={b.seatChange} />,
+    className: "col-seat-changes", width: 160, sortKey: "seatChanges", dateScoped: true,
+    render: (c, b, ctx) => (hasSeats(b) ? <SeatChangesCell change={seatChangeIn(c, ctx.dateRange)} /> : "—"),
   },
-  industry: { className: "col-industry", width: 145, sortKey: "industry", render: (c) => c.industry || "—" },
-  partnership: { className: "col-partnership", width: 155, sortKey: "partnership", render: (c) => c.partnership || "—" },
-  createdOn: {
-    className: "col-created", width: 144, sortKey: "createdOn", dateScoped: true,
-    render: (_c, b) => b.createdOn,
+  /* Both are multi-value. The cell shows the first value with a "+N" badge for
+     the rest and lists the whole set on hover, the same atom the Tasks table's
+     "Used in" column uses. A company with none on file reads an em dash. */
+  industry: {
+    className: "col-industry", width: 145, sortKey: "industry",
+    cellTip: (c) => tagTip(c.industry),
+    render: (c) => <TagCell values={c.industry} />,
   },
+  partnership: {
+    className: "col-partnership", width: 155, sortKey: "partnership",
+    cellTip: (c) => tagTip(c.partnership),
+    render: (c) => <TagCell values={c.partnership} />,
+  },
+  // No calendar glyph any more: Created On is a plain date the range no longer
+  // narrows — Seat Changes is the one date-scoped column now.
+  createdOn: { className: "col-created", width: 144, sortKey: "createdOn", render: (_c, b) => b.createdOn },
   canceledOn: { className: "col-canceled", width: 136, sortKey: "canceledOn", render: (_c, b) => getCanceledOn(b) },
   trialEndDate: { className: "col-trial-end", width: 146, sortKey: "trialEndDate", render: (_c, b) => getTrialEndDate(b) },
   price: { className: "col-price", width: 110, sortKey: "price", render: (c) => getCompanyPrice(c) },
-  salesRep: { className: "col-sales-rep", width: 175, sortKey: "salesRep", render: (c) => getAssignedSalesRep(c) },
-  csm: { className: "col-csm", width: 165, sortKey: "csm", render: (c) => getAssignedCsm(c) },
+  // Assigning an owner is optional, so an unassigned account reads an em dash.
+  salesRep: { className: "col-sales-rep", width: 175, sortKey: "salesRep", render: (c) => getAssignedSalesRep(c) || "—" },
+  csm: { className: "col-csm", width: 165, sortKey: "csm", render: (c) => getAssignedCsm(c) || "—" },
   dashboardLastAccess: {
     className: "col-dashboard-access", width: 150, sortKey: "dashboardLastAccess",
     tip: "Last time a Manager/Admin viewed the Dashboard",
@@ -152,7 +213,7 @@ const COL_DRAW: Record<CompanyColumn, Omit<CompanyCol, "key" | "label">> = {
 
 const COLS: CompanyCol[] = COMPANY_OPTIONAL_COLUMNS.map((d) => ({ ...d, ...COL_DRAW[d.key] }));
 
-function compare(a: Company, b: Company, key: SortKey): number {
+function compare(a: Company, b: Company, key: SortKey, range: DateRangeState): number {
   switch (key) {
     case "name": return a.name.localeCompare(b.name);
     case "email": return a.email.localeCompare(b.email);
@@ -161,17 +222,19 @@ function compare(a: Company, b: Company, key: SortKey): number {
     case "signUp": return getCompanyBilling(a).signUp.localeCompare(getCompanyBilling(b).signUp);
     case "billingCycle": return getCompanyBilling(a).billingCycle.localeCompare(getCompanyBilling(b).billingCycle);
     case "payment": return paymentLabel(getCompanyBilling(a)).localeCompare(paymentLabel(getCompanyBilling(b)));
-    case "seats": return a.seats - b.seats;
-    case "industry": return a.industry.localeCompare(b.industry);
-    case "partnership": return a.partnership.localeCompare(b.partnership);
-    case "seatChanges": return seatChangeOf(a) - seatChangeOf(b);
+    case "seats": return seatsValue(a) - seatsValue(b);
+    // Multi-value columns sort on their FIRST value, the one the cell shows;
+    // a company with none sorts to the bottom rather than ahead of "Appliance".
+    case "industry": return tagSortKey(a.industry).localeCompare(tagSortKey(b.industry));
+    case "partnership": return tagSortKey(a.partnership).localeCompare(tagSortKey(b.partnership));
+    case "seatChanges": return seatChangeValue(a, range) - seatChangeValue(b, range);
     case "createdOn": return (Date.parse(getCompanyBilling(a).createdOn) || 0) - (Date.parse(getCompanyBilling(b).createdOn) || 0);
     case "canceledOn": return (Date.parse(getCanceledOn(getCompanyBilling(a))) || 0) - (Date.parse(getCanceledOn(getCompanyBilling(b))) || 0);
     case "trialEndDate": return (Date.parse(getTrialEndDate(getCompanyBilling(a))) || 0) - (Date.parse(getTrialEndDate(getCompanyBilling(b))) || 0);
     case "dashboardLastAccess": return (getDashboardLastAccessDays(a) ?? Infinity) - (getDashboardLastAccessDays(b) ?? Infinity);
     case "price": return (getCompanyPriceValue(a) ?? -1) - (getCompanyPriceValue(b) ?? -1);
-    case "salesRep": return getAssignedSalesRep(a).localeCompare(getAssignedSalesRep(b));
-    case "csm": return getAssignedCsm(a).localeCompare(getAssignedCsm(b));
+    case "salesRep": return blankLast(getAssignedSalesRep(a)).localeCompare(blankLast(getAssignedSalesRep(b)));
+    case "csm": return blankLast(getAssignedCsm(a)).localeCompare(blankLast(getAssignedCsm(b)));
   }
 }
 
@@ -183,23 +246,33 @@ type Props = {
   onEditCompany: (company: Company) => void;
   onManageSubscription: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
+  /** Removes the company for good — only reachable from a Pending Payment
+   *  Setup row, which has never billed and so has nothing to unwind. */
+  onDeleteCompany: (company: Company) => void;
   onViewEmployees: (company: Company) => void;
-  /** Opens Manage Completions with this company's cohort pre-selected. */
-  onManageProgress: (company: Company) => void;
+  /** Jump to Product Config → B2B Management, where the lists these forms
+   *  pick from (cancellation reasons, industries, partnerships) are edited. */
+  onNavigateToProductConfig?: () => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onViewEmployees, onManageProgress }: Props) {
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig }: Props) {
   useCreateShortcut(onNewCompany);
   const [query, setQuery] = useState(initialQuery);
+  /* Opens UNFILTERED — every company is listed until the user narrows it. The
+     table used to default to Status: Active, which quietly hid trials, grants
+     and cancelled accounts from the first screen. This matches what Clear
+     Filters resets to, so the opening view and the cleared view agree. */
   const [filters, setFilters] = useState<CompanyFilterState>({
     tiers: [],
     industries: [],
     partnerships: [],
-    statuses: ["Active"],
+    statuses: [],
     ...EMPTY_MORE_FILTERS,
   });
-  // Companies are filtered on Created On; the range always has a value
-  // (default Last 30 Days), so this is a standing filter, not an optional one.
+  /* The Date Range does NOT narrow the row set — every company is always
+     listed. It scopes the Seat Changes column: that cell sums only the seat
+     movements inside this window. The range always has a value (default Last
+     30 Days), so the column always has a window to report on. */
   const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
   const [columns, setColumns] = useState<CompanyColumnState>(COMPANY_DEFAULT_COLUMNS);
   /* Display order of the optional columns, independent of which are switched
@@ -230,6 +303,10 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   const [billingModal, setBillingModal] = useState<Company | null>(null);
   const [invoicesModal, setInvoicesModal] = useState<Company | null>(null);
   const [cancelModal, setCancelModal] = useState<Company | null>(null);
+  const [deleteModal, setDeleteModal] = useState<Company | null>(null);
+  /* Bumped on every copy so a second click restarts the toast rather than
+     being swallowed while the first one is still up. */
+  const [copiedAt, setCopiedAt] = useState(0);
 
   useEffect(() => setQuery(initialQuery), [initialQuery]);
 
@@ -239,13 +316,14 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       if (q && !(
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
-        c.industry.toLowerCase().includes(q) ||
-        c.partnership.toLowerCase().includes(q) ||
+        c.industry.some((v) => v.toLowerCase().includes(q)) ||
+        c.partnership.some((v) => v.toLowerCase().includes(q)) ||
         (c.tier?.toLowerCase().includes(q) ?? false)
       )) return false;
       if (filters.tiers.length && !(c.tier && filters.tiers.includes(c.tier))) return false;
-      if (filters.industries.length && !filters.industries.includes(c.industry)) return false;
-      if (filters.partnerships.length && !filters.partnerships.includes(c.partnership)) return false;
+      // Multi-value: a company matches when ANY of its values is picked.
+      if (filters.industries.length && !c.industry.some((v) => filters.industries.includes(v))) return false;
+      if (filters.partnerships.length && !c.partnership.some((v) => filters.partnerships.includes(v))) return false;
       if (filters.statuses.length && !filters.statuses.includes(getCompanyBilling(c).status)) return false;
       if (filters.signUps.length && !filters.signUps.includes(getCompanyBilling(c).signUp)) return false;
       if (filters.billingCycles.length) {
@@ -265,15 +343,19 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c))) {
         return false;
       }
-      if (!dateRangeIncludes(dateRange, getCompanyBilling(c).createdOn)) return false;
       return true;
     });
-  }, [companies, query, filters, dateRange]);
+    // NOTE: Date Range is deliberately absent here. It scopes the Seat Changes
+    // COLUMN, not the row set — every company stays listed whatever window is
+    // selected, and only that column's figure narrows with it.
+  }, [companies, query, filters]);
 
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
+    const arr = [...filtered].sort((a, b) => compare(a, b, sort.key, dateRange));
     return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort]);
+  }, [filtered, sort, dateRange]);
+
+  const colContext = useMemo<ColContext>(() => ({ dateRange }), [dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
@@ -287,30 +369,32 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   // (or any search / pill / row interaction) morphs it into the table view.
   const morph = useLandingMorph(Boolean(initialQuery));
 
-  const suggested = useMemo(() => {
-    const pills: LandingPill[] = [];
-    topValues(companies, (c) => c.tier, 2).forEach((tier) =>
-      pills.push({
-        key: `tier-${tier}`,
-        label: tier,
+  /* Two fixed quick filters (Figma 956:1009) — the questions this page is
+     usually opened to answer, rather than a sample of whichever tiers and
+     industries happen to be most common. Each SETS the whole filter state it
+     stands for instead of adding to what is already applied, so the result is
+     exactly the named slice however the page was left. */
+  const suggested = useMemo<LandingPill[]>(
+    () => [
+      {
+        key: "past-due",
+        label: "Past Due Invoices",
         onPick: () => {
-          setFilters((prev) => ({ ...prev, tiers: Array.from(new Set([...prev.tiers, tier as Tier])) }));
+          setFilters((prev) => ({ ...prev, statuses: ["Past Due"], tiers: [] }));
           morph.showTable();
         },
-      }),
-    );
-    topValues(companies, (c) => c.industry, 2).forEach((ind) =>
-      pills.push({
-        key: `ind-${ind}`,
-        label: ind,
+      },
+      {
+        key: "professional",
+        label: "Professional Tier",
         onPick: () => {
-          setFilters((prev) => ({ ...prev, industries: Array.from(new Set([...prev.industries, ind])) }));
+          setFilters((prev) => ({ ...prev, statuses: ["Active"], tiers: ["Professional"] }));
           morph.showTable();
         },
-      }),
-    );
-    return pills;
-  }, [companies, morph.showTable]);
+      },
+    ],
+    [morph.showTable],
+  );
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => {
     const billing = getCompanyBilling(c);
@@ -322,8 +406,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       cells: {
         status: <span className={`co-status-pill co-status-pill--${status.tone}`}>{status.label}</span>,
         accountHolder: c.email,
-        tier: c.tier ?? "",
-        seats: c.seats.toLocaleString(),
+        tier: c.tier ?? "—",
+        seats: hasSeats(billing) ? c.seats.toLocaleString() : "—",
+        seatChanges: hasSeats(billing) ? (
+          <SeatChangesCell change={seatChangeIn(c, dateRange)} />
+        ) : (
+          "—"
+        ),
         lastAccess: getDashboardLastAccess(c),
       },
     };
@@ -381,7 +470,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                 />
               </div>
 
-              <LandingFilterRow pills={suggested}>
+              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <CompanyFilters
                     filters={filters}
                     setFilters={setFilters}
@@ -392,7 +481,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
               <div className="lm-stage">
               <LandingOverlay
-                caption="Companies A–Z"
+                caption="Recently Active Companies"
                 columns={LM_COLS}
                 nameLabel="Company"
                 nameWidth={220}
@@ -443,6 +532,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                         key={c.id}
                         company={c}
                         cols={visibleCols}
+                        ctx={colContext}
                         onEdit={() => onEditCompany(c)}
                         onManageSubscription={() => onManageSubscription(c)}
                         onOpenMenu={(rect) => setMenu({ company: c, rect })}
@@ -455,7 +545,6 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
               </div>
 
               <div className="pagination">
-                <BackToSearch onClick={morph.showLanding} />
                 <span>
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
@@ -482,8 +571,16 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           onAddBillingEmails={() => setBillingModal(menu.company)}
           onCancelSubscription={() => setCancelModal(menu.company)}
           onViewEmployees={() => onViewEmployees(menu.company)}
-          onManageProgress={() => onManageProgress(menu.company)}
           onViewInvoices={() => setInvoicesModal(menu.company)}
+          onCopyPaymentLink={() => {
+            navigator.clipboard?.writeText(
+              stripePaymentLink(menu.company.email, menu.company.name),
+            ).catch(() => {});
+            // Raised on the click, not on the promise: a browser that refuses
+            // the write would otherwise give no sign the item did anything.
+            setCopiedAt(Date.now());
+          }}
+          onDeleteCompany={() => setDeleteModal(menu.company)}
         />
       )}
 
@@ -512,20 +609,55 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         />
       )}
 
+      {copiedAt > 0 && (
+        <CopiedToast key={copiedAt} onDone={() => setCopiedAt(0)} />
+      )}
+
+      {deleteModal && (
+        <PrmModal
+          title="Delete Company?"
+          confirmLabel="Delete Company"
+          cancelLabel="Cancel"
+          danger
+          onCancel={() => setDeleteModal(null)}
+          onConfirm={() => {
+            onDeleteCompany(deleteModal);
+            setDeleteModal(null);
+          }}
+        >
+          {/* Both paragraphs are CONTENT, so both are white (Figma 667:884 —
+              only the optional description under the title is grey). The first
+              used to be passed as that description, which greyed out the very
+              sentence explaining why deleting is safe here. */}
+          <div className="prm-stack">
+            <p className="prm-content">
+              <strong>{deleteModal.name}</strong> has not added a payment method, so nothing
+              has been billed. Deleting removes the company and its account holder invitation
+              for good.
+            </p>
+            <p className="prm-content">
+              This cannot be undone. The payment link already shared with them stops working.
+            </p>
+          </div>
+        </PrmModal>
+      )}
+
       {cancelModal && (
         <CancelSubscriptionModal
           company={cancelModal}
           onClose={() => setCancelModal(null)}
+          onNavigateToProductConfig={onNavigateToProductConfig}
           onConfirm={(reason) => {
             onUpdateCompany({
               ...cancelModal,
               status: "Canceled",
               cancelsOn: getCancelEffectiveDate(getCompanyBilling(cancelModal)),
-              cancellationReason: reason,
+              cancellationReason: reason || undefined,
             });
             setCancelModal(null);
             window.alert(
-              `${cancelModal.name}'s subscription is scheduled to cancel at the end of the current billing cycle.\n\nReason: ${reason}`,
+              `${cancelModal.name}'s subscription is scheduled to cancel at the end of the current billing cycle.` +
+                (reason ? `\n\nReason: ${reason}` : ""),
             );
           }}
         />
@@ -577,6 +709,38 @@ function SortableHeader({
       </span>
     </th>
   );
+}
+
+/* Multi-value cell (Industry, Partnership) — Figma reuses the Tasks table's
+ * "Used in" atom: the first value in full, then a muted "+N" standing for the
+ * rest, with the complete list on the cell's hover tooltip. A company with
+ * nothing on file gets the same em dash every other empty cell uses. */
+function TagCell({ values }: { values: string[] }) {
+  if (values.length === 0) return <>—</>;
+  return (
+    <>
+      {values[0]}
+      {values.length > 1 && <span className="used-extra">+{values.length - 1}</span>}
+    </>
+  );
+}
+
+/** The hover for a multi-value cell: every value, one per line, so the "+N"
+ *  badge is always resolvable. Nothing to add when there is 0 or 1 value. */
+function tagTip(values: string[]): string | undefined {
+  return values.length > 1 ? values.join("\n") : undefined;
+}
+
+/** Sort key for a multi-value column: the first value, which is the one the
+ *  cell actually shows. Empty sorts last in ascending order. */
+function tagSortKey(values: string[]): string {
+  return values[0] ?? "\uffff";
+}
+
+/** Same idea for the optional single-value columns (Assigned CSM / Sales Rep):
+ *  unassigned accounts collect at the end rather than at the top. */
+function blankLast(value: string): string {
+  return value || "\uffff";
 }
 
 function TierPill({ tier }: { tier?: Tier }) {
@@ -654,9 +818,12 @@ function billingCycleLabel(billing: CompanyBilling): string {
  * settles a final invoice). Deliberately NOT Past Due: that account is defined
  * by the payment that did NOT go through, so naming a method there would read
  * as if collection were working. Every other status is unbilled entirely. */
+/* Every BILLED company has a payment method on file — Past Due especially, as
+ * that status exists precisely because a charge against that method failed;
+ * showing it a dash hid the thing you open the row to check. Trials and Free
+ * Access grants collect nothing, so they keep the dash. */
 function paymentLabel(billing: CompanyBilling): string {
-  const collects = billing.status === "Active" || billing.status === "Canceled";
-  return collects ? billing.payment : "—";
+  return isBilledStatus(billing.status) ? billing.payment : "—";
 }
 
 function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
@@ -669,9 +836,11 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, cols, onEdit, onManageSubscription, onOpenMenu, menuOpen,
+  company, cols, ctx, onEdit, onManageSubscription, onOpenMenu, menuOpen,
 }: {
   company: Company;
+  /** Page state the date-scoped cells report within. */
+  ctx: ColContext;
   /** The visible optional columns, in the user's order. */
   cols: CompanyCol[];
   onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
@@ -679,13 +848,22 @@ function CompanyRow({
   menuOpen: boolean;
 }) {
   const billing = getCompanyBilling(company);
+  /* A company waiting on its payment method has no subscription to manage yet,
+     so its hover bar drops the card glyph and offers only Edit. The kebab stays
+     — it is the bar's last cell, aligned to sit exactly on the resting lone
+     kebab, and without it the menu would be unreachable while hovering. */
+  const pendingSetup = billing.status === "Pending Payment Setup";
   return (
     <tr className={menuOpen ? "menu-open" : ""}>
       <td className="col-name">{company.name}</td>
       <td className="col-status"><StatusPill billing={billing} /></td>
       {cols.map((c) => (
-        <td key={c.key} className={c.cellClassName ?? c.className}>
-          {c.render(company, billing)}
+        <td
+          key={c.key}
+          className={c.cellClassName ?? c.className}
+          data-tip={c.cellTip?.(company)}
+        >
+          {c.render(company, billing, ctx)}
         </td>
       ))}
       <td className="col-actions">
@@ -697,12 +875,14 @@ function CompanyRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit" title="Edit company" onClick={onEdit}>
+          <button className="row-action-btn" aria-label="Edit" title="Edit company details" onClick={onEdit}>
             <RowEditIcon />
           </button>
-          <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={onManageSubscription}>
-            <RowCardIcon />
-          </button>
+          {!pendingSetup && (
+            <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={onManageSubscription}>
+              <RowCardIcon />
+            </button>
+          )}
           <button
             className="row-action-btn"
             aria-label="More"
@@ -719,7 +899,7 @@ function CompanyRow({
 /* ─────────────── Row actions menu (fixed-positioned) ─────────────── */
 
 function CompanyActionsMenu({
-  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onManageProgress, onViewInvoices,
+  company, rect, onClose, onEditCompany, onManageSubscription, onEditAccountHolder, onAddBillingEmails, onCancelSubscription, onViewEmployees, onViewInvoices, onCopyPaymentLink, onDeleteCompany,
 }: {
   company: Company;
   rect: DOMRect;
@@ -730,13 +910,32 @@ function CompanyActionsMenu({
   onAddBillingEmails: () => void;
   onCancelSubscription: () => void;
   onViewEmployees: () => void;
-  onManageProgress: () => void;
   onViewInvoices: () => void;
+  onCopyPaymentLink: () => void;
+  onDeleteCompany: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  // Only paid, running subscriptions can be cancelled.
-  const canCancel = getCompanyBilling(company).status === "Active";
+  const status = getCompanyBilling(company).status;
+  const pendingSetup = status === "Pending Payment Setup";
+  /* A paid subscription can be cancelled whether or not its last invoice was
+     paid. Past Due is the case that most often ends in cancellation, and the
+     unpaid invoice does not go away with it — the modal's Outstanding Balance
+     card says so. Trials, grants and already-cancelled accounts have no
+     subscription to end. */
+  const canCancel = status === "Active" || status === "Past Due";
+  // Billing emails address invoices, so an account that is not — and will not
+  // again be — invoiced has nothing to manage them for.
+  const showBillingEmails = !(
+    status === "Free Trial" ||
+    status === "Trial Expired" ||
+    status === "Free Access" ||
+    status === "Free Access Ended" ||
+    status === "Canceled"
+  );
+  // A trial never raised an invoice, so there is nothing to look at. Free
+  // Access and cancelled accounts keep the item: their past invoices stand.
+  const showInvoices = !(status === "Free Trial" || status === "Trial Expired");
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -789,19 +988,30 @@ function CompanyActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* An account waiting on its payment method has no subscription, no
+          invoices and no employees yet, so the full list would be a page of
+          dead ends. It gets the three things that do apply: fix the details,
+          re-send the link, or drop the record. */}
+      {pendingSetup ? (
+        <>
+          {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
+          {item(<CopyIcon />, "Copy Payment Link", onCopyPaymentLink)}
+          {item(<RowDeleteIcon />, "Delete Company", onDeleteCompany, true)}
+        </>
+      ) : (
+      <>
       {/* Figma 670:1323 — items only, no company header. Cancel Subscription
           is the design-system danger red (#ff1f31, text and icon). */}
       {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
       {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
       {item(<MenuUserVipIcon />, "Change Account Holder", onEditAccountHolder)}
-      {item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
+      {showBillingEmails && item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
       {item(<MenuUsersIcon />, "View All Employees", onViewEmployees)}
-      {/* Sits with the other roster action — opens Manage Completions on this
-          company's cohort (that page left the sidebar; every way in is scoped). */}
-      {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
-      {item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
+      {showInvoices && item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
       {item(<MenuEnterIcon />, "View Company Dashboard", () => viewDashboard(company))}
       {canCancel && item(<MenuCancelSubIcon />, "Cancel Subscription", onCancelSubscription, true)}
+      </>
+      )}
     </div>
   );
 }
@@ -949,9 +1159,17 @@ function EditAccountHolderModal({
             value={selectedLabel}
             options={optionLabels}
             onChange={setSelectedLabel}
-            placeholder="Choose an employee…"
+            placeholder="Select an Employee..."
             searchPlaceholder="Search Employees..."
             popupMenu
+            /* Five rows then scroll, like the country/state pickers — a company
+               with a long roster otherwise opens a menu taller than the modal. */
+            maxVisibleOptions={5}
+            optionSecondary={(label) => {
+              const email = candidates[optionLabels.indexOf(label)]?.email;
+              return email ? `· ${email}` : null;
+            }}
+            optionSearchText={(label) => candidates[optionLabels.indexOf(label)]?.email ?? ""}
             optionDetail={(label) => {
               const role = candidates[optionLabels.indexOf(label)]?.role;
               // Only Admins and Managers carry a role tag (Figma 668:943);
@@ -971,20 +1189,13 @@ function EditAccountHolderModal({
 
 /* ─────────────── Manage Billing Emails modal ─────────────── */
 
-const ExternalLinkIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    <path d="M15 3h6v6M10 14L21 3" />
-  </svg>
-);
-
 function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose: () => void }) {
   // Deep-links to the customer's page in the Stripe dashboard, searched by the
   // account holder's billing email.
   const stripeUrl = `https://dashboard.stripe.com/search?query=${encodeURIComponent(company.email)}`;
 
   const steps = [
-    "Click on the “Go to Stripe” button",
+    "Click on the “Open Stripe” button",
     "On the Stripe Customer Page, click on the 3-dot menu and select “Edit Information”",
     "Navigate to the “Billing Email” option.",
     "Here, you can choose the “Add More Recipients” option where you can add more emails",
@@ -994,7 +1205,7 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
     <PrmModal
       title="Manage Billing Emails"
       description="Add/Remove emails that receive invoices"
-      confirmLabel={<>Go to Stripe <ExternalLinkIcon /></>}
+      confirmLabel="Open Stripe"
       confirmHref={stripeUrl}
       onCancel={onClose}
     >
@@ -1021,89 +1232,130 @@ function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: ()
   return (
     <PrmModal
       title="View Invoices"
-      cancelLabel="Close"
-      confirmLabel={<>Open invoices in Stripe <ExternalLinkIcon /></>}
+      confirmLabel="Open Stripe"
       confirmHref={stripeUrl}
       onCancel={onClose}
     >
-      <p className="prm-text">
+      <p className="prm-content">
         Invoices for <strong>{company.name}</strong> are managed in Stripe. This needs to be
         opened on Stripe to view or download them.
       </p>
-      <div className="co-billing-step" style={{ alignItems: "center" }}>
-        <span className="co-billing-step-num">i</span>
-        <span>Opening this will redirect to Stripe with the customer's Stripe ID.</span>
-      </div>
     </PrmModal>
   );
 }
 
 /* ─────────────── Cancel Subscription modal ─────────────── */
 
-const WarningIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
+/* Outstanding Balance card — Figma 1031:1036.
+ * One line: the glyph, the amount inline in the heading, and a note that the
+ * charge still lands at the end of the period. Cancelling ends the
+ * subscription, not the debt, and this is where the flow says so.
+ *
+ * Renders NOTHING when there is no balance — an empty-state card would be a
+ * row of reassurance nobody asked for, so the modal simply loses it. */
+function OutstandingBalanceCard({ company }: { company: Company }) {
+  const bal = getOutstandingBalance(company);
+  if (bal.total === 0) return null;
 
+  const amount = `${CURRENCY_SYMBOL[bal.currency]}${bal.total.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+  return (
+    <div className="co-balance">
+      <span className="co-balance-icon"><AlertCircleFilledIcon /></span>
+      <div className="co-balance-text">
+        <p className="co-balance-title">Outstanding Balance: {amount}</p>
+        <p className="co-balance-sub">
+          The customer will be billed at the end of the period.
+        </p>
+      </div>
+    </div>
+  );
+}
 function CancelSubscriptionModal({
-  company, onClose, onConfirm,
+  company, onClose, onConfirm, onNavigateToProductConfig,
 }: {
   company: Company;
   onClose: () => void;
   onConfirm: (reason: string) => void;
+  onNavigateToProductConfig?: () => void;
 }) {
   const billing = getCompanyBilling(company);
   const sym = CURRENCY_SYMBOL[billing.currency];
-  const [reason, setReason] = useState("");
+  /* More than one reason can apply, so this is the shared MultiSelect rather
+     than a single-choice dropdown. The record keeps them as one display
+     string (the status pill's hover reads "Reason: …"), joined in the order
+     they were picked. */
+  const [reasons, setReasons] = useState<string[]>([]);
+  const reasonText = reasons.join(", ");
   const [step, setStep] = useState<"form" | "confirm">("form");
 
-  // Seats ADDED this cycle still bill (prorated) on the upcoming invoice;
-  // a company that shed seats has nothing pending.
-  const pendingSeats = Math.max(0, billing.seatChange);
-  const pendingCharge = pendingSeats * billing.ratePerSeat;
+  // Seats ADDED this cycle still bill (prorated) on the upcoming invoice; a
+  // company that shed seats has nothing pending. Same source as the card on
+  // step one, so the two screens cannot disagree about what is owed.
+  const balance = getOutstandingBalance(company);
+  /* The date this modal PRINTS is the date it stores on confirm. The raw
+     nextBillingDate carries no year ("Feb 1"), which read as ambiguous beside
+     the fully-qualified access-cutoff date in the Past Due copy. */
+  const effectiveDate = getCancelEffectiveDate(billing);
+  const pendingSeats = balance.pendingSeats;
+  const pendingCharge = balance.pendingSeatCharge;
 
   return step === "form" ? (
     <PrmModal
       title="Cancel Subscription"
       cancelLabel="Keep subscription"
       confirmLabel="Continue"
-      confirmDisabled={!reason}
       onCancel={onClose}
       onConfirm={() => setStep("confirm")}
     >
       <div className="prm-stack">
-        <p className="prm-text">
-          <strong>{company.name}</strong> keeps full access until the end of the current
-          billing cycle ({billing.nextBillingDate}), then the subscription cancels.
-        </p>
+        {/* An Active account keeps working to the cycle end; a Past Due one is
+            already inside its grace period and can lose access sooner, so it must
+            not be told it keeps "full access" until then. */}
+        {billing.status === "Past Due" ? (
+          <p className="prm-content">
+            <strong>{company.name}</strong> is {billing.daysPastDue}{" "}
+            {billing.daysPastDue === 1 ? "day" : "days"} past due. Cancelling schedules the
+            subscription to end with the current billing cycle ({effectiveDate}).
+            Access is cut off on {billing.accessEndsOn} if the outstanding invoice goes unpaid.
+          </p>
+        ) : (
+          <p className="prm-content">
+            <strong>{company.name}</strong> keeps full access until the end of the current
+            billing cycle ({effectiveDate}), then the subscription cancels.
+          </p>
+        )}
 
         <div className="prm-field">
-          <span className="prm-label">Cancellation reason<span className="prm-req">*</span></span>
-          <select
-            className="form-input co-select"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          >
-            <option value="" disabled>Select a reason…</option>
-            {CANCELLATION_REASONS.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-          <p className="form-help">Reasons are managed under Product Config → B2B Management.</p>
+          <span className="prm-label">Cancellation Reason</span>
+          {/* `popupMenu` puts the panel on the popup-context surface, the way
+              the Change Account Holder picker does inside the same shell. */}
+          <MultiSelect
+            options={CANCELLATION_REASONS}
+            value={reasons}
+            onChange={setReasons}
+            placeholder="Select a reason…"
+            popupMenu
+          />
+          <p className="form-help co-w-manage-link">
+            Manage Cancellation Reasons on{" "}
+            <a
+              href="#"
+              className="text-link"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToProductConfig?.();
+              }}
+            >
+              Product Config <ArrowUpRightIcon />
+            </a>
+          </p>
         </div>
 
-        {pendingSeats > 0 && (
-          <div className="co-cancel-alert">
-            <span className="co-cancel-alert-icon"><WarningIcon /></span>
-            <div>
-              <strong>Pending seat charges.</strong> {pendingSeats} seat{pendingSeats === 1 ? "" : "s"} added
-              this cycle will be billed (~{sym}{pendingCharge.toLocaleString()}) on the upcoming
-              invoice before cancellation takes effect.
-            </div>
-          </div>
-        )}
+        <OutstandingBalanceCard company={company} />
       </div>
     </PrmModal>
   ) : (
@@ -1113,23 +1365,25 @@ function CancelSubscriptionModal({
       onCancelButton={() => setStep("form")}
       confirmLabel="Cancel subscription"
       onCancel={onClose}
-      onConfirm={() => onConfirm(reason)}
+      onConfirm={() => onConfirm(reasonText)}
     >
       <div className="prm-stack">
-        <p className="prm-text">
+        <p className="prm-content">
           This schedules cancellation for the end of the current billing cycle
-          ({billing.nextBillingDate}). The status changes to Canceled and the company is not
+          ({effectiveDate}). The status changes to Canceled and the company is not
           billed again after that date.
         </p>
 
         <div className="co-cancel-summary">
           <div className="co-cancel-summary-row">
             <span className="co-cancel-summary-label">Reason</span>
-            <span>{reason}</span>
+            {/* The reason is optional, so this row can be empty — it takes the
+                same em dash every other blank value in the app uses. */}
+            <span>{reasonText || "—"}</span>
           </div>
           <div className="co-cancel-summary-row">
             <span className="co-cancel-summary-label">Effective</span>
-            <span>End of cycle · {billing.nextBillingDate}</span>
+            <span>End of cycle · {effectiveDate}</span>
           </div>
           {pendingSeats > 0 && (
             <div className="co-cancel-summary-row">

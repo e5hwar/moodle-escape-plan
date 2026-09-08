@@ -7,10 +7,18 @@ import {
   TAX_STATUSES,
   TIERS,
   CSM_OPTIONS,
+
+  getAssignedCsm,
+
+  getAssignedSalesRep,
   SALES_REP_OPTIONS,
   defaultRate,
   getCompanyBilling,
+  monthlyRate,
+  stripePaymentLink,
+  todayStamp,
   type BillingCycle,
+  type CompanyBilling,
   type Company,
   type Currency,
   type PaymentCollection,
@@ -25,7 +33,7 @@ import {
   findPhoneCountry,
 } from "../data/countries";
 import { lookupZip } from "../data/zipcodes";
-import { CheckIcon, CheckBoldIcon, SmallXIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon, RowEditIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, CopyIcon, SmallXIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon, RowEditIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { Dropdown } from "./Dropdown";
@@ -34,6 +42,7 @@ import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 import { PrmModal } from "./PrmModal";
+import { CopiedToast } from "./CopiedToast";
 import { CURRENCY_INFO, currencyOptionFor, codeFromCurrencyOption } from "../data/currencies";
 
 /* ─────────────── Constants ─────────────── */
@@ -114,15 +123,21 @@ function buildDefaultSavedPrices(): SavedPrice[] {
     { id: "gro-an",       label: "Growth — Annual (default)",                rates: r2(defaultRate("Growth",     "Annual",  "USD"), defaultRate("Growth",     "Annual",  "CAD")) },
     { id: "pro-mo",       label: "Professional — Monthly (default)",                  rates: r2(defaultRate("Professional",        "Monthly", "USD"), defaultRate("Professional",        "Monthly", "CAD")) },
     { id: "pro-an",       label: "Professional — Annual (default)",                   rates: r2(defaultRate("Professional",        "Annual",  "USD"), defaultRate("Professional",        "Annual",  "CAD")) },
-    // Custom / partner prices
-    { id: "part-ess-mo",  label: "Essentials — Monthly (Preferred Partner)", rates: r2(42,  56)  },
-    { id: "part-ess-an",  label: "Essentials — Annual (Preferred Partner)",  rates: r2(33,  44)  },
-    { id: "part-gro-mo",  label: "Growth — Monthly (Preferred Partner)",     rates: r2(65,  87)  },
-    { id: "part-gro-an",  label: "Growth — Annual (Preferred Partner)",      rates: r2(52,  70)  },
-    { id: "ngo-ess-mo",   label: "Essentials — Monthly (NGO Rate)",          rates: r2(29,  39)  },
-    { id: "ngo-gro-mo",   label: "Growth — Monthly (NGO Rate)",              rates: r2(49,  65)  },
-    { id: "elite-pro-mo", label: "Professional — Monthly (Elite Partner)",  rates: r2(99,  132) },
-    { id: "elite-pro-an", label: "Professional — Annual (Elite Partner)",   rates: r2(79,  105) },
+    // Custom / partner prices. Annual ones are yearly amounts, like the
+    // defaults above — a discount off ten months, not off a monthly rate.
+    { id: "part-ess-mo",  label: "Essentials — Monthly (Preferred Partner)", rates: r2(27,  36)  },
+    { id: "part-ess-an",  label: "Essentials — Annual (Preferred Partner)",  rates: r2(270, 360) },
+    { id: "part-gro-mo",  label: "Growth — Monthly (Preferred Partner)",     rates: r2(36,  48)  },
+    { id: "part-gro-an",  label: "Growth — Annual (Preferred Partner)",      rates: r2(360, 480) },
+    { id: "ngo-ess-mo",   label: "Essentials — Monthly (NGO Rate)",          rates: r2(22,  29)  },
+    { id: "ngo-gro-mo",   label: "Growth — Monthly (NGO Rate)",              rates: r2(30,  40)  },
+    { id: "elite-pro-mo", label: "Professional — Monthly (Elite Partner)",  rates: r2(45,  60)  },
+    { id: "elite-pro-an", label: "Professional — Annual (Elite Partner)",   rates: r2(450, 600) },
+    // A Stripe price carries no nickname unless someone typed one, so a real
+    // list has unnamed rows in it. They read as the amount alone.
+    { id: "px-1J4nQ2",                                                       rates: r2(34,  45)  },
+    { id: "px-8KdW7f",                                                       rates: r2(380, 505) },
+    { id: "px-3RmT9c",                                                       rates: r2(58,  77)  },
   ];
 }
 
@@ -169,6 +184,25 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // A company whose free trial has expired cannot be put back onto a trial — it
   // can only convert to a paid Subscription or be granted Free Access.
   const trialExpired = isEdit && editBilling?.status === "Trial Expired";
+  // Neither can one that is already on a Subscription or Complimentary Free Access:
+  // the trial is a pre-sale state, and nothing here walks an account back into
+  // it. (Creation is unaffected — there is no company to be on a plan yet.)
+  const trialLocked = isEdit && !!editCompany && planFor(editCompany) !== "free-trial";
+  // Free Access can't be granted over a subscription that is still running —
+  // it has to be cancelled first. A cancellation scheduled for cycle end still
+  // counts as running; one that has taken effect does not.
+  // A company that invoices manually moves itself onto automatic collection —
+  // it has to enter a payment method, which happens in its own dashboard, not
+  // here. Admins can still push the other way.
+  const automaticLocked =
+    isEdit && !!editCompany && !!editBilling &&
+    planFor(editCompany) === "subscription" &&
+    editBilling.payment === "Invoice";
+  const complimentaryLocked =
+    isEdit && !!editBilling &&
+    (editBilling.status === "Active" ||
+      editBilling.status === "Past Due" ||
+      (editBilling.status === "Canceled" && editBilling.cancelScheduled));
 
   // When editing a company that already has a running paid subscription, the
   // billing-impact rail becomes a change preview (diff + proration) instead of
@@ -191,9 +225,17 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // Company details
   const [name, setName] = useState(editCompany?.name ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
-  const [assignedCsm, setAssignedCsm] = useState(editCompany?.assignedCsm ?? "");
+  /* Editing shows the owners the Companies table shows, which for a record
+     created before these fields existed is the derived one — reading the
+     record raw made the form say "Unassigned" for an account the table
+     credited to someone, and saving would then have silently cleared it.
+     Both stay genuinely optional: the helpers return "" for an unassigned
+     account, and the pickers open on their Unassigned option. */
+  const [assignedCsm, setAssignedCsm] = useState(
+    editCompany ? getAssignedCsm(editCompany) : "",
+  );
   const [assignedSalesRep, setAssignedSalesRep] = useState(
-    editCompany?.assignedSalesRep ?? CURRENT_SALES_REP,
+    editCompany ? getAssignedSalesRep(editCompany) : CURRENT_SALES_REP,
   );
   // Structured address (Figma 101:337). Composed into a flat string on save.
   const [country, setCountry] = useState(editCompany?.addressParts?.country ?? "United States");
@@ -205,16 +247,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const [contactName, setContactName] = useState(editCompany?.contactName ?? "");
   const [email, setEmail] = useState(editCompany?.email ?? "");
   const [phone, setPhone] = useState(editCompany?.phone ?? "");
-  const [industries, setIndustries] = useState<string[]>(
-    editCompany?.industry ? editCompany.industry.split(",").map((s) => s.trim()).filter(Boolean) : [],
-  );
-  const [partnerships, setPartnerships] = useState<string[]>(
-    editCompany?.partnership ? editCompany.partnership.split(",").map((s) => s.trim()).filter(Boolean) : [],
-  );
+  // Both fields are multi-select in the form AND multi-value on the record, so
+  // they round-trip as lists — no comma-joining on the way in or out.
+  const [industries, setIndustries] = useState<string[]>(editCompany?.industry ?? []);
+  const [partnerships, setPartnerships] = useState<string[]>(editCompany?.partnership ?? []);
 
   // Step 2
   const [plan, setPlan] = useState<Plan>(
-    editCompany ? (trialExpired ? "subscription" : planFor(editCompany)) : "subscription",
+    editCompany ? planFor(editCompany) : "subscription",
   );
   const [tier, setTier] = useState<PaidTier>(
     editCompany && planFor(editCompany) === "subscription" ? (editCompany.tier as PaidTier) : "Growth",
@@ -229,6 +269,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const [freeAccessEndDate, setFreeAccessEndDate] = useState(editCompany?.freeAccessEndDate ?? "");
   const [savedPrices, setSavedPrices] = useState<SavedPrice[]>(buildDefaultSavedPrices);
   const [showNewPriceModal, setShowNewPriceModal] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   // Three-step split-view wizard (matches the Tasks wizard shell): 0 = Company
   // details, 1 = Admin account, 2 = Plan. The billing-impact rail and the save
@@ -257,7 +298,55 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const noteSym = isPricedCurrency ? sym : currencySymbol("USD");
   const seatCount = parseInt(seats, 10) || 0;
   const effectiveRate = parseFloat(priceStr) || baseRate;
-  const monthlyTotal = isSubscription ? effectiveRate * seatCount : 0;
+  // In the unit the cycle bills in: a yearly rate x seats is a yearly total.
+  const planTotal = isSubscription ? effectiveRate * seatCount : 0;
+
+  // Every plan-relevant value in one comparable key. The first render's copy is
+  // kept for the life of the wizard, so "dirty" means "differs from what was
+  // loaded" — putting a field back to its original value un-dirties the form.
+  // Only the fields the CHOSEN plan actually uses. A tier or rate the form is
+  // still holding from a subscription the admin looked at and moved away from
+  // is not a change to a Free Access grant, and counting it would leave the
+  // form dirty after the admin had put everything back.
+  const planStateKey = JSON.stringify(
+    plan === "subscription"
+      ? { plan, tier, billingCycle, currency, rate: effectiveRate, seats: seatCount, payment }
+      : plan === "complimentary"
+      ? { plan, freeAccessEndDate: freeAccessEndDate.trim() }
+      : { plan },
+  );
+  /* The Company-details equivalent of planStateKey — every field
+     handleSaveDetails writes, so putting a value back un-dirties the form. */
+  const detailsStateKey = JSON.stringify({
+    name: name.trim(),
+    taxStatus,
+    assignedCsm,
+    assignedSalesRep,
+    industries,
+    partnerships,
+    country: country.trim(),
+    line1: addrLine1.trim(),
+    line2: addrLine2.trim(),
+    city: addrCity.trim(),
+    pin: addrPin.trim(),
+    state: addrState.trim(),
+  });
+  const initialDetailsRef = useRef<string | null>(null);
+  if (initialDetailsRef.current === null) initialDetailsRef.current = detailsStateKey;
+  const detailsDirty = detailsStateKey !== initialDetailsRef.current;
+
+  const initialPlanStateRef = useRef<string | null>(null);
+  if (initialPlanStateRef.current === null) initialPlanStateRef.current = planStateKey;
+  const planDirty = planStateKey !== initialPlanStateRef.current;
+  const currentPlan = editCompany && editBilling ? currentPlanRows(editCompany, editBilling) : null;
+  // Seats are fixed for an account that is already on a paid subscription —
+  // they move through the seat-management flow, not this form. An account
+  // arriving on Free Access or an expired trial has no billed seat count yet,
+  // so converting it to a Subscription has to set one here.
+  const seatsLocked = isEdit && !!editCompany && planFor(editCompany) === "subscription";
+  const currentPlanKind: Plan | null = editCompany ? planFor(editCompany) : null;
+  const currentAccessEnd =
+    currentPlanKind === "complimentary" && editCompany ? editCompany.freeAccessEndDate ?? "" : null;
 
   // Auto-fill price when tier / cycle / currency changes. Skip the first run in
   // edit mode so a prefilled custom rate isn't clobbered by the default.
@@ -282,6 +371,11 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const step0Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: name.trim().length > 0, message: "Add a company name to continue." },
     { valid: addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
+    // Only when this step IS the save — in the full wizard it is a way-point,
+    // and an untouched details step is a perfectly good one to walk past.
+    ...(detailsOnly && isEdit
+      ? [{ valid: detailsDirty, message: "Change something to save." }]
+      : []),
   ];
   const step1Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: contactName.trim().length > 0, message: "Add an account holder name to continue." },
@@ -295,6 +389,9 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // Free Access is open-ended unless an end date is set, so one is required.
   const freeAccessValid = plan !== "complimentary" || freeAccessEndDate.trim().length > 0;
   const step2Checks: { valid: boolean; message: string }[] = [
+    // Editing saves a CHANGE. With the form still exactly as it was loaded
+    // there is nothing to write, so the CTA stays disabled and says why.
+    ...(isEdit ? [{ valid: planDirty, message: "Change something to save." }] : []),
     ...(isSubscription
       ? [
           { valid: priceValid, message: "Save the custom price before creating the subscription." },
@@ -337,15 +434,26 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           renew: currentSub.nextBillingDate,
         }
       : null;
-  const saveCta = change
-    ? change.applyLabel
-    : planTypeChange
-    ? "Schedule change"
-    : isEdit
-    ? "Save changes"
+  // Editing always saves changes, whatever the change turns out to be — the
+  // preview states what will happen, so the button doesn't have to.
+  const saveCta = isEdit
+    ? "Save Changes"
     // Creating doesn't save from here — it hands off to the confirmation screen,
     // where "Create company" is the button that actually commits.
     : "Review Details";
+  const previewModel = buildPreviewModel({
+    change, planTypeChange, currentSub,
+    plan, tier, billingCycle, payment, effectiveRate, seatCount, planTotal, sym,
+    freeAccessEndDate, isEdit, planDirty, currentPlan, currentAccessEnd, currentPlanKind,
+  });
+  // What happens on save, in one line under the modal's title.
+  const saveEffect = change?.anyChange
+    ? change.chargeReason
+    : plan === "complimentary"
+    ? "Free access continues until the end date above. Nothing is charged."
+    : planTypeChange
+    ? "The change is scheduled for the end of the current billing cycle."
+    : "The new plan takes effect today.";
 
   const STEPS: { id: string; label: string; sub: string; desc: string }[] = [
     {
@@ -400,8 +508,8 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       taxStatus,
       assignedCsm: assignedCsm || undefined,
       assignedSalesRep: assignedSalesRep || undefined,
-      industry: industries.join(", "),
-      partnership: partnerships.join(", "),
+      industry: industries,
+      partnership: partnerships,
       address: [addrLine1, addrLine2, addrCity, addrState, addrPin, country]
         .map((s) => s.trim()).filter(Boolean).join(", ") || undefined,
       addressParts: [country, addrLine1, addrLine2, addrCity, addrPin, addrState].some((s) => s.trim())
@@ -426,8 +534,8 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
       // grant carries no tier at all, and says so through `status` below.
       tier: plan === "subscription" ? tier : undefined,
       seats: seatCount,
-      industry: industries.join(", "),
-      partnership: partnerships.join(", "),
+      industry: industries,
+      partnership: partnerships,
       taxStatus,
       assignedCsm: assignedCsm || undefined,
       assignedSalesRep: assignedSalesRep || undefined,
@@ -453,7 +561,15 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         ? "Free Access"
         : isEdit && editBilling?.status === "Past Due"
         ? "Past Due"
+        : isEdit && editBilling?.status === "Pending Payment Setup"
+        ? "Pending Payment Setup"
+        : !isEdit && isSubscription && payment === "Automatic"
+        ? "Pending Payment Setup"
         : "Active",
+      // Stamp the real creation date on a new company so its Created On and
+      // Last Access columns report the day it was made rather than a date
+      // derived from its id.
+      ...(isEdit ? {} : { createdAt: todayStamp() }),
       ...(isSubscription
         ? {
             billingCycle,
@@ -476,8 +592,24 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     }
   }
 
+  // Whether the Stripe link was put on the clipboard automatically when the
+  // company was created — the payment-link screen then opens with the Copy
+  // button already reading "Copied".
+  const [linkAutoCopied, setLinkAutoCopied] = useState(false);
+
   function handleConfirmCreate() {
     if (!pendingCompany) return;
+    // An automatically-billed subscription hands the admin a Stripe payment
+    // link. Copy it right here, inside the click handler: browsers only honour
+    // clipboard writes while a user gesture is still active, so doing it after
+    // the screen mounts would be refused.
+    if (!isEdit && isSubscription && pendingCompany.payment === "Automatic") {
+      const link = stripePaymentLink(pendingCompany.email, pendingCompany.name);
+      setLinkAutoCopied(false);
+      navigator.clipboard?.writeText(link)
+        .then(() => setLinkAutoCopied(true))
+        .catch(() => { /* blocked — the Copy button still works by hand */ });
+    }
     onCreate?.(pendingCompany);
     setCreatedCompany(pendingCompany);
     setPendingCompany(null);
@@ -489,7 +621,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     // edit) has nothing further to collect, so it goes straight to the full summary.
     const showPaymentLink = !isEdit && isSubscription && createdCompany.payment === "Automatic";
     return showPaymentLink ? (
-      <PaymentLinkScreen company={createdCompany} onClose={onClose} />
+      <PaymentLinkScreen company={createdCompany} autoCopied={linkAutoCopied} onClose={onClose} />
     ) : (
       <SuccessScreen
         company={createdCompany}
@@ -591,12 +723,16 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   seats={seats} setSeats={setSeats}
                   payment={payment} setPayment={setPayment}
                   noteRate={noteRate} noteSym={noteSym} effectiveRate={effectiveRate}
-                  monthlyTotal={monthlyTotal} seatCount={seatCount} sym={sym}
+                  planTotal={planTotal} seatCount={seatCount} sym={sym}
                   savedPrices={savedPrices}
                   onCreatePrice={() => setShowNewPriceModal(true)}
                   trialExpired={trialExpired}
+                  trialLocked={trialLocked}
+                  complimentaryLocked={complimentaryLocked}
+                  automaticLocked={automaticLocked}
                   freeAccessEndDate={freeAccessEndDate} setFreeAccessEndDate={setFreeAccessEndDate}
-                  seatsLocked={isEdit}
+                  seatsLocked={seatsLocked}
+                  manageMode={subscriptionOnly}
                   hideSummary
                 />
               )}
@@ -605,21 +741,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           </div>
         </div>
 
-        {step === 2 && (
-          <BillingImpactRail
-            change={change}
-            planTypeChange={planTypeChange}
-            currentSub={currentSub}
-            plan={plan}
-            tier={tier}
-            billingCycle={billingCycle}
-            payment={payment}
-            effectiveRate={effectiveRate}
-            seatCount={seatCount}
-            monthlyTotal={monthlyTotal}
-            sym={sym}
-          />
-        )}
+        {step === 2 && <BillingImpactRail model={previewModel} />}
       </div>
 
       <footer className="wizard-footer">
@@ -641,7 +763,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
             >
               {!detailsOnly && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
-              <span className="wizard-gate-btn-inner">{detailsOnly ? "Save changes" : "Continue"}</span>
+              <span className="wizard-gate-btn-inner">{detailsOnly ? "Save Changes" : "Continue"}</span>
             </button>
           ) : step === 1 ? (
             <button
@@ -658,13 +780,25 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
               disabled={!canSave}
               data-tooltip={ctaTooltip}
-              onClick={handleCreate}
+              onClick={isEdit ? () => setShowSaveConfirm(true) : handleCreate}
             >
               {saveCta}
             </button>
           )}
         </div>
       </footer>
+
+      {showSaveConfirm && (
+        <SaveChangesModal
+          model={previewModel}
+          effect={saveEffect}
+          onCancel={() => setShowSaveConfirm(false)}
+          onConfirm={() => {
+            setShowSaveConfirm(false);
+            handleCreate();
+          }}
+        />
+      )}
 
       {showNewPriceModal && (
         <CreatePriceModal
@@ -696,21 +830,18 @@ function money(n: number, sym: string): string {
   return `${sym}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function shortCycle(c: BillingCycle): string { return c === "Annual" ? "yr" : "mo"; }
-function cycleWord(c: BillingCycle): string { return c === "Annual" ? "Yearly" : "Monthly"; }
+function cycleWord(c: BillingCycle): string { return c === "Annual" ? "Annual" : "Monthly"; }
 function payLabel(p: PaymentCollection): string { return p === "Automatic" ? "Automatic" : "Invoice"; }
-// Per-cycle invoiced total. `total` is the monthly-equivalent (rate × seats);
-// annual plans invoice 12× that once a year.
-function cycleTotal(total: number, cycle: BillingCycle): number {
-  return cycle === "Annual" ? total * 12 : total;
-}
+// Per-cycle invoiced total. Rates are cycle-native (a yearly rate is already a
+// year's price, see DEFAULT_RATES), so `total` is what the cycle invoices.
 function totalDisplay(total: number, cycle: BillingCycle, sym: string): string {
-  return `${money(cycleTotal(total, cycle), sym)} / ${shortCycle(cycle)}`;
+  return `${money(total, sym)}/${shortCycle(cycle)}`;
 }
 // Per-seat price in the unit its own cycle bills in — Figma 616:1156 reads
 // "$40.00/mo → $400.00/yr", so each side of a cycle switch carries its own unit
 // rather than both being quoted monthly.
 function perSeatDisplay(rate: number, cycle: BillingCycle, sym: string): string {
-  return `${money(cycleTotal(rate, cycle), sym)}/${shortCycle(cycle)}`;
+  return `${money(rate, sym)}/${shortCycle(cycle)}`;
 }
 
 // Full month names for the billing-impact timeline date labels (Figma 107:1236
@@ -720,6 +851,15 @@ const FULL_MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+function parseAccessEnd(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+/** "Aug 15, 2026" — the short form the date field and the tables print. */
+function fmtAccessDate(iso: string): string {
+  const d = parseAccessEnd(iso);
+  return d ? `${FULL_MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}` : "—";
+}
 function fmtFullDate(d: Date): string {
   return `${FULL_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
@@ -772,7 +912,9 @@ type Target = {
   currency: Currency;
 };
 
-type ChangeRow = { label: string; oldStr: string; newStr: string };
+/** `oldStr` is absent on a row that states a value rather than a change (Seats,
+ *  which is locked while editing). */
+type ChangeRow = { label: string; oldStr?: string; newStr: string };
 // One dot on the billing-impact timeline (Figma 107:1236 "Billing Impact").
 type TimelineEntry = { date: string; amount?: string; desc: string; now?: boolean; muted?: boolean };
 type ChangePreview = {
@@ -797,6 +939,11 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   const newSym = currencySymbol(tgt.currency);
   const oldTotal = cur.rate * cur.seats;
   const newTotal = tgt.rate * tgt.seats;
+  // Cycle-native totals can't be compared across a cycle switch ($400/yr is not
+  // ten times "bigger" than $40/mo), so every economic test below — direction,
+  // proration, the recurring delta — runs on the monthly equivalent.
+  const oldMonthly = monthlyRate(cur.rate, cur.cycle) * cur.seats;
+  const newMonthly = monthlyRate(tgt.rate, tgt.cycle) * tgt.seats;
   const dir = TIER_ORDER[tgt.tier] - TIER_ORDER[cur.tier];
   const cycleChanged = cur.cycle !== tgt.cycle;
   const toAnnual = tgt.cycle === "Annual";
@@ -812,20 +959,20 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
 
   // Normalise to USD so cross-currency edits compare and prorate sensibly
   // (a CA$105 plan must not read as "larger" than a $79 one).
-  const oldTotalUSD = toUSD(oldTotal, cur.currency);
-  const newTotalUSD = toUSD(newTotal, tgt.currency);
+  const oldTotalUSD = toUSD(oldMonthly, cur.currency);
+  const newTotalUSD = toUSD(newMonthly, tgt.currency);
   const totalEps = Math.max(1, oldTotalUSD * 0.01);
   const econDown = oldTotalUSD - newTotalUSD > totalEps;
   // Old recurring total expressed in the target currency, for the proration delta.
-  const oldTotalInTgt = oldTotal * (usdValue(cur.currency) / usdValue(tgt.currency));
+  const oldTotalInTgt = oldMonthly * (usdValue(cur.currency) / usdValue(tgt.currency));
   // Per-seat economic comparison (drives the price-increase / decrease label).
-  const oldRateUSD = toUSD(cur.rate, cur.currency);
-  const newRateUSD = toUSD(tgt.rate, tgt.currency);
+  const oldRateUSD = toUSD(monthlyRate(cur.rate, cur.cycle), cur.currency);
+  const newRateUSD = toUSD(monthlyRate(tgt.rate, tgt.cycle), tgt.currency);
   const rateEconChanged = Math.abs(newRateUSD - oldRateUSD) > Math.max(0.5, oldRateUSD * 0.01);
 
   // ── Label ──
   const parts: string[] = [];
-  if (cycleChanged) parts.push(toAnnual ? "Monthly → Yearly" : "Yearly → Monthly");
+  if (cycleChanged) parts.push(toAnnual ? "Monthly → Annual" : "Annual → Monthly");
   if (dir > 0) parts.push("Tier upgrade");
   else if (dir < 0) parts.push("Tier downgrade");
   if (currencyChanged) parts.push(`Currency ${cur.currency} → ${tgt.currency}`);
@@ -855,9 +1002,9 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   if (!billingChanged && paymentChanged) {
     chargeReason = "Only how invoices are collected changes. Nothing is prorated or charged now.";
   } else if (immediate) {
-    chargeNow = Math.max(0, newTotal - oldTotalInTgt) * frac;
+    chargeNow = Math.max(0, newMonthly - oldTotalInTgt) * frac;
     if (chargeNow > 0.005) {
-      chargeReason = `+${money(newTotal - oldTotalInTgt, newSym)} / mo · prorated for the ${daysLeft} of ${cycleDays} days left in this cycle.`;
+      chargeReason = `+${money(newMonthly - oldTotalInTgt, newSym)} / mo · prorated for the ${daysLeft} of ${cycleDays} days left in this cycle.`;
     } else {
       // Applies now but there is nothing to prorate: equal total, currency
       // redenomination, or a cycle switch that does not raise the recurring total.
@@ -870,31 +1017,36 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
     chargeReason = "No prorations or refunds. The company stays on the current plan until the cycle ends, then moves to the new plan.";
   }
 
-  // ── Diff rows (only what changed) ──
-  // Tier · Cycle · Per Seat lead, the order the form on the left puts them in.
-  // (Figma 616:1111 lists Per Seat before Cycle, but that node predates Seats
-  // moving below Per-Seat Price on the form; the two panels reading the same
-  // way top-to-bottom is what matters here.)
-  const rows: ChangeRow[] = [];
-  if (dir !== 0) rows.push({ label: "Tier", oldStr: cur.tier, newStr: tgt.tier });
-  if (cycleChanged) rows.push({ label: "Cycle", oldStr: cycleWord(cur.cycle), newStr: cycleWord(tgt.cycle) });
-  // A cycle switch re-denominates the per-seat price even when the rate itself
-  // holds, so the row belongs there too.
-  if (rateChanged || currencyChanged || cycleChanged) {
-    rows.push({
-      label: "Per Seat",
-      oldStr: perSeatDisplay(cur.rate, cur.cycle, oldSym),
-      newStr: perSeatDisplay(tgt.rate, tgt.cycle, newSym),
-    });
-  }
-  if (seatsChanged) rows.push({ label: "Seats", oldStr: `${cur.seats}`, newStr: `${tgt.seats}` });
+  // The card carries the SAME fields as the untouched summary, in the order the
+  // form on the left puts them: a row the edit did not touch states its value,
+  // and only the ones that moved read old -> new. Dropping untouched rows made
+  // the card change shape with every edit and took away the context the changed
+  // numbers are read against.
+  const diff = (label: string, changed: boolean, oldStr: string, newStr: string): ChangeRow =>
+    changed ? { label, oldStr, newStr } : { label, newStr };
+  const rows: ChangeRow[] = [
+    { label: "Plan", newStr: "Subscription" },
+    diff("Tier", dir !== 0, cur.tier, tgt.tier),
+    diff("Cycle", cycleChanged, cycleWord(cur.cycle), cycleWord(tgt.cycle)),
+    // A cycle switch re-denominates the per-seat price even when the rate
+    // itself holds, so that counts as a change to this row too.
+    diff(
+      "Per Seat",
+      rateChanged || currencyChanged || cycleChanged,
+      perSeatDisplay(cur.rate, cur.cycle, oldSym),
+      perSeatDisplay(tgt.rate, tgt.cycle, newSym),
+    ),
+    diff("Seats", seatsChanged, `${cur.seats}`, `${tgt.seats}`),
+    diff("Payment", paymentChanged, payLabel(cur.payment), payLabel(tgt.payment)),
+  ];
+  // What the company is invoiced each cycle. It closes the card whether or not
+  // the edit moved it, so the reader can always see what the plan costs.
   const oldTotalStr = totalDisplay(oldTotal, cur.cycle, oldSym);
   const newTotalStr = totalDisplay(newTotal, tgt.cycle, newSym);
-  if (oldTotalStr !== newTotalStr) rows.push({ label: "Total", oldStr: oldTotalStr, newStr: newTotalStr });
-  if (paymentChanged) rows.push({ label: "Payment", oldStr: payLabel(cur.payment), newStr: payLabel(tgt.payment) });
+  rows.push(diff("Recurring", oldTotalStr !== newTotalStr, oldTotalStr, newTotalStr));
 
   const applyLabel = !anyChange
-    ? "Save changes"
+    ? "Save Changes"
     : !immediate
     ? "Schedule change"
     : chargeNow > 0
@@ -915,8 +1067,8 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   const renewDate = cur.cycle === "Annual"
     ? nextFirstOfMonth(MONTH_IDX[renew.slice(0, 3)] ?? APP_TODAY.getMonth())
     : new Date(APP_TODAY.getFullYear(), APP_TODAY.getMonth() + 1, 1);
-  const newCycleTotalStr = money(cycleTotal(newTotal, tgt.cycle), newSym);
-  const cycleAdj = tgt.cycle === "Annual" ? "yearly" : "monthly";
+  const newCycleTotalStr = money(newTotal, newSym);
+  const cycleAdj = tgt.cycle === "Annual" ? "annual" : "monthly";
   const remainderWord = cur.cycle === "Annual" ? "year" : "month";
   // Collection-method-only edits (no tier/cycle/rate/seat change) must not be
   // framed as a new tier charge in the timeline.
@@ -972,12 +1124,12 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   };
 }
 
-// Presentational billing-impact rail shown on the Plan step. The change /
-// planTypeChange decisions and the primary-action label are computed by the
-// wizard; the footer owns the save button, so this only renders the card.
-function BillingImpactRail({
+// The four wizard cases normalise into one PreviewModel, so the rail and the
+// save-confirmation modal render from a single shape.
+function buildPreviewModel({
   change, planTypeChange, currentSub,
-  plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
+  plan, tier, billingCycle, payment, effectiveRate, seatCount, planTotal, sym,
+  freeAccessEndDate, isEdit, planDirty, currentPlan, currentAccessEnd, currentPlanKind,
 }: {
   change: ChangePreview | null;
   planTypeChange: { target: string; renew: string } | null;
@@ -988,18 +1140,102 @@ function BillingImpactRail({
   payment: PaymentCollection;
   effectiveRate: number;
   seatCount: number;
-  monthlyTotal: number;
+  planTotal: number;
   sym: string;
-}) {
-  // The three wizard cases normalise into one PreviewModel, so the timeline has
-  // a single render path.
+  /** "YYYY-MM-DD" from the Access End Date field, "" until one is picked. */
+  freeAccessEndDate: string;
+  isEdit: boolean;
+  /** Whether any plan field differs from the values the wizard loaded. */
+  planDirty: boolean;
+  /** The company's plan as it stands today — the untouched-edit summary. */
+  currentPlan: PreviewRow[] | null;
+  /** The Free Access end date the company arrived with ("" if it had none),
+   *  or null when it isn't on Free Access at all. */
+  currentAccessEnd: string | null;
+  /** The plan the company arrived on; null when creating one. */
+  currentPlanKind: Plan | null;
+}): PreviewModel {
   const model: PreviewModel =
-    change
+    // Editing, nothing touched yet: there is no change to preview, so the card
+    // states the plan as it stands instead. This runs ahead of computeChange,
+    // which would otherwise answer the same case with its empty card.
+    isEdit && !planDirty
+      ? currentPlan
+        ? { rows: currentPlan, timeline: [] }
+        : { empty: plan === "complimentary" ? NO_ACCESS_CHANGES : NO_BILLING_CHANGES, rows: [], timeline: [] }
+      // Already on Free Access and staying there: the end date is the change.
+      : currentAccessEnd !== null && plan === "complimentary"
+      ? accessChangeToModel(currentAccessEnd, freeAccessEndDate)
+      : change
       ? changeToModel(change)
       : planTypeChange && currentSub
-      ? planTypeChangeToModel(planTypeChange, currentSub)
-      : createToModel({ plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym });
+      ? planTypeChangeToModel(planTypeChange, currentSub, freeAccessEndDate)
+      : createToModel({ plan, tier, billingCycle, payment, effectiveRate, seatCount, planTotal, sym, freeAccessEndDate });
 
+  // Converting a trial or a Free Access grant into a Subscription (or between
+  // those two) runs through the create model, which describes the NEW plan and
+  // nothing else. The plan itself is the headline change, so it leads the card
+  // as an old → new row — the way a tier or rate change does.
+  const planChanged = isEdit && currentPlanKind !== null && currentPlanKind !== plan;
+  const showPlanRow = planChanged && !model.empty && !change && !planTypeChange;
+  return showPlanRow
+    ? {
+        ...model,
+        rows: [
+          { label: "Plan", oldStr: planLabel(currentPlanKind), newStr: planLabel(plan) },
+          ...model.rows.filter((r) => r.label !== "Plan"),
+        ],
+      }
+    : model;
+}
+
+/* Confirmation step for a Manage Subscription save (Figma 483:588's confirm
+   shell). It restates the change exactly as the preview card does — the admin
+   reads the same rows twice rather than a second, differently-worded summary —
+   and says what saving will do. */
+function SaveChangesModal({
+  model, effect, onCancel, onConfirm,
+}: {
+  model: PreviewModel;
+  effect: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <PrmModal
+      title="Save Changes"
+      description="Review the change before it is applied."
+      confirmLabel="Save Changes"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <div className="prm-stack">
+        {model.rows.length > 0 && (
+          <div className="sub-summary">
+            {model.rows.map((r) => (
+              <div className="sub-summary-row" key={r.label}>
+                <span className="sub-summary-label">{r.label}</span>
+                <span className="sub-summary-val">
+                  {r.oldStr != null && (
+                    <>
+                      <span className="sub-summary-old">{r.oldStr}</span>
+                      <span className="sub-summary-arrow">→</span>
+                    </>
+                  )}
+                  <span className="sub-summary-new">{r.newStr}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="prm-text">{effect}</p>
+      </div>
+    </PrmModal>
+  );
+}
+
+// Presentational billing-impact rail shown on the Plan step.
+function BillingImpactRail({ model }: { model: PreviewModel }) {
   return (
     <aside className="cw-impact">
       <h2 className="cw-impact-title">Preview</h2>
@@ -1013,19 +1249,109 @@ function BillingImpactRail({
 // (new only, when creating). `empty` is the no-change-yet edit state.
 type PreviewRow = { label: string; oldStr?: string; newStr: string };
 type PreviewModel = {
-  empty?: boolean;
+  empty?: { title: string; sub: string };
   rows: PreviewRow[];
   timeline: TimelineEntry[];
+};
+
+/* The untouched Manage Subscription state: rather than an empty card, the rail
+   states the plan as it stands today — every field the form below can change,
+   plus the totals and dates those fields drive. Values only, no old → new.
+   Status is deliberately absent: it is not a field this form changes, and the
+   Companies table's status pill already says it. */
+function planLabel(kind: Plan): string {
+  return kind === "subscription" ? "Subscription" : kind === "free-trial" ? "Free Trial" : "Free Access";
+}
+
+function currentPlanRows(company: Company, billing: CompanyBilling): PreviewRow[] {
+  const sym = currencySymbol(billing.currency);
+  const kind = planFor(company);
+  const row = (label: string, newStr: string) => ({ label, newStr });
+
+  if (kind === "complimentary") {
+    return [
+      row("Plan", "Free Access"),
+      // Past tense once the grant has lapsed, the way the trial row reads — the
+      // card is the only place the state is stated, so "Ends" on a date that
+      // has been and gone would read as though access were still running.
+      row(
+        billing.status === "Free Access Ended" ? "Access Ended" : "Access Ends",
+        fmtAccessDate(company.freeAccessEndDate ?? ""),
+      ),
+    ];
+  }
+  if (kind === "free-trial") {
+    return [
+      row("Plan", "Free Trial"),
+      row(billing.status === "Free Trial" ? "Trial Ends" : "Trial Ended", billing.trialEndsOn),
+    ];
+  }
+
+  const cycle = billing.billingCycle;
+  // The currency reads off the Per Seat amount's own prefix, and the total and
+  // the next invoice date are consequences rather than fields of this form.
+  return [
+    row("Plan", "Subscription"),
+    ...(company.tier ? [row("Tier", company.tier)] : []),
+    row("Cycle", cycleWord(cycle)),
+    row("Per Seat", perSeatDisplay(billing.ratePerSeat, cycle, sym)),
+    row("Seats", company.seats.toLocaleString()),
+    row("Payment", payLabel(billing.payment)),
+    row("Recurring", totalDisplay(billing.ratePerSeat * company.seats, cycle, sym)),
+  ];
+}
+
+/* The no-change-yet edit state. A paid subscription lists the levers it has;
+   a company on Free Access has only the plan itself and its end date. */
+const NO_BILLING_CHANGES = {
+  title: "No billing changes",
+  sub: "Change the tier, cycle, rate, seats, or payment method to preview the impact.",
+};
+const NO_ACCESS_CHANGES = {
+  title: "No changes",
+  sub: "Change the plan or the access end date to preview the impact.",
 };
 
 // Editing a running paid subscription (plan stays "subscription").
 function changeToModel(change: ChangePreview): PreviewModel {
   if (!change.anyChange) {
-    return { empty: true, rows: [], timeline: [] };
+    return { empty: NO_BILLING_CHANGES, rows: [], timeline: [] };
   }
   return {
     rows: change.rows.map((r) => ({ label: r.label, oldStr: r.oldStr, newStr: r.newStr })),
     timeline: change.timeline,
+  };
+}
+
+/* Editing a company that is already on Free Access. The only thing there is to
+   change is when the access ends, so the card diffs that one field the way the
+   subscription card diffs a rate. */
+function accessChangeToModel(prevIso: string, nextIso: string): PreviewModel {
+  const next = parseAccessEnd(nextIso);
+  const prev = parseAccessEnd(prevIso);
+  // Pulling the end date in is the same edit run the other way, so it says so
+  // rather than calling a cut short an extension.
+  const shortened = !!prev && !!next && next.getTime() < prev.getTime();
+  return {
+    rows: [
+      { label: "Plan", newStr: "Free Access" },
+      { label: "Access Ends", oldStr: fmtAccessDate(prevIso), newStr: fmtAccessDate(nextIso) },
+    ],
+    timeline: [
+      {
+        date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+        desc: shortened
+          ? "Complimentary free access shortened. No charge or payment method required"
+          : "Complimentary free access extended. No charge or payment method required",
+        now: true,
+      },
+      ...(next
+        ? [{
+            date: `FREE ACCESS ENDS · ${fmtFullDate(next).toUpperCase()}`,
+            desc: "Complimentary Free Access can be reinstated",
+          }]
+        : []),
+    ],
   };
 }
 
@@ -1034,6 +1360,7 @@ function changeToModel(change: ChangePreview): PreviewModel {
 function planTypeChangeToModel(
   ptc: { target: string; renew: string },
   cur: CurrentSub,
+  freeAccessEndDate: string,
 ): PreviewModel {
   const curSym = currencySymbol(cur.currency);
   const curTotal = cur.rate * cur.seats;
@@ -1048,6 +1375,8 @@ function planTypeChangeToModel(
   return {
     rows: [
       { label: "Plan", oldStr: `${cur.tier} Subscription`, newStr: ptc.target },
+      // A grant has an end date; a trial's length is set in Product Config.
+      ...(isTrial ? [] : [{ label: "Access Ends", newStr: fmtAccessDate(freeAccessEndDate) }]),
       { label: "Recurring", oldStr: totalDisplay(curTotal, cur.cycle, curSym), newStr: money(0, curSym) },
     ],
     timeline: [
@@ -1071,7 +1400,7 @@ function planTypeChangeToModel(
 // Creating a new company, or editing one without a running paid subscription.
 // No prior state to diff against, so the timeline is built from the form alone.
 function createToModel({
-  plan, tier, billingCycle, payment, effectiveRate, seatCount, monthlyTotal, sym,
+  plan, tier, billingCycle, payment, effectiveRate, seatCount, planTotal, sym, freeAccessEndDate,
 }: {
   plan: Plan;
   tier: PaidTier;
@@ -1079,8 +1408,9 @@ function createToModel({
   payment: PaymentCollection;
   effectiveRate: number;
   seatCount: number;
-  monthlyTotal: number;
+  planTotal: number;
   sym: string;
+  freeAccessEndDate: string;
 }): PreviewModel {
   const y = APP_TODAY.getFullYear();
   const m = APP_TODAY.getMonth();
@@ -1094,7 +1424,7 @@ function createToModel({
         {
           date: todayLabel,
           amount: money(0, sym),
-          desc: "Free trial begins — no charge and no payment method required",
+          desc: "Free Trial begins. No charge or payment required",
           now: true,
         },
         {
@@ -1106,29 +1436,38 @@ function createToModel({
   }
 
   if (plan === "complimentary") {
+    // The end date is required to save, but the preview renders while the field
+    // is still empty. A dot that can't name its date says nothing, so it is left
+    // out entirely until one is picked — and with no second dot the timeline
+    // draws no connector below the first, which is what makes the half-line
+    // hanging off the bottom impossible.
+    const accessEnd = parseAccessEnd(freeAccessEndDate);
     return {
-      rows: [{ label: "Plan", newStr: "Free Access" }],
+      rows: [
+        { label: "Plan", newStr: "Free Access" },
+        { label: "Access Ends", newStr: fmtAccessDate(freeAccessEndDate) },
+      ],
       timeline: [
         {
           date: todayLabel,
-          amount: money(0, sym),
-          desc: "Free access granted — no Stripe subscription or invoice is created",
+          desc: "Free Access granted. No charge or payment method required",
           now: true,
         },
-        {
-          date: "ONGOING",
-          amount: money(0, sym),
-          desc: "Full access continues until it is manually revoked",
-        },
+        // Mirrors the trial's second dot: the end date, then what happens after
+        // it — no amount, since nothing is charged either way.
+        ...(accessEnd
+          ? [{
+              date: `FREE ACCESS ENDS · ${fmtFullDate(accessEnd).toUpperCase()}`,
+              desc: "Complimentary Free Access can be reinstated",
+            }]
+          : []),
       ],
     };
   }
 
-  // New subscription — effective today. Everyone bills on the 1st, so a monthly
-  // sub is prorated for the remainder of the month today, then charged the full
-  // amount on the 1st; an annual sub is charged the full year upfront and renews
-  // a year out (no near-term second charge to prorate).
-  const automatic = payment === "Automatic";
+  // New subscription — effective today. Everyone bills on the 1st, so both
+  // cycles are prorated for the remainder of THIS month today and then charged
+  // in full on the 1st: a month's worth on Monthly, the year's on Annual.
   // No rate chosen yet — a currency the catalogue does not price, and no saved
   // price picked. The rows still describe the plan, but Per Seat has nothing to
   // state and there is no amount to build a timeline of charges from.
@@ -1139,47 +1478,30 @@ function createToModel({
     { label: "Cycle", newStr: cycleWord(billingCycle) },
     { label: "Per Seat", newStr: hasRate ? perSeatDisplay(effectiveRate, billingCycle, sym) : "—" },
     { label: "Seats", newStr: seatCount.toLocaleString() },
+    { label: "Payment", newStr: payLabel(payment) },
   ];
   if (!hasRate) return { rows, timeline: [] };
 
-  let timeline: TimelineEntry[];
-  if (billingCycle === "Annual") {
-    const fullYear = money(cycleTotal(monthlyTotal, "Annual"), sym);
-    const renewDate = new Date(y + 1, m, 1);
-    timeline = [
-      {
-        date: todayLabel,
-        amount: fullYear,
-        desc: automatic
-          ? `First yearly charge for the ${tier} Tier — collected via the payment link`
-          : `First yearly invoice for the ${tier} Tier — payable within the configured window`,
-        now: true,
-      },
-      {
-        date: `${fmtFullDate(renewDate).toUpperCase()} ONWARDS`,
-        amount: fullYear,
-        desc: `Recurring yearly charge for the ${tier} Tier`,
-      },
-    ];
-  } else {
-    const fullMonth = money(monthlyTotal, sym);
-    const { frac } = daysLeftInCycle("", "Monthly");
-    const proratedNow = money(monthlyTotal * frac, sym);
-    const firstFullDate = new Date(y, m + 1, 1);
-    timeline = [
-      {
-        date: todayLabel,
-        amount: proratedNow,
-        desc: "Prorated charge for remainder of the month",
-        now: true,
-      },
-      {
-        date: `${fmtFullDate(firstFullDate).toUpperCase()} ONWARDS`,
-        amount: fullMonth,
-        desc: `First full monthly charge for the ${tier} Tier`,
-      },
-    ];
-  }
+  const { frac } = daysLeftInCycle("", "Monthly");
+  const firstFullDate = new Date(y, m + 1, 1);
+  // Today's proration covers the rest of this month either way, so an annual
+  // plan prorates its MONTHLY equivalent — the year itself starts on the 1st.
+  const proratedNow = money(monthlyRate(planTotal, billingCycle) * frac, sym);
+  const timeline: TimelineEntry[] = [
+    {
+      date: todayLabel,
+      amount: proratedNow,
+      desc: "Prorated charge for remainder of the month",
+      now: true,
+    },
+    {
+      date: `${fmtFullDate(firstFullDate).toUpperCase()} ONWARDS`,
+      amount: money(planTotal, sym),
+      desc: billingCycle === "Annual"
+        ? `Recurring annual charge for the ${tier} Tier`
+        : `First full monthly charge for the ${tier} Tier`,
+    },
+  ];
 
   return { rows, timeline };
 }
@@ -1191,8 +1513,8 @@ function SubPreview({ model }: { model: PreviewModel }) {
   if (model.empty) {
     return (
       <div className="sub-preview-empty">
-        <div className="sub-preview-empty-title">No billing changes</div>
-        <div className="sub-preview-empty-sub">Change the tier, cycle, rate, seats, or payment method to preview the impact.</div>
+        <div className="sub-preview-empty-title">{model.empty.title}</div>
+        <div className="sub-preview-empty-sub">{model.empty.sub}</div>
       </div>
     );
   }
@@ -1388,7 +1710,7 @@ function Step1Details({
             value={industries}
             onChange={setIndustries}
             placeholder="Select Industries"
-            searchPlaceholder="Search Industries…"
+            searchPlaceholder="Search Industries..."
           />
           <p className="form-help co-w-manage-link">
             Manage Industries on{" "}
@@ -1411,7 +1733,7 @@ function Step1Details({
             value={partnerships}
             onChange={setPartnerships}
             placeholder="Select Partnerships"
-            searchPlaceholder="Search Partnerships…"
+            searchPlaceholder="Search Partnerships..."
           />
           <p className="form-help co-w-manage-link">
             Manage Partnerships on{" "}
@@ -1585,13 +1907,17 @@ function Step2Plan({
   priceStr, setPriceStr,
   seats, setSeats,
   payment, setPayment,
-  noteRate, noteSym, effectiveRate, monthlyTotal, seatCount, sym,
+  noteRate, noteSym, effectiveRate, planTotal, seatCount, sym,
   savedPrices,
   onCreatePrice,
   trialExpired = false,
+  trialLocked = false,
+  complimentaryLocked = false,
+  automaticLocked = false,
   freeAccessEndDate, setFreeAccessEndDate,
   seatsLocked = false,
   hideSummary = false,
+  manageMode = false,
 }: {
   plan: Plan; setPlan: (v: Plan) => void;
   tier: PaidTier; setTier: (v: PaidTier) => void;
@@ -1600,20 +1926,27 @@ function Step2Plan({
   priceStr: string; setPriceStr: (v: string) => void;
   seats: string; setSeats: (v: string) => void;
   payment: PaymentCollection; setPayment: (v: PaymentCollection) => void;
-  noteRate: number; noteSym: string; effectiveRate: number; monthlyTotal: number; seatCount: number; sym: string;
+  noteRate: number; noteSym: string; effectiveRate: number; planTotal: number; seatCount: number; sym: string;
   savedPrices: SavedPrice[];
   onCreatePrice: () => void;
   trialExpired?: boolean;
+  trialLocked?: boolean;
+  complimentaryLocked?: boolean;
+  automaticLocked?: boolean;
   freeAccessEndDate: string; setFreeAccessEndDate: (v: string) => void;
   seatsLocked?: boolean;
   hideSummary?: boolean;
+  /** Manage Subscription: this step IS the page, so it heads itself. */
+  manageMode?: boolean;
 }) {
   const isSubscription = plan === "subscription";
 
   return (
     <>
-      <h1 className="wizard-title">Plan Selection</h1>
-      <p className="wizard-desc">Set up the company's plan</p>
+      <h1 className="wizard-title">{manageMode ? "Manage Subscription" : "Plan Selection"}</h1>
+      <p className="wizard-desc">
+        {manageMode ? "Update the company's plan" : "Set up the company's plan"}
+      </p>
 
       <div className="form-group">
         <label className="form-label">Plan <span className="req">*</span></label>
@@ -1627,19 +1960,26 @@ function Step2Plan({
           <RadioCard
             selected={plan === "free-trial"}
             onSelect={() => setPlan("free-trial")}
-            disabled={trialExpired}
+            disabled={trialExpired || trialLocked}
             title="Free Trial"
             desc={
               trialExpired
-                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Complimentary Access."
+                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Complimentary Free Access."
+                : trialLocked
+                ? "Unavailable — this company is already on a paid or complimentary plan. A trial can't be started from here."
                 : `${TRIAL_DAYS}-day free trial. No payment method required to start the trial.`
             }
           />
           <RadioCard
             selected={plan === "complimentary"}
             onSelect={() => setPlan("complimentary")}
-            title="Complimentary Access"
-            desc="Free access, with all the same features as that of the Pro Tier."
+            disabled={complimentaryLocked}
+            title="Complimentary Free Access"
+            desc={
+              complimentaryLocked
+                ? "Company's subscription must be cancelled before they can be given Free Access"
+                : "Free access, with all the same features as that of the Pro Tier."
+            }
           />
         </div>
       </div>
@@ -1672,7 +2012,7 @@ function Step2Plan({
                   className={`seg-btn ${billingCycle === c ? "active accent" : ""}`}
                   onClick={() => setBillingCycle(c)}
                 >
-                  {c === "Annual" ? "Yearly" : c}
+                  {c}
                 </button>
               ))}
             </div>
@@ -1716,8 +2056,13 @@ function Step2Plan({
               <RadioCard
                 selected={payment === "Automatic"}
                 onSelect={() => setPayment("Automatic")}
+                disabled={automaticLocked}
                 title="Automatically charge a payment method"
-                desc="Generates a unique payment link that must be shared with the company"
+                desc={
+                  automaticLocked
+                    ? "Companies can switch to automatic payment via the Billing Tab of their Dashboard"
+                    : "Generates a unique payment link that must be shared with the company"
+                }
               />
               <RadioCard
                 selected={payment === "Invoice"}
@@ -1735,12 +2080,12 @@ function Step2Plan({
                   {sym}{effectiveRate} × {seatCount || 0} seats
                 </span>
                 <span className="co-cost-total">
-                  {sym}{monthlyTotal.toLocaleString()} / month
+                  {sym}{planTotal.toLocaleString()} / {billingCycle === "Annual" ? "year" : "month"}
                 </span>
               </div>
               {billingCycle === "Annual" && (
                 <div className="co-cost-sub">
-                  Billed yearly — {sym}{(monthlyTotal * 12).toLocaleString()} / year
+                  Billed once a year — {sym}{(planTotal / 12).toLocaleString("en-US", { maximumFractionDigits: 2 })} / month equivalent
                 </div>
               )}
             </div>
@@ -1748,24 +2093,15 @@ function Step2Plan({
         </>
       )}
 
-      {plan === "free-trial" && (
-        <div className="co-plan-note" style={{ marginTop: 8 }}>
-          <strong>No payment method required.</strong> The trial runs for the globally configured
-          window, then converts to a paid subscription.
-        </div>
-      )}
-
       {plan === "complimentary" && (
-        <>
-          <div className="co-plan-note" style={{ marginTop: 8 }}>
-            <strong>Complimentary access granted.</strong> No subscription is created in Stripe.
-            Eligible only for companies without an active or paused subscription.
-          </div>
-          <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
-            <label className="form-label">Complimentary Access End Date <span className="req">*</span></label>
-            <DateField value={freeAccessEndDate} onChange={setFreeAccessEndDate} />
-          </div>
-        </>
+        <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
+          <label className="form-label">Access End Date <span className="req">*</span></label>
+          <DateField
+            value={freeAccessEndDate}
+            onChange={setFreeAccessEndDate}
+            placeholder="Select Date..."
+          />
+        </div>
       )}
     </>
   );
@@ -1970,23 +2306,13 @@ function PerSeatPriceField({
           case still shows through the field's own error border, and the Create
           button stays disabled via `priceValid`. */}
       <p className="form-help">
-        Default for {tier} {billingCycle === "Annual" ? "Yearly" : "Monthly"} is {noteSym}{noteRate} / seat / {unitWordLong}.
+        Default for {tier} {cycleWord(billingCycle)} is {noteSym}{noteRate} / seat / {unitWordLong}.
       </p>
     </div>
   );
 }
 
 /* ─────────────── Success screen ─────────────── */
-
-function fakeStripeLink(email: string, name: string): string {
-  let h = 0;
-  for (let i = 0; i < (email + name).length; i++) h = (h * 31 + (email + name).charCodeAt(i)) >>> 0;
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  let seed = h;
-  for (let i = 0; i < 14; i++) { code += chars[seed % chars.length]; seed = (seed * 1664525 + 1013904223) >>> 0; }
-  return `https://buy.stripe.com/${code}`;
-}
 
 function CompanySummaryRows({
   company, plan, tier,
@@ -2010,8 +2336,8 @@ function CompanySummaryRows({
       {company.contactName && detail("Account Holder", company.contactName)}
       {detail("Email", company.email)}
       {company.phone && detail("Phone", company.phone)}
-      {company.industry && detail("Industry", company.industry)}
-      {company.partnership && detail("Partnership", company.partnership)}
+      {company.industry.length > 0 && detail("Industry", company.industry.join(", "))}
+      {company.partnership.length > 0 && detail("Partnership", company.partnership.join(", "))}
       {company.taxStatus && detail("Tax status", company.taxStatus)}
       {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
       {company.assignedSalesRep && detail("Assigned Sales Rep", company.assignedSalesRep)}
@@ -2019,57 +2345,53 @@ function CompanySummaryRows({
       {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
       {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}
       {isSubscription && tier && detail("Tier", tier)}
-      {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Yearly" : "Monthly")}
+      {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Annual" : "Monthly")}
       {isSubscription && detail("Currency", company.currency ?? "USD")}
-      {isSubscription && detail("Per-seat rate", `${sym}${company.ratePerSeat} / month`)}
+      {isSubscription && detail("Per-seat rate", `${sym}${company.ratePerSeat} / ${company.billingCycle === "Annual" ? "year" : "month"}`)}
       {isSubscription && detail("Seats", String(company.seats))}
       {isSubscription && detail("Payment method", company.payment === "Automatic" ? "Automatic" : "Manual (invoice)")}
-      {isSubscription && detail("Est. monthly total", `${sym}${((company.ratePerSeat ?? 0) * company.seats).toLocaleString()}`)}
+      {isSubscription && detail(
+        company.billingCycle === "Annual" ? "Est. annual total" : "Est. monthly total",
+        `${sym}${((company.ratePerSeat ?? 0) * company.seats).toLocaleString()}`,
+      )}
     </>
   );
 }
 
-function StripeLinkBox({ stripeLink }: { stripeLink: string }) {
-  const [copied, setCopied] = useState(false);
-
+function StripeLinkBox({ stripeLink, onCopy }: {
+  stripeLink: string;
+  /** Fired on every copy, so the parent's toast rises alongside it. */
+  onCopy?: () => void;
+}) {
   function copy() {
-    navigator.clipboard.writeText(stripeLink).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    // The toast fires on the click, not on the promise: a browser that refuses
+    // the write (an insecure origin, a denied permission) would otherwise leave
+    // the button silent, with no sign the click registered at all. The link is
+    // on screen and selectable either way.
+    navigator.clipboard?.writeText(stripeLink).catch(() => {});
+    onCopy?.();
   }
 
   return (
     <div className="stripe-link-box">
-      <div className="stripe-link-header">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </svg>
-        Stripe Payment Link
-      </div>
+      {/* Figma 1046:1250 — a tinted card holding the link and a copy glyph. The
+          glyph never swaps to a check: the toast is the whole acknowledgement,
+          so the button reads the same before and after. */}
       <div className="stripe-link-row">
         <span className="stripe-link-url">{stripeLink}</span>
-        <button className="stripe-link-copy" onClick={copy}>
-          {copied ? (
-            <>
-              <CheckBoldIcon />
-              Copied
-            </>
-          ) : (
-            <>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              Copy
-            </>
-          )}
+        <button
+          className="stripe-link-copy"
+          title="Copy link"
+          aria-label="Copy payment link"
+          onClick={copy}
+        >
+          <CopyIcon />
         </button>
       </div>
       <p className="stripe-link-note">
-        Share this link with the account holder to collect their payment method. The Stripe
-        subscription activates once payment is confirmed.
+        Share this link with the company to collect their payment method. The Stripe
+        subscription and Dashboard activate once payment method is added. The link remains
+        active for 24 hours.
       </p>
     </div>
   );
@@ -2078,19 +2400,23 @@ function StripeLinkBox({ stripeLink }: { stripeLink: string }) {
 /* One review card (Figma 945:1974): a 20px title with a pencil beside it, over
  * a tinted card of label/value rows. A row with no value is dropped rather than
  * printed empty — the address and phone are optional on the form. */
+/** One field on a confirm card: label over value. `wide` spans two of the
+ *  card's four grid columns, for long values like an address or email. */
+type ConfirmField = [label: string, value: string | undefined, wide?: boolean];
+
 function ConfirmCard({
   title, onEdit, rows, fillBlanks = false,
 }: {
   title: string;
   onEdit: () => void;
-  rows: [label: string, value: string | undefined][];
-  /** Keep every row, printing "—" where the form left a value blank. Without
-   *  it a valueless row is dropped, which is what the Subscription card wants
-   *  for rows that don't apply to the chosen plan. */
+  rows: ConfirmField[];
+  /** Keep every field, printing "—" where the form left a value blank. Without
+   *  it a valueless field is dropped, which is what the Subscription card wants
+   *  for fields that don't apply to the chosen plan. */
   fillBlanks?: boolean;
 }) {
-  const shown = fillBlanks
-    ? rows.map(([label, value]) => [label, value || "—"] as const)
+  const shown: ConfirmField[] = fillBlanks
+    ? rows.map(([label, value, wide]) => [label, value || "—", wide])
     : rows.filter(([, value]) => value);
   return (
     <section className="confirm-card">
@@ -2105,11 +2431,14 @@ function ConfirmCard({
           <RowEditIcon />
         </button>
       </header>
+      {/* Confirm Details 6B — fields sit in a four-column grid (the first column
+          a little wider for the card's lead field) with the label above the
+          value, rather than one label/value row per line. */}
       <div className="confirm-card-body">
-        {shown.map(([label, value]) => (
-          <div className="confirm-card-row" key={label}>
-            <span className="confirm-card-label">{label}</span>
-            <span className="confirm-card-value">{value}</span>
+        {shown.map(([label, value, wide]) => (
+          <div className={`confirm-card-field${wide ? " confirm-card-field--wide" : ""}`} key={label}>
+            <div className="confirm-card-label">{label}</div>
+            <div className="confirm-card-value">{value}</div>
           </div>
         ))}
       </div>
@@ -2144,22 +2473,23 @@ function ConfirmCompanyScreen({
           with a header and content, the same shape as the steps before it. */}
       <div className="wizard-body">
         <div className="wizard-content">
-          <h1 className="wizard-title">Confirm details</h1>
+          <h1 className="wizard-title">Review Details</h1>
           <p className="wizard-desc">
-            Review the details below before creating <strong>{company.name}</strong>.
+            Review all the details. Once done, the company's account will be created.
           </p>
 
-          {/* Figma 945:1974 — one card per wizard step, each headed by its title
-              and a pencil that returns to that step. The two detail cards list
-              every field, blanks included, so a missing one is visible as "—";
-              the Subscription card drops rows that don't apply to the plan. */}
+          {/* Confirm Details 6B — one full-width card per wizard step, stacked,
+              each headed by its title and a pencil that returns to that step.
+              The two detail cards list every field, blanks included, so a
+              missing one is visible as "—"; the Subscription card drops fields
+              that don't apply to the plan. */}
           <div className="confirm-cards">
             <ConfirmCard title="Company Details" fillBlanks onEdit={() => onEditStep(0)} rows={[
               ["Company Name", company.name],
-              ["Address", company.address],
+              ["Address", company.address, true],
               ["Tax Behaviour", company.taxStatus],
-              ["Industry", company.industry],
-              ["Partnership", company.partnership],
+              ["Industry", company.industry.join(", ")],
+              ["Partnership", company.partnership.join(", ")],
               ["Assigned CSM", company.assignedCsm],
               ["Assigned Sales Rep", company.assignedSalesRep],
             ]} />
@@ -2174,7 +2504,7 @@ function ConfirmCompanyScreen({
               ["Plan", planLabel],
               ["Free Access Ends", plan === "complimentary" ? company.freeAccessEndDate : undefined],
               ["Subscription Tier", isSubscription ? tier : undefined],
-              ["Billing Cycle", isSubscription ? (company.billingCycle === "Annual" ? "Yearly" : "Monthly") : undefined],
+              ["Billing Cycle", isSubscription ? (company.billingCycle === "Annual" ? "Annual" : "Monthly") : undefined],
               ["Price Per-Seat", isSubscription ? perSeat : undefined],
               ["No. of Seats", isSubscription ? String(company.seats) : undefined],
               ["Payment Method", isSubscription
@@ -2201,26 +2531,44 @@ function ConfirmCompanyScreen({
  * just the company name and the Stripe link to send the account holder. The
  * full detail summary was already reviewed on the confirmation screen. */
 function PaymentLinkScreen({
-  company, onClose,
+  company, autoCopied = false, onClose,
 }: {
-  company: Omit<Company, "id">; onClose: () => void;
+  company: Omit<Company, "id">; autoCopied?: boolean; onClose: () => void;
 }) {
-  const stripeLink = fakeStripeLink(company.email, company.name);
-
+  const stripeLink = stripePaymentLink(company.email, company.name);
+  // The toast (Figma 1046:1141) fires alongside the button's own "Copied"
+  // flash — the auto-copy included — and re-fires on every manual click
+  // rather than staying up for the one continuous auto-copied stretch.
+  // `autoCopied` lands as a prop update after this screen has already
+  // mounted (the clipboard write is still pending when the screen first
+  // renders), so it's watched with an effect rather than a useState
+  // initializer, which would only see the value at mount.
+  const [showToast, setShowToast] = useState(false);
+  useEffect(() => {
+    if (autoCopied) setShowToast(true);
+  }, [autoCopied]);
   return (
     <div className="wizard">
-      <div className="wizard-body wizard-body--success">
-        <div className="wizard-content wizard-success-content">
-          <div className="wizard-success-icon">
-            <CheckBoldIcon />
+      <div className="wizard-body wizard-body--success pl-body">
+        <div className="wizard-content wizard-success-content wizard-success-content--center">
+          {/* Figma 1046:1111 "Icon Filled" — the brand-orange badge, not the
+              green one the other success screens use. Its check is the icon
+              library's own `tdesign:check`, which `CheckIcon` already draws. */}
+          <div className="wizard-success-icon wizard-success-icon--brand">
+            <CheckIcon />
           </div>
-          <h1 className="wizard-title">Company created</h1>
+          <h1 className="wizard-title">Company Created</h1>
           <p className="wizard-desc">
-            <strong>{company.name}</strong> has been added.
+            Almost done! Just the Payment Method needs to be added.
           </p>
 
-          <StripeLinkBox stripeLink={stripeLink} />
+          <StripeLinkBox stripeLink={stripeLink} onCopy={() => setShowToast(true)} />
         </div>
+
+        {/* Inside the body, not the page, so the 40px offset is measured from
+            where the footer begins rather than from the window's bottom. With
+            no footer the body runs to the bottom and the 40px falls there. */}
+        {showToast && <CopiedToast onDone={() => setShowToast(false)} />}
       </div>
 
       <footer className="wizard-footer">
@@ -2357,7 +2705,7 @@ function CreatePriceModal({
               className={`seg-btn ${cycle === c ? "active accent" : ""}`}
               onClick={() => setCycle(c)}
             >
-              {c === "Annual" ? "Yearly" : c}
+              {c}
             </button>
           ))}
         </div>
@@ -2409,7 +2757,7 @@ function CreatePriceModal({
                     onChange={(e) => setAmount(i, e.target.value)}
                   />
                   {/* 941:1206 — the unit follows the cycle chosen above, so a
-                      Yearly price never reads "/seat/month". */}
+                      Annual price never reads "/seat/month". */}
                   <span className="cp-rate-unit">
                     /seat/{cycle === "Annual" ? "year" : "month"}
                   </span>
@@ -2458,8 +2806,10 @@ export function MultiSelect({
 }: {
   options: string[]; value: string[]; onChange: (v: string[]) => void;
   placeholder: string;
-  /** Search box label, e.g. "Search Industries…" (Figma 591:1322). */
-  searchPlaceholder: string;
+  /** Search box label, e.g. "Search Industries…" (Figma 591:1322). OMIT it to
+   *  drop the search header entirely — the same switch SelectField uses. A
+   *  short, fixed list (cancellation reasons) reads faster without one. */
+  searchPlaceholder?: string;
   /** Set when the field sits on a modal/popup — the panel takes the
    *  popup-context surface (Figma 668:972), same as SelectField's. */
   popupMenu?: boolean;
@@ -2552,23 +2902,26 @@ function MultiSelectMenu({
   options, value, toggle, searchPlaceholder, query, setQuery,
 }: {
   options: string[]; value: string[]; toggle: (opt: string) => void;
-  searchPlaceholder: string; query: string; setQuery: (v: string) => void;
+  searchPlaceholder?: string; query: string; setQuery: (v: string) => void;
 }) {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (!searchPlaceholder) return;
     const id = requestAnimationFrame(() => searchRef.current?.focus());
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [searchPlaceholder]);
 
   return (
     <>
-      <DropdownSearch
-        inputRef={searchRef}
-        placeholder={searchPlaceholder}
-        value={query}
-        onChange={setQuery}
-      />
+      {searchPlaceholder && (
+        <DropdownSearch
+          inputRef={searchRef}
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={setQuery}
+        />
+      )}
       {/* Five rows, then scroll. Same arithmetic SelectField uses: a row is
           31px (6 + a 19px line + 6) and `.dropdown-list` pads 6px top and
           bottom, so five land exactly on the fifth row's edge and the clipped

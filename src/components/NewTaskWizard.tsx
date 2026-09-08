@@ -629,7 +629,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   }
 
   const isLast = step === lastStep;
-  const publishLabel = primaryLabel ?? (isEditing ? "Save changes" : "Publish");
+  const publishLabel = primaryLabel ?? (isEditing ? "Save Changes" : "Publish");
 
   return (
     <div className="wizard">
@@ -1505,7 +1505,7 @@ function ContentTagsSection({ data, update }: StepProps) {
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
           placeholder="Select Trades"
-          searchPlaceholder="Search Trades…"
+          searchPlaceholder="Search Trades..."
         />
         <p className="form-help">
           Only companies tagged with a Trade you pick will see this Task. Picking more than
@@ -1521,7 +1521,7 @@ function ContentTagsSection({ data, update }: StepProps) {
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
           placeholder="Select Partnerships"
-          searchPlaceholder="Search Partnerships…"
+          searchPlaceholder="Search Partnerships..."
         />
         <p className="form-help">
           Only companies in a Partnership you pick will see this Task. Picking more than one
@@ -2706,7 +2706,7 @@ function TriggerTaskPickerModal({
             </span>
             <input
               className="search-input"
-              placeholder="Search Tasks by name or ID…"
+              placeholder="Search Tasks by Name or ID..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus

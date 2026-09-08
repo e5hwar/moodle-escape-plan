@@ -161,7 +161,7 @@ export function SelectCertificationsModal({
             <input
               autoFocus
               className="search-input stm-search-input"
-              placeholder="Search Certifications"
+              placeholder="Search Certifications..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);

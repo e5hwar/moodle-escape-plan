@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
-import type { SortKey, SortDir } from "./ProctoringPage";
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, EnterKeyIcon, SortIcon } from "./icons";
+import { ChevronRightIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { PrmModal } from "./PrmModal";
 import { UserDetailsHover } from "./UserDetailsHover";
@@ -34,41 +33,24 @@ function idCardOf(s: Submission): IdCardData {
    reject/request-ID actions) is the same content ProctoringDetailModal used
    to show in an overlay — it just lives in a page body now. ── */
 
-/* Transcribed from the header's exported "Icon Library" asset (444:821 et al):
-   a 9.219×5.552 chevron with a 1.33333 SQUARE-capped stroke, placed at the
-   asset's own offsets inside the 16px box — so it spans x 4.333→11.667,
-   y 6.333→10. Deliberately NOT the project's round-capped ChevronDownIcon. */
-const SectionCaretIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path
-      d="M11.6667 6.3333L8 10L4.3333 6.3333"
-      stroke="currentColor"
-      strokeWidth="1.33333"
-      strokeLinecap="square"
-    />
-  </svg>
-);
-
-
-
 /* ── Integrity Note icons (Figma 457:583 / 457:586) ──
    Both transcribed from the exported assets. The note's 20px outline triangle
    and chevron are gone with the expand/collapse: it now carries an 11px FILLED
    alert circle and, on the right, the 10.5px open-in-new glyph. Each is drawn
    at its own natural size and centred by its wrapper span. */
 const NoteAlertIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path
-      d="M5.5 0C8.5375 0 11 2.4625 11 5.5C11 8.5375 8.5375 11 5.5 11C2.4625 11 0 8.5375 0 5.5C0 2.4625 2.4625 0 5.5 0ZM5 6.5H6V2.75H5V6.5ZM6.002 7.25H5V8.252H6.002V7.25Z"
+      d="M8 0.666667C12.05 0.666667 15.3333 3.95 15.3333 8C15.3333 12.05 12.05 15.3333 8 15.3333C3.95 15.3333 0.666667 12.05 0.666667 8C0.666667 3.95 3.95 0.666667 8 0.666667ZM7.33333 9.33333H8.66667V4.33333H7.33333V9.33333ZM8.66933 10.3333H7.33333V11.6693H8.66933V10.3333Z"
       fill="currentColor"
     />
   </svg>
 );
 
 const NoteOpenIcon = () => (
-  <svg width="10.5" height="10.5" viewBox="0 0 10.5 10.5" fill="none" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
     <path
-      d="M3.5 0.583333H0.583333V9.91667H9.91667V7M9.47917 1.02083L5.25 5.25M6.41667 0.583333H9.91667V4.08333"
+      d="M5.25 2.33333H2.33333V11.6667H11.6667V8.75M11.2292 2.77083L7 7M8.16667 2.33333H11.6667V5.83333"
       stroke="currentColor"
       strokeWidth="1.16667"
       strokeLinecap="square"
@@ -100,24 +82,14 @@ const REJECT_REASONS = [
   OTHER_REASON,
 ];
 
-/* Queue popover columns — mirrors ReviewConsole's QUEUE_COLS, minus the
-   attempt-count column (no equivalent here). */
-const QUEUE_COLS: { cls: string; label: string; sortKey?: SortKey }[] = [
-  { cls: "idx", label: "" },
-  { cls: "user", label: "Candidate", sortKey: "candidate" },
-  { cls: "task", label: "Exam", sortKey: "exam" },
-  { cls: "date", label: "Submitted", sortKey: "submittedAt" },
-];
-
 export function ProctoringConsole({
   submission,
   queue,
   previousRejected,
-  examFilter,
-  sort,
-  onSort,
   onGoto,
   onExit,
+  originLabel,
+  onExitToSection,
   onAccept,
   onReject,
   onRequestId,
@@ -125,15 +97,18 @@ export function ProctoringConsole({
   onRenameUser,
 }: {
   submission: Submission;
-  /** The table's filtered + sorted pending submissions — becomes the queue. */
+  /** The table's filtered + sorted pending submissions — the order Skip and
+   *  ←/→ step through. It has no on-screen UI of its own any more. */
   queue: Submission[];
   previousRejected: Submission[];
-  /** The table's applied Exam filter, echoed read-only in the queue popover head. */
-  examFilter: string[];
-  sort: { key: SortKey; dir: SortDir };
-  onSort: (key: SortKey) => void;
   onGoto: (id: string) => void;
   onExit: () => void;
+  /** When the console was opened from another page, that page's name — it
+   *  becomes the trailing crumb, and Exam Reviews moves up a level. */
+  originLabel?: string;
+  /** The Exam Reviews crumb above `originLabel` — leaves the origin behind and
+   *  goes to the Exam Reviews landing. */
+  onExitToSection?: () => void;
   onAccept: () => void;
   onReject: (details?: RejectDetails) => void;
   onRequestId: () => void;
@@ -149,14 +124,18 @@ export function ProctoringConsole({
   /* The ID card's full-view overlay owns the keyboard while it's open — it has
      its own Escape handler, so this page must not also act on the same event. */
   const [idFullView, setIdFullView] = useState(false);
-  const [queueOpen, setQueueOpen] = useState(false);
-  /* Same highlight-then-commit interaction as ReviewConsole's queue: arrows
-     move the highlight, Q/⏎ commits, Esc discards, a row click commits at once. */
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const queueWrapRef = useRef<HTMLDivElement>(null);
+  /* The footage rail's Flagged filter. It's a view filter, not a count — the
+     FLAGGED stat stays the true total either way — and it is kept across queue
+     navigation so a reviewer scanning flags can keep going. */
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  /* The Name Mismatch card's pending name. It lives here, not in the card, so
+     it survives nothing but this submission — `approve` writes it, and moving
+     to another candidate re-seeds it from that candidate's name. */
+  const [nameDraft, setNameDraft] = useState(submission.candidateName);
+  useEffect(() => setNameDraft(submission.candidateName), [submission.id, submission.candidateName]);
 
-  /* Prev/next has no on-screen control any more (the queue popover is the
-     navigation UI) but ←/→ still step through the queue for keyboard users. */
+  /* The queue has no on-screen control (Figma 445:878 leaves Skip alone on the
+     footer's left), but ←/→ still step through it for keyboard users. */
   const index = queue.findIndex((s) => s.id === submission.id);
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < queue.length - 1;
@@ -166,17 +145,14 @@ export function ProctoringConsole({
     onGoto(queue[idx].id);
   }
 
-  function moveQueue(d: number) {
-    if (!queue.length) return;
-    const from = highlightId ?? submission.id;
-    const i = Math.max(0, queue.findIndex((x) => x.id === from));
-    const next = Math.min(queue.length - 1, Math.max(0, i + d));
-    setHighlightId(queue[next].id);
-  }
-
-  function commitQueue() {
-    if (highlightId && highlightId !== submission.id) onGoto(highlightId);
-    setQueueOpen(false);
+  /* Approving is what saves the name — the Name Mismatch card promises exactly
+     that, and it's the only commit point: skipping, rejecting or walking away
+     leaves the candidate's name alone. The name is written FIRST so the
+     submission is accepted under the name the reviewer settled on. */
+  function approve() {
+    const next = nameDraft.trim();
+    if (next && next !== submission.candidateName) onUpdateName(next);
+    onAccept();
   }
 
   /* Footage follows the EXAM, not the queue the submission currently sits in —
@@ -185,23 +161,33 @@ export function ProctoringConsole({
   /* Already asked for a new ID and still waiting on the candidate (the "Requested"
      state on the ID Re-uploads tab) — there's nothing to ask again for yet. */
   const idAlreadyRequested = submission.status === "id-requested";
+  /** This row's document is a re-upload — the rail says so beside the title. */
+  const isReupload = submission.kind === "id-reupload";
+  const idVerified = hasFootage && !!submission.idPreviouslyVerified;
   const flaggedFrames = submission.frames.filter((f) => !!f.flag);
+  /* The three AI CONFIDENCE bands the rail is designed against (Figma 308:2208
+     90+ green / 999:1113 80-90 amber / 999:1168 under 80 red). */
   const confidenceClass =
     submission.idConfidence >= 90
       ? "is-strong"
-      : submission.idConfidence >= 75
+      : submission.idConfidence >= 80
       ? "is-ok"
       : "is-weak";
-  // The header's Reason column surfaces the most common flag across the footage.
-  const dominantReason =
-    flaggedFrames.length === 0
+  /* The rail's REASONS stat names the most common flag and counts the OTHER
+     distinct reasons after it — "Looking Away +1" (Figma 1000:1194). Facts, not
+     a verdict; the auditor judges. */
+  const distinctReasons = [
+    ...flaggedFrames.reduce(
+      (m, f) => m.set(f.flag!, (m.get(f.flag!) ?? 0) + 1),
+      new Map<string, number>(),
+    ),
+  ].sort((a, b) => b[1] - a[1]);
+  const reasonsSummary =
+    distinctReasons.length === 0
       ? "-" // Figma 308:2254 uses a plain hyphen here, not an em dash.
-      : [
-          ...flaggedFrames.reduce(
-            (m, f) => m.set(f.flag!, (m.get(f.flag!) ?? 0) + 1),
-            new Map<string, number>(),
-          ),
-        ].sort((a, b) => b[1] - a[1])[0][0];
+      : distinctReasons.length === 1
+      ? distinctReasons[0][0]
+      : `${distinctReasons[0][0]} +${distinctReasons.length - 1}`;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -213,21 +199,10 @@ export function ProctoringConsole({
         if (e.key === "Escape") (e.target as HTMLElement).blur();
         return;
       }
-      /* While the queue popover is open it owns the keyboard, same as ReviewConsole:
-         ↑↓ navigate, ⏎/Q commit, Esc closes and discards. */
-      if (queueOpen) {
-        if (e.key === "Escape") { setQueueOpen(false); return; }
-        if (e.key === "Enter" || e.key === "q" || e.key === "Q") { commitQueue(); return; }
-        if (e.key === "ArrowDown") { e.preventDefault(); moveQueue(1); return; }
-        if (e.key === "ArrowUp") { e.preventDefault(); moveQueue(-1); return; }
-        return;
-      }
       if (e.key === "ArrowLeft" && hasPrev) gotoIndex(index - 1);
       else if (e.key === "ArrowRight" && hasNext) gotoIndex(index + 1);
-      else if (e.key === "q" || e.key === "Q") setQueueOpen((v) => !v);
-      /* The footer's keycaps (Figma 445:878). Its "Request ID Again" cap reads R,
-         the same letter as Reject — one of the two can't work, so Reject keeps R
-         (it matches the red button) and Request ID Again takes I. */
+      /* The footer's keycaps (Figma 445:878). Reject keeps R (it matches the red
+         button) and Request ID Re-Upload takes I. */
       else if (e.key === "a" || e.key === "A") setConfirmKind("accept");
       // No Reject button on ID-only submissions, so no R either.
       else if ((e.key === "r" || e.key === "R") && hasFootage) setConfirmKind("reject");
@@ -237,23 +212,7 @@ export function ProctoringConsole({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, confirmKind, idFullView, queueOpen, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, highlightId, submission.id]);
-
-  /* Opening the popover highlights whatever is on screen. */
-  useEffect(() => {
-    setHighlightId(queueOpen ? submission.id : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queueOpen]);
-
-  /* Click outside the queue popover closes it. */
-  useEffect(() => {
-    if (!queueOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (!queueWrapRef.current?.contains(e.target as Node)) setQueueOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [queueOpen]);
+  }, [zoom, confirmKind, idFullView, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, submission.id]);
 
   return (
     <div className="main">
@@ -267,9 +226,33 @@ export function ProctoringConsole({
                 <ChevronRightIcon />
                 <span className="rvc-crumb">Operations</span>
                 <ChevronRightIcon />
-                <button className="rvc-crumb rvc-crumb--current" onClick={onExit} title="Back to Exam Reviews">
-                  Exam Reviews
-                </button>
+                {/* Opened from the review queue, Exam Reviews IS the page to go
+                    back to. Opened from a page that hangs off it, that page is
+                    the trailing crumb instead and Exam Reviews reads as the
+                    section it sits under. */}
+                {originLabel ? (
+                  <>
+                    <button
+                      className="rvc-crumb"
+                      onClick={onExitToSection}
+                      title="Back to Exam Reviews"
+                    >
+                      Exam Reviews
+                    </button>
+                    <ChevronRightIcon />
+                    <button
+                      className="rvc-crumb rvc-crumb--current"
+                      onClick={onExit}
+                      title={`Back to ${originLabel}`}
+                    >
+                      {originLabel}
+                    </button>
+                  </>
+                ) : (
+                  <button className="rvc-crumb rvc-crumb--current" onClick={onExit} title="Back to Exam Reviews">
+                    Exam Reviews
+                  </button>
+                )}
               </nav>
               <div className="rvc-pagehead-id">
                 <h1 className="tasks-title">
@@ -303,34 +286,48 @@ export function ProctoringConsole({
                 </QuizAttemptLink>
               </div>
             </div>
+
+            {/* The Integrity Note rides on the right of the page header, beside
+                the candidate — it is context on WHO is being reviewed, not a
+                heading for the review content, and up here it also stays put
+                instead of scrolling away under the first section rail. */}
+            <IntegrityNoteBanner submission={submission} previousRejected={previousRejected} />
           </div>
 
-          {/* ── body — single column; the integrity note is a full-width card
-                 heading it, above the ID ── */}
+          {/* ── body — single column, the ID section heading it ── */}
           <div className="rvc-body">
             <div className="rvc-stagecol prc-stagecol">
-              <IntegrityNoteBanner submission={submission} previousRejected={previousRejected} />
-
-              <CollapsibleSection
+              {/* Already accepted on an earlier submission? The rail says so
+                  itself (Figma 1006:1348): a Verified pill beside the title and
+                  the approval date in place of the AI read, since there is
+                  nothing left for the reviewer to judge here. Proctored exams
+                  only — on an ID-only submission the ID check IS the review. */}
+              <ReviewSection
                 title="ID Verification"
-                meta={
-                  <span className="pr-section-stats">
-                    <SectionAiAssist />
-                    <SectionStat
-                      label="Confidence"
-                      value={`${submission.idConfidence}%`}
-                      tone={confidenceClass}
+                /* Never both: requesting a re-upload drops the prior
+                   verification (it vouched for the document being replaced),
+                   so a row is one or the other. */
+                badge={isReupload ? <ReuploadedIdPill /> : idVerified ? <VerifiedPill /> : undefined}
+                stats={
+                  idVerified ? (
+                    <RailStat
+                      label="Approved On"
+                      value={shortDateOf(submission.idPreviouslyVerified!.at)}
+                      tone="is-muted"
                     />
-                    <SectionStat label="Document" value={submission.idType} />
-                  </span>
+                  ) : (
+                    <>
+                      <RailStat
+                        label="AI Confidence"
+                        value={`${submission.idConfidence}%`}
+                        tone={confidenceClass}
+                        info
+                      />
+                      <RailStat label="Identified Document" value={submission.idType} />
+                    </>
+                  )
                 }
               >
-                {/* Shown above the card when this candidate's ID was already
-                    accepted on an earlier submission. */}
-                {hasFootage && submission.idPreviouslyVerified && (
-                  <IdPreviouslyVerifiedBanner detail={submission.idPreviouslyVerified} />
-                )}
-
                 {/* Card on the left, the name-mismatch prompt beside it on the
                     right. Shared card: hover magnifies, click opens full view,
                     and it rotates — the same component the Name Change Requests
@@ -340,54 +337,65 @@ export function ProctoringConsole({
                   <div className="prc-idcard">
                     <ZoomableIdCard data={idCardOf(submission)} onFullViewChange={setIdFullView} hideTools />
                   </div>
-                  <NameMismatchBanner submission={submission} onUpdate={onUpdateName} />
+                  <NameMismatchBanner
+                    submission={submission}
+                    draft={nameDraft}
+                    onDraftChange={setNameDraft}
+                  />
                 </div>
-              </CollapsibleSection>
+              </ReviewSection>
 
-              {/* ID reviews and reupload requests are ID-only — no proctoring footage was captured. */}
+              {/* ID reviews and reupload requests are ID-only — no proctoring
+                  footage was captured. The old separate "Flagged Images" section
+                  is folded into this one: the FLAGGED stat itself filters the
+                  wall (Figma 1000:1184 idle / 1003:1266 applied). */}
               {hasFootage && (
-                <>
-                  <CollapsibleSection
-                    title="Complete Proctoring Footage"
-                    meta={
-                      <span className="pr-section-stats">
-                        <SectionAiAssist />
-                        <SectionStat label="Frames" value={submission.webcamTotal} tone="is-muted" />
-                        <SectionStat
-                          label="Flagged"
-                          value={submission.webcamFlaggedCount}
-                          tone={submission.webcamFlaggedCount > 0 ? "is-bad" : "is-strong"}
-                        />
-                        <SectionStat
-                          label="Reason"
-                          value={dominantReason}
-                          tone={submission.webcamFlaggedCount > 0 ? "" : "is-muted"}
-                        />
-                      </span>
-                    }
-                  >
+                <ReviewSection
+                  title="Proctoring Footage"
+                  bodyClass="prc-section-body--footage"
+                  stats={
+                    <>
+                      <RailStat label="Total Frames" value={submission.webcamTotal} tone="is-muted" />
+                      <RailStat
+                        label="Flagged"
+                        value={submission.webcamFlaggedCount}
+                        tone={submission.webcamFlaggedCount > 0 ? "is-bad" : "is-strong"}
+                        /* Nothing to narrow to when nothing is flagged, so the
+                           stat stays a plain number there. */
+                        onFilter={
+                          submission.webcamFlaggedCount > 0
+                            ? () => setFlaggedOnly((v) => !v)
+                            : undefined
+                        }
+                        filtered={flaggedOnly}
+                        filterLabel="Show only the flagged frames"
+                        clearLabel="Show all frames"
+                      />
+                      <RailStat
+                        label="Reason"
+                        value={reasonsSummary}
+                        tone={submission.webcamFlaggedCount > 0 ? "" : "is-muted"}
+                      />
+                    </>
+                  }
+                >
+                  {flaggedOnly && flaggedFrames.length === 0 ? (
+                    <div className="pr-empty">
+                      No flagged frames found. AI can make mistakes. Review the footage
+                      and decide yourself.
+                    </div>
+                  ) : (
                     <div className="pr-frame-grid">
-                      {submission.frames.map((f, i) => (
-                        <FrameCell key={`all-${i}`} frame={f} onZoom={() => setZoom(<ZoomedFrame frame={f} />)} />
+                      {(flaggedOnly ? flaggedFrames : submission.frames).map((f, i) => (
+                        <FrameCell
+                          key={`${flaggedOnly ? "flag" : "all"}-${i}`}
+                          frame={f}
+                          onZoom={() => setZoom(<ZoomedFrame frame={f} />)}
+                        />
                       ))}
                     </div>
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Flagged Images">
-                    {flaggedFrames.length === 0 ? (
-                      <div className="pr-empty">
-                        No flagged frames found. AI can make mistakes. Review the footage
-                        and decide yourself.
-                      </div>
-                    ) : (
-                      <div className="pr-frame-grid">
-                        {flaggedFrames.map((f, i) => (
-                          <FrameCell key={`flag-${i}`} frame={f} onZoom={() => setZoom(<ZoomedFrame frame={f} />)} />
-                        ))}
-                      </div>
-                    )}
-                  </CollapsibleSection>
-                </>
+                  )}
+                </ReviewSection>
               )}
             </div>
           </div>
@@ -404,112 +412,11 @@ export function ProctoringConsole({
               >
                 Skip
               </button>
-              <div className="rvc-queue-wrap" ref={queueWrapRef}>
-                <button
-                  className="btn-save-draft rvc-viewqueue"
-                  onClick={() => setQueueOpen((v) => !v)}
-                  aria-expanded={queueOpen}
-                >
-                  <span className="rvc-viewqueue-text">
-                    <span className="rvc-viewqueue-label">View Queue</span>
-                    <span className="rvc-viewqueue-count">· {queue.length} waiting</span>
-                  </span>
-                  <span className="kbd-letter">Q</span>
-                </button>
-
-                {queueOpen && (
-                  <div className="rvc-qpanel rvc-qpanel--proctoring" role="dialog" aria-label="Proctoring queue">
-                    <div className="rvc-qpanel-head">
-                      <span className="rvc-qcount">{queue.length} Pending</span>
-                      {examFilter.length > 0 && (
-                        <div className="rvc-qpanel-filters">
-                          {examFilter.map((name) => (
-                            <span key={name} className="filter-applied">
-                              <span className="filter-applied-main">
-                                <span className="label">Exam</span>
-                                <span className="sep" />
-                                <span className="value">{name}</span>
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rvc-qhead">
-                      {QUEUE_COLS.map((c) => {
-                        const active = !!c.sortKey && sort.key === c.sortKey;
-                        if (!c.sortKey) {
-                          return <span key={c.cls} className={`rvc-qc rvc-qc--${c.cls}`}>{c.label}</span>;
-                        }
-                        return (
-                          <button
-                            key={c.cls}
-                            className={`rvc-qc rvc-qc--${c.cls} rvc-qc--sortable`}
-                            onClick={() => onSort(c.sortKey!)}
-                          >
-                            {c.label}
-                            <SortIcon active={active} dir={active ? sort.dir : undefined} />
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="rvc-qlist">
-                      {queue.map((q, i) => {
-                        const sel = q.id === (highlightId ?? submission.id);
-                        return (
-                          <button
-                            key={q.id}
-                            className={`rvc-qrow ${sel ? "is-selected" : ""}`}
-                            onClick={() => {
-                              if (q.id !== submission.id) onGoto(q.id);
-                              setQueueOpen(false);
-                            }}
-                          >
-                            <span className="rvc-qc rvc-qc--idx">{i + 1}</span>
-                            <span className="rvc-qc rvc-qc--user">{q.candidateName}</span>
-                            <span className="rvc-qc rvc-qc--task">{q.examShort}</span>
-                            <span className="rvc-qc rvc-qc--date">{q.submittedAt}</span>
-                          </button>
-                        );
-                      })}
-                      {queue.length === 0 && (
-                        <div className="rvc-qempty">No submissions match these filters.</div>
-                      )}
-                    </div>
-
-                    <div className="rvc-qpanel-foot">
-                      <div className="rvc-qhints">
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkeypair">
-                            <span className="rvc-qkey"><ArrowUpIcon /></span>
-                            <span className="rvc-qkey"><ArrowDownIcon /></span>
-                          </span>
-                          To navigate
-                        </span>
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkey"><EnterKeyIcon /></span>
-                          To select
-                        </span>
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkey rvc-qkey--text">Esc</span>
-                          To close
-                        </span>
-                      </div>
-                      <span className="rvc-qhint">
-                        <span className="rvc-qkey rvc-qkey--text">Q</span>
-                        Save &amp; update queue
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="prc-footer-right">
               <button
-                className="prc-cta prc-cta--warn"
+                className="prc-cta prc-cta--secondary"
                 onClick={() => setConfirmKind("request")}
                 disabled={idAlreadyRequested}
                 title={
@@ -518,7 +425,7 @@ export function ProctoringConsole({
                     : undefined
                 }
               >
-                Request ID Again
+                Request ID Re-Upload
                 <span className="prc-key">I</span>
               </button>
               {/* ID-only submissions (ID reviews and re-uploads) can't be
@@ -568,7 +475,7 @@ export function ProctoringConsole({
           onCancel={() => setConfirmKind(null)}
           onConfirm={() => {
             setConfirmKind(null);
-            if (confirmKind === "accept") onAccept();
+            if (confirmKind === "accept") approve();
             else if (confirmKind === "reject") onReject();
             else onRequestId();
           }}
@@ -859,14 +766,21 @@ function ImageZoomOverlay({
   );
 }
 
-/** A review section whose header collapses it. The chevron that was decorative
- *  is now the control: it points down while open (at the content below) and
- *  rotates to the right when collapsed. The whole header is the hit target. */
-/** One labelled stat column in a section header (Figma 302:104) — a small
- *  uppercase label stacked over its value. `tone` colours the value
- *  (is-strong / is-ok / is-weak / is-bad / is-muted). */
-/** 9.167px "info" circle from the header asset (482:560), centred in its 10px
- *  box. Square caps and a 0.833 stroke — not the project's round-capped icons. */
+/* ── Section rails (Figma 308:2208 / 1000:1184 / 1003:1266) ──
+   Each review section carries a "stat rail": the section title on the left and
+   its stats on the right, divided by hairlines. The rail PINS to the top of the
+   scrolling stage while its own section is in view and hands off when the next
+   section arrives, so the counts stay visible through a long frame wall.
+   Sections do not collapse — the old chevron was deliberately removed and both
+   are always open. */
+
+/** The caveat carried by the (i) on any AI-derived stat. */
+const AI_CAVEAT =
+  "Generated by AI to speed up review. It can make mistakes. The final decision is yours";
+
+/** 9.167px "info" circle from the header asset (Figma 999:1103), centred in its
+ *  10px box. Square caps and a 0.833 stroke — not the project's round-capped
+ *  icons. */
 const AiAssistIcon = () => (
   <svg width="9.16667" height="9.16667" viewBox="0 0 9.16667 9.16667" fill="none" aria-hidden="true">
     <path
@@ -884,93 +798,140 @@ const AiAssistIcon = () => (
   </svg>
 );
 
-/** Leads the stat group on any header whose numbers are AI-derived (Figma
- *  444:825). One centred row rather than the label-over-value stack, with the
- *  info icon carrying the caveat. */
-function SectionAiAssist() {
-  return (
-    <span className="pr-hstat pr-hstat--assist">
-      <span className="pr-hstat-label">AI Assist</span>
-      <span
-        className="pr-hstat-info"
-        data-tip="Generated by AI to speed up review. It can make mistakes. The final decision is yours"
-        aria-label="Generated by AI to speed up review. It can make mistakes. The final decision is yours"
-        role="img"
-      >
-        <AiAssistIcon />
-      </span>
-    </span>
-  );
-}
+/** The 14px close-circle beside an applied stat filter — transcribed from the
+ *  exported asset (Figma 1003:1286). Square caps and a 1.16667 stroke, not the
+ *  project's round-capped CloseXIcon. */
+const StatFilterClearIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path
+      d="M1.16653 7.00028C1.16653 3.77862 3.7782 1.16695 6.99986 1.16695C10.2215 1.16695 12.8332 3.77862 12.8332 7.00029C12.8332 10.2219 10.2215 12.8336 6.99986 12.8336C3.7782 12.8336 1.16652 10.2219 1.16653 7.00028Z"
+      stroke="currentColor"
+      strokeWidth="1.16667"
+      strokeLinecap="square"
+    />
+    <path
+      d="M8.85593 5.14401L6.99997 6.99997M6.99997 6.99997L5.14362 8.85632M6.99997 6.99997L8.85593 8.85593M6.99997 6.99997L5.14362 5.14362"
+      stroke="currentColor"
+      strokeWidth="1.16667"
+      strokeLinecap="square"
+    />
+  </svg>
+);
 
-function SectionStat({
+/** One stat block on a rail — a small uppercase label over its value. `tone`
+ *  colours the value (is-strong / is-ok / is-weak / is-bad / is-muted).
+ *
+ *  Passing `onFilter` makes the VALUE the control that narrows the section to
+ *  what it counts (Figma 1000:1184 / 1003:1266) — there is no separate toggle.
+ *  A dotted underline marks it as clickable, and while `filtered` a close-circle
+ *  sits beside it to clear. The number itself never changes: it is the true
+ *  total in both states, not a count of what's on screen. */
+function RailStat({
   label,
   value,
   tone = "",
+  info = false,
+  onFilter,
+  filtered = false,
+  filterLabel,
+  clearLabel,
 }: {
   label: string;
   value: ReactNode;
   tone?: string;
+  /** Adds the (i) after the label — this number came from the AI. */
+  info?: boolean;
+  /** Toggles this stat's filter. Omit for a stat that isn't a control. */
+  onFilter?: () => void;
+  filtered?: boolean;
+  /** Tooltip on the value while the filter is off. */
+  filterLabel?: string;
+  /** Tooltip on the value and the clear button while it is on. */
+  clearLabel?: string;
 }) {
+  const head = (
+    <span className="prc-stat-head">
+      <span className="prc-stat-label">{label}</span>
+      {info && (
+        <span className="prc-stat-info" data-tip={AI_CAVEAT} aria-label={AI_CAVEAT} role="img">
+          <AiAssistIcon />
+        </span>
+      )}
+    </span>
+  );
+
+  if (!onFilter) {
+    return (
+      <span className="prc-stat">
+        {head}
+        <span className={`prc-stat-value ${tone}`}>{value}</span>
+      </span>
+    );
+  }
+
+  const tip = filtered ? clearLabel : filterLabel;
   return (
-    <span className="pr-hstat">
-      <span className="pr-hstat-label">{label}</span>
-      <span className={`pr-hstat-value ${tone}`}>{value}</span>
+    <span className={`prc-stat prc-stat--filter ${filtered ? "is-filtered" : ""}`}>
+      <button
+        type="button"
+        className="prc-stat-btn"
+        onClick={onFilter}
+        aria-pressed={filtered}
+        data-tip={tip}
+        title={tip}
+      >
+        {head}
+        <span className={`prc-stat-value ${tone}`}>{value}</span>
+      </button>
+      {filtered && (
+        <button
+          type="button"
+          className="prc-stat-clear"
+          onClick={onFilter}
+          data-tip={clearLabel}
+          aria-label={clearLabel}
+        >
+          <StatFilterClearIcon />
+        </button>
+      )}
     </span>
   );
 }
 
-function CollapsibleSection({
+/** A review section with a sticky stat rail. The <section> is the rail's
+ *  containing block, which is what bounds its sticky range — this is load-
+ *  bearing: with both rails in one block the first would never unpin and the
+ *  two would overlap. Pinning is pure CSS and so is the pinned shadow (see
+ *  .prc-rail in index.css): there is deliberately no observer or state here.
+ *  A React commit and a repaint landing exactly at the pin moment showed as a
+ *  hitch mid-scroll. */
+function ReviewSection({
   title,
-  meta,
+  badge,
+  stats,
+  bodyClass = "",
   children,
 }: {
   title: string;
-  /** Stats/labels shown after the title in the header. */
-  meta?: ReactNode;
+  /** A pill shown right after the title (the ID section's "Verified"). */
+  badge?: ReactNode;
+  /** Stat blocks, right-aligned on the rail. */
+  stats: ReactNode;
+  bodyClass?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <section className={`pr-section ${open ? "" : "is-collapsed"}`}>
-      {/* Figma 308:2208 / 2254 / 2269 / 2284: title + stats grouped on the left,
-          the chevron alone on the far right. */}
-      <button
-        className="pr-section-head"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span className="pr-section-headleft">
-          <span className="pr-section-title">{title}</span>
-          {meta}
-        </span>
-        <span className="pr-section-caret">
-          <SectionCaretIcon />
-        </span>
-      </button>
-      {open && children}
+    <section className="prc-section">
+      <div className="prc-rail">
+        <div className="prc-rail-left">
+          <h2 className="prc-rail-title">{title}</h2>
+          {badge}
+        </div>
+        <div className="prc-rail-right">{stats}</div>
+      </div>
+      <div className={`prc-section-body ${bodyClass}`}>{children}</div>
     </section>
   );
-}
-
-/** "November 5th, 2025, 2:30 PM" → "5th November 2025", the ordinal long date
- *  the Integrity Note's rejected-attempt lines use (Figma 303:942). */
-function longDateOf(submittedAt: string): string {
-  const d = new Date(submittedAt.replace(/(\d+)(st|nd|rd|th)/, "$1"));
-  if (Number.isNaN(d.getTime())) return submittedAt;
-  const day = d.getDate();
-  const tens = day % 100;
-  const suffix =
-    tens >= 11 && tens <= 13
-      ? "th"
-      : day % 10 === 1
-      ? "st"
-      : day % 10 === 2
-      ? "nd"
-      : day % 10 === 3
-      ? "rd"
-      : "th";
-  return `${day}${suffix} ${d.toLocaleDateString("en-US", { month: "long" })} ${d.getFullYear()}`;
 }
 
 /** Integrity Note (Figma 302:883 collapsed / 303:905 expanded). Only renders
@@ -1010,34 +971,56 @@ function QuizAttemptLink({
   );
 }
 
-/** The asset (456:574) is an 11px filled check-circle centred in a 12px box. */
+/** The asset (Figma 1006:1381) is a 12px filled check-circle. */
 const VerifiedCheckIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <path
-      d="M5.5 11C8.5375 11 11 8.5375 11 5.5C11 2.4625 8.5375 0 5.5 0C2.4625 0 0 2.4625 0 5.5C0 8.5375 2.4625 11 5.5 11ZM3.25 4.793L4.75 6.293L7.75 3.293L8.457 4L4.75 7.707L2.543 5.5L3.25 4.793Z"
+      d="M6 11.5C9.0375 11.5 11.5 9.0375 11.5 6C11.5 2.9625 9.0375 0.5 6 0.5C2.9625 0.5 0.5 2.9625 0.5 6C0.5 9.0375 2.9625 11.5 6 11.5ZM3.75 5.293L5.25 6.793L8.25 3.793L8.957 4.5L5.25 8.207L3.043 6L3.75 5.293Z"
       fill="currentColor"
     />
   </svg>
 );
 
-/** "ID Previously Verified" banner (Figma 456:563). Proctored exams only — on
- *  an ID-only submission the ID check IS the review, so there is nothing to
- *  skip. The date reuses longDateOf, which is why `at` is stored in the same
- *  display format as `submittedAt`. */
-function IdPreviouslyVerifiedBanner({ detail }: { detail: { at: string; by: string } }) {
+/* The re-upload pill's alert glyph (Figma 1015:1463) — a filled 12px circle
+   with an exclamation knocked out of it. */
+const ReuploadAlertIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path
+      d="M6 0.5C9.0375 0.5 11.5 2.9625 11.5 6C11.5 9.0375 9.0375 11.5 6 11.5C2.9625 11.5 0.5 9.0375 0.5 6C0.5 2.9625 2.9625 0.5 6 0.5ZM5.5 7H6.5V3.25H5.5V7ZM6.502 7.75H5.5V8.752H6.502V7.75Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+/** The "Re-Uploaded ID" pill beside the ID Verification title when the document
+ *  on screen is one the candidate re-sent after being asked (Figma 1015:1454).
+ *  It says the reviewer is looking at a second attempt, not the original. */
+function ReuploadedIdPill() {
   return (
-    <div className="prc-idverified">
-      <span className="prc-idverified-icon">
-        <VerifiedCheckIcon />
-      </span>
-      <span className="prc-banner-text">
-        <span className="prc-idverified-title">ID Previously Verified</span>
-        <span className="prc-idverified-detail">
-          · Approved on {longDateOf(detail.at)} by {detail.by}
-        </span>
-      </span>
-    </div>
+    <span className="prc-pill prc-pill--warn">
+      <ReuploadAlertIcon />
+      Re-Uploaded ID
+    </span>
   );
+}
+
+/** The "Verified" pill beside the ID Verification title when this candidate's
+ *  document was already accepted on an earlier submission (Figma 1006:1378). */
+function VerifiedPill() {
+  return (
+    <span className="prc-pill prc-pill--ok">
+      <VerifiedCheckIcon />
+      Verified
+    </span>
+  );
+}
+
+/** "March 2nd, 2026, 9:00 AM" → "Mar 2, 2026", the short date the verified
+ *  rail's APPROVED ON stat carries (Figma 1006:1388). */
+function shortDateOf(at: string): string {
+  const d = new Date(at.replace(/(\d+)(st|nd|rd|th)/, "$1"));
+  if (Number.isNaN(d.getTime())) return at;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function IntegrityNoteBanner({
@@ -1070,10 +1053,12 @@ function IntegrityNoteBanner({
         <span className="prc-inote-icon" aria-hidden>
           <NoteAlertIcon />
         </span>
-        <span className="prc-banner-text">
+        {/* Two lines now (Figma 458:590): the note sits UNDER the title rather
+            than trailing it after a middot. */}
+        <span className="prc-banner-text prc-inote-text">
           <span className="prc-inote-title">Past Attempt Flagged By Proctor</span>
           {submission.integrityNote && (
-            <span className="prc-inote-sub">· {submission.integrityNote}</span>
+            <span className="prc-inote-sub">{submission.integrityNote}</span>
           )}
         </span>
       </span>
@@ -1099,31 +1084,24 @@ function IntegrityNoteBanner({
 }
 
 /** Name Mismatch card (Figma 308:2299). The reviewer sets the name to keep in an
- *  editable field seeded with the SkillCat name; the detected name sits below with
- *  a "Use This" link that adopts it.
+ *  editable field seeded with the SkillCat name; the detected name sits below
+ *  with a "Use This" link that fills the field with it.
  *
- *  The design has no explicit save control, so the field commits on blur or Enter
- *  (only when non-empty and actually changed) — "Use This" commits immediately.
- *  Committing resolves the mismatch, which unmounts this card. */
+ *  Nothing here saves on its own — the card says so itself ("Saved when you
+ *  approve the review"). It holds a DRAFT the console owns and writes only when
+ *  the review is approved, so the card stays put while the reviewer works and
+ *  an abandoned review leaves the name untouched. */
 function NameMismatchBanner({
   submission,
-  onUpdate,
+  draft,
+  onDraftChange,
 }: {
   submission: Submission;
-  onUpdate?: (name: string) => void;
+  draft: string;
+  onDraftChange: (name: string) => void;
 }) {
-  const [draft, setDraft] = useState(submission.candidateName);
-
-  // Re-seed when navigating to another candidate.
-  useEffect(() => setDraft(submission.candidateName), [submission.id, submission.candidateName]);
-
   if (!submission.idDetectedName || submission.idDetectedName === submission.candidateName) {
     return null;
-  }
-
-  function commit() {
-    const next = draft.trim();
-    if (next && next !== submission.candidateName) onUpdate?.(next);
   }
 
   return (
@@ -1136,44 +1114,40 @@ function NameMismatchBanner({
         </p>
       </div>
 
-      <div className="prc-mismatch-body">
-        <div className="prc-mismatch-field">
-          <label className="form-label" htmlFor="prc-name">
-            Name on SkillCat<span className="req">*</span>
-          </label>
-          <input
-            id="prc-name"
-            className="form-input prc-mismatch-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commit();
-              }
-            }}
-          />
-          <p className="form-help prc-mismatch-help">
-            Detection can be wrong. Confirm the spelling before you accept.
-          </p>
-        </div>
-
-        <div className="prc-mismatch-detected">
-          <span className="prc-mismatch-detected-text">
-            On The Uploaded ID: <strong>{submission.idDetectedName}</strong>
-          </span>
+      <div className="prc-mismatch-field">
+        <label className="form-label" htmlFor="prc-name">
+          Name on SkillCat Profile<span className="req">*</span>
+        </label>
+        <input
+          id="prc-name"
+          className="form-input"
+          value={draft}
+          onChange={(e) => onDraftChange(e.target.value)}
+          /* Enter must not submit anything — the name rides along with Approve.
+             Swallowing it also keeps the console's A/R/I shortcuts out of the
+             way while the field has focus. */
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+          }}
+        />
+        {/* The detected name reads as a sentence with the adopt link inside it,
+            not as a boxed row (Figma 1014:1447). */}
+        <p className="prc-mismatch-detected">
+          <span>ID reads {submission.idDetectedName} ·</span>
+          {/* Fills the field only — like typing it. The save still waits for
+              Approve, so the reviewer can change their mind. */}
           <button
             className="prc-mismatch-use"
-            onClick={() => {
-              setDraft(submission.idDetectedName!);
-              onUpdate?.(submission.idDetectedName!);
-            }}
+            onClick={() => onDraftChange(submission.idDetectedName!)}
           >
             Use This
           </button>
-        </div>
+        </p>
       </div>
+
+      <p className="prc-mismatch-note">
+        Type to correct the name. Saved when you approve the review.
+      </p>
     </div>
   );
 }

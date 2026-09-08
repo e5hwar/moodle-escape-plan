@@ -247,7 +247,7 @@ export function NewSkillWizard(props: Props) {
             </button>
           ) : (
             <button className="btn-publish" disabled={!nameValid || !criteriaValid} onClick={handleSave}>
-              {isEditing ? "Save changes" : "Publish"}
+              {isEditing ? "Save Changes" : "Publish"}
             </button>
           )}
         </div>
@@ -471,7 +471,7 @@ function LinkedSkillsStep({
             })
           }
           placeholder="Select Skills"
-          searchPlaceholder="Search Skills…"
+          searchPlaceholder="Search Skills..."
         />
         <p className="form-help">
           The Mastery Skill is awarded automatically the moment a user holds <strong>all</strong> linked Skills.

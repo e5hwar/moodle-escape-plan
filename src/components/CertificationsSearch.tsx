@@ -87,7 +87,7 @@ export function CertificationsSearch({
   return (
     <EntitySearch
       scopes={scopes}
-      placeholder="Search Certifications…"
+      placeholder="Search Certifications..."
       searchForScope="Certifications"
       query={query}
       onCommit={onCommit}

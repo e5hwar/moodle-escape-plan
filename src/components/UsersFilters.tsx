@@ -124,7 +124,7 @@ export function UsersFilters({
         value={filters.companies}
         onApply={(v) => setFilters({ ...filters, companies: v })}
         searchable
-        searchPlaceholder="Search companies…"
+        searchPlaceholder="Search Companies..."
         width={300}
       />
       <MoreFiltersPill

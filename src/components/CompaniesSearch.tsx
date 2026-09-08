@@ -7,7 +7,7 @@ import {
   COMPANY_PARTNERSHIPS,
   type Company,
 } from "../data/companies";
-import { KeyCommandIcon, SearchIcon } from "./icons";
+import { KeyCommandIcon, SearchClearIcon, SearchIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -83,11 +83,24 @@ export function CompaniesSearch({
       });
       return m;
     };
+    /* Multi-value fields (Industry, Partnership) count a company under EVERY
+       value it carries, which is what the facet filter matches on — so the
+       counts can total more than the company count, and a company with none
+       is counted nowhere. */
+    const tallyAll = (pick: (c: Company) => string[]) => {
+      const m = new Map<string, number>();
+      companies.forEach((c) => {
+        pick(c).forEach((v) => {
+          if (v) m.set(v, (m.get(v) ?? 0) + 1);
+        });
+      });
+      return m;
+    };
     return {
       tier: tally((c) => c.tier ?? ""),
       status: tally((c) => getCompanyBilling(c).status),
-      industry: tally((c) => c.industry),
-      partnership: tally((c) => c.partnership),
+      industry: tallyAll((c) => c.industry),
+      partnership: tallyAll((c) => c.partnership),
     };
   }, [companies]);
 
@@ -198,6 +211,20 @@ export function CompaniesSearch({
     setOpen(false);
   }
 
+  /* The ✕ that takes the ⌘K badge's place once there is something to clear:
+     drops the typed text AND the committed query, so the table goes back to
+     unsearched in one hit. Applied filter pills stay the Filters row's to
+     clear — the bar only owns the query. */
+  function clearSearch() {
+    setText("");
+    setActive(-1);
+    setOpen(false);
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
+  }
+
   function activate(opt: Opt) {
     if (opt.kind === "facet") {
       setText(`${opt.facet.label}:`);
@@ -252,10 +279,26 @@ export function CompaniesSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        <span className="usearch-kbd">
-          <span className="kbd-cmd"><KeyCommandIcon /></span>
-          <span className="kbd-letter">K</span>
-        </span>
+        {/* Figma 902:3585 "Text Entered": the moment there is something to
+            clear, the ⌘K badge gives way to a ✕ that clears on click. */}
+        {text || query ? (
+          <button
+            type="button"
+            className="usearch-clear"
+            aria-label="Clear search"
+            title="Clear search"
+            /* Keep the input focused — clearing should not close the panel. */
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={clearSearch}
+          >
+            <SearchClearIcon />
+          </button>
+        ) : (
+          <span className="usearch-kbd">
+            <span className="kbd-cmd"><KeyCommandIcon /></span>
+            <span className="kbd-letter">K</span>
+          </span>
+        )}
       </div>
 
       {open && (

@@ -19,7 +19,7 @@ import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingFilterRow, LandingOverlay, BackToSearch, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's default visible columns (key,
    label, width) so the p=1 hand-off to the real table lines up. */
@@ -161,6 +161,7 @@ function TagText({ tags }: { tags: string[] }) {
 }
 
 export function TasksPage({
+  initialCertificationFilter,
   onNewTask,
   onEditTask,
   onOpenCompanyDashboard,
@@ -171,6 +172,9 @@ export function TasksPage({
   onOpenSkills,
   extraTasks,
 }: {
+  /** Deep link from a Certification's "View All Tasks" — seeds the
+   *  Certifications filter and opens straight on the table. */
+  initialCertificationFilter?: string;
   onNewTask: (t: TaskTypeKey) => void;
   onEditTask: (task: Task) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
@@ -201,9 +205,12 @@ export function TasksPage({
   // Search bar: committedQuery only changes on Enter. The certification filter is
   // shared with the Filters row (filters.certifications) and applies on Enter.
   const [committedQuery, setCommittedQuery] = useState("");
+  // Arriving from a Certification's "View All Tasks" applies that Certification
+  // and NOTHING else — not even the page's usual "Created By: SkillCat"
+  // default, which would hide the Cert's company-authored Tasks.
   const [filters, setFilters] = useState<FilterState>({
-    creators: ["SkillCat"],
-    certifications: [],
+    creators: initialCertificationFilter ? [] : ["SkillCat"],
+    certifications: initialCertificationFilter ? [initialCertificationFilter] : [],
     discoverable: [],
     subscription: [],
     types: [],
@@ -304,7 +311,9 @@ export function TasksPage({
 
   // Landing morph — the page opens as the search-first landing and the wheel
   // (or any search / pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph();
+  // Arriving from a Certification's "View All Tasks" is a deep link — the
+  // filter is already set, so the landing has nothing left to ask for.
+  const morph = useLandingMorph(Boolean(initialCertificationFilter));
 
   // The two quick filters this page offers (user-specified): the dominant task
   // type, and the HVAC job-readiness certification. "HVAC JobReady" is the
@@ -482,7 +491,7 @@ export function TasksPage({
             />
           </div>
 
-          <LandingFilterRow pills={quickFilterPills}>
+          <LandingFilterRow pills={quickFilterPills} onShowAll={morph.showTable}>
               <Filters filters={filters} setFilters={setFilters} />
             </LandingFilterRow>
 
@@ -547,7 +556,6 @@ export function TasksPage({
               </div>
 
               <div className="pagination">
-                <BackToSearch onClick={morph.showLanding} />
                 <span>
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
@@ -754,25 +762,20 @@ function CompanyEditBlockedModal({
   onOpenDashboard: () => void;
 }) {
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Can't edit this task here</h3>
-          <p className="cl-modal-sub">
-            Tasks created by a company can only be edited from the B2B Dashboard.
-            Login as <strong>{task.createdBy}</strong> to make changes.
-          </p>
-        </div>
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-publish" onClick={onOpenDashboard}>
-            Open Company Dashboard
-          </button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title="Can't edit this task here"
+      description={
+        <>
+          Tasks created by a company can only be edited from the B2B Dashboard.
+          Login as <strong>{task.createdBy}</strong> to make changes.
+        </>
+      }
+      confirmLabel="Open Company Dashboard"
+      onCancel={onClose}
+      onConfirm={onOpenDashboard}
+    >
+      {null}
+    </PrmModal>
   );
 }
 

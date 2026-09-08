@@ -149,7 +149,7 @@ function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Industries/Sub-Industries…"
+          searchPlaceholder="Search Industries/Sub-Industries..."
         />
       )}
     </Dropdown>
@@ -316,7 +316,7 @@ function MoreFiltersBody({
           key: "keyword",
           label: "Keyword",
           text: {
-            placeholder: "Search Keywords…",
+            placeholder: "Search Keywords...",
             help: "Matches certifications tagged with this keyword.",
           },
         },

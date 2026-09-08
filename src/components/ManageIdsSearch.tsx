@@ -107,7 +107,10 @@ export function ManageIdsSearch({
     setActive(-1);
     setOpen(false);
     onStatusesChange([]);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   function addStatus(name: string) {
@@ -173,8 +176,8 @@ export function ManageIdsSearch({
   }));
 
   const placeholder = scopeChips.length
-    ? "Search within scope…"
-    : "Search User's Name, Email, or Phone";
+    ? "Search Within Scope..."
+    : "Search User's Name, Email, or Phone...";
 
   return (
     <div className="usearch" ref={wrapRef}>

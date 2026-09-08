@@ -232,7 +232,7 @@ export function CreatedByPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Creators…"
+          searchPlaceholder="Search Creators..."
         />
       )}
     </Dropdown>
@@ -270,7 +270,7 @@ function CertificationsPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Certifications…"
+          searchPlaceholder="Search Certifications..."
         />
       )}
     </Dropdown>

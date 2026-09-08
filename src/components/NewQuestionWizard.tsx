@@ -480,7 +480,7 @@ export function NewQuestionWizard({
               onClose();
             }}
           >
-            {isEditing ? "Save changes" : "Create question"}
+            {isEditing ? "Save Changes" : "Create question"}
           </button>
         </div>
       </footer>

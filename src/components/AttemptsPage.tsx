@@ -266,7 +266,7 @@ export function AttemptsPage({
                     below, exactly as Company: feeds the Users company pill. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone…"
+                  placeholder="Search Users by Name, Email, or Phone..."
                   query={search}
                   onCommit={setSearch}
                 />
@@ -279,7 +279,7 @@ export function AttemptsPage({
                   value={filters.quizzes}
                   onApply={(v) => setFilters((f) => ({ ...f, quizzes: v }))}
                   searchable
-                  searchPlaceholder="Search Quizzes"
+                  searchPlaceholder="Search Quizzes..."
                   width={300}
                 />
                 <MultiPill
@@ -288,7 +288,7 @@ export function AttemptsPage({
                   value={filters.certifications}
                   onApply={(v) => setFilters((f) => ({ ...f, certifications: v }))}
                   searchable
-                  searchPlaceholder="Search Certifications"
+                  searchPlaceholder="Search Certifications..."
                   width={300}
                 />
                 <MultiPill

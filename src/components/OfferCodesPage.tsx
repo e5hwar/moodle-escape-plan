@@ -237,7 +237,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search Offer Codes by code, plan, or region…"
+                  placeholder="Search Offer Codes by Code, Plan, or Region..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -309,7 +309,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                         close();
                       }}
                       searchable
-                      searchPlaceholder="Search countries/regions…"
+                      searchPlaceholder="Search Countries/Regions..."
                     />
                   )}
                 </Dropdown>
@@ -743,7 +743,7 @@ function CreateOfferCodeModal({
             value={regions}
             onChange={setRegions}
             placeholder="Select Countries/Regions"
-            searchPlaceholder="Search Countries/Regions…"
+            searchPlaceholder="Search Countries/Regions..."
             popupMenu
           />
           <p className="form-help">

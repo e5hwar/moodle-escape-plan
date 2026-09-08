@@ -1413,7 +1413,7 @@ function AddCertsModal({
             <input
               autoFocus
               className="search-input"
-              placeholder="Search Certifications"
+              placeholder="Search Certifications..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

@@ -317,6 +317,18 @@ export const FullTableIcon = () => (
   </svg>
 );
 
+/* Right chevron closing the landing's quick-filter row (Figma 977:1014 → its
+   977:1020 "Icon Library" instance) — "there are more filters than these",
+   click-through into the full table. Transcribed from the exported 14px asset
+   (square caps, 1.16667 stroke), NOT the shared ChevronRightIcon, whose round
+   caps and 24-box geometry read differently at this size. Takes currentColor,
+   so it follows the button's hover. */
+export const MoreFiltersIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M5.54167 10.2083L8.75 7L5.54167 3.79167" />
+  </svg>
+);
+
 /* edit-off — marks a read-only review rail (Figma 298:1886). */
 export const EditOffIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -827,6 +839,35 @@ export const MenuPaidIcon = () => (
   </svg>
 );
 
+/* Manage Completions menu glyphs (Figma 970:991 "3-Dot Menu - Manage
+   Completions"). Square-cap 16px strokes like the rest of the Menu family;
+   the box-and-mark pair reads as a completion checkbox rather than the
+   free-standing check / circle-✕ this menu borrowed before. */
+
+/* Box with a check — Mark as Completed (node 7:1472). */
+export const MenuMarkCompleteIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M2 2H14V14H2V2Z" />
+    <path d="M11 6L7 10L5 8" />
+  </svg>
+);
+
+/* Box with an ✕ — Mark as Incomplete (node 7:1818). */
+export const MenuMarkIncompleteIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M14 2H2V14H14V2Z" />
+    <path d="M9.886 6.114L8 8M8 8L6.114 9.886M8 8L6.114 6.114M8 8L9.886 9.886" />
+  </svg>
+);
+
+/* Circle with a plus — Grant Additional Attempts (node 7:34). */
+export const MenuGrantAttemptsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333">
+    <circle cx="8" cy="8" r="6.667" />
+    <path d="M11 8H5M8 5V11" strokeLinecap="square" />
+  </svg>
+);
+
 /* Speech bubble with a question mark — View All Attempts (node 7:3217). */
 export const MenuAttemptsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
@@ -861,6 +902,28 @@ export const MenuLinkIcon = () => (
 export const MenuArchiveReplaceIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M9.133 6.047L10.468 5.533L9.955 6.868M5.255 1.923C6.118 1.534 7.054 1.333 8 1.333C11.682 1.333 14.667 4.318 14.667 8C14.667 8.978 14.456 9.907 14.077 10.744M3.287 3.287C2.667 3.905 2.175 4.64 1.84 5.448C1.505 6.257 1.332 7.124 1.333 8C1.333 11.682 4.318 14.667 8 14.667C8.876 14.668 9.743 14.496 10.552 14.161C11.361 13.826 12.096 13.334 12.714 12.714M2 2L14 14M8.339 11.067L7.439 8.563L4.933 7.662L6.905 6.903L9.097 9.096L8.339 11.067Z" />
+  </svg>
+);
+
+/* Open folder — "View All Tasks" (node 974:1063). The asset draws its group at
+   an inset rather than in the full 16px frame, so a translate places it; the
+   path data itself is the export's, untouched. */
+export const MenuAllTasksIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <g transform="translate(0 1.6667)">
+      <path d="M0.666667 11.6667H13L15 5H2.66667L0.666667 11.6667ZM0.666667 11.6667V0.666667H4.66667L6.66667 2.33333H13V5" />
+    </g>
+  </svg>
+);
+
+/* Cloud with an up-arrow — "Backup Certification" (node 974:1069), replacing
+   the placeholder box the entry carried before the frame gained a real glyph. */
+export const MenuBackupIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <g transform="translate(0 1.3333)">
+      <path d="M0.666667 8.33407C0.666667 8.81559 0.761508 9.29239 0.945775 9.73725C1.13004 10.1821 1.40013 10.5863 1.74061 10.9268C2.42824 11.6144 3.36087 12.0007 4.33333 12.0007H11.6667C12.5828 12.0019 13.4661 11.6601 14.1428 11.0427C14.8196 10.4252 15.2406 9.57675 15.3232 8.66438C15.4057 7.75201 15.1437 6.8418 14.5887 6.11291C14.0338 5.38403 13.2261 4.88929 12.3247 4.72607C12.255 3.62642 11.7691 2.59461 10.9657 1.84051C10.1623 1.08641 9.10185 0.666667 8 0.666667C6.89815 0.666667 5.83768 1.08641 5.0343 1.84051C4.23092 2.59461 3.74499 3.62642 3.67533 4.72607C2.8308 4.88013 2.06709 5.32563 1.51729 5.98495C0.967493 6.64427 0.666466 7.4756 0.666667 8.33407Z" />
+      <path d="M10 6.33407L8 4.33407L6 6.33407M8 9.33407V7.33407V4.66741" />
+    </g>
   </svg>
 );
 
@@ -1002,5 +1065,53 @@ export const KeyArrowLeftIcon = () => (
 export const KeyCommandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667">
     <path d="M8.45833 5.54167V8.45833M8.45833 5.54167H5.54167M8.45833 5.54167V3.79167C8.45833 3.44555 8.56097 3.1072 8.75326 2.81942C8.94555 2.53163 9.21887 2.30733 9.53864 2.17488C9.85841 2.04242 10.2103 2.00777 10.5497 2.07529C10.8892 2.14282 11.201 2.30949 11.4458 2.55423C11.6905 2.79897 11.8572 3.11079 11.9247 3.45026C11.9922 3.78973 11.9576 4.14159 11.8251 4.46136C11.6927 4.78113 11.4684 5.05445 11.1806 5.24674C10.8928 5.43903 10.5545 5.54167 10.2083 5.54167H8.45833ZM8.45833 8.45833H5.54167M8.45833 8.45833H10.2083C10.5545 8.45833 10.8928 8.56097 11.1806 8.75326C11.4684 8.94555 11.6927 9.21887 11.8251 9.53864C11.9576 9.85841 11.9922 10.2103 11.9247 10.5497C11.8572 10.8892 11.6905 11.201 11.4458 11.4458C11.201 11.6905 10.8892 11.8572 10.5497 11.9247C10.2103 11.9922 9.85841 11.9576 9.53864 11.8251C9.21887 11.6927 8.94555 11.4684 8.75326 11.1806C8.56097 10.8928 8.45833 10.5545 8.45833 10.2083V8.45833ZM5.54167 5.54167V8.45833M5.54167 5.54167H3.79167C3.44555 5.54167 3.1072 5.43903 2.81942 5.24674C2.53163 5.05445 2.30733 4.78113 2.17488 4.46136C2.04242 4.14159 2.00777 3.78973 2.07529 3.45026C2.14282 3.11079 2.30949 2.79897 2.55423 2.55423C2.79897 2.30949 3.11079 2.14282 3.45026 2.07529C3.78973 2.00777 4.14159 2.04242 4.46136 2.17488C4.78113 2.30733 5.05445 2.53163 5.24674 2.81942C5.43903 3.1072 5.54167 3.44555 5.54167 3.79167V5.54167ZM5.54167 8.45833V10.2083C5.54167 10.5545 5.43903 10.8928 5.24674 11.1806C5.05445 11.4684 4.78113 11.6927 4.46136 11.8251C4.14159 11.9576 3.78973 11.9922 3.45026 11.9247C3.11079 11.8572 2.79897 11.6905 2.55423 11.4458C2.30949 11.201 2.14282 10.8892 2.07529 10.5497C2.00777 10.2103 2.04242 9.85841 2.17488 9.53864C2.30733 9.21887 2.53163 8.94555 2.81942 8.75326C3.1072 8.56097 3.44555 8.45833 3.79167 8.45833H5.54167Z" />
+  </svg>
+);
+
+/* Manage Completions task-table glyphs (Figma 960:980) — 12px "Icon Library"
+   instances beside a cell's value. Paths are the Figma exports verbatim,
+   translated into the 12px box the instance places them in; Figma bakes the
+   colours in (#a8a8a8 / #ffc524 / #ff1f31), here they take currentColor so the
+   cell's own tone drives them. */
+
+/* Flag — a completion an admin set by hand. */
+export const FlagIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
+    <g transform="translate(1.5 1)">
+      <path d="M0.5 6H4L5 7H8.5L7.5 4.25L8.5 1.5H5L4 0.5H0.5V6ZM0.5 6V9.75" />
+    </g>
+  </svg>
+);
+
+/* Hourglass — an attempt submitted and awaiting review. */
+export const HourglassIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor">
+    <g transform="translate(2 1)">
+      <path d="M4 5C4.92826 5 5.8185 5.36875 6.47487 6.02513C7.13125 6.6815 7.5 7.57174 7.5 8.5V9.5H0.5V8.5C0.5 7.57174 0.868749 6.6815 1.52513 6.02513C2.1815 5.36875 3.07174 5 4 5ZM4 5C3.07174 5 2.1815 4.63125 1.52513 3.97487C0.868749 3.3185 0.5 2.42826 0.5 1.5V0.5H7.5V1.5C7.5 2.42826 7.13125 3.3185 6.47487 3.97487C5.8185 4.63125 4.92826 5 4 5Z" />
+    </g>
+  </svg>
+);
+
+/* Error triangle — every attempt used without a pass. */
+export const ErrorTriangleIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor">
+    <g transform="translate(0 0.75)">
+      <path d="M10.6532 9.59954H1.29966L5.97544 1.49896L10.6532 9.59954Z" strokeWidth="0.5" />
+      <path d="M5.97606 0.999934L11.0861 9.84993H0.866064L5.97606 0.999934Z" strokeLinecap="square" />
+      <path d="M5.97606 4.74993V6.49993M5.97606 8.24993H5.97806V8.25193H5.97606V8.24993Z" strokeLinecap="square" />
+    </g>
+  </svg>
+);
+
+/* Filled alert circle — the 16px disc with the exclamation knocked out
+   (Figma 1031:1038 "Icon Library", the Outstanding Balance card's glyph).
+   Path data is the Figma export verbatim. Distinct from InfoFilledIcon,
+   which is the smaller "i" disc. */
+export const AlertCircleFilledIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M8 0.666667C12.05 0.666667 15.3333 3.95 15.3333 8C15.3333 12.05 12.05 15.3333 8 15.3333C3.95 15.3333 0.666667 12.05 0.666667 8C0.666667 3.95 3.95 0.666667 8 0.666667ZM7.33333 9.33333H8.66667V4.33333H7.33333V9.33333ZM8.66933 10.3333H7.33333V11.6693H8.66933V10.3333Z"
+      fill="currentColor"
+    />
   </svg>
 );

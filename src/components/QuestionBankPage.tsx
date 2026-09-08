@@ -1981,13 +1981,13 @@ function QbMoreFiltersPill({
               key: "quizzes",
               label: "Quizzes",
               groups: [{ items: quizNames }],
-              searchPlaceholder: "Search Quizzes…",
+              searchPlaceholder: "Search Quizzes...",
             },
             {
               key: "forms",
               label: "Feedback Forms",
               groups: [{ items: formNames }],
-              searchPlaceholder: "Search Feedback Forms…",
+              searchPlaceholder: "Search Feedback Forms...",
             },
           ]}
           value={value}

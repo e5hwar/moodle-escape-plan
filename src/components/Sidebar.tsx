@@ -164,7 +164,7 @@ type Props = {
 };
 
 export function Sidebar({ active = "tasks", onNavigate }: Props) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [hovered, setHovered] = useState(false);
   const activeKey = ACTIVE_MAP[active] ?? active;
 

@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { renameUser } from "../data/users";
 import {
   submissions as seedSubmissions,
   matchesQuery,
-  reuploadStatusOf,
   type ProctoringKind,
   type ProctoringStatus,
   type Submission,
 } from "../data/proctoring";
-import { nameChangeRequests } from "../data/nameChangeRequests";
 import { ProctoringConsole } from "./ProctoringConsole";
 import { MultiPill } from "./UsersFilters";
 import {
@@ -27,11 +26,12 @@ import {
   ChevronRightIcon,
   RunMoveUpIcon,
   RunMoveDownIcon,
+  RowChevronIcon,
 } from "./icons";
 
 const PAGE_SIZE = 50;
 
-export type SortKey = "candidate" | "email" | "exam" | "submittedAt";
+export type SortKey = "candidate" | "email" | "phone" | "exam" | "submittedAt";
 export type SortDir = "asc" | "desc";
 
 // submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
@@ -71,6 +71,7 @@ function rankOf(s: Submission, order: RunOrder): number {
 const SORT_FIELD: Record<Exclude<SortKey, "submittedAt">, (s: Submission) => string> = {
   candidate: (s) => s.candidateName,
   email: (s) => s.candidateEmail,
+  phone: (s) => s.candidatePhone,
   exam: (s) => s.exam,
 };
 
@@ -89,9 +90,7 @@ function compareRows(a: Submission, b: Submission, key: SortKey): number {
    pill-per-kind tab row (which had itself replaced the stat-card tiles): one
    pill holding the same three kinds, so the Quiz filter can sit beside it on
    the same line. No selection means every kind, the way an unapplied filter
-   reads everywhere else. Named for the kinds it holds, NOT for the Status
-   COLUMN further down, which says something else entirely (Requested vs To
-   Review on a re-upload). */
+   reads everywhere else. */
 const REVIEW_TYPE_LABEL: Record<ProctoringKind, string> = {
   proctoring: "Proctoring",
   "id-review": "ID Reviews",
@@ -113,6 +112,36 @@ function waitingLabelOf(s: Submission): string {
   return `Waiting ${days} day${days === 1 ? "" : "s"}`;
 }
 
+/* Short date for the flag's tooltip — "Mar 9, 2026" from the row's own
+   "March 9th, 2026, 11:20 AM" display string. */
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function shortDate(display: string): string {
+  const t = parseSubmittedAt(display);
+  if (!t) return display;
+  const d = new Date(t);
+  return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/** The candidate's name with the "New ID" flag when this row is a re-upload the
+ *  candidate has sent back (Figma 994:1081 "Table Pills - Yellow"). Shared by
+ *  the table and the landing overlay so the morph hand-off doesn't pop. */
+function CandidateName({ submission }: { submission: Submission }) {
+  if (submission.kind !== "id-reupload") return <>{submission.candidateName}</>;
+  return (
+    <>
+      {submission.candidateName}
+      <span
+        className="pr-name-flag"
+        data-tip={
+          submission.reuploadedAt ? `Re-Uploaded on ${shortDate(submission.reuploadedAt)}` : undefined
+        }
+      >
+        New ID
+      </span>
+    </>
+  );
+}
+
 /* Landing-morph columns — mirror the table's columns (key, label, width) so
    the p=1 hand-off to the real table lines up. The minimal view is Name plus
    the right-aligned wait column (the Tasks landing's Name + Type shape); the
@@ -122,25 +151,44 @@ function waitingLabelOf(s: Submission): string {
 const WAIT_LANDING_WIDTH = 170;
 const LM_COLS: LandingCol[] = [
   { key: "email", label: "Email", width: 310 },
+  { key: "phone", label: "Phone", width: 170 },
   { key: "quiz", label: "Quiz", width: 316 },
   { key: "date", label: "Submitted On", width: 265, fixed: true, landingWidth: WAIT_LANDING_WIDTH },
 ];
 
-export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }) {
+export function ProctoringPage({
+  onPendingIdReuploads,
+  initialSubmissionId,
+  onExitToOrigin,
+  originLabel,
+}: {
+  onPendingIdReuploads?: () => void;
+  /** Opens straight into a submission's console — how Pending ID Re-Uploads
+   *  hands a row over, so an exam is only ever reviewed in one place. */
+  initialSubmissionId?: string;
+  /** Where to go when the console handed over by `initialSubmissionId` is
+   *  closed: back to the page that sent us, not this page's own table. */
+  onExitToOrigin?: () => void;
+  /** That page's name, for the console's breadcrumb. */
+  originLabel?: string;
+}) {
   const [list, setList] = useState<Submission[]>(seedSubmissions);
   // The Review Type pill's applied kinds, as labels — empty means every kind.
   const [reviewTypeFilter, setReviewTypeFilter] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  // Quiz has a pill on the filters row now; Company is still applied from
-  // inside the search bar, which is where its applied chips stay.
+  // Quiz has a pill on the filters row; the search bar can also scope to it.
   const [examFilter, setExamFilter] = useState<string[]>([]);
-  const [companyFilter, setCompanyFilter] = useState<string[]>([]);
   /* All Time, not the shared Last 30 Days default: this is a backlog queue, and
      a rolling window would open the page with the longest-waiting submissions —
      the ones it exists to surface — already hidden. */
   const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
   const [page, setPage] = useState(1);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(initialSubmissionId ?? null);
+  /* True while the console is still showing the row another page handed over,
+     so closing it goes back there. Cleared the moment the reviewer acts on a
+     submission: from then on they're working this page's queue, and exiting
+     belongs on this page's table. */
+  const [returnToOrigin, setReturnToOrigin] = useState(!!initialSubmissionId);
   // Longest waiting first — the landing's framing, and the default review-run
   // order, so the table below the morph reads in the same order as the queue.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedAt", dir: "asc" });
@@ -244,12 +292,11 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
     [quizRanked],
   );
 
-  const hasFilters = reviewTypeFilter.length + examFilter.length + companyFilter.length > 0;
+  const hasFilters = reviewTypeFilter.length + examFilter.length > 0;
 
   function clearFilters() {
     setReviewTypeFilter([]);
     setExamFilter([]);
-    setCompanyFilter([]);
   }
 
   /** Start a run: clear the filters, order the whole pending queue by the run's
@@ -266,7 +313,6 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
     if (!first) return;
     setReviewTypeFilter([]);
     setExamFilter([]);
-    setCompanyFilter([]);
     setDateRange(allTimeDateRange());
     setQuery("");
     setSort({ key: "submittedAt", dir: "asc" });
@@ -280,20 +326,19 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
       if (s.status === "pending") {
         if (kinds.length > 0 && !kinds.includes(s.kind)) return false;
       } else if (s.status === "id-requested") {
-        // Waiting on the candidate, not on us — it shows only when the Review
-        // Type filter actually asks for re-uploads.
-        if (!kinds.includes("id-reupload")) return false;
+        /* Waiting on the candidate, not on us — never part of this table. The
+           Review Type pill used to be able to ask for these; it no longer
+           offers ID Re-uploads, and they have their own page instead. */
+        return false;
       } else {
         return false;
       }
       if (!dateRangeIncludes(dateRange, readableDate(s.submittedAt))) return false;
       if (examFilter.length > 0 && !examFilter.includes(s.exam)) return false;
-      if (companyFilter.length > 0 && !(s.companyName && companyFilter.includes(s.companyName)))
-        return false;
       if (q && !matchesQuery(s, q)) return false;
       return true;
     });
-  }, [list, kinds, query, examFilter, companyFilter, dateRange]);
+  }, [list, kinds, query, examFilter, dateRange]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -315,20 +360,19 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   useEffect(
     () => setPage(1),
-    [query, reviewTypeFilter, examFilter, companyFilter, dateRange, sort, runOrder],
+    [query, reviewTypeFilter, examFilter, dateRange, sort, runOrder],
   );
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  /* Status is a re-uploads-only column: it distinguishes "we've asked, the
-     candidate hasn't sent it" from "sent, waiting on us". Without ID Re-uploads
-     in the Review Type filter there's nothing to distinguish — only the To
-     Review ones are listed — so the column would be a single repeated value,
-     and it's dropped. */
-  const showStatus = kinds.includes("id-reupload");
-
-  const active = activeId ? sorted.find((s) => s.id === activeId) ?? null : null;
+  /* Normally the open submission is one of the visible rows. The fallback to
+     the full list covers a row arrived at from elsewhere that the current
+     filters happen to exclude — without it the console would silently refuse
+     to open. */
+  const active = activeId
+    ? sorted.find((s) => s.id === activeId) ?? list.find((s) => s.id === activeId) ?? null
+    : null;
 
   /* The three run cards carry keycaps (Figma 713:1358 / 714:1478 / 714:1542),
      so each CTA has the matching letter shortcut. Live only on the landing —
@@ -351,11 +395,28 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   }, [list, active]);
 
   function openSubmission(id: string) {
+    // Moving to a different submission means they're working this page's queue.
+    if (id !== initialSubmissionId) setReturnToOrigin(false);
     setActiveId(id);
   }
 
   function closeConsole() {
+    if (returnToOrigin && onExitToOrigin) {
+      onExitToOrigin();
+      return;
+    }
     setActiveId(null);
+  }
+
+  /* The console's "Exam Reviews" crumb when it was opened from elsewhere:
+     leaves that origin behind for this page's own landing. The re-upload
+     preselection goes with it — it exists only to make the handed-over row
+     visible, and the landing is the whole queue. */
+  function exitToSection() {
+    setReturnToOrigin(false);
+    setReviewTypeFilter([]);
+    setActiveId(null);
+    morph.showLanding();
   }
 
   // Decide a submission (accept/reject): it leaves the review queue entirely and
@@ -363,6 +424,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   // Rejection reasons are kept on the record so this candidate's later submissions
   // can list them in the Integrity Note's "Rejected Attempts" detail.
   function decide(id: string, status: ProctoringStatus, reasons?: string[]) {
+    setReturnToOrigin(false);
     const idx = sorted.findIndex((s) => s.id === id);
     const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
     setList((prev) =>
@@ -379,12 +441,19 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   // pending/secondary state — it no longer counts toward the pill counts, but stays
   // visible in the table until it's accepted or rejected.
   function requestReupload(id: string) {
+    setReturnToOrigin(false);
     const idx = sorted.findIndex((s) => s.id === id);
     const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
     setList((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, status: "id-requested", kind: "id-reupload" } : s,
-      ),
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        /* The prior verification is dropped with the request: it vouched for the
+           document being replaced, not for whatever arrives next. This is what
+           keeps "Re-Uploaded ID" and "Verified" mutually exclusive — a row can
+           never be both. */
+        const { idPreviouslyVerified: _dropped, ...rest } = s;
+        return { ...rest, status: "id-requested" as const, kind: "id-reupload" as const };
+      }),
     );
     setActiveId(next ? next.id : null);
   }
@@ -392,36 +461,31 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
   /* The Name Mismatch banner's commit: the reviewer has decided which name to
      keep, so the ID's detected name matches it from here on and the mismatch is
      resolved. */
-  function updateCandidateName(id: string, name: string) {
+  /* One rename, wherever it comes from — the Name Mismatch card's commit, its
+     "Use This", or the pop-up behind the candidate's name. Three things have to
+     move together or the rename only looks like it worked:
+       · the USER's profile (the shared roster), not just this submission —
+         otherwise the old name is back the moment you leave the page;
+       · every submission this candidate has, not just the open one;
+       · the name read off the ID, which settles the mismatch — the admin has
+         just told us which name to keep, so the card has nothing left to ask. */
+  function renameCandidate(userId: string, name: string) {
+    renameUser(userId, name);
     setList((prev) =>
       prev.map((s) =>
-        s.id === id ? { ...s, candidateName: name, idDetectedName: name } : s,
+        s.userId === userId ? { ...s, candidateName: name, idDetectedName: name } : s,
       ),
     );
   }
 
-  /* A plain rename from the user-details card. Unlike the banner it leaves the
-     name read off the ID alone — renaming the user doesn't change what the
-     document says, so a rename that disagrees with it raises the mismatch
-     rather than silently clearing it. */
-  function renameCandidate(id: string, name: string) {
-    setList((prev) => prev.map((s) => (s.id === id ? { ...s, candidateName: name } : s)));
-  }
-
-  // The Status column exists only on the ID Re-uploads tab — insert it into the
-  // landing columns there too (between Quiz and Submitted On, the real table's
-  // order) so the p=1 hand-off stays column-aligned.
-  const lmCols = showStatus
-    ? [...LM_COLS.slice(0, 2), { key: "status", label: "Status", width: STATUS_WIDTH }, LM_COLS[2]]
-    : LM_COLS;
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => ({
     key: s.id,
-    name: s.candidateName,
+    name: <CandidateName submission={s} />,
     cells: {
       email: s.candidateEmail,
+      phone: s.candidatePhone,
       quiz: s.exam,
-      ...(showStatus ? { status: <ReuploadStatusPill submission={s} /> } : null),
       date: (
         <span className="prl-swap">
           <span className="prl-swap-real">{s.submittedAt}</span>
@@ -437,16 +501,17 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
         submission={active}
         queue={sorted}
         previousRejected={previousRejected}
-        examFilter={examFilter}
-        sort={sort}
-        onSort={toggleSort}
         onGoto={openSubmission}
         onExit={closeConsole}
+        // Only while the exit still goes back there — once the reviewer joins
+        // this page's queue, the crumb has to follow them (see `returnToOrigin`).
+        originLabel={returnToOrigin ? originLabel : undefined}
+        onExitToSection={exitToSection}
         onAccept={() => decide(active.id, "accepted")}
         onReject={(details) => decide(active.id, "rejected", details?.reasons)}
         onRequestId={() => requestReupload(active.id)}
-        onUpdateName={(name) => updateCandidateName(active.id, name)}
-        onRenameUser={(_userId, name) => renameCandidate(active.id, name)}
+        onUpdateName={(name) => renameCandidate(active.userId, name)}
+        onRenameUser={renameCandidate}
       />
     );
   }
@@ -460,14 +525,12 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
               <h1 className="tasks-title">Exam Reviews</h1>
             </div>
             <div className="tasks-header-actions">
-              {/* Name Change Requests left the sidebar and is reached from here
-                  (same move Skills/Question Bank made on the Tasks header); the
-                  pill carries the open-request count. */}
-              <button className="cta-quiet" onClick={onNameChanges}>
-                Name Changes
-                <span className="co-status-pill co-status-pill--accent">
-                  {nameChangeRequests.length}
-                </span>
+              {/* Pending ID Re-Uploads is reached from here (the slot Name
+                  Changes used to hold). No count pill: these rows wait on the
+                  CANDIDATE, not on an admin, so a badge beside the review
+                  queue's own numbers would read as work to pick up. */}
+              <button className="cta-quiet" onClick={onPendingIdReuploads}>
+                Pending ID Re-Uploads
               </button>
             </div>
           </header>
@@ -597,15 +660,12 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
               {/* Search and filters belong to the EXPANDED table only — the
                   collapsed view is the run cards plus the list, and both rows
                   fade in with the table chrome (see `.tasks.lm.pr-page` in
-                  index.css). Company is the one scope still applied from inside the
-                  bar — Quiz has a pill on the filter row below it. */}
+                  index.css). */}
               <div className="toolbar">
                 <ProctoringSearch
                   submissions={pending}
                   exams={examFilter}
                   onExamsChange={setExamFilter}
-                  companies={companyFilter}
-                  onCompaniesChange={setCompanyFilter}
                   query={query}
                   onCommit={(q) => {
                     setQuery(q);
@@ -629,7 +689,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                   value={examFilter}
                   onApply={setExamFilter}
                   searchable
-                  searchPlaceholder="Search quizzes…"
+                  searchPlaceholder="Search Quizzes..."
                   width={300}
                 />
                 {hasFilters && (
@@ -644,7 +704,6 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                   <DateRangePill
                     value={dateRange}
                     onChange={setDateRange}
-                    defaultValue={allTimeDateRange()}
                   />
                 </span>
               </div>
@@ -652,11 +711,11 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
               <div className="lm-stage">
                 <LandingOverlay
                   caption="Longest waiting"
-                  columns={lmCols}
+                  columns={LM_COLS}
                   rows={landingRows}
                   nameLabel="User's Name"
                   nameWidth={NAME_MIN}
-                  actionsWidth={0}
+                  actionsGlyph="chevron"
                   onShowAll={morph.showTable}
                   onRowClick={(row) => openSubmission(row.key)}
                 />
@@ -665,45 +724,64 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                       page uses, minus Edit Columns (this column set is fixed). */}
                   <div
                     className="table-xscroll"
-                    style={{ "--table-min": `${showStatus ? TABLE_MIN + STATUS_WIDTH : TABLE_MIN}px` } as React.CSSProperties}
+                    style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
                   >
                     <table className="table table-head">
-                      <ProctoringColGroup showStatus={showStatus} />
+                      <ProctoringColGroup />
                       <thead>
                         <tr>
                           <SortableHeader col="candidate" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
                           <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
+                          <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
                           <SortableHeader col="exam" label="Quiz" className="pr-col-exam" sort={sort} toggle={toggleSort} />
-                          {showStatus && (
-                            <th className="col-status no-sort">
-                              <span className="th-content">Status</span>
-                            </th>
-                          )}
                           <SortableHeader col="submittedAt" label="Submitted On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                          <th className="col-actions" />
                         </tr>
                       </thead>
                     </table>
 
                     <div className="tasks-scroll">
                       <table className="table table-body">
-                        <ProctoringColGroup showStatus={showStatus} />
+                        <ProctoringColGroup />
                         <tbody>
                           {paged.map((s) => (
                             <tr key={s.id} onClick={() => openSubmission(s.id)}>
-                              <td className="col-name">{s.candidateName}</td>
-                              <td className="pr-col-email">{s.candidateEmail}</td>
+                              <td className="col-name"><CandidateName submission={s} /></td>
+                              {/* Click-to-copy (see CopyCells.tsx) — the two
+                                  values an admin pastes into a mail client or
+                                  a phone dialler while chasing a candidate. */}
+                              <td className="pr-col-email" data-copyable>{s.candidateEmail}</td>
+                              <td className="pr-col-phone" data-copyable>{s.candidatePhone}</td>
                               <td className="pr-col-exam">{s.exam}</td>
-                              {showStatus && (
-                                <td className="col-status">
-                                  <ReuploadStatusPill submission={s} />
-                                </td>
-                              )}
                               <td className="pr-col-date">{s.submittedAt}</td>
+                              {/* Row-end affordance, identical to the Hands-On
+                                  Task Submissions table: a centred chevron that
+                                  hides on row hover, replaced in place by a
+                                  labelled bar whose own chevron lands on the
+                                  same pixel. */}
+                              <td className="col-actions">
+                                <button
+                                  className="row-action-btn lone-dots row-chevron"
+                                  aria-label="Review Exam"
+                                  onClick={(e) => { e.stopPropagation(); openSubmission(s.id); }}
+                                >
+                                  <RowChevronIcon />
+                                </button>
+                                <div className="row-action-bar">
+                                  <button
+                                    className="row-action-btn row-action-btn--label"
+                                    onClick={(e) => { e.stopPropagation(); openSubmission(s.id); }}
+                                  >
+                                    Review Exam
+                                    <RowChevronIcon />
+                                  </button>
+                                </div>
+                              </td>
                             </tr>
                           ))}
                           {paged.length === 0 && (
                             <tr>
-                              <td colSpan={showStatus ? 5 : 4} className="u-empty">
+                              <td colSpan={6} className="u-empty">
                                 {query.trim()
                                   ? `No submissions match "${query.trim()}".`
                                   : "No submissions match these filters."}
@@ -716,7 +794,7 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
                   </div>
 
                   <div className="pagination">
-                    <BackToSearch onClick={morph.showLanding} />
+                    <BackToSearch onClick={morph.showLanding} label="Back to Review Options" />
                     <span>
                       Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
@@ -744,14 +822,23 @@ export function ProctoringPage({ onNameChanges }: { onNameChanges?: () => void }
    ("andre.dubois@keystoneelectrical.com", ~270px, plus the cell's 2×20px
    padding); Quiz at its longest value ("Building Science Principles
    Certificate", 274px) the same way. */
-const NAME_MIN = 240;
-const COL_WIDTHS = { email: 310, quiz: 316, date: 265 };
-const TABLE_MIN = NAME_MIN + COL_WIDTHS.email + COL_WIDTHS.quiz + COL_WIDTHS.date;
+/* Widened from 240 to fit the "New ID" flag beside the longest name without
+   pushing either to an ellipsis (Figma 994:1055). The longest pair
+   ("Sophia Andersson" + the flag) measures 209px including the cell's insets,
+   so this still clears it. */
+const NAME_MIN = 260;
+const COL_WIDTHS = { email: 310, phone: 170, quiz: 316, date: 265 };
+/** The row-end chevron column — same 40px reserve as the Hands-On table. */
+const ACTIONS_WIDTH = 40;
+const TABLE_MIN =
+  NAME_MIN +
+  COL_WIDTHS.email +
+  COL_WIDTHS.phone +
+  COL_WIDTHS.quiz +
+  COL_WIDTHS.date +
+  ACTIONS_WIDTH;
 
-/** Wide enough for the "To Review" pill plus the cell's 2×20px padding. */
-const STATUS_WIDTH = 130;
-
-function ProctoringColGroup({ showStatus }: { showStatus: boolean }) {
+function ProctoringColGroup() {
   return (
     <colgroup>
       {/* Name carries its 240px minimum here (not left auto) so a stretched
@@ -761,23 +848,11 @@ function ProctoringColGroup({ showStatus }: { showStatus: boolean }) {
           morph hand-off. */}
       <col style={{ width: NAME_MIN }} />
       <col style={{ width: COL_WIDTHS.email }} />
+      <col style={{ width: COL_WIDTHS.phone }} />
       <col style={{ width: COL_WIDTHS.quiz }} />
-      {showStatus && <col style={{ width: STATUS_WIDTH }} />}
       <col style={{ width: COL_WIDTHS.date }} />
+      <col style={{ width: ACTIONS_WIDTH }} />
     </colgroup>
-  );
-}
-
-/* Figma "Table Pills" — Requested is the grey pill (83:512, #737373), To Review
-   the green one (80:483, #14b867). Both already exist as `.co-status-pill--*`;
-   `.col-status` on the cell is what re-enables their chrome past the table's
-   strip-all-pills rule. */
-function ReuploadStatusPill({ submission }: { submission: Submission }) {
-  const status = reuploadStatusOf(submission);
-  return (
-    <span className={`co-status-pill co-status-pill--${status === "Requested" ? "grey" : "green"}`}>
-      {status}
-    </span>
   );
 }
 

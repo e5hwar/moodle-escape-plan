@@ -113,13 +113,24 @@ export function HoverTooltip() {
       if (related && current.current.contains(related)) return; // moved within the cell
       hide();
     }
+    // The hovered element's tip changed under the pointer (a cell flipping to
+    // "Copied" — see CopyCells.tsx): re-read it and show at once, no delay.
+    function onRefresh() {
+      const el = current.current as HTMLElement | null;
+      if (!el) return;
+      clearTimer();
+      if (el.getAttribute("data-tip")) show(el);
+      else setTip(null);
+    }
     document.addEventListener("mouseover", onOver);
     document.addEventListener("mouseout", onOut);
+    window.addEventListener("tip-refresh", onRefresh);
     // Position is captured at show-time, so hide on any scroll to avoid drift.
     window.addEventListener("scroll", hide, true);
     return () => {
       document.removeEventListener("mouseover", onOver);
       document.removeEventListener("mouseout", onOut);
+      window.removeEventListener("tip-refresh", onRefresh);
       window.removeEventListener("scroll", hide, true);
       clearTimer();
     };

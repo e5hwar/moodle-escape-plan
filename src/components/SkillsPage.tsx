@@ -18,6 +18,7 @@ import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filter
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { MultiPill } from "./UsersFilters";
 import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
+import { PrmModal } from "./PrmModal";
 import { SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
@@ -413,7 +414,7 @@ export function SkillsPage() {
                     table only ever filters on the applied query. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder={tab === "skills" ? "Search Skills…" : "Search Mastery Skills…"}
+                  placeholder={tab === "skills" ? "Search Skills..." : "Search Mastery Skills..."}
                   searchForScope={tab === "skills" ? "Skills" : "Mastery Skills"}
                   query={query}
                   onCommit={setQuery}
@@ -427,7 +428,7 @@ export function SkillsPage() {
                   value={certFilter}
                   onApply={setCertFilter}
                   searchable
-                  searchPlaceholder="Search Certifications"
+                  searchPlaceholder="Search Certifications..."
                   width={300}
                 />
                 <MultiPill
@@ -436,7 +437,7 @@ export function SkillsPage() {
                   value={taskFilter}
                   onApply={setTaskFilter}
                   searchable
-                  searchPlaceholder="Search Tasks"
+                  searchPlaceholder="Search Tasks..."
                   width={300}
                 />
                 {tab === "skills" ? (
@@ -446,7 +447,7 @@ export function SkillsPage() {
                     value={masteryFilter}
                     onApply={setMasteryFilter}
                     searchable
-                    searchPlaceholder="Search Mastery Skills"
+                    searchPlaceholder="Search Mastery Skills..."
                     width={300}
                   />
                 ) : (
@@ -456,7 +457,7 @@ export function SkillsPage() {
                     value={skillFilter}
                     onApply={setSkillFilter}
                     searchable
-                    searchPlaceholder="Search Skills"
+                    searchPlaceholder="Search Skills..."
                     width={300}
                   />
                 )}
@@ -989,18 +990,15 @@ function ConfirmModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="cl-modal-overlay" onClick={onCancel}>
-      <div className="cl-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">{title}</h3>
-        </div>
-        <div style={{ padding: "0 24px 8px" }}>{children}</div>
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className={danger ? "sk-btn-danger" : "btn-publish"} onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title={title}
+      confirmLabel={confirmLabel}
+      danger={danger}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <div className="prm-content">{children}</div>
+    </PrmModal>
   );
 }
 
@@ -1043,7 +1041,7 @@ function CreatedByPill({ value, onApply }: { value: string[]; onApply: (v: strin
           ]}
           subsectionStyle
           searchable
-          searchPlaceholder="Search creators…"
+          searchPlaceholder="Search Creators..."
           value={value}
           onApply={(v) => { onApply(v); close(); }}
         />

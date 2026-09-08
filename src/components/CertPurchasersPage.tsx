@@ -382,7 +382,7 @@ export function CertPurchasersPage({
                     pills below, exactly as on the quiz Who Paid page. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone…"
+                  placeholder="Search Users by Name, Email, or Phone..."
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -398,7 +398,7 @@ export function CertPurchasersPage({
                     value={certNames}
                     onApply={setCertNames}
                     searchable
-                    searchPlaceholder="Search Certifications"
+                    searchPlaceholder="Search Certifications..."
                     width={300}
                   />
                 }
@@ -801,7 +801,7 @@ function GrantAccessModal({
               <input
                 ref={inputRef}
                 className="cl-modal-input"
-                placeholder="Search users by name, email, phone, or company…"
+                placeholder="Search Users by Name, Email, Phone, or Company..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

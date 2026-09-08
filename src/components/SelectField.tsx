@@ -29,6 +29,8 @@ export function SelectField<T extends string>({
   renderTrigger,
   searchPlaceholder,
   optionDetail,
+  optionSecondary,
+  optionSearchText,
   popupMenu = false,
   maxVisibleOptions,
   menuWidth,
@@ -53,6 +55,13 @@ export function SelectField<T extends string>({
   searchPlaceholder?: string;
   /** Right-aligned muted text on an option's row (Figma 668:943). */
   optionDetail?: (option: T) => ReactNode;
+  /** Muted text set immediately after the option's name, inside the same row
+   *  (Figma 955:976 — an employee's email beside their name). Unlike
+   *  `optionDetail` it hugs the name rather than the row's far edge. */
+  optionSecondary?: (option: T) => ReactNode;
+  /** Extra text the search header matches, beyond the option itself — so a
+   *  row showing a secondary value can be found by that value too. */
+  optionSearchText?: (option: T) => string;
   /** Set when the field sits on a modal/popup — the panel takes the
    *  popup-context surface (Figma 668:972) so it separates from the card. */
   popupMenu?: boolean;
@@ -134,6 +143,8 @@ export function SelectField<T extends string>({
             onChange={onChange}
             searchPlaceholder={searchPlaceholder}
             optionDetail={optionDetail}
+            optionSecondary={optionSecondary}
+            optionSearchText={optionSearchText}
             maxVisibleOptions={maxVisibleOptions}
             // Hand the keyboard back to the trigger, the way a native select does.
             close={() => {
@@ -154,6 +165,8 @@ function SelectMenu<T extends string>({
   close,
   searchPlaceholder,
   optionDetail,
+  optionSecondary,
+  optionSearchText,
   maxVisibleOptions,
 }: {
   value: T | "";
@@ -162,6 +175,8 @@ function SelectMenu<T extends string>({
   close: () => void;
   searchPlaceholder?: string;
   optionDetail?: (option: T) => ReactNode;
+  optionSecondary?: (option: T) => ReactNode;
+  optionSearchText?: (option: T) => string;
   maxVisibleOptions?: number;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -172,8 +187,11 @@ function SelectMenu<T extends string>({
   // value with weight alone.
   const [active, setActive] = useState(-1);
 
+  const q = query.trim().toLowerCase();
   const shown = searchPlaceholder
-    ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()))
+    ? options.filter((o) =>
+        `${o} ${optionSearchText?.(o) ?? ""}`.toLowerCase().includes(q),
+      )
     : options;
 
   // React only honours `autoFocus` on form elements, so the menu takes focus
@@ -258,6 +276,7 @@ function SelectMenu<T extends string>({
     >
       {shown.map((opt, i) => {
         const detail = optionDetail?.(opt);
+        const secondary = optionSecondary?.(opt);
         return (
           <button
             type="button"
@@ -275,10 +294,15 @@ function SelectMenu<T extends string>({
               close();
             }}
           >
-            {detail != null ? (
+            {detail != null || secondary != null ? (
               <>
-                <span className="dropdown-item-name">{opt}</span>
-                <span className="dropdown-item-detail">{detail}</span>
+                <span className="dropdown-item-name">
+                  {opt}
+                  {secondary != null && (
+                    <span className="dropdown-item-secondary">{secondary}</span>
+                  )}
+                </span>
+                {detail != null && <span className="dropdown-item-detail">{detail}</span>}
               </>
             ) : (
               opt

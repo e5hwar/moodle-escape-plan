@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RowExternalLinkIcon, CopyIcon, PencilIcon } from "./icons";
 import { useHoverCard, type HoverPos } from "../hooks/useHoverCard";
+import { PrmModal } from "./PrmModal";
 
 /* ── User details hover card (Figma 436:572) ──────────────────────────────────
    Hovering the learner's name in the review console peeks at who they are —
@@ -269,47 +270,30 @@ function EditNameModal({
   }, [onCancel]);
 
   return (
-    <div className="pm-overlay" onClick={onCancel}>
-      <div
-        className="pm-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit Name"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="pm-head">
-          <h3 className="pm-title">Edit Name</h3>
-          <p className="pm-sub">The name shown on this user&apos;s profile and submissions.</p>
-        </div>
-        <div className="pm-body">
-          <div className="form-group">
-            <label className="form-label" htmlFor="udh-edit-name">
-              Name <span className="req">*</span>
-            </label>
-            <input
-              id="udh-edit-name"
-              autoFocus
-              className="form-input"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && isValid) onSave(trimmed);
-              }}
-            />
-          </div>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button
-            className="btn-publish"
-            disabled={!isValid}
-            onClick={() => isValid && onSave(trimmed)}
-          >
-            Save Changes
-          </button>
-        </div>
+    <PrmModal
+      title="Edit Name"
+      description="The name shown on this user's profile and submissions."
+      confirmLabel="Save Changes"
+      confirmDisabled={!isValid}
+      onCancel={onCancel}
+      onConfirm={() => isValid && onSave(trimmed)}
+    >
+      <div className="form-group">
+        <label className="form-label" htmlFor="udh-edit-name">
+          Name <span className="req">*</span>
+        </label>
+        <input
+          id="udh-edit-name"
+          autoFocus
+          className="form-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && isValid) onSave(trimmed);
+          }}
+        />
       </div>
-    </div>
+    </PrmModal>
   );
 }
 

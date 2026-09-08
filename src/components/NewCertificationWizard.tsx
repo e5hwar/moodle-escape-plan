@@ -874,7 +874,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
         <div className="wizard-actions">
           <button className="btn-save-draft" onClick={onClose}>Save as draft</button>
           <button className="btn-publish" onClick={handlePublish}>
-            {isEditing ? "Save changes" : "Publish"}
+            {isEditing ? "Save Changes" : "Publish"}
           </button>
         </div>
       </footer>
@@ -953,7 +953,7 @@ function CertIndustriesModal({
             value={value}
             onChange={onChange}
             placeholder="Select Industries"
-            searchPlaceholder="Search Industries…"
+            searchPlaceholder="Search Industries..."
           />
           <p className="form-help">
             Used for catalog browsing and content discovery. A Certification can belong to multiple
@@ -2599,7 +2599,7 @@ function ImportCertsModal({
               <input
                 autoFocus
                 className="cl-modal-input"
-                placeholder="Search Certifications…"
+                placeholder="Search Certifications..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -3021,7 +3021,7 @@ function ConditionItemPicker({ onPick }: { onPick: (item: CompletionItem) => voi
 
       <DropdownSearch
         autoFocus
-        placeholder={tab === "task" ? "Search Tasks…" : "Search Certifications…"}
+        placeholder={tab === "task" ? "Search Tasks..." : "Search Certifications..."}
         value={query}
         onChange={setQuery}
       />
@@ -3203,7 +3203,7 @@ function AudienceStep({
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
           placeholder="Select Trades"
-          searchPlaceholder="Search Trades…"
+          searchPlaceholder="Search Trades..."
         />
         <p className="form-help">
           Only companies tagged with a Trade you pick will see this Certification. Picking
@@ -3219,7 +3219,7 @@ function AudienceStep({
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
           placeholder="Select Partnerships"
-          searchPlaceholder="Search Partnerships…"
+          searchPlaceholder="Search Partnerships..."
         />
         <p className="form-help">
           Only companies in a Partnership you pick will see this Certification. Picking
@@ -3320,7 +3320,7 @@ export function ArchiveCertificationPage({
                   value={replacementCerts}
                   onChange={setReplacementCerts}
                   placeholder="Select Certifications"
-                  searchPlaceholder="Search Certifications…"
+                  searchPlaceholder="Search Certifications..."
                 />
                 <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
               </div>

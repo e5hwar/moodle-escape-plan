@@ -190,7 +190,10 @@ export function ReviewSearch({
     setDraftCerts([]);
     setActive(-1);
     setOpen(false);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   function addCompany(name: string) {
@@ -291,8 +294,8 @@ export function ReviewSearch({
   ];
 
   const placeholder = scopeChips.length
-    ? "Search within scope…"
-    : "Search by User's Name, Email, Phone, Task, or Parent Certification…";
+    ? "Search Within Scope..."
+    : "Search by User's Name, Email, Phone, Task, or Parent Certification...";
 
   return (
     <div className="usearch" ref={wrapRef}>

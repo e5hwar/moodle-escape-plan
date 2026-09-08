@@ -11,10 +11,12 @@ import type { TaskType } from "../data/tasks";
 import {
   ADMIN_ACTOR,
   ADMIN_STAMP,
+  applyClearCert,
   applyDeleteAttempt,
   applyGrantAttempt,
   applyMarkCert,
   applyMarkComplete,
+  applyMarkIncomplete,
   attemptInfo,
   attemptsForTask,
   buildData,
@@ -24,6 +26,12 @@ import {
   statusVisual,
   fmtD,
   fmtDT,
+  fmtDY,
+  fmtMins,
+  gradeLabel,
+  tracksAttempts,
+  tracksTime,
+  TYPE_SHORT,
   type Cell,
   type CellMap,
   type CertManual,
@@ -31,8 +39,6 @@ import {
   type Employee,
 } from "../data/certLookup";
 import { questions as bankQuestions } from "../data/questionBank";
-import { Dropdown } from "./Dropdown";
-import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { PrmModal } from "./PrmModal";
 import { SectionHeading } from "./SectionHeading";
 import { SearchHints } from "./SearchPanelParts";
@@ -40,36 +46,42 @@ import { Stepper } from "./Stepper";
 import {
   ArrowUpRightIcon,
   CheckIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
+  ErrorTriangleIcon,
   FileIcon,
+  FlagIcon,
   HandsOnIcon,
+  HourglassIcon,
   KeyCommandIcon,
+  MenuAttemptsIcon,
+  MenuGrantAttemptsIcon,
+  MenuMarkCompleteIcon,
+  MenuMarkIncompleteIcon,
   PackageIcon,
-  PlusCircleIcon,
   QuizIcon,
-  RowExternalLinkIcon,
   RowKebabIcon,
+  SearchClearIcon,
   SearchIcon,
   XCircleIcon,
 } from "./icons";
 
 /**
- * Manage Completions — search an employee or a cohort, then a certification
- * or a single task. The combination drives the view (Claude Design "Progress
- * Admin - Prototype"):
+ * Manage Completions — search an employee, then a certification or a single
+ * task. The pair drives the view (Claude Design "Progress Admin - Prototype",
+ * 2026-09 revision — the cohort scope is gone, every lookup is one person):
  *
- *   cohort   + cert  → roster of everyone with progress; a row expands inline
- *                      into that person's task table
- *   cohort   + task  → roster of everyone's status on one task (grade,
- *                      attempts, marked-by)
- *   employee + cert  → cert summary notice + that person's task table
- *   employee + task  → single task card with metrics + attempt history
+ *   employee + cert  → learner header with the certification action, a
+ *                      progress strip, and that person's task table (Figma
+ *                      960:980: time is tracked on xAPI/Quiz only, a flag marks
+ *                      a manual completion, Quiz grades are a %, Hands-On out
+ *                      of 10, attempts carry an hourglass while pending review
+ *                      and an error triangle once exhausted)
+ *   employee + task  → learner header with the task actions and a status strip
  *
- * Admin actions — mark a task or a whole certification complete, grant quiz
- * attempts, delete a quiz attempt — are STAGED, not applied: each toggles a
- * "Staged" pill in place and lands in the footer, and Review & Save opens a
- * confirm dialog listing every change (with an optional reason) before
+ * Admin actions — mark a task or a whole certification complete OR incomplete,
+ * grant quiz attempts, delete a quiz attempt — are STAGED, not applied: each
+ * toggles a "Staged" pill in place and lands in the footer, and Review & Save
+ * opens a confirm dialog listing every change (with an optional reason) before
  * anything is committed. Everything applied is logged as ADMIN_ACTOR.
  *
  * Chrome is assembled from the shared design system (Figma "Components" page
@@ -114,21 +126,42 @@ function Avatar({ initials, size = 28 }: { initials: string; size?: number }) {
 }
 
 /** Table Pill (Figma 109:1237) carrying a task's status, staged state first:
- *  Staged: Complete → Attempts Exhausted → the base status vocabulary. */
+ *  Staged: Complete / Incomplete → Attempts Exhausted → the base vocabulary. */
 function TaskStatusPill({
   task,
   cell,
   staged,
+  stagedIncomplete,
 }: {
   task: CertTask;
   cell: Cell;
   staged: boolean;
+  stagedIncomplete: boolean;
 }) {
   if (staged) return <span className="co-status-pill co-status-pill--accent">Staged: Complete</span>;
+  if (stagedIncomplete)
+    return <span className="co-status-pill co-status-pill--accent">Staged: Incomplete</span>;
   if (isExhausted(task, cell))
     return <span className="co-status-pill co-status-pill--red">Attempts Exhausted</span>;
   const v = statusVisual(cell.status, cell.status === "complete" && cell.manual);
   return <span className={`co-status-pill co-status-pill--${v.tone}`}>{v.label}</span>;
+}
+
+/** The Attempts value (Figma 960:980): the count, amber with an hourglass
+ *  while a submission awaits review, red with an error triangle once every
+ *  attempt is used — plus the staged-grant pill. Blank on open-ended tasks. */
+function AttemptsValue({ task, cell, grant }: { task: CertTask; cell: Cell; grant?: { n: number } }) {
+  const ai = attemptInfo(task, cell);
+  const exhausted = isExhausted(task, cell);
+  const pending = cell.status === "review" && !exhausted;
+  return (
+    <span className={`mct-att${exhausted ? " is-exhausted" : pending ? " is-pending" : ""}`}>
+      {tracksAttempts(task) ? ai.attemptsUsed : "-"}
+      {pending && <HourglassIcon />}
+      {exhausted && <ErrorTriangleIcon />}
+      {grant && <span className="co-status-pill co-status-pill--accent">+{grant.n}</span>}
+    </span>
+  );
 }
 
 /** A clickable pill — staged states double as their own undo. */
@@ -154,22 +187,26 @@ function PillButton({
 
 type Staged =
   | { kind: "complete"; uid: string; tid: string; grade: number | null }
+  | { kind: "incomplete"; uid: string; tid: string }
   | { kind: "cert"; uid: string; certId: string; tids: string[] }
+  | { kind: "certun"; uid: string; certId: string }
   | { kind: "grant"; uid: string; tid: string; n: number }
   | { kind: "del"; uid: string; tid: string; attemptNumber: number };
 
 /* ─────────────────────────────── page ──────────────────────────────────── */
 
-type Who = { kind: "employee" | "cohort"; id: string } | null;
 type What = { kind: "cert" | "task"; id: string } | null;
-type GradePrompt = { uid: string; tid: string; taskName: string; type: string } | null;
+/** `max` is the scale the admin types in — 100 for a Quiz, 10 for Hands-On. */
+type GradePrompt = { uid: string; tid: string; taskName: string; type: string; max: 10 | 100 } | null;
 type TaskRef = { uid: string; tid: string } | null;
-type MenuState = { uid: string; tid: string; rect: DOMRect } | null;
+type MenuState =
+  | { kind: "task"; uid: string; tid: string; rect: DOMRect }
+  | { kind: "cert"; uid: string; certId: string; rect: DOMRect }
+  | null;
 
 export function ContentOverridesPage({
   onViewAttempts,
   initialUserId,
-  initialCohort,
   initialCertId,
   initialTaskId,
   backLabel,
@@ -183,8 +220,6 @@ export function ContentOverridesPage({
      the generated model simply leave that half empty. */
   /** Pre-selects this employee (Manage Users). */
   initialUserId?: string;
-  /** Pre-selects this cohort, by company name (Companies). */
-  initialCohort?: string;
   /** Pre-selects this certification (Certifications). */
   initialCertId?: string;
   /** Pre-selects this task (Tasks). */
@@ -207,12 +242,10 @@ export function ContentOverridesPage({
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const [who, setWho] = useState<Who>(() => {
-    if (initialUserId && data.employeesById[initialUserId]) return { kind: "employee", id: initialUserId };
-    if (initialCohort && data.cohorts.some((c) => c.id === initialCohort))
-      return { kind: "cohort", id: initialCohort };
-    return null;
-  });
+  /* Scope: one employee id, and a certification or a task. */
+  const [who, setWho] = useState<string | null>(() =>
+    initialUserId && data.employeesById[initialUserId] ? initialUserId : null,
+  );
   const [what, setWhat] = useState<What>(() => {
     if (initialCertId && data.certsById[initialCertId]) return { kind: "cert", id: initialCertId };
     if (initialTaskId && data.tasksById[initialTaskId]) return { kind: "task", id: initialTaskId };
@@ -221,16 +254,10 @@ export function ContentOverridesPage({
   const [whoQ, setWhoQ] = useState("");
   const [whatQ, setWhatQ] = useState("");
 
-  /* The one cohort-roster row whose task table is open inline. */
-  const [expandedEmp, setExpandedEmp] = useState<string | null>(null);
-
-  const [ftypes, setFtypes] = useState<string[]>([]);
-  const [finalOnly, setFinalOnly] = useState(false);
-
   const [gradePrompt, setGradePrompt] = useState<GradePrompt>(null);
   const [gradeInput, setGradeInput] = useState("");
 
-  /* Modals + row menu. */
+  /* Modals + anchored menus. */
   const [menu, setMenu] = useState<MenuState>(null);
   const [grantFor, setGrantFor] = useState<TaskRef>(null);
   const [grantN, setGrantN] = useState("2");
@@ -238,41 +265,42 @@ export function ContentOverridesPage({
   const [viewAttempt, setViewAttempt] = useState<{ uid: string; tid: string; attemptNumber: number } | null>(null);
 
   /* selection */
-  function selectWho(kind: "employee" | "cohort", id: string) {
-    setWho({ kind, id });
+  function selectWho(id: string) {
+    setWho(id);
     setWhoQ("");
-    setExpandedEmp(null);
   }
   function selectWhat(kind: "cert" | "task", id: string) {
     setWhat({ kind, id });
     setWhatQ("");
-    setExpandedEmp(null);
   }
   function clearWho() {
     setWho(null);
     setWhoQ("");
-    setExpandedEmp(null);
   }
   function clearWhat() {
     setWhat(null);
     setWhatQ("");
-    setExpandedEmp(null);
   }
-  function setScope(w: NonNullable<Who>, x: NonNullable<What>) {
+  function setScope(w: string, x: NonNullable<What>) {
     setWho(w);
     setWhat(x);
     setWhoQ("");
     setWhatQ("");
-    setExpandedEmp(null);
-    setFtypes([]);
-    setFinalOnly(false);
+  }
+  function openGrant(uid: string, tid: string) {
+    setGrantN("2");
+    setGrantFor({ uid, tid });
   }
 
   /* ───── staged-change helpers ───── */
   const stagedComplete = (uid: string, tid: string) =>
     staged.find((s): s is Extract<Staged, { kind: "complete" }> => s.kind === "complete" && s.uid === uid && s.tid === tid);
+  const stagedIncomplete = (uid: string, tid: string) =>
+    staged.find((s): s is Extract<Staged, { kind: "incomplete" }> => s.kind === "incomplete" && s.uid === uid && s.tid === tid);
   const stagedCertOf = (uid: string) =>
     staged.find((s): s is Extract<Staged, { kind: "cert" }> => s.kind === "cert" && s.uid === uid);
+  const stagedCertUnOf = (uid: string) =>
+    staged.find((s): s is Extract<Staged, { kind: "certun" }> => s.kind === "certun" && s.uid === uid);
   const stagedGrant = (uid: string, tid: string) =>
     staged.find((s): s is Extract<Staged, { kind: "grant" }> => s.kind === "grant" && s.uid === uid && s.tid === tid);
   const stagedDel = (uid: string, tid: string, n: number) =>
@@ -280,12 +308,19 @@ export function ContentOverridesPage({
 
   const isStagedComplete = (uid: string, tid: string) =>
     !!stagedComplete(uid, tid) || !!staged.find((s) => s.kind === "cert" && s.uid === uid && s.tids.includes(tid));
+  const isStagedIncomplete = (uid: string, tid: string) => !!stagedIncomplete(uid, tid);
 
-  /** Stage / unstage one task's manual completion. Staging a gradeable task
-   *  routes through the grade prompt first. */
+  /** Stage / unstage one task's manual completion — or, on a task that is
+   *  already complete, its reopening. Staging a gradeable completion routes
+   *  through the grade prompt first. */
   function toggleComplete(uid: string, tid: string) {
     const cell = cells[uid + "_" + tid];
-    if (!cell || cell.status === "complete") return;
+    if (!cell) return;
+    if (cell.status === "complete") {
+      const ex = stagedIncomplete(uid, tid);
+      setStaged((prev) => (ex ? prev.filter((s) => s !== ex) : [...prev, { kind: "incomplete", uid, tid }]));
+      return;
+    }
     /* Inside a staged cert? Pull the task back out of it. */
     const certEntry = staged.find(
       (s): s is Extract<Staged, { kind: "cert" }> => s.kind === "cert" && s.uid === uid && s.tids.includes(tid),
@@ -305,7 +340,7 @@ export function ContentOverridesPage({
     }
     const t = data.tasksById[tid];
     if (t && needsGradePrompt(t)) {
-      setGradePrompt({ uid, tid, taskName: t.name, type: t.type });
+      setGradePrompt({ uid, tid, taskName: t.name, type: t.type, max: t.type === "Hands-On Task" ? 10 : 100 });
       setGradeInput("");
     } else {
       setStaged((prev) => [...prev, { kind: "complete", uid, tid, grade: null }]);
@@ -315,7 +350,8 @@ export function ContentOverridesPage({
   function confirmGrade() {
     if (!gradePrompt) return;
     const raw = gradeInput.trim();
-    const grade = raw === "" ? null : Number(raw);
+    /* Hands-On is typed out of 10 and stored as tens on the shared scale. */
+    const grade = raw === "" ? null : Number(raw) * (100 / gradePrompt.max);
     setStaged((prev) => [...prev, { kind: "complete", uid: gradePrompt.uid, tid: gradePrompt.tid, grade }]);
     setGradePrompt(null);
     setGradeInput("");
@@ -333,6 +369,12 @@ export function ContentOverridesPage({
       .map((t) => t.id);
     if (!tids.length) return;
     setStaged((prev) => [...prev, { kind: "cert", uid, certId, tids }]);
+  }
+
+  /** Stage / unstage "mark certification incomplete" — reopens every task. */
+  function toggleCertUnstage(uid: string, certId: string) {
+    const ex = stagedCertUnOf(uid);
+    setStaged((prev) => (ex ? prev.filter((s) => s !== ex) : [...prev, { kind: "certun", uid, certId }]));
   }
 
   function stageGrant(uid: string, tid: string) {
@@ -356,11 +398,19 @@ export function ContentOverridesPage({
       const t = data.tasksById[s.tid];
       return `mark “${t?.name ?? s.tid}” Complete${s.grade != null ? ` · Grade ${s.grade}/100` : ""}`;
     }
+    if (s.kind === "incomplete") {
+      const t = data.tasksById[s.tid];
+      return `mark “${t?.name ?? s.tid}” Incomplete`;
+    }
     if (s.kind === "cert") {
       const c = data.certsById[s.certId];
       return `mark ${c?.name ?? "certification"} complete (${s.tids.length} remaining ${
         s.tids.length === 1 ? "task" : "tasks"
       })`;
+    }
+    if (s.kind === "certun") {
+      const c = data.certsById[s.certId];
+      return `mark ${c?.name ?? "certification"} incomplete (reopens completed tasks)`;
     }
     if (s.kind === "grant") {
       const t = data.tasksById[s.tid];
@@ -382,19 +432,25 @@ export function ContentOverridesPage({
     const note = reason.trim() || null;
     let c = cells;
     let m = certManual;
-    /* Deletes first so grant math sees the freed slots, then grants, then
-       completes — the prototype's order. */
+    /* Deletes first so grant math sees the freed slots, then everything else
+       in staging order — the prototype's sequence. */
     staged.forEach((s) => {
       if (s.kind === "del") c = applyDeleteAttempt(c, s.uid, s.tid, s.attemptNumber);
     });
     staged.forEach((s) => {
       if (s.kind === "grant") c = applyGrantAttempt(c, s.uid, s.tid, s.n);
       else if (s.kind === "complete") c = applyMarkComplete(c, s.uid, s.tid, s.grade, ADMIN_ACTOR, note);
+      else if (s.kind === "incomplete") c = applyMarkIncomplete(c, s.uid, s.tid);
       else if (s.kind === "cert") {
         s.tids.forEach((tid) => {
           c = applyMarkComplete(c, s.uid, tid, null, ADMIN_ACTOR, note);
         });
         m = applyMarkCert(m, s.uid, s.certId);
+      } else if (s.kind === "certun") {
+        (data.certsById[s.certId]?.taskIds ?? []).forEach((tid) => {
+          c = applyMarkIncomplete(c, s.uid, tid);
+        });
+        m = applyClearCert(m, s.uid, s.certId);
       }
     });
     const n = staged.length;
@@ -409,40 +465,23 @@ export function ContentOverridesPage({
   }
 
   /* ───── derived scope ───── */
-  const whoUser = who?.kind === "employee" ? data.employeesById[who.id] : null;
-  const cohortId = who?.kind === "cohort" ? who.id : null;
+  const whoUser = who ? data.employeesById[who] ?? null : null;
   const certObj = what?.kind === "cert" ? data.certsById[what.id] : null;
   const taskObj = what?.kind === "task" ? data.tasksById[what.id] : null;
 
-  const hasScope = !!(who && what);
-  const isLanding = !who && !what;
-  const isHalf = !!who !== !!what;
+  const hasScope = !!(whoUser && what);
+  const isLanding = !whoUser && !what;
+  const isHalf = !!whoUser !== !!what;
 
-  /* cert task lists + filters */
-  const ctAll: CertTask[] = certObj
+  const certTasks: CertTask[] = certObj
     ? certObj.taskIds.map((id) => data.tasksById[id]).filter(Boolean)
     : [];
-  const types: string[] = [];
-  ctAll.forEach((t) => {
-    if (!types.includes(t.type)) types.push(t.type);
-  });
-  const anyType = ftypes.length > 0;
-  const ctF = ctAll.filter((t) => (!anyType || ftypes.includes(t.type)) && (!finalOnly || t.isFinal));
-  const filtersActive = anyType || finalOnly;
 
-  const showCohortCert = !!cohortId && !!certObj;
-  const showCohortTask = !!cohortId && !!taskObj;
   const showUserCert = !!whoUser && !!certObj;
   const showUserTask = !!whoUser && !!taskObj;
 
-  const cohortMembers: Employee[] =
-    cohortId != null
-      ? (data.cohorts.find((c) => c.id === cohortId)?.userIds ?? []).map((id) => data.employeesById[id])
-      : [];
-
   /* ───── search matches ───── */
   const whoQl = whoQ.trim().toLowerCase();
-  const cohortMatches = data.cohorts.filter((c) => !whoQl || c.name.toLowerCase().includes(whoQl));
   const peopleMatches = (
     whoQl
       ? data.employees.filter(
@@ -456,39 +495,30 @@ export function ContentOverridesPage({
   const taskMatches = (whatQl ? data.tasks.filter((t) => t.name.toLowerCase().includes(whatQl)) : []).slice(0, 10);
 
   /* ───── combobox option lists ───── */
-  const whoOptions: ScopeOption[] = [
-    ...cohortMatches.map((c) => ({
-      key: "cohort_" + c.id,
-      section: "Cohorts",
-      onSelect: () => selectWho("cohort", c.id),
-      node: (
-        <>
-          <span className="usearch-chip">Cohort</span>
-          <span className="usearch-user-text">
-            <span className="usearch-user-name">{c.name}</span>
-          </span>
-          <span className="usearch-row-desc">
-            {c.userIds.length} {c.userIds.length === 1 ? "employee" : "employees"}
-          </span>
-        </>
-      ),
-    })),
-    ...peopleMatches.map((e) => ({
-      key: "emp_" + e.id,
-      section: "Employees",
-      onSelect: () => selectWho("employee", e.id),
-      node: (
-        <>
-          <Avatar initials={e.initials} size={30} />
-          <span className="usearch-user-text">
-            <span className="usearch-user-name">{e.name}</span>
-            <span className="usearch-user-sub">{e.contact}</span>
-          </span>
-          <span className="usearch-row-desc">{e.cohort ?? "B2C"}</span>
-        </>
-      ),
-    })),
-  ];
+  /* With a certification already picked, each candidate shows their progress
+     on it (the prototype's "4 of 12"); otherwise their cohort. */
+  const whoOptions: ScopeOption[] = peopleMatches.map((e) => ({
+    key: "emp_" + e.id,
+    section: "Employees",
+    onSelect: () => selectWho(e.id),
+    node: (
+      <>
+        <Avatar initials={e.initials} size={30} />
+        <span className="usearch-user-text">
+          <span className="usearch-user-name">{e.name}</span>
+          <span className="usearch-user-sub">{e.contact}</span>
+        </span>
+        <span className="usearch-row-desc">
+          {certObj
+            ? (() => {
+                const p = progress(cells, certManual, e.id, certTasks, certObj.id);
+                return `${p.c} of ${certTasks.length}`;
+              })()
+            : e.cohort ?? "B2C"}
+        </span>
+      </>
+    ),
+  }));
 
   const whatOptions: ScopeOption[] = [
     ...certMatches.map((c) => ({
@@ -524,11 +554,7 @@ export function ContentOverridesPage({
   ];
 
   /* ───── selected-scope tokens ───── */
-  const whoScope = whoUser
-    ? { label: "Employee", name: whoUser.name }
-    : cohortId
-    ? { label: "Cohort", name: cohortId }
-    : null;
+  const whoScope = whoUser ? { label: "Employee", name: whoUser.name } : null;
   const whatScope = certObj
     ? { label: "Certification", name: certObj.name }
     : taskObj
@@ -537,31 +563,41 @@ export function ContentOverridesPage({
 
   /* examples (real entities) */
   const examples = [
-    { who: "Diego Ramirez", what: "EPA 608 Type I", w: { kind: "employee", id: "U-10132" } as const, x: { kind: "cert", id: "C-0420" } as const },
-    { who: "ARS Cooling & Heating", what: "HVAC Field Skills", w: { kind: "cohort", id: "ARS Cooling & Heating" } as const, x: { kind: "cert", id: "C-0398" } as const },
-    { who: "Ayesha Khan", what: "Refrigerant Charging", w: { kind: "employee", id: "U-10157" } as const, x: { kind: "task", id: "T-2350" } as const },
+    { who: "Diego Ramirez", what: "EPA 608 Type I", w: "U-10132", x: { kind: "cert", id: "C-0420" } as const },
+    { who: "Ayesha Khan", what: "Refrigerant Charging", w: "U-10157", x: { kind: "task", id: "T-2350" } as const },
   ].filter((ex) => {
     // Only show examples whose entities resolve in the built model.
-    const wok = ex.w.kind === "cohort" ? data.cohorts.some((c) => c.id === ex.w.id) : !!data.employeesById[ex.w.id];
+    const wok = !!data.employeesById[ex.w];
     const xok = ex.x.kind === "cert" ? !!data.certsById[ex.x.id] : !!data.tasksById[ex.x.id];
     return wok && xok;
   });
 
   /* half-state copy */
   const half =
-    who && !what
+    whoUser && !what
       ? { title: "Now pick what to check", sub: "Search a certification or a single task above.", num: "2" }
-      : { title: "Now pick who to check", sub: "Search an employee or a cohort above.", num: "1" };
+      : { title: "Now pick who to check", sub: "Search an employee above.", num: "1" };
 
-  /* ───── shared row bits handed to the tables ───── */
+  /* ───── shared row bits handed to the task table ───── */
   const rowCtx: RowCtx = {
-    data,
     cells,
     isStagedComplete,
+    isStagedIncomplete,
     stagedGrant,
     toggleComplete,
-    openMenu: (uid, tid, rect) => setMenu({ uid, tid, rect }),
+    openGrant,
+    openMenu: (uid, tid, rect) => setMenu({ kind: "task", uid, tid, rect }),
+    menuFor: menu?.kind === "task" ? { uid: menu.uid, tid: menu.tid } : null,
   };
+
+  /* Employee × certification derivations. */
+  const certProgress =
+    showUserCert ? progress(cells, certManual, whoUser!.id, certTasks, certObj!.id) : null;
+  const certStaged = showUserCert && !!stagedCertOf(whoUser!.id);
+  const certUnStaged = showUserCert && !!stagedCertUnOf(whoUser!.id);
+
+  /* Employee × task derivations. */
+  const taskCell = showUserTask ? cells[whoUser!.id + "_" + taskObj!.id] : null;
 
   /* Modal subjects. */
   const grantTask = grantFor ? data.tasksById[grantFor.tid] : null;
@@ -585,6 +621,81 @@ export function ContentOverridesPage({
 
   const dialogNames = [...new Set(staged.map((s) => data.employeesById[s.uid]?.name).filter(Boolean))].join(", ");
 
+  /* The anchored menu's rows, by what it was opened on. */
+  const menuItems: MenuItem[] = (() => {
+    if (!menu) return [];
+    if (menu.kind === "cert") {
+      /* One action, by state: complete the certification (every open task at
+         once) until it is certified, reopen it after. A staged one undoes. */
+      if (!certProgress?.certified) {
+        const open = certTasks.filter((t) => cells[menu.uid + "_" + t.id]?.status !== "complete").length;
+        return [
+          {
+            icon: <MenuMarkCompleteIcon />,
+            label: certStaged
+              ? "Undo Mark Certification as Completed"
+              : "Mark Certification as Completed",
+            note: certStaged
+              ? "Staged — applies on Review & Save."
+              : `Marks the ${open} open ${open === 1 ? "task" : "tasks"} complete. Applies on Review & Save.`,
+            onPick: () => toggleCertStage(menu.uid, menu.certId, certTasks),
+          },
+        ];
+      }
+      return [
+        {
+          icon: <MenuMarkIncompleteIcon />,
+          label: certUnStaged
+            ? "Undo Mark Certification as Incomplete"
+            : "Mark Certification as Incomplete",
+          note: certUnStaged ? "Staged — applies on Review & Save." : "Reopens all tasks. Applies on Review & Save.",
+          danger: true,
+          onPick: () => toggleCertUnstage(menu.uid, menu.certId),
+        },
+      ];
+    }
+    const t = data.tasksById[menu.tid];
+    const c = cells[menu.uid + "_" + menu.tid];
+    if (!t || !c) return [];
+    const done = c.status === "complete";
+    /* The row has no other control (Figma 960:980), so a staged change is
+       undone from here too. */
+    const stagedC = isStagedComplete(menu.uid, menu.tid);
+    const stagedI = isStagedIncomplete(menu.uid, menu.tid);
+    const items: MenuItem[] = [
+      done
+        ? {
+            icon: <MenuMarkIncompleteIcon />,
+            label: stagedI ? "Undo Mark as Incomplete" : "Mark as Incomplete",
+            note: stagedI ? "Staged — applies on Review & Save." : undefined,
+            onPick: () => toggleComplete(menu.uid, menu.tid),
+          }
+        : {
+            icon: <MenuMarkCompleteIcon />,
+            label: stagedC ? "Undo Mark as Completed" : "Mark as Completed",
+            note: stagedC ? "Staged — applies on Review & Save." : undefined,
+            onPick: () => toggleComplete(menu.uid, menu.tid),
+          },
+    ];
+    /* Granting only means something where attempts are capped — a quiz with a
+       limit, i.e. the final exam. Viewing them works wherever they're kept. */
+    if (attemptInfo(t, c).hasLimit) {
+      items.push({
+        icon: <MenuGrantAttemptsIcon />,
+        label: "Grant Additional Attempts",
+        onPick: () => openGrant(menu.uid, menu.tid),
+      });
+    }
+    if (tracksAttempts(t)) {
+      items.push({
+        icon: <MenuAttemptsIcon />,
+        label: "View All Attempts",
+        onPick: () => setAttListFor({ uid: menu.uid, tid: menu.tid }),
+      });
+    }
+    return items;
+  })();
+
   return (
     <div className="main">
       <div className="workspace">
@@ -604,28 +715,28 @@ export function ContentOverridesPage({
             )}
             <h1 className="tasks-title">Manage Completions</h1>
             <div className="tasks-subtitle">
-              Look up an employee or a cohort, then a certification or a single task, to review and
-              override completions.
+              Look up an employee, then a certification or a single task, to review and override
+              completions.
             </div>
           </header>
 
           {/* ===== scope pickers ===== */}
           <div className="mc-scoperow">
             <ScopeSearch
-              placeholder="Search employee or cohort…"
+              placeholder="Search Users..."
               scope={whoScope}
               query={whoQ}
               onQuery={setWhoQ}
               onClearScope={clearWho}
               options={whoOptions}
-              emptyText="No employees or cohorts match."
+              emptyText="No users match."
               showKbd
             />
             <span className="mc-scope-sep">
               <ChevronRightIcon />
             </span>
             <ScopeSearch
-              placeholder="Search certification or task…"
+              placeholder="Search Tasks or Certifications..."
               scope={whatScope}
               query={whatQ}
               onQuery={setWhatQ}
@@ -634,79 +745,6 @@ export function ContentOverridesPage({
               emptyText="No certifications or tasks match."
             />
           </div>
-
-          {/* ===== task filters (certification scope only) ===== */}
-          {hasScope && certObj && (
-            <div className="filters mc-filters">
-              <Dropdown
-                width={260}
-                trigger={({ open, toggle }) => (
-                  <PillTrigger
-                    label="Task Type"
-                    value={summarize(ftypes, types)}
-                    open={open}
-                    toggle={toggle}
-                    onClear={() => setFtypes([])}
-                  />
-                )}
-              >
-                {({ close }) => (
-                  <SectionedMultiSelect
-                    sections={[{ items: types }]}
-                    value={ftypes}
-                    onApply={(v) => {
-                      setFtypes(v);
-                      close();
-                    }}
-                  />
-                )}
-              </Dropdown>
-
-              {finalOnly ? (
-                <span className="filter-applied">
-                  <button
-                    className="filter-applied-clear"
-                    onClick={() => setFinalOnly(false)}
-                    aria-label="Clear Final Exam filter"
-                  >
-                    <XCircleIcon />
-                  </button>
-                  <button className="filter-applied-main" onClick={() => setFinalOnly(false)}>
-                    <span className="label">Final Exam</span>
-                    <span className="sep" />
-                    <span className="value">Only</span>
-                  </button>
-                </span>
-              ) : (
-                <button className="filter-pill-dashed" onClick={() => setFinalOnly(true)}>
-                  <span className="icon">
-                    <PlusCircleIcon />
-                  </span>
-                  Final Exam
-                </button>
-              )}
-
-              {filtersActive && (
-                <button
-                  className="filter-clear-link"
-                  onClick={() => {
-                    setFtypes([]);
-                    setFinalOnly(false);
-                  }}
-                >
-                  Clear Filters
-                </button>
-              )}
-
-              <span className="filters-end mc-filters-end">
-                <span className="mc-filter-count">
-                  {ctF.length === ctAll.length
-                    ? `${ctAll.length} tasks`
-                    : `${ctF.length} of ${ctAll.length} tasks`}
-                </span>
-              </span>
-            </div>
-          )}
 
           {/* ===== body ===== */}
           <main className="mc-body">
@@ -718,9 +756,9 @@ export function ContentOverridesPage({
                   </span>
                   <div className="mc-empty-title">Find someone, then pick what to check</div>
                   <div className="mc-empty-sub">
-                    Search an <strong>employee or a cohort</strong>, then a{" "}
-                    <strong>certification or a single task</strong>. Pick a cohort to see everyone, and
-                    open any person inline.
+                    Search an <strong>employee</strong>, then a{" "}
+                    <strong>certification or a single task</strong>, to review their progress and
+                    override completions.
                   </div>
                   {examples.length > 0 && (
                     <>
@@ -751,55 +789,58 @@ export function ContentOverridesPage({
             )}
 
             {hasScope && (
-              <div className="mc-roster-scroll">
-                {/* cohort × certification — expandable roster */}
-                {showCohortCert && (
-                  <CohortCertTable
-                    members={cohortMembers}
-                    certId={certObj!.id}
-                    allTasks={ctAll}
-                    filteredTasks={ctF}
-                    certManual={certManual}
-                    expandedEmp={expandedEmp}
-                    onToggleExpand={(uid) => setExpandedEmp((e) => (e === uid ? null : uid))}
-                    stagedCertOf={stagedCertOf}
-                    onToggleCert={(uid) => toggleCertStage(uid, certObj!.id, ctAll)}
-                    ctx={rowCtx}
-                  />
-                )}
-
-                {/* cohort × task — roster on one task */}
-                {showCohortTask && (
-                  <CohortTaskTable members={cohortMembers} task={taskObj!} ctx={rowCtx} />
-                )}
-
-                {/* employee × certification — summary notice + task table */}
-                {showUserCert && (
+              <div className="mc-scroll">
+                {/* ── employee × certification ── */}
+                {showUserCert && certProgress && (
                   <>
-                    <CertNotice
-                      uid={whoUser!.id}
-                      certId={certObj!.id}
-                      allTasks={ctAll}
-                      cells={cells}
-                      certManual={certManual}
-                      stagedCert={!!stagedCertOf(whoUser!.id)}
-                      onToggleCert={() => toggleCertStage(whoUser!.id, certObj!.id, ctAll)}
-                    />
-                    <TaskTable uid={whoUser!.id} tasks={ctF} ctx={rowCtx} />
+                    {/* Certification card (Figma 965:1401): progress headline,
+                        the task count, and the ⋯ that holds every
+                        certification-level action. */}
+                    <div className="mc-notice mc-certcard">
+                      <div className="mc-notice-text">
+                        <div className="mc-certcard-title">
+                          {certProgress.certified ? "Certification Complete" : `${certProgress.pct}% Complete`}
+                          {certStaged && <span className="co-status-pill co-status-pill--accent">Staged: Complete</span>}
+                          {certUnStaged && (
+                            <span className="co-status-pill co-status-pill--accent">Staged: Incomplete</span>
+                          )}
+                        </div>
+                        <div className="mc-certcard-sub">
+                          {certProgress.certified
+                            ? `All ${certTasks.length} Tasks in the Certification are complete · Certified ${
+                                fmtD(certProgress.certAt) || "—"
+                              }${certProgress.certManual ? " (marked manually)" : ""}`
+                            : `${certProgress.c} out of ${certTasks.length} Tasks in the Certification are complete`}
+                        </div>
+                      </div>
+                      <button
+                        className="row-action-btn lone-dots"
+                        aria-label="Certification actions"
+                        onClick={(e) =>
+                          setMenu({
+                            kind: "cert",
+                            uid: whoUser!.id,
+                            certId: certObj!.id,
+                            rect: e.currentTarget.getBoundingClientRect(),
+                          })
+                        }
+                      >
+                        <RowKebabIcon />
+                      </button>
+                    </div>
+
+                    <TaskTable uid={whoUser!.id} tasks={certTasks} ctx={rowCtx} />
                   </>
                 )}
 
-                {/* employee × task — single task card */}
-                {showUserTask && (
-                  <UserTaskCard
-                    uid={whoUser!.id}
+                {/* ── employee × task ── */}
+                {showUserTask && taskCell && (
+                  <UserTaskView
+                    user={whoUser!}
                     task={taskObj!}
+                    cell={taskCell}
                     ctx={rowCtx}
                     onViewAttempts={() => setAttListFor({ uid: whoUser!.id, tid: taskObj!.id })}
-                    onGrant={() => {
-                      setGrantN("2");
-                      setGrantFor({ uid: whoUser!.id, tid: taskObj!.id });
-                    }}
                   />
                 )}
               </div>
@@ -827,17 +868,9 @@ export function ContentOverridesPage({
             </footer>
           )}
 
-          {/* ===== row 3-dot menu (quiz rows) ===== */}
-          {menu && (
-            <RowMenu
-              rect={menu.rect}
-              onClose={() => setMenu(null)}
-              onGrant={() => {
-                setGrantN("2");
-                setGrantFor({ uid: menu.uid, tid: menu.tid });
-              }}
-              onViewAttempts={() => setAttListFor({ uid: menu.uid, tid: menu.tid })}
-            />
+          {/* ===== anchored 3-dot menu (task rows + the certification) ===== */}
+          {menu && menuItems.length > 0 && (
+            <AnchoredMenu rect={menu.rect} onClose={() => setMenu(null)} items={menuItems} />
           )}
 
           {/* ===== review-changes dialog ===== */}
@@ -853,14 +886,14 @@ export function ContentOverridesPage({
             >
               <div className="mc-review-list">
                 {staged.map((s, i) => {
-                  const task = s.kind === "cert" ? null : data.tasksById[s.tid];
+                  const task = s.kind === "cert" || s.kind === "certun" ? null : data.tasksById[s.tid];
                   return (
                     <div className="mc-review-item" key={i}>
                       {task ? (
                         <TaskTypeIcon type={task.type} />
                       ) : (
                         <span className="mc-typeicon">
-                          <CheckIcon />
+                          {s.kind === "certun" ? <XCircleIcon /> : <CheckIcon />}
                         </span>
                       )}
                       <span className="mc-review-text">
@@ -1044,7 +1077,7 @@ export function ContentOverridesPage({
                         className="form-input"
                         type="number"
                         min={0}
-                        max={100}
+                        max={gradePrompt.max}
                         autoFocus
                         value={gradeInput}
                         onChange={(e) => setGradeInput(e.target.value)}
@@ -1053,7 +1086,7 @@ export function ContentOverridesPage({
                         }}
                         placeholder="Optional"
                       />
-                      <span className="mc-gradefield-suffix">/ 100</span>
+                      <span className="mc-gradefield-suffix">/ {gradePrompt.max}</span>
                     </div>
                     <p className="form-help">
                       Enter a grade, or leave blank to mark complete without one. Applies on Review
@@ -1095,6 +1128,16 @@ function grantHint(user: Employee, task: CertTask, cells: CellMap, grantN: strin
   if (ai.totalAllowed == null) return "Applies on Review & Save.";
   const first = user.name.split(" ")[0];
   return `${first} will have ${ai.totalAllowed + n - ai.attemptsUsed} of ${ai.totalAllowed + n} remaining. Applies on Review & Save.`;
+}
+
+/** One cell of the metrics strip under a view header. */
+function Metric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="mc-metric">
+      <div className="mc-metric-label">{label}</div>
+      <div className="mc-metric-value">{value}</div>
+    </div>
+  );
 }
 
 /* ───────────────────── scope search combobox (Figma "Expanded Search") ──── */
@@ -1199,11 +1242,32 @@ function ScopeSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        {showKbd && (
-          <span className="usearch-kbd">
-            <span className="kbd-cmd"><KeyCommandIcon /></span>
-            <span className="kbd-letter">K</span>
-          </span>
+        {/* Figma 902:3585 "Text Entered": once there is something to clear —
+            typed text or a picked scope — the ⌘K badge gives way to a ✕. */}
+        {query || scope ? (
+          <button
+            type="button"
+            className="usearch-clear"
+            aria-label="Clear search"
+            title="Clear search"
+            /* Keep the input focused — clearing should not close the panel. */
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onQuery("");
+              onClearScope();
+              setActive(-1);
+              inputRef.current?.focus();
+            }}
+          >
+            <SearchClearIcon />
+          </button>
+        ) : (
+          showKbd && (
+            <span className="usearch-kbd">
+              <span className="kbd-cmd"><KeyCommandIcon /></span>
+              <span className="kbd-letter">K</span>
+            </span>
+          )
         )}
       </div>
 
@@ -1240,441 +1304,222 @@ function ScopeSearch({
 /* ─────────────────────────── shared row context ────────────────────────── */
 
 type RowCtx = {
-  data: ReturnType<typeof buildData>;
   cells: CellMap;
   isStagedComplete: (uid: string, tid: string) => boolean;
+  isStagedIncomplete: (uid: string, tid: string) => boolean;
   stagedGrant: (uid: string, tid: string) => { n: number } | undefined;
   toggleComplete: (uid: string, tid: string) => void;
+  openGrant: (uid: string, tid: string) => void;
   openMenu: (uid: string, tid: string, rect: DOMRect) => void;
+  /** The row whose menu is open — it holds the hover treatment open. */
+  menuFor: { uid: string; tid: string } | null;
 };
-
-/** Attempts cell contents: "x of y" for limited quizzes, with the staged-grant
- *  pill beside it, "—" otherwise. */
-function AttemptsCell({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx }) {
-  const cell = ctx.cells[uid + "_" + task.id];
-  const ai = attemptInfo(task, cell);
-  const grant = ctx.stagedGrant(uid, task.id);
-  return (
-    <span className="mc-attcell">
-      {ai.hasLimit ? `${ai.attemptsUsed} of ${ai.totalAllowed}` : ""}
-      {grant && <span className="co-status-pill co-status-pill--accent">+{grant.n} Staged</span>}
-    </span>
-  );
-}
-
-/** The actions cell shared by every task row: the mark-complete checkbox
- *  (hidden once complete) and, on attempt-limited quizzes, the 3-dot menu. */
-function TaskRowActions({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx }) {
-  const cell = ctx.cells[uid + "_" + task.id];
-  const ai = attemptInfo(task, cell);
-  const staged = ctx.isStagedComplete(uid, task.id);
-  return (
-    <div className="mc-rowactions">
-      {cell.status !== "complete" && (
-        <button
-          className={`checkbox mc-check${staged ? " checked" : ""}`}
-          aria-label={staged ? "Unstage mark complete" : "Stage mark complete"}
-          title={staged ? "Staged: Complete — click to undo" : "Mark Complete"}
-          onClick={(e) => {
-            e.stopPropagation();
-            ctx.toggleComplete(uid, task.id);
-          }}
-        >
-          {staged && <CheckIcon />}
-        </button>
-      )}
-      {ai.hasLimit && (
-        <button
-          className="mc-iconbtn"
-          aria-label="Attempt actions"
-          onClick={(e) => {
-            e.stopPropagation();
-            ctx.openMenu(uid, task.id, e.currentTarget.getBoundingClientRect());
-          }}
-        >
-          <RowKebabIcon />
-        </button>
-      )}
-    </div>
-  );
-}
 
 /* ───────────────────────────── task table ──────────────────────────────── */
 
-/** One person's tasks — used full-width on employee × cert and nested inside
- *  an expanded cohort-roster row. */
+/** One person's tasks on the employee × certification view — the Figma
+ *  960:980 card: TASK · TIME SPENT · COMPLETED ON · GRADE · ATTEMPTS · ⋯. */
 function TaskTable({ uid, tasks, ctx }: { uid: string; tasks: CertTask[]; ctx: RowCtx }) {
   return (
-    <table className="mc-table mc-table--flat">
-      <thead>
-        <tr>
-          <th>Task</th>
-          <th className="mc-col-status">Status</th>
-          <th className="mc-col-date">Completed</th>
-          <th className="mc-col-grade">Grade</th>
-          <th className="mc-col-tries">Attempts</th>
-          <th className="mc-col-act2" />
-        </tr>
-      </thead>
-      <tbody>
-        {tasks.map((t) => {
-          const cell = ctx.cells[uid + "_" + t.id];
-          const staged = ctx.isStagedComplete(uid, t.id);
-          return (
-            <tr key={t.id} className={staged ? "is-staged" : ""}>
-              <td>
-                <span className="mc-taskname">
-                  <TaskTypeIcon type={t.type} />
-                  <span className="mc-taskname-text">{t.name}</span>
-                  {t.isFinal && <span className="co-status-pill co-status-pill--accent">Final</span>}
-                </span>
-              </td>
-              <td className="mc-col-status">
-                <TaskStatusPill task={t} cell={cell} staged={staged} />
-              </td>
-              <td className="mc-col-date">{cell.status === "complete" ? fmtDT(cell.completedAt) : ""}</td>
-              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : ""}</td>
-              <td className="mc-col-tries">
-                <AttemptsCell uid={uid} task={t} ctx={ctx} />
-              </td>
-              <td className="mc-col-act2">
-                <TaskRowActions uid={uid} task={t} ctx={ctx} />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/* ─────────────────── cohort × certification (expandable) ────────────────── */
-
-function CohortCertTable({
-  members,
-  certId,
-  allTasks,
-  filteredTasks,
-  certManual,
-  expandedEmp,
-  onToggleExpand,
-  stagedCertOf,
-  onToggleCert,
-  ctx,
-}: {
-  members: Employee[];
-  certId: string;
-  allTasks: CertTask[];
-  filteredTasks: CertTask[];
-  certManual: CertManual;
-  expandedEmp: string | null;
-  onToggleExpand: (uid: string) => void;
-  stagedCertOf: (uid: string) => Staged | undefined;
-  onToggleCert: (uid: string) => void;
-  ctx: RowCtx;
-}) {
-  return (
-    <table className="mc-table">
-      <thead>
-        <tr>
-          <th>Employee · {members.length}</th>
-          <th className="mc-col-progress">Progress</th>
-          <th className="mc-col-date">Completed</th>
-          <th className="mc-col-certact" />
-          <th className="mc-col-caret" />
-        </tr>
-      </thead>
-      <tbody>
-        {members.map((u) => {
-          const ps = progress(ctx.cells, certManual, u.id, allTasks, certId);
-          const open = expandedEmp === u.id;
-          const stagedCert = !!stagedCertOf(u.id);
-          return (
-            <FragmentRows key={u.id}>
-              <tr className={open ? "is-focus" : ""} onClick={() => onToggleExpand(u.id)}>
-                <td>
-                  <div className="mc-cell-user">
-                    <Avatar initials={u.initials} size={32} />
-                    <span className="mc-cell-user-text">
-                      <span className="mc-cell-user-name">{u.name}</span>
-                      <span className="mc-cell-user-sub">{u.contact}</span>
-                    </span>
-                  </div>
-                </td>
-                <td className="mc-col-progress">
-                  {ps.certified ? (
-                    <span className={`co-status-pill co-status-pill--${ps.certManual ? "accent" : "green"}`}>
-                      {ps.certManual ? "Certified · Manual" : "Certified"}
-                    </span>
-                  ) : (
-                    <span className="mc-pct">{ps.pct}%</span>
-                  )}
-                </td>
-                <td className="mc-col-date">{ps.certified ? fmtD(ps.certAt) : ""}</td>
-                <td className="mc-col-certact">
-                  {!ps.certified &&
-                    (stagedCert ? (
-                      <PillButton
-                        tone="accent"
-                        label="Staged: Complete · Undo"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleCert(u.id);
-                        }}
-                      />
-                    ) : (
-                      <button
-                        className="btn-save-draft mc-btn-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleCert(u.id);
-                        }}
-                      >
-                        Mark Cert
-                      </button>
-                    ))}
-                </td>
-                <td className="mc-col-caret">
-                  <span className={`mc-caret${open ? " is-open" : ""}`}>
-                    <ChevronDownIcon />
-                  </span>
-                </td>
-              </tr>
-              {open && (
-                <tr className="mc-exp-row">
-                  <td colSpan={5}>
-                    <div className="mc-subtable">
-                      <TaskTable uid={u.id} tasks={filteredTasks} ctx={ctx} />
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </FragmentRows>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/** <>…</> that can carry a key inside a <tbody> map. */
-function FragmentRows({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-}
-
-/* ───────────────────────── cohort × one task ───────────────────────────── */
-
-function CohortTaskTable({
-  members,
-  task,
-  ctx,
-}: {
-  members: Employee[];
-  task: CertTask;
-  ctx: RowCtx;
-}) {
-  return (
-    <table className="mc-table mc-table--flat">
-      <thead>
-        <tr>
-          <th>Employee · {members.length}</th>
-          <th className="mc-col-status">Status</th>
-          <th className="mc-col-grade">Grade</th>
-          <th className="mc-col-tries">Attempts</th>
-          <th className="mc-col-date">Completed</th>
-          <th className="mc-col-marked">Marked By</th>
-          <th className="mc-col-act2" />
-        </tr>
-      </thead>
-      <tbody>
-        {members.map((u) => {
-          const cell = ctx.cells[u.id + "_" + task.id];
-          const staged = ctx.isStagedComplete(u.id, task.id);
-          return (
-            <tr key={u.id} className={staged ? "is-staged" : ""}>
-              <td>
-                <div className="mc-cell-user">
-                  <Avatar initials={u.initials} size={32} />
-                  <span className="mc-cell-user-text">
-                    <span className="mc-cell-user-name">{u.name}</span>
-                    <span className="mc-cell-user-sub">{u.contact}</span>
-                  </span>
-                </div>
-              </td>
-              <td className="mc-col-status">
-                <TaskStatusPill task={task} cell={cell} staged={staged} />
-              </td>
-              <td className="mc-col-grade">{cell.grade != null ? `${cell.grade}%` : ""}</td>
-              <td className="mc-col-tries">
-                <AttemptsCell uid={u.id} task={task} ctx={ctx} />
-              </td>
-              <td className="mc-col-date">{cell.status === "complete" ? fmtD(cell.completedAt) : ""}</td>
-              <td className="mc-col-marked">{cell.markedBy ?? ""}</td>
-              <td className="mc-col-act2">
-                <TaskRowActions uid={u.id} task={task} ctx={ctx} />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/* ─────────────── employee × certification summary notice ───────────────── */
-
-function CertNotice({
-  uid,
-  certId,
-  allTasks,
-  cells,
-  certManual,
-  stagedCert,
-  onToggleCert,
-}: {
-  uid: string;
-  certId: string;
-  allTasks: CertTask[];
-  cells: CellMap;
-  certManual: CertManual;
-  stagedCert: boolean;
-  onToggleCert: () => void;
-}) {
-  const ps = progress(cells, certManual, uid, allTasks, certId);
-  const remain = ps.rv + ps.inc;
-  return (
-    <div className="mc-notice">
-      <div className="mc-notice-text">
-        <div className="mc-notice-title">
-          {ps.certified
-            ? ps.certManual
-              ? "Certification marked complete by admin"
-              : "Certification complete"
-            : `${remain} task${remain === 1 ? "" : "s"} still open before certified`}
-        </div>
-        <div className="mc-notice-sub">
-          {ps.certified
-            ? (ps.certManual ? "Manually certified " : "Certified ") + (ps.certAt ? fmtDT(ps.certAt) : "—")
-            : `${ps.pct}% of this certification complete`}
-        </div>
+    <div className="mct">
+      <div className="mct-hd">
+        <span className="mct-c-task">Task</span>
+        <span className="mct-c-time">Time Spent</span>
+        <span className="mct-c-date">Completed On</span>
+        <span className="mct-c-grade">Grade</span>
+        <span className="mct-c-att">Attempts</span>
+        <span className="mct-c-menu" />
       </div>
-      {!ps.certified &&
-        (stagedCert ? (
-          <PillButton tone="accent" label="Staged: Certification Complete · Undo" onClick={onToggleCert} />
-        ) : (
-          <button className="btn-publish" onClick={onToggleCert}>
-            Mark Certification Complete
-          </button>
+      {/* Only the rows scroll — the page, the card and this header stay put. */}
+      <div className="mct-rows">
+        {tasks.map((t) => (
+          <TaskRow key={t.id} uid={uid} task={t} ctx={ctx} />
         ))}
+      </div>
     </div>
   );
 }
 
-/* ───────────────────────── employee × task card ────────────────────────── */
+function TaskRow({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx }) {
+  const cell = ctx.cells[uid + "_" + task.id];
+  const done = cell.status === "complete";
+  const stagedC = ctx.isStagedComplete(uid, task.id);
+  const stagedI = ctx.isStagedIncomplete(uid, task.id);
+  const time = tracksTime(task) ? fmtMins(cell.timeSpent) : "";
+  const grade = gradeLabel(task, cell);
+  const menuOpen = ctx.menuFor?.uid === uid && ctx.menuFor.tid === task.id;
+  const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    ctx.openMenu(uid, task.id, e.currentTarget.getBoundingClientRect());
+  };
+  return (
+    <div
+      className={`mct-row${stagedC || stagedI ? " is-staged" : ""}${menuOpen ? " is-menu" : ""}`}
+    >
+      <span className="mct-c-task">
+        <span className="mct-name">{task.name}</span>
+        <span className="mct-type">· {TYPE_SHORT[task.type]}</span>
+        {stagedC && <span className="co-status-pill co-status-pill--accent">Staged: Complete</span>}
+        {stagedI && <span className="co-status-pill co-status-pill--accent">Staged: Incomplete</span>}
+      </span>
+      <span className="mct-c-time">{time || "-"}</span>
+      <span className="mct-c-date">
+        {!done ? (
+          "-"
+        ) : cell.manual ? (
+          /* The flag and the date share one tooltip naming who set it. */
+          <span className="mct-manual" data-tip={`Manually marked complete by ${cell.markedBy ?? ADMIN_ACTOR}`}>
+            {fmtDY(cell.completedAt)}
+            <FlagIcon />
+          </span>
+        ) : (
+          fmtDY(cell.completedAt)
+        )}
+      </span>
+      <span className="mct-c-grade">{grade || "-"}</span>
+      <span className="mct-c-att">
+        <AttemptsValue task={task} cell={cell} grant={ctx.stagedGrant(uid, task.id)} />
+      </span>
+      {/* Shared row-action chrome (Figma 386:269): the resting kebab gives way
+          to the bar pill on hover, exactly as on Tasks and Certifications. The
+          bar holds one cell here — the menu is this row's only action. */}
+      <span className="mct-c-menu">
+        <button className="row-action-btn lone-dots" aria-label="Task actions" onClick={openMenu}>
+          <RowKebabIcon />
+        </button>
+        <div className="row-action-bar">
+          <button className="row-action-btn" aria-label="Task actions" onClick={openMenu}>
+            <RowKebabIcon />
+          </button>
+        </div>
+      </span>
+    </div>
+  );
+}
 
-function UserTaskCard({
-  uid,
+/* ───────────────────────── employee × task view ────────────────────────── */
+
+function UserTaskView({
+  user,
   task,
+  cell,
   ctx,
   onViewAttempts,
-  onGrant,
 }: {
-  uid: string;
+  user: Employee;
   task: CertTask;
+  cell: Cell;
   ctx: RowCtx;
   onViewAttempts: () => void;
-  onGrant: () => void;
 }) {
-  const cell = ctx.cells[uid + "_" + task.id];
   const ai = attemptInfo(task, cell);
-  const staged = ctx.isStagedComplete(uid, task.id);
-  const grant = ctx.stagedGrant(uid, task.id);
-  const exhausted = isExhausted(task, cell);
+  const stagedC = ctx.isStagedComplete(user.id, task.id);
+  const stagedI = ctx.isStagedIncomplete(user.id, task.id);
   const done = cell.status === "complete";
 
-  const metric = (label: string, value: ReactNode) => (
-    <div className="mc-metric">
-      <div className="mc-metric-label">{label}</div>
-      <div className="mc-metric-value">{value}</div>
-    </div>
-  );
-
   return (
-    <div className="mc-taskcard">
-      <div className="mc-taskcard-head">
-        <div className="mc-taskcard-text">
-          <div className="mc-acc-titlerow">
-            <TaskTypeIcon type={task.type} />
-            <span className="mc-acc-name">{task.name}</span>
-            {task.isFinal && <span className="co-status-pill co-status-pill--accent">Final</span>}
-          </div>
-          <div className="mc-acc-metatext">
-            {task.certName} · {task.type}
+    <>
+      <div className="mc-viewhead">
+        <div className="mc-viewhead-text">
+          <div className="mc-viewhead-name">{user.name}</div>
+          <div className="mc-viewhead-sub">
+            <span className="mc-viewhead-task">
+              <TaskTypeIcon type={task.type} />
+              {task.name}
+            </span>
+            {" · "}
+            {task.certName}
           </div>
         </div>
-        <TaskStatusPill task={task} cell={cell} staged={staged} />
-      </div>
-
-      <div className="mc-taskcard-body">
-        <div className="mc-metrics">
-          {metric("Completed On", done ? fmtDT(cell.completedAt) : "")}
-          {metric("Marked Complete By", cell.markedBy ?? "")}
-          {metric("Highest Grade", cell.grade != null ? `${cell.grade}%` : "")}
-          {metric(
-            ai.hasLimit ? `Attempts (Max. ${ai.totalAllowed})` : "Attempts",
-            <span className="mc-attcell">
-              {ai.hasLimit ? String(ai.attemptsUsed) : ""}
-              {exhausted && <span className="co-status-pill co-status-pill--red">Exhausted</span>}
-              {grant && <span className="co-status-pill co-status-pill--accent">+{grant.n} Staged</span>}
-            </span>,
+        <div className="mc-viewhead-actions">
+          {done ? (
+            <span className="co-status-pill co-status-pill--green">
+              {cell.manual ? "Complete · Marked Manually" : "Complete"}
+            </span>
+          ) : stagedC ? (
+            <PillButton tone="accent" label="Staged: Complete · Undo" onClick={() => ctx.toggleComplete(user.id, task.id)} />
+          ) : (
+            <button className="btn-publish" onClick={() => ctx.toggleComplete(user.id, task.id)}>
+              Mark as Completed
+            </button>
+          )}
+          {done &&
+            (stagedI ? (
+              <PillButton tone="accent" label="Staged: Incomplete · Undo" onClick={() => ctx.toggleComplete(user.id, task.id)} />
+            ) : (
+              <button className="btn-save-draft" onClick={() => ctx.toggleComplete(user.id, task.id)}>
+                Mark as Incomplete
+              </button>
+            ))}
+          {tracksAttempts(task) && (
+            <button className="btn-save-draft" onClick={onViewAttempts}>
+              View All Attempts
+            </button>
+          )}
+          {/* Only a capped quiz — the final exam — can be granted more. */}
+          {ai.hasLimit && (
+            <button className="btn-save-draft" onClick={() => ctx.openGrant(user.id, task.id)}>
+              Grant Additional Attempts
+            </button>
           )}
         </div>
       </div>
 
-      <div className="mc-taskcard-foot">
-        {done ? (
-          <span className="co-status-pill co-status-pill--green">
-            {cell.manual ? "Complete · Marked Manually" : "Complete"}
-          </span>
-        ) : staged ? (
-          <PillButton tone="accent" label="Staged: Complete · Undo" onClick={() => ctx.toggleComplete(uid, task.id)} />
-        ) : (
-          <button className="btn-publish" onClick={() => ctx.toggleComplete(uid, task.id)}>
-            Mark Complete
-          </button>
-        )}
-        {ai.hasLimit && (
-          <>
-            <button className="btn-save-draft" onClick={onViewAttempts}>
-              View Attempts
-            </button>
-            <button className="btn-save-draft" onClick={onGrant}>
-              Grant Attempts
-            </button>
-          </>
-        )}
-        <span className="mc-taskcard-note">
-          All manual changes are logged with actor and timestamp.
-        </span>
+      <div className="mc-metrics mc-metrics--5">
+        <Metric
+          label="Status"
+          value={<TaskStatusPill task={task} cell={cell} staged={stagedC} stagedIncomplete={stagedI} />}
+        />
+        <Metric
+          label="Completed On"
+          value={
+            done ? (
+              cell.manual ? (
+                <span className="mct-manual" data-tip={`Manually marked complete by ${cell.markedBy ?? ADMIN_ACTOR}`}>
+                  {fmtDT(cell.completedAt)}
+                  <FlagIcon />
+                </span>
+              ) : (
+                fmtDT(cell.completedAt)
+              )
+            ) : (
+              ""
+            )
+          }
+        />
+        <Metric label="Marked By" value={cell.markedBy ?? ""} />
+        <Metric label="Highest Grade" value={gradeLabel(task, cell)} />
+        <Metric
+          label={ai.hasLimit ? `Attempts (Max. ${ai.totalAllowed})` : "Attempts"}
+          value={<AttemptsValue task={task} cell={cell} grant={ctx.stagedGrant(user.id, task.id)} />}
+        />
       </div>
-    </div>
+    </>
   );
 }
 
-/* ─────────────────────── row 3-dot menu (quiz rows) ────────────────────── */
+/* ───────────────────────── anchored 3-dot menu ─────────────────────────── */
+
+type MenuItem = {
+  icon: JSX.Element;
+  label: string;
+  onPick: () => void;
+  /** Destructive row — the design-system red (.u-menu-item--danger). */
+  danger?: boolean;
+  /** Second line under the label. */
+  note?: string;
+};
 
 /** Same `.u-menu` chrome + fixed positioning as the Users row menu — the
  *  table scrolls, so an in-row popover would be clipped. */
-function RowMenu({
+function AnchoredMenu({
   rect,
   onClose,
-  onGrant,
-  onViewAttempts,
+  items,
 }: {
   rect: DOMRect;
   onClose: () => void;
-  onGrant: () => void;
-  onViewAttempts: () => void;
+  items: MenuItem[];
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -1708,20 +1553,6 @@ function RowMenu({
     };
   }, [onClose]);
 
-  const item = (icon: JSX.Element, label: string, onPick: () => void) => (
-    <button
-      className="u-menu-item"
-      onClick={(e) => {
-        e.stopPropagation();
-        onPick();
-        onClose();
-      }}
-    >
-      <span className="u-menu-item-icon">{icon}</span>
-      {label}
-    </button>
-  );
-
   return (
     <div
       ref={ref}
@@ -1733,8 +1564,23 @@ function RowMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {item(<PlusCircleIcon />, "Grant Attempts", onGrant)}
-      {item(<RowExternalLinkIcon />, "View Attempts", onViewAttempts)}
+      {items.map((it) => (
+        <button
+          key={it.label}
+          className={`u-menu-item${it.danger ? " u-menu-item--danger" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            it.onPick();
+            onClose();
+          }}
+        >
+          <span className="u-menu-item-icon">{it.icon}</span>
+          <span className="u-menu-item-text">
+            <span>{it.label}</span>
+            {it.note && <span className="u-menu-item-sub mc-menu-note">{it.note}</span>}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

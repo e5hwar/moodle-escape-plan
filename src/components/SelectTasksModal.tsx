@@ -153,7 +153,7 @@ export function SelectTasksModal({
             </span>
             <input
               className="search-input stm-search-input"
-              placeholder="Search Tasks"
+              placeholder="Search Tasks..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);

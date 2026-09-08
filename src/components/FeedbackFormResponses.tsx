@@ -673,7 +673,7 @@ export function FormResponsesSplit({ form, bank, responses }: Props) {
             </span>
             <input
               className="search-input"
-              placeholder="Search by Name or Email"
+              placeholder="Search by Name or Email..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

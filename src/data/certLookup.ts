@@ -8,13 +8,16 @@
  *                      cohort exists for every company on the Companies page
  *   • Cohorts        → one per company, holding both rosters' employees
  *   • Certifications → src/data/certifications.ts
- *   • Tasks          → src/data/tasks.ts (associated by `usedIn`, then padded
- *                      deterministically to each cert's declared task count)
+ *   • Tasks          → src/data/tasks.ts (associated by `usedIn`, then filled
+ *                      from the pool so every cert follows the same PLAN of
+ *                      task types × states — see "demo scenario plan")
  *
  * Per-(employee, task) completion state has no home in the app data, so it is
- * generated deterministically (seeded by a hash of the ids) — stable across
- * renders and identical on every load. Admin actions (mark complete, grant an
- * attempt, mark a certification) overlay this baseline via React state.
+ * generated deterministically: each task's slot in its certification's PLAN
+ * fixes the state (complete, pending review, out of attempts…) and a hash of
+ * the ids seeds the numbers — stable across renders and identical on every
+ * load. Admin actions (mark complete / incomplete, grant an attempt, mark a
+ * certification) overlay this baseline via React state.
  */
 
 import { users, type User } from "./users";
@@ -79,12 +82,20 @@ export type CertTask = {
   type: TaskType;
   certId: string;
   certName: string;
-  difficulty: number;
   isFinal: boolean;
+  /** Sat under a proctor — its submissions wait in the Proctoring queue, so
+   *  the task can be pending review the way a Hands-On task can. */
+  proctored: boolean;
+  /** Quizzes and Hands-On tasks are attempt-limited; the rest are open. */
   attemptLimit: number | null;
 };
 
-export type CertDef = { id: string; name: string; industry: string; taskIds: string[] };
+export type CertDef = {
+  id: string;
+  name: string;
+  industry: string;
+  taskIds: string[];
+};
 export type Cohort = { id: string; name: string; userIds: string[] };
 
 export type Employee = {
@@ -126,10 +137,6 @@ const USEDIN_TO_CERT: Record<string, string> = {
   // "OSHA 30" has no matching certification — ignored.
 };
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
-
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
   const a = parts[0]?.[0] ?? "";
@@ -137,102 +144,203 @@ function initialsOf(name: string): string {
   return (a + b).toUpperCase();
 }
 
+/** Only a quiz can cap attempts, and in this data set only the certification's
+ *  final exam does — every other quiz and every Hands-On task retries freely.
+ *  A capped quiz is the one place "Grant Attempts" means anything. */
 function attemptLimitFor(t: Task): number | null {
-  if (t.type !== "Quiz") return null;
-  if (t.finalExam) return 2;
-  return hash(t.id) % 2 === 0 ? 2 : 3;
+  return t.type === "Quiz" && t.finalExam ? (hash(t.id) % 2 === 0 ? 2 : 3) : null;
 }
 
-/** Real tasks associated with a cert via `usedIn`, padded to the declared count. */
-function tasksForCert(cert: (typeof appCerts)[number], certIndex: number): Task[] {
-  const matched = appTasks.filter(
-    (t) => t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
+/* ───────────────────────── demo scenario plan ─────────────────────────
+   Every certification carries every task type in every state the task table
+   can show, so any employee × certification is a complete demonstration:
+   xAPI / Resource complete and open, an admin's manual completion (flag), a
+   Quiz passed / still failing, Hands-On instructor-graded / pending review
+   (hourglass) / still failing / marked by hand, and the final exam out of
+   attempts (error) — the one capped task, so the one that can be exhausted
+   and the one "Grant Attempts" is offered on. The order reads like a learner
+   working through the certification. Only the numbers vary per employee. */
+export type Scenario =
+  | "complete" // earned in-product (xAPI, Resource)
+  | "manual" // an admin marked it complete — flagged in the table
+  | "inprogress" // started, time logged, not finished (xAPI)
+  | "notstarted"
+  | "passed" // Quiz complete on a passing grade
+  | "graded" // Hands-On complete, instructor-graded
+  | "failing" // attempted, best grade under the bar, free to retry
+  | "exhausted" // every attempt of a capped quiz used without a pass
+  | "pending"; // submitted, awaiting review (Hands-On / proctored Quiz)
+
+const PLAN: { type: TaskType; scenario: Scenario; final?: boolean }[] = [
+  { type: "Resource", scenario: "complete" },
+  { type: "xAPI", scenario: "complete" },
+  { type: "Quiz", scenario: "passed" },
+  { type: "Hands-On Task", scenario: "graded" },
+  { type: "xAPI", scenario: "manual" },
+  { type: "Hands-On Task", scenario: "manual" },
+  { type: "xAPI", scenario: "inprogress" },
+  { type: "Quiz", scenario: "failing" },
+  { type: "Hands-On Task", scenario: "pending" },
+  { type: "Hands-On Task", scenario: "failing" },
+  { type: "Resource", scenario: "notstarted" },
+  { type: "xAPI", scenario: "notstarted" },
+  { type: "Quiz", scenario: "notstarted" },
+  { type: "Hands-On Task", scenario: "notstarted" },
+  { type: "Quiz", scenario: "exhausted", final: true },
+];
+
+/** One task per PLAN slot: the cert's own `usedIn` tasks first, then any task
+ *  of that type nobody has taken, and once the pool runs dry a copy of one
+ *  under a cert-suffixed id — cells are keyed by task, so two certs can never
+ *  share a task or they would share its state. `taken` runs across certs. */
+function tasksForCert(
+  cert: (typeof appCerts)[number],
+  certIndex: number,
+  taken: Set<string>,
+): { task: Task; scenario: Scenario }[] {
+  const matched = appTasks.filter((t) =>
+    t.usedIn.some((u) => USEDIN_TO_CERT[u] === cert.id),
   );
-  const target = clamp(cert.tasks, 4, 12);
-  const pool = appTasks.filter((t) => !t.finalExam);
-
-  const list: Task[] = [];
-  const seen = new Set<string>();
-  for (const t of matched) {
-    if (!seen.has(t.id)) {
-      seen.add(t.id);
-      list.push(t);
+  /* Names already on this cert's list. A certification never shows the same
+     task name twice — including once the pool is down to clones, which carry
+     their source's name. Every type's pool holds more distinct names than the
+     PLAN asks slots of it, so a fresh one is always there to find. */
+  const names = new Set<string>();
+  const pick = (slot: (typeof PLAN)[number]): Task => {
+    const fits = (t: Task) =>
+      t.type === slot.type && !!t.finalExam === !!slot.final;
+    const fresh = (t: Task) => fits(t) && !names.has(t.name);
+    const free =
+      matched.find((t) => fresh(t) && !taken.has(t.id)) ??
+      appTasks.find((t) => fresh(t) && !taken.has(t.id));
+    if (free) return free;
+    const pool = appTasks.filter(fresh);
+    if (pool.length) {
+      const src = pool[(certIndex * 7 + taken.size) % pool.length];
+      return { ...src, id: `${src.id}~${cert.id}` };
     }
-  }
-  // Pad with a deterministic, distinct window of the task pool.
-  for (let i = 0; list.length < target && i < pool.length * 3; i++) {
-    const c = pool[(certIndex * 7 + i * 3) % pool.length];
-    if (!seen.has(c.id)) {
-      seen.add(c.id);
-      list.push(c);
-    }
-  }
-  let result = list.length > target ? list.slice(0, target) : list;
-
-  // Ensure the certification's real final exam (if any) sits last.
-  const fin = result.find((t) => t.finalExam) ?? matched.find((t) => t.finalExam);
-  if (fin) {
-    result = result.filter((t) => t.id !== fin.id);
-    if (result.length >= target) result.pop();
-    result.push(fin);
-  }
-  return result;
+    /* Only reachable if a PLAN ever asks for more slots of a type than the
+       pool holds names: number the repeat so the rows stay tellable apart. */
+    const all = appTasks.filter(fits);
+    const src = all[(certIndex * 7 + taken.size) % all.length];
+    let n = 2;
+    while (names.has(`${src.name} ${n}`)) n++;
+    return { ...src, id: `${src.id}~${cert.id}~${n}`, name: `${src.name} ${n}` };
+  };
+  return PLAN.map((slot) => {
+    const task = pick(slot);
+    taken.add(task.id);
+    names.add(task.name);
+    return { task, scenario: slot.scenario };
+  });
 }
 
 /* ─────────────────────────── build the model ────────────────────────── */
 
 /** Instructors credited on reviewed Hands-On completions (hash-picked). */
-const INSTRUCTORS = ["J. Cole (Instructor)", "M. Ferris (Instructor)", "S. Bhatt (Instructor)"];
+const INSTRUCTORS = [
+  "J. Cole (Instructor)",
+  "M. Ferris (Instructor)",
+  "S. Bhatt (Instructor)",
+];
 
-function genCell(uid: string, task: CertTask, forceComplete: boolean): Cell {
+/** The cell for one employee on one task, in the state its PLAN slot names.
+ *  Time is only tracked on xAPI and Quiz tasks. Hands-On is scored out of 10
+ *  and kept as tens on the shared 0–100 scale, so `/10` reads back exactly. */
+function genCell(uid: string, task: CertTask, scenario: Scenario): Cell {
   const rng = mulberry32(hash(uid + "|" + task.id));
-  const skill = 0.4 + (hash(uid) % 1000) / 1000 * 0.55;
+  const r = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
+  /* Uncapped tasks still log attempts — 3 is just the ceiling for the
+     generated counts, not a limit the UI enforces. */
+  const limit = task.attemptLimit ?? 3;
+  const handsOn = task.type === "Hands-On Task";
+  const assignedAt = NOW - r(40, 70) * DAY;
+  const startedAt = assignedAt + r(1, 5) * DAY;
+  const submittedAt = startedAt + r(1, 10) * DAY;
+  const completedAt = submittedAt + r(0, 3) * DAY;
+  const timeSpent = tracksTime(task) ? r(8, 95) : 0;
+  const pass = () => (handsOn ? r(6, 10) * 10 : r(70, 100));
+  const fail = () => (handsOn ? r(1, 5) * 10 : r(15, 65));
 
-  const r = rng();
-  const p = skill - task.difficulty * 0.4;
-  let status: CellStatus;
-  if (forceComplete || r < Math.max(0.06, p)) status = "complete";
-  else if (r < Math.max(0.06, p) + 0.13) status = "review";
-  else status = "incomplete";
-
-  const assignedAt = NOW - (Math.floor(rng() * 30) + 40) * DAY;
-  let startedAt: number | null = null;
-  let submittedAt: number | null = null;
-  let completedAt: number | null = null;
-  let grade: number | null = null;
-  let attempts = 0;
-  let timeSpent = 0;
-
-  if (status !== "incomplete") {
-    startedAt = assignedAt + (1 + Math.floor(rng() * 5)) * DAY;
-    submittedAt = startedAt + (1 + Math.floor(rng() * 10)) * DAY;
-    attempts = 1 + Math.floor(rng() * 2);
-    timeSpent = 20 + Math.floor(rng() * 130);
-  }
-  if (status === "complete") {
-    completedAt = submittedAt! + Math.floor(rng() * 4) * DAY;
-    grade = 62 + Math.floor(rng() * 38);
-  }
-
-  return {
-    status,
+  const base: Cell = {
+    status: "incomplete",
     assignedAt,
-    startedAt,
-    submittedAt,
-    completedAt,
-    grade,
-    attempts,
-    timeSpent,
+    startedAt: null,
+    submittedAt: null,
+    completedAt: null,
+    grade: null,
+    attempts: 0,
+    timeSpent: 0,
     returnedAt: null,
     attemptGrants: [],
     manual: false,
-    markedBy:
-      status === "complete" && task.type === "Hands-On Task"
-        ? INSTRUCTORS[hash(uid + "|" + task.id + "|marker") % INSTRUCTORS.length]
-        : null,
+    markedBy: null,
     deletedAttempts: [],
     note: null,
   };
+  const done = {
+    status: "complete" as const,
+    startedAt,
+    submittedAt,
+    completedAt,
+    attempts: 1,
+    timeSpent,
+  };
+  switch (scenario) {
+    case "notstarted":
+      return base;
+    case "inprogress":
+      return { ...base, startedAt, attempts: 1, timeSpent };
+    case "complete":
+      return { ...base, ...done };
+    case "manual":
+      return { ...base, ...done, manual: true, markedBy: ADMIN_ACTOR };
+    case "passed":
+      return { ...base, ...done, attempts: r(1, limit), grade: pass() };
+    case "graded":
+      return {
+        ...base,
+        ...done,
+        attempts: r(1, 2),
+        grade: pass(),
+        markedBy:
+          INSTRUCTORS[
+            hash(uid + "|" + task.id + "|marker") % INSTRUCTORS.length
+          ],
+      };
+    case "failing":
+      return {
+        ...base,
+        startedAt,
+        submittedAt,
+        attempts: r(1, Math.max(1, limit - 1)),
+        timeSpent,
+        grade: fail(),
+      };
+    case "exhausted":
+      return {
+        ...base,
+        startedAt,
+        submittedAt,
+        attempts: limit,
+        timeSpent,
+        grade: fail(),
+      };
+    case "pending": {
+      /* A Hands-On resubmission still shows the grade the last attempt got;
+         a proctored quiz has no grade until the proctor signs off. */
+      const attempts = r(1, limit);
+      return {
+        ...base,
+        status: "review",
+        startedAt,
+        submittedAt,
+        attempts,
+        timeSpent,
+        grade: handsOn && attempts > 1 ? fail() : null,
+      };
+    }
+  }
 }
 
 export function buildData(): CertData {
@@ -280,50 +388,48 @@ export function buildData(): CertData {
     .map(([name, userIds]) => ({ id: name, name, userIds }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Certifications (non-draft) with real, padded task lists.
+  // Certifications (non-draft), each with a full PLAN of tasks of its own.
   const certifications: CertDef[] = [];
   const tasksById: Record<string, CertTask> = {};
   const tasks: CertTask[] = [];
+  const scenarioOf: Record<string, Scenario> = {};
+  const taken = new Set<string>();
 
-  appCerts
-    .filter((c) => !c.draft)
-    .forEach((c, ci) => {
-      const realTasks = tasksForCert(c, ci);
-      const taskIds = realTasks.map((t) => t.id);
-      certifications.push({ id: c.id, name: c.name, industry: c.industry, taskIds });
-      realTasks.forEach((t) => {
-        if (tasksById[t.id]) return; // first cert that references a task owns its display context
-        const ct: CertTask = {
-          id: t.id,
-          name: t.name,
-          type: t.type,
-          certId: c.id,
-          certName: c.name,
-          difficulty: (hash(t.id) % 1000) / 1000,
-          isFinal: !!t.finalExam,
-          attemptLimit: attemptLimitFor(t),
-        };
-        tasksById[t.id] = ct;
-        tasks.push(ct);
-      });
+  /* Every certification, drafts included — the Certifications row menu offers
+     "Manage User Progress" on all of them, so each must resolve here or the
+     page opens with an empty scope. */
+  appCerts.forEach((c, ci) => {
+    const planned = tasksForCert(c, ci, taken);
+    certifications.push({
+      id: c.id,
+      name: c.name,
+      industry: c.industry,
+      taskIds: planned.map((p) => p.task.id),
     });
+    planned.forEach(({ task: t, scenario }) => {
+      const ct: CertTask = {
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        certId: c.id,
+        certName: c.name,
+        isFinal: !!t.finalExam,
+        proctored: t.type === "Quiz" && !!t.finalExam,
+        attemptLimit: attemptLimitFor(t),
+      };
+      tasksById[t.id] = ct;
+      tasks.push(ct);
+      scenarioOf[t.id] = scenario;
+    });
+  });
   const certsById: Record<string, CertDef> = {};
   certifications.forEach((c) => (certsById[c.id] = c));
 
-  // Top-skill employees get fully-complete records (mirrors the original seed).
-  const topIds = new Set(
-    employees
-      .slice()
-      .sort((a, b) => (hash(b.id) % 1000) - (hash(a.id) % 1000))
-      .slice(0, 3)
-      .map((e) => e.id),
-  );
-
-  // Generate baseline cells for every (employee, task) pair in play.
+  // Baseline cells for every (employee, task) pair, in the slot's state.
   const cells: CellMap = {};
   employees.forEach((e) => {
     tasks.forEach((t) => {
-      cells[e.id + "_" + t.id] = genCell(e.id, t, topIds.has(e.id));
+      cells[e.id + "_" + t.id] = genCell(e.id, t, scenarioOf[t.id]);
     });
   });
 
@@ -341,7 +447,11 @@ export function buildData(): CertData {
 
 /* ─────────────────────────── pure helpers ───────────────────────────── */
 
-export function cellOf(cells: CellMap, uid: string, tid: string): Cell | undefined {
+export function cellOf(
+  cells: CellMap,
+  uid: string,
+  tid: string,
+): Cell | undefined {
   return cells[uid + "_" + tid];
 }
 
@@ -428,7 +538,12 @@ export function statusVisual(st: CellStatus, manual: boolean): StatusVisual {
       label: manual ? "Complete · Marked Manually" : "Complete",
     };
   if (st === "review")
-    return { tone: "accent", dot: "review", manual: false, label: "In Review" };
+    return {
+      tone: "accent",
+      dot: "review",
+      manual: false,
+      label: "Pending Review",
+    };
   return { tone: "grey", dot: "todo", manual: false, label: "Incomplete" };
 }
 
@@ -449,11 +564,27 @@ export function attemptInfo(t: CertTask, c: Cell): AttemptInfo {
   const grants = c.attemptGrants || [];
   const grantedTotal = grants.reduce((s, g) => s + g.amount, 0);
   /* A deleted attempt frees its slot. */
-  const attemptsUsed = Math.max(0, (c.attempts || 0) - (c.deletedAttempts?.length ?? 0));
-  const hasLimit = isQuiz && attemptLimit != null;
+  const attemptsUsed = Math.max(
+    0,
+    (c.attempts || 0) - (c.deletedAttempts?.length ?? 0),
+  );
+  /* Capped at all — only a final-exam quiz is, so this also gates the
+     exhausted state and the Grant Attempts action. */
+  const hasLimit = attemptLimit != null;
   const totalAllowed = hasLimit ? attemptLimit! + grantedTotal : null;
-  const remaining = hasLimit ? Math.max(0, (totalAllowed ?? 0) - attemptsUsed) : null;
-  return { isQuiz, hasLimit, attemptLimit, grantedTotal, attemptsUsed, totalAllowed, remaining, grants };
+  const remaining = hasLimit
+    ? Math.max(0, (totalAllowed ?? 0) - attemptsUsed)
+    : null;
+  return {
+    isQuiz,
+    hasLimit,
+    attemptLimit,
+    grantedTotal,
+    attemptsUsed,
+    totalAllowed,
+    remaining,
+    grants,
+  };
 }
 
 /** True when an attempt-limited quiz is out of attempts without a pass —
@@ -466,7 +597,18 @@ export function isExhausted(t: CertTask, c: Cell): boolean {
 
 /* ───────────────────── attempt history (for the Attempts page) ──────────────────── */
 
-const PHONE_AREA = ["415", "510", "408", "650", "213", "312", "713", "305", "602", "206"];
+const PHONE_AREA = [
+  "415",
+  "510",
+  "408",
+  "650",
+  "213",
+  "312",
+  "713",
+  "305",
+  "602",
+  "206",
+];
 
 function synthPhone(uid: string): string {
   const h = hash(uid + "|phone");
@@ -530,13 +672,64 @@ export function attemptsForTask(
 
 export function fmtD(ts: number | null): string {
   if (!ts) return "";
-  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
+/** "Aug 28, 2027" — the task table's Completed On cell. */
+export function fmtDY(ts: number | null): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+/** "12 mins" — the task table's Time Spent cell. */
+export function fmtMins(min: number): string {
+  if (!min) return "";
+  return min === 1 ? "1 min" : `${min} mins`;
+}
+
+/* ───────────────────── task-table display rules ───────────────────── */
+
+/** Time is only tracked on xAPI and Quiz tasks. */
+export function tracksTime(t: CertTask): boolean {
+  return t.type === "xAPI" || t.type === "Quiz";
+}
+
+/** Attempts are counted on Quizzes and Hands-On tasks — whether or not the
+ *  task caps them (only a final exam does; see `attemptLimitFor`). */
+export function tracksAttempts(t: CertTask): boolean {
+  return t.type === "Quiz" || t.type === "Hands-On Task";
+}
+
+/** A grade as the table shows it: Quizzes as a percentage, Hands-On out of 10
+ *  (stored as tens on the shared scale). Other task types carry no grade. */
+export function gradeLabel(t: CertTask, c: Cell): string {
+  if (c.grade == null) return "";
+  if (t.type === "Quiz") return `${c.grade}%`;
+  if (t.type === "Hands-On Task") return String(Math.round(c.grade / 10));
+  return "";
+}
+
+/** Row subtitle labels — "Hands-On", not the entity's full "Hands-On Task". */
+export const TYPE_SHORT: Record<TaskType, string> = {
+  xAPI: "xAPI",
+  Quiz: "Quiz",
+  "Hands-On Task": "Hands-On",
+  Resource: "Resource",
+};
 export function fmtDT(ts: number | null): string {
   if (!ts) return "";
   const d = new Date(ts);
   return (
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+    d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }) +
     " · " +
     d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
   );
@@ -560,7 +753,11 @@ export function fmtDur(min: number): string {
 
 /* ───────────────────── detail (timeline + metrics) ──────────────────── */
 
-export type TimelineEvent = { label: string; tsStr: string; tone: "done" | "accent" | "future" };
+export type TimelineEvent = {
+  label: string;
+  tsStr: string;
+  tone: "done" | "accent" | "future";
+};
 
 export type TaskDetail = {
   gradeStr: string;
@@ -576,24 +773,40 @@ export type TaskDetail = {
   footerNote: string;
 };
 
-export function buildDetail(cells: CellMap, uid: string, task: CertTask): TaskDetail {
+export function buildDetail(
+  cells: CellMap,
+  uid: string,
+  task: CertTask,
+): TaskDetail {
   const c = cells[uid + "_" + task.id]!;
   const tl: TimelineEvent[] = [];
   tl.push({ label: "Assigned", tsStr: fmtDT(c.assignedAt), tone: "done" });
-  if (c.startedAt) tl.push({ label: "Started", tsStr: fmtDT(c.startedAt), tone: "done" });
+  if (c.startedAt)
+    tl.push({ label: "Started", tsStr: fmtDT(c.startedAt), tone: "done" });
   if (c.submittedAt)
     tl.push({
       label: "Submitted" + (c.attempts > 1 ? " · attempt " + c.attempts : ""),
       tsStr: fmtDT(c.submittedAt),
       tone: "done",
     });
-  if (c.returnedAt) tl.push({ label: "Returned for revision", tsStr: fmtDT(c.returnedAt), tone: "done" });
+  if (c.returnedAt)
+    tl.push({
+      label: "Returned for revision",
+      tsStr: fmtDT(c.returnedAt),
+      tone: "done",
+    });
   if (c.status === "review")
-    tl.push({ label: "Awaiting your review", tsStr: "Pending · waiting " + rel(c.submittedAt), tone: "accent" });
+    tl.push({
+      label: "Awaiting your review",
+      tsStr: "Pending · waiting " + rel(c.submittedAt),
+      tone: "accent",
+    });
   else if (c.status === "complete") {
     if (c.manual)
       tl.push({
-        label: "Marked complete by admin" + (c.grade ? " · " + c.grade + "/100" : ""),
+        label:
+          "Marked complete by admin" +
+          (c.grade ? " · " + c.grade + "/100" : ""),
         tsStr: fmtDT(c.completedAt),
         tone: "done",
       });
@@ -604,8 +817,18 @@ export function buildDetail(cells: CellMap, uid: string, task: CertTask): TaskDe
         tone: "done",
       });
   } else {
-    if (c.returnedAt) tl.push({ label: "Awaiting resubmission", tsStr: "No new submission yet", tone: "future" });
-    else tl.push({ label: "Not started", tsStr: "No submission yet", tone: "future" });
+    if (c.returnedAt)
+      tl.push({
+        label: "Awaiting resubmission",
+        tsStr: "No new submission yet",
+        tone: "future",
+      });
+    else
+      tl.push({
+        label: "Not started",
+        tsStr: "No submission yet",
+        tone: "future",
+      });
   }
 
   const ai = attemptInfo(task, c);
@@ -628,18 +851,26 @@ export function buildDetail(cells: CellMap, uid: string, task: CertTask): TaskDe
   let footerNote = "";
   if (c.status === "complete")
     footerNote = c.manual
-      ? "Marked complete by admin" + (c.grade ? " · grade " + c.grade + "/100" : " — no grade recorded") + "."
+      ? "Marked complete by admin" +
+        (c.grade ? " · grade " + c.grade + "/100" : " — no grade recorded") +
+        "."
       : "Read-only — approved & complete.";
   else if (c.status === "incomplete" && c.returnedAt)
     footerNote = "Returned to employee — or mark it complete manually.";
-  else footerNote = "Not yet submitted — you can mark it complete manually for this employee.";
+  else
+    footerNote =
+      "Not yet submitted — you can mark it complete manually for this employee.";
 
   return {
     gradeStr: c.grade ? c.grade + "/100" : "",
     grade: c.grade,
     completedStr: c.completedAt ? fmtD(c.completedAt) : "",
     durStr: fmtDur(c.timeSpent),
-    attemptsStr: ai.hasLimit ? ai.attemptsUsed + " / " + ai.totalAllowed : c.attempts ? String(c.attempts) : "0",
+    attemptsStr: ai.hasLimit
+      ? ai.attemptsUsed + " / " + ai.totalAllowed
+      : c.attempts
+        ? String(c.attempts)
+        : "0",
     timeline: tl,
     isQuizLimited: ai.hasLimit,
     attemptsRemainingStr,
@@ -649,8 +880,10 @@ export function buildDetail(cells: CellMap, uid: string, task: CertTask): TaskDe
   };
 }
 
+/** Only Quizzes and Hands-On tasks carry a grade, so only they ask for one
+ *  when marked complete by hand. */
 export function needsGradePrompt(task: CertTask): boolean {
-  return task.type === "Quiz" || task.type === "xAPI";
+  return task.type === "Quiz" || task.type === "Hands-On Task";
 }
 
 /* ──────────────────── mutations (return new state) ───────────────────── */
@@ -683,7 +916,32 @@ export function applyMarkComplete(
     attempts: c.attempts || 1,
     timeSpent: c.timeSpent || 30,
     grade:
-      grade != null && !Number.isNaN(grade) ? Math.max(0, Math.min(100, Math.round(grade))) : null,
+      grade != null && !Number.isNaN(grade)
+        ? Math.max(0, Math.min(100, Math.round(grade)))
+        : null,
+  };
+  return { ...cells, [key]: next };
+}
+
+/** Reopens a completed task — the reverse of applyMarkComplete. The earned
+ *  record (attempts, time, quiz grade) stays; only the completion goes, so a
+ *  quiz's attempt history still reads the same afterwards. */
+export function applyMarkIncomplete(
+  cells: CellMap,
+  uid: string,
+  tid: string,
+): CellMap {
+  const key = uid + "_" + tid;
+  const c = cells[key];
+  if (!c || c.status !== "complete") return cells;
+  const next: Cell = {
+    ...c,
+    status: "incomplete",
+    completedAt: null,
+    manual: false,
+    markedBy: null,
+    note: null,
+    grade: c.attempts > 0 ? c.grade : null,
   };
   return { ...cells, [key]: next };
 }
@@ -699,21 +957,40 @@ export function applyDeleteAttempt(
   const key = uid + "_" + tid;
   const c = cells[key];
   if (!c || c.deletedAttempts.includes(attemptNumber)) return cells;
-  return { ...cells, [key]: { ...c, deletedAttempts: [...c.deletedAttempts, attemptNumber] } };
+  return {
+    ...cells,
+    [key]: { ...c, deletedAttempts: [...c.deletedAttempts, attemptNumber] },
+  };
 }
 
-export function applyGrantAttempt(cells: CellMap, uid: string, tid: string, amount = 1): CellMap {
+export function applyGrantAttempt(
+  cells: CellMap,
+  uid: string,
+  tid: string,
+  amount = 1,
+): CellMap {
   const key = uid + "_" + tid;
   const c = cells[key];
   if (!c) return cells;
-  return { ...cells, [key]: { ...c, attemptGrants: [...c.attemptGrants, { at: NOW, amount }] } };
+  return {
+    ...cells,
+    [key]: { ...c, attemptGrants: [...c.attemptGrants, { at: NOW, amount }] },
+  };
 }
 
-export function applyMarkCert(certManual: CertManual, uid: string, certId: string): CertManual {
+export function applyMarkCert(
+  certManual: CertManual,
+  uid: string,
+  certId: string,
+): CertManual {
   return { ...certManual, [uid + "_" + certId]: { at: NOW } };
 }
 
-export function applyClearCert(certManual: CertManual, uid: string, certId: string): CertManual {
+export function applyClearCert(
+  certManual: CertManual,
+  uid: string,
+  certId: string,
+): CertManual {
   const next = { ...certManual };
   delete next[uid + "_" + certId];
   return next;
@@ -756,8 +1033,8 @@ export function attemptTaskIdForExam(examName: string): string | null {
   if (!certId) return null;
   cachedData ??= buildData();
 
-  const used = (appTasks as Task[]).filter(
-    (t) => t.usedIn.some((u) => USEDIN_TO_CERT[u] === certId),
+  const used = (appTasks as Task[]).filter((t) =>
+    t.usedIn.some((u) => USEDIN_TO_CERT[u] === certId),
   );
   const candidates = [
     ...used.filter((t) => t.finalExam),

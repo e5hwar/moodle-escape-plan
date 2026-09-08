@@ -137,7 +137,10 @@ export function TasksSearch({
     setDraft([]);
     setActive(-1);
     setOpen(false);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   function addCert(name: string) {

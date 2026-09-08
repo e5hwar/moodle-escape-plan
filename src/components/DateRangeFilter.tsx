@@ -155,18 +155,14 @@ export function dateRangeIncludes(range: DateRangeState, date: string): boolean 
 
 /** The Date Range filter pill + its dual-calendar dropdown (Figma 673:1409 /
  *  673:1421 pill states, 606:1688 panel). Always applied — there is no empty
- *  state and no ⊗: the range cannot be removed, only changed (the panel's
- *  Clear resets it to the Last 30 Days default). */
+ *  state and no ⊗: the range cannot be removed, only changed — pick another
+ *  preset, or a pair of dates, and Apply. */
 export function DateRangePill({
   value,
   onChange,
-  defaultValue,
 }: {
   value: DateRangeState;
   onChange: (v: DateRangeState) => void;
-  /** What the panel's Clear resets to. Defaults to Last 30 Days — pass the
-   *  page's own default when it opens on a different window. */
-  defaultValue?: DateRangeState;
 }) {
   const preset = value.preset
     ? buildPresets(startOfToday()).find((p) => p.key === value.preset)
@@ -181,7 +177,7 @@ export function DateRangePill({
       panelClass="dropdown--cal drp-panel"
       trigger={({ open, toggle }) => (
         // No ⊗ (Figma 673:1409) — the range always has a value and cannot be
-        // removed; the panel's Clear resets it to the default instead.
+        // removed, only changed.
         <span className={`filter-applied drp-pill ${open ? "open" : ""}`}>
           <button className="filter-applied-main" onClick={toggle}>
             <span className="label">Date Range</span>
@@ -207,7 +203,6 @@ export function DateRangePill({
       {({ close }) => (
         <DateRangePanel
           applied={value}
-          fallback={defaultValue}
           onApply={(v) => {
             onChange(v);
             close();
@@ -224,11 +219,9 @@ type MyMenu = { cal: 0 | 1; kind: "month" | "year" };
 
 function DateRangePanel({
   applied,
-  fallback,
   onApply,
 }: {
   applied: DateRangeState;
-  fallback?: DateRangeState;
   onApply: (v: DateRangeState) => void;
 }) {
   const today = startOfToday();
@@ -334,17 +327,10 @@ function DateRangePanel({
         })}
       </div>
 
+      {/* Apply alone — no Clear. The range always has a value, so "clear" only
+          ever meant "reset to the default", which the presets list already
+          offers by name and says more clearly. */}
       <div className="dropdown-footer drp-footer">
-        <button
-          className="drp-btn-clear"
-          onClick={() => {
-            const v = fallback ?? defaultDateRange();
-            setDraft(v);
-            setViewMonth(startOfMonth(parseISO(v.start)!));
-          }}
-        >
-          Clear
-        </button>
         <button
           className="btn-apply"
           disabled={

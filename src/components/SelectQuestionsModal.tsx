@@ -234,7 +234,7 @@ export function SelectQuestionsModal({
             </span>
             <input
               className="search-input stm-search-input"
-              placeholder="Search Questions"
+              placeholder="Search Questions..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);

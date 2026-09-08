@@ -546,7 +546,7 @@ function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search industries…"
+          searchPlaceholder="Search Industries..."
         />
       )}
     </Dropdown>

@@ -936,19 +936,39 @@ button.breadcrumb-item:hover {
   flex-shrink: 0;
 }
 
-/* Figma 12:15164 "Filters - Unapplied" (re-synced 2026-08-28): 28px, r20,
-   1px dashed #404040, 12px insets, 6px gap to the 14px add-circle, Fira Sans
-   Medium 14 #a8a8a8. The label went 16→14 and the shell 32→28 — the 28 is the
-   applied pill's frame height (12:15221), which its 20px divider sets; the
-   unapplied node hugs to 25, and matching the taller one keeps one row height. */
+/* Figma 12:15164 "Filters - Unapplied" (dash re-synced 2026-09-06): 28px, r20,
+   a 1px #404040 stroke on a 4-on/4-off dash, 12px insets, 6px gap to the 14px
+   add-circle, Fira Sans Medium 14 #a8a8a8. The label went 16→14 and the shell
+   32→28 — the 28 is the applied pill's frame height (12:15221), which its 20px
+   divider sets; the unapplied node hugs to 25, and matching the taller one
+   keeps one row height.
+
+   The ring is an SVG background rather than `border-style: dashed` because CSS
+   gives no control over a border's dash length — Chrome picks its own pattern,
+   which is not the node's dashPattern [4, 4]. (That property is also why a
+   design re-sync reads as "no change": the generated code collapses every dash
+   to a bare `border-dashed`, so the pattern only shows up on the node itself.)
+   The border stays as a 1px TRANSPARENT one so the box metrics are untouched,
+   and `background-origin: border-box` lets the image paint over that ring.
+   Inside the SVG the rect is stroked at 2px centred on the box edge: the outer
+   half falls outside the viewport and is clipped, leaving exactly the 1px
+   INSIDE stroke the node specifies. rx is 14, not 20 — a 28px-tall box scales a
+   20px radius down to half its height, and the SVG has to be handed the
+   resolved value. The stroke colour is baked into the data URI, so the hover
+   swaps the whole image where it used to move `border-color`. */
 .filter-pill-dashed {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 28px;
   padding: 0 12px;
-  background: transparent;
-  border: 1px dashed #404040;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='14' ry='14' fill='none' stroke='%23404040' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  border: 1px solid transparent;
   border-radius: 20px;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -957,10 +977,12 @@ button.breadcrumb-item:hover {
   white-space: nowrap;
 }
 
+/* Same ring in --text-faint (#5a5a5e) — the colour the border-color used to
+   take on hover. Kept as a literal because a data URI cannot read a token. */
 .filter-pill-dashed:hover,
 .filter-pill-dashed.open {
-  background: var(--bg-pill);
-  border-color: var(--text-faint);
+  background-color: var(--bg-pill);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='14' ry='14' fill='none' stroke='%235a5a5e' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
 }
 
 .filter-pill-dashed .icon {
@@ -1168,6 +1190,62 @@ button.breadcrumb-item:hover {
   white-space: pre-line;
   pointer-events: none;
   box-shadow: var(--tip-shadow);
+}
+
+/* ── Click-to-copy cells (Figma 992:1015; see CopyCells.tsx) ─────────────
+   Opt-in: only a `<td data-copyable>` takes part — today the Email and Phone
+   columns on Exam Reviews and ID Re-Uploads.
+   A hovered marked cell carries data-copy="fit" (glyph after the text, at
+   --copy-x) or "clip" (glyph at the right edge; the cell's right padding was
+   grown 16px by the script so the ellipsis truncates a little more text —
+   widths are border-box, so the column never grows). The copy glyph is
+   ::before and the check is ::after, stacked in the same 12px slot so the two
+   crossfade for the 3s `data-copied` state. Glyphs are the exported Figma
+   vectors (992:1032 copy, 992:1052 check) as masks over currentColor. */
+tbody td[data-copyable][data-copy] {
+  position: relative;
+  cursor: pointer;
+}
+tbody td[data-copyable][data-copy]::before,
+tbody td[data-copyable][data-copy]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--copy-x);
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  background-color: #a8a8a8;
+  -webkit-mask: var(--copy-glyph) center / 12px 12px no-repeat;
+  mask: var(--copy-glyph) center / 12px 12px no-repeat;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+tbody td[data-copyable][data-copy="clip"]::before,
+tbody td[data-copyable][data-copy="clip"]::after {
+  left: auto;
+  right: 12px;
+}
+/* Copy glyph: Figma 992:1032 (9.5×11 export set into the 12px frame). */
+tbody td[data-copyable][data-copy]::before {
+  --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1'%3E%3Cg transform='translate(1 .5)'%3E%3Cpath d='M6 .5V3.5H9M6 .5H6.5L9 3V3.5M6 .5H2.5V8.5H9V3.5'/%3E%3Cpath d='M.5 2.5V10.5H6' stroke-linecap='square'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 1;
+  transform: scale(1);
+}
+/* Check glyph: Figma 992:1052. */
+tbody td[data-copyable][data-copy]::after {
+  --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='square'%3E%3Cpath d='M9.785 3.689L5.1895 8.2855L2.7145 5.8105'/%3E%3C/svg%3E");
+  opacity: 0;
+  transform: scale(0.4);
+}
+tbody td[data-copyable][data-copy][data-copied]::before {
+  opacity: 0;
+  transform: scale(0.4);
+}
+tbody td[data-copyable][data-copy][data-copied]::after {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* ===== Dropdown popover ===== */
@@ -3384,8 +3462,10 @@ button.breadcrumb-item:hover {
    #0d0d0d. It holds the billing timeline alone — the plan-summary card and the
    two page-break headers it sat under were dropped. */
 .cw-impact {
-  /* Figma 616:969 — the preview rail is 401px wide. */
-  width: 401px;
+  /* Figma 616:969 — the preview rail is 380px wide in the create-company
+     wizard. Manage Subscription keeps the wider 401px rail (below): it is a
+     single-step page, so the extra width costs the form nothing. */
+  width: 380px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -3397,6 +3477,11 @@ button.breadcrumb-item:hover {
   background:
     linear-gradient(90deg, rgba(122, 122, 122, 0.1) 0%, rgba(122, 122, 122, 0.1) 100%),
     linear-gradient(90deg, #0d0d0d 0%, #0d0d0d 100%);
+}
+.company-wizard--sub .cw-impact {
+  /* Manage Subscription is a single-step page, so its preview gets the room the
+     old → new diff rows need. */
+  width: 480px;
 }
 .cw-impact-title {
   margin: 0;
@@ -3440,7 +3525,14 @@ button.breadcrumb-item:hover {
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: normal;
+  /* An explicit line box, not "normal": the arrow glyph in an old -> new value
+     resolves to a fallback face with taller metrics, which grew those rows by
+     2px and made the card change height as fields were edited. Every row is one
+     line of 16px text either way, so they all measure the same. */
+  line-height: 1.25;
+}
+.sub-summary-row * {
+  line-height: inherit;
 }
 .sub-summary-row:last-child {
   border-bottom: none;
@@ -3478,12 +3570,12 @@ button.breadcrumb-item:hover {
   color: #fff;
 }
 
-/* Billing timeline (Figma 616:1045): a dotted rail + dated amounts, inset 8px
-   from the summary card above it. */
+/* Billing timeline (Figma 616:1045): a dotted rail + dated amounts. The steps
+   sit flush with the summary card above them — the 8px side inset the node used
+   to carry was dropped in the updated 616:969. */
 .sub-timeline {
   display: flex;
   flex-direction: column;
-  padding: 0 8px;
 }
 .sub-timeline-item {
   display: flex;
@@ -5686,7 +5778,7 @@ button.breadcrumb-item:hover {
   font-weight: 700;
   letter-spacing: 0;
 }
-.lp-search { padding: 0 18px 10px; border-bottom: none; }
+.lp-search { padding: 0 24px 10px; border-bottom: none; }
 .lp-pick-list,
 .lp-sel-list {
   flex: 1;
@@ -7913,32 +8005,38 @@ button.breadcrumb-item:hover {
   padding: 40px 20px;
 }
 
+/* Figma 667:884 "General Modal" — the picker shell now wears the same card as
+   PrmModal: 8px radius, a 15% grey wash over #0d0d0d, and no outer border.
+   The per-picker overrides (.aet-*, .lp-*, .ncr-*) still own their internals. */
 .cl-modal {
   width: 100%;
   max-width: 520px;
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    #0d0d0d;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
 
+/* No divider under the head — the design's only rule is the footer's. */
 .cl-modal-head {
-  padding: 18px 22px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 24px 24px 12px;
+  border-bottom: none;
 }
 .cl-modal-eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--text-muted);
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 11pt;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .cl-modal-back {
   background: transparent;
@@ -7953,16 +8051,21 @@ button.breadcrumb-item:hover {
 .cl-modal-back:hover { color: var(--text); }
 .cl-modal-title {
   font-family: var(--font-sans);
-  font-size: 18pt;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: normal;
 }
+/* 2px under the title — the design groups the pair tighter than the body gap. */
 .cl-modal-sub {
   font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+  margin: 2px 0 0;
 }
 
 .cl-modal-search {
@@ -7970,8 +8073,8 @@ button.breadcrumb-item:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 .cl-modal-search .search-icon {
   position: static;
@@ -8030,9 +8133,11 @@ button.breadcrumb-item:hover {
 
 .cl-modal-foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border);
+  padding: 12px 24px;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 0 0 8px 8px;
 }
 
 /* =============================================================
@@ -10154,8 +10259,10 @@ a.spc-hero-pill--link:hover {
   white-space: nowrap;
 }
 
-/* Manage IDs only since 2026-08-25 — the Proctoring table dropped Phone for
-   Type ("User Reviews 6B"). */
+/* Manage IDs, and the Exam Reviews table again since 2026-09-07 — it had
+   dropped Phone for Type in "User Reviews 6B". `COL_WIDTHS.phone` in
+   ProctoringPage.tsx and the landing overlay's own Phone track both mirror this
+   170px, so the morph hand-off stays column-aligned; change all three together. */
 .table .pr-col-phone {
   width: 170px;
   white-space: nowrap;
@@ -10445,75 +10552,241 @@ a.spc-hero-pill--link:hover {
   color: var(--text);
 }
 
-/* Collapsible-section header stats (Figma 302:104) — labelled columns pinned to
-   the far right of the header: a small uppercase label over its value. */
-/* The stats sit directly after the title (no margin-left:auto any more — the
-   header's space-between puts the chevron on the right instead). Cells are
-   separated by a hairline, not a gap. */
-.pr-section-stats {
-  display: inline-flex;
-  align-items: center;
+/* ── Proctoring console section rails (Header Layout Redesign handoff) ──
+   Each section is its own containing block (.prc-section), which is what
+   bounds the rail's sticky range: the rail pins to the top of the scrolling
+   stage (.prc-stagecol) while its section is in view and hands off to the next
+   section's rail as it arrives. With both rails in one block the first would
+   never unpin and the two would overlap. No collapse control any more. */
+.prc-section {
+  display: flex;
+  flex-direction: column;
 }
 
-.pr-hstat {
+/* Figma 308:2208 / 1000:1184: 8px BELOW the row only, 12px each side, and a
+   #404040 bottom rule, with the title left and the stat group right. No top
+   padding — the gap above comes from the page header's own 28px (or, for the
+   second rail, from the section above it). The 12px is the rail's own inset:
+   the rule spans the full content width while the title and stats sit in from
+   it, so the rail reads as a band rather than as a line of body copy.
+   Background must be OPAQUE and the page's own colour: at rest the rail reads
+   as plain page content, and while pinned the frames scroll under it. */
+.prc-rail {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 48px;
+  padding: 0 12px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid #404040;
+}
+/* The pinned shadow is ALWAYS painted — no observer, no state flip, nothing
+   for the main thread to do at the pin moment (a commit plus a repaint landing
+   there read as a hitch in the scroll). It reads as "pinned" all by itself: a
+   black shadow on the near-black page is invisible, so it only shows once the
+   lighter content (frames, the ID card) scrolls up under the rail. Its 28px
+   reach stays inside the section body's top padding, so at rest it never
+   touches the content below. */
+.prc-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 -1px;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* Titles never break — a long section title would wrap at narrow
+   widths otherwise. Line-heights on the rail are whole pixels on purpose: a
+   sticky element is composited on its own layer, and a fractional height
+   leaves it snapping to a different pixel than the content scrolling under
+   it — the rail visibly jitters. */
+/* Title, plus any pill that qualifies it (Figma 1006:1372). */
+.prc-rail-left {
+  display: flex;
+  align-items: center;
+  /* 8px between the section title and its badge (the ID section's "Verified"),
+     up from 4 — the pill needs the extra air against the 24px title. */
+  gap: 8px;
+  min-width: 0;
+}
+
+.prc-rail-title {
+  margin: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #e7e7e8;
+}
+
+/* Status pill on a rail — the DS table pill (Figma 1006:1378): a 10% wash of
+   its own accent behind a 12px icon and a 12px medium label. */
+.prc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  white-space: nowrap;
+}
+.prc-pill--ok {
+  background: rgba(20, 184, 103, 0.1);
+  color: #14b867;
+}
+/* Amber — the "Re-Uploaded ID" state (Figma 1015:1454), the same 10%-wash
+   treatment the table's "New ID" flag uses. */
+.prc-pill--warn {
+  background: rgba(255, 197, 36, 0.1);
+  color: #ffc524;
+}
+
+/* Stat cells butt against each other — the hairline is the separation, not a
+   gap (Figma 999:1099 "AI Review"). */
+.prc-rail-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Stat block: label over value. The 1px divider is an INSET SHADOW, not a
+   border, so it can't add to the cell's width and shift every stat after the
+   first. Same trick the Integrity Note and the stat cards use. */
+.prc-stat {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   padding: 0 12px;
-  /* Figma's 0.5px divider as an INSET SHADOW, not a border: Chrome rounds a
-     0.5px border up to a full pixel AND adds it to the cell's width, which
-     shifts every stat after the first. Same trick the Integrity Note and the
-     stat cards use for their sub-pixel strokes. */
-  box-shadow: inset -0.5px 0 0 0 #404040;
-  line-height: normal;
+  box-shadow: inset -1px 0 0 0 rgba(64, 64, 64, 0.5);
 }
-
-.pr-hstat:last-child {
+/* The last cell keeps its 12px: the design ends the trailing value 24px in from
+   the rail's edge (the cell's 12px plus the rail's own). */
+.prc-stat:last-child {
   box-shadow: none;
 }
 
-/* "AI Assist" leads the group as one centred row, not a label-over-value
-   stack — it labels where the numbers beside it came from. */
-.pr-hstat--assist {
-  flex-direction: row;
+/* Label, plus the (i) on an AI-derived stat. */
+.prc-stat-head {
+  display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.pr-hstat-info {
+.prc-stat-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 14px;
+  text-transform: uppercase;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+
+/* Default arrow, not `help`: the question-mark cursor isn't used anywhere the
+   app shows a tooltip. */
+.prc-stat-info {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 10px;
   height: 10px;
   color: #a8a8a8;
-  /* Default arrow, not `help`: the question-mark cursor isn't used anywhere the
-     app shows a tooltip. */
   cursor: default;
 }
 
-.pr-hstat-label {
+/* Values default to white; the tone classes are the design's literal band
+   colours (Figma 308:2208 / 999:1113 / 999:1168). */
+.prc-stat-value {
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  text-transform: uppercase;
-  color: #a8a8a8;
-}
-
-/* Values default to white; the tone classes below are the design's literal
-   pill-palette colours, not the app's older approximations. */
-.pr-hstat-value {
-  font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 19px;
   color: #fff;
+  white-space: nowrap;
+}
+.prc-stat-value.is-strong { color: #14b867; }
+.prc-stat-value.is-ok { color: #ffc524; }
+.prc-stat-value.is-weak,
+.prc-stat-value.is-bad { color: #ff1f31; }
+.prc-stat-value.is-muted { color: #a8a8a8; }
+
+/* A stat that filters the section to what it counts (Figma 1000:1184 idle /
+   1003:1266 applied). The value carries a dotted underline to say it is
+   clickable; there is no separate toggle control on the rail. */
+.prc-stat--filter {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.prc-stat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.prc-stat-btn .prc-stat-value {
+  text-decoration: underline dotted;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+}
+.prc-stat-btn:hover .prc-stat-label,
+.prc-stat--filter.is-filtered .prc-stat-label {
+  color: #e7e7e8;
 }
 
-.pr-hstat-value.is-strong { color: #14b867; }
-.pr-hstat-value.is-ok { color: #ffc524; }
-.pr-hstat-value.is-weak,
-.pr-hstat-value.is-bad { color: #ff1f31; }
-.pr-hstat-value.is-muted { color: #a8a8a8; }
+/* Clears the filter. Bottom-aligned with the value it sits beside, and it only
+   exists while the filter is applied — so the rail's width changes by its 14px
+   plus the 4px gap when it appears. */
+.prc-stat-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.prc-stat-clear:hover {
+  color: #e7e7e8;
+}
+
+/* Section content under the rail: 30px down to the ID card, 26px to the frame
+   wall. The 48px the design leaves under each section's content is the stage
+   column's existing 28px section gap plus the next rail's 26px top padding. */
+/* 12px under the sticky rail before the content starts, and the rail's own
+   12px side inset repeated here so the ID card and the frame wall line up with
+   the title above them rather than sitting outside it. */
+.prc-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 12px 0;
+}
+.prc-section-body--footage {
+  padding-top: 12px;
+}
+/* The section separation, inside the containing block (see .prc-stagecol) —
+   32px, the gap the wizards use between their own sections. */
+.prc-section:not(:last-child) > .prc-section-body {
+  padding-bottom: 32px;
+}
 
 /* ID card */
 .pr-id-row {
@@ -10625,17 +10898,28 @@ a.spc-hero-pill--link:hover {
   gap: 14px;
 }
 
+/* Webcam tile (Figma 1000:1213 clean / 1000:1209 flagged). A clean tile is
+   just the rounded image — no stroke. The flagged stroke is drawn OVER the
+   image by an overlay pseudo-element so the image keeps exactly the same size
+   and position in both states (the design draws the 2px stroke over the
+   image's edge). It is an inset box-shadow, not a border or outline: those
+   snap to whole device pixels, and at a 125% display 2px lands at 1.6px. */
 .pr-frame {
   position: relative;
   aspect-ratio: 1 / 1;
   background: #15151a;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--border);
 }
 
-.pr-frame.is-flagged {
-  border: 3px solid #e25555;
+.pr-frame.is-flagged::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px #ff1f31;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .pr-frame-img {
@@ -10649,19 +10933,23 @@ a.spc-hero-pill--link:hover {
   display: block;
 }
 
+/* Reason tag (Figma 1000:1211): flush with the tile's top-left corner, so the
+   tile's own 8px clip rounds its outer corner and the 4px radius shows on the
+   inner ones. Same pill palette red as the stroke. */
 .pr-frame-tag {
   position: absolute;
   top: 0;
   left: 0;
-  background: #e25555;
+  background: #ff1f31;
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-bottom-right-radius: 4px;
-  letter-spacing: 0.01em;
-  z-index: 1;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 2; /* above the flagged stroke overlay */
 }
 
 .pr-frame {
@@ -10677,7 +10965,9 @@ a.spc-hero-pill--link:hover {
    stage, so it grows from its middle rather than the old top-anchored viewport. */
 .pr-zoom-stage {
   transform-origin: center;
-  transition: transform 0.12s ease;
+  /* A quarter turn wants to be seen turning: the old 0.12s read as a flicker.
+     The curve starts fast and settles, matching the viewer's zoom glide. */
+  transition: transform 0.36s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .pr-zoom-frame {
@@ -10919,7 +11209,7 @@ a.spc-hero-pill--link:hover {
    this is cosmetic dead code, not a live regression. */
 .prm {
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
@@ -10933,7 +11223,7 @@ a.spc-hero-pill--link:hover {
 }
 
 /* The reject modal carries a form and a wrapped image grid, so it runs to 80%
-   of the window instead of the confirm shell's 560px — the frames are the point
+   of the window instead of the confirm shell's 640px — the frames are the point
    of the screen and 720px only fitted five per row. Its height is FIXED, not
    content-driven: revealing the "Other" text box must scroll the body rather
    than resize the whole modal under the pointer. */
@@ -10953,7 +11243,7 @@ a.spc-hero-pill--link:hover {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 24px; /* Figma 667:884 re-issue — was 20px */
+  gap: 20px; /* Figma 682:2495 — one 20px rhythm for everything the body stacks */
   padding: 24px;
   min-height: 0;
   /* Scrolls on its own; `.prm-foot` is a sibling, so the footer stays put. */
@@ -11029,6 +11319,11 @@ a.spc-hero-pill--link:hover {
 .prm-content p {
   margin: 0;
 }
+/* Emphasis inside content copy — the same 600 the description uses, rather
+   than the browser's 700, so a company name reads as emphasis not shouting. */
+.prm-content strong {
+  font-weight: 600;
+}
 .prm-content ol,
 .prm-content ul {
   margin: 12px 0 0;
@@ -11038,12 +11333,13 @@ a.spc-hero-pill--link:hover {
   gap: 8px;
 }
 
-/* Figma 667:884 "General Modal": 32px between content items, the same rhythm
-   as the wizard screens (was 28px before that component landed). */
+/* Content items inside the body sit on the SAME 20px rhythm as the body's own
+   children (Figma 682:2495) — a stack is just a grouping, so it must not open
+   a wider gap than the body it sits in. Was 32px. */
 .prm-stack {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 20px;
 }
 
 .prm-field {
@@ -11225,7 +11521,7 @@ a.spc-hero-pill--link:hover {
   justify-content: space-between;
   flex-shrink: 0;
   padding: 12px 24px;
-  border-top: 1px solid rgba(122, 122, 122, 0.5);
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
   border-radius: 0 0 8px 8px;
 }
 /* Acknowledgment modals drop the text button, so the CTA keeps the right edge
@@ -11322,6 +11618,18 @@ a.prm-cta {
   background: var(--bg-row-hover);
 }
 
+/* Back to the shared cell inset. Name Change Requests and Pending ID Re-Uploads
+   read as list pages beside Tasks / Certifications / Companies / Manage Users /
+   Exam Reviews, so they take the base table's 12px inset — 24px between
+   adjacent columns' text — instead of this shell's roomier 16px. Restoring the
+   header's `0 12px` also hands back the 40px header row the 10px vertical
+   padding above was overriding. Same specificity as the rules it undoes, so it
+   must stay AFTER them. */
+.sch-table--tight thead th,
+.sch-table--tight tbody td {
+  padding: 0 12px;
+}
+
 /* Status filter tabs */
 .sch-status-tabs {
   display: inline-flex;
@@ -11408,7 +11716,7 @@ a.prm-cta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
   font-family: var(--font-sans);
   font-size: 11pt;
 }
@@ -12142,7 +12450,7 @@ a.rh-crumb-link:hover {
 }
 .idhz-card {
   transform-origin: center center;
-  transition: transform 0.18s ease;
+  transition: transform 0.36s cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* The lens tracks the pointer and marks the region drawn into the panel. */
@@ -12303,10 +12611,12 @@ a.rh-crumb-link:hover {
   justify-content: center;
   width: 40px;
   height: 40px;
-  /* No box: border/fill/radius all off, per the design. */
+  /* No box: border/fill/radius all off, per the design. The 40px is the hit
+     area only — the glyph inside is the modals' 20px tdesign:close, at their
+     #7a7a7a resting colour, so the two read as the same control. */
   border: none;
   background: none;
-  color: var(--text-muted);
+  color: #7a7a7a;
   cursor: pointer;
   transition: color 0.12s ease;
 }
@@ -12321,6 +12631,69 @@ a.rh-crumb-link:hover {
    outside it: close top-right, tools bottom-left, hint bottom-centre. */
 .idfs-overlay {
   padding: 0;
+  /* Enter: the wash fades up while the content settles in from a hair under
+     full size — the "lift" every native image viewer opens with. Exit runs
+     the same pair backwards over a shorter beat (`CLOSE_MS` in
+     FullscreenViewer.tsx waits exactly this long before unmounting). */
+  animation: idfs-overlay-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* The entrance rides `scale` (the individual transform property) rather than
+   `transform`: that one belongs to the pan/zoom loop, which writes it every
+   frame, and the two compose instead of fighting. */
+.idfs-overlay > .idfs-stage > .idfs-content {
+  animation: idfs-content-in 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* The chrome arrives a beat after the content, so the eye lands on the image
+   first and the controls appear once it has settled. */
+.idfs-overlay > .idfs-close,
+.idfs-overlay > .idfs-toolbar,
+.idfs-overlay > .idfs-hint {
+  animation: idfs-chrome-in 0.24s ease-out 0.1s both;
+}
+.idfs-overlay--closing {
+  animation: idfs-overlay-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+.idfs-overlay--closing > .idfs-stage > .idfs-content {
+  animation: idfs-content-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+}
+.idfs-overlay--closing > .idfs-close,
+.idfs-overlay--closing > .idfs-toolbar,
+.idfs-overlay--closing > .idfs-hint {
+  animation: idfs-chrome-out 0.12s ease-in both;
+}
+@keyframes idfs-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes idfs-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes idfs-content-in {
+  from { opacity: 0; scale: 0.94; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes idfs-content-out {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: 0.96; }
+}
+@keyframes idfs-chrome-in {
+  from { opacity: 0; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes idfs-chrome-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .idfs-overlay,
+  .idfs-overlay > .idfs-stage > .idfs-content,
+  .idfs-overlay > .idfs-close,
+  .idfs-overlay > .idfs-toolbar,
+  .idfs-overlay > .idfs-hint {
+    animation: none;
+  }
 }
 
 /* Without the zoom/rotate toolbar there is nothing to grab — and the content
@@ -12328,19 +12701,27 @@ a.rh-crumb-link:hover {
 .idfs-stage--static {
   cursor: default;
 }
+/* Full-bleed: zoom in and the image runs to the window edges, with the close
+   button and the toolbar floating over it. The clearance that keeps the OPENING
+   view off those controls is not here — it's the fit inset in
+   FullscreenViewer.tsx, which only sizes the default zoom. */
 .idfs-stage {
   position: absolute;
-  inset: 24px 24px 72px;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
   overflow: hidden;
-  cursor: grab;
+  /* An open hand only once there is somewhere to pan to: at the fit the
+     content can't move, and a grab cursor over it would be a lie. */
+  cursor: default;
   /* The drag is ours — don't let the browser pan/zoom the page on touch, and
      don't let a pan turn into a text selection across the card. */
   touch-action: none;
   user-select: none;
+}
+.idfs-stage.is-pannable {
+  cursor: grab;
 }
 .idfs-stage.is-dragging {
   cursor: grabbing;
@@ -12349,8 +12730,9 @@ a.rh-crumb-link:hover {
 /* The pan/zoom carrier. It takes the stage's full size so children sized in %
    (the ID card's `.idhz-fs-box` is `width:100%; max-width:900px`) still have
    something to resolve against — as a shrink-to-fit flex item it collapsed them
-   to a fraction of their intended size. No transition: it has to track the
-   pointer exactly. */
+   to a fraction of their intended size. No CSS transition on transform: the
+   viewer eases it itself, frame by frame, and has to be able to hand the
+   content to the pointer instantly mid-glide. */
 .idfs-content {
   display: flex;
   align-items: center;
@@ -12359,6 +12741,9 @@ a.rh-crumb-link:hover {
   height: 100%;
   transform-origin: center;
   will-change: transform;
+  /* Keeps the layer on the compositor for the whole session, so the first
+     frame of a zoom doesn't pay for a re-raster. */
+  backface-visibility: hidden;
 }
 
 .idfs-toolbar {
@@ -12368,7 +12753,9 @@ a.rh-crumb-link:hover {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* The design sets the two pills 12px apart (1017:1591 ends at x=1843,
+     1018:1610 starts at 1855). */
+  gap: 12px;
 }
 
 /* Stays centred on the window even though the tools moved to the left. */
@@ -12385,38 +12772,48 @@ a.rh-crumb-link:hover {
 
 /* Both segments share the pill shell — a rotate button on its own, then the
    zoom group. */
+/* Two pills, both 32px tall on the design's shared surface — a 20% grey wash
+   over #0d0d0d inside a 0.5px hairline (Figma 1017:1591 rotate / 1018:1610
+   zoom). Rotate is a 32px square; the zoom bar is 200px: 6px inset, then the
+   16px −/+ glyphs and the 140px track at 8px gaps. */
 .idfs-toolbar > .idfs-btn,
+.idfs-toolbar > .udh-anchor > .idfs-btn,
 .idfs-zoom {
   display: inline-flex;
   align-items: center;
-  height: 36px;
-  padding: 0 6px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-pill);
+  height: 32px;
+  border-radius: 8px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
 }
 
 .idfs-zoom {
   gap: 8px;
-  padding: 0 10px;
+  padding: 0 6px;
 }
 
 .idfs-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: none;
   background: none;
-  border-radius: 6px;
-  color: var(--text-muted);
+  color: #a8a8a8;
   cursor: pointer;
   transition: color 0.12s ease;
 }
-.idfs-toolbar > .idfs-btn {
-  min-width: 36px;
+/* The rotate pill IS the button, so it fills the 32px square. It sits inside
+   ShortcutHint.s `.udh-anchor` wrapper, so both paths have to be named. */
+.idfs-toolbar > .idfs-btn,
+.idfs-toolbar > .udh-anchor > .idfs-btn {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
 }
 .idfs-btn:hover:not(:disabled) {
   color: #fff;
@@ -12426,38 +12823,59 @@ a.rh-crumb-link:hover {
   cursor: default;
 }
 
-/* Track + thumb have to be authored per-engine; there is no shared shorthand. */
+/* Track + thumb have to be authored per-engine; there is no shared shorthand.
+   Figma 1018:1623: a 140×4px #404040 track under a 13px thumb that is an
+   ORANGE RING over the page's own black, not a solid orange dot — #0d0d0d
+   filled with #f05523 at 20%, ringed in #f05523. The 14px box the design gives
+   the group is the thumb's, so the track is centred in it. */
 .idfs-slider {
   appearance: none;
   -webkit-appearance: none;
-  width: 120px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  width: 140px;
+  height: 14px;
+  /* The UA gives range inputs `margin: 2px`, which pushed the bar to 206px. */
+  margin: 0;
+  background: none;
   cursor: pointer;
+}
+.idfs-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #404040;
+}
+.idfs-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #404040;
 }
 .idfs-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 13px;
   height: 13px;
+  /* Centres the 13px thumb on the 4px track: (4 - 13) / 2. */
+  margin-top: -4.5px;
   border-radius: 50%;
-  border: none;
-  background: #f05523;
+  border: 1px solid #f05523;
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    #0d0d0d;
 }
 .idfs-slider::-moz-range-thumb {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  border: none;
-  background: #f05523;
+  border: 1px solid #f05523;
+  background:
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    #0d0d0d;
 }
 
 .ncr-fs-hint {
   margin-top: 12px;
   font-family: var(--font-sans);
   font-size: 10.5pt;
-  color: var(--text-faint);
+  color: #a8a8a8;
 }
 
 /* ── Approve split modal ── */
@@ -13808,7 +14226,7 @@ a.rh-crumb-link:hover {
 /* Breadcrumb over the rail title — same 12px crumb→title gap as .rvc-pagehead.
    The way back to Certifications now that Industries left the sidebar. */
 .ind-crumbs {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 /* Inline flow (not flex) so the glyph follows the last word when the copy
@@ -15500,28 +15918,42 @@ a.rh-crumb-link:hover {
   z-index: 200;
   padding: 40px 24px;
 }
+/* Figma 667:884 "General Modal" — the third modal shell in the app, now on the
+   same card as PrmModal and .cl-modal: 8px radius, a 15% grey wash over #0d0d0d,
+   no outer border. Its size variants (.ind-*, .mid-*, .qh-*) are unchanged. */
 .pm-modal {
   width: 100%;
   max-width: 460px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.7);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    #0d0d0d;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
-.pm-head { padding: 20px 22px 0; }
-.pm-title { font-size: 15pt; font-weight: 700; margin: 0; }
-.pm-sub {
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  margin-top: 5px;
-  line-height: 1.45;
+.pm-head { padding: 24px 24px 0; }
+.pm-title {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  margin: 0;
 }
+/* 2px under the title — title and description read as one group. */
+.pm-sub {
+  font-size: 16px;
+  font-weight: 400;
+  color: #a8a8a8;
+  margin-top: 2px;
+  line-height: normal;
+}
+/* 24px between the head and the content, and between content items. */
 .pm-body {
-  padding: 16px 22px 2px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
 }
 .pm-row2 {
   display: grid;
@@ -15540,9 +15972,39 @@ a.rh-crumb-link:hover {
 .pm-text strong { color: var(--text); font-weight: 600; }
 .pm-foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  padding: 18px 22px 20px;
+  padding: 12px 24px;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 0 0 8px 8px;
+}
+
+/* ── Modal footer buttons (Figma 667:891) ──
+   In a modal the dismiss action is plain text on the LEFT and the Primary CTA
+   keeps the right edge — unlike the wizards, where Save-draft is a real
+   secondary button beside Publish. `.btn-publish` already IS the design's
+   Primary CTA, so only the Cancel changes. Scoped to the three modal footers
+   (`margin-right: auto` rather than `justify-content: space-between`, so a
+   footer with only a CTA, or with its own left-hand text block, is untouched). */
+.pm-foot > .btn-save-draft,
+.cl-modal-foot > .btn-save-draft {
+  height: auto;
+  margin-right: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #a8a8a8;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.pm-foot > .btn-save-draft:hover,
+.cl-modal-foot > .btn-save-draft:hover {
+  filter: none;
+  color: #fff;
 }
 
 /* ============== Public Portfolio page (standalone tab) ============== */
@@ -17014,6 +17476,53 @@ a.rh-crumb-link:hover {
 .table tbody td.col-status:not(.col-actions) .co-status-pill--secondary { color: #a8a8a8 !important; background: rgba(168, 168, 168, 0.1) !important; }
 .table tbody td.col-status:not(.col-actions) .co-status-pill--accent    { color: #f05527 !important; background: rgba(240, 85, 39, 0.1) !important; }
 
+/* Row flag beside a candidate's name — Figma 994:1081 "Table Pills - Yellow":
+   #ffc524 on its own 10% wash, 12px Medium in 4px/8px padding, 8px radius, 4px
+   off the name. Deliberately smaller than the `.co-status-pill` family (14px in
+   6px/10px): this marks the name it sits against rather than filling a column
+   of its own. */
+.pr-name-flag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  white-space: nowrap;
+  color: #ffc524;
+  background: rgba(255, 197, 36, 0.1);
+  vertical-align: middle;
+}
+
+/* The landing's minimal list is Name + wait only, so the flag has no place on
+   it. It fades in with the rest of the table chrome (`--lmt`, the same ramp the
+   pagination uses) rather than being dropped outright: the landing list IS the
+   list for the whole gesture, so a flag that only existed after the crossfade
+   would pop in. Opacity, not display — the name must not reflow mid-morph. */
+.lm-cell--name .pr-name-flag {
+  opacity: var(--lmt, 0);
+}
+
+/* The plain-text-column rule strips chrome from spans inside data cells; this
+   re-enables it for the flag, the way `.col-status` does for status pills. The
+   :not() keeps specificity above that strip rule (both use !important). */
+.table tbody td.col-name:not(.col-actions) .pr-name-flag {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 4px 8px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: normal !important;
+  white-space: nowrap !important;
+  color: #ffc524 !important;
+  background: rgba(255, 197, 36, 0.1) !important;
+}
+
 /* Sign-up channel pill (Self vs Internal) */
 .co-signup {
   display: inline-flex;
@@ -17096,6 +17605,64 @@ a.rh-crumb-link:hover {
   line-height: 1.5;
 }
 .co-cancel-alert-icon { color: var(--skill-yellow); flex-shrink: 0; margin-top: 1px; }
+/* ── Outstanding Balance card — Figma 1031:1036 ──
+   Shown on Cancel Subscription while the company still owes something; the
+   component renders nothing at all when the balance is zero, so there is no
+   settled variant here.
+
+   The fill is the node's two stacked layers verbatim: a 20% red wash over
+   #0d0d0d at 75%. Keeping both means the card sits on the modal's own dark
+   ground the way it does on the board, rather than a single flat red. */
+.co-balance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 0.5px solid rgba(255, 31, 49, 0.1);
+  background:
+    linear-gradient(rgba(255, 31, 49, 0.2), rgba(255, 31, 49, 0.2)),
+    linear-gradient(rgba(13, 13, 13, 0.75), rgba(13, 13, 13, 0.75));
+}
+
+/* 16px slot, sized explicitly so the glyph never stretches to its natural box. */
+.co-balance-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+}
+.co-balance-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* min-width:0 lets a long amount wrap instead of pushing the card wider. */
+.co-balance-text {
+  flex: 1 0 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  word-break: break-word;
+}
+.co-balance-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+.co-balance-sub {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
 .co-cancel-summary {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -17887,6 +18454,15 @@ a.rh-crumb-link:hover {
 }
 .ss-menu .dropdown-item-detail {
   flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+/* A second value sitting WITH the name rather than at the row's far edge —
+   the account-holder picker's email (Figma 955:976), set 14px muted after a
+   middot. The name keeps its own size; only the trailing value drops back. */
+.ss-menu .dropdown-item-secondary {
+  margin-left: 4px;
   font-size: 14px;
   font-weight: 400;
   color: #a8a8a8;
@@ -18909,6 +19485,18 @@ a.rh-crumb-link:hover {
 .wizard-success-content {
   max-width: 560px;
 }
+/* Company Created 1A — icon, heading and subtext centred on the column, which
+   itself sits in the middle of the page. Only the link block inside it goes
+   back to reading left-aligned. */
+.wizard-success-content--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  max-width: 840px;
+  max-height: 100%;
+  text-align: center;
+}
 .wizard-success-icon {
   width: 52px;
   height: 52px;
@@ -18921,35 +19509,49 @@ a.rh-crumb-link:hover {
   font-size: 20pt;
   margin-bottom: 20px;
 }
+/* Figma 1046:1111 "Icon Filled" — brand orange rather than the green the other
+   success screens use: a 10% orange fill inside a hairline 75% orange ring,
+   with a white check at half the badge's width (the node's own 12:24 ratio). */
+.wizard-success-icon--brand {
+  background: rgba(240, 85, 35, 0.1);
+  border: 1px solid rgba(240, 85, 35, 0.75);
+  color: #fff;
+}
+.wizard-success-icon--brand svg {
+  width: 26px;
+  height: 26px;
+}
 .wizard-success-icon--review {
   background: rgba(233, 114, 55, 0.14);
   color: var(--accent);
 }
-/* ===== Confirmation review cards (Figma 945:1974) =====
-   One card per wizard step, side by side. The node fixes each column at 439px;
-   they flex here so three of them still fit a narrower window, wrapping rather
-   than overflowing. */
+/* ===== Confirmation review cards (Figma 1046:1147) =====
+   One full-width card per wizard step, stacked 32px apart. The description
+   above already carries the 28px gap down to the first card. */
 .confirm-cards {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 28px;
-  margin-top: 24px;
+  flex-direction: column;
+  gap: 32px;
   text-align: left;
 }
+/* The 10% grey card the app uses everywhere, r12, with a 16px side inset only —
+   the header and the body supply their own vertical padding so the rule between
+   them runs the full width between those insets. */
 .confirm-card {
-  flex: 1 1 360px;
-  max-width: 439px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 12px;
+  padding: 0 16px;
   min-width: 0;
+  overflow: hidden;
 }
+/* The title sits over a hairline rule rather than plain whitespace. */
 .confirm-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 16px 0 17px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 .confirm-card-title {
   margin: 0;
@@ -18960,7 +19562,8 @@ a.rh-crumb-link:hover {
   color: #fff;
   white-space: nowrap;
 }
-/* 945:1830 — a bare 16px pencil, no button chrome of its own. */
+/* A bare 16px pencil, no button chrome of its own, resting grey like every
+   other row glyph and warming to the accent on hover. */
 .confirm-card-edit {
   flex: none;
   display: inline-flex;
@@ -18971,45 +19574,47 @@ a.rh-crumb-link:hover {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #fff;
+  color: #a8a8a8;
   cursor: pointer;
 }
 .confirm-card-edit:hover { color: var(--accent-strong, #f05523); }
-/* 943:1676 — the same tinted card as the plan preview: 10% grey, r8, and a
-   12px side gutter with the rows supplying their own vertical padding. */
+/* Four columns of equal width, 32px between them and 20px between rows. The
+   node fixes each at 200px inside a 928px card; they flex here so the same
+   layout holds at the wizard's own width. */
 .confirm-card-body {
-  background: rgba(122, 122, 122, 0.1);
-  border-radius: 8px;
-  padding: 0 12px;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 32px;
+  row-gap: 20px;
+  padding: 16px 0;
 }
-.confirm-card-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 0 13px;
-  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+.confirm-card-field {
+  min-width: 0;
   font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
   line-height: normal;
 }
-.confirm-card-row:last-child {
-  border-bottom: none;
-  padding-bottom: 12px;
+/* The address runs long, so it takes two columns. */
+.confirm-card-field--wide {
+  grid-column: span 2;
 }
-/* The label column is a fixed 140px (943:1679), so every value in the card
-   starts on the same line however long its label runs. */
 .confirm-card-label {
-  flex: none;
-  width: 140px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 400;
   color: #a8a8a8;
 }
 .confirm-card-value {
-  flex: 1 1 0;
-  min-width: 0;
+  font-size: 16px;
+  font-weight: 500;
   color: #fff;
   word-break: break-word;
+}
+/* A narrow window folds the grid to two columns; wide fields then take a
+   full row. */
+@media (max-width: 900px) {
+  .confirm-card-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 .success-summary {
   margin-top: 24px;
@@ -19051,64 +19656,111 @@ a.rh-crumb-link:hover {
   margin: 4px 0;
 }
 
-/* ─────────────── Stripe payment link ─────────────── */
+/* ─────────────── Stripe payment link (Company Created 1A) ─────────────── */
+/* An unstyled wrapper: the row below carries the surface, and the note sits
+   under it. The description above already supplies the 28px gap. */
 .stripe-link-box {
-  margin-top: 20px;
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: 12px;
-  background: rgba(99, 102, 241, 0.07);
-  padding: 16px 18px;
+  width: 100%;
+  text-align: left;
 }
-.stripe-link-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11pt;
-  font-weight: 700;
-  color: #a5b4fc;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
+/* Figma 1046:1250 — a 10% grey card, r8, 12px inset, ringed by the hairline
+   that gives it its glass edge. The node's own export drops that ring, so the
+   values here are read off the rendered node instead: the fill lands on #181818
+   over the page ground, and the 1px edge on #22-#26, i.e. the same grey at 12%.
+   Figma draws the ring as a faint top-left-to-bottom-right ramp (15% down to
+   10%); flat 12% sits inside that range and the whole span is four levels of
+   grey, so the ramp isn't worth a masked pseudo-element. */
 .stripe-link-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--bg-pill-strong);
+  gap: 12px;
+  background: rgba(122, 122, 122, 0.1);
+  border: 1px solid rgba(122, 122, 122, 0.12);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 12px;
 }
+/* The link is set in the page's own sans at Medium, not a mono face, and wraps
+   on to a second line rather than ellipsising — the whole URL stays readable. */
 .stripe-link-url {
   flex: 1;
-  font-family: var(--font-mono);
-  font-size: 10.5pt;
-  color: #a5b4fc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  word-break: break-word;
 }
+/* Bare 16px glyph, the size the node draws it at, so the gap beside it reads as
+   the specified 12px. Same shape as every other copy affordance in the app. */
 .stripe-link-copy {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 5px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  background: transparent;
-  color: #a5b4fc;
-  font-size: 11pt;
-  font-weight: 600;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #a8a8a8;
   cursor: pointer;
 }
-.stripe-link-copy:hover { background: rgba(99, 102, 241, 0.12); }
+.stripe-link-copy svg { width: 16px; height: 16px; }
+.stripe-link-copy:hover { color: #fff; }
 .stripe-link-note {
-  margin-top: 10px;
-  font-size: 10.5pt;
-  color: var(--text-faint);
-  line-height: 1.5;
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  line-height: 1.45;
 }
-
+/* "Payment Link Copied!" toast (Figma 1046:1141) — flat green tint over a
+   translucent dark base, the same green hue `.prc-cta--ok` rings at 15%, so
+   it reads over any content behind it. Reuses `.rvc-toast`'s slide-in. */
+/* 40px in from the bottom-right of the window. Inside a wizard body it becomes
+   the body's own bottom-right instead — that edge is where the footer starts,
+   so the toast clears the footer's buttons. */
+.pl-body { position: relative; }
+.pl-body .pl-copied-toast { position: absolute; }
+.pl-copied-toast {
+  position: fixed;
+  right: 40px;
+  bottom: 40px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 300px;
+  padding: 12px 16px;
+  border: 1px solid rgba(41, 182, 115, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(41, 182, 115, 0.15), rgba(41, 182, 115, 0.15)),
+    linear-gradient(rgba(13, 13, 13, 0.75), rgba(13, 13, 13, 0.75));
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: normal;
+  color: #fff;
+  /* It sits 40px off the bottom-right, which puts it over the footer and the
+     Done button beneath it, so it must never eat that click. */
+  pointer-events: none;
+  animation: rvcToastIn 0.18s ease;
+}
+/* The node's check is white, not the green the tint is built from — the green
+   reads on the panel behind it, the glyph stays plain. Same `tdesign:check`
+   `CheckIcon` draws, at the 16px the node sets. */
+.pl-copied-toast-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+}
+.pl-copied-toast-icon svg { width: 16px; height: 16px; }
 /* ─────────────── Stripe invoices placeholder (standalone tab) ─────────────── */
 
 .stripe-placeholder {
@@ -22754,15 +23406,21 @@ a.rh-crumb-link:hover {
 
 /* ── header (Figma 293:849) ──
    Breadcrumb over the DS page header (title + subtitle), no bottom rule, on
-   the app's even 32px page gutter (the 32px down to the body comes from
-   `.rvc-stagecol`'s own top padding, so this header has none). The
-   task and submitter now live here, which is why there's no separate submission
-   bar; the attempt switcher rides on the right of the same row. */
+   the app's even 32px page gutter. The task and submitter now live here, which
+   is why there's no separate submission bar; the attempt switcher rides on the
+   right of the same row.
+
+   The 28px below the subtext is the wizard's own subtext-to-first-field step
+   (`.wizard-desc`'s margin). It lives HERE rather than on `.rvc-stagecol`
+   because the stage is the scroll container: top padding on it would sit
+   inside the sticky constraint box and leave the pinned section rail stopping
+   28px short of the scrollport edge. On the header it is outside the scroller,
+   so scrolling is untouched. */
 .rvc-header {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 32px 32px 0;
+  padding: 32px 32px 28px;
   flex: none;
 }
 /* In the split layout the column owns the gutter, so the header only keeps the
@@ -22772,7 +23430,7 @@ a.rh-crumb-link:hover {
    land between the title and its subtext and override the DS 2px, leaving these
    crumbed pages looser than every plain .tasks-title page. */
 .rvc-pagehead { display: flex; flex-direction: column; min-width: 0; }
-.rvc-pagehead > .rvc-crumbs { margin-bottom: 12px; }
+.rvc-pagehead > .rvc-crumbs { margin-bottom: 8px; }
 .rvc-crumbs { display: flex; align-items: center; gap: 4px; }
 .rvc-crumb {
   font-family: var(--font-sans);
@@ -22790,7 +23448,16 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 span.rvc-crumb--current { cursor: default; }
 .rvc-crumbs svg { width: 12px; height: 12px; color: #a8a8a8; flex: none; }
 /* .tasks-title already carries the 2px gap down to .tasks-subtitle. */
-.rvc-pagehead-id { min-width: 0; }
+/* A flex column, not a block: the subtitle is an inline-flex, and as an INLINE
+   box it would sit on a line box sized by the container's 1.45 line-height —
+   4px taller than the subtitle itself, which pushed the header past the
+   design's 82px. As a flex item it contributes its own height and nothing more. */
+.rvc-pagehead-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 /* Task name and submitter open their own tab — styled as plain text until
    hovered so the header still reads as a heading. */
 .rvc-headlink {
@@ -23448,61 +24115,13 @@ span.rvc-crumb--current { cursor: default; }
    runs full width and the integrity note is a full-width card heading it,
    above the ID. Only the footer's right-hand button group and the narrower
    queue panel (4 columns, not 5) are specific to this page. */
-/* ── "ID Previously Verified" banner (Figma 456:563) ──
-   Green-at-20% over a 75%-opaque page fill, ringed by the same green at 10%.
-   Padding is Figma's 8/16 minus the 0.5px border (bordered-shell rule). The
-   design's "Glass Effect" is carried as a backdrop blur — a no-op over the
-   opaque page, kept for fidelity, same as the Integrity Note. */
-.prc-idverified {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7.5px 11.5px;
-  /* No margin: the section is a flex column with its own 14px row-gap, and a
-     margin here stacked on top of it — 30px below the banner against 14px above. */
-  border: 0.5px solid rgba(20, 184, 103, 0.1);
-  border-radius: 8px;
-  background:
-    linear-gradient(rgba(20, 184, 103, 0.2), rgba(20, 184, 103, 0.2)),
-    rgba(13, 13, 13, 0.75);
-  backdrop-filter: blur(100px);
-}
-
-/* Both banners group their title + detail at gap 4 inside the row's 12px gap
-   (Figma 458:589 / 458:590), so the icon sits apart from the pair. */
+/* The Integrity Note groups its title + detail inside the row's 12px gap
+   (Figma 458:590), so the icon sits apart from the pair. */
 .prc-banner-text {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-}
-
-.prc-idverified-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  color: #fff;
-}
-
-.prc-idverified-title {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: normal;
-  color: #fff;
-  white-space: nowrap;
-}
-
-.prc-idverified-detail {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: normal;
-  color: #fff;
-  white-space: nowrap;
 }
 
 /* ── The header's exam + date line ──
@@ -23588,6 +24207,16 @@ span.rvc-crumb--current { cursor: default; }
     linear-gradient(rgba(255, 197, 36, 0.75), rgba(255, 197, 36, 0.75)),
     #0d0d0d;
 }
+/* Request ID Re-Upload is a Secondary Button now, not a third coloured CTA
+   (Figma 1004:1309) — the same grey the app's .btn-save-draft uses, so the two
+   destructive/positive CTAs beside it carry the only colour in the footer. */
+.prc-cta--secondary {
+  padding: 0 16px;
+  border-color: rgba(122, 122, 122, 0.1);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+}
 /* Green (495:2242) and red (495:2247) are two-stop VERTICAL gradients, the same
    construction as the orange CTA — they were flat 75% tints. Both nodes ring the
    button in the ACCENT at 15%, which the component appears to have inherited
@@ -23621,17 +24250,32 @@ span.rvc-crumb--current { cursor: default; }
   line-height: 1;
   color: #fff;
 }
-/* View Queue sits on the LEFT of the Proctoring footer (Figma 445:878), so the
-   popover has to open rightwards — the shared .rvc-qpanel is `right: 0`, which
-   from here would hang off the left edge of the screen. */
-.rvc-qpanel--proctoring {
-  right: auto;
-  left: 0;
-  width: 620px;
-}
-/* Sections need the modal's old 28px separation, not the media column's 10px. */
+/* Sections need the modal's old 28px separation, not the media column's 10px.
+   No top padding on the stage: the section rails pin with `top: 0`, and a
+   scroll container's top padding sits INSIDE the sticky constraint box, so the
+   pinned rail would stop 32px short of the scrollport edge with frames visible
+   above it. A rail that leads the stage therefore sits at rest exactly where it
+   sits pinned (its own 26px top padding under the page header) — only a
+   leading Integrity Note keeps the page's 32px gutter. */
 .prc-stagecol {
-  gap: 28px;
+  /* No flex gap: the sections must ABUT so the footage rail's top edge is what
+     pushes the ID rail out (a gap between the containing blocks would push the
+     ID rail away 28px before the next rail arrives — an odd, empty handoff).
+     The 28px separation lives on the banner's bottom margin and on each
+     section body's bottom padding instead. */
+  gap: 0;
+  padding-top: 0;
+  /* Reaching either end must not hand the wheel to an ancestor, and the
+     browser must not re-anchor the scroll position mid-scroll when a rail's
+     state flips — nothing above the reader ever changes size here. */
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+.prc-stagecol > :first-child:not(.prc-section) {
+  margin-top: 32px;
+}
+.prc-stagecol > :not(.prc-section) {
+  margin-bottom: 28px;
 }
 /* The shared ZoomableIdCard's magnifier panel is anchored to the right of the
    card (left: 100% + 26px). Name Change Requests bounds it naturally with a
@@ -23666,7 +24310,7 @@ span.rvc-crumb--current { cursor: default; }
 .prc-mismatch {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   padding: 20.5px;
   border-radius: 12px;
   background:
@@ -23691,65 +24335,43 @@ span.rvc-crumb--current { cursor: default; }
 .prc-mismatch-sub {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   line-height: normal;
   color: #a8a8a8;
 }
 
-.prc-mismatch-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Hairline above the field, then 16px before its label. */
+/* Label, input and the detected-name line, 8px apart (Figma 1014:1439). The
+   input is the plain shared `.form-input` — no fill, no hairline above the
+   group; the card's own 24px gap does the separating. */
 .prc-mismatch-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 16px;
-  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
 }
 /* The 8px gap already spaces the group — drop the atoms' own margins. */
 .prc-mismatch-field .form-label {
   margin-bottom: 0;
 }
-.prc-mismatch-help {
-  margin: 0;
-  font-style: italic;
-  color: #7a7a7a;
-}
-/* .form-input is transparent on a #404040 border; this field is a filled input. */
-.prc-mismatch-input {
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  background: rgba(122, 122, 122, 0.15);
-  line-height: normal;
-}
 
-/* The detected name + "Use This" row. */
+/* "ID reads <name> · Use This" — a plain line under the input, not a boxed row. */
 .prc-mismatch-detected {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px;
-  border-radius: 8px;
-  background: rgba(115, 115, 115, 0.1);
-}
-.prc-mismatch-detected-text {
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
   line-height: normal;
-  color: #fff;
+  color: #a8a8a8;
+}
+.prc-mismatch-detected > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.prc-mismatch-detected-text strong {
-  font-weight: 600;
 }
 .prc-mismatch-use {
   flex: none;
@@ -23758,8 +24380,17 @@ span.rvc-crumb--current { cursor: default; }
   font-weight: 500;
   line-height: normal;
   color: #f05523;
-  text-decoration: underline;
   white-space: nowrap;
+}
+
+/* Closing note on the card (Figma 1013:1410). */
+.prc-mismatch-note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #a8a8a8;
 }
 .prc-mismatch-use:hover {
   color: #f5875f;
@@ -23785,8 +24416,18 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   align-items: center;
   gap: 40px;
-  width: 100%;
-  padding: 7.5px 11.5px;
+  /* Sits on the RIGHT of the page header, beside the candidate. It sizes to
+     its own content and is pushed over by the auto margin, capped at the
+     design's 615px; past that the note line ellipses (see .prc-inote-sub).
+     `align-self` rather than the header's own `align-items`, which is shared
+     with the Hands-On review console: the note tops out level with the
+     breadcrumb instead of centring in the taller title stack. */
+  flex: 0 1 auto;
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 615px;
+  margin-left: auto;
+  padding: 12px;
   border: 0.5px solid rgba(255, 31, 49, 0.1);
   border-radius: 8px;
   background:
@@ -23817,27 +24458,37 @@ span.rvc-crumb--current { cursor: default; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   color: #fff;
+}
+
+/* Title over note, not one row (Figma 458:590) — overrides the shared
+   .prc-banner-text row. */
+.prc-inote-text {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
 }
 
 .prc-inote-title {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   line-height: normal;
   color: #fff;
   white-space: nowrap;
 }
 
-/* The note is free text — it truncates rather than wrapping the row to two lines. */
+/* The note is free text — it truncates rather than wrapping to a third line. */
 .prc-inote-sub {
+  max-width: 100%;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   line-height: normal;
-  color: #fff;
+  color: #a8a8a8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -23865,14 +24516,14 @@ span.rvc-crumb--current { cursor: default; }
   height: 75vh;
   max-width: calc(100vw - 40px);
   max-height: calc(100vh - 80px);
-  padding: 0 22px 0;
+  padding: 0 24px 0;
 }
 
 .aet-head {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 18px 0 12px;
+  padding: 24px 0 12px;
 }
 .aet-head-text { min-width: 0; }
 .aet-head .cl-modal-sub { max-width: 780px; }
@@ -24141,25 +24792,26 @@ span.rvc-crumb--current { cursor: default; }
    ==================================================================
    Rebuilt on the shared design system (Figma "Components" page 11:15114);
    the 2026-08-28 pass mapped Claude Design "Progress Admin - Prototype" onto
-   it (staged changes, expandable cohort roster, attempt management). Mapping:
+   it, and the 2026-09-05 revision of that prototype dropped the cohort scope:
+   every lookup is now one employee × (certification | task), with a learner
+   header + metrics strip over each view and "mark incomplete" alongside
+   "mark complete". Mapping:
      · page header            → .tasks-title / .tasks-subtitle (46:314)
      · scope pickers          → .usearch-* combobox + .usearch-scope token
-     · task filters           → .filter-pill-dashed / .filter-applied (12:15164, 12:15221)
      · status & staged pills  → .co-status-pill--{green|accent|red|grey} (109:1237)
      · buttons                → .btn-publish (73:473) / .btn-save-draft (73:495)
-     · mark-complete checkbox → the shared .checkbox atom (8:13495)
-     · row 3-dot menu         → .u-menu (386:269 family)
+     · 3-dot menus            → .u-menu (386:269 family), danger row 559:2215
      · modals                 → PrmModal (483:588) + .prm-field / Stepper (618:1264)
      · footer                 → .wizard-footer / .wizard-actions (73:515)
      · grade prompt           → .pm-overlay / .pm-modal + .form-label/.form-input/.form-help
      · tables                 → the large-table tokens (190:285 head / 190:309 row)
      · toast                  → .rvc-toast (no DS component yet — see its note)
    What remains below is the lookup-specific structure the design system has no
-   component for: the roster/task tables' column plan, the inline-expanded row
-   (.mc-exp-row/.mc-subtable), the review-dialog change list, the metrics grid
-   and the attempt-detail answers list. All are built on DS tokens — 36px page
-   gutters, 32px controls, 8px radius, the 12/14/16/28 type ramp,
-   rgba(122,122,122,.5) structural rules and #404040 control borders. */
+   component for: the view header, the metrics strip, the task table's column
+   plan and hover-revealed actions, the review-dialog change list and the
+   attempt-detail answers list. All are built on DS tokens — 36px page gutters,
+   32px controls, 8px radius, the 12/14/16/28 type ramp, rgba(122,122,122,.5)
+   structural rules and #404040 control borders. */
 
 .mc-root {
   --mc-divider: rgba(122, 122, 122, 0.5); /* DS structural rule */
@@ -24180,10 +24832,10 @@ span.rvc-crumb--current { cursor: default; }
   padding: 32px 32px 0;
 }
 /* The page is only ever opened from another page's row menu, so it carries the
-   shared crumb row above the title — same 12px crumb→title gap .rvc-pagehead
+   shared crumb row above the title — same 8px crumb→title gap .rvc-pagehead
    uses (the header itself is a plain block, not a flex column). */
 .mc-header .rvc-crumbs {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 /* ── scope pickers ── */
@@ -24223,23 +24875,6 @@ span.rvc-crumb--current { cursor: default; }
   align-items: center;
   color: var(--text-faint);
   flex: none;
-}
-
-.mc-filters-end {
-  align-items: center;
-  gap: 24px;
-}
-
-.mc-filters {
-  padding: 20px 36px 0;
-  margin-bottom: 0;
-}
-
-.mc-filter-count {
-  font-size: 14px;
-  font-weight: 400;
-  color: #a8a8a8;
-  align-items: center;
 }
 
 .mc-typeicon {
@@ -24406,13 +25041,88 @@ span.rvc-crumb--current { cursor: default; }
   color: #f05523;
 }
 
-/* ── roster table (cohort × one task) ── */
-.mc-roster-scroll {
+/* ── scoped view (employee × certification / employee × task) ──
+   The page never scrolls: this column clips, and the task table's rows are
+   the one scrolling region (like every other table). */
+.mc-scroll {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 0 36px 24px;
+}
+
+/* ── certification card (Figma 965:1401, on the .mc-notice shell) ──
+   Headline + task count on the left, the ⋯ holding every certification
+   action on the right. Its wash is twice the notice's. */
+.mc-notice.mc-certcard {
+  flex: none;
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+}
+
+.mc-certcard-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.mc-certcard-sub {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Learner header over each view: name + what is being looked at on the left,
+   the view's actions on the right. Wraps under a narrow workspace. */
+.mc-viewhead {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.mc-viewhead-text {
+  flex: 1;
+  min-width: 260px;
+}
+
+.mc-viewhead-name {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.mc-viewhead-sub {
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Task view: the task's type glyph + name (+ Final pill) before the cert. */
+.mc-viewhead-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: bottom;
+}
+
+/* The actions sit level with the name, not the two-line text block. */
+.mc-viewhead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 32px;
 }
 
 .mc-table {
@@ -24456,11 +25166,6 @@ span.rvc-crumb--current { cursor: default; }
   font-weight: 400;
   color: #a8a8a8;
 }
-
-.mc-table .mc-col-status { width: 210px; }
-.mc-table .mc-col-attempts { width: 110px; }
-.mc-table .mc-col-actions { width: 240px; }
-.mc-table .mc-col-open { width: 36px; padding-right: 0; text-align: right; }
 
 .mc-cell-user {
   display: flex;
@@ -24506,73 +25211,207 @@ span.rvc-crumb--current { cursor: default; }
   gap: 8px;
 }
 
-/* ── new-table column plan (cohort roster / task tables / attempts modal) ── */
-.mc-table .mc-col-progress { width: 200px; }
-.mc-table .mc-col-date { width: 210px; white-space: nowrap; }
+/* ── column plan (attempts modal) ── */
 .mc-table .mc-col-grade { width: 90px; }
-.mc-table .mc-col-tries { width: 150px; }
-.mc-table .mc-col-marked { width: 190px; }
-.mc-table .mc-col-certact { width: 230px; }
-.mc-table .mc-col-caret { width: 36px; padding-right: 0; text-align: right; }
 .mc-table .mc-col-act2 { width: 96px; padding-right: 0; }
 .mc-table .mc-col-attnum { width: 90px; }
 .mc-table .mc-col-result { width: 110px; }
 
-/* Task tables don't navigate anywhere — rows are flat, actions do the work. */
+/* The attempts modal's rows don't navigate anywhere — actions do the work. */
 .mc-table--flat tbody tr { cursor: default; }
 .mc-table--flat tbody tr:hover { background: transparent; }
 
-/* A staged row keeps a faint accent wash until Review & Save applies it. */
-.mc-table tbody tr.is-staged { background: rgba(240, 85, 35, 0.05); }
+/* ── task table (Figma 960:980, the "Quiz Questions" card in its table role) ──
+   A half-strength #404040 hairline on r8 around transparent 40px rows; only
+   the header row carries the 122-grey wash, with 16px medium white labels.
+   16px gutters and a 40px column gap. Every column after Task takes the
+   design's fixed width so the numbers line up row to row; Task takes the
+   rest and ellipsises. */
+.mct {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
 
-/* Cohort-roster progress percentage (plain text until certified). */
-.mc-pct {
+/* The rows are the page's only scrolling region; the header stays pinned.
+   Both reserve a scrollbar gutter so the header's columns stay over the
+   rows' — without it the scrollbar narrows the rows and every value sits a
+   scrollbar-width left of its label. Reserved on both sides of the split, so
+   platforms with overlay scrollbars (gutter 0) line up too. */
+.mct-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.mct-hd {
+  flex: none;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* Task takes a fixed 440px and every other column its own fixed width, so the
+   leftover width has nowhere to pool: `space-between` hands it to the gaps
+   instead, spreading the value columns evenly across the row and landing the
+   kebab on the right edge. The 40px gap is the floor — below that the row is
+   out of room and Task gives way first (`flex: 0 1`). */
+.mct-hd,
+.mct-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.mct-hd {
+  padding-top: 8px;
+  padding-bottom: 9px;
+  background: rgba(122, 122, 122, 0.1);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   color: #fff;
 }
 
-/* Expander caret on the cohort roster. */
-.mc-caret {
-  display: inline-flex;
+.mct-row {
+  height: 40px;
+  font-size: 16px;
   color: #a8a8a8;
 }
-.mc-caret svg { transition: transform 0.15s ease; }
-.mc-caret.is-open svg { transform: rotate(180deg); }
 
-/* ── inline-expanded roster row → nested task table ── */
-.mc-exp-row > td {
-  padding: 0 0 16px;
+.mct-rows > .mct-row:last-child {
+  border-bottom: none;
 }
-.mc-exp-row:hover { background: transparent; }
-.mc-subtable {
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  border-radius: 8px;
-  background: var(--mc-card);
-  padding: 4px 16px;
-}
-.mc-subtable .mc-table thead th { font-size: 14px; padding-top: 10px; }
 
-/* Task-name cell (icon + name + optional Final pill). */
-.mc-taskname {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+/* A staged row keeps a faint accent wash until Review & Save applies it. */
+.mct-row.is-staged {
+  background: rgba(240, 85, 35, 0.05);
+}
+
+/* TASK: white name, "· Type" in the 14px muted register, then any pills. */
+.mct-c-task {
+  flex: 0 1 440px;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
-.mc-taskname-text {
-  color: #e7e7e8;
+
+.mct-name {
+  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mct-type {
+  flex: none;
+  font-size: 14px;
+}
+
+.mct-c-task .co-status-pill {
+  flex: none;
+  margin-left: 4px;
+}
+
+/* Fixed columns — the design's widths, the date's widened for its flag. */
+.mct-c-time { width: 82px; }
+.mct-c-date { width: 118px; }
+.mct-c-grade { width: 44px; }
+.mct-c-att { width: 67px; }
+/* Actions cell — the shared table's 40px right-aligned control box, so
+   `.row-action-bar`'s tuned offset drops its kebab onto the resting one. */
+.mct-c-menu {
+  width: 40px;
+  position: relative;
+  text-align: right;
+}
+
+/* The resting kebab fills the control box, exactly as `.table .col-actions`
+   does it — that is what centres its glyph 20px from the right edge, which is
+   the distance `.row-action-bar`'s offset is tuned against. Without it the
+   glyph jumps sideways as the bar swaps in. */
+.mct-c-menu > :not(.row-action-bar) {
+  width: 40px;
+}
+.mct-c-time,
+.mct-c-date,
+.mct-c-grade,
+.mct-c-att,
+.mct-c-menu {
+  flex: none;
   white-space: nowrap;
 }
 
-/* Attempts cell — count + the staged-grant / exhausted pill beside it. */
-.mc-attcell {
+/* A manual completion: the date and its flag, sharing one tooltip. */
+.mct-manual {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+  gap: 4px;
+  cursor: default;
+}
+
+/* The attempts count with its state glyph: medium-weight amber with a 16px
+   hourglass while pending review, red with the 16px error triangle once
+   exhausted — the glyph takes the same colour. Also the task view's Attempts
+   metric. */
+.mct-att {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mct-att.is-pending,
+.mct-att.is-exhausted {
+  font-weight: 500;
+}
+.mct-att.is-pending { color: #ffc524; }
+.mct-att.is-exhausted { color: #ff1f31; }
+
+.mct-manual svg,
+.mct-att svg {
+  display: block;
+  flex: none;
+}
+.mct-manual svg {
+  width: 12px;
+  height: 12px;
+}
+.mct-att svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Row actions follow the shared table convention (Figma 386:269) rather than
+   restyling a bare kebab: the row washes on hover, the resting `.lone-dots`
+   kebab gives way to the `.row-action-bar` pill, and an open menu holds both
+   open with the orange hairline. The bar carries one cell — the menu is the
+   row's only action — which `.row-action-bar > .row-action-btn:only-child`
+   already rounds on both ends. */
+.mct-row:hover,
+.mct-row.is-menu {
+  background: var(--bg-row-hover);
+}
+
+.mct-row:hover .lone-dots,
+.mct-row.is-menu .lone-dots {
+  visibility: hidden;
+}
+
+.mct-row:hover .row-action-bar,
+.mct-row.is-menu .row-action-bar {
+  display: inline-flex;
+}
+
+.mct-row.is-menu .row-action-bar > .row-action-btn:last-child {
+  border-color: #f05523;
+  position: relative;
+  z-index: 1;
 }
 
 /* Bare-button reset so a .co-status-pill can act as its own undo control. */
@@ -24584,12 +25423,15 @@ span.rvc-crumb--current { cursor: default; }
   cursor: pointer;
 }
 
-/* The mark-complete checkbox rides in table cells. */
-.mc-table .mc-check {
-  cursor: pointer;
-  padding: 0;
+/* The certification menu's one row carries its consequence under the label.
+   .u-menu-item-sub is otherwise scoped to disabled reasons, so the note names
+   its own size and colour. */
+.u-menu-item .mc-menu-note {
+  font-size: 14px;
+  line-height: normal;
+  max-width: 248px;
+  color: #a8a8a8;
 }
-.mc-table .mc-check svg { width: 10px; height: 10px; }
 
 /* ── review-changes dialog list ── */
 .mc-review-list {
@@ -24798,14 +25640,18 @@ span.rvc-crumb--current { cursor: default; }
   margin-top: 24px;
 }
 
-/* ── metrics grid ── */
+/* ── metrics strip ──
+   Under the view header: three cells on the certification view, five on the
+   task view. Sits 20px over the task table it summarises. */
 .mc-metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 20px;
   border: 1px solid var(--mc-hairline);
   border-radius: 8px;
   overflow: hidden;
 }
+.mc-metrics--5 { grid-template-columns: repeat(5, 1fr); }
 
 .mc-metric {
   padding: 10px 14px;
@@ -24826,59 +25672,16 @@ span.rvc-crumb--current { cursor: default; }
   margin-bottom: 4px;
 }
 
+/* A value is text or a status pill; both sit on the same 24px line so an
+   empty cell keeps the strip's height. */
 .mc-metric-value {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   color: #fff;
-}
-
-.mc-metric-value.is-big {
-  font-size: 16px;
-}
-
-/* ── single-task detail card ── */
-.mc-taskcard {
-  border-radius: 12px;
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  background: var(--mc-card);
-  overflow: hidden;
-}
-
-.mc-taskcard-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-bottom: 0.5px solid var(--mc-hairline);
-}
-
-.mc-taskcard-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.mc-taskcard-body {
-  padding: 16px;
-}
-
-.mc-taskcard-body .section-heading {
-  margin: 24px 0 16px;
-}
-
-.mc-taskcard-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-top: 0.5px solid var(--mc-hairline);
-}
-
-.mc-taskcard-note {
-  font-size: 14px;
-  font-weight: 400;
-  color: #7a7a7a;
-  line-height: 1.4;
 }
 
 /* ── unsaved-changes footer ── */
@@ -25130,6 +25933,12 @@ span.rvc-crumb--current { cursor: default; }
   --lm: 1;
   --lmf: 1;
   --lmt: 1;
+  /* Landing width of the caption / list / hint-bar stack (`.lm-caption`,
+     `.lm-list`, `.lm-hint-wrap`): 56% of the page = 80% of the hero search bar
+     (70%, see `.tasks.lm .toolbar`), so the collapsed list reads as a compact
+     block under the bar instead of matching its edges. (Was 72% — 2026-09-06.)
+     The cards-hero landings (`.lm-cards`) keep the old measure below. */
+  --lm-list-w: 56%;
 }
 
 /* The page header does NOT change between the landing and the table: Figma
@@ -25263,10 +26072,14 @@ span.rvc-crumb--current { cursor: default; }
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 500;
+  /* Set in caps (Figma 956:1017) the way the app's other eyebrow labels are —
+     the transform lives here so the markup stays readable. */
+  text-transform: uppercase;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
-  max-width: calc(90px * (1 - var(--lm)));
+  /* Caps + the colon run wider than the old mixed-case "Quick Filters". */
+  max-width: calc(112px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
   /* At p=1 the zero-width label would still leave a stray flex gap — pull it in. */
   margin-right: calc(2px - 10px * var(--lm));
@@ -25314,10 +26127,70 @@ span.rvc-crumb--current { cursor: default; }
   flex-shrink: 0;
   flex-grow: 1;
 }
-/* The quick-filter pills are the shared Figma 12:15164 atom (.filter-pill-dashed)
-   — they only need to hold their width inside the clipped .lm-pills track. */
-.tasks.lm .lm-pills .filter-pill-dashed {
+/* ── Quick-filter pill — Figma 956:1009 "Quick Filter" (2026-09-06) ──
+   The landing's own pill atom, written out rather than reusing the shared
+   12:15164 "Filters - Unapplied": the node's border is SOLID #404040, where the
+   shared one is dashed. Everything else matches it exactly — r20, 12px insets,
+   6px gap to the 14px add-circle, Fira Sans Medium 14 #a8a8a8 — so the two
+   still read as one family while the row carries both mid-morph.
+   Height is the row's 28px, not the node's 25px hug, for the same reason
+   `.filter-pill-dashed` takes 28: the real Filters row unfolds INTO this row as
+   the table forms, so both sets have to sit on one row height. */
+.lm-quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Holds its width inside the clipped .lm-pills track. */
   flex: none;
+  height: 28px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-quick-pill:hover {
+  background: var(--bg-pill);
+  border-color: var(--text-faint);
+}
+.lm-quick-pill .icon {
+  color: #a8a8a8;
+  display: inline-flex;
+  align-items: center;
+}
+.lm-quick-pill .icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── "More filters" — Figma 977:1014, the icon-only Quick Filter closing the
+   row: a 14px right chevron centred in the same pill shell, saying the quick
+   filters are not all of them. Clicking it jumps to the full table (the list's
+   "View full table" destination). Square like the node, at the row's 28px
+   rather than its 25px for the same reason the pills take 28. Its hover is the
+   pills' — it sits among them and should not read as a different control — with
+   the glyph brightening since it carries no label to do that job. */
+.lm-more-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  color: #a8a8a8;
+}
+.lm-more-filters:hover {
+  background: var(--bg-pill);
+  border-color: var(--text-faint);
+  color: #fff;
 }
 
 /* The solid-bordered `.lm-pill` variant was retired 2026-09-04: Exam Reviews
@@ -25400,7 +26273,7 @@ span.rvc-crumb--current { cursor: default; }
    ("keep scrolling to see the table") is the only click-through left. Shared by
    every landing that uses the minimal table. */
 .lm-caption {
-  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
   margin-top: calc(65px * (1 - var(--lm)));
   height: calc(40px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
@@ -25421,7 +26294,7 @@ span.rvc-crumb--current { cursor: default; }
   white-space: nowrap;
 }
 .lm-list {
-  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -25505,10 +26378,18 @@ span.rvc-crumb--current { cursor: default; }
 .lm-cell--grow {
   opacity: var(--lmf);
 }
-/* The ⋯ gutter mirrors the real table's sticky actions column: pinned to the
-   row's visible right edge (the real .col-actions pins with sticky right:0
-   when the table overflows), so the kebab never jumps at the hand-off. The
-   grid template still reserves its track, keeping the width budget intact. */
+/* The ⋯ gutter mirrors the real table's row-end CONTROL, not its cell: a 40px
+   box pinned to the row's visible right edge, which lands the glyph 20px in
+   from that edge — exactly where `.table .col-actions > *` centres its own 40px
+   button. That holds in both of the fixed layout's regimes: overflowing, the
+   column is sticky right:0 at 40px; stretched, the column grows past 40px but
+   the button stays 40px against its right edge (the same 40px gutter
+   `.col-actions::before` ramps up to). The box is absolutely positioned, so
+   this is purely visual — the grid template reserves the real track and keeps
+   the width budget intact.
+   It used to take the column's STRETCHED width and centre the glyph across all
+   of it, which sat the landing glyph ~6px left of the control it hands off to
+   on any viewport wide enough to stretch the table. */
 .lm-cell--dots {
   position: absolute;
   right: 0;
@@ -25517,12 +26398,23 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Same stretch share as the real actions column (--lmtw = the page's table
-     width total, set inline by LandingOverlay). */
-  width: calc(max(40px, 40 * 100% / var(--lmtw, 1030)) * var(--lm));
+  width: calc(40px * var(--lm));
   color: #7a7a7a;
   text-align: center;
   padding: 0;
+}
+/* Hands-On rests its rows on the chevron rather than the kebab, so its gutter
+   mirrors that glyph — and the #a8a8a8 of `.lone-dots.row-chevron`, not the
+   kebab's grey. Without this the whole morph showed a ⋯ that became a chevron
+   the instant the real table took over at p=1, swapping one control for another
+   in place. `flex: none` keeps the 16px box intact so the collapsing track
+   clips it the way it clips the ⋯, instead of squashing the glyph. */
+.lm-cell--chevron {
+  color: #a8a8a8;
+}
+.lm-cell--chevron svg {
+  display: block;
+  flex: none;
 }
 .lm-row--dim .lm-cell {
   color: var(--text-faint);
@@ -25539,7 +26431,7 @@ span.rvc-crumb--current { cursor: default; }
      width expression as .lm-list, so it lines up with the row edges in both
      states instead of running the full page width. */
   height: calc(30px * (1 - var(--lm)));
-  width: calc(72% * (1 - var(--lm)) + 100% * var(--lm));
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
   display: flex;
@@ -25890,6 +26782,11 @@ span.rvc-crumb--current { cursor: default; }
 .tasks.lm.lm-cards .lm-caption {
   margin-top: calc(59px * (1 - var(--lm)));
 }
+/* No hero search bar to sit under, so the list keeps its 72% measure — the
+   search-first pages narrowed theirs to 56% (see `--lm-list-w` on `.tasks.lm`). */
+.tasks.lm.lm-cards {
+  --lm-list-w: 72%;
+}
 
 /* The run cards collapse as the landing morphs into the table (the reference
    collapses their max-height while fading and sliding them up 14px). The cap
@@ -26206,7 +27103,7 @@ span.rvc-crumb--current { cursor: default; }
   opacity: var(--lmt);
 }
 .tasks.lm.qb-lm .rvc-pagehead > .qb-crumbs {
-  margin-bottom: calc(12px * var(--lm));
+  margin-bottom: calc(8px * var(--lm));
 }
 .tasks.lm.qb-lm:not([data-lm="table"]) .qb-crumbs {
   pointer-events: none;

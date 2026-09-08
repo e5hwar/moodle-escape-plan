@@ -22,6 +22,7 @@ import {
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
 import { NewAwardWizard } from "./NewAwardWizard";
+import { PrmModal } from "./PrmModal";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
 import { AwardRecipientsPage } from "./AwardRecipientsPage";
 import { SearchIcon, SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -254,7 +255,7 @@ export function AwardsPage({ onBackToCerts }: { onBackToCerts?: () => void }) {
                   <span className="search-icon"><SearchIcon /></span>
                   <input
                     className="search-input"
-                    placeholder={tab === "awards" ? "Search Awards by Certification or ID…" : "Search templates by name or ID…"}
+                    placeholder={tab === "awards" ? "Search Awards by Certification or ID..." : "Search Templates by Name or ID..."}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -767,18 +768,15 @@ function ConfirmModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="cl-modal-overlay" onClick={onCancel}>
-      <div className="cl-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">{title}</h3>
-        </div>
-        <div style={{ padding: "0 24px 8px" }}>{children}</div>
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className={danger ? "sk-btn-danger" : "btn-publish"} onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title={title}
+      confirmLabel={confirmLabel}
+      danger={danger}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <div className="prm-content">{children}</div>
+    </PrmModal>
   );
 }
 

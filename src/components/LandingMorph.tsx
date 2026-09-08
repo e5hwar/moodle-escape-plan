@@ -17,7 +17,7 @@
  *   </div>
  */
 
-import { FullTableIcon, PlusCircleIcon } from "./icons";
+import { FullTableIcon, MoreFiltersIcon, PlusCircleIcon, RowChevronIcon } from "./icons";
 
 export type LandingPill = { key: string; label: string; onPick: () => void };
 
@@ -73,27 +73,41 @@ export type LandingRow = {
  *
  * At the landing the label + pills are CENTERED under the hero search bar and
  * the row is capped at 92% of that bar's width (see `.lm-filter-slot`); the
- * pills themselves ARE the shared Figma 12:15164 "Filters - Unapplied" atom
- * (`.filter-pill-dashed`), the same component the real Filters row uses. */
+ * pills are Figma 956:1009 "Quick Filter" (`.lm-quick-pill`) — the landing's
+ * own solid-bordered atom, no longer the shared 12:15164 "Filters - Unapplied"
+ * dashed pill the real Filters row carries. The row closes with Figma 977:1014,
+ * the chevron button that says "there are more filters than these" and jumps
+ * straight into the full table. */
 export function LandingFilterRow({
   pills,
+  onShowAll,
   children,
 }: {
   pills: LandingPill[];
+  /** The chevron after the pills — same jump as the list's "View full table". */
+  onShowAll: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div className="lm-filter-slot">
-      <span className="lm-quick-label">Quick Filters</span>
+      <span className="lm-quick-label">Quick Filters:</span>
       <span className="lm-pills">
         {pills.map((p) => (
-          <button key={p.key} className="filter-pill-dashed" onClick={p.onPick}>
+          <button key={p.key} className="lm-quick-pill" onClick={p.onPick}>
             <span className="icon">
               <PlusCircleIcon />
             </span>
             {p.label}
           </button>
         ))}
+        <button
+          className="lm-more-filters"
+          onClick={onShowAll}
+          title="View full table"
+          aria-label="More filters — view full table"
+        >
+          <MoreFiltersIcon />
+        </button>
       </span>
       <div className="lm-filters-flow">{children}</div>
     </div>
@@ -112,6 +126,7 @@ export function LandingOverlay({
   nameLabel = "Name",
   nameWidth = 240,
   actionsWidth = 40,
+  actionsGlyph = "dots",
   footer,
   onShowAll,
   onRowClick,
@@ -130,6 +145,11 @@ export function LandingOverlay({
   /** The real table's ⋯ actions gutter. Pass 0 for tables with no actions
    * column (Proctoring) so no gutter track is reserved or drawn. */
   actionsWidth?: number;
+  /** Which glyph the gutter rests on — mirror whatever the page's real table
+   * puts in `.col-actions`, or the p=1 hand-off swaps one control for another
+   * in place. Most tables rest on the ⋯ kebab (`.lone-dots`); Hands-On rests on
+   * the row chevron (`.lone-dots.row-chevron`), so it passes "chevron". */
+  actionsGlyph?: "dots" | "chevron";
   /** Landing-only content between the list and the "keep scrolling" bar —
    * the Question Bank's slim CSV drop bar. Collapse it with --lm yourself. */
   footer?: React.ReactNode;
@@ -174,12 +194,20 @@ export function LandingOverlay({
           {r.cells[c.key]}
         </span>
       ))}
-      {actionsWidth > 0 && <span className="lm-cell lm-cell--grow lm-cell--dots">⋯</span>}
+      {actionsWidth > 0 && (
+        <span
+          className={`lm-cell lm-cell--grow lm-cell--dots${
+            actionsGlyph === "chevron" ? " lm-cell--chevron" : ""
+          }`}
+        >
+          {actionsGlyph === "chevron" ? <RowChevronIcon /> : "⋯"}
+        </span>
+      )}
     </>
   );
 
   return (
-    <div className="lm-land" style={{ "--lmtw": totalWidth } as React.CSSProperties}>
+    <div className="lm-land">
       {/* Figma 760:4642 "Atomic Component - Minimal State - Header Row" — the
           40px header row in its landing state carries ONE left-aligned page
           description and nothing opposite. The "all n" jump it used to hold was
@@ -229,11 +257,19 @@ export function LandingOverlay({
 }
 
 /** "↑ Back to search" — placed as the first child of the page's .pagination
- * row; returns the page to the landing state. */
-export function BackToSearch({ onClick }: { onClick: () => void }) {
+ * row; returns the page to the landing state. `label` names what the landing
+ * actually is on pages whose landing isn't a search (Exam Reviews opens on its
+ * review-run cards, not a search box). */
+export function BackToSearch({
+  onClick,
+  label = "Back to search",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button className="lm-back" onClick={onClick}>
-      ↑ Back to search
+      ↑ {label}
     </button>
   );
 }

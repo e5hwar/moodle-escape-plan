@@ -51,6 +51,13 @@ export type Submission = {
   examShort: string;
   grade: string;
   submittedAt: string; // ISO-like display string
+  /** When the candidate sent the new ID back. Set on `id-reupload` rows that
+   *  have returned — the "New ID" flag beside their name reads this. */
+  reuploadedAt?: string;
+  /** When an admin asked the candidate to send a new ID. Set only on
+   *  `id-requested` rows — it's the date the Pending ID-Reuploads page is
+   *  chasing, and it is always AFTER `submittedAt` (the original attempt). */
+  reuploadRequestedAt?: string;
   kind: ProctoringKind;
   status: ProctoringStatus;
   idConfidence: number; // 0-100
@@ -82,6 +89,15 @@ export type Submission = {
   rejectionReasons?: string[];
 };
 
+/** The floor for how many frames the footage wall samples. The console fits 8
+ *  tiles a row at its widest, so 40 is the 5 rows a real recording produces —
+ *  the wall should read as a wall, not as one short strip. TOTAL FRAMES on the
+ *  rail is the true length of the recording; this is what gets shown. */
+const FRAME_SAMPLE = 40;
+/** …and the ceiling: recordings differ in length, so the walls shouldn't all
+ *  be the same height. `frameSampleFor` picks a row's count in this range. */
+const FRAME_SAMPLE_MAX = 64;
+
 function makeFrames(totalCount: number, flagged: Array<{ at: number; reason: FlagReason }>): WebcamFrame[] {
   const frames: WebcamFrame[] = [];
   const flagMap = new Map<number, FlagReason>();
@@ -99,6 +115,25 @@ function makeFrames(totalCount: number, flagged: Array<{ at: number; reason: Fla
     }
   }
   return frames;
+}
+
+/** This submission's wall length, 40…64 — deterministic (the same FNV-1a hash
+ *  the ID details use) so a row is the same height on every render rather than
+ *  reshuffling under the reviewer. */
+function frameSampleFor(id: string): number {
+  return FRAME_SAMPLE + (phash(id) % (FRAME_SAMPLE_MAX - FRAME_SAMPLE + 1));
+}
+
+/** Grows a seeded frame list to `count`, continuing the same neutral/side
+ *  cadence `makeFrames` uses. Every seeded flag sits in the first frames, so
+ *  they all survive — this only adds unflagged tail frames. */
+function resizeFrames(frames: WebcamFrame[], count: number): WebcamFrame[] {
+  if (frames.length >= count) return frames.slice(0, count);
+  const out = [...frames];
+  for (let i = frames.length; i < count; i++) {
+    out.push({ tone: i % 7 === 3 ? "side" : "neutral" });
+  }
+  return out;
 }
 
 /** Looks up a real user from the Manage Users roster so submissions carry the
@@ -182,6 +217,8 @@ type SeedRow = {
   exam: string;
   grade: string;
   submittedAt: string;
+  reuploadRequestedAt?: string;
+  reuploadedAt?: string;
   kind: ProctoringKind;
   status: ProctoringStatus;
   idConfidence: number;
@@ -211,7 +248,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 98,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1063",
@@ -224,7 +261,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 94,
     idType: "US Passport",
     webcamFlaggedCount: 2,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 6, reason: "Looking Away" },
       { at: 17, reason: "Looking Away" },
     ]),
@@ -240,7 +277,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 91,
     idType: "US State ID",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1061",
@@ -254,7 +291,7 @@ const seedRows: SeedRow[] = [
     idType: "US Driver's License",
     idDetectedName: "Yelena Petrova",
     webcamFlaggedCount: 3,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 4, reason: "Face Not Visible" },
       { at: 11, reason: "Looking Away" },
       { at: 19, reason: "Looking Away" },
@@ -271,7 +308,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 97,
     idType: "US Passport",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1059",
@@ -284,7 +321,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 93,
     idType: "US Driver's License",
     webcamFlaggedCount: 1,
-    frames: makeFrames(24, [{ at: 8, reason: "Multiple Faces" }]),
+    frames: makeFrames(FRAME_SAMPLE, [{ at: 8, reason: "Multiple Faces" }]),
   },
   {
     id: "PR-1058",
@@ -298,7 +335,7 @@ const seedRows: SeedRow[] = [
     idType: "US Passport",
     idPreviouslyVerified: { at: "March 2nd, 2026, 9:00 AM", by: "Maxwell Wesonga" },
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1057",
@@ -311,7 +348,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 95,
     idType: "US State ID",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1056",
@@ -324,7 +361,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 90,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1055",
@@ -337,7 +374,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 86,
     idType: "US Driver's License",
     webcamFlaggedCount: 4,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Looking Away" },
       { at: 7, reason: "No Face" },
       { at: 13, reason: "Looking Away" },
@@ -356,7 +393,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 96,
     idType: "US Passport",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1053",
@@ -369,7 +406,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 92,
     idType: "US State ID",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1052",
@@ -382,7 +419,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 99,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1051",
@@ -396,7 +433,7 @@ const seedRows: SeedRow[] = [
     idType: "US Driver's License",
     idDetectedName: "Zoey Campbell",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1050",
@@ -409,7 +446,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 94,
     idType: "US Passport",
     webcamFlaggedCount: 1,
-    frames: makeFrames(24, [{ at: 15, reason: "Looking Away" }]),
+    frames: makeFrames(FRAME_SAMPLE, [{ at: 15, reason: "Looking Away" }]),
   },
   {
     id: "PR-1049",
@@ -422,7 +459,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 98,
     idType: "US Passport",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1048",
@@ -435,7 +472,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 91,
     idType: "US State ID",
     webcamFlaggedCount: 2,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 5, reason: "Looking Away" },
       { at: 18, reason: "Multiple Faces" },
     ]),
@@ -451,7 +488,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 95,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   /* Two more re-uploads so that tab has both of its states beyond the originals. */
   {
@@ -460,12 +497,13 @@ const seedRows: SeedRow[] = [
     exam: "EPA 608 Type 2 Certificate",
     grade: "8.6",
     submittedAt: "November 20th, 2025, 10:25 AM",
+    reuploadedAt: "November 28th, 2025, 2:15 PM",
     kind: "id-reupload",
     status: "pending",
     idConfidence: 78,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1045",
@@ -473,12 +511,13 @@ const seedRows: SeedRow[] = [
     exam: "NATE Ready To Work",
     grade: "9.0",
     submittedAt: "November 6th, 2025, 3:40 PM",
+    reuploadRequestedAt: "November 11th, 2025, 9:05 AM",
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 74,
     idType: "US State ID",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1042",
@@ -492,7 +531,7 @@ const seedRows: SeedRow[] = [
     idType: "US Driver's License",
     idDetectedName: "Priya V",
     webcamFlaggedCount: 1,
-    frames: makeFrames(24, [{ at: 12, reason: "Looking Away" }]),
+    frames: makeFrames(FRAME_SAMPLE, [{ at: 12, reason: "Looking Away" }]),
   },
   {
     id: "PR-1041",
@@ -506,7 +545,7 @@ const seedRows: SeedRow[] = [
     idType: "US Passport",
     idPreviouslyVerified: { at: "June 23rd, 2026, 10:15 AM", by: "Maxwell Wesonga" },
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1040",
@@ -519,7 +558,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 92,
     idType: "US Driver's License",
     webcamFlaggedCount: 4,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 3, reason: "Looking Away" },
       { at: 9, reason: "Looking Away" },
       { at: 14, reason: "Face Not Visible" },
@@ -541,7 +580,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 71,
     idType: "US Driver's License",
     webcamFlaggedCount: 5,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Face Not Visible" },
       { at: 8, reason: "Multiple Faces" },
       { at: 13, reason: "Looking Away" },
@@ -561,7 +600,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 68,
     idType: "US Driver's License",
     webcamFlaggedCount: 7,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 1, reason: "No Face" },
       { at: 6, reason: "Face Not Visible" },
       { at: 11, reason: "Looking Away" },
@@ -580,7 +619,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 98,
     idType: "US Driver's License",
     webcamFlaggedCount: 2,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 1, reason: "Looking Away" },
       { at: 4, reason: "Looking Away" },
       { at: 11, reason: "Face Not Visible" },
@@ -599,7 +638,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 95,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1037",
@@ -607,12 +646,13 @@ const seedRows: SeedRow[] = [
     exam: "EPA 609 Certificate",
     grade: "8.3",
     submittedAt: "January 22nd, 2024, 10:15 AM",
+    reuploadRequestedAt: "January 24th, 2024, 11:40 AM",
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 64,
     idType: "US State ID",
     webcamFlaggedCount: 1,
-    frames: makeFrames(24, [{ at: 7, reason: "Looking Away" }]),
+    frames: makeFrames(FRAME_SAMPLE, [{ at: 7, reason: "Looking Away" }]),
   },
   {
     /* A re-upload still waiting on the candidate ("Requested") whose exam WAS
@@ -623,12 +663,13 @@ const seedRows: SeedRow[] = [
     exam: "EPA 608 Universal Certificate",
     grade: "8.6",
     submittedAt: "February 2nd, 2026, 4:20 PM",
+    reuploadRequestedAt: "February 5th, 2026, 2:15 PM",
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 58,
     idType: "US State ID",
     webcamFlaggedCount: 2,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 5, reason: "Looking Away" },
       { at: 17, reason: "Face Not Visible" },
     ]),
@@ -643,12 +684,13 @@ const seedRows: SeedRow[] = [
     exam: "EPA 608 Type 2 Certificate",
     grade: "8.8",
     submittedAt: "March 3rd, 2026, 9:05 AM",
+    reuploadedAt: "March 9th, 2026, 11:20 AM",
     kind: "id-reupload",
     status: "pending",
     idConfidence: 88,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1036",
@@ -662,7 +704,7 @@ const seedRows: SeedRow[] = [
     idType: "US Driver's License",
     idPreviouslyVerified: { at: "January 14th, 2025, 4:40 PM", by: "Priyanka Rao" },
     webcamFlaggedCount: 1,
-    frames: makeFrames(24, [{ at: 6, reason: "Looking Away" }]),
+    frames: makeFrames(FRAME_SAMPLE, [{ at: 6, reason: "Looking Away" }]),
   },
   {
     id: "PR-1035",
@@ -675,7 +717,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 88,
     idType: "US Driver's License",
     webcamFlaggedCount: 6,
-    frames: makeFrames(24, [
+    frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Looking Away" },
       { at: 5, reason: "Looking Away" },
       { at: 9, reason: "Face Not Visible" },
@@ -697,7 +739,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 91,
     idType: "US Driver's License",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1033",
@@ -710,7 +752,7 @@ const seedRows: SeedRow[] = [
     idConfidence: 94,
     idType: "US Passport",
     webcamFlaggedCount: 0,
-    frames: makeFrames(24, []),
+    frames: makeFrames(FRAME_SAMPLE, []),
   },
 ];
 
@@ -722,6 +764,8 @@ export const submissions: Submission[] = seedRows.map((r) => ({
   examShort: EXAM_SHORT[r.exam] ?? r.exam,
   grade: r.grade,
   submittedAt: r.submittedAt,
+  reuploadRequestedAt: r.reuploadRequestedAt,
+  reuploadedAt: r.reuploadedAt,
   kind: r.kind,
   status: r.status,
   idConfidence: r.idConfidence,
@@ -730,7 +774,7 @@ export const submissions: Submission[] = seedRows.map((r) => ({
   idPreviouslyVerified: r.idPreviouslyVerified,
   webcamFlaggedCount: r.webcamFlaggedCount,
   webcamTotal: 180,
-  frames: r.frames,
+  frames: resizeFrames(r.frames, frameSampleFor(r.id)),
   integrityNote: r.integrityNote,
   rejectionReasons: r.rejectionReasons,
 }));
@@ -747,15 +791,10 @@ export function matchesQuery(s: Submission, q: string): boolean {
   );
 }
 
-/** Where an ID re-upload sits, derived from the row's own state rather than a
- *  separate field: `id-requested` means an admin asked and the candidate hasn't
- *  sent it back yet; a `pending` re-upload has been sent back and is waiting on
- *  an admin. Only the ID Re-uploads tab surfaces this. */
-export type ReuploadStatus = "Requested" | "To Review";
-
-export function reuploadStatusOf(s: Submission): ReuploadStatus {
-  return s.status === "id-requested" ? "Requested" : "To Review";
-}
+/* The two states an ID re-upload can be in are now two separate pages rather
+   than a Status column: `id-requested` (asked for, not sent back) is the whole
+   of Pending ID Re-Uploads — see `isPendingIdReupload` — and a `pending`
+   re-upload sits in the Exam Reviews queue like any other submission. */
 
 /** Whether webcam footage was captured for a submission.
  *
@@ -766,3 +805,13 @@ export function reuploadStatusOf(s: Submission): ReuploadStatus {
 export function hasProctoringFootage(s: Submission): boolean {
   return (PROCTORED_EXAMS as readonly string[]).includes(s.exam);
 }
+
+/** The re-uploads an admin has asked for that the candidate hasn't sent back
+ *  yet. Nothing here is reviewable — the row is waiting on the CANDIDATE, not
+ *  on an admin — which is why it gets its own page off the Exam Reviews header
+ *  rather than a place in the review queue. */
+export function isPendingIdReupload(s: Submission): boolean {
+  return s.status === "id-requested";
+}
+
+export const pendingIdReuploads = submissions.filter(isPendingIdReupload);

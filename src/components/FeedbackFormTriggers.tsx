@@ -158,7 +158,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
               </span>
               <input
                 className="search-input"
-                placeholder="Search Tasks or Certifications…"
+                placeholder="Search Tasks or Certifications..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

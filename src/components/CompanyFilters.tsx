@@ -154,7 +154,9 @@ function StatusPill({
   const summary = summarize(value, SUBSCRIPTION_STATUSES);
   return (
     <Dropdown
-      width={220}
+      /* Wide enough for "Pending Payment Setup", the longest status, to sit on
+         one line: it needs 231px of list, and the panel is border-box. */
+      width={240}
       trigger={({ open, toggle }) => (
         <PillTrigger
           label="Status"
@@ -209,7 +211,7 @@ function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search industries…"
+          searchPlaceholder="Search Industries..."
         />
       )}
     </Dropdown>
@@ -246,7 +248,7 @@ function PartnershipPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search partnerships…"
+          searchPlaceholder="Search Partnerships..."
         />
       )}
     </Dropdown>

@@ -365,7 +365,7 @@ export function ReviewHandsOnPage() {
       value: creators,
       onApply: setCreators,
       searchable: true,
-      searchPlaceholder: "Search creators…",
+      searchPlaceholder: "Search Creators...",
       primary: true,
     },
     {
@@ -374,7 +374,7 @@ export function ReviewHandsOnPage() {
       value: tasks,
       onApply: setTasks,
       searchable: true,
-      searchPlaceholder: "Search tasks…",
+      searchPlaceholder: "Search Tasks...",
     },
     {
       label: "Parent Certification",
@@ -382,7 +382,7 @@ export function ReviewHandsOnPage() {
       value: certs,
       onApply: setCerts,
       searchable: true,
-      searchPlaceholder: "Search certifications…",
+      searchPlaceholder: "Search Certifications...",
     },
     { label: "User Type", all: ["B2C", "B2B"], value: types, onApply: setTypes },
     { label: "User's Company", all: companyNames, value: companies, onApply: setCompanies },
@@ -564,7 +564,7 @@ export function ReviewHandsOnPage() {
                   value={tasks}
                   onApply={setTasks}
                   searchable
-                  searchPlaceholder="Search tasks…"
+                  searchPlaceholder="Search Tasks..."
                   width={300}
                 />
                 <MultiPill
@@ -573,7 +573,7 @@ export function ReviewHandsOnPage() {
                   value={certs}
                   onApply={setCerts}
                   searchable
-                  searchPlaceholder="Search certifications…"
+                  searchPlaceholder="Search Certifications..."
                   width={300}
                 />
                 {/* The lower-traffic filters, same cascading menu the Tasks page
@@ -599,6 +599,7 @@ export function ReviewHandsOnPage() {
                 rows={landingRows}
                 nameLabel="User's Name"
                 nameWidth={NAME_WIDTH}
+                actionsGlyph="chevron"
                 onShowAll={morph.showTable}
                 onRowClick={(row) => setOpenId(row.key)}
               />

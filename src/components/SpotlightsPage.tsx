@@ -474,7 +474,7 @@ export function SpotlightsPage() {
               </span>
               <input
                 className="search-input"
-                placeholder="Search Spotlights by Title, Description, or Creator…"
+                placeholder="Search Spotlights by Title, Description, or Creator..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

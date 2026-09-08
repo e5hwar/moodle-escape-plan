@@ -121,7 +121,10 @@ export function EntitySearch({
     setDraft({});
     setActive(-1);
     setOpen(false);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   // Add a value to the pending scope (does NOT touch the table yet).
@@ -326,7 +329,7 @@ export function UsersSearch({
   return (
     <EntitySearch
       scopes={[scope]}
-      placeholder="Search Users by Name, Email, or Phone…"
+      placeholder="Search Users by Name, Email, or Phone..."
       query={query}
       onCommit={onCommit}
     />

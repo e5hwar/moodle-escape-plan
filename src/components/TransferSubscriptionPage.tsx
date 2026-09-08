@@ -319,7 +319,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                     user={src}
                     query={qSrc}
                     results={resSrc}
-                    placeholder="Search the account to move from…"
+                    placeholder="Search the Account to Move From..."
                     emptyText={srcOnlyB2B ? b2bEmpty(qSrc) : undefined}
                     onQuery={setQSrc}
                     onPick={(id) => { pickAccount(setSrcId, id); setQSrc(""); }}
@@ -339,7 +339,7 @@ export function TransferSubscriptionPage({ onClose }: { onClose?: () => void }) 
                     user={dst}
                     query={qDst}
                     results={resDst}
-                    placeholder="Search the account to move to…"
+                    placeholder="Search the Account to Move To..."
                     emptyText={dstOnlyB2B ? b2bEmpty(qDst) : undefined}
                     onQuery={setQDst}
                     onPick={(id) => { pickAccount(setDstId, id); setQDst(""); }}

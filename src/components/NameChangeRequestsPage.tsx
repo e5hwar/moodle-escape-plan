@@ -99,15 +99,15 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
       <div className="workspace">
         <div className="tasks sch-page">
           <header className="tasks-header">
-            {/* This page is reached from the Proctoring Review header's Name
-                Changes button (it no longer has its own sidebar entry), so the
-                crumb is the way back. */}
+            {/* This page is reached from the Manage Users header's Name Changes
+                button (it has no sidebar entry of its own), so the crumb is the
+                way back. */}
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Operations</span>
                 <ChevronRightIcon />
-                <button className="rvc-crumb" onClick={onBack} title="Back to Exam Reviews">
-                  Exam Reviews
+                <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
+                  Manage Users
                 </button>
                 <ChevronRightIcon />
                 <span className="rvc-crumb rvc-crumb--current">Name Changes</span>
@@ -130,7 +130,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search by name, email, or phone…"
+                  placeholder="Search by Name, Email, or Phone..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -138,7 +138,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
               </div>
 
               <div className="tasks-scroll">
-                <table className="table sch-table ncr-table">
+                <table className="table sch-table sch-table--tight ncr-table">
                   <colgroup>
                     <col style={{ width: 240 }} />
                     <col style={{ width: 240 }} />

@@ -225,7 +225,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search Scholarships by name, email, or phone…"
+                  placeholder="Search Scholarships by Name, Email, or Phone..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -273,7 +273,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                         close();
                       }}
                       searchable
-                      searchPlaceholder="Search assigners…"
+                      searchPlaceholder="Search Assigners..."
                     />
                   )}
                 </Dropdown>

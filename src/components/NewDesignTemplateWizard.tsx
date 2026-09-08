@@ -159,7 +159,7 @@ export function NewDesignTemplateWizard(props: Props) {
             </button>
           ) : (
             <button className="btn-publish" disabled={!nameValid || !bgValid} onClick={handleSave}>
-              {isEditing ? "Save changes" : "Create Template"}
+              {isEditing ? "Save Changes" : "Create Template"}
             </button>
           )}
         </div>

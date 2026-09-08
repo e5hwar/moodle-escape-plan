@@ -19,6 +19,10 @@ export type PaymentCollection = "Automatic" | "Invoice";
 export type TaxStatus = "Taxable" | "Tax Exempt" | "Reverse Charge";
 export type SubscriptionStatus =
   | "Active"
+  /** Created on an automatic-payment subscription, but the account holder has
+   *  not yet added a payment method through the Stripe link. The plan is fully
+   *  configured — tier, seats, cycle, price — it simply has not billed yet. */
+  | "Pending Payment Setup"
   | "Past Due"
   | "Free Trial"
   | "Trial Expired"
@@ -51,8 +55,13 @@ export type Company = {
    *  plan at all, so its Tier cell reads "—". See isBilledStatus. */
   tier?: Tier;
   seats: number;
-  industry: string;
-  partnership: string;
+  /** A company can work in several trades, or have none on file yet. The
+   *  Industry column shows the first with a "+N" for the rest, or an em dash
+   *  when the list is empty. */
+  industry: string[];
+  /** Partnership programmes the company belongs to. Same multi-value shape as
+   *  `industry`; most companies belong to none. */
+  partnership: string[];
   address?: string;
   /** Structured address captured by the Create Company form (Figma 101:337). The
    *  flat `address` above is kept as a composed one-line string for display. */
@@ -66,6 +75,10 @@ export type Company = {
   };
   contactName?: string;
   phone?: string;
+  /** "YYYY-MM-DD" — the day the company was actually created, stored by the
+   *  wizard. Seed companies have none and fall back to a date derived from
+   *  their id, so the Date Range presets always have rows in range. */
+  createdAt?: string;
   // Optional billing/subscription fields. When absent (seed data), they are
   // derived deterministically by getCompanyBilling(); when a company is created
   // through the wizard, the chosen values are stored here and take precedence.
@@ -75,6 +88,8 @@ export type Company = {
   payment?: PaymentCollection;
   status?: SubscriptionStatus;
   seatsUsed?: number;
+  /** Per seat, in the unit `billingCycle` bills in: per month on Monthly, per
+   *  year on Annual (see DEFAULT_RATES). */
   ratePerSeat?: number;
   taxStatus?: TaxStatus;
   /** Date a scheduled cancellation takes effect, as "Mon D, YYYY" (e.g.
@@ -94,12 +109,33 @@ export type Company = {
   assignedSalesRep?: string;
 };
 
+/* The Stripe payment link for a company. Stand-in for the real Stripe call:
+ * the same company always gets the same URL, so the wizard's success screen and
+ * the row menu's "Copy Payment Link" agree. */
+export function stripePaymentLink(email: string, name: string): string {
+  let h = 0;
+  for (let i = 0; i < (email + name).length; i++) h = (h * 31 + (email + name).charCodeAt(i)) >>> 0;
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  let seed = h;
+  for (let i = 0; i < 14; i++) { code += chars[seed % chars.length]; seed = (seed * 1664525 + 1013904223) >>> 0; }
+  return `https://buy.stripe.com/${code}`;
+}
+
+/** Today as "YYYY-MM-DD" — the stamp the wizard writes on a new company. */
+export function todayStamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
 
 export const TIERS: Tier[] = ["Essentials", "Growth", "Professional"];
 
 export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Active",
+  "Pending Payment Setup",
   "Past Due",
   "Free Trial",
   "Trial Expired",
@@ -114,7 +150,12 @@ export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
  * all read "—" (Company.tier is absent for exactly these). A Canceled
  * subscription billed right up to its effective date, so it counts. */
 export function isBilledStatus(status: SubscriptionStatus): boolean {
-  return status === "Active" || status === "Past Due" || status === "Canceled";
+  return (
+    status === "Active" ||
+    status === "Pending Payment Setup" ||
+    status === "Past Due" ||
+    status === "Canceled"
+  );
 }
 
 export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign-Up"];
@@ -163,10 +204,10 @@ export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] =
   { key: "accountHolder", label: "Account Holder" },
   { key: "tier", label: "Tier" },
   { key: "seats", label: "Seats" },
+  { key: "seatChanges", label: "Seat Changes" },
   { key: "signUp", label: "Sign-Up Method" },
   { key: "billingCycle", label: "Billing Cycle" },
   { key: "payment", label: "Payment Method" },
-  { key: "seatChanges", label: "Seat Changes" },
   { key: "industry", label: "Industry" },
   { key: "partnership", label: "Partnership" },
   { key: "createdOn", label: "Created On" },
@@ -183,17 +224,17 @@ export const COMPANY_FIXED_COLUMNS: { label: string }[] = [
   { label: "Status" },
 ];
 
-/* The table's starting columns — Account Holder, Tier, Seats and the trailing
- * Last Access on, the rest off. Exported so the page and the landing-morph
- * preview can't drift apart. */
+/* The table's starting columns — Account Holder, Tier, Seats, Seat Changes and
+ * the trailing Last Access on, the rest off. Exported so the page and the
+ * landing-morph preview can't drift apart. */
 export const COMPANY_DEFAULT_COLUMNS: Record<CompanyColumn, boolean> = {
   accountHolder: true,
   tier: true,
   seats: true,
+  seatChanges: true,
   signUp: false,
   billingCycle: false,
   payment: false,
-  seatChanges: false,
   industry: false,
   partnership: false,
   createdOn: false,
@@ -217,14 +258,49 @@ export const CANCELLATION_REASONS = [
 ];
 
 export const companies: Company[] = [
+  /* Created through the wizard on an automatic-payment subscription and still
+     waiting for the account holder to add a card. Every plan column is filled —
+     it is a fully configured subscription that simply has not billed yet. Its
+     creation date is stamped at load so it stays the most recent row however
+     long this seed data lives. */
+  {
+    id: "CO-090",
+    name: "Cascade Mechanical Group",
+    email: "ops@cascademech.com",
+    tier: "Growth",
+    seats: 24,
+    seatsUsed: 24,
+    industry: ["HVAC", "Plumbing"],
+    partnership: ["NexStar"],
+    address: "412 SW Alder St, Portland, Oregon, 97204, United States",
+    addressParts: {
+      country: "United States",
+      line1: "412 SW Alder St",
+      city: "Portland",
+      pin: "97204",
+      state: "Oregon",
+    },
+    contactName: "Marisol Vega",
+    phone: "+1 503 555 0142",
+    createdAt: todayStamp(),
+    status: "Pending Payment Setup",
+    billingCycle: "Monthly",
+    currency: "USD",
+    signUp: "Internal Sign-Up",
+    payment: "Automatic",
+    ratePerSeat: 40,
+    taxStatus: "Taxable",
+    assignedCsm: "Leanna Olbinsky",
+    assignedSalesRep: "Brendan Arsenault",
+  },
   {
     id: "CO-001",
     name: "ARS Cooling & Heating",
     email: "admin@arscooling.com",
     tier: "Professional",
     seats: 120,
-    industry: "HVAC",
-    partnership: "Preferred Partner",
+    industry: ["HVAC", "Refrigeration"],
+    partnership: ["Preferred Partner", "NGO Partner"],
   },
   {
     id: "CO-002",
@@ -232,8 +308,8 @@ export const companies: Company[] = [
     email: "training@brennanhvac.com",
     tier: "Growth",
     seats: 45,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC"],
+    partnership: [],
   },
   {
     id: "CO-003",
@@ -241,8 +317,8 @@ export const companies: Company[] = [
     email: "hr@comfortfirst.com",
     tier: "Essentials",
     seats: 18,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC"],
+    partnership: [],
   },
   {
     id: "CO-004",
@@ -250,8 +326,8 @@ export const companies: Company[] = [
     email: "ops@deltaelectrical.com",
     tier: "Professional",
     seats: 200,
-    industry: "Electrical",
-    partnership: "Elite Partner",
+    industry: ["Electrical", "Solar"],
+    partnership: ["Elite Partner"],
   },
   {
     id: "CO-005",
@@ -259,16 +335,16 @@ export const companies: Company[] = [
     email: "admin@evercleanplumbing.com",
     tier: "Growth",
     seats: 60,
-    industry: "Plumbing",
-    partnership: "",
+    industry: ["Plumbing"],
+    partnership: [],
   },
   {
     id: "CO-006",
     name: "FastFix Appliance Repair",
     email: "team@fastfixappliance.com",
     seats: 5,
-    industry: "Appliance Repair",
-    partnership: "",
+    industry: ["Appliance Repair"],
+    partnership: [],
     status: "Free Trial",
   },
   {
@@ -277,8 +353,8 @@ export const companies: Company[] = [
     email: "training@greenshieldsolar.com",
     tier: "Essentials",
     seats: 22,
-    industry: "Solar",
-    partnership: "",
+    industry: [],
+    partnership: [],
   },
   {
     id: "CO-008",
@@ -286,16 +362,16 @@ export const companies: Company[] = [
     email: "hr@harborcitymech.com",
     tier: "Professional",
     seats: 85,
-    industry: "HVAC",
-    partnership: "Preferred Partner",
+    industry: ["HVAC", "Plumbing", "Refrigeration"],
+    partnership: ["Preferred Partner"],
   },
   {
     id: "CO-009",
     name: "Integrity Roofing",
     email: "admin@integrityroofing.com",
     seats: 8,
-    industry: "Roofing",
-    partnership: "",
+    industry: ["Roofing"],
+    partnership: [],
     status: "Trial Expired",
   },
   {
@@ -304,8 +380,8 @@ export const companies: Company[] = [
     email: "ops@jetstreamair.com",
     tier: "Growth",
     seats: 37,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC", "Electrical"],
+    partnership: [],
   },
   {
     id: "CO-011",
@@ -313,17 +389,18 @@ export const companies: Company[] = [
     email: "safety@keystoneelectrical.com",
     tier: "Essentials",
     seats: 14,
-    industry: "Electrical",
-    partnership: "",
+    industry: ["Electrical"],
+    partnership: [],
   },
   {
     id: "CO-012",
     name: "LightPath Solar Co.",
     email: "admin@lightpathsolar.com",
     seats: 10,
-    industry: "Solar",
-    partnership: "NGO Partner",
+    industry: ["Solar"],
+    partnership: ["NGO Partner"],
     status: "Free Access",
+    freeAccessEndDate: "2026-11-30",
   },
   {
     id: "CO-013",
@@ -331,8 +408,8 @@ export const companies: Company[] = [
     email: "training@metropipe.com",
     tier: "Growth",
     seats: 50,
-    industry: "Plumbing",
-    partnership: "",
+    industry: [],
+    partnership: [],
   },
   {
     id: "CO-014",
@@ -340,8 +417,8 @@ export const companies: Company[] = [
     email: "hr@northstarrefrig.com",
     tier: "Professional",
     seats: 95,
-    industry: "Refrigeration",
-    partnership: "Elite Partner",
+    industry: ["Refrigeration"],
+    partnership: ["Elite Partner"],
   },
   {
     id: "CO-015",
@@ -349,16 +426,16 @@ export const companies: Company[] = [
     email: "admin@onyxcommercial.com",
     tier: "Growth",
     seats: 42,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC"],
+    partnership: [],
   },
   {
     id: "CO-016",
     name: "PeakFit Construction",
     email: "learn@peakfitconstruction.com",
     seats: 3,
-    industry: "Construction",
-    partnership: "",
+    industry: ["Construction"],
+    partnership: [],
     status: "Free Trial",
   },
   {
@@ -367,8 +444,8 @@ export const companies: Company[] = [
     email: "admin@quickspark.com",
     tier: "Essentials",
     seats: 28,
-    industry: "Electrical",
-    partnership: "",
+    industry: ["Electrical"],
+    partnership: [],
   },
   {
     id: "CO-018",
@@ -376,17 +453,18 @@ export const companies: Company[] = [
     email: "training@reliablefire.com",
     tier: "Professional",
     seats: 130,
-    industry: "Fire Protection",
-    partnership: "Preferred Partner",
+    industry: ["Fire Protection", "Electrical"],
+    partnership: ["Preferred Partner", "Elite Partner"],
   },
   {
     id: "CO-019",
     name: "Sunridge Utilities",
     email: "ops@sunridgeutils.com",
     seats: 15,
-    industry: "Utilities",
-    partnership: "NGO Partner",
+    industry: ["Utilities", "Solar"],
+    partnership: ["NGO Partner"],
     status: "Free Access",
+    freeAccessEndDate: "2027-02-28",
   },
   {
     id: "CO-020",
@@ -394,8 +472,8 @@ export const companies: Company[] = [
     email: "hr@totalcomforthvac.com",
     tier: "Growth",
     seats: 55,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC"],
+    partnership: [],
   },
   {
     id: "CO-021",
@@ -403,8 +481,8 @@ export const companies: Company[] = [
     email: "admin@unitedmechanical.com",
     tier: "Professional",
     seats: 175,
-    industry: "HVAC",
-    partnership: "Elite Partner",
+    industry: ["HVAC", "Plumbing"],
+    partnership: ["Elite Partner", "NGO Partner"],
   },
   {
     id: "CO-022",
@@ -412,16 +490,16 @@ export const companies: Company[] = [
     email: "training@valleyviewplumbing.com",
     tier: "Essentials",
     seats: 20,
-    industry: "Plumbing",
-    partnership: "",
+    industry: ["Plumbing"],
+    partnership: [],
   },
   {
     id: "CO-023",
     name: "Wattwise Energy",
     email: "learn@wattwise.com",
     seats: 6,
-    industry: "Solar",
-    partnership: "",
+    industry: [],
+    partnership: ["NGO Partner"],
     status: "Trial Expired",
   },
   {
@@ -430,8 +508,8 @@ export const companies: Company[] = [
     email: "admin@xcelmetal.com",
     tier: "Growth",
     seats: 33,
-    industry: "Roofing",
-    partnership: "",
+    industry: ["Roofing", "Construction"],
+    partnership: [],
   },
   {
     id: "CO-025",
@@ -439,8 +517,8 @@ export const companies: Company[] = [
     email: "hr@zephyrclimate.com",
     tier: "Professional",
     seats: 110,
-    industry: "HVAC",
-    partnership: "Preferred Partner",
+    industry: ["HVAC"],
+    partnership: ["Preferred Partner"],
   },
   {
     // Subscription scheduled to cancel at the end of the cycle — demonstrates
@@ -450,8 +528,8 @@ export const companies: Company[] = [
     email: "billing@apexmech.com",
     tier: "Growth",
     seats: 40,
-    industry: "HVAC",
-    partnership: "",
+    industry: ["HVAC", "Refrigeration"],
+    partnership: [],
     status: "Canceled",
     cancelsOn: "Aug 27, 2026",
   },
@@ -463,8 +541,8 @@ export const companies: Company[] = [
     email: "accounts@bluecrestplumbing.com",
     tier: "Essentials",
     seats: 18,
-    industry: "Plumbing",
-    partnership: "",
+    industry: ["Plumbing"],
+    partnership: [],
     status: "Canceled",
     cancelsOn: "Mar 12, 2026",
   },
@@ -475,8 +553,8 @@ export const companies: Company[] = [
     name: "Cascade Roofing Collective",
     email: "admin@cascaderoofing.com",
     seats: 8,
-    industry: "Roofing",
-    partnership: "NGO Partner",
+    industry: ["Roofing"],
+    partnership: ["NGO Partner"],
     status: "Free Access",
     freeAccessEndDate: "2026-03-01",
   },
@@ -485,8 +563,8 @@ export const companies: Company[] = [
     name: "Ironclad Fire & Safety",
     email: "training@ironcladfire.com",
     seats: 12,
-    industry: "Fire Protection",
-    partnership: "Preferred Partner",
+    industry: ["Fire Protection", "Construction"],
+    partnership: ["Preferred Partner"],
     status: "Free Access",
     freeAccessEndDate: "2026-05-15",
   },
@@ -494,18 +572,22 @@ export const companies: Company[] = [
 
 // Distinct industry / partnership values present in the data, used to populate
 // the Manage Companies filter pills.
+/* Both fields are multi-value, so the pickers list every value ANY company
+ * carries — flattened, de-duplicated and alphabetical. */
 export const COMPANY_INDUSTRIES = Array.from(
-  new Set(companies.map((c) => c.industry).filter(Boolean)),
+  new Set(companies.flatMap((c) => c.industry)),
 ).sort();
 
 export const COMPANY_PARTNERSHIPS = Array.from(
-  new Set(companies.map((c) => c.partnership).filter(Boolean)),
+  new Set(companies.flatMap((c) => c.partnership)),
 ).sort();
 
 /* ───────────────── Pricing (Default Rates, per seat) ─────────────────
- * Section 21.3: set per Tier, per cycle, per currency. Annual rates are the
- * effective monthly per-seat cost when billed annually. Every tier is a paid
- * plan; whether a company is actually billed is a matter of STATUS, not tier
+ * Section 21.3: set per Tier, per cycle, per currency. A rate is quoted in the
+ * unit its own cycle bills in: a Monthly rate is per seat per MONTH, an Annual
+ * one per seat per YEAR, priced at ten months' worth (two months free for
+ * paying up front). `monthlyRate` puts the two on one scale. Every tier is a
+ * paid plan; whether a company is actually billed is a matter of STATUS, not tier
  * (see isBilledStatus) — a trialing company is on a plan it doesn't pay for. */
 export const BILLING_CYCLES: BillingCycle[] = ["Monthly", "Annual"];
 export const CURRENCIES: Currency[] = ["USD", "CAD"];
@@ -515,18 +597,24 @@ export const DEFAULT_RATES: Record<
   Record<BillingCycle, Record<Currency, number>>
 > = {
   Essentials: {
-    Monthly: { USD: 49, CAD: 65 },
-    Annual: { USD: 39, CAD: 52 },
+    Monthly: { USD: 30, CAD: 40 },
+    Annual: { USD: 300, CAD: 400 },
   },
   Growth: {
-    Monthly: { USD: 79, CAD: 105 },
-    Annual: { USD: 63, CAD: 84 },
+    Monthly: { USD: 40, CAD: 53 },
+    Annual: { USD: 400, CAD: 530 },
   },
   Professional: {
-    Monthly: { USD: 119, CAD: 159 },
-    Annual: { USD: 95, CAD: 127 },
+    Monthly: { USD: 50, CAD: 67 },
+    Annual: { USD: 500, CAD: 670 },
   },
 };
+
+/** A cycle-native per-seat rate expressed per month, so an annual rate can be
+ *  compared with a monthly one or summed into a monthly-equivalent total. */
+export function monthlyRate(rate: number, cycle: BillingCycle): number {
+  return cycle === "Annual" ? rate / 12 : rate;
+}
 
 /** The published rate, falling back to USD for a currency the table doesn't
  *  price — those are set by hand on the company, not defaulted. */
@@ -560,13 +648,14 @@ export type CompanyBilling = {
   currency: Currency;
   signUp: SignUpChannel;
   payment: PaymentCollection;
+  /** Per seat, in the unit `billingCycle` bills in (see DEFAULT_RATES). */
   ratePerSeat: number;
   seatsUsed: number;
   seatsTotal: number;
-  /** Seat movement over the period, signed: positive when the company took on
-   *  seats, negative when it gave them up, 0 when it held flat. An account
-   *  moves one way or the other in a period, never both — which is why this is
-   *  one number rather than an added/removed pair. */
+  /** Net seat movement across the account's WHOLE history, signed: positive if
+   *  it took on seats, negative if it gave them up, 0 if it never moved. The
+   *  table's Seat Changes column is date-scoped and sums getSeatEvents inside
+   *  the selected range instead of reading this. */
   seatChange: number;
   nextBillingDate: string;
   createdOn: string;
@@ -638,18 +727,14 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   const ratePerSeat = c.ratePerSeat ?? (c.tier ? defaultRate(c.tier, billingCycle, currency) : 0);
   const seatsTotal = c.seats;
   const seatsUsed = c.seatsUsed ?? Math.max(1, Math.min(seatsTotal, Math.round(seatsTotal * (0.55 + (h % 35) / 100))));
-  /* Roughly two thirds of accounts grew over the period, a sixth shrank, and
-     the rest held flat — an account moves one way or the other, never both.
-     Salted: the sequential CO-nnn ids leave `h`'s own bits too correlated, and
-     reusing them here lands every company on the same handful of numbers.
-     `hash` is unsigned, so the shift has to be `>>>` — a plain `>>` coerces
-     anything past 2^31 to a negative int32 and flips the sign of the result. */
-  const hs = hash(c.id + "seatchange");
-  const seatMove = hs % 6;
-  const seatChange =
-    seatMove === 0 ? 0 : seatMove === 1 ? -(1 + ((hs >>> 3) % 12)) : 1 + ((hs >>> 3) % 24);
+  // Net across the account's whole history. The Seat Changes column shows only
+  // what falls inside the page's Date Range and computes its own figure.
+  const seatChange = getTotalSeatChange(c);
 
-  const monthlyTotal = status === "Active" ? ratePerSeat * seatsTotal : 0;
+  // Monthly-equivalent: an annual rate is a yearly figure, so it is divided
+  // back down before it joins a "per month" total.
+  const monthlyTotal =
+    status === "Active" ? monthlyRate(ratePerSeat, billingCycle) * seatsTotal : 0;
 
   // Everyone bills on the 1st (Section 21.5).
   const nextBillingDate =
@@ -663,6 +748,8 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Free Access ended — no access"
       : status === "Canceled"
       ? "Canceled"
+      : status === "Pending Payment Setup"
+      ? "Awaiting payment method"
       : `${MONTHS[h % 12]} 1`;
 
   // Deterministic creation date, counted back from the REAL current date so the
@@ -670,16 +757,7 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   // companies in range: about half land in the last 30 days, a quarter in the
   // last 90, and the rest reach back ~3 years. Salted — the sequential CO-nnn
   // ids leave `h` itself too correlated to spread these buckets.
-  const hc = hash(c.id + "age");
-  const createdBucket = hc % 4;
-  const createdDaysBack =
-    createdBucket <= 1
-      ? (hc >> 3) % 30
-      : createdBucket === 2
-      ? 30 + ((hc >> 3) % 60)
-      : 90 + ((hc >> 3) % 1000);
-  const now = new Date();
-  const created = new Date(now.getFullYear(), now.getMonth(), now.getDate() - createdDaysBack);
+  const created = companyCreatedDate(c);
   const createdOn = `${MONTHS[created.getMonth()]} ${created.getDate()}, ${created.getFullYear()}`;
 
   // Region split — distribute used seats across 1–3 regions deterministically.
@@ -701,7 +779,13 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   // Salted: the sequential CO-nnn ids leave `h`'s high bits too correlated, so
   // reusing them here lands every trial on the same day.
   const ht = hash(c.id + "trial");
-  const trialEndsOn = fmtDate(addDays(APP_TODAY, 1 + (ht % 75)));
+  // A running trial ends in the future; an expired one ended in the past. Both
+  // carry a real date — "Trial Expired" is a trial that HAS an end date, not
+  // one without.
+  const trialEndsOn =
+    declared === "Trial Expired"
+      ? fmtDate(addDays(APP_TODAY, -(1 + (ht % 90))))
+      : fmtDate(addDays(APP_TODAY, 1 + (ht % 75)));
   // A cancellation set through the UI carries its own effective date; seed data
   // alternates between the two cases. Either way the DATE decides which pill
   // shows, so a stored cancelsOn that has since passed reads "Canceled".
@@ -763,6 +847,8 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
       return { tone: "green", label: "Active" };
     case "Past Due":
       return { tone: "red", label: "Past Due" };
+    case "Pending Payment Setup":
+      return { tone: "red", label: "Pending Payment Setup" };
     case "Free Trial":
       return { tone: "yellow", label: `Free Trial Ends ${billing.trialEndsOn}` };
     case "Trial Expired":
@@ -778,6 +864,60 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
     default:
       return { tone: "grey", label: billing.status };
   }
+}
+
+/** One seat movement: how many seats the company took on or gave up, and when.
+ *  A company only ever moves one way, so every event for a given company shares
+ *  a sign — narrowing the Date Range shows fewer movements, never a direction
+ *  the account never went. */
+export type SeatEvent = { date: string; delta: number };
+
+/* Seat movements over the last two years, so the Companies page's Date Range
+ * selector has something real to narrow: the Seat Changes column sums the
+ * events inside the selected window, and a window containing none reads "—".
+ * Roughly a sixth of accounts never moved at all and have no events.
+ *
+ * `>>>`, not `>>`: hash is unsigned, and a signed shift past 2^31 goes negative
+ * and would flip a growing account into a shrinking one. */
+export function getSeatEvents(company: Company): SeatEvent[] {
+  /* An account still waiting on its payment method has never billed a seat. It
+     holds exactly the seats it was created with, so there is no movement to
+     report and every seat-derived figure reads empty.
+
+     This reads the DECLARED status rather than getCompanyBilling's: that
+     function calls getTotalSeatChange, so asking it here would recurse. Nothing
+     derives "Pending Payment Setup" anyway — it is only ever set explicitly. */
+  if (company.status === "Pending Payment Setup") return [];
+  const h = hash(company.id + "seatchange");
+  const bucket = h % 6;
+  if (bucket === 0) return [];
+  const direction = bucket === 1 ? -1 : 1;
+  const count = 2 + ((h >>> 3) % 5);
+  /* Counted back from the REAL current date, not APP_TODAY — the Date Range
+     presets are built from the real clock, so events anchored to the app's
+     fixed "today" would fall outside every window and the column would read
+     "—" for everyone. Same reasoning as createdOn in getCompanyBilling. */
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Array.from({ length: count }, (_, i) => {
+    const hi = hash(`${company.id}seat${i}`);
+    /* The newest movement lands inside the last three weeks so the default
+       Last 30 Days window has something to report for most accounts; the rest
+       reach back about two years, so widening the range genuinely adds to the
+       figure rather than just repeating it. */
+    const daysAgo = i === 0 ? (hi >>> 2) % 21 : 21 + ((hi >>> 2) % 700);
+    return {
+      date: fmtDate(addDays(today, -daysAgo)),
+      delta: direction * (1 + ((hi >>> 5) % 8)),
+    };
+  });
+}
+
+/** Net seat movement across a company's whole history — the range-independent
+ *  figure. The table's Seat Changes column sums only the events inside the
+ *  selected Date Range instead; see seatChangeIn in CompaniesPage. */
+export function getTotalSeatChange(company: Company): number {
+  return getSeatEvents(company).reduce((n, e) => n + e.delta, 0);
 }
 
 /* Detail behind a status pill, shown on hover (the shared `data-tip` tooltip).
@@ -827,16 +967,47 @@ export function getTrialEndDate(billing: CompanyBilling): string {
 /* "Dashboard Last Access" column (Manage Companies) — the last time a Manager
  * or Admin at the company viewed the B2B Dashboard. Deterministic per company;
  * roughly 1 in 6 accounts have never logged into the dashboard (null). */
+/* The day a company was created: the wizard's own stamp when it has one, and
+ * otherwise a date derived from the id — bucketed so the Companies page's Date
+ * Range presets (Last 7/30/90 days…) always have companies in range. About half
+ * land in the last 30 days, a quarter in the last 90, the rest reach back about
+ * three years. Salted, because the sequential CO-nnn ids leave the plain hash
+ * too correlated to spread the buckets. */
+export function companyCreatedDate(c: Company): Date {
+  if (c.createdAt) {
+    const [y, m, d] = c.createdAt.split("-").map(Number);
+    if (y && m && d) return new Date(y, m - 1, d);
+  }
+  const hc = hash(c.id + "age");
+  const bucket = hc % 4;
+  const daysBack =
+    bucket <= 1 ? (hc >> 3) % 30 : bucket === 2 ? 30 + ((hc >> 3) % 60) : 90 + ((hc >> 3) % 1000);
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack);
+}
+
+/** Whole days between a past date and today, floored at 0. */
+function daysAgo(d: Date): number {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((today.getTime() - d.getTime()) / 86400000));
+}
+
 export function getDashboardLastAccessDays(company: Company): number | null {
+  // An account still waiting on its payment method has never reached the
+  // dashboard — there is nothing to sign in to yet — so the day it was created
+  // is the most recent thing that happened to it.
+  if (company.status === "Pending Payment Setup") return daysAgo(companyCreatedDate(company));
   const h = hash(company.id + "dashboard");
   if (h % 6 === 0) return null;
   return 1 + (h % 60);
 }
 
 export function getDashboardLastAccess(company: Company): string {
-  const daysAgo = getDashboardLastAccessDays(company);
-  if (daysAgo === null) return "Never";
-  return daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
+  const days = getDashboardLastAccessDays(company);
+  if (days === null) return "Never";
+  if (days === 0) return "Today";
+  return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
 /* "Price" column (Manage Companies) — the per-seat rate a company pays, same
@@ -847,11 +1018,16 @@ export function getCompanyPriceValue(company: Company): number | null {
   return isBilledStatus(billing.status) ? billing.ratePerSeat : null;
 }
 
-/* "Assigned CSM" / "Assigned Sales Rep" columns. The wizard stores an explicit
- * choice; seed companies (and any record created before the fields existed)
- * fall back to a deterministic owner so the columns are never empty. */
+/* "Assigned CSM" / "Assigned Sales Rep" columns. Both are OPTIONAL: the
+ * wizard stores an explicit choice, and an account that has not been handed
+ * to anyone yet has none — those cells read "—". Seed companies get a
+ * deterministic owner, except for a slice left deliberately unassigned so the
+ * blank state is visible in the table (same shape as getCompanyPhone).
+ * Both return "" for unassigned; callers render the dash. */
 export function getAssignedCsm(company: Company): string {
-  return company.assignedCsm ?? CSM_OPTIONS[hash(company.id + "csm") % CSM_OPTIONS.length];
+  if (company.assignedCsm) return company.assignedCsm;
+  const h = hash(company.id + "csm");
+  return h % 4 === 0 ? "" : CSM_OPTIONS[h % CSM_OPTIONS.length];
 }
 
 /* The account holder's phone. The create/edit wizard captures one; seed
@@ -866,16 +1042,92 @@ export function getCompanyPhone(company: Company): string {
 }
 
 export function getAssignedSalesRep(company: Company): string {
-  return (
-    company.assignedSalesRep ??
-    SALES_REP_OPTIONS[hash(company.id + "rep") % SALES_REP_OPTIONS.length]
-  );
+  if (company.assignedSalesRep) return company.assignedSalesRep;
+  const h = hash(company.id + "rep");
+  return h % 3 === 0 ? "" : SALES_REP_OPTIONS[h % SALES_REP_OPTIONS.length];
 }
 
 export function getCompanyPrice(company: Company): string {
   const rate = getCompanyPriceValue(company);
   if (rate === null) return "—";
   return `${getCompanyBilling(company).currency} ${rate.toFixed(2)}`;
+}
+
+/* ── Outstanding balance ──
+ * What a company still owes at the moment it cancels. Cancelling ends the
+ * SUBSCRIPTION, not the debt: an invoice that already went unpaid stays
+ * payable, and seats added during the current cycle are still billed on the
+ * final invoice. Both are derived rather than stored — same as every other
+ * billing figure in this module.
+ *
+ * Only a billed account can owe anything. A trial or a Free Access grant was
+ * never invoiced, so its balance is zero. */
+export type OutstandingBalance = {
+  currency: Currency;
+  /** An invoice past its due date and still unpaid. Only a Past Due account
+   *  carries one; it is one cycle's recurring charge. */
+  overdue: number;
+  /** How overdue that invoice is, for the row's subtext. 0 when none. */
+  daysPastDue: number;
+  /** Seats added this cycle — still billed, prorated, on the final invoice.
+   *  Seats REMOVED create no credit here, so this never goes negative. */
+  pendingSeats: number;
+  pendingSeatCharge: number;
+  /** overdue + pendingSeatCharge. Zero means nothing is owed. */
+  total: number;
+};
+
+/* Seats added inside the CURRENT billing cycle — the ones that land, prorated,
+ * on the final invoice. `billing.seatChange` is the account's whole-history net
+ * movement, a much larger number and the wrong one to bill against, so this
+ * sums the seat EVENTS inside the cycle instead.
+ *
+ * The window is the cycle's own LENGTH counted back from today: ~30 days for a
+ * monthly plan, a year for an annual one. Anchoring to the stored
+ * nextBillingDate is not possible here — that date runs on the app's fixed
+ * APP_TODAY while seat events are dated off the real clock (see getSeatEvents),
+ * so the two calendars would not line up. Counting back keeps both sides on
+ * one clock and gives the cycle now running.
+ *
+ * Removals are ignored: giving up seats produces no charge to collect. */
+function seatsAddedThisCycle(company: Company, billing: CompanyBilling): number {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const cycleDays = billing.billingCycle === "Annual" ? 365 : 30;
+  const cycleStart = addDays(today, -cycleDays);
+  return getSeatEvents(company).reduce((sum, e) => {
+    if (e.delta <= 0) return sum;
+    const d = new Date(e.date);
+    return Number.isNaN(d.getTime()) || d < cycleStart ? sum : sum + e.delta;
+  }, 0);
+}
+export function getOutstandingBalance(company: Company): OutstandingBalance {
+  const billing = getCompanyBilling(company);
+  const empty = {
+    currency: billing.currency,
+    overdue: 0,
+    daysPastDue: 0,
+    pendingSeats: 0,
+    pendingSeatCharge: 0,
+    total: 0,
+  };
+  if (!isBilledStatus(billing.status)) return empty;
+
+  // The unpaid invoice is one cycle's recurring total — ratePerSeat is quoted
+  // in the cycle's own unit, so rate x seats is that cycle's charge.
+  const overdue = billing.status === "Past Due" ? billing.ratePerSeat * company.seats : 0;
+  const daysPastDue = billing.status === "Past Due" ? billing.daysPastDue : 0;
+  const pendingSeats = seatsAddedThisCycle(company, billing);
+  const pendingSeatCharge = pendingSeats * billing.ratePerSeat;
+
+  return {
+    currency: billing.currency,
+    overdue,
+    daysPastDue,
+    pendingSeats,
+    pendingSeatCharge,
+    total: overdue + pendingSeatCharge,
+  };
 }
 
 // Deterministic fake Stripe customer id, stable per company — stands in for

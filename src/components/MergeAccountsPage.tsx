@@ -753,7 +753,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                     user={p}
                     query={qPrim}
                     results={resP}
-                    placeholder="Search the account to keep…"
+                    placeholder="Search the Account to Keep..."
                     onQuery={setQPrim}
                     onPick={(id) => { pickAccount(setPrimId, id); setQPrim(""); }}
                     onClear={() => pickAccount(setPrimId, null)}
@@ -773,7 +773,7 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                     user={s}
                     query={qSec}
                     results={resS}
-                    placeholder="Search the account to remove…"
+                    placeholder="Search the Account to Remove..."
                     onQuery={setQSec}
                     onPick={(id) => { pickAccount(setSecId, id); setQSec(""); }}
                     onClear={() => pickAccount(setSecId, null)}

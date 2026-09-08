@@ -935,7 +935,7 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
                 onClick={handleSave}
                 disabled={saved}
               >
-                {saved ? "Saved!" : "Save changes"}
+                {saved ? "Saved!" : "Save Changes"}
               </button>
             </div>
 

@@ -379,7 +379,7 @@ function SelectGrantUsersModal({
         <div className="stm-toolbar">
           <EntitySearch
             scopes={scopes}
-            placeholder="Search Users by Name, Email, or Phone…"
+            placeholder="Search Users by Name, Email, or Phone..."
             query={committedQuery}
             onCommit={(q) => {
               setCommittedQuery(q);

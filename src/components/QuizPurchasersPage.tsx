@@ -387,7 +387,7 @@ export function QuizPurchasersPage({
                     pills below, exactly as on Quiz Attempts. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone…"
+                  placeholder="Search Users by Name, Email, or Phone..."
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -403,7 +403,7 @@ export function QuizPurchasersPage({
                     value={quizzes}
                     onApply={setQuizzes}
                     searchable
-                    searchPlaceholder="Search Quizzes"
+                    searchPlaceholder="Search Quizzes..."
                     width={300}
                   />
                 }

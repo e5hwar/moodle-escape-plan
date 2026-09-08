@@ -127,7 +127,12 @@ function daysAhead(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const companyIndustry = new Map(companies.map((c) => [c.name, c.industry]));
+/* A company can carry several trades; a user profile shows ONE industry, so
+   it takes the company's first (primary) trade. Companies with none on file
+   are absent from the map and fall back below. */
+const companyIndustry = new Map(
+  companies.filter((c) => c.industry.length > 0).map((c) => [c.name, c.industry[0]]),
+);
 
 const SKILLS: Record<string, string[]> = {
   HVAC: ["Refrigerant Handling", "Brazing & Soldering", "Superheat & Subcooling", "Electrical Diagnostics", "Airflow Balancing", "Heat Pump Service", "Combustion Analysis", "Thermostat Wiring"],

@@ -254,7 +254,7 @@ export function ContentLinksPage({
           <div className="toolbar">
             <SearchField
               value={focused ? focused.name : query}
-              placeholder="Search Certifications…"
+              placeholder="Search Certifications..."
               onChange={(v) => {
                 setQuery(v);
                 setFocusId(null);

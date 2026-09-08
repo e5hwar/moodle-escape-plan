@@ -4,21 +4,16 @@ import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-/** Per scope kind (Quiz / Company) in "Suggested filters". */
+/** Per scope kind in "Suggested filters" (Quiz is the only one). */
 const MAX_SUGGESTED_PER_KIND = 2;
 
-type Opt =
-  | { kind: "exam-filter" }
-  | { kind: "company-filter" }
-  | { kind: "exam"; name: string }
-  | { kind: "company"; name: string };
+type Opt = { kind: "exam-filter" } | { kind: "exam"; name: string };
 
 /**
- * The Proctoring queue's search — the Users / Hands-On Task combobox, with the
- * two scopes this page filters on (Quiz, Company). Quiz has a filter pill on the
- * page, so its applied values leave the bar on Enter and are shown (and cleared)
- * there, the way ReviewSearch hands its scopes to the pills. Company has no pill,
- * so its applied chips stay in the bar — that is where they are removed from.
+ * The Proctoring queue's search — the Users / Hands-On Task combobox, scoped to
+ * Quiz. Quiz has a filter pill on the page, so its applied values leave the bar
+ * on Enter and are shown (and cleared) there, the way ReviewSearch hands its
+ * scopes to the pills.
  *
  * The panel offers filters only — no live result rows. The table filters on the
  * COMMITTED query, so a list that updated per keystroke would be showing results
@@ -28,23 +23,18 @@ export function ProctoringSearch({
   submissions,
   exams: appliedExams,
   onExamsChange,
-  companies: appliedCompanies,
-  onCompaniesChange,
   query,
   onCommit,
 }: {
   submissions: Submission[];
   exams: string[];
   onExamsChange: (next: string[]) => void;
-  companies: string[];
-  onCompaniesChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
 }) {
   const [text, setText] = useState(query);
   // Scopes picked in THIS search session — not yet applied to the table.
   const [draftExams, setDraftExams] = useState<string[]>([]);
-  const [draftCompanies, setDraftCompanies] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -60,34 +50,17 @@ export function ProctoringSearch({
     return { names: [...counts.keys()].sort(), counts };
   }, [submissions]);
 
-  const allCompanies = useMemo(() => {
-    const counts = new Map<string, number>();
-    submissions.forEach((s) => {
-      if (s.companyName) counts.set(s.companyName, (counts.get(s.companyName) ?? 0) + 1);
-    });
-    return { names: [...counts.keys()].sort(), counts };
-  }, [submissions]);
-
-  // Prefixes (case-insensitive) switch the panel into selection mode.
+  // The `Quiz:` prefix (case-insensitive) switches the panel into selection mode.
   const examMatch = text.match(/^\s*quiz:\s*(.*)$/i);
-  const companyMatch = text.match(/^\s*company:\s*(.*)$/i);
   const inExamMode = examMatch != null;
-  const inCompanyMode = companyMatch != null;
-  const inScopeMode = inExamMode || inCompanyMode;
   const examQuery = examMatch ? examMatch[1] : "";
-  const companyQuery = companyMatch ? companyMatch[1] : "";
-  const freeQuery = inScopeMode ? "" : text;
+  const freeQuery = inExamMode ? "" : text;
 
   // Everything currently narrowing the bar — applied scopes plus this session's drafts.
   const scopedExams = useMemo(
     () => Array.from(new Set([...appliedExams, ...draftExams])),
     [appliedExams, draftExams],
   );
-  const scopedCompanies = useMemo(
-    () => Array.from(new Set([...appliedCompanies, ...draftCompanies])),
-    [appliedCompanies, draftCompanies],
-  );
-
   const examResults = useMemo(() => {
     const q = examQuery.trim().toLowerCase();
     return allExams.names
@@ -95,41 +68,27 @@ export function ProctoringSearch({
       .slice(0, MAX_RESULTS);
   }, [allExams, examQuery, scopedExams]);
 
-  const companyResults = useMemo(() => {
-    const q = companyQuery.trim().toLowerCase();
-    return allCompanies.names
-      .filter((c) => !scopedCompanies.includes(c) && c.toLowerCase().includes(q))
-      .slice(0, MAX_RESULTS);
-  }, [allCompanies, companyQuery, scopedCompanies]);
-
   /* "Suggested filters" follows what's typed: with an empty box it teaches the
-     two scope prefixes, and as soon as there is text it offers the Quizzes and
-     Companies that actually match it — so "delta" can be turned into a scope
-     without knowing the prefix syntax. */
+     scope prefix, and as soon as there is text it offers the Quizzes that
+     actually match it — so "608" can be turned into a scope without knowing the
+     prefix syntax. */
   const suggestions = useMemo<Opt[]>(() => {
     const q = freeQuery.trim().toLowerCase();
-    if (!q) return [{ kind: "exam-filter" }, { kind: "company-filter" }];
-    const pick = (names: string[], scoped: string[]) =>
-      names.filter((n) => !scoped.includes(n) && n.toLowerCase().includes(q)).slice(0, MAX_SUGGESTED_PER_KIND);
-    return [
-      ...pick(allExams.names, scopedExams).map((name) => ({ kind: "exam", name }) as Opt),
-      ...pick(allCompanies.names, scopedCompanies).map((name) => ({ kind: "company", name }) as Opt),
-    ];
-  }, [freeQuery, allExams, allCompanies, scopedExams, scopedCompanies]);
+    if (!q) return [{ kind: "exam-filter" }];
+    return allExams.names
+      .filter((n) => !scopedExams.includes(n) && n.toLowerCase().includes(q))
+      .slice(0, MAX_SUGGESTED_PER_KIND)
+      .map((name) => ({ kind: "exam", name }) as Opt);
+  }, [freeQuery, allExams, scopedExams]);
 
-  const optionCount = inExamMode
-    ? examResults.length
-    : inCompanyMode
-    ? companyResults.length
-    : suggestions.length;
+  const optionCount = inExamMode ? examResults.length : suggestions.length;
 
   function optionAt(i: number): Opt | null {
     if (inExamMode) return examResults[i] ? { kind: "exam", name: examResults[i] } : null;
-    if (inCompanyMode) return companyResults[i] ? { kind: "company", name: companyResults[i] } : null;
     return suggestions[i] ?? null;
   }
 
-  useEffect(() => setActive(-1), [text, draftExams.length, draftCompanies.length]);
+  useEffect(() => setActive(-1), [text, draftExams.length]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
      query, so a bar left showing half-typed text would be lying about what the
@@ -138,7 +97,6 @@ export function ProctoringSearch({
   function revert() {
     setText(query);
     setDraftExams([]);
-    setDraftCompanies([]);
     setActive(-1);
     setOpen(false);
   }
@@ -151,19 +109,20 @@ export function ProctoringSearch({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
     // `query`/drafts are deps so the handler always reverts to current state.
-  }, [open, query, draftExams, draftCompanies]);
+  }, [open, query, draftExams]);
 
   /* Clear the applied search outright — no Enter needed. It clears what the bar
-     itself is showing: the text, this session's drafts, and the applied Company
-     chips. Applied quizzes belong to the Quiz pill and are left alone. */
+     itself is showing: the text and this session's drafts. Applied quizzes
+     belong to the Quiz pill and are left alone. */
   function clearSearch() {
     setText("");
     setDraftExams([]);
-    setDraftCompanies([]);
     setActive(-1);
     setOpen(false);
-    onCompaniesChange([]);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   function addExam(name: string) {
@@ -173,24 +132,12 @@ export function ProctoringSearch({
     setOpen(true);
     inputRef.current?.focus();
   }
-  function addCompany(name: string) {
-    if (!scopedCompanies.includes(name)) setDraftCompanies([...draftCompanies, name]);
-    setText("");
-    setActive(-1);
-    setOpen(true);
-    inputRef.current?.focus();
-  }
-
-  /* ✕ on a chip: drop it from whichever list it lives in and re-run the search.
-     The `exam*` identifiers are the data's field name (Submission.exam); the
-     user-facing label for that field on this page is "Quiz". */
+  /* ✕ on a chip: drop it and re-run the search. The `exam*` identifiers are the
+     data's field name (Submission.exam); the user-facing label for that field on
+     this page is "Quiz". */
   function removeQuiz(name: string) {
     setDraftExams((d) => d.filter((x) => x !== name));
     if (appliedExams.includes(name)) onExamsChange(appliedExams.filter((x) => x !== name));
-  }
-  function removeCompany(name: string) {
-    setDraftCompanies((d) => d.filter((x) => x !== name));
-    if (appliedCompanies.includes(name)) onCompaniesChange(appliedCompanies.filter((x) => x !== name));
   }
 
   function activate(opt: Opt) {
@@ -198,23 +145,15 @@ export function ProctoringSearch({
       setText("QUIZ:");
       setActive(-1);
       inputRef.current?.focus();
-    } else if (opt.kind === "company-filter") {
-      setText("COMPANY:");
-      setActive(-1);
-      inputRef.current?.focus();
-    } else if (opt.kind === "exam") {
-      addExam(opt.name);
     } else {
-      addCompany(opt.name);
+      addExam(opt.name);
     }
   }
 
   function commit() {
     onExamsChange(scopedExams);
-    onCompaniesChange(scopedCompanies);
     onCommit(freeQuery);
     setDraftExams([]);
-    setDraftCompanies([]);
     setOpen(false);
   }
 
@@ -236,31 +175,26 @@ export function ProctoringSearch({
         if (examResults[0]) return addExam(examResults[0]);
         return;
       }
-      if (inCompanyMode) {
-        if (companyResults[0]) return addCompany(companyResults[0]);
-        return;
-      }
       commit();
     } else if (e.key === "Escape") {
       revert();
     } else if (e.key === "Backspace" && text === "") {
       // Only what the bar actually shows is backspace-able.
-      const lastCompany = scopedCompanies[scopedCompanies.length - 1];
       const lastExam = draftExams[draftExams.length - 1];
-      if (lastCompany) removeCompany(lastCompany);
-      else if (lastExam) removeQuiz(lastExam);
+      if (lastExam) removeQuiz(lastExam);
     }
   }
 
-  const scopeChips = [
-    // Drafts only for Quiz: once applied it is the Quiz pill's to display.
-    ...draftExams.map((name) => ({ kind: "Quiz", name, remove: () => removeQuiz(name) })),
-    ...scopedCompanies.map((name) => ({ kind: "Company", name, remove: () => removeCompany(name) })),
-  ];
+  // Drafts only: once applied, a Quiz is the Quiz pill's to display.
+  const scopeChips = draftExams.map((name) => ({
+    kind: "Quiz",
+    name,
+    remove: () => removeQuiz(name),
+  }));
 
   const placeholder = scopeChips.length
-    ? "Search within scope…"
-    : "Search User's Name, Email, or Phone";
+    ? "Search Within Scope..."
+    : "Search User's Name, Email, or Phone...";
 
   return (
     <div className="usearch" ref={wrapRef}>
@@ -320,11 +254,11 @@ export function ProctoringSearch({
 
       {open && (
         <div className="usearch-panel">
-          {!inScopeMode && (
+          {!inExamMode && (
             <>
               {suggestions.length > 0 && <div className="usearch-head">Suggested filters</div>}
               {suggestions.map((opt, i) => {
-                const row = suggestionRow(opt, { allExams, allCompanies });
+                const row = suggestionRow(opt, { allExams });
                 if (!row) return null;
                 return (
                   <OptionRow
@@ -362,25 +296,6 @@ export function ProctoringSearch({
             </>
           )}
 
-          {inCompanyMode && (
-            <>
-              <div className="usearch-head">Companies</div>
-              {companyResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {companyQuery.trim() ? `No companies match “${companyQuery.trim()}”.` : "Start typing a company name…"}
-                </div>
-              ) : (
-                companyResults.map((name, i) => (
-                  <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
-                    <span className="usearch-chip">Company:</span>
-                    <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allCompanies.counts.get(name)} submissions</span>
-                  </OptionRow>
-                ))
-              )}
-            </>
-          )}
-
           {freeQuery.trim() ? (
             <SearchForRow query={freeQuery.trim()} scope="Submissions" onClick={commit} />
           ) : (
@@ -398,18 +313,14 @@ type NameCounts = { names: string[]; counts: Map<string, number> };
  * prefix hints when the box is empty, a real scope value once it isn't. */
 function suggestionRow(
   opt: Opt,
-  all: { allExams: NameCounts; allCompanies: NameCounts },
+  all: { allExams: NameCounts },
 ): { key: string; chip: string; example: string; desc: string } | null {
   const count = (c: NameCounts, name: string) => `${c.counts.get(name) ?? 0} submissions`;
   switch (opt.kind) {
     case "exam-filter":
       return { key: "exam-filter", chip: "Quiz:", example: "Quiz: EPA 608 Universal", desc: "Filter by Quiz" };
-    case "company-filter":
-      return { key: "company-filter", chip: "Company:", example: "Company: Acme Inc.", desc: "Filter by User's Company" };
     case "exam":
       return { key: `exam:${opt.name}`, chip: "Quiz:", example: opt.name, desc: count(all.allExams, opt.name) };
-    case "company":
-      return { key: `company:${opt.name}`, chip: "Company:", example: opt.name, desc: count(all.allCompanies, opt.name) };
     default:
       return null;
   }

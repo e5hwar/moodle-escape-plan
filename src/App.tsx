@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
+import { CopyCells } from "./components/CopyCells";
 import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
@@ -34,6 +35,7 @@ import { NewCompanyWizard } from "./components/NewCompanyWizard";
 import { UsersPage } from "./components/UsersPage";
 import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
 import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
+import { PendingIdReuploadsPage } from "./components/PendingIdReuploadsPage";
 import { OfferCodesPage } from "./components/OfferCodesPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
 import { buildData, attemptsForTask } from "./data/certLookup";
@@ -78,7 +80,7 @@ function certToFocusNode(cert: Certification): ContentNode {
 }
 
 type View =
-  | { name: "tasks" }
+  | { name: "tasks"; certificationFilter?: string }
   | { name: "certs" }
   | { name: "new-task"; taskType: TaskTypeKey }
   | { name: "edit-task"; task: Task }
@@ -97,7 +99,7 @@ type View =
   | { name: "new-question"; categoryPath?: string[]; initialType?: QuestionType; forFormId?: string }
   | { name: "edit-question"; question: Question }
   | { name: "spotlight" }
-  | { name: "proctoring" }
+  | { name: "proctoring"; openSubmissionId?: string }
   | { name: "manage-ids" }
   | { name: "scholarship" }
   | { name: "feedback" }
@@ -112,13 +114,13 @@ type View =
   | { name: "offer-codes" }
   | { name: "review-hands-on" }
   | { name: "name-change-requests" }
+  | { name: "pending-id-reuploads" }
   /* Manage Completions is not a nav landing page — it is only reached scoped,
      from a row's "Manage User Progress" action. `origin` is the page that
      opened it: it lights that sidebar entry and is the crumb back. */
   | {
       name: "content-overrides";
       userId?: string;
-      cohort?: string;
       certId?: string;
       taskId?: string;
       origin: "tasks" | "certs" | "users" | "companies";
@@ -146,6 +148,7 @@ const VIEW_SLUGS: Record<string, string> = {
   "review-hands-on": "review-hands-on",
   proctoring: "proctoring-review",
   "name-change-requests": "name-change-requests",
+  "pending-id-reuploads": "pending-id-reuploads",
   "merge-accounts": "merge-accounts",
   "transfer-subscription": "transfer-subscription",
   users: "users",
@@ -466,9 +469,10 @@ function AdminApp() {
       ? "spotlight"
       : view.name === "proctoring" ||
         view.name === "manage-ids" ||
-        view.name === "name-change-requests"
+        view.name === "pending-id-reuploads"
       ? "proctoring-review"
-      : view.name === "scholarship"
+      : /* Name Changes hangs off Manage Users now, not Exam Reviews. */
+        view.name === "scholarship" || view.name === "name-change-requests"
       ? "manage-users"
       : view.name === "feedback" || view.name === "feedback-detail" || view.name === "feedback-responses"
       ? "certs"
@@ -501,6 +505,15 @@ function AdminApp() {
     window.history.pushState({}, "", urlForView(next));
   }
 
+  /* Same as `navigate`, for a view carrying state a nav key can't express (the
+     Exam Reviews console opened on a specific submission). Both routed pages,
+     so the URL has to follow — otherwise closing the console strands the Exam
+     Reviews table under the URL of the page it was opened from. */
+  function goToView(next: View) {
+    setView(next);
+    window.history.pushState({}, "", urlForView(next));
+  }
+
   function addCompany(company: Omit<Company, "id">) {
     const id = `CO-${String(companies.length + 1).padStart(3, "0")}`;
     setCompanies((prev) => [{ id, ...company }, ...prev]);
@@ -508,6 +521,10 @@ function AdminApp() {
 
   function updateCompany(company: Company) {
     setCompanies((prev) => prev.map((c) => (c.id === company.id ? company : c)));
+  }
+
+  function deleteCompany(company: Company) {
+    setCompanies((prev) => prev.filter((c) => c.id !== company.id));
   }
 
   function upsertForm(form: FeedbackForm) {
@@ -552,11 +569,13 @@ function AdminApp() {
   return (
     <div className="app">
       <HoverTooltip />
+      <CopyCells />
       <Sidebar active={sidebarActive} onNavigate={navigate} />
       {view.name === "tasks" ? (
         <div className="main">
           <div className="workspace">
             <TasksPage
+              initialCertificationFilter={view.certificationFilter}
               onNewTask={(t) => setView({ name: "new-task", taskType: t })}
               onEditTask={(task) => setView({ name: "edit-task", task })}
               onOpenCompanyDashboard={openLoginAsLibrary}
@@ -589,6 +608,7 @@ function AdminApp() {
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
+          onViewAllTasks={(cert) => setView({ name: "tasks", certificationFilter: cert.name })}
           onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
           onManageProgress={(cert) =>
             setView({ name: "content-overrides", certId: cert.id, origin: "certs" })
@@ -641,7 +661,13 @@ function AdminApp() {
       ) : view.name === "spotlight" ? (
         <SpotlightsPage />
       ) : view.name === "proctoring" ? (
-        <ProctoringPage onNameChanges={() => setView({ name: "name-change-requests" })} />
+        <ProctoringPage
+          key={view.openSubmissionId ?? "queue"}
+          onPendingIdReuploads={() => setView({ name: "pending-id-reuploads" })}
+          initialSubmissionId={view.openSubmissionId}
+          onExitToOrigin={() => goToView({ name: "pending-id-reuploads" })}
+          originLabel="Pending ID Re-Uploads"
+        />
       ) : /* Currently unreachable: the Proctoring header's "View All IDs" button was
              removed 2026-08-25 and this view has no nav key. Kept wired so restoring
              an entry point is a one-liner. */
@@ -654,15 +680,14 @@ function AdminApp() {
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}
+          onDeleteCompany={deleteCompany}
           initialQuery={view.query}
           onNewCompany={() => setView({ name: "new-company" })}
           onEditCompany={(company) => setView({ name: "edit-company", company })}
           onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
           onUpdateCompany={updateCompany}
           onViewEmployees={(company) => setView({ name: "users", companyFilter: company.name })}
-          onManageProgress={(company) =>
-            setView({ name: "content-overrides", cohort: company.name, origin: "companies" })
-          }
+          onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
       ) : view.name === "new-company" ? (
         <NewCompanyWizard
@@ -693,6 +718,7 @@ function AdminApp() {
           }
           onOpenOfferCodes={() => navigate("offer-codes")}
           onOpenScholarships={() => navigate("scholarship")}
+          onOpenNameChanges={() => navigate("name-change-requests")}
           onOpenMergeAccounts={() => navigate("merge-accounts")}
           onOpenTransferSubscription={() => navigate("transfer-subscription")}
           initialCompanyFilter={view.companyFilter}
@@ -701,13 +727,17 @@ function AdminApp() {
         <OfferCodesPage onBack={() => navigate("manage-users")} />
       ) : view.name === "review-hands-on" ? (
         <ReviewHandsOnPage />
+      ) : view.name === "pending-id-reuploads" ? (
+        <PendingIdReuploadsPage
+          onBack={() => setView({ name: "proctoring" })}
+          onReview={(id) => goToView({ name: "proctoring", openSubmissionId: id })}
+        />
       ) : view.name === "name-change-requests" ? (
-        <NameChangeRequestsPage onBack={() => setView({ name: "proctoring" })} />
+        <NameChangeRequestsPage onBack={() => navigate("manage-users")} />
       ) : view.name === "content-overrides" ? (
         <ContentOverridesPage
           onViewAttempts={openAttemptsForUser}
           initialUserId={view.userId}
-          initialCohort={view.cohort}
           initialCertId={view.certId}
           initialTaskId={view.taskId}
           backLabel={CONTENT_OVERRIDES_BACK[view.origin].label}

@@ -191,7 +191,7 @@ export function NewAwardWizard(props: Props) {
               disabled={!certValid || !appearanceValid}
               onClick={handleSave}
             >
-              {isEditing ? "Save changes" : "Create Award"}
+              {isEditing ? "Save Changes" : "Create Award"}
             </button>
           )}
         </div>
@@ -259,7 +259,7 @@ function LinkStep({
             <span className="search-icon"><SearchIcon /></span>
             <input
               className="sk-picker-search-input"
-              placeholder="Search Certifications by name or ID…"
+              placeholder="Search Certifications by Name or ID..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

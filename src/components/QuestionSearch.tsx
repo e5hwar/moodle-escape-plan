@@ -246,7 +246,10 @@ export function QuestionSearch({
     setDraft([]);
     setActive(-1);
     setOpen(false);
-    onCommit("");
+    /* Only re-commit when there IS a committed query to drop. Pages wire
+       onCommit to their landing morph, so an unconditional call would shove
+       the page out of its landing view just for clearing typed text. */
+    if (query) onCommit("");
   }
 
   // Add a token to the pending scope — one per kind, re-picking replaces it.
@@ -329,7 +332,7 @@ export function QuestionSearch({
   }
 
   const barPlaceholder = !scoped
-    ? placeholder ?? "Search Questions by Text or ID"
+    ? placeholder ?? "Search Questions by Text or ID..."
     : draft.length === 1
       ? `Search within ${draft[0].name}…`
       : `Search within ${draft.length} filters…`;

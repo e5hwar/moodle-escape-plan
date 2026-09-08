@@ -13,13 +13,13 @@ import {
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPlaceholderIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PrmModal } from "./PrmModal";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { CertificationsSearch } from "./CertificationsSearch";
-import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { LandingFilterRow, LandingOverlay, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table’s default visible columns so the
    p=1 hand-off to the real table lines up. The fixed Name column leads (see
@@ -123,6 +123,7 @@ export function CertificationsPage({
   onEditCert,
   onOpenCompanyDashboard,
   onViewPayers,
+  onViewAllTasks,
   onManageContentLinks,
   onManageProgress,
   onArchiveCert,
@@ -134,6 +135,7 @@ export function CertificationsPage({
   onEditCert: (cert: Certification) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
+  onViewAllTasks: (cert: Certification) => void;
   onManageContentLinks: (cert: Certification) => void;
   onManageProgress: (cert: Certification) => void;
   onArchiveCert: (cert: Certification) => void;
@@ -365,7 +367,7 @@ export function CertificationsPage({
                 />
               </div>
 
-              <LandingFilterRow pills={suggested}>
+              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <CertFilters filters={filters} setFilters={setFilters} />
                 </LandingFilterRow>
 
@@ -433,7 +435,6 @@ export function CertificationsPage({
                   </div>
 
                   <div className="pagination">
-                    <BackToSearch onClick={morph.showLanding} />
                     <span>
                       Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
@@ -461,6 +462,7 @@ export function CertificationsPage({
           onToggleVisibility={() => toggleHidden(menu.cert)}
           onDelete={() => setDeleting(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
+          onViewAllTasks={() => onViewAllTasks(menu.cert)}
           onBackup={() => backupCertification(menu.cert)}
           onManageContentLinks={() => onManageContentLinks(menu.cert)}
           onManageProgress={() => onManageProgress(menu.cert)}
@@ -641,6 +643,7 @@ function CertActionsMenu({
   onToggleVisibility,
   onDelete,
   onViewPayers,
+  onViewAllTasks,
   onBackup,
   onManageContentLinks,
   onManageProgress,
@@ -653,6 +656,7 @@ function CertActionsMenu({
   onToggleVisibility: () => void;
   onDelete: () => void;
   onViewPayers: () => void;
+  onViewAllTasks: () => void;
   onBackup: () => void;
   onManageContentLinks: () => void;
   onManageProgress: () => void;
@@ -737,9 +741,10 @@ function CertActionsMenu({
       {cert.payment && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
       {item(<MenuLinkIcon />, "Manage Content Links", onManageContentLinks)}
       {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
-      {/* Not on the Figma frame, but the export is a live action with nowhere
-          else to live — kept below the frame's own items. */}
-      {item(<MenuPlaceholderIcon />, "Backup Certification", onBackup)}
+      {/* Opens the Tasks page with this Certification already in the filter
+          row — the Tasks a Cert is built from, without retyping the name. */}
+      {item(<MenuAllTasksIcon />, "View All Tasks", onViewAllTasks)}
+      {item(<MenuBackupIcon />, "Backup Certification", onBackup)}
       {/* Archiving used to be an edit-only step inside the Cert wizard; it's
           now this entry, opening its own full-page Archive & Replace view. An
           already-archived Cert can't be archived again. */}
@@ -787,24 +792,19 @@ function CompanyEditBlockedModal({
   onOpenDashboard: () => void;
 }) {
   return (
-    <div className="cl-modal-overlay" onClick={onClose}>
-      <div className="cl-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="cl-modal-head">
-          <h3 className="cl-modal-title">Can't edit this certification here</h3>
-          <p className="cl-modal-sub">
-            Certifications created by a company can only be edited from the B2B
-            Dashboard. Login as <strong>{companyName}</strong> to make changes.
-          </p>
-        </div>
-        <div className="cl-modal-foot">
-          <button className="btn-save-draft" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-publish" onClick={onOpenDashboard}>
-            Open Company Dashboard
-          </button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title="Can't edit this certification here"
+      description={
+        <>
+          Certifications created by a company can only be edited from the B2B
+          Dashboard. Login as <strong>{companyName}</strong> to make changes.
+        </>
+      }
+      confirmLabel="Open Company Dashboard"
+      onCancel={onClose}
+      onConfirm={onOpenDashboard}
+    >
+      {null}
+    </PrmModal>
   );
 }
