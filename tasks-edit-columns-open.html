@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tasks — Edit Columns (open)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --bg-panel: #0f0f10;
+    --bg-pill: #161618;
+    --bg-pill-strong: #1d1d20;
+    --border: #2e2e33;
+    --border-strong: #3d3d43;
+    --text: #e7e7e8;
+    --text-muted: #8b8b8f;
+    --text-faint: #5a5a5e;
+    --accent: #e97237;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0D0D0D;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 12pt;
+    line-height: 1.45;
+    padding: 40px;
+  }
+
+  /* Table-header context strip with the gear button anchoring the dropdown */
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 560px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toolbar-col-label {
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .edit-columns-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .edit-columns-btn:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+
+  /* ===== Dropdown shell (align right) ===== */
+  .dropdown-wrap { position: relative; display: inline-block; }
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    z-index: 100;
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    display: flex;
+    flex-direction: column;
+    max-height: 440px;
+  }
+
+  .dropdown-list { padding: 6px; overflow-y: auto; flex: 1; min-height: 0; }
+  .dropdown-section + .dropdown-section {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Edit Columns menu — Fixed / Active / Available sections */
+  .cols-menu .dropdown-section-label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    padding: 6px 10px 6px;
+  }
+  .cols-menu .cols-fixed-row {
+    padding: 7px 10px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .cols-menu .cols-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 10px;
+  }
+  .cols-menu .cols-row-label { flex: 1; text-align: left; }
+  .cols-menu .cols-drag-handle {
+    color: var(--text-faint);
+    display: inline-flex;
+    align-items: center;
+    cursor: grab;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 400;
+    color: var(--text);
+    text-align: left;
+  }
+  .dropdown-item:hover { background: var(--bg-pill); }
+
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: transparent;
+  }
+  .checkbox.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+  <div class="toolbar-row">
+    <span class="toolbar-col-label">Created By</span>
+
+    <div class="dropdown-wrap">
+      <button class="edit-columns-btn" type="button" aria-label="Edit columns">
+        <svg width="16" height="16" viewBox="0 0 14.5813 14.6667" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5.56264 2.64L5.9573 0.666667H8.62397L9.01864 2.64C9.55864 2.83933 10.056 3.12867 10.49 3.49067L12.3973 2.84533L13.7306 5.15467L12.2186 6.48333C12.3157 7.04585 12.3157 7.62082 12.2186 8.18333L13.7306 9.512L12.3973 11.8213L10.49 11.176C10.0517 11.5414 9.55403 11.8292 9.01864 12.0267L8.62397 14H5.9573L5.56264 12.0267C5.02724 11.8292 4.52961 11.5414 4.0913 11.176L2.18397 11.8213L0.850636 9.512L2.36264 8.18333C2.26689 7.62071 2.26689 7.04596 2.36264 6.48333L0.850636 5.15467L2.18397 2.84533L4.0913 3.49067C4.52961 3.12522 5.02724 2.83751 5.56264 2.64Z" stroke="currentColor" stroke-width="1.33333" stroke-linecap="square" />
+          <path d="M9.9573 7.33333C9.9573 8.04058 9.67635 8.71885 9.17625 9.21895C8.67616 9.71905 7.99788 10 7.29064 10C6.58339 10 5.90512 9.71905 5.40502 9.21895C4.90492 8.71885 4.62397 8.04058 4.62397 7.33333C4.62397 6.62609 4.90492 5.94781 5.40502 5.44772C5.90512 4.94762 6.58339 4.66667 7.29064 4.66667C7.99788 4.66667 8.67616 4.94762 9.17625 5.44772C9.67635 5.94781 9.9573 6.62609 9.9573 7.33333Z" stroke="currentColor" stroke-width="1.33333" stroke-linecap="square" />
+        </svg>
+      </button>
+
+      <div class="dropdown">
+        <div class="dropdown-list cols-menu">
+          <!-- Fixed columns -->
+          <div class="dropdown-section">
+            <div class="dropdown-section-label">Fixed columns</div>
+            <div class="cols-fixed-row">Name</div>
+          </div>
+
+          <!-- Active columns (checked, draggable) -->
+          <div class="dropdown-section">
+            <div class="dropdown-section-label">Active columns</div>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox checked">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+              </span>
+              <span class="cols-row-label">ID</span>
+              <span class="cols-drag-handle" aria-hidden="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2" /><circle cx="8" cy="2" r="1.2" /><circle cx="2" cy="7" r="1.2" /><circle cx="8" cy="7" r="1.2" /><circle cx="2" cy="12" r="1.2" /><circle cx="8" cy="12" r="1.2" /></svg>
+              </span>
+            </button>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox checked">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+              </span>
+              <span class="cols-row-label">Type</span>
+              <span class="cols-drag-handle" aria-hidden="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2" /><circle cx="8" cy="2" r="1.2" /><circle cx="2" cy="7" r="1.2" /><circle cx="8" cy="7" r="1.2" /><circle cx="2" cy="12" r="1.2" /><circle cx="8" cy="12" r="1.2" /></svg>
+              </span>
+            </button>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox checked">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+              </span>
+              <span class="cols-row-label">Paid</span>
+              <span class="cols-drag-handle" aria-hidden="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2" /><circle cx="8" cy="2" r="1.2" /><circle cx="2" cy="7" r="1.2" /><circle cx="8" cy="7" r="1.2" /><circle cx="2" cy="12" r="1.2" /><circle cx="8" cy="12" r="1.2" /></svg>
+              </span>
+            </button>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox checked">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+              </span>
+              <span class="cols-row-label">Used in</span>
+              <span class="cols-drag-handle" aria-hidden="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2" /><circle cx="8" cy="2" r="1.2" /><circle cx="2" cy="7" r="1.2" /><circle cx="8" cy="7" r="1.2" /><circle cx="2" cy="12" r="1.2" /><circle cx="8" cy="12" r="1.2" /></svg>
+              </span>
+            </button>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox checked">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+              </span>
+              <span class="cols-row-label">Created By</span>
+              <span class="cols-drag-handle" aria-hidden="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2" /><circle cx="8" cy="2" r="1.2" /><circle cx="2" cy="7" r="1.2" /><circle cx="8" cy="7" r="1.2" /><circle cx="2" cy="12" r="1.2" /><circle cx="8" cy="12" r="1.2" /></svg>
+              </span>
+            </button>
+          </div>
+
+          <!-- Available columns (unchecked) -->
+          <div class="dropdown-section">
+            <div class="dropdown-section-label">Available columns</div>
+
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox"></span>
+              <span class="cols-row-label">Tags</span>
+            </button>
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox"></span>
+              <span class="cols-row-label">Date Created</span>
+            </button>
+            <button class="dropdown-item cols-row" type="button">
+              <span class="checkbox"></span>
+              <span class="cols-row-label">Date Modified</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

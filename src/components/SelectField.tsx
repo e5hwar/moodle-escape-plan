@@ -247,9 +247,9 @@ function SelectMenu<T extends string>({
   }
 
   // The cap is measured off a real row rather than assumed, because row height
-  // varies by menu (the countries menu's rows are an 8px inset where the others
-  // are 6px). N rows land exactly on the Nth row's edge, so the cut-off row
-  // that would follow reads as "there is more below".
+  // varies by menu (a wrapping label makes a taller row than the 35px a
+  // single-line 8px-inset one stands). N rows land exactly on the Nth row's
+  // edge, so the cut-off row that would follow reads as "there is more below".
   const [maxHeight, setMaxHeight] = useState<number | undefined>();
   useLayoutEffect(() => {
     if (!maxVisibleOptions) return;

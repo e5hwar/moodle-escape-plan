@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tasks — Created By filter (open)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --bg-panel: #0f0f10;
+    --bg-pill: #161618;
+    --bg-pill-strong: #1d1d20;
+    --border: #2e2e33;
+    --border-strong: #3d3d43;
+    --text: #e7e7e8;
+    --text-muted: #8b8b8f;
+    --text-faint: #5a5a5e;
+    --accent: #e97237;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0D0D0D;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 12pt;
+    line-height: 1.45;
+    display: flex;
+    justify-content: center;
+    padding: 80px 24px;
+  }
+
+  .stage { width: 100%; max-width: 720px; }
+
+  /* ===== Filter pill row (mirrors .filters / .filter-pill-dashed) ===== */
+  .filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 14px;
+    flex-shrink: 0;
+  }
+
+  .filter-pill-dashed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    background: transparent;
+    border: 1px dashed #3b3b3f;
+    border-radius: 20px;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    color: #a8a8a8;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .filter-pill-dashed:hover,
+  .filter-pill-dashed.open {
+    background: var(--bg-pill);
+    border-color: var(--text-faint);
+  }
+  .filter-pill-dashed .icon { color: #a8a8a8; display: inline-flex; align-items: center; }
+  .filter-pill-dashed .icon svg { width: 16px; height: 16px; }
+
+  .filter-clear-link {
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    cursor: pointer;
+  }
+
+  /* ===== Dropdown (mirrors .dropdown-wrap / .dropdown) ===== */
+  .dropdown-wrap { position: relative; display: inline-block; }
+
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 300px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    z-index: 100;
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    display: flex;
+    flex-direction: column;
+    max-height: 440px;
+  }
+
+  .dropdown-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .dropdown-search-icon { color: var(--text-faint); display: inline-flex; }
+  .dropdown-search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 400;
+    outline: none;
+  }
+  .dropdown-search input::placeholder { color: var(--text-faint); }
+
+  .dropdown-list { padding: 6px; overflow-y: auto; flex: 1; min-height: 0; }
+
+  .dropdown-subsection-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 400;
+    padding: 6px 8px 2px;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 400;
+    color: var(--text);
+    text-align: left;
+  }
+  .dropdown-item:hover { background: var(--bg-pill); }
+
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: transparent;
+  }
+  .checkbox.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .dropdown-footer {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+  .btn-apply {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: radial-gradient(70.6% 65.41% at 50% 49.62%, rgba(228, 69, 21, 0.75) 29.09%, rgba(138, 49, 20, 0.75) 100%), rgba(13, 13, 13, 0.75);
+    color: #fff;
+    font-family: var(--font-sans);
+    font-size: 12pt;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 8px 22px rgba(228, 69, 21, 0.28);
+  }
+  .btn-apply:hover { filter: brightness(1.08); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- Tasks filter row with the "Created By" pill OPEN -->
+    <div class="filters">
+      <div class="dropdown-wrap">
+        <button class="filter-pill-dashed open" type="button">
+          <span class="icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9.5" />
+              <path d="M12 7v10M7 12h10" stroke-width="2.4" />
+            </svg>
+          </span>
+          Created By
+        </button>
+
+        <div class="dropdown">
+          <div class="dropdown-search">
+            <span class="dropdown-search-icon">
+              <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.83114 8.23679e-05C7.35854 0.008312 8.82139 0.618266 9.90145 1.69832C10.9815 2.77838 11.5915 4.24123 11.5997 5.76864C11.6064 7.02957 11.2015 8.25094 10.4591 9.25301L14.0391 12.8331L12.9083 13.9649L9.337 10.3946C8.94597 10.6955 8.51866 10.9475 8.06258 11.1407C7.35657 11.4398 6.59787 11.5956 5.83114 11.5997C5.06433 11.6038 4.30404 11.4557 3.59481 11.1641C2.88554 10.8726 2.24058 10.4437 1.69832 9.90145C1.15607 9.35919 0.727208 8.71424 0.435629 8.00496C0.144086 7.29573 -0.00400175 6.53545 8.22256e-05 5.76864C0.0042134 5.0019 0.159996 4.24321 0.459067 3.53719C0.758139 2.83127 1.19444 2.19169 1.74227 1.65536C2.83386 0.586779 4.3036 -0.00805325 5.83114 8.23679e-05ZM5.82235 1.59969C4.7162 1.5938 3.65187 2.02511 2.86141 2.79891C2.46488 3.18719 2.14923 3.65022 1.9327 4.16122C1.71611 4.67252 1.60266 5.22215 1.59969 5.77743C1.59673 6.33263 1.70406 6.88304 1.91512 7.39657C2.12626 7.91018 2.43749 8.37695 2.83016 8.76961C3.22283 9.16228 3.6896 9.47351 4.20321 9.68465C4.71673 9.89572 5.26714 10.003 5.82235 10.0001C6.37762 9.99711 6.92725 9.88367 7.43856 9.66707C7.95012 9.45031 8.41284 9.13473 8.80086 8.73836C9.57458 7.94798 10.006 6.88368 10.0001 5.77743C9.99417 4.67132 9.55177 3.61231 8.76961 2.83016C7.98746 2.04801 6.92846 1.60561 5.82235 1.59969Z" fill="currentColor" />
+              </svg>
+            </span>
+            <input placeholder="Search creators…" value="" autofocus />
+          </div>
+
+          <div class="dropdown-list">
+            <div class="dropdown-subsection">
+              <div class="dropdown-subsection-label">Made in house</div>
+              <button class="dropdown-item" type="button">
+                <span class="checkbox"></span>
+                <span class="cols-row-label">SkillCat</span>
+              </button>
+            </div>
+
+            <div class="dropdown-subsection">
+              <div class="dropdown-subsection-label">B2B customers</div>
+              <button class="dropdown-item" type="button">
+                <span class="checkbox"></span>
+                <span class="cols-row-label">ARS</span>
+              </button>
+              <button class="dropdown-item" type="button">
+                <span class="checkbox"></span>
+                <span class="cols-row-label">HVACR</span>
+              </button>
+              <button class="dropdown-item" type="button">
+                <span class="checkbox"></span>
+                <span class="cols-row-label">NexTech</span>
+              </button>
+              <button class="dropdown-item" type="button">
+                <span class="checkbox"></span>
+                <span class="cols-row-label">Premium HVAC Services</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dropdown-footer">
+            <button class="btn-apply" type="button">Apply</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sibling pills (collapsed) for toolbar context -->
+      <button class="filter-pill-dashed" type="button">
+        <span class="icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9.5" />
+            <path d="M12 7v10M7 12h10" stroke-width="2.4" />
+          </svg>
+        </span>
+        Certifications
+      </button>
+      <button class="filter-pill-dashed" type="button">
+        <span class="icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9.5" />
+            <path d="M12 7v10M7 12h10" stroke-width="2.4" />
+          </svg>
+        </span>
+        Discoverable
+      </button>
+      <button class="filter-clear-link" type="button">Clear filters</button>
+    </div>
+  </div>
+</body>
+</html>

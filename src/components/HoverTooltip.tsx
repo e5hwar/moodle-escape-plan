@@ -52,6 +52,11 @@ type TipState = {
   below: number;
   above: number;
   align: "left" | "right";
+  /** `data-tip-place="above"` — prefer the space above the anchor (a tip on a
+      control that sits ON the thing it describes, e.g. the footage grid's
+      per-frame checkbox, must not cover that frame). Still flips below when
+      there is no room above. */
+  prefer: "below" | "above";
 };
 
 export function HoverTooltip() {
@@ -67,10 +72,10 @@ export function HoverTooltip() {
     const el = cardRef.current;
     if (!el || !tip) return;
     const h = el.offsetHeight;
-    const top =
-      tip.below + h <= window.innerHeight - 8
-        ? tip.below
-        : Math.max(8, tip.above - h);
+    const fitsBelow = tip.below + h <= window.innerHeight - 8;
+    const fitsAbove = tip.above - h >= 8;
+    const useAbove = tip.prefer === "above" ? fitsAbove : !fitsBelow;
+    const top = useAbove ? Math.max(8, tip.above - h) : tip.below;
     el.style.top = `${top}px`;
   }, [tip]);
 
@@ -98,6 +103,7 @@ export function HoverTooltip() {
         below: r.bottom + 6,
         above: r.top - 6,
         align: nearRight ? "right" : "left",
+        prefer: el.getAttribute("data-tip-place") === "above" ? "above" : "below",
       });
     }
     function onOver(e: MouseEvent) {

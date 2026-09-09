@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Input Fields Inventory — SkillCat Admin</title>
+<style>
+  :root {
+    --bg: #0f0f12;
+    --panel: #17171c;
+    --panel-2: #1d1d24;
+    --border: #2a2a33;
+    --text: #e8e8ee;
+    --muted: #9a9aa4;
+    --accent: #6f8cff;
+    --accent-2: #4ad0a0;
+    --chip: #232330;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(180deg, #14141a, #101015);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 28px;
+    backdrop-filter: blur(8px);
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; font-weight: 650; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .toolbar { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #search {
+    flex: 1 1 280px; min-width: 220px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 9px; font-size: 13px; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  .stat { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; }
+  .layout { display: flex; align-items: flex-start; }
+  nav.toc {
+    position: sticky; top: 132px;
+    width: 240px; flex: 0 0 240px;
+    max-height: calc(100vh - 140px); overflow-y: auto;
+    padding: 18px 12px 40px 20px; font-size: 12.5px;
+  }
+  nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+  nav.toc a:hover { color: var(--text); background: var(--panel); }
+  nav.toc .toc-group { margin-top: 14px; color: var(--accent); font-weight: 650; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 4px 8px; }
+  main { flex: 1 1 auto; padding: 24px 32px 120px; min-width: 0; }
+  section.screen {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  section.screen > h2 {
+    margin: 0; padding: 14px 18px;
+    font-size: 15px; font-weight: 650;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  section.screen > h2 .count { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .group { padding: 6px 18px 14px; }
+  .group h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--accent-2); margin: 16px 0 8px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 7px 10px; vertical-align: top; border-bottom: 1px solid #20202833; }
+  tr:last-child td { border-bottom: none; }
+  td.field { font-weight: 550; width: 32%; }
+  td.type { width: 22%; }
+  td.notes { color: var(--muted); }
+  .tag {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--chip); border: 1px solid var(--border); white-space: nowrap;
+  }
+  .t-text { color: #9fc1ff; border-color: #2c3656; }
+  .t-textarea, .t-rich { color: #c8a8ff; border-color: #3d3057; }
+  .t-number, .t-date { color: #ffd28a; border-color: #574a2c; }
+  .t-select, .t-dropdown { color: #7ee0c0; border-color: #2c5749; }
+  .t-multi { color: #6ad0e0; border-color: #2c4f57; }
+  .t-radio, .t-segmented { color: #ff9fb0; border-color: #572c39; }
+  .t-checkbox, .t-toggle { color: #ffb38a; border-color: #573f2c; }
+  .t-file { color: #b0b0ff; border-color: #38386b; }
+  .t-search { color: #9fc1ff; border-color: #2c3656; }
+  .t-slider, .t-picker { color: #d0d07e; border-color: #54542c; }
+  mark { background: #5a4d00; color: #fff; border-radius: 3px; padding: 0 2px; }
+  .hidden { display: none !important; }
+  footer { color: var(--muted); font-size: 12px; padding: 0 32px 60px; max-width: 900px; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Input Fields Inventory</h1>
+  <p>Every place a user can enter or select data across the SkillCat Admin app — text inputs, dropdowns, multi-selects, radios, toggles, checkboxes, date/number fields, file uploads, rich-text editors and pickers. Grouped by screen; wizards broken out by step.</p>
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Filter fields, screens, or control types…" />
+    <span class="stat" id="stat"></span>
+  </div>
+</header>
+<div class="layout">
+  <nav class="toc" id="toc"></nav>
+  <main id="main"></main>
+</div>
+<footer>
+  Legend — control types: <span class="tag t-text">text</span> <span class="tag t-textarea">textarea</span> <span class="tag t-rich">rich text</span> <span class="tag t-number">number</span> <span class="tag t-date">date</span> <span class="tag t-select">select</span> <span class="tag t-dropdown">dropdown</span> <span class="tag t-multi">multi-select</span> <span class="tag t-radio">radio</span> <span class="tag t-segmented">segmented</span> <span class="tag t-checkbox">checkbox</span> <span class="tag t-toggle">toggle</span> <span class="tag t-file">file</span> <span class="tag t-search">search</span> <span class="tag t-slider">slider</span> <span class="tag t-picker">picker</span>.
+  <p>Pure action buttons (Save, Cancel, pagination, row menus) are largely omitted — this catalog focuses on data entry/selection controls. Generated from source under <code>src/components/</code>.</p>
+</footer>
+
+<script>
+// ----- DATA MODEL -----------------------------------------------------------
+// Each screen: { nav, name, groups: [ { step, fields: [ [label, type, notes] ] } ] }
+// type keys map to a CSS class for the colored tag.
+const DATA = [
+ { nav:"Tasks", name:"Tasks — List & Search", groups:[
+   { step:"Search & Filters", fields:[
+     ["Search Tasks","search","⌘K; search by name or ID, scoped prefixes (Certification:, Type:)"],
+     ["Created By","multi","In-House makers + B2B customers"],
+     ["Certifications","multi","searchable; all certifications"],
+     ["Discoverable","multi","DISCOVERABLE_OPTIONS"],
+     ["Final Exam","multi","FINAL_EXAM_OPTIONS"],
+     ["Task Type (More filters)","multi","xAPI, Quiz, Hands-On, ID Upload, File, URL, Deep Link"],
+     ["Visibility (More filters)","multi","VISIBILITIES"],
+     ["Content / Trade Tags (More filters)","multi","grouped checkboxes by subsection"],
+     ["Edit Columns","checkbox","toggle ID, Type, Paid, Used In, Created By, Tags, Date Created, Date Modified"],
+   ]},
+   { step:"Create", fields:[
+     ["Create Task","dropdown","xAPI (X), Quiz (Q), Hands-On (H), ID Upload (I), File (F), Deep Link (D), URL (U)"],
+   ]},
+ ]},
+ { nav:"Tasks", name:"New / Edit Task Wizard", groups:[
+   { step:"Step — Details / Basics", fields:[
+     ["Task Name (English)","text","required"],
+     ["Task Name (Spanish)","text","optional"],
+     ["Description (English)","rich","optional"],
+     ["Description (Spanish)","rich","optional"],
+     ["xAPI Package (EN / ES)","file","xAPI tasks"],
+     ["URL (EN / ES)","text","URL tasks; https://"],
+     ["File (EN / ES)","file","File tasks"],
+     ["Deep Link URL","text","with preview button; https:// or custom scheme"],
+     ["Time to Complete — value","number","numeric"],
+     ["Time to Complete — unit","dropdown","minutes, hours, days, weeks"],
+     ["Final Exam","toggle",""],
+   ]},
+   { step:"Step — Launch Behaviour", fields:[
+     ["Allow rotation","toggle","xAPI / URL in-app launch"],
+     ["Locked orientation","radio","Portrait, Landscape"],
+     ["Open in (URL)","radio","External Browser, In-App Browser"],
+   ]},
+   { step:"Step — Completion & Scoring (xAPI / URL / File)", fields:[
+     ["How completion is determined","radio","No tracking, Upon viewing, User manually marks, xAPI completion statement"],
+     ["Capture a score from the package","toggle","xAPI only"],
+     ["Which score to keep","radio","Highest grade, Most recent"],
+     ["Score displayed","radio","Highest, Most recent"],
+   ]},
+   { step:"Step — Grading & Structure (Quiz)", fields:[
+     ["Quiz Structure","radio","Single block, Sectioned (locked when editing)"],
+     ["Section name (EN / ES)","text","per section"],
+     ["Passing %","number","per section"],
+     ["Required to pass","checkbox","per section"],
+     ["Grading model","radio","Quiz-level, Section-level (locked when editing)"],
+     ["Quiz passing %","number",""],
+     ["Quiz completion","radio","None, Passing grade (locked when editing)"],
+   ]},
+   { step:"Step — Questions (Quiz)", fields:[
+     ["Question Order","radio","Fixed, Shuffled"],
+     ["Shuffle scope","radio","Within section, All (when shuffled)"],
+     ["Static Questions","picker","add/edit/remove list"],
+     ["Random Pools","picker","add/edit/remove list"],
+   ]},
+   { step:"Step — Attempts & Timing (Quiz)", fields:[
+     ["Maximum attempts","radio","Limit to N (1–10) / Unlimited"],
+     ["Limit attempts count","number","inline, 1–10"],
+     ["Cooldown mode","radio","Uniform, Variable"],
+     ["Cooldown (uniform)","number","minutes"],
+     ["Variable cooldowns","number","attempt number → minutes list"],
+     ["Auto attempts","toggle",""],
+     ["Auto attempts count","number","when enabled"],
+     ["Auto attempt triggers","picker","task picker when enabled"],
+     ["Time limit","toggle",""],
+     ["Time limit (minutes)","number","when enabled"],
+   ]},
+   { step:"Step — Integrity & Resources (Quiz)", fields:[
+     ["Proctoring","toggle",""],
+     ["In-Quiz Resource type","dropdown","Image, Video, PDF, WebView, Custom"],
+     ["In-Quiz Resource name","text","per resource"],
+   ]},
+   { step:"Step — Post-Submission Review (Quiz)", fields:[
+     ["Show attempt","checkbox",""],
+     ["Show quiz result","checkbox",""],
+     ["Show quiz score","checkbox",""],
+     ["Show whether correct","checkbox",""],
+     ["Show per-question feedback","checkbox",""],
+     ["Show per-section results","checkbox",""],
+   ]},
+   { step:"Step — Payments & Integrations (Quiz)", fields:[
+     ["Paywall","toggle",""],
+     ["Paywall mode","radio","Common, Per-attempt"],
+     ["Common / Subsequent price IDs","text","PriceIdFields — Google, Apple, Stripe B2C, Stripe B2B"],
+     ["Attempt prices","picker","per-attempt list with add"],
+     ["NATE exam","toggle",""],
+     ["NATE ID (EN / ES)","text","when enabled"],
+   ]},
+   { step:"Step — Hands-On: Reference", fields:[
+     ["Reference Files (EN / ES)","file","multiple"],
+     ["Instructions (EN / ES)","rich",""],
+     ["Tools / Materials Required (EN / ES)","rich",""],
+     ["Reviewer checklist","rich",""],
+   ]},
+   { step:"Step — Hands-On: Submission", fields:[
+     ["Project description limit","number","0 = unlimited"],
+     ["Media files maximum","number","0–10"],
+     ["Media file types allowed","checkbox","Images, Videos, Audio"],
+   ]},
+   { step:"Step — Hands-On: Completion", fields:[
+     ["Maximum attempts","radio","Limit to N / Unlimited"],
+     ["Completion","radio","Passing grade from reviewer, Submission made"],
+     ["Passing grade","number","1–10, when reviewer grade selected"],
+   ]},
+   { step:"Step — Visibility / Content Tags", fields:[
+     ["Trade","multi","select + applied chips"],
+     ["Partnership","multi","select + applied chips"],
+     ["User Type","multi","select + applied chips"],
+     ["Discoverable (Hands-On)","radio",""],
+   ]},
+ ]},
+ { nav:"Tasks", name:"Attempts Page", groups:[
+   { step:"", fields:[
+     ["Search by name, email, or phone","search",""],
+     ["Name / Email / Phone","text","filter pills"],
+     ["Quiz","dropdown","pre-filled with selected task"],
+   ]},
+ ]},
+ { nav:"Tasks", name:"Attempt Viewer", groups:[
+   { step:"", fields:[
+     ["Scoring math","toggle","show/hide scoring math"],
+     ["Feedback","toggle","show/hide feedback"],
+   ]},
+ ]},
+ { nav:"Tasks", name:"Quiz Purchasers", groups:[
+   { step:"", fields:[
+     ["Search","search",""],
+     ["Name / Email / Phone","text","filter pills"],
+     ["User Type","multi",""],
+     ["Subscription","multi",""],
+     ["Company","multi",""],
+     ["Role","multi",""],
+     ["Goal","multi",""],
+     ["Industry","multi",""],
+     ["Edit Columns","checkbox",""],
+     ["Grant Attempt","picker","modal to grant additional attempt"],
+   ]},
+ ]},
+
+ { nav:"Certifications", name:"Certifications — List & Filters", groups:[
+   { step:"", fields:[
+     ["Search","search","ID, name, industry"],
+     ["Industry","multi","hierarchical, searchable"],
+     ["Career Stage","multi",""],
+     ["Type","multi",""],
+     ["Created By","multi","with subsections"],
+     ["Visibility","multi",""],
+     ["CEU minimum (More filters)","number",""],
+     ["Keyword (More filters)","text",""],
+     ["Edit Columns","checkbox",""],
+   ]},
+ ]},
+ { nav:"Certifications", name:"New Certification — Start", groups:[
+   { step:"", fields:[
+     ["Creation method","radio","From Scratch, Upload Backup, CSV Upload"],
+     ["Backup / CSV file","file","dropzone"],
+   ]},
+ ]},
+ { nav:"Certifications", name:"New / Edit Certification Wizard", groups:[
+   { step:"Step — Basics", fields:[
+     ["Certification name (EN)","text","required"],
+     ["Certification name (ES)","text",""],
+     ["Description (EN / ES)","rich",""],
+     ["Industry","dropdown","hierarchical from industries data"],
+     ["Career Stage","dropdown","Apprentice, Journeyman, Master, None"],
+     ["Type","dropdown","Unit, Credential, Program, Bundle, None"],
+     ["Payment","radio","Free, Consumable, Non-consumable"],
+     ["Consumable progress","radio","Reset, Preserve (when consumable)"],
+     ["CEUs","number",""],
+     ["Time to complete — value / unit","number","+ unit dropdown"],
+   ]},
+   { step:"Step — Course Structure", fields:[
+     ["Course name (EN / ES)","text","tree, per course"],
+     ["Course description (EN / ES)","rich",""],
+     ["Course hidden","toggle",""],
+     ["Lesson name (EN / ES)","text","per lesson"],
+     ["Lesson description (EN / ES)","rich",""],
+     ["Lesson hidden","toggle",""],
+     ["Tasks within lesson","picker","add/remove, drag to reorder"],
+   ]},
+   { step:"Step — Access Restrictions", fields:[
+     ["Enable restriction","toggle","per task"],
+     ["Mode","radio","All prerequisites, Any prerequisite"],
+     ["Prerequisite tasks","multi","picker"],
+   ]},
+   { step:"Step — Completion Conditions", fields:[
+     ["Condition sets","picker","task or certification picker; add/remove"],
+   ]},
+   { step:"Step — Payments", fields:[
+     ["Paywall","toggle",""],
+     ["Paywall mode","radio","Common, Per-learner, Per-attempt"],
+     ["Price IDs","text","PriceIdFields by mode"],
+     ["NATE exam","toggle",""],
+     ["NATE IDs","text",""],
+   ]},
+   { step:"Step — Visibility / Content Tags", fields:[
+     ["Trade / Partnership / User Type","multi","select + chips"],
+   ]},
+ ]},
+ { nav:"Certifications", name:"Cert Purchasers", groups:[
+   { step:"", fields:[
+     ["Search","search",""],
+     ["Email / Phone","text","filter pills"],
+     ["User Type / Subscription / Company / Role / Goal / Industry","multi","filter pills"],
+     ["Edit Columns","checkbox",""],
+     ["Grant Access","picker","modal to grant access to non-purchasers"],
+   ]},
+ ]},
+
+ { nav:"Skills & Awards", name:"Skills Page (Skills / Mastery tabs)", groups:[
+   { step:"", fields:[
+     ["Search","search",""],
+     ["Status","multi","filter pill"],
+     ["Created By","multi","filter pill"],
+     ["Edit Columns","checkbox",""],
+   ]},
+ ]},
+ { nav:"Skills & Awards", name:"New Skill Wizard", groups:[
+   { step:"Step — Details", fields:[
+     ["Skill name (EN)","text","required"],
+     ["Skill name (ES)","text",""],
+     ["Description (EN / ES)","rich",""],
+     ["Image","picker","emoji picker (BADGE_EMOJI)"],
+     ["Status","dropdown","Active, Archived, Draft"],
+   ]},
+   { step:"Step — Awarding Criteria", fields:[
+     ["Tasks that award this skill","multi","searchable task list, checkboxes"],
+     ["Award rule","radio","All tasks, Any task (if multiple)"],
+   ]},
+ ]},
+ { nav:"Skills & Awards", name:"New Mastery Skill Wizard", groups:[
+   { step:"Step — Details", fields:[
+     ["Mastery name (EN)","text","required"],
+     ["Mastery name (ES)","text",""],
+     ["Description (EN / ES)","rich",""],
+     ["Image","picker","emoji picker"],
+     ["Status","dropdown","Active, Archived, Draft"],
+   ]},
+   { step:"Step — Linked Skills", fields:[
+     ["Skills that compose this mastery","multi","searchable skill list, checkboxes"],
+   ]},
+ ]},
+ { nav:"Skills & Awards", name:"Awards Page (Awards / Templates tabs)", groups:[
+   { step:"", fields:[
+     ["Search","search",""],
+     ["Merit Tier","multi","filter pill (Awards tab)"],
+     ["Status","multi","filter pill (Awards tab)"],
+     ["Edit Columns","checkbox",""],
+   ]},
+ ]},
+ { nav:"Skills & Awards", name:"New Award Wizard", groups:[
+   { step:"Step — Certification & Tier", fields:[
+     ["Linked Certification","search","searchable picker, radio selection; required"],
+     ["Merit Tier","radio","Bronze, Silver, Gold, Platinum, Diamond"],
+     ["Status","radio","Active, Inactive"],
+   ]},
+   { step:"Step — Appearances", fields:[
+     ["Card template","dropdown","optional"],
+     ["Certificate template","dropdown","optional"],
+   ]},
+ ]},
+
+ { nav:"Question Bank", name:"Question Bank Page", groups:[
+   { step:"", fields:[
+     ["Search categories","search","Search 200 categories"],
+     ["Search questions","search","by text or ID"],
+     ["Type","select","All, MCQ, T/F, Match"],
+     ["Status","select","All, Active, Archived, Draft"],
+     ["Used in","select","Any, In a quiz, Not in use"],
+     ["Category list selection","radio","All Questions + category rows"],
+     ["CSV upload","file","accepts .csv"],
+   ]},
+ ]},
+ { nav:"Question Bank", name:"New / Edit Question Wizard", groups:[
+   { step:"Step 1 — Type & Category", fields:[
+     ["Question type","radio","True/False, Multiple Choice, Match the Following"],
+     ["Category","select","from category tree"],
+     ["Subcategory","select","conditional on category"],
+     ["Question name","text","optional internal label"],
+   ]},
+   { step:"Step 2 — Question Text", fields:[
+     ["Question text (English)","rich","auto-expanding, formatting toolbar"],
+     ["Question text (Spanish)","rich","optional"],
+   ]},
+   { step:"Step 3 — Answers", fields:[
+     ["Answer option text (EN / ES)","rich","per option (MCQ)"],
+     ["Grade","select","0–100% per option (MCQ)"],
+     ["True / False correct answer","radio","T/F type"],
+     ["Match prompt text","rich","per pair (Match)"],
+     ["Match 'matches with' text","rich","per pair (Match)"],
+     ["Match grading","radio","All-or-Nothing, Partial credit"],
+   ]},
+   { step:"Step 4 — Feedback", fields:[
+     ["Correct feedback","rich","optional"],
+     ["Partial feedback","rich","optional"],
+     ["Incorrect feedback","rich","optional"],
+   ]},
+   { step:"Step 5 — Settings", fields:[
+     ["Shuffle options","toggle",""],
+     ["Active status","toggle","Active vs Draft"],
+   ]},
+ ]},
+
+ { nav:"Feedback Forms", name:"Feedback Forms Page", groups:[
+   { step:"", fields:[
+     ["Search forms","search","name, ID, or creator"],
+     ["Status tabs","segmented","All, Active, Draft, Archived"],
+   ]},
+ ]},
+ { nav:"Feedback Forms", name:"New Feedback Form Modal", groups:[
+   { step:"Start from Scratch", fields:[
+     ["Form name","text","required"],
+   ]},
+   { step:"Duplicate Existing", fields:[
+     ["Form source search","search","by name or ID"],
+     ["Form selection","radio","from list"],
+     ["New form name","text","required"],
+   ]},
+ ]},
+ { nav:"Feedback Forms", name:"Feedback Form Editor", groups:[
+   { step:"Per Question", fields:[
+     ["Question type","select","Single select, Multi select, Short answer, File upload, Linear scale"],
+     ["Question text (English)","textarea",""],
+     ["Question text (Spanish)","textarea","optional"],
+     ["Required","checkbox",""],
+   ]},
+   { step:"Single / Multi Select Options", fields:[
+     ["Option text","text","per option"],
+     ["Attach image","file","per option (toggle)"],
+   ]},
+   { step:"File Upload Question", fields:[
+     ["Max files","number","1–10"],
+     ["Max file size (MB)","number","1–500"],
+   ]},
+   { step:"Linear Scale Question", fields:[
+     ["Scale from","select","0, 1"],
+     ["Scale to","select","3–10"],
+     ["Lower label","text","optional"],
+     ["Upper label","text","optional"],
+   ]},
+ ]},
+ { nav:"Feedback Forms", name:"Feedback Form Triggers", groups:[
+   { step:"", fields:[
+     ["Search triggers","search","Tasks or Certifications"],
+     ["Trigger kind","segmented","All, Tasks, Certifications"],
+   ]},
+ ]},
+ { nav:"Feedback Forms", name:"Feedback Form Responses", groups:[
+   { step:"Individual Responses", fields:[
+     ["Search responses","search","name, email, trigger, or response ID"],
+   ]},
+   { step:"Cohort Builder", fields:[
+     ["Trigger filter","select",""],
+     ["Version filter","select",""],
+     ["Choice filter","select","for option questions"],
+     ["Scale filter","select","comparison operator (≥/≤) + value"],
+     ["Text filter","text",""],
+     ["Breakdown question","select",""],
+   ]},
+ ]},
+
+ { nav:"Content", name:"Spotlights Page", groups:[
+   { step:"", fields:[
+     ["Search Spotlights","search","heading, ID, or submitter"],
+     ["Status tabs","segmented","All, Active, Pending Approval, Rejected"],
+   ]},
+ ]},
+ { nav:"Content", name:"Create Spotlight Panel", groups:[
+   { step:"", fields:[
+     ["Heading (English)","text","required"],
+     ["Heading (Spanish)","text","optional"],
+     ["Description (English)","textarea","optional"],
+     ["Description (Spanish)","textarea","optional"],
+     ["CTA button text (EN / ES)","text","optional"],
+     ["CTA redirect URL","text","https:// or skillcat://; conditional required"],
+     ["Background image","file","upload"],
+     ["End date","date","min today, max 6 months out"],
+   ]},
+ ]},
+ { nav:"Content", name:"Content Links Page", groups:[
+   { step:"", fields:[
+     ["Search content","search","course, certification, or task"],
+     ["Link strength","slider","0–100 (detail panel)"],
+     ["Link picker search","search","modal"],
+     ["Link picker content type","segmented","filter tabs"],
+   ]},
+ ]},
+ { nav:"Content", name:"Industries Page", groups:[
+   { step:"List", fields:[
+     ["Search industries","search",""],
+   ]},
+   { step:"Industry / Subcategory Modal", fields:[
+     ["Name (English)","text","required"],
+     ["Name (Spanish)","text","optional"],
+     ["Visibility","toggle","Hidden vs Visible"],
+   ]},
+   { step:"Add Certifications Modal", fields:[
+     ["Search certifications","search",""],
+     ["Career stage","select","All, Apprentice, Journeyman, Master"],
+     ["Industry tag","select","All, Tagged, Untagged"],
+     ["Time","select","Any, Short, Medium, Long"],
+     ["Certification selection","checkbox","ordered numbering"],
+   ]},
+ ]},
+
+ { nav:"Companies", name:"Companies Page", groups:[
+   { step:"Search & Filters", fields:[
+     ["Search Companies","search","⌘K; name, email, industry, or tier"],
+     ["Tier","multi","Free Trial, Essentials, Growth, Pro, Complimentary Access"],
+     ["Status","multi","Active, Paused, Trial Expired, Canceled, Complimentary"],
+     ["Industry","multi","searchable"],
+     ["Partnership","multi","searchable"],
+     ["Edit Columns","checkbox","Sign-Up, Seats, Added, Removed, Industry, Partnership"],
+   ]},
+   { step:"Edit Account Holder Modal", fields:[
+     ["Find a user","search","name, email, or phone"],
+     ["User search results","radio","select existing"],
+     ["New holder name","text",""],
+     ["New holder email","text","email"],
+     ["New holder phone","text","tel, optional"],
+   ]},
+   { step:"Cancel Subscription Modal", fields:[
+     ["Cancellation reason","select","required; CANCELLATION_REASONS"],
+   ]},
+ ]},
+ { nav:"Companies", name:"New / Edit Company Wizard", groups:[
+   { step:"Step 1 — Company Details", fields:[
+     ["Company name","text","required"],
+     ["Tax status","segmented","Taxable, Tax-Exempt"],
+     ["Address","text","optional"],
+     ["Account Holder","text","required"],
+     ["Phone number","text","tel, optional"],
+     ["Email","text","required; Stripe billing + first Admin"],
+     ["Industry","multi","HVAC, Electrical, Plumbing, Solar, Roofing, Refrigeration, Fire Protection, Construction, Appliance Repair, Utilities, Other"],
+     ["Partnership","multi","Preferred, Elite, NGO, NexStar, National Account, Channel (optional)"],
+   ]},
+   { step:"Step 2 — Plan Selection", fields:[
+     ["Plan","radio","Free Trial, Subscription, Complimentary Access"],
+     ["Tier","radio","Essentials, Growth, Pro (if Subscription)"],
+     ["Billing cycle","segmented","Monthly, Yearly"],
+     ["Per-seat price currency","dropdown","USD, CAD"],
+     ["Per-seat price","text","decimal; saved-prices dropdown"],
+     ["Seats","number","min 1"],
+     ["Payment method","radio","Automatic, Manual (invoice)"],
+   ]},
+   { step:"Create Price Modal", fields:[
+     ["Label","text","custom price name"],
+     ["Currency","multi","USD, CAD, EUR, GBP, AUD"],
+     ["Rate per currency","number","decimal, per selected currency"],
+   ]},
+ ]},
+
+ { nav:"Users", name:"Users Page", groups:[
+   { step:"Search & Filters", fields:[
+     ["Search Users","search","⌘K; name/email/phone; 'Company:' prefix"],
+     ["User Type","multi","B2C, B2B"],
+     ["Subscription","multi","Free Trial, Starter, Subscriber, Scholarship"],
+     ["Company","multi","searchable"],
+     ["Role (More Filters)","multi","Self-Learner, Employee, Manager, Admin"],
+     ["Goal (More Filters)","multi","First trades job, Exploring careers, Advancing career, Other"],
+     ["Industry Preference (More Filters)","multi","HVAC, Electrical, Plumbing, Solar, Refrigeration, Appliance Repair"],
+     ["Edit Columns","checkbox","Email, Phone, User Type, Company, Role, Subscription, Language, Goal, Attribution, Zip, Industry Pref, Last Access, Joined"],
+   ]},
+ ]},
+ { nav:"Users", name:"Merge Accounts", groups:[
+   { step:"Step 1 — Choose Accounts", fields:[
+     ["Primary account search","search","name, email, or user ID"],
+     ["Primary account result","radio","select to keep"],
+     ["Secondary account search","search","name, email, or user ID"],
+     ["Secondary account result","radio","select to merge"],
+   ]},
+   { step:"Step 2 — Subscriptions & Add-ons", fields:[
+     ["Subscription choice","radio","Keep Primary's, Transfer Secondary's, Proceed with neither"],
+     ["Add-on conflict resolution","radio","Keep Primary's / Keep Secondary's (per duplicate)"],
+   ]},
+   { step:"Step 3 — Merge Learning Records", fields:[
+     ["Conflict resolution","radio","Keep Primary's / Keep Secondary's (per conflict)"],
+   ]},
+ ]},
+ { nav:"Users", name:"Transfer Subscription", groups:[
+   { step:"Step 1 — Choose Accounts", fields:[
+     ["Source account search","search","name, email, or user ID"],
+     ["Source account result","radio","select"],
+     ["Destination account search","search","name, email, or user ID"],
+     ["Destination account result","radio","select"],
+   ]},
+ ]},
+ { nav:"Users", name:"Name Change Requests", groups:[
+   { step:"List", fields:[
+     ["Search","search","current name, requested name, or user ID"],
+   ]},
+   { step:"Approve Modal", fields:[
+     ["Current name","text","read-only"],
+     ["Requested name","text","editable; correct spelling from ID"],
+   ]},
+   { step:"Request Proof Modal", fields:[
+     ["Message to user","textarea","pre-filled, editable"],
+   ]},
+   { step:"Reject Modal", fields:[
+     ["Reason","textarea","optional"],
+   ]},
+ ]},
+ { nav:"Users", name:"Review Hands-On Page", groups:[
+   { step:"Search & Filters", fields:[
+     ["Search submissions","search","⌘K; 'Company:' and 'Task:' prefixes"],
+     ["Status","multi","Rejected, Review Pending (default), Completed"],
+     ["User Type","multi","B2C, B2B"],
+     ["Company","multi","searchable"],
+     ["Edit Columns","checkbox","Due Date, Email, Phone, Created By"],
+   ]},
+   { step:"Submission Detail", fields:[
+     ["Evaluation criteria","checkbox","toggle which criteria met (multi)"],
+     ["Score","radio","1–10 buttons; 1–4 Reject, 5–10 Pass"],
+     ["Feedback Notes","textarea","actionable feedback to learner"],
+   ]},
+ ]},
+
+ { nav:"Proctoring", name:"Proctoring Page", groups:[
+   { step:"", fields:[
+     ["Search by name or email","search","or submission ID"],
+     ["Filter by exam","multi","checkboxes per exam (ALL_EXAMS)"],
+     ["Status tabs","segmented","ALL, PROCTORING, ID REVIEWS, ID RE-UPLOADS"],
+   ]},
+ ]},
+ { nav:"Proctoring", name:"Manage IDs Page", groups:[
+   { step:"", fields:[
+     ["Search by name, email, or phone","search","⌘K"],
+     ["Upload new ID","file","image/* and application/pdf; drag & drop"],
+   ]},
+ ]},
+ { nav:"Proctoring", name:"Scholarships Page", groups:[
+   { step:"List", fields:[
+     ["Search by name, email, phone, or ID","search","⌘K"],
+     ["Status tabs","segmented","All, Active, Expired"],
+   ]},
+   { step:"Add Scholarship Modal", fields:[
+     ["User selection","search","searchable combobox; excludes active"],
+     ["Expires on","date","min today; default +6 months"],
+     ["Quick set","segmented","3 months, 6 months, 1 year"],
+   ]},
+ ]},
+ { nav:"Proctoring", name:"Trial Extension / Complimentary Access", groups:[
+   { step:"List", fields:[
+     ["Search by name, email, phone, or ID","search","⌘K"],
+     ["Status tabs","segmented","All, Active, Expired"],
+   ]},
+   { step:"Grant Access Modal", fields:[
+     ["User selection","search","searchable combobox"],
+     ["Expires on","date","min today; default +1 month (Add) / any (Edit)"],
+     ["Quick set","segmented","2 weeks, 1 month, 3 months"],
+   ]},
+ ]},
+
+ { nav:"Admin / Config", name:"Offer Codes Page", groups:[
+   { step:"List", fields:[
+     ["Search by code, plan, or region","search","⌘K"],
+     ["Status tabs","segmented","All, Active, Expired"],
+   ]},
+   { step:"Create Offer Code Modal", fields:[
+     ["Subscription plan","segmented","Monthly, Annual; required"],
+     ["Offer code","text","letters/numbers, auto-uppercase, max 24; unique"],
+     ["Countries / Regions","checkbox","chip grid; empty = all regions"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Content Overrides (Cert Lookup)", groups:[
+   { step:"", fields:[
+     ["Employee / Cohort search","search","searchable combobox"],
+     ["Certification / Task search","search","searchable combobox"],
+     ["Type filter","checkbox","Quiz, xAPI, Hands-On, File, URL, ID Upload"],
+     ["Final exam only","toggle",""],
+     ["Grade prompt","number","0–100, when marking task complete"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Product Config — General", groups:[
+   { step:"", fields:[
+     ["Force App Update version","text","semver, unique & valid"],
+     ["Webcam Capture Frequency","number","seconds; default 20"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Product Config — Display", groups:[
+   { step:"App Tabs / Dashboard Tabs", fields:[
+     ["Tab icon","file","image/*"],
+     ["Tab name (English)","text",""],
+     ["Tab name (Spanish)","text",""],
+     ["Tab URL","text","https://"],
+     ["Tab visibility","toggle","yes/no"],
+   ]},
+   { step:"Support Pages", fields:[
+     ["Support page URLs","text","B2B Dashboard, Guides, Send Us A Message, News"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Product Config — B2C Management", groups:[
+   { step:"", fields:[
+     ["B2C Paywall Pricing","text","Google/Apple/Stripe × Monthly/Annual (6 fields)"],
+     ["B2C Free Trial Duration","number","days; default 3"],
+     ["Initial Task Count","number","default 5"],
+     ["B2C EPA Card","text","Stripe Product ID"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Product Config — B2B Management", groups:[
+   { step:"", fields:[
+     ["Paywall Pricing","text","Essentials/Growth/Pro × Monthly/Annual (6 fields)"],
+     ["Free Trial Duration","number","days; default 14"],
+     ["Partnerships","text","add/edit/remove list"],
+     ["Trade","text","add/edit/remove list"],
+     ["B2B EPA Card","text","Stripe Product ID"],
+     ["Cancellation Reasons","text","add/remove list"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Product Config — Legal", groups:[
+   { step:"", fields:[
+     ["Terms of Service (EN / ES)","rich","toolbar: Bold, Italic, Underline, lists, indent, link"],
+     ["Privacy Policy (EN / ES)","rich","toolbar"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"New Design Template Wizard", groups:[
+   { step:"Step 1 — Details", fields:[
+     ["Template name","text","required, internal"],
+     ["Background image","file","JPEG or PNG"],
+     ["Color swatch","picker","6 swatches (color/gradient)"],
+   ]},
+ ]},
+ { nav:"Admin / Config", name:"Shared Reusable Controls", groups:[
+   { step:"", fields:[
+     ["Price ID Fields","text","Google, Apple, Stripe B2C, Stripe B2B"],
+     ["Dropdown","dropdown","reusable popup; left/right align, up/down"],
+     ["Search Panel Parts","search","scoped search input + keyboard hints"],
+     ["Wizard Step Rail","picker","step markers / navigation"],
+   ]},
+ ]},
+];
+
+// ----- RENDER ---------------------------------------------------------------
+const typeClass = {
+  text:"t-text", textarea:"t-textarea", rich:"t-rich", number:"t-number", date:"t-date",
+  select:"t-select", dropdown:"t-dropdown", multi:"t-multi", radio:"t-radio",
+  segmented:"t-segmented", checkbox:"t-checkbox", toggle:"t-toggle", file:"t-file",
+  search:"t-search", slider:"t-slider", picker:"t-picker"
+};
+const typeLabel = {
+  text:"text", textarea:"textarea", rich:"rich text", number:"number", date:"date",
+  select:"select", dropdown:"dropdown", multi:"multi-select", radio:"radio",
+  segmented:"segmented", checkbox:"checkbox", toggle:"toggle", file:"file",
+  search:"search", slider:"slider", picker:"picker"
+};
+
+const main = document.getElementById("main");
+const tocEl = document.getElementById("toc");
+let totalFields = 0;
+const navOrder = [];
+
+DATA.forEach((screen, si) => {
+  totalFields += screen.groups.reduce((n,g)=>n+g.fields.length,0);
+  if (!navOrder.includes(screen.nav)) navOrder.push(screen.nav);
+});
+
+// TOC grouped by nav
+navOrder.forEach(navName => {
+  const g = document.createElement("div");
+  g.className = "toc-group";
+  g.textContent = navName;
+  tocEl.appendChild(g);
+  DATA.forEach((screen, si) => {
+    if (screen.nav !== navName) return;
+    const a = document.createElement("a");
+    a.href = "#s" + si;
+    a.textContent = screen.name;
+    a.dataset.idx = si;
+    tocEl.appendChild(a);
+  });
+});
+
+// Sections
+DATA.forEach((screen, si) => {
+  const sec = document.createElement("section");
+  sec.className = "screen";
+  sec.id = "s" + si;
+  const count = screen.groups.reduce((n,g)=>n+g.fields.length,0);
+  const h2 = document.createElement("h2");
+  h2.innerHTML = `${screen.name} <span class="count">· ${screen.nav} · ${count} field${count!==1?"s":""}</span>`;
+  sec.appendChild(h2);
+  screen.groups.forEach(group => {
+    const gd = document.createElement("div");
+    gd.className = "group";
+    if (group.step) {
+      const h3 = document.createElement("h3");
+      h3.textContent = group.step;
+      gd.appendChild(h3);
+    }
+    const table = document.createElement("table");
+    group.fields.forEach(([label,type,notes]) => {
+      const tr = document.createElement("tr");
+      tr.className = "field-row";
+      tr.dataset.text = (label + " " + (typeLabel[type]||type) + " " + (notes||"") + " " + screen.name + " " + screen.nav + " " + (group.step||"")).toLowerCase();
+      tr.innerHTML = `<td class="field">${label}</td>`+
+        `<td class="type"><span class="tag ${typeClass[type]||''}">${typeLabel[type]||type}</span></td>`+
+        `<td class="notes">${notes||""}</td>`;
+      table.appendChild(tr);
+    });
+    gd.appendChild(table);
+    sec.appendChild(gd);
+  });
+  main.appendChild(sec);
+});
+
+document.getElementById("stat").textContent = `${DATA.length} screens · ${totalFields} input controls`;
+
+// ----- SEARCH FILTER --------------------------------------------------------
+const searchEl = document.getElementById("search");
+searchEl.addEventListener("input", () => {
+  const q = searchEl.value.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll("section.screen").forEach(sec => {
+    let secVisible = false;
+    sec.querySelectorAll("tr.field-row").forEach(tr => {
+      const match = !q || tr.dataset.text.includes(q);
+      tr.classList.toggle("hidden", !match);
+      if (match) { secVisible = true; shown++; }
+    });
+    // hide empty groups
+    sec.querySelectorAll(".group").forEach(g => {
+      const anyVisible = g.querySelector("tr.field-row:not(.hidden)");
+      g.classList.toggle("hidden", !anyVisible);
+    });
+    sec.classList.toggle("hidden", !secVisible);
+  });
+  document.querySelectorAll("nav.toc a").forEach(a => {
+    const sec = document.getElementById("s"+a.dataset.idx);
+    a.classList.toggle("hidden", sec.classList.contains("hidden"));
+  });
+  document.getElementById("stat").textContent = q
+    ? `${shown} field${shown!==1?"s":""} match “${searchEl.value}”`
+    : `${DATA.length} screens · ${totalFields} input controls`;
+});
+</script>
+</body>
+</html>

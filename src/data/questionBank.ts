@@ -264,7 +264,7 @@ export function versionHistory(q: Question): QuestionVersion[] {
   return out;
 }
 
-export const categories: Category[] = [
+const SEED_CATEGORIES: Category[] = [
   {
     key: "epa-608",
     label: "EPA 608",
@@ -419,7 +419,184 @@ export const categories: Category[] = [
     ],
   },
   { key: "learner-feedback", label: "Learner Feedback", count: 16 },
+  /* ─── Course-shaped categories (2026-09-09) — the real SkillCat course
+     names the bank is organised by. Flat by default: a course only earns
+     subcategories once it is big enough to need them, which is why the larger
+     ones below carry a handful and the rest are a single list. Names that
+     already exist above as a category or one of its subcategories (the EPA 608
+     type certificates, Heat Pumps, Ice Machines, Walk-In Freezers, PPE,
+     Lockout/Tagout, the appliance basics) were deliberately not duplicated. ─── */
+  {
+    key: "air-handling-distribution",
+    label: "Air Handling and Distribution",
+    count: 74,
+    subcategories: [
+      { key: "fans-blowers", label: "Fans & Blowers", count: 24 },
+      { key: "duct-design", label: "Duct Design", count: 22 },
+      { key: "dampers-vav", label: "Dampers & VAV", count: 16 },
+      { key: "air-balancing", label: "Balancing", count: 12 },
+    ],
+  },
+  { key: "ahu-routine-maintenance", label: "Air Handling and Distribution: Routine Maintenance", count: 41 },
+  {
+    key: "advanced-electrical-troubleshooting",
+    label: "Advanced Electrical Troubleshooting",
+    count: 96,
+    subcategories: [
+      { key: "control-circuits", label: "Control Circuits", count: 31 },
+      { key: "motor-faults", label: "Motor Faults", count: 26 },
+      { key: "sequence-of-operation", label: "Sequence of Operation", count: 22 },
+      { key: "meter-readings", label: "Meter Readings", count: 17 },
+    ],
+  },
+  {
+    key: "basic-electrical-systems-controls",
+    label: "Basic Electrical Systems & Controls",
+    count: 88,
+    subcategories: [
+      { key: "contactors-relays", label: "Contactors & Relays", count: 28 },
+      { key: "transformers", label: "Transformers", count: 21 },
+      { key: "capacitors", label: "Capacitors", count: 19 },
+      { key: "safety-switches", label: "Safety Switches", count: 20 },
+    ],
+  },
+  { key: "basic-science-trades", label: "Basic Science for the Trades", count: 58 },
+  { key: "basic-wiring", label: "Basic Wiring", count: 63 },
+  { key: "basics-drawings-blueprints", label: "Basics of Drawings & Blueprints", count: 44 },
+  { key: "brazing-soldering", label: "Brazing & Soldering", count: 37 },
+  { key: "chiller-routine-maintenance", label: "Chiller Systems: Routine Maintenance", count: 46 },
+  { key: "chiller-startup", label: "Chiller Startup Procedures", count: 33 },
+  {
+    key: "complete-chiller-systems",
+    label: "Complete Chiller Systems",
+    count: 118,
+    subcategories: [
+      { key: "centrifugal", label: "Centrifugal Chillers", count: 34 },
+      { key: "absorption", label: "Absorption Chillers", count: 26 },
+      { key: "cooling-towers", label: "Cooling Towers", count: 31 },
+      { key: "water-treatment", label: "Water Treatment", count: 27 },
+    ],
+  },
+  {
+    key: "complete-residential-systems",
+    label: "Complete Residential Systems",
+    count: 127,
+    subcategories: [
+      { key: "split-systems", label: "Split Systems", count: 36 },
+      { key: "package-units", label: "Package Units", count: 28 },
+      { key: "res-zoning", label: "Zoning", count: 31 },
+      { key: "commissioning", label: "Commissioning", count: 32 },
+    ],
+  },
+  { key: "computer-room-ac", label: "Computer Room Air Conditioning", count: 39 },
+  { key: "confined-spaces", label: "Confined Spaces", count: 18 },
+  { key: "customer-interaction", label: "Customer Interaction", count: 52 },
+  { key: "domestic-refrigerators", label: "Domestic Refrigerators Basics", count: 43 },
+  { key: "electrical-safety", label: "Electrical Safety", count: 36 },
+  {
+    key: "electricity-fundamentals",
+    label: "Electricity Fundamentals",
+    count: 92,
+    subcategories: [
+      { key: "ohms-law", label: "Ohm's Law", count: 27 },
+      { key: "series-parallel", label: "Series & Parallel", count: 24 },
+      { key: "ac-dc", label: "AC vs DC", count: 21 },
+      { key: "circuit-symbols", label: "Circuit Symbols", count: 20 },
+    ],
+  },
+  { key: "fire-prevention", label: "Fire Prevention", count: 21 },
+  { key: "gas-boiler-basics", label: "Gas Boiler Basics", count: 49 },
+  { key: "gas-furnace-basics", label: "Gas Furnace Basics", count: 67 },
+  { key: "hand-power-tool-safety", label: "Hand & Power Tool Safety", count: 26 },
+  { key: "heating-basics", label: "Heating Basics", count: 71 },
+  {
+    key: "heating-systems",
+    label: "Heating Systems",
+    count: 84,
+    subcategories: [
+      { key: "hs-furnaces", label: "Furnaces", count: 29 },
+      { key: "hs-boilers", label: "Boilers", count: 24 },
+      { key: "hs-heat-pumps", label: "Heat Pumps", count: 18 },
+      { key: "hs-radiant", label: "Radiant", count: 13 },
+    ],
+  },
+  {
+    key: "hvac-trade-school",
+    label: "HVAC Trade School Diploma",
+    count: 156,
+    subcategories: [
+      { key: "term-1", label: "Term 1", count: 41 },
+      { key: "term-2", label: "Term 2", count: 38 },
+      { key: "term-3", label: "Term 3", count: 40 },
+      { key: "capstone", label: "Capstone", count: 37 },
+    ],
+  },
+  { key: "installing-chiller-systems", label: "Installing Chiller Systems", count: 31 },
+  { key: "intro-electrical-troubleshooting", label: "Intro to Electrical Troubleshooting", count: 79 },
+  { key: "intro-plumbing", label: "Intro to Plumbing", count: 68 },
+  { key: "intro-roofing", label: "Intro to Roofing", count: 24 },
+  { key: "intro-welding", label: "Intro to Welding", count: 27 },
+  {
+    key: "intro-commercial-systems",
+    label: "Introduction to Commercial Systems",
+    count: 103,
+    subcategories: [
+      { key: "rooftop-units", label: "Rooftop Units", count: 30 },
+      { key: "built-up-systems", label: "Built-Up Systems", count: 24 },
+      { key: "commercial-controls", label: "Commercial Controls", count: 26 },
+      { key: "service-access", label: "Service Access", count: 23 },
+    ],
+  },
+  { key: "intro-drain-cleaning", label: "Introduction to Drain Cleaning", count: 19 },
+  { key: "intro-electrician-apprentice", label: "Introduction to being an Electrician Apprentice", count: 58 },
+  { key: "intro-residential-water-heaters", label: "Introduction to Residential Water Heaters", count: 42 },
+  { key: "key-hand-tools", label: "Key Hand Tools", count: 38 },
+  { key: "mechanical-aptitude-soft-skills", label: "Mechanical Aptitude Soft Skills", count: 45 },
+  { key: "mechanical-troubleshooting", label: "Mechanical Troubleshooting", count: 61 },
+  { key: "mini-split", label: "Mini Split - Operation and Procedures", count: 47 },
+  { key: "packaged-rtu-maintenance", label: "Packaged Rooftop Units: Routine Maintenance", count: 53 },
+  { key: "piping", label: "Piping", count: 56 },
+  { key: "ptac-basics", label: "PTAC Unit Basics", count: 28 },
+  { key: "reading-electrical-blueprints", label: "Reading Electrical Drawings & Blueprints", count: 35 },
+  { key: "reading-hvac-blueprints", label: "Reading HVAC Drawings and Blueprints", count: 40 },
+  {
+    key: "refrigeration-basics",
+    label: "Refrigeration Basics",
+    count: 108,
+    subcategories: [
+      { key: "cycle-components", label: "Cycle Components", count: 32 },
+      { key: "refrigerants", label: "Refrigerants", count: 29 },
+      { key: "charging", label: "Charging", count: 26 },
+      { key: "recovery", label: "Recovery", count: 21 },
+    ],
+  },
+  { key: "refrigeration-equipment", label: "Refrigeration Equipment", count: 72 },
+  { key: "residential-gas-piping", label: "Residential Gas Piping", count: 33 },
+  { key: "safety-basics", label: "Safety Basics", count: 64 },
+  { key: "full-tune-up", label: "The Full Tune-Up Visit", count: 51 },
+  {
+    key: "trade-math",
+    label: "Trade Math",
+    count: 77,
+    subcategories: [
+      { key: "fractions-decimals", label: "Fractions & Decimals", count: 26 },
+      { key: "conversions", label: "Conversions", count: 21 },
+      { key: "areas-volumes", label: "Areas & Volumes", count: 17 },
+      { key: "formulas", label: "Formulas", count: 13 },
+    ],
+  },
+  { key: "troubleshooting-ahu", label: "Troubleshooting Air Handling Units", count: 37 },
+  { key: "using-a-multimeter", label: "Using A Multimeter", count: 55 },
+  { key: "wiring-diagrams", label: "Wiring Diagrams", count: 66 },
 ];
+
+/* A→Z is the bank's reading order — the rail's tree walks this array as it
+   stands, and with ~70 categories an authoring order nobody can predict is
+   just noise. (The landing index sorts its own copy; categories created at
+   runtime still append to the bottom, where the user just put them.) */
+export const categories: Category[] = [...SEED_CATEGORIES].sort((a, b) =>
+  a.label.localeCompare(b.label),
+);
 
 const EPA_UNI = ["EPA 608", "Universal"];
 

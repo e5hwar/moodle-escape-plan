@@ -2923,17 +2923,20 @@ function MultiSelectMenu({
         />
       )}
       {/* Five rows, then scroll. Same arithmetic SelectField uses: a row is
-          31px (6 + a 19px line + 6) and `.dropdown-list` pads 6px top and
-          bottom, so five land exactly on the fifth row's edge and the clipped
-          sixth reads as "there is more below". Shorter lists still collapse to
-          their own height; the search header above stays put either way. */}
-      <div className="dropdown-list" style={{ maxHeight: 5 * 31 + 12 }}>
+          35px (8 + a 19px line + 8) and `.ms-menu .dropdown-list` pads 8px top
+          and bottom, so five land exactly on the fifth row's edge and the
+          clipped sixth reads as "there is more below". Shorter lists still
+          collapse to their own height; the search header above stays put
+          either way. */}
+      <div className="dropdown-list" style={{ maxHeight: 5 * 35 + 16 }}>
         {options.map((opt) => {
           const selected = value.includes(opt);
           return (
             <button
               key={opt}
-              className="dropdown-item"
+              // `is-current` sets the SemiBold selected row (Figma 591:1322),
+              // the same class the single-select menu marks its value with.
+              className={`dropdown-item${selected ? " is-current" : ""}`}
               // Ticking an option must not pull focus out of the search — it
               // stays live so the user can keep typing and filtering.
               onMouseDown={(e) => e.preventDefault()}

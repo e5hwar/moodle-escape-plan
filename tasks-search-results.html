@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tasks — Search (typed query with results)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --bg-panel: #0f0f10;
+    --bg-pill: #161618;
+    --bg-pill-strong: #1d1d20;
+    --border: #2e2e33;
+    --border-strong: #3d3d43;
+    --text: #e7e7e8;
+    --text-muted: #8b8b8f;
+    --text-faint: #5a5a5e;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0D0D0D;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 12pt;
+    line-height: 1.45;
+    display: flex;
+    justify-content: center;
+    padding: 80px 24px;
+  }
+
+  .stage { width: 100%; max-width: 720px; }
+
+  /* ===== Search component (mirrors .usearch* in src/index.css) ===== */
+  .usearch { position: relative; width: 100%; z-index: 20; }
+
+  .usearch-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #1e1e20;
+    border: 1px solid transparent;
+    border-radius: 8px;
+  }
+  .usearch-bar.open {
+    border-color: var(--text-faint);
+    box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.12);
+  }
+  .usearch-icon { display: inline-flex; color: #a8a8a8; flex-shrink: 0; }
+  .usearch-icon svg { width: 20px; height: 20px; }
+
+  .usearch-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 20px;
+    font-weight: 500;
+  }
+  .usearch-input::placeholder { color: #a8a8a8; }
+
+  .usearch-kbd { display: inline-flex; gap: 4px; flex-shrink: 0; color: #a8a8a8; }
+  .usearch-kbd .kbd-cmd,
+  .usearch-kbd .kbd-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .usearch-kbd .kbd-cmd { font-size: 16px; }
+  .usearch-kbd .kbd-letter { font-family: var(--font-mono); font-weight: 600; font-size: 18px; }
+
+  /* Dropdown panel */
+  .usearch-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+    padding: 6px;
+    max-height: 420px;
+    overflow-y: auto;
+    z-index: 50;
+  }
+  .usearch-head {
+    padding: 10px 12px 6px;
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+  }
+
+  .usearch-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 8px;
+    text-align: left;
+    font-family: var(--font-sans);
+  }
+  .usearch-row.active { background: var(--bg-pill); }
+
+  .usearch-chip {
+    flex-shrink: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-family: var(--font-mono);
+    font-size: 10pt;
+    color: var(--text-muted);
+    background: var(--bg-pill-strong);
+  }
+  .usearch-row-ex {
+    color: var(--text);
+    font-size: 11.5pt;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .usearch-row-desc {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 10.5pt;
+    padding-left: 12px;
+  }
+
+  /* Task result row (leading ID badge, name + sub) */
+  .usearch-task-id {
+    flex-shrink: 0;
+    min-width: 56px;
+    text-align: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--bg-pill-strong);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10pt;
+    color: var(--text-muted);
+  }
+  .usearch-user-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+  .usearch-user-name {
+    font-size: 11.5pt;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .usearch-user-sub {
+    font-size: 10pt;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .usearch-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 10.5pt;
+  }
+  .usearch-kbd-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--bg-pill-strong);
+    color: var(--text-muted);
+    font-size: 10pt;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- Tasks search bar: OPEN with a typed query ("lab") returning task results -->
+    <div class="usearch">
+      <div class="usearch-bar open">
+        <span class="usearch-icon">
+          <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.83114 8.23679e-05C7.35854 0.008312 8.82139 0.618266 9.90145 1.69832C10.9815 2.77838 11.5915 4.24123 11.5997 5.76864C11.6064 7.02957 11.2015 8.25094 10.4591 9.25301L14.0391 12.8331L12.9083 13.9649L9.337 10.3946C8.94597 10.6955 8.51866 10.9475 8.06258 11.1407C7.35657 11.4398 6.59787 11.5956 5.83114 11.5997C5.06433 11.6038 4.30404 11.4557 3.59481 11.1641C2.88554 10.8726 2.24058 10.4437 1.69832 9.90145C1.15607 9.35919 0.727208 8.71424 0.435629 8.00496C0.144086 7.29573 -0.00400175 6.53545 8.22256e-05 5.76864C0.0042134 5.0019 0.159996 4.24321 0.459067 3.53719C0.758139 2.83127 1.19444 2.19169 1.74227 1.65536C2.83386 0.586779 4.3036 -0.00805325 5.83114 8.23679e-05ZM5.82235 1.59969C4.7162 1.5938 3.65187 2.02511 2.86141 2.79891C2.46488 3.18719 2.14923 3.65022 1.9327 4.16122C1.71611 4.67252 1.60266 5.22215 1.59969 5.77743C1.59673 6.33263 1.70406 6.88304 1.91512 7.39657C2.12626 7.91018 2.43749 8.37695 2.83016 8.76961C3.22283 9.16228 3.6896 9.47351 4.20321 9.68465C4.71673 9.89572 5.26714 10.003 5.82235 10.0001C6.37762 9.99711 6.92725 9.88367 7.43856 9.66707C7.95012 9.45031 8.41284 9.13473 8.80086 8.73836C9.57458 7.94798 10.006 6.88368 10.0001 5.77743C9.99417 4.67132 9.55177 3.61231 8.76961 2.83016C7.98746 2.04801 6.92846 1.60561 5.82235 1.59969Z" fill="currentColor" />
+          </svg>
+        </span>
+        <input class="usearch-input" placeholder="Search Tasks" value="lab" autofocus />
+        <span class="usearch-kbd">
+          <span class="kbd-cmd">⌘</span>
+          <span class="kbd-letter">K</span>
+        </span>
+      </div>
+
+      <div class="usearch-panel">
+        <div class="usearch-head">Suggested filters</div>
+        <button class="usearch-row" type="button">
+          <span class="usearch-chip">CERTIFICATIONS:</span>
+          <span class="usearch-row-ex">CERTIFICATIONS:EPA 608</span>
+          <span class="usearch-row-desc">Filter tasks by certification</span>
+        </button>
+
+        <div class="usearch-head">Tasks</div>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-2165</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">Thermostat Wiring Lab</span>
+            <span class="usearch-user-sub">Used in HVAC Field Skills +1</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-2024</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">Electrical Panel Lab</span>
+            <span class="usearch-user-sub">Used in Safety Bundle +1</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-1689</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">Superheat Reading Lab</span>
+            <span class="usearch-user-sub">Used in EPA 608 Type I</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-1555</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">PVC Pipe Joining Lab</span>
+            <span class="usearch-user-sub">Not in any certification</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-1488</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">Sweat Soldering Lab</span>
+            <span class="usearch-user-sub">Not in any certification</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <button class="usearch-row usearch-task" type="button">
+          <span class="usearch-task-id">T-1321</span>
+          <span class="usearch-user-text">
+            <span class="usearch-user-name">Tankless Heater Lab</span>
+            <span class="usearch-user-sub">Not in any certification</span>
+          </span>
+          <span class="usearch-row-desc">Hands-On Task</span>
+        </button>
+
+        <div class="usearch-foot">
+          <span class="usearch-kbd-inline">↵</span>
+          Show results in the table
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

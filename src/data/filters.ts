@@ -113,7 +113,7 @@ export type OptionalColumn =
   | "dateModified";
 
 export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
-  { key: "id", label: "ID" },
+  { key: "id", label: "Task ID" },
   { key: "type", label: "Type" },
   { key: "paid", label: "Paid" },
   { key: "usedIn", label: "Used in" },

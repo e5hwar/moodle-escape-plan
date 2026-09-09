@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Unique Input Controls — SkillCat Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:"Fira Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --bg:#0b0b0c; --bg-sidebar:#0a0a0b; --bg-panel:#0f0f10; --bg-row-hover:#131315;
+    --bg-pill:#161618; --bg-pill-strong:#1d1d20; --border:#2e2e33; --border-strong:#3d3d43;
+    --text:#e7e7e8; --text-muted:#8b8b8f; --text-faint:#5a5a5e; --accent:#e97237; --accent-strong:#f08043;
+    --input-bg:#1e1e20; --input-border:#404040;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0D0D0D;color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.5;}
+  header.page{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,#101011,#0b0b0c);border-bottom:1px solid var(--border);padding:20px 28px;}
+  header.page h1{margin:0 0 4px;font-size:20px;font-weight:700;}
+  header.page p{margin:0;color:var(--text-muted);font-size:13px;max-width:920px;}
+  .toolbar{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  #q{flex:1 1 280px;min-width:220px;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);
+     padding:9px 12px;border-radius:9px;font-size:13px;outline:none;font-family:var(--font-sans);}
+  #q:focus{border-color:var(--accent);}
+  .stat{color:var(--text-muted);font-size:12px;}
+  main{padding:26px 28px 120px;max-width:1180px;}
+  .group-head{display:flex;align-items:baseline;gap:12px;margin:8px 0 16px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  .group-head:not(:first-child){margin-top:38px;}
+  .group-head h2{margin:0;font-size:16px;font-weight:700;letter-spacing:.01em;}
+  .group-head .gdesc{color:var(--text-muted);font-size:12.5px;}
+  .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;margin-bottom:18px;overflow:hidden;}
+  .card-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--border);background:#121214;}
+  .card-head .num{color:var(--text-faint);font-variant-numeric:tabular-nums;font-weight:600;font-size:13px;}
+  .card-head h3{margin:0;font-size:15px;font-weight:650;}
+  .ctype{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:#232330;border:1px solid var(--border);color:#9fc1ff;}
+  .ctype.comp{color:#7ee0c0;}
+  .card-body{display:grid;grid-template-columns:1fr 330px;gap:0;}
+  @media(max-width:860px){.card-body{grid-template-columns:1fr;}}
+  .preview{padding:26px 24px;display:flex;align-items:flex-start;justify-content:flex-start;min-height:96px;overflow-x:auto;
+     background:radial-gradient(circle at 14px 14px,#1a1a1c 1px,transparent 0) 0 0/22px 22px,#0b0b0c;}
+  .meta{padding:18px 20px;border-left:1px solid var(--border);font-size:12.5px;background:#0d0d0e;}
+  @media(max-width:860px){.meta{border-left:none;border-top:1px solid var(--border);}}
+  .meta .lbl{color:var(--accent);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;font-weight:700;margin:0 0 4px;}
+  .meta p{margin:0 0 12px;color:var(--text-muted);}
+  .meta .uses{color:var(--text);}
+  .meta .recur{font-size:11px;color:var(--text-faint);}
+  .hidden{display:none!important;}
+
+  /* ============ shared faithful pieces ============ */
+  .row-input{padding:10px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);
+     font-size:15px;outline:none;font-family:var(--font-sans);}
+  .row-input::placeholder{color:#5a5a5e;}
+  .drag{color:var(--text-faint);font-size:13px;letter-spacing:-3px;flex-shrink:0;cursor:grab;user-select:none;}
+  .idx-badge{width:22px;height:22px;border-radius:50%;background:var(--bg-pill-strong);border:1px solid var(--border-strong);
+     font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);}
+  .sq-badge{border-radius:6px;}
+  .row-x{width:28px;height:28px;border-radius:6px;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;
+     flex-shrink:0;cursor:pointer;}
+  .row-x:hover{background:rgba(255,255,255,.06);color:var(--text);}
+  .ghost-btn{padding:8px 14px;border:1px dashed var(--border-strong);border-radius:8px;color:var(--text-muted);font-weight:600;
+     font-size:13px;background:transparent;cursor:pointer;font-family:var(--font-sans);}
+  .ghost-btn:hover{color:var(--text);border-color:var(--text-faint);}
+  .link-add{color:var(--text-muted);font-size:14px;background:none;border:none;cursor:pointer;font-family:var(--font-sans);padding:4px 0;}
+  .link-add:hover{color:var(--text);}
+  .sub-head{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-muted);text-transform:uppercase;}
+  .num-box{width:56px;padding:8px 10px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);border-radius:6px;
+     color:var(--text);font-size:14px;text-align:center;outline:none;font-family:var(--font-sans);}
+  .num-box:focus{border-color:var(--accent);}
+  .form-select{padding:10px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);
+     font-family:var(--font-sans);font-size:15px;outline:none;cursor:pointer;
+     appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%238b8b8f' stroke-width='2'><path d='M3 5l4 4 4-4'/></svg>");
+     background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+  .toggle{width:38px;height:22px;border-radius:999px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);
+     position:relative;flex-shrink:0;cursor:pointer;display:inline-block;}
+  .toggle .knob{position:absolute;top:1px;left:1px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);}
+  .toggle.on{background:var(--accent);border-color:var(--accent);}
+  .toggle.on .knob{left:17px;}
+  .checkbox{width:16px;height:16px;border:1px solid var(--border-strong);border-radius:4px;display:inline-flex;align-items:center;
+     justify-content:center;flex-shrink:0;}
+  .checkbox.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  /* ============ ATOMIC control styles ============ */
+  .usearch-bar{display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;background:var(--input-bg);
+     border:1px solid var(--text-faint);border-radius:8px;min-width:360px;max-width:520px;width:100%;}
+  .usearch-icon{display:inline-flex;color:#a8a8a8;flex-shrink:0;}
+  .usearch-input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;font-weight:500;font-family:var(--font-sans);}
+  .usearch-input::placeholder{color:#a8a8a8;}
+  .usearch-kbd{display:inline-flex;gap:4px;flex-shrink:0;}
+  .kbd-cmd,.kbd-letter{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;
+     background:rgba(255,255,255,.04);font-size:14px;font-weight:500;color:#a8a8a8;}
+  .kbd-letter{font-family:var(--font-mono);}
+  .usearch-scope{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:5px 9px;border-radius:6px;
+     border:1px solid var(--border-strong);font-size:14px;font-weight:500;color:#a8a8a8;}
+  .usearch-scope .sx{color:var(--text-faint);}
+  .filter-pill-dashed{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;background:transparent;
+     border:1px dashed #3b3b3f;border-radius:20px;font-size:14px;font-weight:500;color:#a8a8a8;white-space:nowrap;cursor:pointer;}
+  .filter-applied{display:inline-flex;align-items:center;height:32px;border:1px solid var(--text-faint);border-radius:20px;overflow:hidden;}
+  .filter-applied .clear{padding:0 4px 0 12px;color:#a8a8a8;display:inline-flex;align-items:center;cursor:pointer;}
+  .filter-applied .main{display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 0;font-size:14px;}
+  .filter-applied .main .label{font-weight:500;color:#a8a8a8;}
+  .filter-applied .main .sep{width:1px;height:20px;background:#3b3b3f;}
+  .filter-applied .main .value{font-weight:500;color:var(--accent);}
+  .dropdown{width:268px;background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;}
+  .dropdown-search{display:flex;align-items:center;gap:8px;padding:8px 12px 9px;border-bottom:1px solid var(--border);}
+  .dropdown-search input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none;font-family:var(--font-sans);}
+  .dropdown-search input::placeholder{color:#a8a8a8;}
+  .dropdown-list{padding:10px 6px;}
+  .dropdown-section-label{text-transform:uppercase;letter-spacing:.04em;color:#7a7a7a;font-size:11px;padding:0 8px 4px;}
+  .dropdown-item{display:flex;align-items:center;gap:10px;width:100%;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:500;color:#cfcfd2;cursor:pointer;}
+  .dropdown-item:hover{background:var(--bg-pill);}
+  .checkbox.tint{background:rgba(240,85,35,.2);border-color:rgba(240,85,35,.75);color:#f05523;}
+  .dropdown-footer{padding:9px 12px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;}
+  .btn-apply{padding:8px 16px;border-radius:8px;color:#fff;font-size:14px;font-weight:700;border:.5px solid rgba(240,85,35,.28);
+     background:linear-gradient(0deg,rgba(138,49,20,.75),rgba(240,85,35,.75) 70.9%),#0d0d0d;cursor:pointer;}
+  .fg{display:flex;flex-direction:column;gap:8px;max-width:420px;width:100%;}
+  .form-label{font-size:14px;font-weight:500;color:var(--text);}
+  .form-label .req{color:var(--accent);margin-left:2px;}
+  .form-input{width:100%;padding:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-family:var(--font-sans);font-size:16px;outline:none;}
+  .form-input::placeholder{color:#5a5a5e;}
+  .form-input.small{width:100px;}
+  .form-select.big{padding:12px 14px;font-size:16px;min-width:150px;}
+  .time-row{display:flex;gap:12px;align-items:center;}
+  textarea.form-input{resize:vertical;min-height:74px;line-height:1.45;font-size:15px;}
+  .rte-field{border:1px solid var(--border);border-radius:10px;background:var(--bg-pill);overflow:hidden;max-width:460px;width:100%;}
+  .rte-toolbar{display:flex;align-items:center;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border);}
+  .rte-btn{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);font-weight:600;font-size:13px;cursor:pointer;}
+  .rte-btn:hover{background:var(--bg-pill-strong);color:var(--text);}
+  .rte-sep{width:1px;height:18px;background:var(--border);margin:0 4px;}
+  .rte-area{padding:14px 16px;font-size:15px;color:var(--text);line-height:1.55;min-height:48px;}
+  .rte-tag{float:right;font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:5px;padding:1px 6px;}
+  .select-pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #3b3b3f;border-radius:20px;background:transparent;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;}
+  .select-pill .lbl{color:var(--text-muted);}
+  .select-pill .chev{color:var(--text-muted);display:inline-flex;}
+  .radio-cards{border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:480px;width:100%;}
+  .radio-card{display:flex;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .radio-card:last-child{border-bottom:none;}
+  .radio-card.selected{background:var(--bg-pill);}
+  .radio-dot{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--text-muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .radio-card.selected .radio-dot{border-color:#fff;}
+  .radio-card.selected .radio-dot::after{content:"";width:9px;height:9px;border-radius:50%;background:#fff;}
+  .radio-title{font-weight:600;font-size:15px;}
+  .radio-desc{color:var(--text-muted);font-size:13px;margin-top:2px;}
+  .toggle-row{display:flex;align-items:center;gap:14px;}
+  .tab-switch{display:inline-flex;background:var(--bg-pill);border:1px solid var(--border);border-radius:8px;padding:3px;}
+  .tab-switch .tab{padding:6px 22px;border-radius:6px;background:transparent;color:var(--text-muted);font-size:14px;font-weight:600;cursor:pointer;}
+  .tab-switch .tab.active{background:#fff;color:#111;}
+  .cb-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;color:var(--text);cursor:pointer;}
+  .date-wrap{display:flex;flex-direction:column;gap:12px;}
+  input[type=date].form-input{max-width:240px;color-scheme:dark;}
+  .quick-row{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .quick-label{color:var(--text-muted);font-size:13px;}
+  .quick-btn{padding:5px 12px;border:1px dashed var(--border-strong);border-radius:999px;color:var(--text-muted);font-size:13px;font-weight:600;background:transparent;cursor:pointer;}
+  .quick-btn:hover{background:var(--bg-pill);color:var(--text);}
+  .dropzone{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 20px;border:1.5px dashed var(--border-strong);border-radius:12px;background:var(--bg-pill);text-align:center;max-width:420px;width:100%;cursor:pointer;}
+  .dropzone .dz-icon{color:var(--text-muted);}
+  .dropzone .dz-title{font-size:15px;font-weight:600;}
+  .dropzone .dz-hint{font-size:12.5px;color:var(--text-faint);}
+  .usearch-panel{width:100%;max-width:460px;background:var(--input-bg);border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 16px 44px rgba(0,0,0,.55);padding:6px;}
+  .usearch-row{display:flex;align-items:center;gap:10px;width:100%;padding:6px 12px;border-radius:8px;cursor:pointer;}
+  .usearch-row.active{background:#2c2c2f;}
+  .usearch-avatar{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;background:radial-gradient(70% 70% at 50% 40%,#e97237,#8a3114);}
+  .usearch-user-name{font-size:14.5px;font-weight:600;color:var(--text);}
+  .usearch-user-sub{font-size:12.5px;color:var(--text-muted);}
+  .tag-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:460px;}
+  .tag-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;background:var(--bg-pill-strong);border-radius:6px;font-size:14px;color:var(--text);}
+  .tag-chip .x{width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;}
+  .tag-chip .x:hover{background:rgba(255,255,255,.06);color:var(--text);}
+  .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;max-width:380px;}
+  .emoji-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:20px;border-radius:9px;background:var(--bg-pill);border:1px solid var(--border);cursor:pointer;}
+  .emoji-cell:hover{border-color:var(--border-strong);background:var(--bg-pill-strong);}
+  .emoji-cell.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .swatch-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .swatch{width:38px;height:26px;border-radius:6px;border:2px solid var(--border);cursor:pointer;padding:0;}
+  .swatch.active{border-color:var(--accent);}
+  .strength-input{width:56px;padding:6px 8px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:14px;text-align:center;outline:none;}
+  .score-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px;max-width:460px;width:100%;}
+  .score-btn{aspect-ratio:1/1;border:1px solid var(--border);border-radius:10px;background:var(--bg-pill);color:var(--text-muted);font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .score-btn.reject{background:rgba(224,72,72,.85);border-color:#e04848;color:#fff;}
+  .score-btn.pass{background:rgba(95,208,163,.9);border-color:#5fd0a3;color:#0d0d0d;}
+  .score-legend{margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;gap:18px;}
+  .region-grid{display:flex;flex-wrap:wrap;gap:8px;max-width:460px;}
+  .region-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg-pill);color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;}
+  .region-chip:hover{color:var(--text);border-color:var(--border-strong);}
+  .region-chip.active{border-color:var(--accent-strong);background:rgba(233,114,55,.12);color:var(--text);}
+  .region-chip.active .chk{color:var(--accent-strong);display:inline-flex;}
+  .price-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;max-width:460px;}
+  .price-field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .price-field label{font-size:12px;font-weight:600;color:var(--text-muted);}
+  .price-input{padding:11px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none;width:100%;}
+  .price-input::placeholder{color:#5a5a5e;}
+
+  /* ============ COMPOSITE styles ============ */
+  .stack{display:flex;flex-direction:column;gap:8px;width:100%;max-width:760px;}
+  .section-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-pill);border:1px solid var(--border);border-radius:10px;}
+  .section-fields{flex:1;display:flex;gap:8px;min-width:0;}
+  .section-fields .row-input{flex:1;min-width:0;}
+  .panel-wrap{border:1px solid var(--border);border-radius:12px;padding:18px 20px;background:var(--bg-panel);width:100%;max-width:760px;}
+  .pw-title{font-weight:600;font-size:14px;}
+  .pw-sub{color:var(--text-muted);font-size:12.5px;margin-top:2px;}
+  .q-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);}
+  .q-icon{color:var(--text-faint);}
+  .q-text{flex:1;font-size:14px;color:var(--text);}
+  .q-type{color:var(--text-muted);}
+  .ip-num{display:inline-block;width:54px;padding:4px 10px;margin:0 6px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:14px;font-weight:600;text-align:center;}
+  .res-row{display:flex;align-items:center;gap:10px;width:100%;max-width:620px;}
+  .grade-row{display:flex;align-items:center;gap:18px;padding:12px 16px;background:var(--bg-pill);border:1px solid var(--border);border-radius:10px;max-width:620px;width:100%;}
+  .grade-row .nm{flex:1;font-size:14px;}
+  .grade-row .nm strong{font-weight:600;}
+  .cert-tree{border:1px solid var(--border);border-radius:12px;overflow:hidden;width:100%;max-width:680px;background:var(--bg-panel);}
+  .cert-row{display:flex;align-items:center;gap:12px;padding:11px 16px;}
+  .cert-row+.cert-row{border-top:1px solid var(--border);}
+  .cert-row.in-lesson{padding-left:44px;background:rgba(255,255,255,.012);}
+  .cert-caret{color:var(--text-muted);width:12px;text-align:center;font-size:11px;}
+  .cert-num{width:26px;height:26px;border-radius:6px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;color:var(--text-muted);}
+  .cert-name{font-weight:600;font-size:14px;}
+  .cert-meta{color:var(--text-muted);font-size:12.5px;}
+  .cert-add{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:18px;}
+  .cond-card{border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:14px 16px;display:flex;flex-direction:column;gap:10px;max-width:520px;width:100%;}
+  .cond-head{display:flex;align-items:center;gap:10px;}
+  .cond-num{width:22px;height:22px;border-radius:50%;background:var(--bg-pill-strong);border:1px solid var(--border-strong);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--text-muted);}
+  .cond-title{flex:1;font-weight:600;font-size:14px;}
+  .cond-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-pill);border:1px solid var(--border);border-radius:8px;}
+  .cond-row .nm{font-weight:600;font-size:14px;}
+  .cond-row .rule{color:var(--text-muted);font-size:12.5px;}
+  .cond-add{color:#79bbff;font-weight:600;font-size:14px;background:none;border:none;cursor:pointer;padding:2px 0;text-align:left;}
+  .cond-note{font-size:12.5px;color:var(--text-muted);}
+  .restrict-edit{padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--bg-pill);display:flex;flex-direction:column;gap:14px;max-width:460px;width:100%;}
+  .restrict-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);}
+  .restrict-opt.checked{border-color:var(--accent);background:rgba(233,114,55,.06);}
+  .rchk{width:18px;height:18px;border-radius:5px;border:1px solid var(--border-strong);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .rchk.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .qe-option-row{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-panel);max-width:560px;width:100%;}
+  .qe-letter{width:24px;height:24px;border-radius:6px;background:var(--bg-pill-strong);border:1px solid var(--border-strong);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex-shrink:0;margin-top:4px;}
+  .qe-ed{flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;background:var(--bg-pill);padding:10px 12px;font-size:14px;min-height:40px;}
+  .qe-grade{width:120px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;}
+  .qe-cap{font-size:9.5px;font-weight:600;text-transform:uppercase;color:var(--text-faint);letter-spacing:.04em;}
+  .qe-grade select{color:#5fcf80;width:100%;}
+  .qe-pair{display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+  .qe-arrow{color:var(--text-faint);font-size:15px;flex-shrink:0;}
+  .fb-card{border:1px solid var(--border);background:var(--bg-panel);border-radius:10px;overflow:hidden;max-width:560px;width:100%;}
+  .fb-card.active{border-color:rgba(233,114,55,.55);box-shadow:0 0 0 1px rgba(233,114,55,.25);}
+  .fb-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);}
+  .fb-num{width:24px;height:24px;border-radius:50%;background:var(--bg-pill);display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);flex-shrink:0;}
+  .fb-type{background:var(--bg-pill);border:1px solid var(--border-strong);color:var(--text);font-size:13px;padding:6px 26px 6px 10px;border-radius:6px;cursor:pointer;
+     appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%238b8b8f' stroke-width='2'><path d='M2 4l4 4 4-4'/></svg>");background-repeat:no-repeat;background-position:right 8px center;}
+  .fb-acts{margin-left:auto;display:flex;gap:4px;}
+  .fb-mini{width:26px;height:26px;border-radius:6px;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
+  .fb-mini:hover{background:var(--bg-pill);color:var(--text);}
+  .fb-body{padding:14px;display:flex;flex-direction:column;gap:10px;}
+  .fb-text{width:100%;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;padding:10px 12px;font-family:var(--font-sans);outline:none;}
+  .fb-text.es{border-style:dashed;color:var(--text-muted);}
+  .fb-foot{padding:10px 14px;border-top:1px solid var(--border);background:rgba(255,255,255,.015);display:flex;justify-content:flex-end;}
+  .fb-opt{display:flex;align-items:center;gap:10px;padding:4px 0;}
+  .fb-opt-icon{width:16px;height:16px;border:1.5px solid var(--border-strong);flex-shrink:0;}
+  .fb-opt-icon.radio{border-radius:50%;}
+  .fb-opt-icon.check{border-radius:3px;}
+  .fb-opt input{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--text);padding:4px 0;font-size:14px;outline:none;font-family:var(--font-sans);}
+  .fb-opt input:focus{border-bottom-color:var(--accent);}
+  .fb-link{color:var(--accent);font-size:13px;background:none;border:none;cursor:pointer;padding:4px 0;font-family:var(--font-sans);}
+  .scale-row{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;}
+  .scale-col{display:flex;flex-direction:column;gap:5px;}
+  .scale-col label{font-size:11px;color:var(--text-muted);font-weight:600;}
+  .pc-tab{display:flex;gap:16px;padding:16px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.015);max-width:680px;width:100%;}
+  .pc-icon{width:56px;height:56px;border-radius:10px;border:1px dashed var(--border-strong);display:flex;align-items:center;justify-content:center;color:var(--text-faint);flex-shrink:0;font-size:11px;text-align:center;cursor:pointer;}
+  .pc-fields{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0;}
+  .pc-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:520px;width:100%;}
+  .pc-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;font-size:14px;}
+  .pc-list-row+.pc-list-row{border-top:1px solid var(--border);}
+  .pc-list-acts{display:flex;gap:4px;color:var(--text-muted);}
+  .pc-add-row{display:flex;gap:10px;margin-top:10px;max-width:520px;}
+  .pc-add-row .row-input{flex:1;}
+  .btn-primary{padding:10px 16px;border-radius:8px;color:#fff;font-size:14px;font-weight:700;border:.5px solid rgba(240,85,35,.28);
+     background:linear-gradient(0deg,rgba(138,49,20,.75),rgba(240,85,35,.75) 70.9%),#0d0d0d;cursor:pointer;white-space:nowrap;}
+  .price-rowgrid{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:560px;width:100%;}
+  .price-rowgrid .pr{display:grid;grid-template-columns:160px 1fr 1fr;align-items:center;}
+  .price-rowgrid .pr+.pr{border-top:1px solid var(--border);}
+  .price-rowgrid .pr.head{background:var(--bg-pill);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);}
+  .price-rowgrid .pr .cell{padding:10px 12px;}
+  .price-rowgrid .pr .cell+.cell{border-left:1px solid var(--border);}
+  .tier-badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;}
+  .pcell-in{width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 10px;outline:none;}
+  .ind-row{display:flex;align-items:center;gap:8px;height:38px;padding:0 8px;border-radius:6px;color:var(--text-muted);font-size:14px;font-weight:500;max-width:520px;width:100%;}
+  .ind-row:hover{background:var(--bg-pill);color:var(--text);}
+  .ind-hidden-tag{font-size:9.5px;font-weight:600;text-transform:uppercase;color:var(--text-faint);background:var(--bg-pill-strong);border-radius:4px;padding:1px 6px;}
+  .ind-count{margin-left:auto;color:var(--text-faint);font-size:12px;}
+  .kw-chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:520px;}
+  .fu-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:520px;width:100%;margin-top:10px;}
+  .fu-row{display:flex;align-items:center;gap:12px;padding:11px 16px;font-size:14px;}
+  .fu-row+.fu-row{border-top:1px solid var(--border);}
+  .fu-ver{font-family:var(--font-mono);font-size:13px;}
+  .fu-active{font-size:10px;font-weight:700;text-transform:uppercase;color:#5fcf80;background:rgba(95,208,163,.12);border:1px solid rgba(95,208,163,.3);border-radius:4px;padding:1px 6px;}
+  .fu-date{margin-left:auto;color:var(--text-faint);font-size:12px;}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Unique Input Controls</h1>
+  <p>The full inventory had ~250 field instances built from a small set of reusable patterns. Below is every <strong>distinct</strong> control, rendered as it looks in the app (real dark theme, Fira Sans, <span style="color:#e97237">#e97237</span> accent). Split into <strong>Atomic</strong> controls (single fields) and <strong>Composite / repeatable</strong> controls (list editors, embedded-input rows, cards). Use the filter to find one.</p>
+  <div class="toolbar">
+    <input id="q" type="text" placeholder="Filter controls (e.g. section, attempts, toggle, grade, tab)…" />
+    <span class="stat" id="stat"></span>
+  </div>
+</header>
+<main id="main"></main>
+
+<script>
+const S={
+  search:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M11 11l3 3"/></svg>',
+  chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.5 5.5L7 9l3.5-3.5"/></svg>',
+  plus:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3v8M3 7h8"/></svg>',
+  x:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4l6 6M10 4l-6 6"/></svg>',
+  check:'<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5L6 10.5 11 4"/></svg>',
+  up:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V6M8 9l4-3 4 3"/><path d="M5 18h14"/></svg>',
+  upS:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V7M7 11l5-5 5 5"/></svg>',
+  dn:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v12M7 13l5 5 5-5"/></svg>',
+  copy:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>',
+  trash:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  dots:'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>',
+  spark:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v12M2 8h12M4 4l8 8M12 4l-8 8"/></svg>',
+};
+const drag='<span class="drag">⋮⋮</span>';
+
+const CONTROLS=[
+ // ===================== ATOMIC =====================
+ {g:"atomic",name:"Standard Search Bar",type:"search",
+  html:`<div class="usearch-bar"><span class="usearch-icon">${S.search}</span><input class="usearch-input" placeholder="Search by name, email, or phone"/><span class="usearch-kbd"><span class="kbd-cmd">⌘</span><span class="kbd-letter">K</span></span></div>`,
+  uses:"Tasks, Companies, Users, Scholarships, Trial Extension, Offer Codes, Manage IDs, Question Bank, Feedback Forms, Spotlights, and most list pages.",recur:"~18 screens"},
+ {g:"atomic",name:"Scoped Search Bar (prefix chips)",type:"search",
+  html:`<div class="usearch-bar"><span class="usearch-icon">${S.search}</span><span class="usearch-scope"><span class="sx">Company:</span>Apex HVAC</span><input class="usearch-input" placeholder="Search submissions" style="font-size:15px"/><span class="usearch-kbd"><span class="kbd-cmd">⌘</span><span class="kbd-letter">K</span></span></div>`,
+  uses:"Users (Company:), Review Hands-On (Company:, Task:), Tasks (Certification:, Type:).",recur:"3 search bars"},
+ {g:"atomic",name:"Filter Pill — unapplied (dashed)",type:"dropdown trigger",
+  html:`<button class="filter-pill-dashed"><span style="display:inline-flex">${S.plus}</span>Created By</button>`,
+  uses:"Every list page filter row: Tier, Status, Industry, Created By, User Type, Subscription, Career Stage, Visibility, etc.",recur:"~40 pills"},
+ {g:"atomic",name:"Filter Pill — applied",type:"dropdown trigger",
+  html:`<span class="filter-applied"><span class="clear">${S.x}</span><span class="main"><span class="label">Tier</span><span class="sep"></span><span class="value">Growth +2</span></span></span>`,
+  uses:"Shown after a filter is chosen; value turns orange with a clear (×).",recur:"all filter rows"},
+ {g:"atomic",name:"Multi-select Dropdown Panel",type:"multi-select",
+  html:`<div class="dropdown"><div class="dropdown-search"><span style="color:#a8a8a8;display:inline-flex">${S.search}</span><input placeholder="Search…"/></div><div class="dropdown-list"><div class="dropdown-section-label">Tier</div><div class="dropdown-item"><span class="checkbox tint">${S.check}</span>Essentials</div><div class="dropdown-item"><span class="checkbox tint">${S.check}</span>Growth</div><div class="dropdown-item"><span class="checkbox"></span>Pro</div><div class="dropdown-item"><span class="checkbox"></span>Free Trial</div></div><div class="dropdown-footer"><button class="btn-apply">Apply</button></div></div>`,
+  uses:"Opens from every multi-select filter pill; searchable variants for Industry / Company / Partnership.",recur:"~40 dropdowns"},
+ {g:"atomic",name:"Single-line Text Input",type:"text",
+  html:`<div class="fg"><label class="form-label">Company name <span class="req">*</span></label><input class="form-input" placeholder="e.g. Apex HVAC Solutions"/></div>`,
+  uses:"Names, addresses, URLs, headings, labels across every wizard and modal.",recur:"~70 fields"},
+ {g:"atomic",name:"Number + Unit",type:"number",
+  html:`<div class="fg"><label class="form-label">Time to complete</label><div class="time-row"><input class="form-input small" type="text" value="30"/><select class="form-select big"><option>minutes</option><option>hours</option><option>days</option><option>weeks</option></select></div></div>`,
+  uses:"Time to Complete (Task & Cert), CEUs, max files, trial duration, webcam frequency.",recur:"~20 fields"},
+ {g:"atomic",name:"Textarea",type:"textarea",
+  html:`<div class="fg"><label class="form-label">Feedback notes</label><textarea class="form-input" placeholder="Actionable feedback to the learner…"></textarea></div>`,
+  uses:"Review feedback, Spotlight description, Name-change request message & reject reason.",recur:"~8 fields"},
+ {g:"atomic",name:"Rich Text Editor (bilingual)",type:"rich text",
+  html:`<div class="rte-field"><div class="rte-toolbar"><span class="rte-btn" style="font-weight:800">B</span><span class="rte-btn" style="font-style:italic">I</span><span class="rte-btn" style="text-decoration:underline">U</span><span class="rte-sep"></span><span class="rte-btn">•</span><span class="rte-btn">1.</span><span class="rte-sep"></span><span class="rte-btn">🔗</span></div><div class="rte-area"><span class="rte-tag">EN</span>Covers EPA 608 refrigerant handling and leak repair…</div></div>`,
+  uses:"Descriptions (Task, Cert, Course, Lesson, Skill), Hands-On instructions & tools, Terms of Service & Privacy Policy.",recur:"~24 editors"},
+ {g:"atomic",name:"Single Select (pill)",type:"select",
+  html:`<button class="select-pill"><span class="lbl">Type:</span>All<span class="chev">${S.chev}</span></button>`,
+  uses:"Question Bank (Type / Status / Used-in), Industries add-certs filters.",recur:"~10 selects"},
+ {g:"atomic",name:"Radio Cards",type:"radio",
+  html:`<div class="radio-cards"><div class="radio-card selected"><span class="radio-dot"></span><div><div class="radio-title">Single block</div><div class="radio-desc">One flat list of questions.</div></div></div><div class="radio-card"><span class="radio-dot"></span><div><div class="radio-title">Sectioned</div><div class="radio-desc">Group questions into graded sections.</div></div></div></div>`,
+  uses:"Quiz structure, grading model, completion rules, payment type, plan/tier, creation method, merge conflicts, orientation.",recur:"~30 groups"},
+ {g:"atomic",name:"Toggle Switch",type:"toggle",
+  html:`<div class="toggle-row"><span class="toggle on"><span class="knob"></span></span><span>Final Exam</span></div><div class="toggle-row" style="margin-top:14px"><span class="toggle"><span class="knob"></span></span><span style="color:#8b8b8f">Proctoring</span></div>`,
+  uses:"Final Exam, Proctoring, Paywall, NATE exam, Auto attempts, Time limit, Hidden, Visibility, tab visibility.",recur:"~25 toggles"},
+ {g:"atomic",name:"Segmented Control / Tabs",type:"segmented",
+  html:`<div class="tab-switch"><span class="tab active">Monthly</span><span class="tab">Yearly</span></div><div class="tab-switch" style="margin-top:12px"><span class="tab active">All</span><span class="tab">Active</span><span class="tab">Expired</span></div>`,
+  uses:"Tax status, Billing cycle, Status tabs, Plan toggle, Trigger kind, response views.",recur:"~15 controls"},
+ {g:"atomic",name:"Checkbox (list row)",type:"checkbox",
+  html:`<div><div class="cb-row"><span class="checkbox checked">${S.check}</span>Date Created</div><div class="cb-row"><span class="checkbox checked">${S.check}</span>Created By</div><div class="cb-row"><span class="checkbox"></span>Tags</div></div>`,
+  uses:"Edit Columns menus, Required-to-pass, post-submission review options, media types, evaluation criteria.",recur:"~20 lists"},
+ {g:"atomic",name:"Date + Quick-set",type:"date",
+  html:`<div class="date-wrap"><input class="form-input" type="date" value="2026-12-26"/><div class="quick-row"><span class="quick-label">or</span><button class="quick-btn">3 months</button><button class="quick-btn">6 months</button><button class="quick-btn">1 year</button></div></div>`,
+  uses:"Scholarships (expiry), Trial Extension (expiry), Spotlight end date.",recur:"3 modals"},
+ {g:"atomic",name:"File Upload Dropzone",type:"file",
+  html:`<div class="dropzone"><span class="dz-icon">${S.up}</span><div class="dz-title">Upload new ID</div><div class="dz-hint">Drag &amp; drop or click to browse · image or PDF</div></div>`,
+  uses:"Manage IDs, Cert backup/CSV import, Question Bank CSV, xAPI package, Task file, Reference files, template background, tab icons.",recur:"~12 uploads"},
+ {g:"atomic",name:"Searchable Combobox (user picker)",type:"combobox",
+  html:`<div class="usearch-panel"><div class="usearch-row active"><span class="usearch-avatar">JS</span><div><div class="usearch-user-name">Jane Smith</div><div class="usearch-user-sub">jane@apexhvac.com · B2B</div></div></div><div class="usearch-row"><span class="usearch-avatar">MR</span><div><div class="usearch-user-name">Mateo Ruiz</div><div class="usearch-user-sub">mateo@gmail.com · B2C</div></div></div></div>`,
+  uses:"Scholarship/Trial user select, Merge Accounts, Transfer Subscription, Edit Account Holder, Content Overrides.",recur:"~9 pickers"},
+ {g:"atomic",name:"Content Tag Chips",type:"chips",
+  html:`<div class="tag-row"><span class="tag-chip">HVAC<span class="x">${S.x}</span></span><span class="tag-chip">Electrical<span class="x">${S.x}</span></span><select class="form-select" style="min-width:130px"><option>Add Trade…</option></select></div>`,
+  uses:"Visibility / Content Tags step (Trade, Partnership, User Type) in Task & Cert wizards.",recur:"~6 pickers"},
+ {g:"atomic",name:"Emoji / Badge Picker",type:"picker",
+  html:`<div class="emoji-grid">${["🏆","⚡","🔧","🛠️","❄️","🔥","🥇","⭐","🎖️","🧰","💡","🌟","🔌","🚰","🏅","✅"].map((e,i)=>`<div class="emoji-cell${i===2?' active':''}">${e}</div>`).join("")}</div>`,
+  uses:"Skill & Mastery Skill image selection (BADGE_EMOJI grid).",recur:"2 wizards"},
+ {g:"atomic",name:"Color Swatch Picker",type:"picker",
+  html:`<div class="swatch-row"><button class="swatch active" style="background:linear-gradient(135deg,#e97237,#8a3114)"></button><button class="swatch" style="background:linear-gradient(135deg,#5fd0a3,#1d6b4f)"></button><button class="swatch" style="background:linear-gradient(135deg,#6f8cff,#2c3a8a)"></button><button class="swatch" style="background:linear-gradient(135deg,#f5d36b,#a07a14)"></button><button class="swatch" style="background:linear-gradient(135deg,#c8a8ff,#5b3a99)"></button><button class="swatch" style="background:#1d1d20"></button></div>`,
+  uses:"Design Template background (NewDesignTemplateWizard).",recur:"1 wizard"},
+ {g:"atomic",name:"Strength Number (slider field)",type:"number",
+  html:`<div style="display:flex;align-items:center;gap:10px"><span style="color:#8b8b8f">Link strength</span><input class="strength-input" type="text" value="80"/><span style="color:#5a5a5e">/ 100</span></div>`,
+  uses:"Content Links — prerequisite / recommended / related link strength.",recur:"1 page"},
+ {g:"atomic",name:"Score Selector (1–10)",type:"button group",
+  html:`<div><div class="score-grid">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="score-btn${n===7?' pass':''}">${n}</button>`).join("")}</div><div class="score-legend"><span style="color:#e04848">1–4 · Reject</span><span style="color:#5fd0a3">5–10 · Pass</span></div></div>`,
+  uses:"Review Hands-On submission grading.",recur:"1 detail view"},
+ {g:"atomic",name:"Region Chip Grid",type:"checkbox grid",
+  html:`<div class="region-grid"><span class="region-chip active"><span class="chk">${S.check}</span>United States</span><span class="region-chip active"><span class="chk">${S.check}</span>Canada</span><span class="region-chip">Mexico</span><span class="region-chip">United Kingdom</span><span class="region-chip">Australia</span><span class="region-chip">India</span></div>`,
+  uses:"Offer Codes — countries / regions selection.",recur:"1 modal"},
+ {g:"atomic",name:"Price ID Fields",type:"text group",
+  html:`<div class="price-grid"><div class="price-field"><label>Google</label><input class="price-input" placeholder="com.skillcat.product.id"/></div><div class="price-field"><label>Apple</label><input class="price-input" placeholder="com.skillcat.product.id"/></div><div class="price-field"><label>Stripe (B2C)</label><input class="price-input" placeholder="price_xxxxxxxxxxxx"/></div><div class="price-field"><label>Stripe (B2B)</label><input class="price-input" placeholder="price_xxxxxxxxxxxx"/></div></div>`,
+  uses:"Paywall pricing in Task & Cert wizards, Product Config (B2C/B2B), per-attempt prices.",recur:"~8 places"},
+
+ // ===================== COMPOSITE / REPEATABLE =====================
+ {g:"comp",name:"Sections Editor (bilingual rows)",type:"repeatable rows",
+  html:`<div class="stack"><div class="section-row">${drag}<span class="idx-badge">1</span><div class="section-fields"><input class="row-input" value="Core"/><input class="row-input" value="Núcleo"/></div><span class="row-x">${S.x}</span></div><div class="section-row">${drag}<span class="idx-badge">2</span><div class="section-fields"><input class="row-input" value="Type I"/><input class="row-input" value="Tipo I"/></div><span class="row-x">${S.x}</span></div><button class="ghost-btn" style="align-self:flex-start;margin-top:2px">+ Add Section</button></div>`,
+  uses:"Quiz wizard — Sections step. Each row: drag handle + index badge + EN name + ES name + remove, with “+ Add Section”.",recur:"Quiz builder"},
+ {g:"comp",name:"Static Questions Picker",type:"repeatable rows + weight",
+  html:`<div class="panel-wrap"><div><span class="pw-title">Per attempt</span> <span class="pw-sub" style="display:inline">(3 questions)</span><div class="pw-sub">3 static · 0 drawn from 0 pools</div></div><div class="sub-head" style="margin:14px 0 2px">Static Questions</div><div class="q-row">${drag}<span class="q-icon">${S.spark}</span><span class="q-text">Section 608 prohibits which actions? <span class="q-type">· Multiple choice</span></span><input class="num-box" value="1"/><span class="row-x">${S.x}</span></div><div class="q-row">${drag}<span class="q-icon">${S.spark}</span><span class="q-text">Technicians must be EPA-certified. <span class="q-type">· True / False</span></span><input class="num-box" value="1"/><span class="row-x">${S.x}</span></div><div style="padding-top:10px"><button class="ghost-btn">+ Add questions from Bank</button></div><div class="sub-head" style="margin:16px 0 6px">Random Pools</div><button class="ghost-btn">+ Add random pool</button></div>`,
+  uses:"Quiz wizard — Questions step. Per-row points input + drag; “Add from Bank” and “Add random pool”.",recur:"Quiz builder"},
+ {g:"comp",name:"Radio + Inline Number",type:"radio w/ embedded input",
+  html:`<div class="radio-cards"><div class="radio-card selected"><span class="radio-dot"></span><div><div class="radio-title">Limit to <span class="ip-num">3</span> attempts</div><div class="radio-desc">1–10 attempts. Admins can grant more later.</div></div></div><div class="radio-card"><span class="radio-dot"></span><div><div class="radio-title">Unlimited attempts</div></div></div></div>`,
+  uses:"Max attempts (Quiz & Hands-On). A number input is embedded inside the radio label.",recur:"~3 wizards"},
+ {g:"comp",name:"In-Quiz Resource Row",type:"select + text row",
+  html:`<div class="stack"><div class="res-row">${drag}<select class="form-select" style="min-width:130px"><option>Image</option><option>Video</option><option>PDF</option><option>WebView</option><option>Custom</option></select><input class="row-input" style="flex:1" value="EPA P-T chart"/><span class="row-x">${S.x}</span></div><button class="ghost-btn" style="align-self:flex-start">+ Add resource</button></div>`,
+  uses:"Quiz wizard — Integrity & Resources step. Type dropdown + name per resource.",recur:"Quiz builder"},
+ {g:"comp",name:"Section Passing % Row",type:"row + percent + toggle",
+  html:`<div class="grade-row"><span class="nm">Section 1: <strong>Core</strong></span><div style="display:flex;align-items:center;gap:8px"><input class="num-box" value="70"/><span style="color:#8b8b8f">% to pass</span></div><div style="display:flex;align-items:center;gap:10px"><span class="toggle on"><span class="knob"></span></span><span style="font-size:13px;color:#8b8b8f">Required</span></div></div>`,
+  uses:"Quiz wizard — Grading & Completion. Per-section passing percentage + required toggle.",recur:"Quiz builder"},
+ {g:"comp",name:"Variable Cooldown Row",type:"number row",
+  html:`<div class="stack"><div class="res-row"><span class="nm" style="flex:1;font-size:14px">Between attempts <strong>1 → 2</strong></span><input class="num-box" style="width:70px" value="30"/><span style="color:#8b8b8f">min</span><span class="row-x">${S.x}</span></div><div class="res-row"><span class="nm" style="flex:1;font-size:14px">Between attempts <strong>2 → 3</strong></span><input class="num-box" style="width:70px" value="120"/><span style="color:#8b8b8f">min</span><span class="row-x">${S.x}</span></div></div>`,
+  uses:"Quiz wizard — Attempts & Timing, variable cooldown mode. Per-attempt-gap minutes.",recur:"Quiz builder"},
+ {g:"comp",name:"Course / Lesson Tree",type:"nested rows + add",
+  html:`<div class="cert-tree"><div class="cert-row"><span class="cert-caret">▾</span>${drag}<span class="cert-num">1</span><span class="cert-name">Refrigerant Basics</span><span class="cert-meta">· Course</span></div><div class="cert-row in-lesson"><span class="cert-caret">▸</span>${drag}<span class="cert-num" style="border-radius:50%">a</span><span class="cert-name">Leak Detection</span><span class="cert-meta">· Lesson · 3 tasks</span></div><div class="cert-add"><button class="link-add">+ Add lesson</button><button class="link-add">+ Add task</button></div></div>`,
+  uses:"Certification wizard — Course Structure. Nested course→lesson→task tree, drag-reorder, inline add links.",recur:"Cert builder"},
+ {g:"comp",name:"Completion Condition Set",type:"grouped rows",
+  html:`<div class="cond-card"><div class="cond-head"><span class="cond-num">1</span><span class="cond-title">Condition Set 1</span><span class="row-x">${S.x}</span></div><div class="cond-row"><span class="nm">Final Exam</span><span class="rule">· passing grade</span><span class="row-x" style="margin-left:auto">${S.x}</span></div><div class="cond-row"><span class="nm">Hands-On Install</span><span class="rule">· completed</span><span class="row-x" style="margin-left:auto">${S.x}</span></div><button class="cond-add">+ Add item</button><div class="cond-note">All items in a set use <strong>AND</strong>; sets are joined by <strong>OR</strong>.</div></div>`,
+  uses:"Certification wizard — Completion Conditions. Tasks/certs grouped into AND/OR sets.",recur:"Cert builder"},
+ {g:"comp",name:"Access Restriction Editor",type:"toggle + mode + checks",
+  html:`<div class="restrict-edit"><div class="toggle-row"><span class="toggle on"><span class="knob"></span></span><span>Require prerequisites</span></div><div class="tab-switch"><span class="tab active">All of</span><span class="tab">Any one of</span></div><div style="display:flex;flex-direction:column;gap:6px"><div class="restrict-opt checked"><span class="rchk on">${S.check}</span>Intro Quiz</div><div class="restrict-opt"><span class="rchk"></span>Safety Module</div></div></div>`,
+  uses:"Certification wizard — Access Restrictions. Per-task: enable toggle + All/Any mode + prerequisite checklist.",recur:"Cert builder"},
+ {g:"comp",name:"Per-Attempt Price Block",type:"repeatable price grid",
+  html:`<div class="panel-wrap" style="max-width:520px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span class="pw-title">Attempt 2 price</span><span class="row-x">${S.x}</span></div><div class="price-grid"><div class="price-field"><label>Google</label><input class="price-input" placeholder="com.skillcat…"/></div><div class="price-field"><label>Apple</label><input class="price-input" placeholder="com.skillcat…"/></div><div class="price-field"><label>Stripe (B2C)</label><input class="price-input" placeholder="price_…"/></div><div class="price-field"><label>Stripe (B2B)</label><input class="price-input" placeholder="price_…"/></div></div></div>`,
+  uses:"Per-attempt paywall mode (Task & Cert). One Price-ID block per attempt number, with “+ Add Attempt”.",recur:"~2 wizards"},
+ {g:"comp",name:"MCQ Answer Option Row",type:"editor + grade + remove",
+  html:`<div class="stack"><div class="qe-option-row"><span class="qe-letter">A</span><div class="qe-ed">Only certified technicians may purchase…</div><div class="qe-grade"><span class="qe-cap">Grade</span><select class="form-select" style="padding:8px 26px 8px 10px;font-size:13px"><option>100%</option></select></div><span class="row-x">${S.x}</span></div><button class="ghost-btn" style="align-self:flex-start">+ Add option</button></div>`,
+  uses:"Question Bank wizard — MCQ answers. Rich-text option (bilingual) + per-option grade % + remove.",recur:"Question builder"},
+ {g:"comp",name:"Match-the-Following Pair Row",type:"paired editors",
+  html:`<div class="stack"><div class="qe-option-row"><span class="qe-letter">1</span><div class="qe-pair"><div class="qe-ed">Refrigerant R-410A</div><span class="qe-arrow">→</span><div class="qe-ed">High-pressure blend</div></div><span class="row-x">${S.x}</span></div><button class="ghost-btn" style="align-self:flex-start">+ Add pair</button></div>`,
+  uses:"Question Bank wizard — Match type. Prompt editor → “matches with” editor per pair.",recur:"Question builder"},
+ {g:"comp",name:"Linear Scale Config",type:"selects + labels",
+  html:`<div class="scale-row"><div class="scale-col"><label>Scale from</label><select class="form-select"><option>0</option><option>1</option></select></div><div class="scale-col"><label>to</label><select class="form-select"><option>5</option><option selected>10</option></select></div><div class="scale-col"><label>Lower label</label><input class="row-input" placeholder="Not likely"/></div><div class="scale-col"><label>Upper label</label><input class="row-input" placeholder="Very likely"/></div></div>`,
+  uses:"Feedback Form editor — Linear scale question. From/To bounds + lower/upper labels.",recur:"Feedback editor"},
+ {g:"comp",name:"Feedback Question Card",type:"card w/ embedded fields",
+  html:`<div class="fb-card active"><div class="fb-head"><span class="fb-num">1</span><select class="fb-type"><option>Single select</option><option>Multi select</option><option>Short answer</option><option>File upload</option><option>Linear scale</option></select><span class="fb-acts"><span class="fb-mini">${S.upS}</span><span class="fb-mini">${S.dn}</span><span class="fb-mini">${S.copy}</span><span class="fb-mini">${S.trash}</span></span></div><div class="fb-body"><input class="fb-text" value="How satisfied were you with the exam?"/><input class="fb-text es" placeholder="Spanish (optional)"/><div class="fb-opt"><span class="fb-opt-icon radio"></span><input value="Very satisfied"/><span class="row-x">${S.x}</span></div><div class="fb-opt"><span class="fb-opt-icon radio"></span><input value="Neutral"/><span class="row-x">${S.x}</span></div><div style="display:flex;gap:14px"><button class="fb-link">+ Add option</button><button class="fb-link">+ Add “Other”</button></div></div><div class="fb-foot"><label class="cb-row"><span class="checkbox checked">${S.check}</span>Required</label></div></div>`,
+  uses:"Feedback Form editor. Type select + EN/ES text + options + Required + move/duplicate/delete actions.",recur:"Feedback editor"},
+ {g:"comp",name:"App / Dashboard Tab Row",type:"icon + fields + toggle",
+  html:`<div class="pc-tab"><div class="pc-icon">${S.upS}<br>Icon</div><div class="pc-fields"><input class="row-input" placeholder="Tab name (EN)" value="Home"/><input class="row-input" placeholder="Tab name (ES)" value="Inicio"/><input class="row-input" placeholder="https://…" value="https://app.skillcat.com/home"/><div style="display:flex;align-items:center;gap:10px"><span class="toggle on"><span class="knob"></span></span><span style="font-size:13px;color:#8b8b8f">Visible</span></div></div></div>`,
+  uses:"Product Config — Display tab (App Tabs / Dashboard Tabs). Icon upload + name EN/ES + URL + visibility.",recur:"Product Config"},
+ {g:"comp",name:"Add / Edit / Remove List",type:"list + add input",
+  html:`<div style="width:100%;max-width:520px"><div class="pc-list"><div class="pc-list-row"><span>Preferred Partner</span><span class="pc-list-acts"><span class="fb-mini">✎</span><span class="fb-mini">${S.trash}</span></span></div><div class="pc-list-row"><span>NexStar</span><span class="pc-list-acts"><span class="fb-mini">✎</span><span class="fb-mini">${S.trash}</span></span></div></div><div class="pc-add-row"><input class="row-input" placeholder="Add a partnership…"/><button class="btn-primary">+ Add</button></div></div>`,
+  uses:"Product Config — B2B tab: Partnerships, Trade, Cancellation Reasons. Existing rows + append input.",recur:"Product Config"},
+ {g:"comp",name:"Force-Update Version Row",type:"version input + history",
+  html:`<div style="width:100%;max-width:520px"><div class="pc-add-row" style="margin:0 0 0 0"><input class="row-input" placeholder="e.g. 4.3.0" style="font-family:var(--font-mono)"/><button class="btn-primary">Force Update</button></div><div class="fu-list"><div class="fu-row">${drag}<span class="fu-ver">4.3.0</span><span class="fu-active">Active</span><span class="fu-date">Jun 24, 2026</span><span class="row-x">${S.x}</span></div><div class="fu-row">${drag}<span class="fu-ver">4.2.1</span><span class="fu-date">May 02, 2026</span><span class="row-x">${S.x}</span></div></div></div>`,
+  uses:"Product Config — General tab. Semver input + “Force Update”, with a removable version history list.",recur:"Product Config"},
+ {g:"comp",name:"Paywall Pricing Grid",type:"matrix of inputs",
+  html:`<div class="price-rowgrid"><div class="pr head"><div class="cell">Tier</div><div class="cell">Monthly</div><div class="cell">Annual</div></div><div class="pr"><div class="cell"><span class="tier-badge" style="background:rgba(111,140,255,.15);color:#9fc1ff">Essentials</span></div><div class="cell"><input class="pcell-in" placeholder="price_…"/></div><div class="cell"><input class="pcell-in" placeholder="price_…"/></div></div><div class="pr"><div class="cell"><span class="tier-badge" style="background:rgba(95,208,163,.15);color:#7ee0c0">Growth</span></div><div class="cell"><input class="pcell-in" placeholder="price_…"/></div><div class="cell"><input class="pcell-in" placeholder="price_…"/></div></div></div>`,
+  uses:"Product Config — B2C & B2B Management. Price-ID matrix across tiers/platforms × Monthly/Annual.",recur:"Product Config"},
+ {g:"comp",name:"Industries Tree Row",type:"expandable row + menu",
+  html:`<div style="width:100%;max-width:520px"><div class="ind-row">${drag}<span class="cert-caret">▾</span><span>HVAC &amp; Refrigeration</span><span class="ind-count">14 certs</span><span class="fb-mini">${S.dots}</span></div><div class="ind-row" style="padding-left:30px">${drag}<span class="cert-caret">▸</span><span>Residential</span><span class="ind-hidden-tag">Hidden</span><span class="ind-count">5 certs</span><span class="fb-mini">${S.dots}</span></div></div>`,
+  uses:"Industries page. Expandable industry/subcategory rows with hidden tag, cert count, and a 3-dot menu (Edit / Show-Hide / Delete).",recur:"Industries page"},
+ {g:"comp",name:"Keyword Chips (add input)",type:"chips + input",
+  html:`<div class="kw-chips"><span class="tag-chip">EPA 608<span class="x">${S.x}</span></span><span class="tag-chip">refrigerant<span class="x">${S.x}</span></span><span class="tag-chip">leak rate<span class="x">${S.x}</span></span><input class="row-input" style="flex:1;min-width:140px" placeholder="Add keyword + Enter"/></div>`,
+  uses:"Certification “More filters” keyword field, and keyword tagging inputs. Type + Enter to add a removable chip.",recur:"~2 places"},
+];
+
+const main=document.getElementById("main");
+const GROUPS=[
+  {key:"atomic",title:"Atomic Controls",desc:"single-field building blocks"},
+  {key:"comp",title:"Composite / Repeatable Controls",desc:"list editors, embedded-input rows & cards"},
+];
+let n=0;
+GROUPS.forEach(grp=>{
+  const items=CONTROLS.filter(c=>c.g===grp.key);
+  const gh=document.createElement("div");gh.className="group-head";gh.dataset.group=grp.key;
+  gh.innerHTML=`<h2>${grp.title}</h2><span class="gdesc">${items.length} controls · ${grp.desc}</span>`;
+  main.appendChild(gh);
+  items.forEach(c=>{
+    n++;
+    const card=document.createElement("section");
+    card.className="card";card.dataset.group=grp.key;
+    card.dataset.text=(c.name+" "+c.type+" "+c.uses).toLowerCase();
+    card.innerHTML=`<div class="card-head"><span class="num">${String(n).padStart(2,"0")}</span><h3>${c.name}</h3><span class="ctype ${c.g==='comp'?'comp':''}">${c.type}</span></div>
+      <div class="card-body"><div class="preview">${c.html}</div>
+      <div class="meta"><p class="lbl">Where it's used</p><p class="uses">${c.uses}</p><p class="lbl">Recurrence</p><p class="recur">${c.recur}</p></div></div>`;
+    main.appendChild(card);
+  });
+});
+
+document.getElementById("stat").textContent=`${CONTROLS.length} unique controls · ${CONTROLS.filter(c=>c.g==='atomic').length} atomic + ${CONTROLS.filter(c=>c.g==='comp').length} composite`;
+const q=document.getElementById("q");
+q.addEventListener("input",()=>{
+  const t=q.value.trim().toLowerCase();let shown=0;
+  document.querySelectorAll(".card").forEach(c=>{const m=!t||c.dataset.text.includes(t);c.classList.toggle("hidden",!m);if(m)shown++;});
+  document.querySelectorAll(".group-head").forEach(gh=>{
+    const any=document.querySelector(`.card[data-group="${gh.dataset.group}"]:not(.hidden)`);
+    gh.classList.toggle("hidden",!any);});
+  document.getElementById("stat").textContent=t?`${shown} match “${q.value}”`:`${CONTROLS.length} unique controls · ${CONTROLS.filter(c=>c.g==='atomic').length} atomic + ${CONTROLS.filter(c=>c.g==='comp').length} composite`;
+});
+</script>
+</body>
+</html>

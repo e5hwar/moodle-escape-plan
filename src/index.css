@@ -10574,7 +10574,9 @@ a.spc-hero-pill--link:hover {
 .prc-rail {
   position: sticky;
   top: 0;
-  z-index: 2;
+  /* Above anything the section body layers internally (the frame wall's flagged
+     stroke and its reason tag), so content scrolls UNDER the pinned rail. */
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -10720,50 +10722,25 @@ a.spc-hero-pill--link:hover {
 .prc-stat-value.is-bad { color: #ff1f31; }
 .prc-stat-value.is-muted { color: #a8a8a8; }
 
-/* A stat that filters the section to what it counts (Figma 1000:1184 idle /
-   1003:1266 applied). The value carries a dotted underline to say it is
-   clickable; there is no separate toggle control on the rail. */
-.prc-stat--filter {
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-}
-.prc-stat-btn {
+/* The footage rail's Flagged Images filter (Figma 1000:1184 applied /
+   1070:1299 idle) — it replaced the Total Frames / Flagged / Reason stats, and
+   with them the old dotted-underline filter stat and its clear glyph. It keeps
+   the stat's shape: the FILTER eyebrow over a 16px checkbox + its label, 8px
+   apart. */
+.prc-pick-btn {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px;
   padding: 0;
   border: none;
   background: none;
   text-align: left;
   cursor: pointer;
 }
-.prc-stat-btn .prc-stat-value {
-  text-decoration: underline dotted;
-  text-decoration-thickness: from-font;
-  text-underline-position: from-font;
+.prc-stat--pick .prc-stat-value {
+  color: #fff;
 }
-.prc-stat-btn:hover .prc-stat-label,
-.prc-stat--filter.is-filtered .prc-stat-label {
-  color: #e7e7e8;
-}
-
-/* Clears the filter. Bottom-aligned with the value it sits beside, and it only
-   exists while the filter is applied — so the rail's width changes by its 14px
-   plus the 4px gap when it appears. */
-.prc-stat-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: #a8a8a8;
-  cursor: pointer;
-}
-.prc-stat-clear:hover {
+.prc-pick-btn:hover .prc-stat-value {
   color: #e7e7e8;
 }
 
@@ -10910,6 +10887,9 @@ a.spc-hero-pill--link:hover {
   background: #15151a;
   border-radius: 8px;
   overflow: hidden;
+  /* Own stacking context: the stroke overlay and the reason tag below stack
+     against each other inside the tile only, never against the sticky rail. */
+  isolation: isolate;
 }
 
 .pr-frame.is-flagged::after {
@@ -11341,13 +11321,13 @@ a.spc-hero-pill--link:hover {
   gap: 8px;
 }
 
-/* Content items inside the body sit on the SAME 20px rhythm as the body's own
-   children (Figma 682:2495) — a stack is just a grouping, so it must not open
-   a wider gap than the body it sits in. Was 32px. */
+/* A modal's fields are a form like any other, so they take the app-wide
+   field-to-field gap: 32px (user rule 2026-08-06, one form type everywhere).
+   Was 20px, read off 682:2495 — that node loses to the general rule. */
 .prm-stack {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 32px;
 }
 
 .prm-field {
@@ -11368,12 +11348,15 @@ a.spc-hero-pill--link:hover {
   color: #f05523;
 }
 
+/* Field subtext inside a modal — the app's ONE subtext size, 14px on a 17px
+   line, same as .form-help / .toggle-sub / .radio-card-desc. Was 12px (the
+   literal 49:356 value); don't put it back. */
 .prm-help {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: normal;
+  line-height: 17px;
   color: #a8a8a8;
 }
 
@@ -11409,8 +11392,9 @@ a.spc-hero-pill--link:hover {
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 31px;
-  padding: 6px 8px;
+  /* The multiselect field's own row (1059:1182 / 591:1322): an even 8px inset,
+     so a single-line row stands 35px. Was a 31px row on 6px 8px. */
+  padding: 8px;
   border: none;
   border-radius: 6px;
   background: none;
@@ -11446,9 +11430,14 @@ a.spc-hero-pill--link:hover {
 .prm-check-label {
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: normal;
   color: #fff;
+}
+/* A ticked row runs SemiBold, the same cue the multi- and single-select menus
+   give their selected rows (1059:1182). */
+.prm-check-row[aria-checked="true"] .prm-check-label {
+  font-weight: 600;
 }
 
 /* Indented to the label column: 8px row padding + 16px box + 10px gap. */
@@ -11456,7 +11445,8 @@ a.spc-hero-pill--link:hover {
   padding-left: 34px;
 }
 
-.prm-other {
+.prm-other,
+.prm-text-input {
   width: 100%;
   padding: 12px;
   border: 1px solid #404040;
@@ -11468,58 +11458,101 @@ a.spc-hero-pill--link:hover {
   line-height: normal;
   color: #fff;
 }
-.prm-other::placeholder {
+.prm-other::placeholder,
+.prm-text-input::placeholder {
   color: #404040;
 }
-.prm-other:focus {
+.prm-other:focus,
+.prm-text-input:focus {
   outline: none;
   border-color: #7a7a7a;
 }
 
-/* ── supporting images ──
-   A GRID, not wrapped flex: fixed-width tiles left-aligned in a flex row dump
-   all the leftover width on the right, which read as a lopsided margin. Columns
-   auto-fill at a 120px minimum and share the remainder, so the row always ends
-   flush and the only side margins are the modal body's own 24px. No padding on
-   the container (updated Figma 484:1779). */
-.prm-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.prm-tile {
-  position: relative;
-  /* Square whatever width the column resolves to. */
-  aspect-ratio: 1 / 1;
-  padding: 0.776px;
-  border: 0.776px solid #2e2e33;
-  border-radius: 4.659px;
-  background: #15151a;
-  overflow: hidden;
-  cursor: pointer;
-}
-.prm-tile.is-on {
-  border-color: #f05523;
-}
-.prm-tile .pr-frame-svg {
+/* The evidence row at the top of the reject modal (Figma 1079:1373): the same
+   glassy pill the viewer's tools use, full width, with the count on the left
+   and a chevron on the right. It opens the attached frames full screen. */
+.rjm-evidence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
-  height: 100%;
-  display: block;
+  padding: 12px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    #0d0d0d;
+  cursor: pointer;
+  text-align: left;
 }
-.prm-tile .pr-frame-tag {
-  position: absolute;
-  top: 6px;
-  left: 6px;
+.rjm-evidence:hover:not(:disabled) {
+  border-color: rgba(122, 122, 122, 0.35);
+}
+/* Nothing attached yet: the row still states the count, but there is nothing
+   to open — so it reads as a status line, not a control. */
+.rjm-evidence:disabled {
+  cursor: default;
+}
+.rjm-evidence:disabled .rjm-evidence-label {
+  color: #a8a8a8;
+}
+.rjm-evidence:disabled .rjm-evidence-go {
+  opacity: 0.4;
+}
+.rjm-evidence-label {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+.rjm-evidence-go {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: #a8a8a8;
+}
+.rjm-evidence:hover:not(:disabled) .rjm-evidence-go {
+  color: #fff;
 }
 
-/* Always visible, in both states — the tile has to read as selectable before
-   anything has been picked. */
-.prm-tile-check {
+/* ── supporting images ──
+   Picked on the page, not in the reject modal (Figma 1054:1055 flagged /
+   1054:1067 clean): the footage grid's own tiles carry the checkbox, and
+   selecting one changes nothing else about the tile. */
+.pr-frame-check {
   position: absolute;
-  top: 4.22px;
-  right: 4.21px;
+  top: 8px;
+  right: 8px;
   display: inline-flex;
+  z-index: 3; /* above the flagged stroke overlay */
+}
+/* On the footage grid the box is its own button (the tile behind it zooms), so
+   it needs the button reset — and a slightly larger hit area than the 16px
+   glyph, taken as padding off the corner inset. */
+/* The section title's info glyph (Figma 1000:1184): 14px, 4px after the title.
+   Same glyph as the forms' `.form-help-info`, one size up from its 11px. */
+.prc-rail-info {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: -4px; /* the rail's 8px badge gap, back to the node's 4px */
+  color: #a8a8a8;
+}
+.prc-rail-info svg {
+  width: 14px;
+  height: 14px;
+}
+.prc-rail-info:hover,
+.prc-rail-info:focus-visible {
+  color: #fff;
+}
+
+.pr-frame-check--btn {
+  top: 4px;
+  right: 4px;
+  padding: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
 /* ── footer ── */
@@ -12545,7 +12578,9 @@ a.rh-crumb-link:hover {
 .ncr-fs-overlay {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  /* Above .pr-confirm-overlay (400): the frame viewer can be opened from
+     inside the reject modal. Still under the tooltip/hint ceiling (1000). */
+  z-index: 450;
   background: rgba(6, 8, 12, 0.92);
   display: flex;
   flex-direction: column;
@@ -12787,6 +12822,7 @@ a.rh-crumb-link:hover {
    16px −/+ glyphs and the 140px track at 8px gaps. */
 .idfs-toolbar > .idfs-btn,
 .idfs-toolbar > .udh-anchor > .idfs-btn,
+.idfs-nav > .udh-anchor > .idfs-btn,
 .idfs-zoom {
   display: inline-flex;
   align-items: center;
@@ -12817,12 +12853,21 @@ a.rh-crumb-link:hover {
   transition: color 0.12s ease;
 }
 /* The rotate pill IS the button, so it fills the 32px square. It sits inside
-   ShortcutHint.s `.udh-anchor` wrapper, so both paths have to be named. */
+   ShortcutHint.s `.udh-anchor` wrapper, so both paths have to be named. The
+   viewer's ←/→ arrows (Figma 1080:1390 / 1080:1387) are the same square pill. */
 .idfs-toolbar > .idfs-btn,
-.idfs-toolbar > .udh-anchor > .idfs-btn {
+.idfs-toolbar > .udh-anchor > .idfs-btn,
+.idfs-nav > .udh-anchor > .idfs-btn {
   width: 32px;
   height: 32px;
   justify-content: center;
+}
+
+/* The pair sits at the toolbar's own 12px rhythm. */
+.idfs-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 .idfs-btn:hover:not(:disabled) {
   color: #fff;
@@ -18351,12 +18396,17 @@ a.rh-crumb-link:hover {
   font-weight: 400;
   color: #fff;
 }
+/* Re-synced 2026-09-09: 591:1322 now marks its ticked row SemiBold, the same
+   way 591:1382 marks the single-select's current value — so a selection reads
+   the same in both menus and the checkbox is no longer the only cue. */
+.ms-menu .dropdown-list .dropdown-item.is-current { font-weight: 600; }
 .ms-menu-label {
   flex: 1;
   min-width: 0;
 }
 .ms-menu-empty {
-  padding: 6px 8px;
+  /* Sits on the rows' own 8px inset. */
+  padding: 8px;
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-faint);
@@ -18445,6 +18495,10 @@ a.rh-crumb-link:hover {
 
 .ss-menu { z-index: 500; }
 .ss-menu .dropdown-list { padding: 8px; }
+/* An even 8px inset — a single-line row stands 35px — per 591:1382 / 591:1322.
+   The 6px on `.dropdown-item` belongs to the filter menus (24:16130). */
+.ss-menu .dropdown-list .dropdown-item,
+.ms-menu .dropdown-list .dropdown-item { padding: 8px; }
 .ss-menu .dropdown-list .dropdown-item {
   font-size: 16px;
   font-weight: 400;
@@ -18493,8 +18547,6 @@ a.rh-crumb-link:hover {
 .ss-menu--countries .dropdown-item {
   align-items: center;
   gap: 12px;
-  /* 938:990 is an even 8px inset, so a single-line row stands 35px tall. */
-  padding: 8px;
 }
 .ss-menu--countries .dropdown-item-name {
   overflow: visible;
@@ -18623,9 +18675,6 @@ a.rh-crumb-link:hover {
 
 /* Currency menu — Figma 941:1115. Rows are one string ("USD - United States
    Dollar"), so a long name wraps rather than being cut. */
-.ss-menu--currency .dropdown-item {
-  padding: 8px;
-}
 .ss-menu--currency .dropdown-item-name {
   overflow: visible;
   text-overflow: clip;
@@ -25948,6 +25997,17 @@ span.rvc-crumb--current { cursor: default; }
      block under the bar instead of matching its edges. (Was 72% — 2026-09-06.)
      The cards-hero landings (`.lm-cards`) keep the old measure below. */
   --lm-list-w: 56%;
+  /* The soft bottom edge every landing list ends on — ONE definition, used by
+     `.lm-list` (Tasks / Certifications / Companies / …) and the Question Bank's
+     category index. The fade used to start at 62%, ~36% of the box (~180px);
+     the user found that too strong, so it now starts at 78% — a ~21% ramp,
+     about 105px on Tasks and 115px on the index, a bit over half the old wash
+     (a 72px version, tried earlier on the index alone, read as too weak beside
+     Tasks). The +42% on both stops unwinds the mask as the table forms, so
+     nothing is masked at p=1. Weaken or strengthen the edge HERE; don't fork
+     the ramp back into the two consumers. */
+  --lm-fade-start: calc(78% + 42% * var(--lm));
+  --lm-fade-end: calc(99% + 42% * var(--lm));
 }
 
 /* The page header does NOT change between the landing and the table: Figma
@@ -26309,14 +26369,10 @@ span.rvc-crumb--current { cursor: default; }
   overflow: hidden;
   -webkit-mask-image: linear-gradient(
     180deg,
-    #000 calc(62% + 42% * var(--lm)),
-    transparent calc(98% + 42% * var(--lm))
+    #000 var(--lm-fade-start),
+    transparent var(--lm-fade-end)
   );
-  mask-image: linear-gradient(
-    180deg,
-    #000 calc(62% + 42% * var(--lm)),
-    transparent calc(98% + 42% * var(--lm))
-  );
+  mask-image: linear-gradient(180deg, #000 var(--lm-fade-start), transparent var(--lm-fade-end));
 }
 /* Morphing header row — grows in with the table chrome (--lmt) and matches
    the real thead's metrics at p=1 (Figma 79:445: 40px, 16px/600 white,
@@ -26435,11 +26491,12 @@ span.rvc-crumb--current { cursor: default; }
    #404040 top rule this bar used to carry, so it is now unruled — the list's
    own fade mask is what ends the rows. */
 .lm-hint-wrap {
-  /* The bar is exactly the node's 30px tall (its 14px label row inside 8px
-     top/bottom padding), and exactly as wide as the list rows above it — same
-     width expression as .lm-list, so it lines up with the row edges in both
-     states instead of running the full page width. */
-  height: calc(30px * (1 - var(--lm)));
+  /* The bar is exactly the node's 40px tall (its 14px label row centred in the
+     frame — re-synced 2026-09-09, the component grew 30 → 40px so it matches
+     the table's row height), and exactly as wide as the list rows above it —
+     same width expression as .lm-list, so it lines up with the row edges in
+     both states instead of running the full page width. */
+  height: calc(40px * (1 - var(--lm)));
   width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
   opacity: calc(1 - 2.6 * var(--lm));
   overflow: hidden;
@@ -26454,7 +26511,7 @@ span.rvc-crumb--current { cursor: default; }
   justify-content: center;
   gap: 4px;
   width: 100%;
-  height: 30px;
+  height: 40px;
   padding: 0 12px;
   font-family: var(--font-sans);
   font-size: 12px;
@@ -27072,34 +27129,12 @@ span.rvc-crumb--current { cursor: default; }
    tree and ⌘K carry navigation); the filters row unfolds with the table (the
    `.lm-cards` recipe) and the index fades as the table chrome forms. */
 
-/* The header's own 22px bottom margin spaces the hero bar (the design has no
-   title between them), so the shared 56px toolbar lead is retired here (kept
-   a constant — see the `.lm-cards` note on why an animated margin above the
-   toolbar must never mix ramps). */
-.tasks.lm.qb-lm .toolbar {
-  margin-top: 0;
-}
-
-/* "1,797 QUESTIONS · 15 CATEGORIES · 55 SUBCATEGORIES" — the eyebrow between
-   the header and the hero search: 44px under the header (the header's own
-   22px + 22px here), 20px down to the bar. Every dimension collapses on the
-   linear --lm; the text fades early like the caption row. */
-.qbl-meta {
-  max-height: calc(38px * (1 - var(--lm)));
-  padding-top: calc(22px * (1 - var(--lm)));
-  margin-bottom: calc(20px * (1 - var(--lm)));
-  opacity: calc(1 - 2.4 * var(--lm));
-  overflow: hidden;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  flex-shrink: 0;
-}
+/* The totals eyebrow ("1,797 QUESTIONS · 15 CATEGORIES · …") that used to sit
+   between the header and the hero bar was REMOVED 2026-09-09 — the top of the
+   page now reads exactly like the Tasks / Certifications / Companies landings:
+   header, then the bar under the shared 56px lead. Which is why there is no
+   `.tasks.lm.qb-lm .toolbar { margin-top: 0 }` override any more: that zero
+   existed only because the eyebrow supplied the spacing. Don't re-add it. */
 
 /* "Tasks › Question Bank" — the working screens' crumb trail. The landing is
    the Question Bank itself, so the trail belongs to the table only: HEIGHT
@@ -27133,48 +27168,35 @@ span.rvc-crumb--current { cursor: default; }
   visibility: hidden;
 }
 
-/* RECENT — "RECENT  Commercial Refrigeration · Water Heaters · Solar", 16px
-   under the bar. Collapses with the eyebrow's recipe. */
+/* RECENT — the last categories opened, on the SAME row atom as the other
+   landings' Quick Filters (2026-09-09): the `.lm-quick-label` eyebrow followed
+   by `.lm-quick-pill` pills, centred under the hero search bar and collapsing
+   on the eyebrow's recipe. The pills carry no add-circle — they open a
+   category rather than adding a filter — and there is no `.lm-more-filters`
+   chevron: the A→Z index below is already "all of them". */
 .qbl-recent {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 9px;
-  max-height: calc(36px * (1 - var(--lm)));
-  padding-top: calc(16px * (1 - var(--lm)));
+  gap: 8px;
+  /* No lead of its own: `.toolbar` already carries the 14px margin-bottom that
+     sets the Tasks landing's search-bar → Quick Filters gap, and this row is
+     that same row. Its height alone collapses on --lm. */
+  max-height: calc(28px * (1 - var(--lm)));
   opacity: calc(1 - 2.4 * var(--lm));
   overflow: hidden;
   flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 20px;
-  color: #a8a8a8;
 }
 .tasks.lm.qb-lm[data-lm="table"] .qbl-recent {
   display: none;
 }
-.qbl-recent-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.qbl-recent-item {
+/* Wraps nothing at the landing width, but keeps the pills on one track so the
+   row's gap stays the pills' 8px and not the label's. */
+.qbl-recent-pills {
   display: inline-flex;
-  align-items: baseline;
-  gap: 9px;
-}
-.qbl-recent-dot {
-  color: #404040;
-}
-.qbl-recent-link {
-  font: inherit;
-  color: inherit;
-  white-space: nowrap;
-}
-.qbl-recent-link:hover {
-  color: var(--accent);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 /* The landing layer holds the tree column. It fades on the filter-row ramp
@@ -27202,9 +27224,10 @@ span.rvc-crumb--current { cursor: default; }
    letter heading over a hairline and its categories (name left, count
    right). It is its own scroller (`.lm-scroll`) for a bank with hundreds of
    categories; the wheel morphs to the table only once it is at its top. */
-/* Index header — Figma 867:2473: a 4px/8px row under a 1px #404040 rule,
-   "ALL CATEGORIES · n" (Medium 14) at one end and the Add Category row (the
-   16px plus over SemiBold 14) at the other, both #a8a8a8. The outer element
+/* Index header — Figma 867:2473 (re-synced 2026-09-09): an 8px row under a 1px
+   #404040 rule, "ALL CATEGORIES · n" (SemiBold 20, WHITE — it is the landing's
+   heading now, not an eyebrow) at one end and a bare 24px plus at the other.
+   The outer element
    carries the index's centred 1180px measure and 32px gutters — so the rule
    lines up with the columns beneath and clears the row's 8px inset exactly as
    the letter rules clear theirs — plus the animated lead the index used to own
@@ -27214,24 +27237,30 @@ span.rvc-crumb--current { cursor: default; }
   align-self: center;
   width: 100%;
   max-width: 1180px;
-  padding: calc(24px * (1 - var(--lm))) 32px 0;
+  /* 32px of lead from the Recent Searches row above (24px until 2026-09-09),
+     collapsing on --lm with the rest of the landing. */
+  padding: calc(32px * (1 - var(--lm))) 32px 0;
 }
 .qbl-index-head-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 4px 8px;
+  padding: 8px;
   border-bottom: 1px solid #404040;
 }
+/* Title case, as the node draws it — the uppercase transform this label used
+   to carry was dropped when 867:2473 went to "All Categories · 216". */
 .qbl-index-head-label {
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: #a8a8a8;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
 }
-/* Not the rail's full-width filled row — the same icon + label on open space. */
+/* The plus + label add row: NOT the head's affordance any more (867:2473 went
+   icon-only, see `.qbl-index-add-btn`) but still the atom the Industries
+   launch header and its section actions borrow — kept here, under its original
+   name, so those pages are untouched. */
 .qbl-index-add {
   display: flex;
   align-items: center;
@@ -27250,6 +27279,31 @@ span.rvc-crumb--current { cursor: default; }
 .qbl-index-add.is-open {
   color: #fff;
 }
+/* Icon-only: the node's WHITE plus at 20px (re-sized from 24 on 2026-09-09).
+   TreeAddIcon is the same glyph at any size — its 1.333/16 stroke ratio is the
+   node's 1.667/20 exactly — so only the box changes. White idle leaves no room
+   for a colour hover, so the hover is the index rows' soft fill instead. */
+.qbl-index-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.qbl-index-add-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.qbl-index-add-btn:hover,
+.qbl-index-add-btn.is-open {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
 
 .qbl-index {
   flex: 1;
@@ -27264,39 +27318,59 @@ span.rvc-crumb--current { cursor: default; }
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
+  /* The same soft bottom edge `.lm-list` ends on — the shared `--lm-fade-*`
+     ramp, not a fork of it: the two boxes are nearly the same height (index
+     548px vs list 499px at 1440×900, both `flex: 1` under a hero bar), so one
+     ramp reads the same on both. Over this scroller it doubles as the "there
+     is more below" cue a 67-category index needs. */
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 var(--lm-fade-start),
+    transparent var(--lm-fade-end)
+  );
+  mask-image: linear-gradient(180deg, #000 var(--lm-fade-start), transparent var(--lm-fade-end));
   gap: 0 36px;
-  padding: 12px 32px 16px;
+  /* 32px is the index's own measure gutter (it lines the head's rule up with
+     the columns); the extra 12px is a nesting inset, so the letter groups sit
+     INSIDE the "All Categories" rule rather than flush under it. 12px top too
+     — the same inset on the side the rule is on. */
+  padding: 12px 44px 16px;
 }
 .qbl-index-col {
   min-width: 0;
 }
 .qbl-index-group {
-  margin-bottom: 18px;
+  /* 24px between one letter group and the next (18px until 2026-09-09). */
+  margin-bottom: 24px;
 }
-/* Letter group — Figma 867:2472: the "E · F · G" head (SemiBold 12 #a8a8a8) on
-   a 4px/8px row over a 0.5px #404040 rule, then 4px down to its rows. */
+/* Letter group — Figma 867:2472 (re-synced 2026-09-09): the "E · F · G" head
+   (SemiBold 16 #a8a8a8) on a 4px/8px row over a 0.5px rule, then 4px down to
+   its rows. The rule is rgba(64,64,64,0.5), NOT solid #404040 — the node's
+   line UI went half-strength so the letter heads sit under the head's own 1px
+   #404040 rule rather than competing with it. */
 .qbl-index-letter {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   color: #a8a8a8;
-  border-bottom: 0.5px solid #404040;
+  border-bottom: 0.5px solid rgba(64, 64, 64, 0.5);
   padding: 4px 8px;
   margin-bottom: 4px;
 }
-/* Category row — the same 32px-tree geometry the rail runs (8px inset, 8px
-   radius, 4px gap), so the hover fill lands on a rounded row: Regular 14 white
-   name, Regular 12 #a8a8a8 count. */
+/* Category row — the rail's tree geometry (8px inset, 8px radius) so the hover
+   fill lands on a rounded row: Regular 16 white name, Regular 14 #a8a8a8 count.
+   The name→count gap is 12px, not the tree's 4px: these names run long enough
+   to ellipsize, and 4px let a truncated name crowd its count. */
 .qbl-index-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 12px;
   width: 100%;
   padding: 4px 8px;
   border-radius: 8px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   color: #fff;
   text-align: left;
@@ -27315,20 +27389,30 @@ span.rvc-crumb--current { cursor: default; }
 }
 .qbl-index-count {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   color: #a8a8a8;
 }
 
 /* "Bulk upload: drop a CSV anywhere on this page, or use Import CSV" — pinned
-   under the index; lights up while a file is dragged over the page. */
+   under the index; lights up while a file is dragged over the page. Same atom
+   as the Tasks landing's closing bar (Figma 716:1648 "Atomic Component -
+   Minimal State - Keep Scrolling", `.lm-hint`): a 40px row, its label centred
+   in 12px Medium uppercase #a8a8a8. No trailing icon — this one states a fact,
+   it is not the jump `.lm-hint` offers — and it stays a div, not a button. */
 .qbl-drop-hint {
   flex-shrink: 0;
-  padding: 8px 0 24px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 12px;
   font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #a8a8a8;
+  white-space: nowrap;
   opacity: calc(1 - 2.4 * var(--lm));
 }
 .qb-page.is-drop-active .qbl-drop-hint {

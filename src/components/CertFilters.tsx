@@ -30,8 +30,6 @@ export type CertFilterState = {
   // Everything below lives under "More Filters".
   visibilities: string[];
   tags: string[];
-  ceu: string;
-  keyword: string;
 };
 
 export type CertColumnState = Record<CertColumn, boolean>;
@@ -42,11 +40,7 @@ type Props = {
 };
 
 export function CertFilters({ filters, setFilters }: Props) {
-  const moreCount =
-    filters.visibilities.length +
-    filters.tags.length +
-    (filters.ceu.trim() ? 1 : 0) +
-    (filters.keyword.trim() ? 1 : 0);
+  const moreCount = filters.visibilities.length + filters.tags.length;
 
   const hasFilters =
     filters.industries.length +
@@ -64,8 +58,6 @@ export function CertFilters({ filters, setFilters }: Props) {
       creators: [],
       visibilities: [],
       tags: [],
-      ceu: "",
-      keyword: "",
     });
   }
 
@@ -90,8 +82,6 @@ export function CertFilters({ filters, setFilters }: Props) {
       <MoreFiltersPill
         visibilities={filters.visibilities}
         tags={filters.tags}
-        ceu={filters.ceu}
-        keyword={filters.keyword}
         count={moreCount}
         onApply={(v) => setFilters({ ...filters, ...v })}
       />
@@ -231,15 +221,11 @@ function TypePill({
 type MoreFilters = {
   visibilities: string[];
   tags: string[];
-  ceu: string;
-  keyword: string;
 };
 
 function MoreFiltersPill({
   visibilities,
   tags,
-  ceu,
-  keyword,
   count,
   onApply,
 }: MoreFilters & {
@@ -256,9 +242,7 @@ function MoreFiltersPill({
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() =>
-            onApply({ visibilities: [], tags: [], ceu: "", keyword: "" })
-          }
+          onClear={() => onApply({ visibilities: [], tags: [] })}
         />
       )}
     >
@@ -266,8 +250,6 @@ function MoreFiltersPill({
         <MoreFiltersBody
           visibilities={visibilities}
           tags={tags}
-          ceu={ceu}
-          keyword={keyword}
           onApply={(v) => {
             onApply(v);
             close();
@@ -278,17 +260,15 @@ function MoreFiltersPill({
   );
 }
 
-/* The Tasks page's cascading More Filters menu, with the two free-text
-   certification filters (CEUs, Keyword) as text submenus. */
+/* The Tasks page's cascading More Filters menu. The CEUs and Keyword free-text
+   submenus were removed 2026-09-09 (user request) — the CEUs column and the
+   wizard's keywords field are untouched, only the filters are gone. */
 function MoreFiltersBody({
   visibilities,
   tags,
-  ceu,
-  keyword,
   onApply,
 }: MoreFilters & { onApply: (v: MoreFilters) => void }) {
   const value = useMemo(() => ({ visibilities, tags }), [visibilities, tags]);
-  const texts = useMemo(() => ({ ceu, keyword }), [ceu, keyword]);
 
   return (
     <CascadingMultiSelect
@@ -303,34 +283,9 @@ function MoreFiltersBody({
           label: "Audience/B2B Tags",
           groups: TAG_GROUPS.map((g) => ({ label: g.label, items: [...g.tags] })),
         },
-        {
-          key: "ceu",
-          label: "CEUs",
-          text: {
-            placeholder: "e.g. 1.5",
-            help: "Shows certifications with at least this many CEUs.",
-            numeric: true,
-          },
-        },
-        {
-          key: "keyword",
-          label: "Keyword",
-          text: {
-            placeholder: "Search Keywords...",
-            help: "Matches certifications tagged with this keyword.",
-          },
-        },
       ]}
       value={value}
-      texts={texts}
-      onApply={(v, t) =>
-        onApply({
-          visibilities: v.visibilities,
-          tags: v.tags,
-          ceu: t.ceu ?? "",
-          keyword: t.keyword ?? "",
-        })
-      }
+      onApply={(v) => onApply({ visibilities: v.visibilities, tags: v.tags })}
     />
   );
 }

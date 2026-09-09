@@ -161,8 +161,6 @@ export function CertificationsPage({
     creators: ["SkillCat"],
     visibilities: [],
     tags: [],
-    ceu: "",
-    keyword: "",
   });
   const [columns, setColumns] = useState<CertColumnState>({
     id: true,
@@ -185,8 +183,6 @@ export function CertificationsPage({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const ceuMin = filters.ceu.trim() ? parseFloat(filters.ceu) : null;
-    const kw = filters.keyword.trim().toLowerCase();
     return certList.filter((c) => {
       if (q && !(
         c.id.toLowerCase().includes(q) ||
@@ -209,8 +205,6 @@ export function CertificationsPage({
       if (filters.creators.length && !filters.creators.includes(c.createdBy)) return false;
       if (filters.visibilities.length && !filters.visibilities.includes(c.visibility ?? "Visible")) return false;
       if (filters.tags.length && !matchesTagFilter(c.tags, filters.tags)) return false;
-      if (ceuMin !== null && !Number.isNaN(ceuMin) && parseFloat(c.ceus) < ceuMin) return false;
-      if (kw && !(c.keywords ?? []).some((k) => k.toLowerCase().includes(kw))) return false;
       return true;
     });
   }, [query, filters, certList]);

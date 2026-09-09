@@ -90,6 +90,30 @@ const RotateIcon = () => (
   </svg>
 );
 
+/* Step to the previous / next image in a set (Figma 1080:1390 left,
+   1080:1387 right). The design's own asset is one chevron used both ways. */
+const PrevGlyph = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M9.66667 11.6667L6 8L9.66667 4.33333"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
+const NextGlyph = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M6.33333 11.6667L10 8L6.33333 4.33333"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
 const ZoomOutGlyph = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M12.6667 8H3.33333" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square" />
@@ -115,6 +139,8 @@ export function FullscreenViewer({
   initialRotation = 0,
   controls = true,
   hint,
+  onPrev,
+  onNext,
   onClose,
   children,
 }: {
@@ -123,6 +149,11 @@ export function FullscreenViewer({
   controls?: boolean;
   /** Replaces the default hint line, for a viewer whose gestures differ. */
   hint?: ReactNode;
+  /** Step through a set of images (Figma 1080:1390 / 1080:1387). Pass both to
+   *  get the toolbar's arrows and ←/→; pass undefined for the end of the set —
+   *  the run is bounded, it does not wrap. Omit both for a single image. */
+  onPrev?: () => void;
+  onNext?: () => void;
   onClose: () => void;
   /** Receives the live rotation and the stage's own (untransformed) size, so a
    *  caller can fit its content to the stage. Zoom and pan are applied by the
@@ -391,6 +422,8 @@ export function FullscreenViewer({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") requestClose();
+      else if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+      else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
       else if (controls && (e.key === "r" || e.key === "R")) rotate();
       else if (controls && (e.key === "+" || e.key === "=")) zoomTo(targetRef.current.zoom * ZOOM_STEP);
       else if (controls && (e.key === "-" || e.key === "_")) zoomTo(targetRef.current.zoom / ZOOM_STEP);
@@ -398,7 +431,7 @@ export function FullscreenViewer({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [requestClose, controls, zoomTo]);
+  }, [requestClose, controls, zoomTo, onPrev, onNext]);
 
   /* ── Gestures ── */
 
@@ -507,6 +540,10 @@ export function FullscreenViewer({
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
+  /* A set of one (or a lone image) passes neither handler and gets no arrows;
+     at either end of a longer set exactly one of them is undefined, which is
+     what disables that button rather than hiding the pair. */
+  const nav = onPrev !== undefined || onNext !== undefined;
   const pannable = controls && uiZoom > fitZoom + 0.001;
   const stageClass = [
     "idfs-stage",
@@ -542,6 +579,33 @@ export function FullscreenViewer({
 
       {controls && (
       <div className="idfs-toolbar" onClick={stop}>
+        {/* Only when the caller gave the viewer a set to step through. Both
+            buttons show together; the one at the end of the run is disabled,
+            since a wrapping run gives no sense of where the set ends. */}
+        {nav && (
+          <div className="idfs-nav">
+            <ShortcutHint label="Previous" keyLabel="←">
+              <button
+                className="idfs-btn"
+                onClick={onPrev}
+                disabled={!onPrev}
+                aria-label="Previous image"
+              >
+                <PrevGlyph />
+              </button>
+            </ShortcutHint>
+            <ShortcutHint label="Next" keyLabel="→">
+              <button
+                className="idfs-btn"
+                onClick={onNext}
+                disabled={!onNext}
+                aria-label="Next image"
+              >
+                <NextGlyph />
+              </button>
+            </ShortcutHint>
+          </div>
+        )}
         {/* The shared shortcut hint rather than a native title: it names the key
             as well as the action, and it flips above the control — a tooltip
             under a button this close to the bottom edge was being cropped. */}

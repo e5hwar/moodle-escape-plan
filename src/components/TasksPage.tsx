@@ -24,11 +24,10 @@ import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, ty
 /* Landing-morph columns — mirror the table's default visible columns (key,
    label, width) so the p=1 hand-off to the real table lines up. */
 const LM_COLS: LandingCol[] = [
-  { key: "id", label: "ID", width: 100 },
   { key: "type", label: "Type", width: 160, fixed: true },
-  { key: "paid", label: "Paid", width: 110 },
   { key: "used", label: "Used in", width: 180 },
   { key: "creator", label: "Created By", width: 200 },
+  { key: "modified", label: "Date Modified", width: 130 },
 ];
 
 const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; shortcut: string }[] = [
@@ -101,7 +100,7 @@ type TaskColMeta = {
 };
 
 const TASK_COLS: TaskColMeta[] = [
-  { key: "id", label: "ID", className: "col-id", width: 100, render: (t) => t.id },
+  { key: "id", label: "Task ID", className: "col-id", width: 100, render: (t) => t.id },
   { key: "type", label: "Type", className: "col-type", width: 160, render: (t) => t.type },
   {
     key: "paid", label: "Paid", className: "col-type", width: 110,
@@ -218,21 +217,22 @@ export function TasksPage({
     tags: [],
   });
   const [columns, setColumns] = useState<ColumnState>({
-    id: true,
+    id: false,
     type: true,
-    paid: true,
+    paid: false,
     usedIn: true,
     createdBy: true,
     tradeTag: false,
     partnershipTag: false,
     audience: false,
     dateCreated: false,
-    dateModified: false,
+    dateModified: true,
   });
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(TASK_COLS);
+  // Default sort: most recently edited first.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "id",
+    key: "dateModified",
     dir: "desc",
   });
   const [page, setPage] = useState(1);
@@ -345,9 +345,7 @@ export function TasksPage({
     name: t.name,
     dim: t.hidden || t.usedIn.length === 0,
     cells: {
-      id: t.id,
       type: t.type,
-      paid: isPaid(t) ? "Paid" : "Free",
       used:
         t.usedIn.length === 0
           ? ""
@@ -355,6 +353,7 @@ export function TasksPage({
             ? t.usedIn[0]
             : `${t.usedIn[0]} +${t.usedIn.length - 1}`,
       creator: t.createdBy,
+      modified: t.dateModified ?? "",
     },
   }));
 
@@ -497,7 +496,7 @@ export function TasksPage({
 
           <div className="lm-stage">
           <LandingOverlay
-            caption="Recently created"
+            caption="Recently modified"
             columns={LM_COLS}
             rows={landingRows}
             onShowAll={morph.showTable}

@@ -243,7 +243,7 @@ export function LandingOverlay({
       {footer}
       <div className="lm-hint-wrap">
         {/* Figma 716:1648 "Atomic Component - Minimal State - Keep Scrolling" —
-            a 30px bar closing the collapsed list, its label and 12px down arrow
+            a 40px bar closing the collapsed list, its label and 12px down arrow
             centred on it. The design dropped both the top rule and the wordier
             "keep scrolling" copy, so this now reads as the jump into the table
             that the header row used to offer. */}

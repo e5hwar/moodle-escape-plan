@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
-import { ChevronRightIcon } from "./icons";
+import { ChevronRightIcon, InfoTipIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { PrmModal } from "./PrmModal";
 import { UserDetailsHover } from "./UserDetailsHover";
@@ -69,7 +69,17 @@ type ConfirmKind = "accept" | "reject" | "request";
 export type RejectDetails = {
   reasons: string[];
   frameIndexes: number[];
+  /** Reviewer's Notes — internal only, never sent to the candidate. */
+  note: string;
 };
+
+/* What the footage grid's checkboxes are for (Figma 1000:1184's info glyph).
+   Long enough that it can only live in a tooltip. */
+const FOOTAGE_TIP =
+  "Using the checkbox on each image, select those you'd like to attach as evidence for the user to see when they're notified of their rejected attempt. These images aren't used when approving an attempt or requesting an ID re-upload";
+
+/** The per-frame checkbox's own tip — the short version of FOOTAGE_TIP. */
+const FRAME_PICK_TIP = "Attach as evidence";
 
 /** Kept as its own constant because selecting it reveals the free-text field. */
 const OTHER_REASON = "Other";
@@ -133,6 +143,19 @@ export function ProctoringConsole({
      to another candidate re-seeds it from that candidate's name. */
   const [nameDraft, setNameDraft] = useState(submission.candidateName);
   useEffect(() => setNameDraft(submission.candidateName), [submission.id, submission.candidateName]);
+  /* Supporting images for a rejection, picked straight off the footage grid.
+     They live here, not in the reject modal, so a reviewer can tick frames
+     while they scan the footage and find the modal's required field already
+     satisfied. Indexes are into `submission.frames`, so the Flagged filter
+     doesn't disturb them; they clear with the candidate. */
+  const [pickedFrames, setPickedFrames] = useState<Set<number>>(new Set());
+  useEffect(() => setPickedFrames(new Set()), [submission.id]);
+  const toggleFrame = (i: number) =>
+    setPickedFrames((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
 
   /* The queue has no on-screen control (Figma 445:878 leaves Skip alone on the
      footer's left), but ←/→ still step through it for keyboard users. */
@@ -165,6 +188,10 @@ export function ProctoringConsole({
   const isReupload = submission.kind === "id-reupload";
   const idVerified = hasFootage && !!submission.idPreviouslyVerified;
   const flaggedFrames = submission.frames.filter((f) => !!f.flag);
+  /* `flaggedOnly` survives queue navigation, but the control that clears it
+     only exists while something is flagged — so on a candidate with a clean
+     recording the filter simply doesn't apply. */
+  const showFlaggedOnly = flaggedOnly && flaggedFrames.length > 0;
   /* The three AI CONFIDENCE bands the rail is designed against (Figma 308:2208
      90+ green / 999:1113 80-90 amber / 999:1168 under 80 red). */
   const confidenceClass =
@@ -173,22 +200,6 @@ export function ProctoringConsole({
       : submission.idConfidence >= 80
       ? "is-ok"
       : "is-weak";
-  /* The rail's REASONS stat names the most common flag and counts the OTHER
-     distinct reasons after it — "Looking Away +1" (Figma 1000:1194). Facts, not
-     a verdict; the auditor judges. */
-  const distinctReasons = [
-    ...flaggedFrames.reduce(
-      (m, f) => m.set(f.flag!, (m.get(f.flag!) ?? 0) + 1),
-      new Map<string, number>(),
-    ),
-  ].sort((a, b) => b[1] - a[1]);
-  const reasonsSummary =
-    distinctReasons.length === 0
-      ? "-" // Figma 308:2254 uses a plain hyphen here, not an em dash.
-      : distinctReasons.length === 1
-      ? distinctReasons[0][0]
-      : `${distinctReasons[0][0]} +${distinctReasons.length - 1}`;
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (idFullView) return; // the ID full-view overlay handles its own keys
@@ -346,55 +357,40 @@ export function ProctoringConsole({
               </ReviewSection>
 
               {/* ID reviews and reupload requests are ID-only — no proctoring
-                  footage was captured. The old separate "Flagged Images" section
-                  is folded into this one: the FLAGGED stat itself filters the
-                  wall (Figma 1000:1184 idle / 1003:1266 applied). */}
+                  footage was captured. The rail's three stats (Total Frames /
+                  Flagged / Reason) were replaced by ONE control (Figma
+                  1000:1184 applied / 1070:1299 idle): a checkbox that narrows
+                  the wall to the flagged frames. With nothing flagged there is
+                  nothing to narrow to, so the rail is the title alone
+                  (1003:1266). */}
               {hasFootage && (
                 <ReviewSection
                   title="Proctoring Footage"
+                  info={FOOTAGE_TIP}
                   bodyClass="prc-section-body--footage"
                   stats={
-                    <>
-                      <RailStat label="Total Frames" value={submission.webcamTotal} tone="is-muted" />
-                      <RailStat
-                        label="Flagged"
-                        value={submission.webcamFlaggedCount}
-                        tone={submission.webcamFlaggedCount > 0 ? "is-bad" : "is-strong"}
-                        /* Nothing to narrow to when nothing is flagged, so the
-                           stat stays a plain number there. */
-                        onFilter={
-                          submission.webcamFlaggedCount > 0
-                            ? () => setFlaggedOnly((v) => !v)
-                            : undefined
-                        }
-                        filtered={flaggedOnly}
-                        filterLabel="Show only the flagged frames"
-                        clearLabel="Show all frames"
+                    flaggedFrames.length > 0 ? (
+                      <FlaggedFilter
+                        count={flaggedFrames.length}
+                        on={showFlaggedOnly}
+                        onToggle={() => setFlaggedOnly((v) => !v)}
                       />
-                      <RailStat
-                        label="Reason"
-                        value={reasonsSummary}
-                        tone={submission.webcamFlaggedCount > 0 ? "" : "is-muted"}
-                      />
-                    </>
+                    ) : undefined
                   }
                 >
-                  {flaggedOnly && flaggedFrames.length === 0 ? (
-                    <div className="pr-empty">
-                      No flagged frames found. AI can make mistakes. Review the footage
-                      and decide yourself.
-                    </div>
-                  ) : (
-                    <div className="pr-frame-grid">
-                      {(flaggedOnly ? flaggedFrames : submission.frames).map((f, i) => (
+                  <div className="pr-frame-grid">
+                    {submission.frames.map((f, i) =>
+                      showFlaggedOnly && !f.flag ? null : (
                         <FrameCell
-                          key={`${flaggedOnly ? "flag" : "all"}-${i}`}
+                          key={i}
                           frame={f}
                           onZoom={() => setZoom(<ZoomedFrame frame={f} />)}
+                          checked={pickedFrames.has(i)}
+                          onToggle={() => toggleFrame(i)}
                         />
-                      ))}
-                    </div>
-                  )}
+                      ),
+                    )}
+                  </div>
                 </ReviewSection>
               )}
             </div>
@@ -461,6 +457,7 @@ export function ProctoringConsole({
       {confirmKind === "reject" && hasFootage ? (
         <RejectModal
           submission={submission}
+          frames={pickedFrames}
           onCancel={() => setConfirmKind(null)}
           onConfirm={(details) => {
             setConfirmKind(null);
@@ -593,16 +590,39 @@ function ConfirmActionModal({
   );
 }
 
-/** Shared by both required fields in the reject modal. */
+/** The internal-notes field. The name is the candidate's, since the note is
+ *  written for whoever reviews THEM next. */
+const NOTES_LABEL = "Reviewer's Notes (Internal-Only)";
+const notesHelp = (name: string) =>
+  `Optional. Add details you'd like other reviewers to know when they review ${name}'s proctored quizzes in the future. Only used internally and never shared with users`;
+
+/** The evidence row's chevron (Figma 1080:1381): 16px, 1.33 square cap. */
+const EvidenceChevronIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M6.33333 11.6667L10 8L6.33333 4.33333"
+      stroke="currentColor"
+      strokeWidth="1.33333"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
+/** Subtext under the reject modal's reason field. */
 const REJECT_FIELD_HELP =
-  "The reason for rejecting the attempt, along with any additional feedback is shared with the user";
+  "The reason for rejecting the attempt, along with the selected images, is shared with the user";
 
 function RejectModal({
   submission,
+  frames,
   onCancel,
   onConfirm,
 }: {
   submission: Submission;
+  /** The supporting images ticked on the footage grid. The modal doesn't show
+     or edit them any more — picking happens on the page, where the frames are
+     actually large enough to judge — it just carries them into the rejection. */
+  frames: Set<number>;
   onCancel: () => void;
   onConfirm: (details: RejectDetails) => void;
 }) {
@@ -610,11 +630,19 @@ function RejectModal({
      be unticked again. */
   const [reasons, setReasons] = useState<Set<string>>(new Set());
   const [otherText, setOtherText] = useState("");
-  const [frames, setFrames] = useState<Set<number>>(new Set());
+  const [note, setNote] = useState("");
+  /* Which evidence image the fullscreen viewer is on, as a position in
+     `picked` (not a frame index) — the arrows walk this list. */
+  const [viewing, setViewing] = useState<number | null>(null);
+
+  /* Frame order, so the viewer steps through the images the way they were
+     recorded rather than the order they happened to be ticked in. */
+  const picked = [...frames].sort((a, b) => a - b);
 
   const isOther = reasons.has(OTHER_REASON);
-  const canReject =
-    reasons.size > 0 && frames.size > 0 && (!isOther || otherText.trim().length > 0);
+  /* Supporting images are optional and are picked on the page, so they can't
+     gate this button — a reason is the one thing the modal itself asks for. */
+  const canReject = reasons.size > 0 && (!isOther || otherText.trim().length > 0);
 
   function toggle<T>(set: React.Dispatch<React.SetStateAction<Set<T>>>, v: T) {
     set((prev) => {
@@ -629,21 +657,42 @@ function RejectModal({
   return (
     <PrmModal
       title={copy.title}
+      /* The sentence that used to open the body is the title's subtext — it
+         describes what the pop-up does, so it belongs to the header. */
+      description={copy.body}
       confirmLabel={copy.confirmLabel}
       confirmDisabled={!canReject}
-      wide
       onCancel={onCancel}
       onConfirm={() =>
         canReject &&
         onConfirm({
           // "Other" is stored as what was actually typed, not the literal word.
           reasons: [...reasons].map((r) => (r === OTHER_REASON ? otherText.trim() : r)),
-          frameIndexes: [...frames],
+          frameIndexes: picked,
+          note: note.trim(),
         })
       }
     >
       <div className="prm-stack">
-        <p className="prm-text">{copy.body}</p>
+        {/* What the candidate will be shown (Figma 1079:1373). Ticked on the
+            footage grid behind this modal; the row opens them full screen so a
+            reviewer can check what they attached without cancelling out. It is
+            always here, at zero too — the count is how a reviewer learns the
+            frames were selectable at all — but with nothing attached there is
+            nothing to open, so the row is inert rather than a chevron onto an
+            empty viewer. */}
+        <button
+          className="rjm-evidence"
+          onClick={() => setViewing(0)}
+          disabled={picked.length === 0}
+        >
+          <span className="rjm-evidence-label">
+            Evidence: {picked.length} Image{picked.length === 1 ? "" : "s"} Selected
+          </span>
+          <span className="rjm-evidence-go" aria-hidden>
+            <EvidenceChevronIcon />
+          </span>
+        </button>
 
         <div className="prm-field">
           <span className="prm-label">
@@ -685,40 +734,50 @@ function RejectModal({
           <p className="prm-help">{REJECT_FIELD_HELP}</p>
         </div>
 
+        {/* Optional, and for the NEXT reviewer — not the candidate. No
+            required marker; the CTA never waits on it. */}
         <div className="prm-field">
-          <span className="prm-label">
-            Add Supporting Images<span className="prm-req">*</span>
-          </span>
-          <div className="prm-grid">
-            {submission.frames.map((f, i) => {
-              const on = frames.has(i);
-              return (
-                <button
-                  key={i}
-                  className={`prm-tile ${on ? "is-on" : ""}`}
-                  onClick={() => toggle(setFrames, i)}
-                  role="checkbox"
-                  aria-checked={on}
-                  aria-label={`Frame ${i + 1}${f.flag ? ` — ${f.flag}` : ""}`}
-                >
-                  <FrameAvatar tone={f.tone} flagged={!!f.flag} />
-                  {f.flag && <span className="pr-frame-tag">{f.flag}</span>}
-                  {/* The box shows in both states — it reads as selectable even
-                      before anything is picked. */}
-                  <span className="prm-tile-check">
-                    <PrmCheck on={on} />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <span className="prm-label">{NOTES_LABEL}</span>
+          <input
+            className="prm-text-input"
+            placeholder="Add a note for future reviewers..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <p className="prm-help">{notesHelp(submission.candidateName)}</p>
         </div>
       </div>
+
+      {viewing !== null && (
+        <ImageZoomOverlay
+          onClose={() => setViewing(null)}
+          /* Bounded, not a carousel: at either end the arrow is simply
+             unavailable, so the reviewer can tell where the set stops. */
+          onPrev={viewing > 0 ? () => setViewing(viewing - 1) : undefined}
+          onNext={viewing < picked.length - 1 ? () => setViewing(viewing + 1) : undefined}
+        >
+          <ZoomedFrame frame={submission.frames[picked[viewing]]} />
+        </ImageZoomOverlay>
+      )}
     </PrmModal>
   );
 }
 
-function FrameCell({ frame, onZoom }: { frame: WebcamFrame; onZoom: () => void }) {
+/** A webcam frame on the footage grid. The tile zooms; the corner checkbox
+ *  picks the frame as supporting evidence for a rejection (Figma 1054:1055
+ *  flagged / 1054:1067 clean). Picking lives here rather than in the reject
+ *  modal — this is where the frames are large enough to judge. */
+function FrameCell({
+  frame,
+  onZoom,
+  checked,
+  onToggle,
+}: {
+  frame: WebcamFrame;
+  onZoom: () => void;
+  checked: boolean;
+  onToggle: () => void;
+}) {
   const flagged = !!frame.flag;
   return (
     <div
@@ -734,6 +793,26 @@ function FrameCell({ frame, onZoom }: { frame: WebcamFrame; onZoom: () => void }
       {flagged && (
         <span className="pr-frame-tag">{frame.flag}</span>
       )}
+      {/* Shown in both states — the tile has to read as selectable before
+          anything has been picked. The tile's own click zooms, so the box takes
+          the click for itself; otherwise picking a frame would fling the viewer
+          open on top of the grid. */}
+      <button
+        className="pr-frame-check pr-frame-check--btn"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={`${FRAME_PICK_TIP}${frame.flag ? ` — ${frame.flag}` : ""}`}
+        data-tip={FRAME_PICK_TIP}
+        /* Above the box, so the card sits in the gutter over the row above
+           instead of covering the frame it describes. */
+        data-tip-place="above"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        <PrmCheck on={checked} />
+      </button>
     </div>
   );
 }
@@ -749,14 +828,19 @@ function ZoomedFrame({ frame }: { frame: WebcamFrame }) {
 /** Fullscreen webcam-frame viewer — the same FullscreenViewer chrome the ID
  *  full view uses (bare close, bottom rotate + zoom toolbar, no title bar). */
 function ImageZoomOverlay({
+  onPrev,
+  onNext,
   onClose,
   children,
 }: {
+  /** Stepping through a set of frames — omitted for a single image. */
+  onPrev?: () => void;
+  onNext?: () => void;
   onClose: () => void;
   children: ReactNode;
 }) {
   return (
-    <FullscreenViewer onClose={onClose}>
+    <FullscreenViewer onPrev={onPrev} onNext={onNext} onClose={onClose}>
       {({ rotation }) => (
         <div className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg)` }}>
           {children}
@@ -798,102 +882,66 @@ const AiAssistIcon = () => (
   </svg>
 );
 
-/** The 14px close-circle beside an applied stat filter — transcribed from the
- *  exported asset (Figma 1003:1286). Square caps and a 1.16667 stroke, not the
- *  project's round-capped CloseXIcon. */
-const StatFilterClearIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <path
-      d="M1.16653 7.00028C1.16653 3.77862 3.7782 1.16695 6.99986 1.16695C10.2215 1.16695 12.8332 3.77862 12.8332 7.00029C12.8332 10.2219 10.2215 12.8336 6.99986 12.8336C3.7782 12.8336 1.16652 10.2219 1.16653 7.00028Z"
-      stroke="currentColor"
-      strokeWidth="1.16667"
-      strokeLinecap="square"
-    />
-    <path
-      d="M8.85593 5.14401L6.99997 6.99997M6.99997 6.99997L5.14362 8.85632M6.99997 6.99997L8.85593 8.85593M6.99997 6.99997L5.14362 5.14362"
-      stroke="currentColor"
-      strokeWidth="1.16667"
-      strokeLinecap="square"
-    />
-  </svg>
-);
-
 /** One stat block on a rail — a small uppercase label over its value. `tone`
- *  colours the value (is-strong / is-ok / is-weak / is-bad / is-muted).
- *
- *  Passing `onFilter` makes the VALUE the control that narrows the section to
- *  what it counts (Figma 1000:1184 / 1003:1266) — there is no separate toggle.
- *  A dotted underline marks it as clickable, and while `filtered` a close-circle
- *  sits beside it to clear. The number itself never changes: it is the true
- *  total in both states, not a count of what's on screen. */
+ *  colours the value (is-strong / is-ok / is-weak / is-bad / is-muted). Only
+ *  the ID rail has stats now; the footage rail's filterable Flagged stat was
+ *  replaced by FlaggedFilter, and the dotted-underline/clear-glyph machinery
+ *  went with it. */
 function RailStat({
   label,
   value,
   tone = "",
   info = false,
-  onFilter,
-  filtered = false,
-  filterLabel,
-  clearLabel,
 }: {
   label: string;
   value: ReactNode;
   tone?: string;
   /** Adds the (i) after the label — this number came from the AI. */
   info?: boolean;
-  /** Toggles this stat's filter. Omit for a stat that isn't a control. */
-  onFilter?: () => void;
-  filtered?: boolean;
-  /** Tooltip on the value while the filter is off. */
-  filterLabel?: string;
-  /** Tooltip on the value and the clear button while it is on. */
-  clearLabel?: string;
 }) {
-  const head = (
-    <span className="prc-stat-head">
-      <span className="prc-stat-label">{label}</span>
-      {info && (
-        <span className="prc-stat-info" data-tip={AI_CAVEAT} aria-label={AI_CAVEAT} role="img">
-          <AiAssistIcon />
-        </span>
-      )}
+  return (
+    <span className="prc-stat">
+      <span className="prc-stat-head">
+        <span className="prc-stat-label">{label}</span>
+        {info && (
+          <span className="prc-stat-info" data-tip={AI_CAVEAT} aria-label={AI_CAVEAT} role="img">
+            <AiAssistIcon />
+          </span>
+        )}
+      </span>
+      <span className={`prc-stat-value ${tone}`}>{value}</span>
     </span>
   );
+}
 
-  if (!onFilter) {
-    return (
-      <span className="prc-stat">
-        {head}
-        <span className={`prc-stat-value ${tone}`}>{value}</span>
-      </span>
-    );
-  }
-
-  const tip = filtered ? clearLabel : filterLabel;
+/** The footage rail's only control (Figma 1000:1184 applied / 1070:1299 idle):
+ *  a FILTER eyebrow over a checkbox + "Flagged Images (N)". It replaced the
+ *  Total Frames / Flagged / Reason stats — the count now rides on the label,
+ *  and the reason is already written on each flagged tile. */
+function FlaggedFilter({
+  count,
+  on,
+  onToggle,
+}: {
+  count: number;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  const tip = on ? "Show all frames" : "Show only the flagged frames";
   return (
-    <span className={`prc-stat prc-stat--filter ${filtered ? "is-filtered" : ""}`}>
+    <span className="prc-stat prc-stat--pick">
+      <span className="prc-stat-label">Filter</span>
       <button
         type="button"
-        className="prc-stat-btn"
-        onClick={onFilter}
-        aria-pressed={filtered}
+        className="prc-pick-btn"
+        role="checkbox"
+        aria-checked={on}
+        onClick={onToggle}
         data-tip={tip}
-        title={tip}
       >
-        {head}
-        <span className={`prc-stat-value ${tone}`}>{value}</span>
+        <PrmCheck on={on} />
+        <span className="prc-stat-value">Flagged Images ({count})</span>
       </button>
-      {filtered && (
-        <button
-          type="button"
-          className="prc-stat-clear"
-          onClick={onFilter}
-          data-tip={clearLabel}
-          aria-label={clearLabel}
-        >
-          <StatFilterClearIcon />
-        </button>
-      )}
     </span>
   );
 }
@@ -908,6 +956,7 @@ function RailStat({
 function ReviewSection({
   title,
   badge,
+  info,
   stats,
   bodyClass = "",
   children,
@@ -915,8 +964,11 @@ function ReviewSection({
   title: string;
   /** A pill shown right after the title (the ID section's "Verified"). */
   badge?: ReactNode;
-  /** Stat blocks, right-aligned on the rail. */
-  stats: ReactNode;
+  /** Tooltip copy for a 14px info glyph after the title (Figma 1000:1184). */
+  info?: string;
+  /** Stat blocks / controls, right-aligned on the rail. Omitted when the
+   *  section has nothing to show there (a clean recording). */
+  stats?: ReactNode;
   bodyClass?: string;
   children: ReactNode;
 }) {
@@ -925,9 +977,20 @@ function ReviewSection({
       <div className="prc-rail">
         <div className="prc-rail-left">
           <h2 className="prc-rail-title">{title}</h2>
+          {info && (
+            <span
+              className="prc-rail-info"
+              tabIndex={0}
+              role="note"
+              aria-label={info}
+              data-tip={info}
+            >
+              <InfoTipIcon />
+            </span>
+          )}
           {badge}
         </div>
-        <div className="prc-rail-right">{stats}</div>
+        {stats && <div className="prc-rail-right">{stats}</div>}
       </div>
       <div className={`prc-section-body ${bodyClass}`}>{children}</div>
     </section>

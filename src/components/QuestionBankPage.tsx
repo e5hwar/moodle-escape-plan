@@ -41,8 +41,13 @@ const GRADING_OPTIONS = ["Graded", "Ungraded"];
 
 /* The landing's RECENT row opens with these until the user has opened three
    categories of their own (mock — a real bank would remember per user). */
-const SEED_RECENT = ["Commercial Refrigeration", "Plumbing Code > Water Heaters", "Solar"];
-const RECENT_MAX = 3;
+const SEED_RECENT = [
+  "Commercial Refrigeration",
+  "Plumbing Code > Water Heaters",
+  "Refrigeration Basics",
+  "Solar",
+];
+const RECENT_MAX = 4;
 
 /* Toggleable table columns (Question is fixed). */
 type QbColumn =
@@ -613,16 +618,6 @@ export function QuestionBankPage({
     }
   };
 
-  // Landing totals — the eyebrow over the hero search.
-  const totalSubcategories = useMemo(
-    () => categories.reduce((n, c) => n + (c.subcategories?.length ?? 0), 0),
-    [categories],
-  );
-  const totalQuestions = useMemo(
-    () => categories.reduce((n, c) => n + c.count, 0),
-    [categories],
-  );
-
   // The landing's A→Z index of every category.
   const indexColumns = useMemo(() => balanceIndex(buildIndex(categories)), [categories]);
 
@@ -861,7 +856,7 @@ export function QuestionBankPage({
             <header className="tasks-header">
               {/* Table-state crumb only — the landing IS the Question Bank, so
                   it keeps its bare title and the trail unfolds with the table
-                  chrome (the `.qbl-meta` collapse recipe). Question Bank has no
+                  chrome. Question Bank has no
                   sidebar entry — it is reached from the Tasks header — so
                   "Tasks" is the way back, and "Question Bank" returns to the
                   category index in place of the footer's old "Back to search". */}
@@ -929,12 +924,6 @@ export function QuestionBankPage({
               </div>
             </header>
 
-            {/* Landing eyebrow over the hero search. */}
-            <div className="qbl-meta">
-              {formatCount(totalQuestions)} Questions · {categories.length} Categories ·{" "}
-              {totalSubcategories} Subcategories
-            </div>
-
             <div className="toolbar">
               <QuestionSearch
                 questions={questions}
@@ -960,18 +949,25 @@ export function QuestionBankPage({
               />
             </div>
 
-            {/* Landing only: the last categories opened. */}
+            {/* Landing only: the last categories opened. Carried on the shared
+                Quick Filters row (`.lm-quick-label` + `.lm-quick-pill`, Figma
+                956:1017/956:1009) the other landings use, so the two landings
+                read as one screen. No add-circle glyph on the pills: these
+                OPEN a category, they don't add a filter. */}
             {recentShown.length > 0 && (
               <div className="qbl-recent">
-                <span className="qbl-recent-label">Recent</span>
-                {recentShown.map((label, i) => (
-                  <span key={label} className="qbl-recent-item">
-                    {i > 0 && <span className="qbl-recent-dot">·</span>}
-                    <button className="qbl-recent-link" onClick={() => openCategory(label)}>
+                <span className="lm-quick-label">Recent Searches:</span>
+                <span className="qbl-recent-pills">
+                  {recentShown.map((label) => (
+                    <button
+                      key={label}
+                      className="lm-quick-pill"
+                      onClick={() => openCategory(label)}
+                    >
                       {label.split(" > ").pop()}
                     </button>
-                  </span>
-                ))}
+                  ))}
+                </span>
               </div>
             )}
 
@@ -1025,13 +1021,16 @@ export function QuestionBankPage({
                     <span className="qbl-index-head-label">
                       All Categories · {formatCount(categories.length)}
                     </span>
+                    {/* Icon-only in the re-synced node — the 24px plus alone
+                        carries "add a category" beside the title. */}
                     <button
                       ref={landingCatBtnRef}
-                      className={`qbl-index-add ${catPop && !atTable ? "is-open" : ""}`}
+                      className={`qbl-index-add-btn ${catPop && !atTable ? "is-open" : ""}`}
                       onClick={openNewCategory}
+                      title="Add Category"
+                      aria-label="Add Category"
                     >
-                      <span className="tree-add-icon"><TreeAddIcon /></span>
-                      Add Category
+                      <TreeAddIcon />
                     </button>
                   </div>
                 </div>
@@ -1046,6 +1045,12 @@ export function QuestionBankPage({
                               key={c.key}
                               className="qbl-index-row"
                               onClick={() => openCategory(c.label)}
+                              /* Names ellipsize at this column width, so the
+                                 row carries its own name as a tooltip (the app
+                                 adopts native `title` into the shared tip) —
+                                 hovering either the name or the count shows
+                                 the category in full. */
+                              title={c.label}
                             >
                               <span className="qbl-index-name">{c.label}</span>
                               <span className="qbl-index-count">{formatCount(c.count)}</span>
