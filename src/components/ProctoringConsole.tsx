@@ -588,7 +588,7 @@ function ConfirmActionModal({
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      <p className="prm-text">{copy.body}</p>
+      <p className="prm-text prm-text--primary">{copy.body}</p>
     </PrmModal>
   );
 }

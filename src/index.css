@@ -11214,10 +11214,11 @@ a.spc-hero-pill--link:hover {
   display: flex;
   flex-direction: column;
   border-radius: 8px;
-  /* Figma 667:884 "General Modal" — grey wash at 15% (re-issued down from
-     the original 20%) over #0d0d0d. */
+  /* Grey wash at 20% over #0d0d0d (Figma 483:588 "Approve Attempt -
+     Proctored" — the shell's source of truth, taken over the 15% the
+     "General Modal" frame 667:884 had briefly been drawn at). */
   background:
-    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
     #0d0d0d;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
@@ -11300,6 +11301,13 @@ a.spc-hero-pill--link:hover {
   line-height: normal;
   color: #a8a8a8;
 }
+/* A confirm's body copy is the pop-up's own sentence, not a subtitle sitting
+   under the title, so it runs white (Figma 483:588 "Approve Attempt -
+   Proctored") instead of the description grey. */
+.prm-text--primary {
+  color: #fff;
+}
+
 /* The approve copy emphasises what must have been checked. */
 .prm-text strong {
   font-weight: 600;
@@ -11521,7 +11529,8 @@ a.spc-hero-pill--link:hover {
   justify-content: space-between;
   flex-shrink: 0;
   padding: 12px 24px;
-  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  /* Figma 483:588's footer rule — the grey at 50%, not the darker #404040. */
+  border-top: 1px solid rgba(122, 122, 122, 0.5);
   border-radius: 0 0 8px 8px;
 }
 /* Acknowledgment modals drop the text button, so the CTA keeps the right edge
