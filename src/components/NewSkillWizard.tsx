@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { SmallXIcon, DropdownCaretIcon } from "./icons";
+import { DropdownCaretIcon, ChevronRightIcon, AlertCircleFilledIcon } from "./icons";
+import { MultiSelectTags } from "./MultiSelectTags";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { MultiSelect } from "./NewCompanyWizard";
 import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
 import { RichTextField } from "./RichTextField";
-import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
-import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { tasks, type Task } from "../data/tasks";
 import {
   type AwardRule,
@@ -42,6 +42,25 @@ export function SkillBadge({
 /* ─────────────── Wizard ─────────────── */
 
 type Kind = "skill" | "mastery";
+
+/* Every user-facing line that differs between the two records. A Skill is one
+ * step of a job, earned off Tasks; a Mastery Skill is the job itself, earned
+ * off Skills — so these are genuinely different sentences rather than one
+ * sentence with the noun swapped, and a lookup beats interpolation. */
+const COPY: Record<Kind, { pageSub: string; name: string; desc: string; icon: string }> = {
+  skill: {
+    pageSub: "Name this Skill, then choose the Tasks that award it",
+    name: "Start with a verb, like “Brazing a Copper Joint.” It should make sense as “Can you ___?” from a supervisor.",
+    desc: "What the user can do once they’ve earned this Skill.",
+    icon: "Shown on the user’s Portfolio and when previewing Certifications. A greyed-out version is generated automatically for Skills the user hasn’t earned yet.",
+  },
+  mastery: {
+    pageSub: "Name this Mastery Skill, then choose the Skills that make it up.",
+    name: "Name a real job, not a topic. Example: “Install a Mini-Split System”",
+    desc: "The job a user can do once they’ve earned this Mastery Skill. Shown on their Portfolio.",
+    icon: "Shown on the user’s Portfolio and when previewing Certifications. A greyed-out version is generated automatically for users who haven’t earned it yet.",
+  },
+};
 
 type Props = {
   kind: Kind;
@@ -95,34 +114,25 @@ function initialData(p: Props): Data {
 }
 
 export function NewSkillWizard(props: Props) {
-  const { kind, onClose } = props;
-  const isMastery = kind === "mastery";
+  const { onClose } = props;
   const isEditing = !!(props.editingSkill || props.editingMastery);
-  const [step, setStep] = useState(0);
+  /* One page, one form, both kinds: `kind` comes from which Create button was
+     pressed on the Skills page (or which record is being edited) and decides
+     which criteria field is on screen and which save the footer fires. It is
+     not a field here — a Skill and a Mastery Skill are different records, so
+     switching mid-form would be a conversion, not an edit. */
+  const isMastery = props.kind === "mastery";
+  const noun = isMastery ? "Mastery Skill" : "Skill";
   const [data, setData] = useState<Data>(() => initialData(props));
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
 
-  const STEPS = isMastery
-    ? [
-        { label: "Details", sub: "Name, description, image", desc: "Name, describe, and illustrate this Mastery Skill." },
-        { label: "Linked Skills", sub: "Skills that compose it", desc: "Choose the Skills that make up this Mastery Skill. It is awarded automatically once a user holds all of them." },
-      ]
-    : [
-        { label: "Details", sub: "Name, description, image", desc: "Name, describe, and illustrate this Skill." },
-        { label: "Awarding criteria", sub: "Tasks that award it", desc: "Choose the Task or Tasks whose completion awards this Skill." },
-      ];
-
   const nameValid = data.nameEn.trim().length > 0;
   const criteriaValid = isMastery ? data.skillIds.length > 0 : data.taskIds.length > 0;
-  // Wheel-past-the-edge step navigation, shared with every other wizard.
-  const lastStep = STEPS.length - 1;
-  const gate = useEdgeLineGate({ step, setStep, lastStep });
-  // Rail glyphs: a step passed with its mandatory field still empty shows the
-  // red alert circle rather than a check.
-  const stepStatuses = useWizardStepStatuses({
-    step,
-    count: STEPS.length,
-    incomplete: (i) => (i === 0 ? !nameValid : !criteriaValid),
+  const canSave = nameValid && criteriaValid;
+
+  /* ⌘/Ctrl+Enter is the footer's only button, and waits on the same fields. */
+  useWizardEnterShortcut(() => {
+    if (canSave) handleSave();
   });
 
   function handleSave() {
@@ -154,7 +164,10 @@ export function NewSkillWizard(props: Props) {
         status: data.status,
         image: data.image,
         taskIds: data.taskIds,
-        rule: data.taskIds.length > 1 ? data.rule : "all",
+        // The control is always on screen now, so the picked rule is always a
+        // deliberate choice — no need to normalise a single-Task Skill to
+        // "all", which used to silently undo the choice on the next edit.
+        rule: data.rule,
         createdBy: base?.createdBy ?? "SkillCat",
         holders: base?.holders ?? 0,
         dateCreated: base?.dateCreated ?? now,
@@ -164,62 +177,48 @@ export function NewSkillWizard(props: Props) {
     onClose();
   }
 
+  /* What the dimmed Save is waiting for. The step rail used to report this, and
+     a one-page form has no rail — so the button says it on hover instead. */
+  const title = isEditing ? `Edit ${noun}` : `New ${noun}`;
+  const blockedTip = canSave
+    ? undefined
+    : [
+        "Fill in every required field to save:",
+        ...[
+          !nameValid && "• Name",
+          !criteriaValid && (isMastery ? "• Linked Skills" : "• Awarding Tasks"),
+        ].filter(Boolean),
+      ].join("\n");
+
   return (
     <div className="wizard">
       <div className="wizard-body">
-        <aside className="wizard-nav">
-          <div className="wizard-brand">
-            <span className="wizard-brand-eyebrow">
-              {isEditing ? "Editing" : "Creating"}
-            </span>
-            <span className="wizard-brand-name">
-              {isEditing
-                ? props.editingSkill?.name ?? props.editingMastery?.name
-                : isMastery
-                  ? "New Mastery Skill"
-                  : "New Skill"}
-            </span>
-          </div>
-
-          <ol className="wizard-steps">
-            {STEPS.map((s, i) => {
-              const status = stepStatuses[i];
-              return (
-                <li
-                  key={s.label}
-                  className={`wizard-step ${status}`}
-                  onClick={() => gate.goStep(i)}
-                >
-                  <WizardStepRail status={status} num={i + 1} />
-                  <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
-
         <div className="wizard-main">
-          <WizardGateEdges
-            gate={gate}
-            step={step}
-            lastStep={lastStep}
-            labels={STEPS.map((s) => s.label)}
-          />
-          <div className="wizard-content" ref={gate.scrollRef}>
-            <div className="wizard-paneout" ref={gate.paneOutRef}>
-              <div className="wizard-pane" key={step}>
-              <h1 className="wizard-title">{STEPS[step].label}</h1>
-              <p className="wizard-desc">{STEPS[step].desc}</p>
+          <div className="wizard-content">
+            <div className="wizard-paneout">
+              <div className="wizard-pane">
+                {/* Shared crumb row (.rvc-pagehead): the wizard is reached
+                    from Skills, and "Skills" is also the way back out, so it
+                    stays a button; the record itself is the current crumb. */}
+                <div className="rvc-pagehead">
+                  <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                    <button className="rvc-crumb" onClick={onClose} title="Back to Skills">
+                      Skills
+                    </button>
+                    <ChevronRightIcon />
+                    <span className="rvc-crumb rvc-crumb--current">{title}</span>
+                  </nav>
+                  <h1 className="wizard-title">{title}</h1>
+                </div>
+                <p className="wizard-desc">{COPY[props.kind].pageSub}</p>
 
-              {step === 0 && (
                 <DetailsStep data={data} update={update} isMastery={isMastery} />
-              )}
-              {step === 1 && !isMastery && <CriteriaStep data={data} update={update} />}
-              {step === 1 && isMastery && (
-                <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} />
-              )}
+
+                {isMastery ? (
+                  <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} />
+                ) : (
+                  <CriteriaStep data={data} update={update} />
+                )}
               </div>
             </div>
           </div>
@@ -234,29 +233,26 @@ export function NewSkillWizard(props: Props) {
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
-          {step > 0 && (
-            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
-              <span className="wizard-gate-fill" ref={gate.backFillRef} />
-              <span className="wizard-gate-btn-inner">Back</span>
-            </button>
-          )}
-          {step === 0 ? (
-            <button className="btn-publish wizard-gate-btn" onClick={() => gate.goStep(1)}>
-              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
-              <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
-            </button>
-          ) : (
-            <button className="btn-publish" disabled={!nameValid || !criteriaValid} onClick={handleSave}>
-              {isEditing ? "Save Changes" : "Publish"}
-            </button>
-          )}
+          {/* `aria-disabled` rather than `disabled`, the same way the Task
+              wizard gates publishing: a disabled button fires no mouse events,
+              so it could neither show the tooltip naming what is missing nor
+              answer a click by pointing at it. */}
+          <button
+            className={`btn-publish${canSave ? "" : " is-disabled"}`}
+            aria-disabled={!canSave}
+            data-tip={blockedTip}
+            onClick={() => { if (canSave) handleSave(); }}
+          >
+            {isEditing ? "Save Changes" : `Create ${noun}`}
+            <WizardKeyHint />
+          </button>
         </div>
       </footer>
     </div>
   );
 }
 
-/* ─────────────── Step 1 — Details ─────────────── */
+/* ─────────────── Details fields ─────────────── */
 
 function DetailsStep({
   data,
@@ -268,6 +264,7 @@ function DetailsStep({
   isMastery: boolean;
 }) {
   const noun = isMastery ? "Mastery Skill" : "Skill";
+  const copy = COPY[isMastery ? "mastery" : "skill"];
 
   return (
     <>
@@ -280,9 +277,10 @@ function DetailsStep({
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
-          placeholderEn={`${noun} name`}
-          placeholderEs={isMastery ? "Nombre de la habilidad de maestría" : "Nombre de la habilidad"}
+          placeholderEn="Name..."
+          placeholderEs="Nombre..."
         />
+        <p className="form-help">{copy.name}</p>
       </div>
 
       <div className="form-group">
@@ -292,28 +290,25 @@ function DetailsStep({
           es={data.descEs}
           onChangeEn={(v) => update({ descEn: v })}
           onChangeEs={(v) => update({ descEs: v })}
+          placeholderEn="Description..."
+          placeholderEs="Descripción..."
         />
+        <p className="form-help">{copy.desc}</p>
       </div>
 
       <div className="form-group">
         <label className="form-label">{noun} Icon <span className="req">*</span></label>
         <ImagePicker />
-        <p className="form-help">
-          This is how the {noun} appears to users when previewing Certifications and on their Portfolio
-        </p>
+        <p className="form-help">{copy.icon}</p>
       </div>
     </>
   );
 }
 
-/* Matches MultiSelect's own cap so the two fields wrap identically. */
-const PILL_LIMIT = 2;
-
-/* ─────────────── Step 2 — Skill awarding criteria ─────────────── */
+/* ─────────────── Skill awarding criteria ─────────────── */
 
 function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>) => void }) {
   const selected = data.taskIds;
-  const multi = selected.length > 1;
 
   return (
     <>
@@ -323,36 +318,36 @@ function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>)
         </label>
         <TaskPicker selected={selected} onChange={(ids) => update({ taskIds: ids })} />
         <p className="form-help">
-          Awarding is based on binary Task completion only — a Task counts once it is marked complete per its completion criteria. The same Task can award multiple Skills.
+          Choose the Tasks that award this Skill. A Task counts as soon as it’s marked complete,
+          whatever its completion criteria. The same Task can award more than one Skill.
         </p>
       </div>
 
-      {multi && (
-        <div className="form-group">
-          <label className="form-label">Awarded when the learner completes…</label>
-          <div className="seg-control">
-            <button
-              type="button"
-              className={`seg-btn ${data.rule === "all" ? "active" : ""}`}
-              onClick={() => update({ rule: "all" })}
-            >
-              All of the Tasks
-            </button>
-            <button
-              type="button"
-              className={`seg-btn ${data.rule === "any" ? "active" : ""}`}
-              onClick={() => update({ rule: "any" })}
-            >
-              Any one Task
-            </button>
-          </div>
-          <p className="form-help">
-            {data.rule === "all"
-              ? "The learner must complete every selected Task to earn this Skill."
-              : "Completing any one of the selected Tasks earns this Skill."}
-          </p>
+      {/* The award rule is its own field, not a control that appears once a
+          second Task is picked — the form keeps the same shape from the start,
+          and "All selected Tasks" is the default either way. With one Task
+          picked the two options mean the same thing, which is harmless. */}
+      <div className="form-group">
+        <label className="form-label">Award This Skill After</label>
+        {/* Both segments take the accent-active variant (Figma 639:895): either
+            rule is a real choice, so neither should read as the quieter one. */}
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn accent ${data.rule === "any" ? "active" : ""}`}
+            onClick={() => update({ rule: "any" })}
+          >
+            Any One Task is Complete
+          </button>
+          <button
+            type="button"
+            className={`seg-btn accent ${data.rule === "all" ? "active" : ""}`}
+            onClick={() => update({ rule: "all" })}
+          >
+            All Selected Tasks are Complete
+          </button>
         </div>
-      )}
+      </div>
 
       <RetroNote noun="Skill" />
     </>
@@ -384,28 +379,13 @@ function TaskPicker({
           {chosen.length === 0 ? (
             <span className="multiselect-placeholder">Select Tasks</span>
           ) : (
-            <div className="multiselect-tags">
-              {chosen.slice(0, PILL_LIMIT).map((t) => (
-                <span key={t.id} className="multiselect-tag">
-                  {t.name}
-                  <button
-                    className="multiselect-tag-remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChange(selected.filter((x) => x !== t.id));
-                    }}
-                    aria-label={`Remove ${t.name}`}
-                  >
-                    <SmallXIcon />
-                  </button>
-                </span>
-              ))}
-              {chosen.length > PILL_LIMIT && (
-                <span className="multiselect-tag multiselect-tag-more">
-                  +{chosen.length - PILL_LIMIT}
-                </span>
-              )}
-            </div>
+            <MultiSelectTags
+              tags={chosen.map((t) => ({
+                key: t.id,
+                label: t.name,
+                onRemove: () => onChange(selected.filter((x) => x !== t.id)),
+              }))}
+            />
           )}
           <span className="field-chevron"><DropdownCaretIcon /></span>
         </div>
@@ -429,7 +409,7 @@ function TaskPicker({
   );
 }
 
-/* ─────────────── Step 2 — Mastery linked Skills ─────────────── */
+/* ─────────────── Mastery linked Skills ─────────────── */
 
 /* Linked Skills uses the plain dropdown field (Figma 101:272 + 591:1322) — a
    Skill has no table's worth of metadata to weigh up, so the menu is enough. */
@@ -474,7 +454,8 @@ function LinkedSkillsStep({
           searchPlaceholder="Search Skills..."
         />
         <p className="form-help">
-          The Mastery Skill is awarded automatically the moment a user holds <strong>all</strong> linked Skills.
+          Choose the Skills that make up this job. Holding all of them should mean the user can do
+          it. Awarded automatically once a user holds every one.
         </p>
       </div>
 
@@ -495,14 +476,17 @@ function LinkedSkillsStep({
 
 /* ─────────────── Shared ─────────────── */
 
+/* Figma 1121:1671 "Skills - Creation": the retroactive-award note is a DS
+   callout card — 16px filled alert circle, SemiBold title, muted 14px body. */
 function RetroNote({ noun }: { noun: string }) {
   return (
-    <div className="sk-retro-note">
-      <span className="sk-retro-icon"><InfoIcon /></span>
-      <div>
-        <strong>Retroactive on save.</strong> Every user who already meets the criteria receives this {noun} immediately.
-        Retroactive awards do <strong>not</strong> fire Rudderstack events (push notifications, email campaigns) — those only
-        trigger when a user earns it through real-time Task completion. Updating criteria later never revokes a {noun} already earned.
+    <div className="note-card">
+      <span className="note-card-icon"><AlertCircleFilledIcon /></span>
+      <div className="note-card-text">
+        <p className="note-card-title">Applies to Existing Users</p>
+        <p className="note-card-body">
+          Anyone who already meets the criteria gets this {noun} when you save, without a notification or email.
+        </p>
       </div>
     </div>
   );
@@ -512,13 +496,6 @@ const WarnIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
     <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
-
-const InfoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 8.4v.01M11 12h1v4h1" />
   </svg>
 );
 

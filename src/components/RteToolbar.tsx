@@ -69,6 +69,11 @@ export function RteToolbar() {
         <Dropdown
           overlay
           width="auto"
+          /* The rows carry a 13px text inset (1px panel border + 4px panel
+             padding + 8px row padding) and the trigger has none, so the panel
+             opens 13px to the left — the menu's "Paragraph" then sits exactly
+             under the button's. */
+          offsetX={-13}
           panelClass="rte-para-menu"
           trigger={({ open, toggle: toggleMenu }) => (
             <button

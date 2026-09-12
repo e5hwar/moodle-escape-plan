@@ -62,12 +62,12 @@ const T = (
 ): Task => ({ id, name, type, usedIn, createdBy, tags, dateCreated, dateModified, ...extra });
 
 export const tasks: Task[] = [
-  T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026"),
-  T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", [], "Feb 21, 2024", "Apr 03, 2026"),
+  T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026", { hidden: true }),
+  T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", [], "Feb 21, 2024", "Apr 03, 2026", { hidden: true }),
   T("T-1654", "HVAC Field Tools Walkthrough", "xAPI",
     ["HVAC Field Skills", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
     "SkillCat", ["B2B Companies Only", "HVACR"], "Jan 28, 2024", "Apr 19, 2026"),
-  T("T-1543", "Refrigerant Pressure Chart", "Resource", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC", "Commercial HVAC"], "Dec 02, 2023", "Mar 14, 2026"),
+  T("T-1543", "Refrigerant Pressure Chart", "Resource", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC", "Commercial HVAC"], "Dec 02, 2023", "Mar 14, 2026", { hidden: true }),
   T("T-1432", "Field Visit – Brazing Joints", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat",
     ["HVAC", "Field", "Brazing"], "Apr 09, 2024", "Apr 28, 2026", {
       description: "Practical brazing skill assessment. Technicians document at least one brazed joint completed in the field, with photos and reflection on quality control measures.",
@@ -83,7 +83,7 @@ export const tasks: Task[] = [
   T("T-1407", "EPA 609 Final Exam", "Quiz", ["EPA 609"], "SkillCat", ["HVACR"], "Mar 06, 2024", "Apr 22, 2026", { finalExam: true }),
   T("T-1385", "MVAC Refrigerant Handling", "xAPI", ["EPA 609"], "SkillCat", ["HVACR"], "Mar 08, 2024", "Apr 10, 2026"),
   T("T-1362", "Automotive A/C Recovery", "Hands-On Task", ["EPA 609"], "SkillCat", ["HVAC", "Refrigerant"], "Mar 12, 2024", "Apr 16, 2026"),
-  T("T-1344", "R-1234yf Safety Overview", "Resource", ["EPA 609"], "SkillCat", [], "Mar 15, 2024", "Mar 30, 2026"),
+  T("T-1344", "R-1234yf Safety Overview", "Resource", ["EPA 609"], "SkillCat", [], "Mar 15, 2024", "Mar 30, 2026", { hidden: true }),
   T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B Companies Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
   T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", [], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
   T("T-1198", "EPA 608 Universal Final Exam", "Quiz", ["EPA 608 Universal"], "SkillCat", [], "Feb 14, 2024", "Apr 20, 2026", {

@@ -15,6 +15,11 @@ type Props = {
   /** Fixed panel width, or "auto" to let the panel size to its content. */
   width?: number | "auto";
   align?: "left" | "right";
+  /** Nudge the overlay panel horizontally from that alignment, in px. For a
+   *  menu whose rows should line up with the trigger's TEXT rather than its
+   *  box — the panel's own row inset is the offset (negative moves it left).
+   *  Clamping to the scrollport still applies afterwards. */
+  offsetX?: number;
   direction?: "down" | "up";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -70,6 +75,7 @@ export function Dropdown({
   children,
   width = 300,
   align = "left",
+  offsetX = 0,
   direction = "down",
   open: controlledOpen,
   onOpenChange,
@@ -145,7 +151,7 @@ export function Dropdown({
           : above;
       top = Math.max(b.top + EDGE, Math.min(top, b.bottom - h - EDGE));
 
-      let left = align === "right" ? t.right - w : t.left;
+      let left = (align === "right" ? t.right - w : t.left) + offsetX;
       left = Math.max(b.left + EDGE, Math.min(left, b.right - w - EDGE));
 
       const next = { top, left, maxHeight: constrainHeight ? h : undefined };
@@ -168,7 +174,7 @@ export function Dropdown({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [open, overlay, align, direction, constrainHeight]);
+  }, [open, overlay, align, offsetX, direction, constrainHeight]);
 
   const widthStyle = width === "auto" ? null : { width };
 

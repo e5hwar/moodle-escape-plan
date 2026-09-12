@@ -121,12 +121,17 @@ export function PillTrigger({
   open,
   toggle,
   onClear,
+  tip,
 }: {
   label: string;
   value: string | null;
   open: boolean;
   toggle: () => void;
   onClear?: () => void;
+  /** One line saying what this filter does, shown on hover. A native `title`,
+      which the app's single tooltip adopts (see [[tooltip-and-hover-convention]]).
+      Sits on the label button, not the clear button, which has its own label. */
+  tip?: string;
 }) {
   if (value && onClear) {
     return (
@@ -138,7 +143,7 @@ export function PillTrigger({
         >
           <XCircleIcon />
         </button>
-        <button className="filter-applied-main" onClick={toggle}>
+        <button className="filter-applied-main" onClick={toggle} title={tip}>
           <span className="label">{label}</span>
           <span className="sep" />
           <span className="value">{value}</span>
@@ -153,6 +158,7 @@ export function PillTrigger({
     <button
       className={`filter-pill-dashed ${open ? "open" : ""}`}
       onClick={toggle}
+      title={tip}
     >
       <span className="icon">
         <PlusCircleIcon />

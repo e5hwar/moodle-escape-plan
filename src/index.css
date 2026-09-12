@@ -685,15 +685,28 @@ a {
 }
 
 /* Subtext + tooltip glyph (Figma 742:1061): a 14px info glyph 4px after the
-   page subtext. The row's own 6px gap is trimmed by 2px to land on the 4px. */
+   page subtext. The row's own 6px gap is trimmed by 2px to land on the 4px.
+   Use `InfoIcon14` inside it — a glyph drawn at 14px; the 11px `InfoIcon`
+   scaled up here renders blurred. Brightens on hover/focus like Spotlight's
+   `.sp-info`, and takes focus so the tooltip is reachable by keyboard. */
 .tasks-subtitle-info {
+  display: inline-flex;
+  align-items: center;
   margin-left: -2px;
   color: #a8a8a8;
+  cursor: default;
+  transition: color 0.12s ease;
 }
 
 .tasks-subtitle-info svg {
   width: 14px;
   height: 14px;
+}
+
+.tasks-subtitle:hover .tasks-subtitle-info,
+.tasks-subtitle-info:focus-visible {
+  color: #fff;
+  outline: none;
 }
 
 /* "* Required Fields" hint (Figma node 46:322): 12px Fira Sans Medium, accent
@@ -1192,9 +1205,16 @@ button.breadcrumb-item:hover {
   box-shadow: var(--tip-shadow);
 }
 
+/* `data-tip-head` — the SemiBold label line a tip can carry above its body.
+   Block, so the body always starts on the next line regardless of `pre-line`. */
+.hover-tip-head {
+  display: block;
+  font-weight: 600;
+}
+
 /* ── Click-to-copy cells (Figma 992:1015; see CopyCells.tsx) ─────────────
    Opt-in: only a `<td data-copyable>` takes part — today the Email and Phone
-   columns on Exam Reviews and ID Re-Uploads.
+   columns on Exam Reviews, ID Re-Uploads and Hands-On Task Submissions.
    A hovered marked cell carries data-copy="fit" (glyph after the text, at
    --copy-x) or "clip" (glyph at the right edge; the cell's right padding was
    grown 16px by the script so the ellipsis truncates a little more text —
@@ -3381,13 +3401,74 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   filter: brightness(1.12);
 }
 
+/* Unavailable footer buttons. `.is-disabled` is the `aria-disabled` twin of
+   `:disabled` — a truly disabled button fires no mouse events, so one that
+   needs to explain itself on hover (the Task wizard's Save & Publish, which
+   waits on the mandatory fields) wears the class instead and no-ops its own
+   click. Both spellings look identical. */
+.btn-save-draft:disabled,
+.btn-save-draft.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-save-draft:disabled:hover,
+.btn-save-draft.is-disabled:hover {
+  filter: none;
+}
+
+/* ===== Wizard footer keycap hints (Figma 756:3772 primary / 1113:1109
+   secondary) =====
+   A 3px-gapped run of 20px keycaps after the label: ⌘+Enter on the primary
+   (Continue / Publish), ⌘+Shift+Enter on Save & Publish. Same keycap as the
+   search bar's ⌘K — 20px box, radius 4, a 4% white wash — but white-on-CTA
+   rather than muted, since it sits on a filled button. */
+.wz-kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.wz-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+}
+
+/* The label and its keycaps are one 8px-gapped row — on the gated primary that
+   row lives inside .wizard-gate-btn-inner, above the sweep fill. */
+.wizard-gate-btn-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* (Primary .btn-publish is defined above as the flat orange CTA — Figma 73:473.) */
-.btn-publish:disabled {
+.btn-publish:disabled,
+.btn-publish.is-disabled {
   background: var(--bg-pill-strong);
   color: var(--text-faint);
   border-color: var(--border);
   box-shadow: none;
   cursor: not-allowed;
+}
+.btn-publish.is-disabled:hover,
+.btn-publish.is-disabled:active {
+  background: var(--bg-pill-strong);
+  filter: none;
+  transform: none;
+}
+/* The keycaps are white by design on the live CTA (.wz-key), which is why they
+   stayed white on the gated grey one and read as still active. Disabled, they
+   take the button's own faint text colour so label and hint fade together. */
+.btn-publish:disabled .wz-key,
+.btn-publish.is-disabled .wz-key {
+  color: inherit;
 }
 
 /* Footer actions size to their label — the global .btn-publish width:100%
@@ -4326,12 +4407,15 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 /* ===== Package upload (Images 1 & 2) ===== */
-/* ===== Dual-language file upload (Figma 365:2608) =====
+/* ===== Dual-language file upload (Figma 365:2608, filled states 776:1384 /
+   776:1431) =====
    One bordered shell — the same 13px/9px card shell as .radio-card — split into
-   two equal columns, each a language tag above its own drop zone. */
+   two equal columns, each a language tag above its own drop zone. The columns
+   STRETCH: a column holding files stays exactly as tall as the empty one, with
+   its file list clipping and the add-more row pinned to the bottom edge. */
 .upload-2lang {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 20px;
   /* Figma's 13px inset is measured from the outer edge with the stroke inside
      it, so the padding carries 12 and the border the 13th (208px tall). */
@@ -4348,7 +4432,33 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+}
+
+/* Everything under the tag is full-column-width in the node — only the tag
+   itself is a centred shrink-wrapped label. */
+.upload-lang-col > *:not(.upload-lang-tag) {
+  width: 100%;
+}
+
+/* The drop zone owns the slack: 170px on its own (194px column − 16px tag −
+   8px gap), taller when the neighbouring column is. */
+.upload-lang-col .drop-big {
+  flex: 1;
+  height: auto;
+  min-height: 170px;
+}
+
+/* A filled column: the list clips rather than growing the shell, and the
+   add-more row takes whatever space is left over (min 36px, node 776:1441). */
+.upload-lang-col .file-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: clip;
+}
+
+.upload-lang-col .drop-slim {
+  flex: 1 1 auto;
 }
 
 .upload-lang-tag {
@@ -4366,12 +4476,14 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   gap: 8px;
 }
 
+/* Uploaded-file row (Figma 776:1434): 47px tall — 8/12 padding around a 31px
+   content row — on a grey wash, NOT the darker --bg-pill hole. */
 .file-row {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  background: var(--bg-pill);
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(122, 122, 122, 0.2);
   border-radius: 8px;
 }
 
@@ -4379,7 +4491,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #a8a8a8;
   flex-shrink: 0;
 }
 
@@ -4388,23 +4500,36 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   min-width: 0;
 }
 
+/* The name is the download affordance (link + "Download" tooltip), so it takes
+   the crumb hover — brighten + underline — and nothing else. */
 .file-name {
+  display: block;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.file-sub {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
+.file-name:hover {
+  text-decoration: underline;
 }
 
+.file-sub {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 14px;
+  color: #7a7a7a;
+}
+
+/* 16px glyph in the node; the box is a hit area only and stays inside the
+   31px content row. */
 .file-remove {
   width: 26px;
   height: 26px;
@@ -4412,13 +4537,71 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #a8a8a8;
   flex-shrink: 0;
+}
+
+.file-remove svg {
+  width: 16px;
+  height: 16px;
 }
 
 .file-remove:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
+}
+
+/* ===== Single-file column (Figma 1100:1351) =====
+   When a language column takes ONE file (the xAPI package), the picked file
+   replaces the drop zone instead of stacking a row + add-more strip: the same
+   grey wash as a .file-row, filling the column, with the ✕ alone in the
+   top-right and the glyph/name/size block centred in what's left. The node's
+   32px bottom padding is what pushes that block optically above centre. */
+.file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 8px 32px 12px;
+  background: rgba(122, 122, 122, 0.2);
+  border-radius: 8px;
+}
+
+.file-card-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #a8a8a8;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.file-card-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.file-card-remove:hover {
+  color: var(--text);
+}
+
+.file-card-body {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.file-card-meta {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
 }
 
 /* Drop zone (365:6128): fixed 160px tall, dashed #7a7a7a hairline, stacked
@@ -4442,7 +4625,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -4457,9 +4640,16 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   height: 140px;
 }
 
+/* 20px in every drop-zone node (365:6129, 678:2013, 776:1442) — the shared
+   UploadTrayIcon still ships a 24px box, so it is sized down here. */
 .drop-big-icon {
   display: inline-flex;
   color: #a8a8a8;
+}
+
+.drop-big-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* The prompt sits a step brighter than the file rules beneath it. */
@@ -4483,28 +4673,39 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   text-align: center;
 }
 
+/* Add-more row (Figma 776:1441): the same dashed #7a7a7a hairline and 14px
+   #a8a8a8 prompt as .drop-big — one line, min 36px tall, 20px tray glyph. */
 .drop-slim {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px dashed var(--border-strong);
+  min-height: 36px;
+  padding: 8px 40px;
+  border: 1px dashed #7a7a7a;
   border-radius: 8px;
   background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  color: var(--text-muted);
+  gap: 8px;
+  color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  letter-spacing: normal;
+  text-transform: none;
   cursor: pointer;
+}
+
+.drop-slim svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .drop-slim:hover {
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
-  border-color: var(--text-faint);
+  border-color: #a8a8a8;
 }
 
 /* ===== File Upload - Primary (Figma 378:243) =====
@@ -4616,16 +4817,21 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   max-width: none;
 }
 
-/* Toolbar strip — Figma 620:1352 / 327:137 "Focus State": a compact 34px bar
-   along the field's BOTTOM edge. 4px side inset, 6px above/below the 22px
+/* Toolbar strip — Figma 620:1352 / 327:137 "Focus State": a compact 38px bar
+   along the field's BOTTOM edge. 4px side inset, 8px above/below the 22px
    control row; the fill is rgba(122,122,122,0.1) over #0d0d0d and carries no
-   border of its own — the fill step against the panes is the separator. */
+   border of its own — the fill step against the panes is the separator.
+   Re-synced 2026-09-10: the vertical inset went 6px → 8px (34px → 38px tall)
+   across all four nodes — 620:1352, 327:137, 405:238 and 697:1001 all draw
+   their strip at 38. Nothing else in the bar moved. */
 .rte-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  row-gap: 6px;
-  padding: 6px 4px;
+  /* Only reached when a narrow field wraps the groups; kept level with the
+     strip's own vertical inset. */
+  row-gap: 8px;
+  padding: 8px 4px;
   background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
 }
 
@@ -4700,6 +4906,13 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 .rte-heading:hover {
   color: #fff;
+}
+
+/* The Dropdown wrapper is an inline-block, whose line box is ~2px taller than
+   the button inside it — enough to push the menu off the toolbar's 8px gap.
+   As a flex container it hugs the trigger. */
+.rte-toolbar .dropdown-wrap {
+  display: flex;
 }
 
 /* Block-format menu — Figma 640:1005 "Dropdown Menu - Reduced Size": the
@@ -8557,6 +8770,13 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   white-space: nowrap;
 }
 
+/* Attempts — a count, so it reads in the muted data grey the other numeric
+   columns use rather than the Question cell's white. */
+.table tbody td.qb-col-attempts {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .table tbody td.qb-col-version {
   /* Fira Sans, inherited — every table's row data is Fira Sans, not mono
      (per the user 2026-08-06; this and .qb-col-id were the two stragglers). */
@@ -11197,9 +11417,12 @@ a.spc-hero-pill--link:hover {
   /* Grey wash at 20% over #0d0d0d (Figma 483:588 "Approve Attempt -
      Proctored" — the shell's source of truth, taken over the 15% the
      "General Modal" frame 667:884 had briefly been drawn at). */
-  background:
+  /* Exposed as a token so anything that must paint itself opaque INSIDE the
+     card (the table-picker's sticky header) composites to the same colour. */
+  --prm-surface:
     linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
     #0d0d0d;
+  background: var(--prm-surface);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
@@ -11218,6 +11441,14 @@ a.spc-hero-pill--link:hover {
    no fixed height — the table is paginated, so the card sizes to its rows. */
 .prm--pick {
   max-width: 884px;
+}
+
+/* Select Tasks only: its node (682:2321) went 884 → 1050 on 2026-09-12 to seat
+   the new Industry column. 1050 − 2×24 gutters = the 1002px content row the
+   header's six columns add up to. Every other picker still draws 884 in Figma,
+   so this is a modifier rather than a change to `.prm--pick`. */
+.prm--pick-wide {
+  max-width: 1050px;
 }
 
 .prm-body {
@@ -14395,11 +14626,11 @@ a.rh-crumb-link:hover {
   margin: 0 0 12px;
 }
 
-/* "Add Sub-Industry" / "Add Sub-Category" — Figma Tree 860:2256: a plain
-   32px row on the sub-row inset (pl 28 / pr 8, 4px gap), the 16px thin plus
-   then 16px Regular #a8a8a8; it takes the row hover fill. The Question Bank's
-   `.tree-add-link` is the same row (its root-level "New Category" variant
-   sits on the category inset). */
+/* "Add Sub-Category" — Figma Tree 860:2256: a plain 32px row on the sub-row
+   inset, the 16px thin plus then 16px #a8a8a8; it takes the row hover fill.
+   Inside a sublist it closes the group card behind a 0.5px hairline and its
+   label is Medium (see `.tree-sublist .tree-add-link` below); the rail's own
+   root-level "Add Category" variant keeps this plain form. */
 .tree-add,
 .tree-add-link {
   display: flex;
@@ -14431,6 +14662,15 @@ a.rh-crumb-link:hover {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+}
+/* The in-card variant (860:2256): last row of the group, on the sub-row inset,
+   Medium, over the 0.5px rule that separates it from the subcategories. */
+.tree-sublist .tree-add,
+.tree-sublist .tree-add-link {
+  padding: 0 4px 0 24px;
+  border-top: 0.5px solid #404040;
+  border-radius: 0;
+  font-weight: 500;
 }
 
 /* Rail footer (313:807) — full-bleed sticky block: 2px top rule, centred
@@ -14480,9 +14720,26 @@ a.rh-crumb-link:hover {
   gap: 8px;
 }
 
+/* Group — Figma "Tree" 862:2301 (re-synced 2026-09-10). A COLLAPSED group is
+   just its row (1085:1032: 4px of padding, no border); an EXPANDED one becomes
+   a card around the whole family — 1px #404040, r8, 4px padding (859:2184) —
+   so the category, its subcategories and the Add Sub-Category row read as one
+   block. `is-open` is set by the page rather than inferred with `:has()`: the
+   markup already knows, and the state is worth being explicit about. */
 .tree-group {
   display: flex;
   flex-direction: column;
+  /* Horizontal padding only while collapsed: with `.qb-rail .tree`'s gap of 0,
+     vertical padding (or a transparent border standing in for the card's) would
+     push the collapsed rows off the 32px pitch the rail is tuned for — they
+     stack FLUSH, as they did before the card existed. The 4px still lands the
+     row's own 4px inset on the same 8px of ink as "All Questions". */
+  padding: 0 4px;
+  border-radius: 8px;
+}
+.tree-group.is-open {
+  padding: 4px;
+  border: 1px solid #404040;
 }
 
 /* The tree is a flex column that scrolls, and a flex column squeezes its
@@ -14501,21 +14758,31 @@ a.rh-crumb-link:hover {
   flex-shrink: 0;
 }
 
-/* Category / industry row — Figma Tree 861:2267 (collapsed) / 859:2185
-   (expanded): 32px tall, 8px padding, 4px gap, 8px radius, 16px Regular
-   white label. */
+/* Category row — Figma Tree 1085:1033 (collapsed) / 859:2185 (expanded): 32px
+   tall, 4px insets, 4px gap, 8px radius, 16px white label. The inset is 4px
+   because the group card contributes the other 4px; the standalone "All
+   Questions" row (863:2430) has no card, so it keeps the full 8px. The label
+   goes SemiBold once the group is open (859:2240) — collapsed it is Regular. */
 .tree-row {
   display: flex;
   align-items: center;
   gap: 4px;
   height: 32px;
-  padding: 0 8px;
+  padding: 0 4px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
   transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* "All Questions" (863:2430) — a lone 8px row, not part of any card. */
+.tree-row--all {
+  padding: 0 8px;
+}
+.tree-group.is-open > .tree-row {
+  font-weight: 600;
 }
 
 /* The Question Bank's rows are role=button divs (their kebab is the real
@@ -14525,12 +14792,22 @@ a.rh-crumb-link:hover {
   cursor: pointer;
 }
 
-/* Hover (861:2289): rgba(122,122,122,.2) over the rgba(13,13,13,.75) ground.
-   Selected (861:2281): rgba(240,85,35,.1) over that ground inside a 0.5px
-   rgba(240,85,35,.75) stroke — drawn as an inset ring so the row stays 32px
-   — with the label SemiBold #f05523 and the count #f05523. Selected wins on
-   hover: this rule order keeps the orange fill flat. */
-.tree-row:hover {
+/* Hover — Figma 1086:1148 "Tree - Collapsed - Hover": the fill belongs to the
+   GROUP box, not to the row inside it, so a collapsed category lights up across
+   the card's full width (including the 4px it is inset by) rather than leaving
+   two unlit strips. Inside an OPEN card the rows carry their own hover instead
+   (1085:1051), and "All Questions" is its own row with no group around it.
+   A SELECTED row takes no hover at all (2026-09-10, per the user): it is not
+   clickable any more, so lighting up under the cursor would promise an action
+   it does not have. That is what the `:has(.tree-row.is-active)` exclusion and
+   the two `:not(.is-active)`s are for — and the open-card one also stops this
+   rule (4 classes) from out-specifying `.tree-row.is-active` (2).
+   Selected (861:2281): rgba(240,85,35,.1) over the rgba(13,13,13,.75) ground
+   inside a 0.5px rgba(240,85,35,.75) stroke — drawn as an inset ring so the row
+   stays 32px. Selected wins on hover: this rule order keeps the orange flat. */
+.tree-group:not(.is-open):not(:has(.tree-row.is-active)):hover,
+.tree-group.is-open > .tree-row:not(.is-active):hover,
+.tree-row--all:not(.is-active):hover {
   background:
     linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
     rgba(13, 13, 13, 0.75);
@@ -14605,18 +14882,31 @@ a.rh-crumb-link:hover {
   opacity: 0 !important;
 }
 
+/* Chevron — expand / collapse only, never selection (2026-09-10). It is a real
+   button with a HITBOX far bigger than its 16px glyph: full row height, and
+   wide enough to swallow the row's own left inset and the gap before the text,
+   so everything left of the name folds the group. Negative margins let it eat
+   that inset without moving the glyph, and the -4px on the right is cancelled
+   by the row's 4px gap, so the name starts exactly where it did. */
 .tree-caret-btn {
-  width: 16px;
-  height: 16px;
+  width: 28px;
+  height: 100%;
+  margin: 0 -4px 0 -4px;
+  padding: 0;
+  background: none;
+  border: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #a8a8a8;
   flex-shrink: 0;
+  cursor: pointer;
+}
+.tree-caret-btn svg {
   transition: transform 0.12s ease;
 }
 
-.tree-caret-btn.is-open {
+.tree-caret-btn.is-open svg {
   transform: rotate(90deg);
 }
 
@@ -14632,12 +14922,30 @@ a.rh-crumb-link:hover {
   text-align: left;
 }
 
-.tree-row-label {
-  flex: 1;
+/* The NAME is the select control — a button that hugs its own text, so the
+   empty space after a short name does nothing (the row is not a control any
+   more; see `.tree-caret-btn`). `.tree-main` still takes the slack, holding the
+   kebab at the row's right edge. Disabled = this is already the selection. */
+.tree-row-label,
+.tree-sub-row-label {
+  max-width: 100%;
   min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tree-row-label:disabled,
+.tree-sub-row-label:disabled {
+  cursor: default;
+  color: inherit;
+  opacity: 1;
 }
 
 /* Count — 14px Regular #a8a8a8 sized to its digits (859:2242), right-aligned
@@ -14703,13 +15011,14 @@ a.rh-crumb-link:hover {
   flex-direction: column;
 }
 
-/* Sub row (859:2243): 32px, pl 28 / pr 8, 4px gap, 8px radius, 16px Regular. */
+/* Sub row (859:2243): 32px, pl 24 / pr 4, 4px gap, 8px radius, 16px Regular.
+   24 + the card's 4px is the same 28px of ink the pre-card tree had. */
 .tree-sub-row {
   display: flex;
   align-items: center;
   gap: 4px;
   height: 32px;
-  padding: 0 8px 0 28px;
+  padding: 0 4px 0 24px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
@@ -14718,7 +15027,7 @@ a.rh-crumb-link:hover {
   transition: background 0.1s ease, box-shadow 0.1s ease;
 }
 
-.tree-sub-row:hover {
+.tree-sub-row:not(.is-active):hover {
   background:
     linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
     rgba(13, 13, 13, 0.75);
@@ -14758,12 +15067,11 @@ a.rh-crumb-link:hover {
   text-align: left;
 }
 
+/* The sub row has no chevron, so its name is the only control on it; it takes
+   the shared label rule above and just needs the slack that `.tree-main` gives
+   a category row. */
 .tree-sub-row-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-right: auto;
 }
 
 /* =============================================================
@@ -15702,7 +16010,19 @@ a.rh-crumb-link:hover {
 .u-menu {
   position: fixed;
   z-index: 200;
-  min-width: 210px;
+  /* Every menu hugs its rows (the user, 2026-09-11 — this replaced a shared
+     210px floor, which left short menus like Edit/Preview/Delete far wider than
+     their labels). `max-content` rather than a plain shrink-to-fit box, and a
+     column flex container rather than a block: as a block the panel measured
+     its `<button>` rows at their own shrink-to-fit width and clipped long
+     labels. `align-items: stretch` still paints every row full-bleed for its
+     hover fill. A width is set only where a row carries a reason line, which
+     has its own text box — see `.u-menu-item-sub` and `.qb-row-menu`. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+  max-width: min(320px, 90vw);
   background:
     linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
     #0d0d0d;
@@ -15739,24 +16059,17 @@ a.rh-crumb-link:hover {
 /* Menu row — Figma 670:1323 (superseding 388:354/559:2206): 8px padding, 12px
    gap to a 16px icon, 16px Fira Sans Regular. Icon and label are both pure
    white here, unlike the action bar's #a8a8a8. */
-/* A menu with no head block and short actions (Figma 782:1656, Quiz Attempts)
-   hugs its rows instead of holding the shared 210px floor — that minimum
-   exists for the menus that carry a name/id head above the actions. */
-.u-menu--hug {
-  min-width: 0;
-  /* `max-content`, not just a dropped minimum: the items are `width: 100%`, so
-     in a plain shrink-to-fit box they resolve against a width that hasn't been
-     decided yet and the labels get clipped. Sizing the panel from its content
-     first gives them something real to stretch to. */
-  width: max-content;
-  max-width: min(320px, 90vw);
-}
+/* `.u-menu--hug` was retired 2026-09-11 — hugging is what every menu does now,
+   so the modifier had nothing left to say. */
 
 .u-menu-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  /* `auto`, never `100%`: a percentage resolves against a container width that
+     the container is still deriving FROM these rows. Stretch (from the panel's
+     `align-items`) gives them the full width once it is known. */
+  width: auto;
   padding: 8px;
   border-radius: 6px;
   text-align: left;
@@ -15842,7 +16155,9 @@ a.rh-crumb-link:hover {
    with the label (Figma 388:354). */
 .u-menu-item-text {
   display: flex;
-  flex: 1 0 0;
+  /* `auto` basis, not 0: a zero-basis column contributes nothing to the panel's
+     `max-content`, so the menu could never measure its own labels. */
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
@@ -15943,10 +16258,6 @@ a.rh-crumb-link:hover {
 /* Quiet buttons on this page carry a label next to the glyph. */
 .prof .btn-save-draft {
   gap: 8px;
-}
-.prof .btn-save-draft:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .prof .table .mc-btn-sm + .mc-btn-sm {
   margin-left: 8px;
@@ -16533,63 +16844,181 @@ a.rh-crumb-link:hover {
 }
 
 /* ============== Quiz wizard — structure, questions, grading ============== */
-.section-list {
+/* ─── Sections table (Figma 1097:1205 "Quiz Sections") ───
+ * The same boxed table as the questions card (750:1672) and the question
+ * editor's Options card (.qed-tbl): rgba(122,122,122,.1) on a 12px radius,
+ * 16px gutters, rows split by a rgba(64,64,64,.5) hairline that also closes
+ * the bottom edge. Columns are 24px apart here (the node's gap), and the two
+ * grading columns are only rendered under section-level grading. */
+.qsec {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: var(--font-sans);
   margin-bottom: 12px;
-  max-width: none;
 }
 
-.section-row {
+.qsec-hd,
+.qsec-row,
+.qsec-foot {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 24px;
+  padding: 12px 16px 13px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
-.section-drag {
-  background: transparent;
-  border: none;
-  color: var(--text-faint);
-  cursor: grab;
+.qsec-hd {
+  padding: 8px 16px 9px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+
+.qsec-foot {
+  gap: 4px;
+}
+
+/* Grip + order number: the 16px "move" glyph, 4px, then the number over the
+   44px the node gives the ORDER label. */
+.qsec-ord {
+  width: 64px;
+  flex: none;
   display: inline-flex;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
 }
 
-.section-drag:hover {
-  color: var(--text);
+.qsec-grip {
+  display: inline-flex;
+  color: #a8a8a8;
+  cursor: grab;
 }
 
-.section-order {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
+.qsec-grip:active {
+  cursor: grabbing;
+}
+
+.qsec-hd .qsec-grip {
+  width: 16px;
+  cursor: default;
+}
+
+.qsec-num {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 16px;
+  color: #fff;
+}
+
+.qsec-hd .qsec-num {
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+
+.qsec-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* % TO PASS: a 49px single-language input, 4px, the % sign — 69px all in,
+   which is what the header column reserves. */
+.qsec-pct {
+  width: 69px;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+}
+
+.qsec-pct-input {
+  width: 49px;
+  height: 35px;
+  padding: 8px 12px;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
   font-family: var(--font-sans);
-  font-size: 11pt;
+  font-size: 16px;
+  color: #fff;
+  text-align: center;
+}
+
+.qsec-pct-sign {
+  font-size: 16px;
+  color: #a8a8a8;
+}
+
+.qsec-hd .qsec-pct {
+  justify-content: flex-start;
+}
+
+.qsec-must {
+  width: 86px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.qsec-hd .qsec-must {
+  justify-content: flex-start;
+}
+
+.qsec-x {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+
+.qsec-x:hover:not(:disabled) {
+  color: #fff;
+}
+
+.qsec-x:disabled,
+.qsec-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* "Add Section" closing the card — the same orange text link as the Options
+   card's Add Option (1091:1178). */
+.qsec-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
   font-weight: 600;
-  flex-shrink: 0;
+  line-height: normal;
+  color: #f05523;
+  cursor: pointer;
 }
 
-.section-fields {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  min-width: 0;
+.qsec-add svg {
+  width: 16px;
+  height: 16px;
 }
 
-.section-fields .form-input {
-  flex: 1;
-  min-width: 0;
+.qsec-add:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
 .section-remove {
@@ -16608,43 +17037,6 @@ a.rh-crumb-link:hover {
 .section-remove:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-}
-
-.grade-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: none;
-}
-
-.grade-row {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 16px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.grade-row-name {
-  flex: 1;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
-  min-width: 0;
-}
-
-.grade-row-name strong {
-  font-weight: 600;
-}
-
-.grade-row-pct {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .trigger-list {
@@ -18326,12 +18718,26 @@ a.rh-crumb-link:hover {
   font-weight: 400;
 }
 .multiselect-tags {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+/* MultiSelectTags' invisible measuring twin: the full chip set laid out at its
+   natural width so the visible row can count how many fit. */
+.multiselect-tags-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
 }
 .multiselect-tag {
   display: inline-flex;
@@ -18389,7 +18795,6 @@ a.rh-crumb-link:hover {
    field) paints its top half behind the modal card. A bare 300 here would
    *lower* the panel — this rule comes after `.dropdown--overlay`'s 500. */
 .ms-menu { z-index: 500; }
-.ms-menu .dropdown-search { padding: 8px 16px 9px; }
 .ms-menu .dropdown-list { padding: 8px; }
 .ms-menu .dropdown-list .dropdown-item {
   font-size: 16px;
@@ -18494,6 +18899,24 @@ a.rh-crumb-link:hover {
 }
 
 .ss-menu { z-index: 500; }
+
+/* The grade menu (Figma 1090:1153) is the one select menu drawn on a lighter
+   ground: a 10% #7a7a7a wash — the same fill as the table card it opens over —
+   layered on the shared #0d0d0d base, which is how the node composites it. */
+.ss-menu.qed-grade-menu {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+}
+/* The select family's search header (Figma 668:972 / 955:976 / 938:961): a
+   16px gutter and a FULL-strength 1px #404040 divider, where the filter panels
+   sit on a 0.5px one. `.ss-menu--countries` used to carry its own copy of this;
+   it is one rule for every select menu now, so the two cannot drift apart. */
+.ss-menu .dropdown-search,
+.ms-menu .dropdown-search {
+  padding: 8px 16px 9px;
+  border-bottom: 1px solid #404040;
+}
 .ss-menu .dropdown-list { padding: 8px; }
 /* An even 8px inset — a single-line row stands 35px — per 591:1382 / 591:1322.
    The 6px on `.dropdown-item` belongs to the filter menus (24:16130). */
@@ -18530,20 +18953,10 @@ a.rh-crumb-link:hover {
   font-weight: 400;
   color: #a8a8a8;
 }
-/* Countries menu — Figma 938:961. A 4px inset rather than the 8px the other
-   single-selects use, and the name is allowed to wrap onto a second line
-   ("Turks and Caicos Islands") instead of being cut with an ellipsis. Its
-   search header sits on a 12px gutter and a full-strength hairline, where the
-   filter panels' is 16px over a 0.5px one. */
-/* Figma 938:961 "Dropdown Menu - Countries" re-synced: the search header and
-   the list both sit on a 16px / 8px inset, where they used to be pulled in to
-   12px and 4px. The 1px divider stays (938:1005 draws a full border-b, unlike
-   the 0.5px the filter panels use). */
-.ss-menu--countries .dropdown-search {
-  padding: 8px 16px 9px;
-  border-bottom: 1px solid #404040;
-}
-.ss-menu--countries .dropdown-list { padding: 8px; }
+/* Countries menu — Figma 938:961. Its shell, search header and 8px list inset
+   are the shared select-menu ones above; all that is left of its own is a 12px
+   gap and a name allowed to WRAP onto a second line ("Turks and Caicos
+   Islands") rather than being cut with an ellipsis. */
 .ss-menu--countries .dropdown-item {
   align-items: center;
   gap: 12px;
@@ -18565,12 +18978,14 @@ a.rh-crumb-link:hover {
 
 /* Figma 668:972 "Dropdown Menu - Popups and Modals" — opened over a modal
    card the panel takes a lighter wash (and a softer row hover) so it still
-   separates from the popup behind it. Only for menus on a popup surface. */
+   separates from the popup behind it. Only for menus on a popup surface.
+   Re-synced 2026-09-10: the wash is now rgba(122,122,122,0.15) over #0d0d0d —
+   i.e. exactly `--search-bg`, the shared floating-panel surface — where it used
+   to be a bespoke rgba(115,115,115,0.2). The row hover stays the node's own
+   rgba(115,115,115,0.1); only the panel joined the token. */
 .ss-menu--popup,
 .ms-menu--popup {
-  background:
-    linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)),
-    #0d0d0d;
+  background: var(--search-bg);
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
 }
 .ss-menu--popup .dropdown-list .dropdown-item:hover,
@@ -20812,20 +21227,178 @@ a.rh-crumb-link:hover {
 .sk-status--archived { background: var(--bg-pill); color: var(--text-muted); border-color: var(--border); }
 
 /* Tasks column cell */
-.sk-tasks-cell { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; }
-.sk-tasks-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sk-tasks-more {
+/* The Skills list columns' "+N" was `.sk-tasks-more`, a pill the plain-text
+   strip rule flattened anyway. They now use the shared `.used-extra` badge
+   (Tasks / Certifications "Used in"), which pairs with a `data-tip` listing
+   every value — so a "+N" cell explains itself on hover. */
+
+/* ─── Skills grouped table (Figma 1117:1537) ───
+   One table: a Mastery Skill is a group row and its Skills are child rows.
+   Group row = 1119:1543: the 10% grey wash, standard row separator, 16px caret + 8px
+   gap before the name (name at 36px). Child row = 1119:1561: the standard
+   row atom, name indented past the caret slot (44px, see `.skg-child`).
+   The wash is painted as ONE OPAQUE colour on every cell — rgba(122,122,122,.1)
+   pre-composited over the page's #0d0d0d — not as a translucent tr background.
+   A translucent tr next to the sticky actions cell's opaque colour composites
+   through two different paths and can land one level apart, which reads as a
+   seam exactly at the cell's left edge (seen in the wild, invisible in
+   computed styles). Opaque everywhere, there is nothing to composite. The
+   shared `.col-actions::before` ramp stays, so the fade into the kebab gutter
+   starts where it does on every other row. */
+/* 1119:1543's stroke (re-synced twice on 2026-09-11) ended up as the standard
+   rgba(64,64,64,.5) row separator — the base `.table tbody tr` rule — so the
+   group row sets none of its own. Both atoms draw a 400px primary column,
+   so the shared 280px name cap is lifted on these rows: the child row's name
+   carries the "Also in …" flag and would ellipsise under it. */
+/* The name cell holds the name plus its badges ("Mastery Skill", "Also in …",
+   "Archived"). Laid out as flex so that when the column is too narrow the NAME
+   truncates and the BADGES stay whole — in normal inline flow the badge sits
+   last and is the first thing clipped, which loses the signal entirely (and
+   with it the hover that lists the rest). Only `.skg-name` shrinks; the
+   existing margins supply the atoms' 8px caret gap and 4px badge gap, so the
+   container adds no gap of its own. */
+.table tbody tr.skg-row td.col-name,
+.table tbody tr.skg-group td.col-name {
+  display: flex;
+  align-items: center;
+}
+.table tbody tr.skg-row td.col-name > :not(.skg-name),
+.table tbody tr.skg-group td.col-name > :not(.skg-name) {
   flex: none;
+}
+/* Flex blockifies its items, so the plain-text strip rule's `display: inline`
+   is already overridden here; the truncation still has to be re-stated on the
+   item itself, since `text-overflow` on the cell can't reach a flex child. */
+.table tbody td.col-name:not(.col-actions) span.skg-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A Skill row does nothing on click — selecting one had no use, so it was
+   removed — and must not offer the shared `.table tbody tr` pointer. Only the
+   group row (which folds) and the row-action buttons stay clickable. */
+.table tbody tr.skg-row {
+  cursor: default;
+}
+
+.table tbody tr.skg-group td.col-name,
+.table tbody tr.skg-child td.col-name {
+  max-width: none;
+}
+.table tbody tr.skg-group td {
+  background-color: #181818;
+}
+.table tbody tr.skg-group .col-actions {
+  --actions-bg: #181818;
+}
+.table tbody tr.skg-group:hover td,
+.table tbody tr.skg-group.menu-open td {
+  background-color: #1c1c1c;
+}
+.table tbody tr.skg-group:hover .col-actions,
+.table tbody tr.skg-group.menu-open .col-actions {
+  --actions-bg: #1c1c1c;
+}
+/* Archived rows (1126:1686 Skill / 1126:1704 Mastery Skill): NOT the shared
+   50%-opacity `task-hidden` (which on the opaque group row would also bring
+   the actions-cell seam back). The atoms recolour instead: name #7a7a7a (the
+   row keeps its weight — Regular child, Medium group), a grey "Archived" pill
+   (#737373 on its 10% wash, the name-flag geometry) beside it, every other
+   data cell #404040 (dates included, since the atoms' last re-sync). The
+   group row keeps its wash. */
+.table tbody tr.skg-archived td.col-name {
+  color: #7a7a7a;
+}
+/* Every data cell but the name — Tasks Required, Certifications AND the date
+   (the atoms' last re-sync dimmed the date too), plus ID/Status when on.
+   `[class]` + three :not()s lift this to (0,6,3), one over the shared
+   muted-cell rule (`.table tbody td:not(.col-name):not(.qb-col-question):not(
+   .col-rh-task):not(.col-actions):not(.col-checkbox)`, (0,6,2)) — the trap
+   documented at that rule; it grows a :not() every time a table adds an
+   emphasised column, so this one has to keep pace. */
+.table tbody tr.skg-archived td[class]:not(.col-name):not(.col-actions):not(.col-checkbox) {
+  color: #404040;
+}
+.table tbody td.col-name:not(.col-actions) .pr-name-flag--grey {
+  color: #737373 !important;
+  background: rgba(115, 115, 115, 0.1) !important;
+}
+/* The caret (Icon Library, the same glyph as the QB tree's) — a button so it
+   escapes the plain-text strip rule and can take focus. #a8a8a8 fill per the
+   asset; turns down when the group is open. */
+.skg-caret {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 7px;
-  border-radius: 9px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 9pt;
-  font-weight: 600;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
+  vertical-align: -3px;
+}
+.skg-caret svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.12s ease;
+}
+.skg-caret.is-open svg {
+  transform: rotate(90deg);
+}
+.table tbody tr.skg-group:hover .skg-caret {
+  color: #fff;
+}
+/* Child row (1119:1561, re-synced 2026-09-11): the empty 16px icon slot is
+   followed by a 16px gap — wider than the group row's 8px — so the Skill name
+   sits 8px further in than the Mastery Skill name: 12 + 16 + 16 = 44px. */
+.table tbody tr.skg-child td.col-name {
+  padding-left: 44px;
+}
+/* Group row type pill (1119:1543, re-synced again 2026-09-11): "Mastery Skill"
+   beside the name — the shared name flag's geometry (12px Medium, 4px/8px,
+   r8, 4px off the name) in the accent: #f05523 on its 10% wash. The flag's
+   re-enable block pins its yellow with !important, so the variant repeats
+   that at higher specificity. */
+.table tbody td.col-name:not(.col-actions) .pr-name-flag--accent {
+  color: #f05523 !important;
+  background: rgba(240, 85, 35, 0.1) !important;
+}
+
+/* Child row name (1119:1561, final re-sync 2026-09-11): Fira Sans REGULAR, not
+   the shared name column's Medium — only the Mastery Skill (group) name is
+   Medium. The "Also in {Mastery Skill}" flag beside it is the shared yellow
+   name flag (`.pr-name-flag`, Table Pills - Yellow) at its default 4px gap,
+   which is the atom's own. */
+.table tbody tr.skg-child td.col-name {
+  font-weight: 400;
+}
+
+/* Collapse all / Expand all — the 16px expand-vertical / shrink-vertical
+   glyph at the head of the Name header (1119:1577 / 1127:1755), 8px before
+   the label. The atoms export it white, but the user asked for #a8a8a8 — a
+   dimmed affordance, unlike the sort chevron (79:445), because it acts on
+   the rows rather than describing the column. Brightens on hover. It used
+   to be a text link at the end of the filters row. */
+.skg-toggle-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  /* .th-content's own gap supplies the other 4px of the atom's 8. */
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.skg-toggle-all:hover {
+  color: #fff;
 }
 
 /* Task / Skill pickers (wizard) */
@@ -20915,7 +21488,52 @@ a.rh-crumb-link:hover {
   margin-top: 12px;
 }
 
-/* Retroactive-award informational note (wizard) */
+/* Callout card (Figma 1121:1671 "Skills - Creation"): 20% grey wash over 75%
+   black, 0.5px 10% border, r8, p12, 12px gap; a 16px filled alert circle beside
+   a 16px SemiBold title and a 14px muted body. The wizard's .form-group above
+   already carries the 32px field rhythm, so the card adds no margin of its own.
+   The Skill wizard's retroactive-award note runs on it. */
+.note-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+.note-card-icon {
+  display: inline-flex;
+  flex: none;
+  color: #fff;
+}
+.note-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.note-card-title,
+.note-card-body {
+  margin: 0;
+  font-family: var(--font-sans);
+  line-height: normal;
+}
+.note-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.note-card-body {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Retroactive-award informational note — the Award wizard's "Shared identity"
+   note still runs on this older blue style. */
 .sk-retro-note {
   display: flex;
   gap: 12px;
@@ -20931,9 +21549,19 @@ a.rh-crumb-link:hover {
 .sk-retro-note strong { color: var(--text); font-weight: 600; }
 .sk-retro-icon { color: #6f9fe0; flex: none; margin-top: 1px; }
 
-/* Confirm modal */
-.sk-modal-text { color: var(--text-muted); line-height: 1.55; margin: 4px 0 0; }
-.sk-modal-text strong { color: var(--text); font-weight: 600; }
+/* Skills confirm modals (Figma 667:884 "General Modal"): body copy is the
+   shared `.prm-content` white (the old `.sk-modal-text` grey is gone); this
+   wrapper only adds the node's 32px item spacing between the sentence and
+   the `.note-card` warning under it. Scoped here — other modals stack their
+   own content. */
+.skg-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.skg-modal-content .note-card-body strong {
+  color: var(--text);
+}
 .sk-btn-danger {
   height: 38px;
   padding: 0 18px;
@@ -21411,6 +22039,12 @@ a.rh-crumb-link:hover {
   margin-bottom: 28px;
 }
 
+/* The crumb row sits over the title in the shared .rvc-pagehead column; the
+   title keeps its own bottom gap, so the head adds nothing below itself. */
+.qed-pagehead .wizard-title {
+  margin-top: 0;
+}
+
 /* Rail groups sit 32px apart — the shared field rhythm — now that the
    section headings between them are gone. */
 .qed-side > .wizard-fields + .wizard-fields {
@@ -21433,27 +22067,9 @@ a.rh-crumb-link:hover {
   flex-direction: column;
 }
 
-/* Too narrow for two columns — stack them and hand scrolling back to the page,
-   otherwise each column would get its own scrollbar in a single stream. */
-@media (max-width: 1200px) {
-  .qed .wizard-body {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .qed .wizard-main {
-    flex: none;
-  }
-  .qed .wizard-content {
-    flex: none;
-    overflow: visible;
-  }
-  .qed-side {
-    width: 100%;
-    padding-top: 0;
-    overflow: visible;
-    border-left: 0;
-  }
-}
+/* The editor stays two columns at every width — the rail never stacks under the
+   question. Below ~1200px the main pane simply narrows (it can scroll on its
+   own) and the 380px rail holds its width. */
 
 /* Dropdowns run at the Figma input width (394px), not the 920px field cap. */
 .qed-select {
@@ -21503,6 +22119,11 @@ a.rh-crumb-link:hover {
   font-weight: 600;
   line-height: 19px;
   color: #fff;
+}
+
+/* Matches .rte-field.is-disabled, so label and field fade together. */
+.qed-fb-label.is-disabled {
+  opacity: 0.55;
 }
 
 .qed-row-grip {
@@ -21566,12 +22187,30 @@ a.rh-crumb-link:hover {
    12px inset, sized so the grade + gap + remove icon add up to the 122px the
    GRADE header column reserves (90 + 16 + 16). It reads as a plain white
    value: the sign-tinted variant this had was dropped with the re-sync. */
-.qed-grade {
-  width: 90px;
+/* The grade picker is the shared `SelectField` (2026-09-10), so the width has
+   to be pinned on the wrapper as well as the control — the component's own
+   shrink-to-widest-option sizer would otherwise decide it. */
+/* Grade field (Figma 814:1703, re-issued 2026-09-10): 92px = 12px insets +
+   a 40px value + a 12px gap + the 14px chevron. The width is pinned on the
+   WRAPPER as well, or the component's shrink-to-widest-option sizer decides
+   it. Its menu (1090:1153) is the same 92px, which is what SelectField opens
+   at by default. */
+.qed-tbl-row > .selectfield,
+.select-field.qed-grade {
+  width: 92px;
   min-width: 0;
   flex: none;
-  padding: 12px 30px 12px 12px;
 }
+.select-field.qed-grade {
+  grid-template-columns: 40px 14px;
+  padding: 12px;
+  gap: 12px;
+}
+.select-field.qed-grade svg {
+  width: 14px;
+  height: 14px;
+}
+
 
 /* ─── Options / Combined Feedback card (Figma 814:1679 "Create Question -
  * MCQ", 814:1770) ───
@@ -21608,6 +22247,37 @@ a.rh-crumb-link:hover {
   padding: 12px 16px 13px;
 }
 
+/* "Add N More Options" (Figma 1091:1178): a text link, not the Primary CTA it
+   used to be — 16px SemiBold in the brand orange behind a 16px plus. */
+.qed-tbl-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #f05523;
+  cursor: pointer;
+}
+
+.qed-tbl-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+.qed-tbl-add:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.qed-tbl-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .qed-tbl-hd-opt {
   flex: 1;
   min-width: 0;
@@ -21622,14 +22292,20 @@ a.rh-crumb-link:hover {
   gap: 4px;
 }
 
-/* The 11px info glyph, lifted 1px so it optically centres on the label rather
-   than sagging below its baseline. */
+/* Info glyph (Figma 814:1689 / 814:1829): a 12px Icon Library box that sits on
+   its row's own 4px gap. It used to render at the icon's natural 11px with a
+   second 4px margin on top of that gap, so it read small and adrift. */
 .qed-tbl-info {
   display: inline-flex;
-  position: relative;
-  top: -1px;
-  margin-left: 4px;
+  align-items: center;
   color: #a8a8a8;
+}
+
+/* The note and its glyph are one 4px-gap row (Figma 814:1828). */
+.qed-toggle .toggle-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Drag handle + letter gutter: 16px "move" (751:2524) + 4px + the letter. */
@@ -21647,8 +22323,52 @@ a.rh-crumb-link:hover {
   cursor: grab;
 }
 
+.qed-tbl-grip:hover {
+  color: #fff;
+}
+
 .qed-tbl-grip:active {
   cursor: grabbing;
+}
+
+/* The "Other" row (Figma 1094:1183): a caption line, not an option — the name
+   and its explanation 8px apart, both at 16px, standing 44px against an option
+   row's 114. The node's grip is dropped (nothing to reorder), but its 20px
+   gutter is kept so "Other" sits in the same column as the option letters. */
+.qed-tbl-row--other {
+  gap: 0;
+  padding-left: 36px;
+}
+
+.qed-tbl-other {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+  /* The inherited 1.45 would make the line 23px and the row 49 against the
+     node's 44. */
+  line-height: normal;
+}
+
+.qed-tbl-other-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.qed-tbl-other-desc {
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Drag states — the app's shared pair: the row being carried fades, and the
+   row it would land on takes an accent line along its top edge. */
+.qed-tbl-row.is-dragging {
+  opacity: 0.4;
+}
+
+.qed-tbl-row.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--accent);
 }
 
 .qed-tbl-letter {
@@ -26144,7 +26864,9 @@ span.rvc-crumb--current { cursor: default; }
   /* Set in caps (Figma 956:1017) the way the app's other eyebrow labels are —
      the transform lives here so the markup stays readable. */
   text-transform: uppercase;
-  color: var(--text-faint);
+  /* #a8a8a8 verbatim from the node (2026-09-12) — it had been on --text-faint
+     (#5a5a5e), a step dimmer than the pills it labels. */
+  color: #a8a8a8;
   white-space: nowrap;
   overflow: hidden;
   /* Caps + the colon run wider than the old mixed-case "Quick Filters". */
@@ -26556,26 +27278,74 @@ span.rvc-crumb--current { cursor: default; }
 .stm-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Figma 682:2496 */
+  gap: 12px; /* Figma 682:2496 — search bar → pill row */
 }
 
-/* The card wash this bar used to opt into locally is now what every bar wears
-   (`--search-bg`/`--search-border`), so only the ⌘K-less right padding is left
-   to say. Geometry and type stay `.search-input`'s. */
+/* Figma 682:2497 "Search Bar - Text Entered + Filter": a 40px bar filled with
+   a 10% grey wash that sits LIGHTER than the card, not the app-wide 43px bar
+   whose 15%-over-#0d0d0d fill reads as a dark well inside this card. The
+   1px border + 16 / 16-icon / 12 insets = the node's 44px text inset, which is
+   `.search-input`'s own padding, so only the height and fill are re-said. */
 .stm-search {
   margin-bottom: 0;
 }
 
 .stm-search-input {
-  padding-right: 16px;
+  height: 40px;
+  /* 16 edge + 16 glyph + 12 gap — room for the clear ✕, reserved always so the
+     text never reflows when it appears. */
+  padding-right: 44px;
+  background: rgba(122, 122, 122, 0.1);
 }
 
 .stm-search-input:focus {
   border-color: var(--border-strong);
 }
 
+/* Figma 682:2501 "Filters" (2026-09-12 re-sync): the pills went BACK to the
+   shared Quick Filters spec (12:15164) the app already draws — 28px tall, 14px
+   Medium label, 14px glyph, 8px apart — so the 32px/16px overrides that used to
+   live here are gone. Only the bottom padding is still ours: the row's gap down
+   to the table comes from `.stm`'s own 20px. */
 .stm-filters {
   padding-bottom: 0;
+}
+
+/* Hover matches the TABLE ROW hover in the same card (`rgba(122,122,122,0.05)`)
+   rather than the app-wide `--bg-pill` #161618 — a flat dark that sits BELOW
+   this 20%-washed card, exactly the inversion the row states had. Translucent,
+   so a pill lifts on hover the way a row does. The dashed ring still brightens:
+   that is the shared component's own hover. */
+.stm-filters .filter-pill-dashed:hover,
+.stm-filters .filter-pill-dashed.open,
+.stm-filters .filter-applied:hover,
+.stm-filters .filter-applied.open {
+  background-color: rgba(122, 122, 122, 0.05);
+}
+
+/* Figma 682:2567 header row: an unsorted column is Medium with NO icon — only
+   the sorted column ("Column Header - Sorted Descending", 684:2631) goes
+   SemiBold and carries the 14px arrow. The app-wide table (79:445) shows the
+   idle double chevron on every sortable column; this node does not. */
+.stm-table thead th {
+  font-weight: 500;
+}
+
+.stm-table thead th:has(.sort-icon--active) {
+  font-weight: 600;
+}
+
+.stm-table thead th .sort-icon:not(.sort-icon--active) {
+  display: none;
+}
+
+/* …but a column still has to LOOK sortable, or nobody clicks it. The node draws
+   the RESTING state, where only the sorted column carries a glyph; hovering a
+   header brings its idle double-chevron back, so every sortable column
+   advertises itself without adding permanent furniture the node doesn't have.
+   Every header here sorts — Name, Type, Certifications, Industry, Edited On. */
+.stm-table thead th:hover .sort-icon:not(.sort-icon--active) {
+  display: inline-flex;
 }
 
 .stm-table-wrap {
@@ -26602,12 +27372,26 @@ span.rvc-crumb--current { cursor: default; }
 
 /* The shared sticky header paints itself #0d0d0d so body rows can't bleed under
    it. Inside this card — a grey wash OVER #0d0d0d — that reads as a darker band
-   across the header, which the node doesn't have. Repaint it with the card's own
-   composite: still opaque, but invisible against it. */
+   across the header, which the node (682:2567) doesn't have: its header row is
+   unfilled, just the #404040 rule below. Repaint it with the card's own
+   surface token: still opaque, but invisible against it. (It was a hard-coded
+   15% copy once, and drifted when the shell went to 20% — hence the token.) */
 .stm-table-wrap > .table-xscroll > .table-head {
-  background:
-    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
-    #0d0d0d;
+  background: var(--prm-surface);
+}
+
+/* Row states (682:2578 / 682:2583): a ticked row wears a 10% grey WASH, which
+   lifts it off the card. The app-wide tokens (`--bg-row-hover` #131315 /
+   `--bg-row-selected` #1a1a1d) are flat darks tuned for the #0d0d0d page —
+   inside this 20%-washed card they sit BELOW the surface and read as dark
+   bands, the inverse of the node. Translucent washes stay lighter than
+   whatever they sit on; hover is a half-strength version of selected. */
+.stm-table tbody tr:hover {
+  background-color: rgba(122, 122, 122, 0.05);
+}
+.stm-table tbody tr.selected,
+.stm-table tbody tr.selected:hover {
+  background-color: rgba(122, 122, 122, 0.1);
 }
 
 .stm-pagination {
@@ -26641,10 +27425,29 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 .stm-table .stm-col-certs,
+.stm-table .stm-col-industry,
 .stm-table .stm-col-edited {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Multi-value cells (682:2582 Certifications / 1138:1174 Industry): the FIRST
+   value ellipsised to the column, then a "+N" for the rest that never
+   truncates — "EPA 608 Universal Certi… +1". */
+.stm-multi {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.stm-multi-first {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stm-multi-more {
+  flex: none;
 }
 
 .stm-empty-row td {
@@ -26819,7 +27622,7 @@ span.rvc-crumb--current { cursor: default; }
    above shrink at a constant 332px per unit of --lm; if these rows also grew
    on --lmt (a steep late ramp), their growth briefly outran the cards' shrink
    around p≈0.8 and everything below dipped a few px before rising again — a
-   visible wobble. On --lm the sum is strictly monotonic (−332 + ~108 < 0
+   visible wobble. On --lm the sum is strictly monotonic (−289 + ~111 < 0
    everywhere), so the rows quietly reserve their space across the whole
    gesture and only FADE in with the table chrome. */
 .tasks.lm.lm-cards:not([data-lm="table"]) .toolbar,
@@ -26830,6 +27633,16 @@ span.rvc-crumb--current { cursor: default; }
   pointer-events: none;
   margin-bottom: calc(14px * var(--lm));
   padding-bottom: 0;
+}
+/* The toolbar's cap must reach the search bar's FULL height at --lm = 1: the
+   rule above stops applying at the data-lm="table" boundary, and a cap below
+   natural snaps the row open there (regressed once when the bar went 40 → 43px
+   with the cap still hard-coded at 40 — a 3px jerk right at the hand-off).
+   Tying it to `--search-h` keeps it in step with any future bar re-sync. The
+   filter row stays on 40px: its pills are 28px, and min(cap, natural) is
+   monotonic as long as the cap is at or above natural. */
+.tasks.lm.lm-cards:not([data-lm="table"]) .toolbar {
+  max-height: calc(var(--search-h) * var(--lm));
 }
 /* The hero's 56px top margin belongs to a search that is hidden here — a flat
    0 in every state. (This MUST stay constant: an earlier version animated it
@@ -26902,6 +27715,49 @@ span.rvc-crumb--current { cursor: default; }
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Hands-On's minimal NAME cell — Figma 1103:1051 "Atomic Component - Minimal
+   State - Content Row - Hands-On Task". Collapsed, the row reads
+   "Install a Drain Line · Eshwar Dhandapani": the task in the row's white
+   Medium primary, the submitter 4px after it in the muted secondary. The real
+   table's first column is the user's name, so this is the same two-layer swap
+   as `.prl-swap` above — the minimal label is an overlay that fades out early
+   in the gesture, the real name fades up in flow underneath and owns the
+   layout at the p=1 hand-off. */
+.tasks.lm .lm-nm {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+/* Muted, like the plain `col-rh-user` cell it hands off to — on this table the
+   Task is the primary column, not the submitter. */
+.tasks.lm .lm-nm-real {
+  opacity: var(--lmf);
+  font-weight: 400;
+  color: #a8a8a8;
+}
+.tasks.lm .lm-nm-min {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: calc(1 - 2.4 * var(--lm));
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tasks.lm .lm-nm-sub {
+  margin-left: 4px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+/* …and the landing's Task cell carries `.col-rh-task`'s white/500 emphasis, so
+   the column that grows in during the gesture already looks like the table
+   column it becomes. */
+.tasks.lm .lm-task {
+  font-weight: 500;
+  color: #fff;
 }
 
 /* ═══════════ Review-run cards — Figma 685:2654 "Cards" ═══════════
@@ -27250,12 +28106,31 @@ span.rvc-crumb--current { cursor: default; }
   border-bottom: 1px solid #404040;
 }
 /* Title case, as the node draws it — the uppercase transform this label used
-   to carry was dropped when 867:2473 went to "All Categories · 216". */
+   to carry was dropped when 867:2473 went to "All Categories · 216". It is a
+   button (it opens All Questions, the rail's first row) — see its hover below. */
 .qbl-index-head-label {
+  align-self: flex-start;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  background: none;
+  border: 0;
+  border-radius: 8px;
   font-family: var(--font-sans);
   font-size: 20px;
   font-weight: 600;
   color: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+/* The TREE's hover fill, not the crumb underline, so the landing and the rail
+   answer to the cursor the same way. The negative margins cancel its own
+   padding: the fill hugs the label and its count instead of running the head
+   row's width, and the text keeps its place on the row's 8px inset. */
+.qbl-index-head-label:hover {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
 }
 /* The plus + label add row: NOT the head's affordance any more (867:2473 went
    icon-only, see `.qbl-index-add-btn`) but still the atom the Industries
@@ -27448,12 +28323,14 @@ span.rvc-crumb--current { cursor: default; }
 .qb-rail .section-heading {
   margin: 0 0 8px;
 }
-/* 862:2372: rows stack flush at the 32px pitch across the panel's content
-   width — no group gaps, and no hover-fill bleed past the padding. The list
-   still scrolls (the wheel reaches the morph only at its top) but draws no
-   scrollbar — the panel has none in the design. */
+/* 862:2372: rows run the panel's content width with no hover-fill bleed past
+   the padding, at a 4px pitch between groups (they stacked flush until
+   2026-09-10 — the user asked for the 4px once the groups became cards, so an
+   expanded card has a little air around it). The list still scrolls (the wheel
+   reaches the morph only at its top) but draws no scrollbar — the panel has
+   none in the design. */
 .qb-rail .tree {
-  gap: 0;
+  gap: 4px;
   margin: 0;
   padding: 0;
   scrollbar-width: none;
@@ -27480,7 +28357,7 @@ span.rvc-crumb--current { cursor: default; }
   flex-direction: column;
   gap: 4px;
   /* On the sub-row inset, in the add row's place. */
-  margin: 2px 8px 2px 28px;
+  margin: 2px 4px 2px 24px;
   padding: 7px 10px;
   background: #1a1a1c;
   border: 1px solid var(--accent);
@@ -27510,47 +28387,8 @@ span.rvc-crumb--current { cursor: default; }
   color: #e8675f;
 }
 
-/* New Category popover (design S4): the .u-menu surface at 330px with a
-   title, two fields and a right-aligned Cancel / Create foot. */
-.qb-catpop {
-  position: fixed;
-  z-index: 200;
-  width: 330px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
-  background:
-    linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)),
-    #0d0d0d;
-  border: 0.5px solid #404040;
-  border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
-  font-family: var(--font-sans);
-}
-.qb-catpop-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-}
-.qb-catpop-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.qb-catpop-label {
-  font-size: 12px;
-  color: #a8a8a8;
-}
-.qb-catpop-optional {
-  color: #7a7a7a;
-}
-.qb-catpop-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
-}
+/* The New Category popover's `.qb-catpop*` surface was deleted 2026-09-10 —
+   Create Category is the shared `PrmModal` (Figma 483:588) now. */
 
 /* The rail belongs to the TABLE state. It rides the linear --lm from
    off-canvas (-355px, its own width) to its place beside the content pane,
@@ -27948,4 +28786,16 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   flex-direction: column;
   overflow: auto;
+}
+
+/* Question Bank's row menu hugs its labels like every other menu — EXCEPT when
+   a row carries a reason line. Figma 1085:1082 gives that note a fixed 183px
+   text box (two lines for "Must be removed from all Quizzes and Feedback
+   Forms"), so sizing the NOTE rather than the panel is what the frame actually
+   says: the panel's own `width: max-content` then resolves to 183 + 12 gap +
+   16 glyph + 16 row padding + 16 panel padding = the frame's 244px, and a menu
+   with no note (Edit / Preview / Delete) stays as narrow as its labels. */
+.u-menu.qb-row-menu .u-menu-item:disabled .u-menu-item-sub {
+  width: 183px;
+  max-width: none;
 }

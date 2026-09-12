@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  attemptCount,
   categories as seedCategories,
   questions as allQuestions,
   flattenCategories,
@@ -8,7 +9,6 @@ import {
   shortQuestionType,
   QUESTION_TYPE_MENU,
   QUESTION_TYPE_OPTIONS,
-  TRADE_GROUPS,
   supportsGrading,
   versionHistory,
   type Category,
@@ -18,11 +18,11 @@ import {
   type QuestionVersion,
   type Subcategory,
 } from "../data/questionBank";
-import { ChevronLeftIcon, MenuArchiveIcon, MenuHistoryIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import { ChevronLeftIcon, MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
-import { SelectField } from "./SelectField";
+import { PrmModal } from "./PrmModal";
 import { QuestionSearch } from "./QuestionSearch";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLandingMorph } from "../hooks/useLandingMorph";
@@ -53,6 +53,7 @@ const RECENT_MAX = 4;
 type QbColumn =
   | "id"
   | "type"
+  | "attempts"
   | "version"
   | "status"
   | "category"
@@ -70,6 +71,39 @@ const QB_FIXED_COLUMNS = [{ label: "Question" }];
 const QUESTION_COL_WIDTH = 420;
 const ACTIONS_COL_WIDTH = 40;
 
+function escapeHtml(s: string): string {
+  return s.replace(/[<>&'"]/g, (c) =>
+    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!),
+  );
+}
+
+/* "Preview as Learner" — a PLACEHOLDER tab for now (per the user 2026-09-10):
+   the learner player lives outside this prototype, so the row menu opens the
+   destination it will eventually be, naming the question it was asked for.
+   Same `window.open` + `document.write` stand-in the Users page's "Login As"
+   uses, so the two fake sessions look like siblings. */
+function previewAsLearner(q: Question) {
+  /* No "noopener": with that feature set, window.open returns NULL in Chrome
+     and Safari, and there would be no handle left to write the page into. The
+     usual reason for it doesn't apply here — the tab loads no external
+     document, only the markup below. */
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
+<title>Preview — ${escapeHtml(q.id)}</title>
+<style>:root{color-scheme:dark}body{margin:0;background:#0b0b0c;color:#e7e7e8;font-family:"Fira Sans",-apple-system,system-ui,sans-serif}
+.bar{background:#7a3a18;color:#ffd9c2;padding:10px 20px;font-size:14px;font-weight:600}
+.wrap{max-width:640px;margin:0 auto;padding:60px 24px}
+.meta{font-size:14px;color:#7a7a7a;margin:0 0 10px}
+h1{font-size:22px;line-height:1.45;margin:0 0 24px;font-weight:500}
+p{color:#9a9aa0;line-height:1.6}</style></head>
+<body><div class="bar">Learner preview — placeholder</div>
+<div class="wrap"><p class="meta">${escapeHtml(q.id)} · ${escapeHtml(longQuestionType(q.type))} · v${q.version}</p>
+<h1>${escapeHtml(q.text)}</h1>
+<p>This is where the question renders the way a learner meets it inside a Quiz or a Feedback Form. The learner player isn't wired into this prototype yet.</p></div></body></html>`);
+  win.document.close();
+}
+
 function isGraded(q: Question): boolean {
   return q.gradingEnabled && supportsGrading(q.type);
 }
@@ -78,6 +112,7 @@ type QSortKey =
   | "question"
   | "id"
   | "type"
+  | "attempts"
   | "version"
   | "status"
   | "category"
@@ -102,6 +137,8 @@ function compareQuestions(a: Question, b: Question, key: QSortKey): number {
       return shortQuestionType(a.type).localeCompare(shortQuestionType(b.type));
     case "version":
       return a.version - b.version;
+    case "attempts":
+      return attemptCount(a) - attemptCount(b);
     case "status":
       return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     case "usage":
@@ -224,8 +261,20 @@ type QbColMeta = {
 const QB_COLS: QbColMeta[] = [
   { key: "id", label: "ID", className: "qb-col-id", width: 100, render: (q) => q.id },
   {
-    key: "type", label: "Type", className: "qb-col-type", width: 170,
+    /* 170 = the longest value ("Match the Following", 145px at 16px Fira Sans)
+       plus the header row's 12px insets — the column fits its content and
+       nothing more, so the auto-width Question column takes the rest. */
+    key: "type", label: "Question Type", className: "qb-col-type", width: 170,
     render: (q) => <span className="qb-type-tag">{longQuestionType(q.type)}</span>,
+  },
+  {
+    /* Every attempt ever made on the question, across its versions — so a
+       number here is what makes the row menu offer Archive instead of Delete. */
+    /* 110 = the "Attempts" header + its sort chevron (85px) plus the 12px
+       insets — same fit-the-content sizing as Question Type; the counts
+       themselves are far narrower. */
+    key: "attempts", label: "Attempts", className: "qb-col-attempts", width: 110,
+    render: (q) => attemptCount(q).toLocaleString(),
   },
   { key: "version", label: "Version", className: "qb-col-version", width: 84, render: (q) => `v${q.version}` },
   {
@@ -277,6 +326,8 @@ export function QuestionBankPage({
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
   // Row-click preview panel + version-history modal
   const [historyQ, setHistoryQ] = useState<Question | null>(null);
+  // Row-menu target: the delete confirm. (Preview opens its own tab.)
+  const [deleteQ, setDeleteQ] = useState<Question | null>(null);
   // Category is a multi-select like every other filter — labels from
   // flattenCategories ("EPA 608" / "EPA 608 > Universal"). Empty = all questions.
   const [selection, setSelection] = useState<string[]>([]);
@@ -293,11 +344,10 @@ export function QuestionBankPage({
   const [recent, setRecent] = useState<string[]>(SEED_RECENT);
   // Category being given a new subcategory inline in the tree (its key).
   const [inlineSub, setInlineSub] = useState<string | null>(null);
-  // The New Category popover, anchored to the rail's "+ New category" row.
-  const [catPop, setCatPop] = useState<DOMRect | null>(null);
-  const newCatBtnRef = useRef<HTMLButtonElement | null>(null);
-  // …and the landing's own "+ Add category", in the index header.
-  const landingCatBtnRef = useRef<HTMLButtonElement | null>(null);
+  /* The New Category modal. Both triggers — the rail's "Add Category" row and
+     the landing index head's plus — just open it; it is the shared centred
+     shell now, so neither needs a ref to anchor to. */
+  const [catModalOpen, setCatModalOpen] = useState(false);
 
   // Landing morph — the page opens as the category browser (the hero search
   // over the A→Z category index) and a category click, a committed search, or
@@ -307,6 +357,9 @@ export function QuestionBankPage({
   // accidental morph at the foot of the A→Z would be a page they didn't ask for.
   const morph = useLandingMorph(false, false);
   const atTable = morph.atTable;
+  /* The rail's scroller, so a selection made on the landing can be brought
+     into view once the tree is on screen. */
+  const treeRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -318,11 +371,12 @@ export function QuestionBankPage({
   const [quizFilter, setQuizFilter] = useState<string[]>([]);
   const [formFilter, setFormFilter] = useState<string[]>([]);
 
-  // Question (fixed) + Type is the whole default row — everything else is
-  // opt-in from Edit Columns.
+  // Question (fixed) + Type is the whole default row — everything else,
+  // Attempts included, is opt-in from Edit Columns.
   const [columns, setColumns] = useState<QbColumnState>({
     id: false,
     type: true,
+    attempts: false,
     version: false,
     status: false,
     category: false,
@@ -450,11 +504,26 @@ export function QuestionBankPage({
     onNewQuestion?.(path, type);
   }
 
+  /* "All Questions" — the rail's first row, and the landing's "All Categories"
+     heading, which is the same destination: drop the scope and go to the
+     table. */
+  function openAllQuestions() {
+    setSelection([]);
+    morph.showTable();
+  }
+
   // Opening a category (from the index, the RECENT row, or the rail's tree)
-  // scopes the table to it and moves it to the front of RECENT.
+  // scopes the table to it and moves it to the front of RECENT. The rail's
+  // group is unfolded on the way in — arriving at the table with the chosen
+  // category collapsed hides the very subcategories the click was about — and
+  // a "Parent > Sub" label unfolds its PARENT, which is the group that holds
+  // it. `railRef`'s effect below then scrolls the tree to it.
   function openCategory(label: string) {
     setSelection([label]);
     setRecent((prev) => [label, ...prev.filter((l) => l !== label)].slice(0, RECENT_MAX));
+    const parentLabel = label.split(" > ")[0];
+    const cat = categories.find((c) => c.label === parentLabel);
+    if (cat) setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
     morph.showTable();
   }
 
@@ -462,16 +531,82 @@ export function QuestionBankPage({
   // screen: the rail's "Add Category" foot row at the table, the index header's
   // "+ Add category" at the landing.
   function openNewCategory() {
-    const btn = (atTable ? newCatBtnRef : landingCatBtnRef).current;
-    if (btn) setCatPop(btn.getBoundingClientRect());
+    setCatModalOpen(true);
   }
+
+  /* The tree opens scrolled to the top, which for a 67-category bank means a
+     selection made on the landing is usually off screen when the rail rides
+     in. Once the table is there, centre the active row in the scroller. It
+     runs on the selection too, so the ⌘K search and the RECENT row land the
+     same way; `atTable` gates it because the rail is off-canvas (and its
+     layout not yet settled) for the whole morph. Rects, not offsetTop — the
+     tree is not a positioned ancestor. */
+  useEffect(() => {
+    if (!atTable) return;
+    const timers: number[] = [];
+    const centre = () => {
+      const tree = treeRef.current;
+      const row = tree?.querySelector<HTMLElement>(
+        ".tree-row.is-active, .tree-sub-row.is-active",
+      );
+      /* Not ready yet: `atTable` flips at the START of the rail's ride-in,
+         when the tree is still laid out at no usable height — assigning
+         scrollTop then is clamped to 0 and the row stays off screen. */
+      if (!tree || !row || tree.scrollHeight <= tree.clientHeight) return false;
+      const t = tree.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      const delta = r.top - t.top - (t.height - r.height) / 2;
+      tree.scrollTop = Math.max(0, tree.scrollTop + delta);
+      return true;
+    };
+    /* Try straight away — a selection changed while already at the table needs
+       no wait — then on a short ladder for the ride-in. Timers rather than
+       rAF: a backgrounded tab gets no frames at all, and this must still be
+       in place when the tab comes back. */
+    if (!centre()) {
+      for (const ms of [32, 80, 160, 320, 600]) {
+        timers.push(
+          window.setTimeout(() => {
+            if (centre()) timers.forEach(clearTimeout);
+          }, ms),
+        );
+      }
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [atTable, selection, openGroups]);
+
+  /* Tooltips for the rail's clipped names, and ONLY those: the tree is 355px
+     wide and plenty of these categories run past it, but a tooltip on a name
+     you can already read is noise. Measured after every render (a rename or a
+     new subcategory changes what fits) and handed over as a native `title`,
+     which HoverTooltip adopts into the shared tip on first hover — hence the
+     `data-tip` guard: once adopted, the title is gone and the tip owns it. */
+  useEffect(() => {
+    const tree = treeRef.current;
+    if (!tree) return;
+    tree
+      .querySelectorAll<HTMLElement>(".tree-row-label, .tree-sub-row-label")
+      .forEach((el) => {
+        if (el.scrollWidth > el.clientWidth + 1) {
+          if (!el.dataset.tip) el.setAttribute("title", el.textContent ?? "");
+        } else {
+          el.removeAttribute("title");
+          delete el.dataset.tip;
+        }
+      });
+  });
 
   // Nothing else is mid-flight: no menu, popover, inline editor or modal.
   const idle =
-    catModal.kind === "none" && !catMenu && !createMenuOpen && catPop == null && inlineSub == null;
+    catModal.kind === "none" &&
+    !catMenu &&
+    !createMenuOpen &&
+    !catModalOpen &&
+    !deleteQ &&
+    inlineSub == null;
 
   // "C" opens the Create Question menu on every screen; "A" opens the New
-  // Category popover on both — the landing's index header carries the same
+  // Category modal from both — the landing's index header carries the same
   // affordance the rail does.
   useCreateShortcut(() => setCreateMenuOpen(true), idle);
   useCreateShortcut(openNewCategory, idle, "a");
@@ -520,16 +655,22 @@ export function QuestionBankPage({
     );
   }
 
+  // Delete a question outright (the row menu's destructive action).
+  function deleteQuestion(id: string) {
+    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  }
+
+  /* The chevron's job — expand / collapse WITHOUT touching the selection. */
   function toggleGroup(key: string) {
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   // ─── Category mutations ───────────────────────────────────────────────────
-  function addCategory(label: string, tradeGroup?: string) {
+  function addCategory(label: string) {
     // New categories append to the bottom of the list.
     setCategories((prev) => [
       ...prev,
-      { key: `cat-${Date.now()}`, label, count: 0, subcategories: [], tradeGroup },
+      { key: `cat-${Date.now()}`, label, count: 0, subcategories: [] },
     ]);
   }
 
@@ -609,15 +750,6 @@ export function QuestionBankPage({
     setCatMenu({ target, x: r.right, y: r.bottom });
   }
 
-  // Rows are role="button" divs (the kebab inside them is the real button),
-  // so Enter / Space act like the click.
-  const rowKeys = (act: () => void) => (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      act();
-    }
-  };
-
   // The landing's A→Z index of every category.
   const indexColumns = useMemo(() => balanceIndex(buildIndex(categories)), [categories]);
 
@@ -656,29 +788,29 @@ export function QuestionBankPage({
   // expandable and, when open, ending in an inline "Add Sub-Category" row.
   // Picking a row is a table interaction.
   function renderTree(cats: Category[]) {
-    const showAll = () => {
-      setSelection([]);
-      morph.showTable();
-    };
-    const pickCategory = (cat: Category, isActive: boolean) => {
-      if (isActive) {
-        toggleGroup(cat.key);
-      } else {
-        openCategory(cat.label);
-        setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
-      }
+    const showAll = openAllQuestions;
+    /* Only an UNSELECTED category is a control. The selected one is inert (its
+       kebab still isn't — that is its own button): it used to toggle its own
+       sublist, which meant the row you were already looking at could fold the
+       subcategories away under the cursor. */
+    const pickCategory = (cat: Category) => {
+      openCategory(cat.label);
+      setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
     };
     return (
-      <div className="tree lm-scroll">
+      <div className="tree lm-scroll" ref={treeRef}>
         <div
           className={`tree-row tree-row--all ${selection.length === 0 ? "is-active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={showAll}
-          onKeyDown={rowKeys(showAll)}
+          {...(selection.length === 0 ? { "aria-current": "true" as const } : {})}
         >
           <span className="tree-main">
-            <span className="tree-row-label">All Questions</span>
+            <button
+              className="tree-row-label"
+              onClick={showAll}
+              disabled={selection.length === 0}
+            >
+              All Questions
+            </button>
           </span>
         </div>
 
@@ -686,24 +818,30 @@ export function QuestionBankPage({
           const isOpen = !!openGroups[cat.key];
           const isActiveCat = selection.includes(cat.label);
           return (
-            <div key={cat.key} className="tree-group">
-              {/* The whole row is the control: a click selects the category and
-                  opens its sublist; once it is the selection, further clicks
-                  toggle the sublist. The kebab (Figma 865:2443, hover only)
-                  is the row's one real button, so the row is a role=button. */}
-              <div
-                className={`tree-row ${isActiveCat ? "is-active" : ""}`}
-                role="button"
-                tabIndex={0}
-                aria-expanded={isOpen}
-                onClick={() => pickCategory(cat, isActiveCat)}
-                onKeyDown={rowKeys(() => pickCategory(cat, isActiveCat))}
-              >
-                <span className={`tree-caret-btn ${isOpen ? "is-open" : ""}`} aria-hidden>
+            <div key={cat.key} className={`tree-group ${isOpen ? "is-open" : ""}`}>
+              {/* The row is NOT one control — it is two, side by side. The
+                  chevron (a wide hitbox covering everything left of the text)
+                  only folds the sublist; the NAME is what selects. So you can
+                  peek into a category without leaving the one you are in, and
+                  the category you are already in can still be folded away. */}
+              <div className={`tree-row ${isActiveCat ? "is-active" : ""}`}>
+                <button
+                  className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
+                  onClick={() => toggleGroup(cat.key)}
+                  aria-expanded={isOpen}
+                  aria-label={`${isOpen ? "Collapse" : "Expand"} ${cat.label}`}
+                >
                   <TreeCaretIcon />
-                </span>
+                </button>
                 <span className="tree-main">
-                  <span className="tree-row-label">{cat.label}</span>
+                  <button
+                    className="tree-row-label"
+                    onClick={() => pickCategory(cat)}
+                    disabled={isActiveCat}
+                    {...(isActiveCat ? { "aria-current": "true" as const } : {})}
+                  >
+                    {cat.label}
+                  </button>
                 </span>
                 <button
                   className={`tree-menu-btn ${catMenu?.target.kind === "category" && catMenu.target.categoryKey === cat.key ? "is-open" : ""}`}
@@ -725,12 +863,15 @@ export function QuestionBankPage({
                           <div
                             key={sub.key}
                             className={`tree-sub-row ${isActive ? "is-active" : ""}`}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => openCategory(subLabel)}
-                            onKeyDown={rowKeys(() => openCategory(subLabel))}
                           >
-                            <span className="tree-sub-row-label">{sub.label}</span>
+                            <button
+                              className="tree-sub-row-label"
+                              onClick={() => openCategory(subLabel)}
+                              disabled={isActive}
+                              {...(isActive ? { "aria-current": "true" as const } : {})}
+                            >
+                              {sub.label}
+                            </button>
                             <button
                               className={`tree-menu-btn ${catMenu?.target.kind === "subcategory" && catMenu.target.subKey === sub.key ? "is-open" : ""}`}
                               aria-label="Subcategory options"
@@ -843,8 +984,7 @@ export function QuestionBankPage({
             {renderTree(filteredCategories)}
             {/* 862:2425 — the New Category popover anchors here. */}
             <button
-              ref={newCatBtnRef}
-              className={`tree-add-link qb-rail-add ${catPop ? "is-open" : ""}`}
+              className={`tree-add-link qb-rail-add ${catModalOpen ? "is-open" : ""}`}
               onClick={openNewCategory}
             >
               <span className="tree-add-icon"><TreeAddIcon /></span>
@@ -977,7 +1117,7 @@ export function QuestionBankPage({
                 {/* No Category pill: the open category is navigation here, not
                     a filter — the rail, the title and the crumb carry it. */}
                 <MultiSelectPill
-                  label="Type"
+                  label="Question Type"
                   options={TYPE_OPTIONS}
                   value={typeFilter}
                   onApply={setTypeFilter}
@@ -1018,14 +1158,19 @@ export function QuestionBankPage({
                     while a bank with hundreds of categories scrolls under it. */}
                 <div className="qbl-index-head">
                   <div className="qbl-index-head-row">
-                    <span className="qbl-index-head-label">
+                    {/* The heading is the way into All Questions — the same
+                        destination as the rail's first row. */}
+                    <button
+                      className="qbl-index-head-label"
+                      onClick={openAllQuestions}
+                      title="Show every question"
+                    >
                       All Categories · {formatCount(categories.length)}
-                    </span>
+                    </button>
                     {/* Icon-only in the re-synced node — the 24px plus alone
                         carries "add a category" beside the title. */}
                     <button
-                      ref={landingCatBtnRef}
-                      className={`qbl-index-add-btn ${catPop && !atTable ? "is-open" : ""}`}
+                      className={`qbl-index-add-btn ${catModalOpen && !atTable ? "is-open" : ""}`}
                       onClick={openNewCategory}
                       title="Add Category"
                       aria-label="Add Category"
@@ -1161,8 +1306,22 @@ export function QuestionBankPage({
           rect={rowMenu.rect}
           onClose={() => setRowMenu(null)}
           onEdit={() => onEditQuestion?.(rowMenu.q)}
+          onPreview={() => previewAsLearner(rowMenu.q)}
           onArchive={() => toggleArchive(rowMenu.q.id)}
           onVersionHistory={() => setHistoryQ(rowMenu.q)}
+          onDelete={() => setDeleteQ(rowMenu.q)}
+        />
+      )}
+
+      {/* ─── Delete question confirm ─── */}
+      {deleteQ && (
+        <QuestionDeleteConfirm
+          question={deleteQ}
+          onConfirm={() => {
+            deleteQuestion(deleteQ.id);
+            setDeleteQ(null);
+          }}
+          onCancel={() => setDeleteQ(null)}
         />
       )}
 
@@ -1284,16 +1443,15 @@ export function QuestionBankPage({
         );
       })()}
 
-      {/* ─── New Category popover (design S4) ─── */}
-      {catPop && (
-        <NewCategoryPopover
-          anchor={catPop}
+      {/* ─── New Category — the shared modal (Figma 483:588) ─── */}
+      {catModalOpen && (
+        <NewCategoryModal
           existingNames={categories.map((c) => c.label.toLowerCase())}
-          onCreate={(label, tradeGroup) => {
-            addCategory(label, tradeGroup);
-            setCatPop(null);
+          onCreate={(label) => {
+            addCategory(label);
+            setCatModalOpen(false);
           }}
-          onCancel={() => setCatPop(null)}
+          onCancel={() => setCatModalOpen(false)}
         />
       )}
 
@@ -1338,120 +1496,71 @@ function TreeInlineAdd({
   );
 }
 
-/* New Category popover (design S4): a small card hanging off the rail's
-   "+ New category" row — Name, an optional trade group, Cancel / Create. Esc
-   or a click outside dismisses it; the card is kept on screen when the row
-   sits near the bottom of the rail. */
-function NewCategoryPopover({
-  anchor,
+/* New Category — the app's standard modal (`PrmModal`, Figma 483:588) rather
+   than the anchored card design S4 drew: a Name field over the shell's own
+   Cancel / Create footer (the optional Trade Group select the popover carried
+   was dropped 2026-09-10, along with `Category.tradeGroup` and the
+   `TRADE_GROUPS` list behind it). It replaced the popover on
+   2026-09-10, which is why neither trigger needs a ref any more — both the
+   rail's "Add Category" row and the landing index head's plus just open it.
+   Enter submits from the name field and Esc dismisses (PrmModal itself only
+   closes on the overlay and the close glyph). */
+function NewCategoryModal({
   existingNames,
   onCreate,
   onCancel,
 }: {
-  anchor: DOMRect;
   existingNames: string[];
-  onCreate: (label: string, tradeGroup?: string) => void;
+  onCreate: (label: string) => void;
   onCancel: () => void;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [name, setName] = useState("");
-  const [group, setGroup] = useState<string>("");
   const trimmed = name.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
   const isValid = !!trimmed && !isDuplicate;
 
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const h = el.offsetHeight;
-    const w = el.offsetWidth;
-    // Bottom edge level with the trigger row, hanging off the rail's right
-    // edge (the row spans the rail) so it opens over the content pane like
-    // the design. A trigger in the TOP half of the page — the landing index
-    // header's "+ Add category" — drops below instead and right-aligns to the
-    // trigger rather than hanging past it, so the card opens into the empty
-    // index rather than back over the page header. Both are clamped so the
-    // card never leaves the viewport.
-    const openDown = anchor.top < window.innerHeight / 2;
-    const top = openDown ? anchor.bottom + 8 : anchor.bottom - h;
-    const rightAligned = anchor.left > window.innerWidth / 2;
-    const left = rightAligned ? anchor.right - w : anchor.right - 20;
-    setPos({
-      top: Math.max(8, Math.min(top, window.innerHeight - h - 8)),
-      left: Math.max(8, Math.min(left, window.innerWidth - w - 8)),
-    });
-  }, [anchor]);
-
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      const t = e.target as Element | null;
-      // The trade-group menu is portalled to the body — a click in it stays "inside".
-      if (ref.current?.contains(t) || t?.closest(".dropdown")) return;
-      onCancel();
-    }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
     }
-    document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
   function submit() {
-    if (isValid) onCreate(trimmed, group || undefined);
+    if (isValid) onCreate(trimmed);
   }
 
   return (
-    <div
-      ref={ref}
-      className="qb-catpop"
-      style={{
-        top: pos ? pos.top : anchor.top,
-        left: pos ? pos.left : anchor.left,
-        visibility: pos ? "visible" : "hidden",
-      }}
-      onClick={(e) => e.stopPropagation()}
+    <PrmModal
+      title="New Category"
+      description="Categories and Sub-Categories group questions in the Question Bank"
+      confirmLabel="Create Category"
+      confirmDisabled={!isValid}
+      onCancel={onCancel}
+      onConfirm={submit}
     >
-      <div className="qb-catpop-title">New category</div>
-      <div className="qb-catpop-field">
-        <label className="qb-catpop-label">Name</label>
-        <input
-          autoFocus
-          className="form-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-          placeholder="Commercial Kitchen Equipment"
-        />
-        {isDuplicate && (
-          <div className="pm-error">A category with this name already exists.</div>
-        )}
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            Name<span className="prm-req">*</span>
+          </span>
+          <input
+            autoFocus
+            className="form-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="Commercial Kitchen Equipment"
+          />
+          {isDuplicate && (
+            <p className="form-help oc-error">A category with this name already exists.</p>
+          )}
+        </div>
       </div>
-      <div className="qb-catpop-field">
-        <label className="qb-catpop-label">
-          Trade group <span className="qb-catpop-optional">(optional)</span>
-        </label>
-        <SelectField
-          value={group}
-          options={TRADE_GROUPS}
-          onChange={setGroup}
-          placeholder="Select a trade group"
-          popupMenu
-        />
-      </div>
-      <div className="qb-catpop-foot">
-        <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-        <button className="btn-publish" disabled={!isValid} onClick={submit}>
-          Create
-        </button>
-      </div>
-    </div>
+    </PrmModal>
   );
 }
 
@@ -1517,6 +1626,52 @@ function CatNameModal({
   );
 }
 
+/* Delete Question — the row menu's destructive action (Figma 1085:1082 draws it
+   red, with no disabled state: unlike Archive, deleting stays available even
+   while the question is linked, so the confirm names the links instead of the
+   menu blocking the row. */
+function QuestionDeleteConfirm({
+  question: q,
+  onConfirm,
+  onCancel,
+}: {
+  question: Question;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const links = [
+    ...q.quizzes.map((n) => ({ kind: "Quiz", name: n })),
+    ...q.forms.map((n) => ({ kind: "Feedback Form", name: n })),
+  ];
+  return (
+    <PrmModal
+      title="Delete Question?"
+      description={
+        <>
+          Delete <strong>{q.id}</strong> — “{q.text}”? This can't be undone, and its
+          version history goes with it.
+        </>
+      }
+      danger
+      confirmLabel="Delete Question"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <ul className="ind-modal-list">
+        {links.length === 0 ? (
+          <li>Not used in any Quiz or Feedback Form.</li>
+        ) : (
+          links.map((l) => (
+            <li key={`${l.kind}-${l.name}`}>
+              Removed from {l.kind} <strong>{l.name}</strong>.
+            </li>
+          ))
+        )}
+      </ul>
+    </PrmModal>
+  );
+}
+
 function CatDeleteConfirm({
   label,
   isCategory,
@@ -1561,7 +1716,12 @@ function CatDeleteConfirm({
 function QbColGroup({ cols }: { cols: QbColMeta[] }) {
   return (
     <colgroup>
-      <col style={{ width: QUESTION_COL_WIDTH }} />
+      {/* Auto, not a fixed width: in a fixed-layout table the auto column
+          soaks up ALL the slack, so Question stretches on a wide page instead
+          of every column growing proportionally (which used to leave Type far
+          wider than its longest value). QUESTION_COL_WIDTH still floors it
+          through --table-min. */}
+      <col style={{ width: "auto" }} />
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />
       ))}
@@ -1830,15 +1990,19 @@ function QuestionActionsMenu({
   rect,
   onClose,
   onEdit,
+  onPreview,
   onArchive,
   onVersionHistory,
+  onDelete,
 }: {
   q: Question;
   rect: DOMRect;
   onClose: () => void;
   onEdit: () => void;
+  onPreview: () => void;
   onArchive: () => void;
   onVersionHistory: () => void;
+  onDelete: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -1884,10 +2048,10 @@ function QuestionActionsMenu({
     /* `note` is the reason a row is disabled. It renders as a second line
        INSIDE the button (Figma 388:354), so the icon centres against the whole
        two-line block rather than sitting level with the label. */
-    opts?: { disabled?: boolean; title?: string; note?: string },
+    opts?: { disabled?: boolean; title?: string; note?: string; danger?: boolean },
   ) => (
     <button
-      className="u-menu-item"
+      className={`u-menu-item${opts?.danger ? " u-menu-item--danger" : ""}`}
       disabled={opts?.disabled}
       title={opts?.title}
       onClick={(e) => {
@@ -1906,14 +2070,22 @@ function QuestionActionsMenu({
   );
 
   const isArchived = q.status === "Archived";
-  // A question that's used in a Quiz can't be archived (but can still be unarchived).
-  const inUse = q.quizzes.length > 0;
-  const blockArchive = !isArchived && inUse;
+  /* Archive and Delete are the SAME slot, never both (per the user 2026-09-10).
+     Which one it is turns on whether anyone has answered the question:
+       · answered → Archive, because the attempts have to keep resolving to it;
+         available only once it is out of every Quiz and Feedback Form, and
+         shown disabled with Figma 1085:1082's reason until then.
+       · never answered → Delete, since nothing points back at it.
+     Unarchiving is always allowed — an archived question is already out of
+     circulation, and the row exists to put it back. */
+  const attempts = attemptCount(q);
+  const links = q.quizzes.length + q.forms.length;
+  const blockArchive = !isArchived && links > 0;
 
   return (
     <div
       ref={ref}
-      className="u-menu"
+      className="u-menu qb-row-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -1921,24 +2093,28 @@ function QuestionActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Based on Figma 388:354, minus the Preview row — questions no longer
-          have a preview panel. No heading and no dividers; the open row is
+      {/* Figma 1085:1082 "3-Dot Menu - Question Bank" — the literal frame, which
+          draws Archive twice (enabled, then disabled with its reason) to show
+          both states of one row. No heading and no dividers; the open row is
           identified by its held hover state. */}
-      {item(<RowEditIcon />, "Edit Question", onEdit)}
-      {/* Nothing to show yet — version 1 has no prior versions. */}
+      {item(<RowEditIcon />, "Edit", onEdit)}
+      {item(<MenuPreviewIcon />, "Preview as Learner", onPreview)}
+      {/* Nothing to show at v1 — there is no earlier version to compare to. */}
       {q.version > 1 && item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
-      {item(
-        <MenuArchiveIcon />,
-        isArchived ? "Unarchive" : "Archive",
-        onArchive,
-        blockArchive
-          ? {
-              disabled: true,
-              title: "In use in a quiz — remove it from all quizzes before archiving",
-              note: `Currently active in ${q.quizzes.length} Quiz${q.quizzes.length === 1 ? "" : "zes"}`,
-            }
-          : undefined,
-      )}
+      {attempts > 0
+        ? item(
+            <MenuArchiveOffIcon />,
+            isArchived ? "Unarchive" : "Archive",
+            onArchive,
+            blockArchive
+              ? {
+                  disabled: true,
+                  title: "Linked to a Quiz or Feedback Form — remove it from all of them before archiving",
+                  note: "Must be removed from all Quizzes and Feedback Forms",
+                }
+              : undefined,
+          )
+        : item(<RowDeleteIcon />, "Delete", onDelete, { danger: true })}
     </div>
   );
 }

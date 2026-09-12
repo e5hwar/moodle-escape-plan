@@ -33,7 +33,8 @@ import {
   findPhoneCountry,
 } from "../data/countries";
 import { lookupZip } from "../data/zipcodes";
-import { CheckIcon, CheckBoldIcon, CopyIcon, SmallXIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon, RowEditIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon, RowEditIcon } from "./icons";
+import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { Dropdown } from "./Dropdown";
@@ -2799,7 +2800,6 @@ function CreatePriceModal({
 
 /* Figma 147:1147 keeps the field one row tall: two pills, then a "+N" counter
    for the rest. */
-const PILL_LIMIT = 2;
 
 export function MultiSelect({
   options, value, onChange, placeholder, searchPlaceholder, popupMenu = false,
@@ -2856,25 +2856,13 @@ export function MultiSelect({
             {value.length === 0 ? (
               <span className="multiselect-placeholder">{placeholder}</span>
             ) : (
-              <div className="multiselect-tags">
-                {value.slice(0, PILL_LIMIT).map((v) => (
-                  <span key={v} className="multiselect-tag">
-                    {v}
-                    <button
-                      className="multiselect-tag-remove"
-                      onClick={(e) => { e.stopPropagation(); onChange(value.filter((x) => x !== v)); }}
-                      aria-label={`Remove ${v}`}
-                    >
-                      <SmallXIcon />
-                    </button>
-                  </span>
-                ))}
-                {value.length > PILL_LIMIT && (
-                  <span className="multiselect-tag multiselect-tag-more">
-                    +{value.length - PILL_LIMIT}
-                  </span>
-                )}
-              </div>
+              <MultiSelectTags
+                tags={value.map((v) => ({
+                  key: v,
+                  label: v,
+                  onRemove: () => onChange(value.filter((x) => x !== v)),
+                }))}
+              />
             )}
             <span className="field-chevron"><DropdownCaretIcon /></span>
           </div>

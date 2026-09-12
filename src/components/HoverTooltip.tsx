@@ -48,6 +48,10 @@ function resolve(target: EventTarget | null): HTMLElement | null {
    window would otherwise run off it. */
 type TipState = {
   text: string;
+  /** `data-tip-head` — an optional SemiBold first line above the tip text, for
+      a tip that needs a label before its list ("Any of" over the Tasks a Skill
+      is linked to). Plain text; the body stays plain text too. */
+  head: string | null;
   anchor: number;
   below: number;
   above: number;
@@ -99,6 +103,7 @@ export function HoverTooltip() {
       const nearRight = r.left + 320 > window.innerWidth;
       setTip({
         text,
+        head: el.getAttribute("data-tip-head"),
         anchor: nearRight ? window.innerWidth - r.right : r.left,
         below: r.bottom + 6,
         above: r.top - 6,
@@ -152,6 +157,7 @@ export function HoverTooltip() {
         [tip.align]: tip.anchor,
       }}
     >
+      {tip.head && <span className="hover-tip-head">{tip.head}</span>}
       {tip.text}
     </div>
   );

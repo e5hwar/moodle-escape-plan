@@ -3,75 +3,149 @@ import {
   skills as seedSkills,
   masterySkills as seedMastery,
   masteryUsing,
-  criteriaSummary,
-  criteriaRule,
   taskById,
-  skillById,
   fmtHolders,
   SKILL_STATUSES,
   type Skill,
   type MasterySkill,
 } from "../data/skills";
-import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
+import { CERT_BY_USEDIN, topIndustry } from "../data/certifications";
+import { industries as allIndustries } from "../data/industries";
 import { Dropdown } from "./Dropdown";
-import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
+import {
+  PillTrigger,
+  summarize,
+  SectionedMultiSelect,
+  EditColumnsButton,
+  useColumnOrder,
+  orderedColumns,
+  type ColumnDef,
+} from "./Filters";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { MultiPill } from "./UsersFilters";
-import { NewSkillWizard, SkillBadge } from "./NewSkillWizard";
+import { NewSkillWizard } from "./NewSkillWizard";
 import { PrmModal } from "./PrmModal";
-import { SortIcon, AddIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, ChevronLeftIcon, ChevronRightIcon, TreeCaretIcon, ExpandVerticalIcon, ShrinkVerticalIcon, InfoIcon14, AlertCircleFilledIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
 
-/* ─────────────── Local icons ─────────────── */
-const WarnIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
-
-type Tab = "skills" | "mastery";
 type SortDir = "asc" | "desc";
 
 type Mode =
   | { kind: "list" }
-  | { kind: "new-skill" }
+  /* Creating is one mode for both records — `type` only says which way the
+     create page's Type control starts out. */
+  | { kind: "new"; type: "skill" | "mastery" }
   | { kind: "edit-skill"; skill: Skill }
-  | { kind: "new-mastery" }
   | { kind: "edit-mastery"; mastery: MasterySkill };
 
 type Modal =
   | { kind: "none" }
+  /* Archive always confirms (the user's rule: Archive and Delete both get the
+     Modal); `linked` adds the unearnable-Mastery-Skills warning when set. */
   | { kind: "archive-skill"; skill: Skill; linked: MasterySkill[] }
+  | { kind: "archive-mastery"; mastery: MasterySkill }
   | { kind: "delete-skill-blocked"; skill: Skill; linked: MasterySkill[] }
   | { kind: "delete-skill"; skill: Skill }
   | { kind: "delete-mastery"; mastery: MasterySkill };
 
-const ALL_CREATORS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
+/* The Type filter — a Filters-row pill AND a suggested filter in the search
+   bar, sharing one value set. Both (or neither) = the grouped table; one alone
+   flattens it to that record type, since a group without its other half is
+   just a list. */
+const TYPES = ["Skill", "Mastery Skill"] as const;
 
-type SkillColKey = "id" | "tasks" | "criteria" | "mastery" | "status" | "holders" | "dateCreated" | "dateModified";
-type MasteryColKey = "id" | "skills" | "status" | "holders" | "dateCreated" | "dateModified";
+type ColKey = "tasks" | "certifications" | "industry" | "dateModified" | "id" | "status" | "dateCreated";
 
-const SKILL_COLS: { key: SkillColKey; label: string }[] = [
-  { key: "id", label: "ID" },
-  { key: "tasks", label: "Tasks" },
-  { key: "criteria", label: "Criteria" },
-  { key: "mastery", label: "Mastery Skills" },
-  { key: "status", label: "Status" },
-  { key: "holders", label: "Holders" },
-  { key: "dateCreated", label: "Date Created" },
-  { key: "dateModified", label: "Date Modified" },
+/* ─────────────── Grouping ───────────────
+   One table, grouped by Mastery Skill (Figma 1117:1537). A Mastery Skill is a
+   collapsible group row and its constituent Skills are the child rows under
+   it. Skills that roll up into no Mastery Skill sit under a pseudo-group,
+   "Unlinked Skills", which is always the last group — it has no record of
+   its own, so no ID/status/dates and no row menu. A Skill that belongs to two
+   Mastery Skills appears under each. */
+/* What each filter pill does, shown on hover (the shared `title` tooltip).
+   Written as the effect on the list, not as a restatement of the label. */
+const FILTER_TIPS = {
+  type: "Show only Skills, only Mastery Skills, or both grouped together.",
+  certification: "Show Skills whose Tasks count towards the chosen Certifications.",
+  task: "Show Skills awarded by the chosen Tasks.",
+  industry: "Show Skills whose Certifications sit in the chosen Industries.",
+  status: "Show only Active or only Archived Skills.",
+};
+
+const UNLINKED_KEY = "unlinked";
+const UNLINKED_LABEL = "Unlinked Skills";
+
+type Group = {
+  key: string;
+  /** null = the Unlinked Skills pseudo-group. */
+  mastery: MasterySkill | null;
+  members: Skill[];
+};
+
+type FlatRow =
+  /** `flat`: a Mastery Skill shown as a plain record row (Type = Mastery
+      Skills only) — no wash, no caret, no children. */
+  | { kind: "group"; group: Group; flat: boolean }
+  /** `group` is null when Skills are listed on their own (Type = Skills). */
+  | { kind: "skill"; group: Group | null; skill: Skill };
+
+/* One entry per optional column drives the Edit Columns menu, the colgroup,
+   the header and both row kinds. The menu reorders THIS list, so the table
+   has to render from it rather than from a hand-written sequence of
+   `cols.x && <td>`. Listed in default display order. */
+type Col = ColumnDef<ColKey> & {
+  className: string;
+  width: number;
+  /** Count/label columns with no meaningful order opt out. */
+  sortable?: boolean;
+  /** Hover text for the cell — the FULL list behind a truncated "+N", one per
+      line, as Tasks and Certifications do. */
+  tip?: (s: Skill) => string | undefined;
+  /** SemiBold label line above that text (`data-tip-head`). */
+  tipHead?: (s: Skill) => string | undefined;
+  render: (s: Skill) => React.ReactNode;
+  /** The same column on a Mastery Skill's group row. Omitted = blank, per
+      the group-row atom (1119:1543), which leaves Tasks Required and
+      Certifications empty. */
+  renderGroup?: (m: MasterySkill) => React.ReactNode;
+};
+
+const COLS: Col[] = [
+  {
+    key: "tasks", label: "Linked Tasks", className: "col-used", width: 200, sortable: false,
+    tip: (s) => listTip(s.taskIds.map((id) => taskById(id)?.name ?? id)),
+    /* More than one linked Task means completing any of them awards the Skill,
+       so the list needs saying so before it reads as "all of these". */
+    tipHead: (s) => (s.taskIds.length > 1 ? "Any of" : undefined),
+    render: (s) => <NamesCell names={s.taskIds.map((id) => taskById(id)?.name ?? id)} />,
+  },
+  {
+    key: "certifications", label: "Certifications", className: "col-used", width: 200, sortable: false,
+    tip: (s) => listTip([...new Set(skillCertifications(s))]),
+    render: (s) => <NamesCell names={[...new Set(skillCertifications(s))]} />,
+  },
+  {
+    key: "industry", label: "Industry", className: "col-used", width: 180, sortable: false,
+    tip: (s) => listTip(skillIndustries(s)),
+    render: (s) => <NamesCell names={skillIndustries(s)} />,
+  },
+  { key: "dateModified", label: "Date Modified", className: "col-date", width: 150, render: (s) => s.dateModified, renderGroup: (m) => m.dateModified },
+  { key: "id", label: "ID", className: "col-id", width: 100, render: (s) => s.id, renderGroup: (m) => m.id },
+  { key: "status", label: "Status", className: "col-type", width: 110, render: (s) => <StatusBadge status={s.status} />, renderGroup: (m) => <StatusBadge status={m.status} /> },
+  { key: "dateCreated", label: "Date Created", className: "col-date", width: 150, render: (s) => s.dateCreated, renderGroup: (m) => m.dateCreated },
 ];
-const MASTERY_COLS: { key: MasteryColKey; label: string }[] = [
-  { key: "id", label: "ID" },
-  { key: "skills", label: "Skills" },
-  { key: "status", label: "Status" },
-  { key: "holders", label: "Holders" },
-  { key: "dateCreated", label: "Date Created" },
-  { key: "dateModified", label: "Date Modified" },
-];
+
+const FIXED = [{ label: "Name" }];
+
+/* 340 — the row atoms draw 400; the user settled on 340 after seeing it. The
+   fixed layout hands leftover width to every column, so the name cell grows
+   with the viewport; `.skg-*` rows lift the shared 280px name cap so that
+   growth reaches the "Also in …" flag. */
+const NAME_W = 340;
+const ACTIONS_W = 40;
 
 /* A Skill carries no Certification of its own — it inherits both its Tasks and
    their Certifications from `taskIds`, so the Certification / Task filters (and
@@ -88,12 +162,46 @@ function skillCertifications(s: Skill): string[] {
   return s.taskIds.flatMap((id) => taskById(id)?.usedIn ?? []);
 }
 
-/** Names of the Mastery Skills a Skill rolls up into (the "Mastery Skills" column). */
-function masteryNamesOf(s: Skill, all: MasterySkill[]): string[] {
-  return masteryUsing(s.id, all).map((m) => m.name);
+/* A Skill has no Industry of its own — it inherits the Industries of every
+   Certification it reaches through its Tasks. A Skill can therefore land in
+   several Industries, or in none (its Certifications carry no Industry, or it
+   awards no Task at all). These are the FULL paths ("HVAC › Residential"),
+   which is what the filter matches on; the column shows the top level. */
+function skillIndustryPaths(s: Skill): string[] {
+  return [
+    ...new Set(
+      skillCertifications(s).flatMap((name) => {
+        const industry = CERT_BY_USEDIN.get(name)?.industry;
+        return industry ? [industry] : [];
+      }),
+    ),
+  ];
 }
 
-/** A Mastery Skill reaches Tasks one hop further out, through its Skills. */
+function skillIndustries(s: Skill): string[] {
+  return [...new Set(skillIndustryPaths(s).map(topIndustry))];
+}
+
+/* Industry options are the Industries page's own list: every Industry followed
+   by its Sub-Industries, each reading as its own full path — the same flat
+   list the Certification filters use (see `CertFilters.tsx`). */
+const INDUSTRY_OPTIONS: string[] = [...allIndustries]
+  .sort((a, b) => a.displayPosition - b.displayPosition)
+  .flatMap((ind) => [
+    ind.name,
+    ...[...ind.subIndustries]
+      .sort((a, b) => a.displayPosition - b.displayPosition)
+      .map((sub) => `${ind.name} › ${sub.name}`),
+  ]);
+
+/* A selected option matches its own path and everything beneath it: picking
+   "HVAC" catches "HVAC › Residential", picking the sub path matches only it. */
+function matchesIndustry(s: Skill, selected: string[]): boolean {
+  const paths = skillIndustryPaths(s);
+  return selected.some((opt) => paths.some((p) => p === opt || p.startsWith(`${opt} ›`)));
+}
+
+/** A Mastery Skill's constituent Skills, in its own declared order. */
 function masterySkillsOf(m: MasterySkill, all: Skill[]): Skill[] {
   return m.skillIds.flatMap((id) => {
     const s = all.find((x) => x.id === id);
@@ -108,40 +216,44 @@ function countBy(skills: Skill[], values: (s: Skill) => string[]): Map<string, n
 }
 
 export function SkillsPage() {
-  const [tab, setTab] = useState<Tab>("skills");
   const [skills, setSkills] = useState<Skill[]>(seedSkills);
   const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
-  useCreateShortcut(
-    () => setMode(tab === "skills" ? { kind: "new-skill" } : { kind: "new-mastery" }),
-    mode.kind === "list",
-  );
-  const [menu, setMenu] = useState<{ rect: DOMRect; tab: Tab; id: string } | null>(null);
+  useCreateShortcut(() => setMode({ kind: "new", type: "skill" }), mode.kind === "list");
+  /* `id` names the RECORD the menu acts on; `rowKey` names the ROW it was
+     opened from. They differ because a Skill in several Mastery Skills is
+     rendered once per group — keying the open state by id alone lit up every
+     copy of that Skill at once. */
+  const [menu, setMenu] = useState<{ rect: DOMRect; kind: "skill" | "mastery"; id: string; rowKey: string } | null>(null);
 
   const [query, setQuery] = useState("");
   const [certFilter, setCertFilter] = useState<string[]>([]);
   const [taskFilter, setTaskFilter] = useState<string[]>([]);
-  // Each tab filters by the OTHER list — Skills by the Mastery Skills they roll
-  // up into, Mastery Skills by the Skills they are built from. Both mirror a
-  // column that is already on screen.
-  const [masteryFilter, setMasteryFilter] = useState<string[]>([]);
-  const [skillFilter, setSkillFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [industryFilter, setIndustryFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [creatorFilter, setCreatorFilter] = useState<string[]>([]);
-  const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "id", dir: "desc" });
+  /* Date Modified is a default column, so it is also the default sort — the
+     recency order the list opens in has its indicator on screen. */
+  const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "dateModified", dir: "desc" });
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Group keys whose children are hidden. Archived Mastery Skills open
+      folded — they're history, not the working list — everything else open. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(mastery.filter((m) => m.status === "Archived").map((m) => m.id)),
+  );
 
-  const [skillCols, setSkillCols] = useState<Record<SkillColKey, boolean>>({
-    id: true, tasks: true, criteria: false, mastery: true, status: true, holders: true, dateCreated: false, dateModified: false,
+  /* Defaults answer "what does this Skill cover, and when did it last
+     change". ID, Status and Date Created are a lookup, so they stay one click
+     away in the Edit Columns menu. */
+  const [cols, setCols] = useState<Record<ColKey, boolean>>({
+    tasks: true, certifications: true, industry: true, dateModified: true,
+    id: false, status: false, dateCreated: false,
   });
-  const [masteryCols, setMasteryCols] = useState<Record<MasteryColKey, boolean>>({
-    id: true, skills: true, status: true, holders: true, dateCreated: false, dateModified: false,
-  });
+  const [order, setOrder] = useColumnOrder(COLS);
 
-  // Reset paging/sort context when switching tabs or filtering.
-  useEffect(() => setPage(1), [query, certFilter, taskFilter, masteryFilter, skillFilter, statusFilter, creatorFilter, sort, tab]);
+  // Reset paging when the visible set changes.
+  useEffect(() => setPage(1), [query, typeFilter, certFilter, taskFilter, industryFilter, statusFilter, sort]);
 
   /* ─── Mutations ─── */
   function upsertSkill(s: Skill) {
@@ -166,19 +278,19 @@ export function SkillsPage() {
   }
   function deleteSkill(id: string) {
     setSkills((prev) => prev.filter((s) => s.id !== id));
-    if (selectedId === id) setSelectedId(null);
   }
   function deleteMastery(id: string) {
     setMastery((prev) => prev.filter((m) => m.id !== id));
-    if (selectedId === id) setSelectedId(null);
   }
 
   /* ─── Menu actions ─── */
   function archiveSkill(s: Skill) {
     if (s.status === "Archived") { setSkillStatus(s.id, "Active"); return; }
-    const linked = masteryUsing(s.id, mastery);
-    if (linked.length > 0) setModal({ kind: "archive-skill", skill: s, linked });
-    else setSkillStatus(s.id, "Archived");
+    setModal({ kind: "archive-skill", skill: s, linked: masteryUsing(s.id, mastery) });
+  }
+  function archiveMastery(m: MasterySkill) {
+    if (m.status === "Archived") { setMasteryStatus(m.id, "Active"); return; }
+    setModal({ kind: "archive-mastery", mastery: m });
   }
   function requestDeleteSkill(s: Skill) {
     const linked = masteryUsing(s.id, mastery);
@@ -196,30 +308,32 @@ export function SkillsPage() {
     [skills],
   );
   const certCounts = useMemo(() => countBy(skills, skillCertifications), [skills]);
+  /* A parent Industry counts the Skills of its Sub-Industries too, so the
+     option's count matches what picking it actually shows. */
+  const industryCounts = useMemo(
+    () => countBy(skills, (s) => skillIndustryPaths(s).flatMap((p) => [p, topIndustry(p)])),
+    [skills],
+  );
   const taskCounts = useMemo(() => countBy(skills, skillTaskNames), [skills]);
   const nSkills = (n: number | undefined) => `${n ?? 0} ${n === 1 ? "skill" : "skills"}`;
-
-  /* The two cross-list filters. Options come from the rows that could actually
-     be matched, so neither pill offers a dead value. */
-  const masteryOptions = useMemo(() => mastery.map((m) => m.name).sort(), [mastery]);
-  const skillOptions = useMemo(() => skills.map((s) => s.name).sort(), [skills]);
-  const masteryCounts = useMemo(
-    () => countBy(skills, (s) => masteryNamesOf(s, mastery)),
-    [skills, mastery],
-  );
-  /** How many Mastery Skills a given Skill name appears in. */
-  const skillCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    mastery.forEach((ms) =>
-      masterySkillsOf(ms, skills).forEach((s) => m.set(s.name, (m.get(s.name) ?? 0) + 1)),
-    );
-    return m;
-  }, [mastery, skills]);
 
   /* The two suggested filters inside the search bar. Picking values there is a
      pending draft; Enter moves them into the matching Filters-row pill, which is
      what the table actually filters on (the shared EntitySearch contract). */
   const scopes: SearchScope[] = [
+    {
+      token: "Type",
+      options: [...TYPES],
+      applied: typeFilter,
+      onAppliedChange: setTypeFilter,
+      optionsLabel: "Types",
+      example: "Type: Mastery Skill",
+      hint: "Filter by Type",
+      describe: (name) =>
+        name === "Skill"
+          ? nSkills(skills.length)
+          : `${mastery.length} mastery skill${mastery.length === 1 ? "" : "s"}`,
+    },
     {
       token: "Certification",
       options: certOptions,
@@ -240,138 +354,173 @@ export function SkillsPage() {
       hint: "Filter by Task",
       describe: (name) => nSkills(taskCounts.get(name)),
     },
-    // The cross-list scope flips with the tab, matching the pill row.
-    tab === "skills"
-      ? {
-          token: "Mastery Skill",
-          options: masteryOptions,
-          applied: masteryFilter,
-          onAppliedChange: setMasteryFilter,
-          optionsLabel: "Mastery Skills",
-          example: "Mastery Skill: EPA 608 Mastery",
-          hint: "Filter by Mastery Skill",
-          describe: (name) => nSkills(masteryCounts.get(name)),
-        }
-      : {
-          token: "Skill",
-          options: skillOptions,
-          applied: skillFilter,
-          onAppliedChange: setSkillFilter,
-          optionsLabel: "Skills",
-          example: "Skill: Refrigerant Recovery",
-          hint: "Filter by Skill",
-          describe: (name) => {
-            const n = skillCounts.get(name) ?? 0;
-            return `${n} mastery skill${n === 1 ? "" : "s"}`;
-          },
-        },
+    {
+      token: "Industry",
+      options: INDUSTRY_OPTIONS,
+      applied: industryFilter,
+      onAppliedChange: setIndustryFilter,
+      optionsLabel: "Industries",
+      example: "Industry: HVAC",
+      hint: "Filter by Industry",
+      describe: (name) => nSkills(industryCounts.get(name)),
+    },
   ];
 
-  /* Clear Filters counts only what the active tab can see — the cross-list
-     filter of the other tab is cleared too, so the link never leaves a hidden
-     filter applied behind it. */
-  const tabFilterCount =
-    certFilter.length + taskFilter.length + statusFilter.length + creatorFilter.length +
-    (tab === "skills" ? masteryFilter.length : skillFilter.length);
+  const filterCount =
+    typeFilter.length + certFilter.length + taskFilter.length + industryFilter.length + statusFilter.length;
 
   function clearFilters() {
+    setTypeFilter([]);
     setCertFilter([]);
     setTaskFilter([]);
-    setMasteryFilter([]);
-    setSkillFilter([]);
+    setIndustryFilter([]);
     setStatusFilter([]);
-    setCreatorFilter([]);
   }
 
-  /* ─── Derived list ─── */
-  const filteredSkills = useMemo(() => {
+  /* ─── Derived rows ─── */
+  const showSkills = !typeFilter.length || typeFilter.includes("Skill");
+  const showMastery = !typeFilter.length || typeFilter.includes("Mastery Skill");
+  const grouped = showSkills && showMastery;
+
+  const { groups, flat, total, groupRow } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return skills.filter((s) => {
-      if (q && !(s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))) return false;
+    const hitsQuery = (r: { id: string; name: string }) =>
+      !q || r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q);
+    const pillsPass = (s: Skill) => {
       if (certFilter.length && !skillCertifications(s).some((c) => certFilter.includes(c))) return false;
       if (taskFilter.length && !skillTaskNames(s).some((t) => taskFilter.includes(t))) return false;
-      if (masteryFilter.length && !masteryNamesOf(s, mastery).some((m) => masteryFilter.includes(m))) return false;
+      if (industryFilter.length && !matchesIndustry(s, industryFilter)) return false;
+      return true;
+    };
+    const skillPasses = (s: Skill, needQuery: boolean) => {
+      if (needQuery && !hitsQuery(s)) return false;
+      if (!pillsPass(s)) return false;
       if (statusFilter.length && !statusFilter.includes(s.status)) return false;
-      if (creatorFilter.length && !creatorFilter.includes(s.createdBy)) return false;
       return true;
-    });
-  }, [skills, mastery, query, certFilter, taskFilter, masteryFilter, statusFilter, creatorFilter]);
+    };
+    const cmpSkill = (a: Skill, b: Skill) => compareSkill(a, b, sort.key);
+    const cmpMastery = (a: MasterySkill, b: MasterySkill) => compareMastery(a, b, sort.key);
+    const sortSkills = (arr: Skill[]) => {
+      const out = [...arr].sort(cmpSkill);
+      return sort.dir === "desc" ? out.reverse() : out;
+    };
+    const sortedMastery = [...mastery].sort(cmpMastery);
+    if (sort.dir === "desc") sortedMastery.reverse();
+    const masteryOwnMatch = (m: MasterySkill) =>
+      hitsQuery(m) && (!statusFilter.length || statusFilter.includes(m.status));
 
-  const filteredMastery = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return mastery.filter((m) => {
-      if (q && !(m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))) return false;
-      // A Mastery Skill matches when any of its constituent Skills does — the
-      // same filters, one hop further out.
-      if (certFilter.length || taskFilter.length) {
-        const members = masterySkillsOf(m, skills);
-        if (certFilter.length && !members.some((s) => skillCertifications(s).some((c) => certFilter.includes(c)))) return false;
-        if (taskFilter.length && !members.some((s) => skillTaskNames(s).some((t) => taskFilter.includes(t)))) return false;
-      }
-      if (skillFilter.length && !masterySkillsOf(m, skills).some((s) => skillFilter.includes(s.name))) return false;
-      if (statusFilter.length && !statusFilter.includes(m.status)) return false;
-      if (creatorFilter.length && !creatorFilter.includes(m.createdBy)) return false;
-      return true;
-    });
-  }, [mastery, skills, query, certFilter, taskFilter, skillFilter, statusFilter, creatorFilter]);
+    /* Type = Skill: every matching Skill, one flat list, no groups. */
+    if (!showMastery) {
+      const list = sortSkills(skills.filter((s) => skillPasses(s, true)));
+      const rows: FlatRow[] = list.map((s) => ({ kind: "skill", group: null, skill: s }));
+      return { groups: [] as Group[], flat: rows, total: rows.length, groupRow: new Map<string, number>() };
+    }
 
-  const sortedSkills = useMemo(() => {
-    const arr = [...filteredSkills].sort((a, b) => compareSkill(a, b, sort.key, mastery));
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filteredSkills, sort, mastery]);
+    /* Type = Mastery Skill: the Mastery Skills as plain record rows. The
+       Certification / Task pills reach them through their Skills. */
+    if (!showSkills) {
+      const list = sortedMastery.filter(
+        (m) =>
+          masteryOwnMatch(m) &&
+          (!(certFilter.length || taskFilter.length) || masterySkillsOf(m, skills).some(pillsPass)),
+      );
+      const rows: FlatRow[] = list.map((m) => ({ kind: "group", group: { key: m.id, mastery: m, members: [] }, flat: true }));
+      return { groups: [] as Group[], flat: rows, total: rows.length, groupRow: new Map<string, number>() };
+    }
 
-  const sortedMastery = useMemo(() => {
-    const arr = [...filteredMastery].sort((a, b) => compareMastery(a, b, sort.key));
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filteredMastery, sort]);
+    /* Both: the grouped table. */
+    const out: Group[] = [];
 
-  const rows = tab === "skills" ? sortedSkills : sortedMastery;
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    for (const m of sortedMastery) {
+      /* Searching for the Mastery Skill itself opens the whole group: its
+         children skip the query and only answer to the pill filters. */
+      const nameHit = hitsQuery(m);
+      const members = sortSkills(masterySkillsOf(m, skills).filter((s) => skillPasses(s, !nameHit)));
+      /* A Mastery Skill can stand alone on its own name/status match, but only
+         while no Skill-level pill is narrowing the list — those filter through
+         its members, so with one active an empty group means "no match", not
+         "a group with nothing in it". */
+      const skillPillsActive = certFilter.length + taskFilter.length + industryFilter.length > 0;
+      const selfMatches = masteryOwnMatch(m) && !skillPillsActive;
+      if (members.length > 0 || selfMatches) out.push({ key: m.id, mastery: m, members });
+    }
+
+    // Unlinked Skills last — always, whatever the sort.
+    const unlinked = sortSkills(
+      skills.filter((s) => masteryUsing(s.id, mastery).length === 0 && skillPasses(s, true)),
+    );
+    if (unlinked.length > 0) out.push({ key: UNLINKED_KEY, mastery: null, members: unlinked });
+
+    /* The list paginates over what is on screen (group rows + expanded
+       children); the counter counts Skills — all of them, folded or not — so
+       it doesn't move as groups fold. */
+    const rows: FlatRow[] = [];
+    /** Each group's row index in `rows` — the counter attributes a group's
+        Skills to the page its group row is on, folded or not. */
+    const groupRow = new Map<string, number>();
+    for (const g of out) {
+      groupRow.set(g.key, rows.length);
+      rows.push({ kind: "group", group: g, flat: false });
+      if (!collapsed.has(g.key)) g.members.forEach((s) => rows.push({ kind: "skill", group: g, skill: s }));
+    }
+    return {
+      groups: out,
+      flat: rows,
+      groupRow,
+      // Distinct Skills only — a Mastery Skill row is a container, not a
+      // record, and a Skill under two of them is still one Skill.
+      total: new Set(out.flatMap((g) => g.members.map((s) => s.id))).size,
+    };
+  }, [skills, mastery, query, certFilter, taskFilter, industryFilter, statusFilter, sort, collapsed, showSkills, showMastery]);
+
+  const totalPages = Math.max(1, Math.ceil(flat.length / PAGE_SIZE));
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
-  const paged = rows.slice(start, start + PAGE_SIZE);
+  const paged = flat.slice(start, start + PAGE_SIZE);
+  /* The counter counts Skills only (group rows are containers, not records),
+     each Skill once — one in two Mastery Skills is listed twice but is still
+     one Skill — and independently of folding: a group's Skills count on the
+     page its group row sits on, whether or not its children are showing, so
+     "Collapse all" can't read as "1 - 0 of 12". */
+  const skillsInGroupsBefore = (rowLimit: number) =>
+    new Set(groups.filter((g) => (groupRow.get(g.key) ?? Infinity) < rowLimit).flatMap((g) => g.members.map((s) => s.id))).size;
+  const skillsBefore = grouped ? skillsInGroupsBefore(start) : start;
+  const skillsOnPage = grouped ? skillsInGroupsBefore(start + PAGE_SIZE) - skillsBefore : paged.length;
+
+  const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.key));
+  function toggleGroup(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)));
+  }
 
   function toggleSort(key: string) {
     setSort((p) => (p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
 
-  const sc = skillCols;
-  const mc = masteryCols;
-  const skillTableMin =
-    240 /* name */ + 40 /* actions */ +
-    (sc.id ? 100 : 0) + (sc.tasks ? 200 : 0) + (sc.criteria ? 110 : 0) + (sc.mastery ? 200 : 0) +
-    (sc.status ? 110 : 0) + (sc.holders ? 110 : 0) +
-    (sc.dateCreated ? 130 : 0) + (sc.dateModified ? 130 : 0);
-  const masteryTableMin =
-    240 + 40 +
-    (mc.id ? 100 : 0) + (mc.skills ? 200 : 0) + (mc.status ? 110 : 0) +
-    (mc.holders ? 110 : 0) +
-    (mc.dateCreated ? 130 : 0) + (mc.dateModified ? 130 : 0);
+  const visibleCols = orderedColumns(COLS, order, cols);
+  const tableMin = NAME_W + ACTIONS_W + visibleCols.reduce((n, c) => n + c.width, 0);
 
   /* ─── Wizard routing (after all hooks) ─── */
-  if (mode.kind === "new-skill" || mode.kind === "edit-skill") {
+  /* One wizard for both records: the mode tells it which kind it is making
+     (there is no Type field — the two Create buttons decide), and a save lands
+     in whichever group the record belongs to. */
+  if (mode.kind !== "list") {
     return (
       <NewSkillWizard
-        kind="skill"
+        kind={mode.kind === "new" ? mode.type : mode.kind === "edit-mastery" ? "mastery" : "skill"}
         editingSkill={mode.kind === "edit-skill" ? mode.skill : undefined}
-        allSkills={skills}
-        allMastery={mastery}
-        onClose={() => setMode({ kind: "list" })}
-        onSaveSkill={(s) => upsertSkill(s)}
-        onSaveMastery={() => {}}
-      />
-    );
-  }
-  if (mode.kind === "new-mastery" || mode.kind === "edit-mastery") {
-    return (
-      <NewSkillWizard
-        kind="mastery"
         editingMastery={mode.kind === "edit-mastery" ? mode.mastery : undefined}
         allSkills={skills}
         allMastery={mastery}
         onClose={() => setMode({ kind: "list" })}
-        onSaveSkill={() => {}}
-        onSaveMastery={(m) => upsertMastery(m)}
+        onSaveSkill={upsertSkill}
+        onSaveMastery={upsertMastery}
       />
     );
   }
@@ -383,27 +532,41 @@ export function SkillsPage() {
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Skills</h1>
+              {/* Page subtext (Figma 742:1061): the counts, then the 14px
+                  info glyph 4px after, carrying the page's explainer as the
+                  shared tooltip (a plain `title`, auto-adopted — see
+                  [[tooltip-and-hover-convention]]). Same shape as Awards'
+                  "13 Awards · 12 Active" and Spotlight's subtext + glyph. */}
+              <div className="tasks-subtitle">
+                {skills.length} Skill{skills.length === 1 ? "" : "s"} · {mastery.length} Mastery Skill{mastery.length === 1 ? "" : "s"}
+                <span
+                  className="tasks-subtitle-info"
+                  tabIndex={0}
+                  aria-label="About Skills"
+                  title={
+                    "Skill: A practical task a user has been trained to do on the job, like \"Braze a Copper Joint\". It's earned by completing its linked Tasks, whichever Certification they're in.\n\n" +
+                    "Mastery Skill: A bigger job made up of smaller Skills, like \"Install a Mini-Split System.\" It's earned by holding all of its Skills."
+                  }
+                >
+                  <InfoIcon14 />
+                </span>
+              </div>
             </div>
             <div className="tasks-header-actions">
-              <button
-                className="new-task"
-                onClick={() => setMode(tab === "skills" ? { kind: "new-skill" } : { kind: "new-mastery" })}
-              >
+              {/* Both CTAs open the same create page — the button decides
+                  which kind it makes (the page has no Type field). Create Skill
+                  is the primary (and the C shortcut); Create Mastery Skill is
+                  the quiet sibling. */}
+              <button className="cta-quiet" onClick={() => setMode({ kind: "new", type: "mastery" })}>
+                Create Mastery Skill
+              </button>
+              <button className="new-task" onClick={() => setMode({ kind: "new", type: "skill" })}>
                 <AddIcon />
-                {tab === "skills" ? "Create Skill" : "Create Mastery Skill"}
+                Create Skill
                 <span className="cta-kbd">C</span>
               </button>
             </div>
           </header>
-
-          <div className="tabbar sk-tabbar sk-tabbar--lead">
-            <button className={`tab ${tab === "skills" ? "is-active" : ""}`} onClick={() => setTab("skills")}>
-              Skills
-            </button>
-            <button className={`tab ${tab === "mastery" ? "is-active" : ""}`} onClick={() => setTab("mastery")}>
-              Mastery Skills
-            </button>
-          </div>
 
           <div className="tasks-row">
             <div className="tasks-content">
@@ -414,14 +577,15 @@ export function SkillsPage() {
                     table only ever filters on the applied query. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder={tab === "skills" ? "Search Skills..." : "Search Mastery Skills..."}
-                  searchForScope={tab === "skills" ? "Skills" : "Mastery Skills"}
+                  placeholder="Search Skills and Mastery Skills..."
+                  searchForScope="Skills"
                   query={query}
                   onCommit={setQuery}
                 />
               </div>
 
               <div className="filters">
+                <TypePill value={typeFilter} onApply={setTypeFilter} />
                 <MultiPill
                   label="Certification"
                   all={certOptions}
@@ -430,6 +594,7 @@ export function SkillsPage() {
                   searchable
                   searchPlaceholder="Search Certifications..."
                   width={300}
+                  tip={FILTER_TIPS.certification}
                 />
                 <MultiPill
                   label="Task"
@@ -439,31 +604,20 @@ export function SkillsPage() {
                   searchable
                   searchPlaceholder="Search Tasks..."
                   width={300}
+                  tip={FILTER_TIPS.task}
                 />
-                {tab === "skills" ? (
-                  <MultiPill
-                    label="Mastery Skills"
-                    all={masteryOptions}
-                    value={masteryFilter}
-                    onApply={setMasteryFilter}
-                    searchable
-                    searchPlaceholder="Search Mastery Skills..."
-                    width={300}
-                  />
-                ) : (
-                  <MultiPill
-                    label="Skills"
-                    all={skillOptions}
-                    value={skillFilter}
-                    onApply={setSkillFilter}
-                    searchable
-                    searchPlaceholder="Search Skills..."
-                    width={300}
-                  />
-                )}
+                <MultiPill
+                  label="Industry"
+                  all={INDUSTRY_OPTIONS}
+                  value={industryFilter}
+                  onApply={setIndustryFilter}
+                  searchable
+                  searchPlaceholder="Search Industries/Sub-Industries..."
+                  width={300}
+                  tip={FILTER_TIPS.industry}
+                />
                 <StatusPill value={statusFilter} onApply={setStatusFilter} />
-                <CreatedByPill value={creatorFilter} onApply={setCreatorFilter} />
-                {tabFilterCount > 0 && (
+                {filterCount > 0 && (
                   <button className="filter-clear-link" onClick={clearFilters}>
                     Clear Filters
                   </button>
@@ -472,94 +626,88 @@ export function SkillsPage() {
 
               <div className="co-table-row">
                 <div className="co-table-col">
-                  {tab === "skills" ? (
-                    <div className="table-xscroll" style={{ "--table-min": `${skillTableMin}px` } as React.CSSProperties}>
-                      <table className="table table-head">
-                        <SkillColGroup cols={sc} />
-                        <thead>
-                          <tr>
-                            <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                            {sc.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                            {sc.tasks && <SortableHeader col="tasks" label="Tasks" className="col-used" sort={sort} toggle={toggleSort} sortable={false} />}
-                            {sc.criteria && <SortableHeader col="criteria" label="Criteria" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {sc.mastery && <SortableHeader col="mastery" label="Mastery Skills" className="col-used" sort={sort} toggle={toggleSort} />}
-                            {sc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {sc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {sc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
-                            {sc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
-                            <th className="col-actions">
-                              <ColumnsMenu optional={SKILL_COLS} fixed="Name" value={sc} onChange={(v) => setSkillCols(v as Record<SkillColKey, boolean>)} />
-                            </th>
-                          </tr>
-                        </thead>
-                      </table>
+                  <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
+                    <table className="table table-head">
+                      <ColGroup cols={visibleCols} />
+                      <thead>
+                        <tr>
+                          <SortableHeader
+                            col="name"
+                            label="Name"
+                            className="col-name"
+                            sort={sort}
+                            toggle={toggleSort}
+                            /* The group toggle lives in the Name header
+                               (1119:1577 expand-vertical / 1127:1755
+                               shrink-vertical) — only while there are groups
+                               to fold. */
+                            lead={grouped && groups.length > 0 && (
+                              <button
+                                type="button"
+                                className="skg-toggle-all"
+                                title={allCollapsed ? "Expand All" : "Collapse All"}
+                                aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+                                onClick={(e) => { e.stopPropagation(); toggleAll(); }}
+                              >
+                                {allCollapsed ? <ExpandVerticalIcon /> : <ShrinkVerticalIcon />}
+                              </button>
+                            )}
+                          />
+                          {visibleCols.map((c) => (
+                            <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={c.sortable !== false} />
+                          ))}
+                          <th className="col-actions">
+                            <EditColumnsButton
+                              columns={cols}
+                              setColumns={setCols}
+                              optional={COLS}
+                              fixed={FIXED}
+                              order={order}
+                              onOrderChange={setOrder}
+                            />
+                          </th>
+                        </tr>
+                      </thead>
+                    </table>
 
-                      <div className="tasks-scroll">
-                        <table className="table table-body">
-                          <SkillColGroup cols={sc} />
-                          <tbody>
-                            {(paged as Skill[]).map((s) => (
+                    <div className="tasks-scroll">
+                      <table className="table table-body">
+                        <ColGroup cols={visibleCols} />
+                        <tbody>
+                          {paged.map((row) =>
+                            row.kind === "group" ? (
+                              <GroupRow
+                                key={`g:${row.group.key}`}
+                                group={row.group}
+                                flat={row.flat}
+                                cols={visibleCols}
+                                open={!collapsed.has(row.group.key)}
+                                onToggle={() => toggleGroup(row.group.key)}
+                                onEdit={() => row.group.mastery && setMode({ kind: "edit-mastery", mastery: row.group.mastery })}
+                                onMenu={(rect) => row.group.mastery && setMenu({ rect, kind: "mastery", id: row.group.mastery.id, rowKey: `g:${row.group.key}` })}
+                                menuOpen={menu?.rowKey === `g:${row.group.key}`}
+                              />
+                            ) : (
                               <SkillRow
-                                key={s.id}
-                                skill={s}
-                                cols={sc}
-                                masteryLinked={masteryUsing(s.id, mastery)}
-                                selected={s.id === selectedId}
-                                onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
-                                onEdit={() => setMode({ kind: "edit-skill", skill: s })}
-                                onMenu={(rect) => setMenu({ rect, tab: "skills", id: s.id })}
-                                menuOpen={menu?.tab === "skills" && menu.id === s.id}
+                                key={`${row.group?.key ?? "flat"}:${row.skill.id}`}
+                                skill={row.skill}
+                                indented={row.group !== null}
+                                alsoIn={row.group ? masteryUsing(row.skill.id, mastery).filter((m) => m.id !== row.group?.mastery?.id).map((m) => m.name) : []}
+                                cols={visibleCols}
+                                onEdit={() => setMode({ kind: "edit-skill", skill: row.skill })}
+                                onMenu={(rect) => setMenu({ rect, kind: "skill", id: row.skill.id, rowKey: `${row.group?.key ?? "flat"}:${row.skill.id}` })}
+                                menuOpen={menu?.rowKey === `${row.group?.key ?? "flat"}:${row.skill.id}`}
                               />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="table-xscroll" style={{ "--table-min": `${masteryTableMin}px` } as React.CSSProperties}>
-                      <table className="table table-head">
-                        <MasteryColGroup cols={mc} />
-                        <thead>
-                          <tr>
-                            <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                            {mc.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                            {mc.skills && <SortableHeader col="skills" label="Skills" className="col-used" sort={sort} toggle={toggleSort} />}
-                            {mc.status && <SortableHeader col="status" label="Status" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {mc.holders && <SortableHeader col="holders" label="Holders" className="col-type" sort={sort} toggle={toggleSort} />}
-                            {mc.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
-                            {mc.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
-                            <th className="col-actions">
-                              <ColumnsMenu optional={MASTERY_COLS} fixed="Name" value={mc} onChange={(v) => setMasteryCols(v as Record<MasteryColKey, boolean>)} />
-                            </th>
-                          </tr>
-                        </thead>
+                            ),
+                          )}
+                        </tbody>
                       </table>
-
-                      <div className="tasks-scroll">
-                        <table className="table table-body">
-                          <MasteryColGroup cols={mc} />
-                          <tbody>
-                            {(paged as MasterySkill[]).map((m) => (
-                              <MasteryRow
-                                key={m.id}
-                                mastery={m}
-                                cols={mc}
-                                selected={m.id === selectedId}
-                                onClick={() => setSelectedId(m.id === selectedId ? null : m.id)}
-                                onEdit={() => setMode({ kind: "edit-mastery", mastery: m })}
-                                onMenu={(rect) => setMenu({ rect, tab: "mastery", id: m.id })}
-                                menuOpen={menu?.tab === "mastery" && menu.id === m.id}
-                              />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
                     </div>
-                  )}
+                  </div>
 
                   <div className="pagination">
                     <span>
-                      Showing {rows.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}
+                      Showing {total === 0 ? 0 : skillsBefore + 1} - {skillsBefore + skillsOnPage} of {total}
                     </span>
                     <div className="pagination-controls">
                       <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
@@ -574,16 +722,14 @@ export function SkillsPage() {
       </div>
 
       {menu && (() => {
-        if (menu.tab === "skills") {
+        if (menu.kind === "skill") {
           const s = skills.find((x) => x.id === menu.id);
           if (!s) return null;
           return (
             <ActionsMenu
               rect={menu.rect}
-              title={s.name}
-              subtitle={`${s.id} · ${criteriaSummary(s)}`}
               archived={s.status === "Archived"}
-              archiveLabel="Skill"
+              noun="Skill"
               onClose={() => setMenu(null)}
               onEdit={() => setMode({ kind: "edit-skill", skill: s })}
               onArchive={() => archiveSkill(s)}
@@ -596,13 +742,11 @@ export function SkillsPage() {
         return (
           <ActionsMenu
             rect={menu.rect}
-            title={m.name}
-            subtitle={`${m.id} · ${m.skillIds.length} Skill${m.skillIds.length === 1 ? "" : "s"}`}
             archived={m.status === "Archived"}
-            archiveLabel="Mastery Skill"
+            noun="Mastery Skill"
             onClose={() => setMenu(null)}
             onEdit={() => setMode({ kind: "edit-mastery", mastery: m })}
-            onArchive={() => setMasteryStatus(m.id, m.status === "Archived" ? "Active" : "Archived")}
+            onArchive={() => archiveMastery(m)}
             onDelete={() => setModal({ kind: "delete-mastery", mastery: m })}
           />
         );
@@ -617,18 +761,33 @@ export function SkillsPage() {
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { setSkillStatus(modal.skill.id, "Archived"); setModal({ kind: "none" }); }}
         >
-          <div className="form-warning" style={{ marginBottom: 0 }}>
-            <span className="form-warning-icon"><WarnIcon /></span>
-            <div>
-              <strong>{modal.linked.length} Mastery Skill{modal.linked.length === 1 ? "" : "s"} will become unearnable for new users.</strong>{" "}
-              <strong>{modal.skill.name}</strong> is one of their required Skills, and an archived Skill can’t be earned. Existing holders keep everything. Ideally remove this Skill from each Mastery Skill’s criteria first.
-              <div className="sk-warn-chips">
-                {modal.linked.map((m) => (
-                  <span key={m.id} className="sk-chip"><SkillBadge emoji={m.image} size={18} mastery />{m.name}</span>
-                ))}
-              </div>
-            </div>
-          </div>
+          <p>
+            Archive <strong>{modal.skill.name}</strong> ({modal.skill.id})? New users can no longer earn it and it leaves the active list. The{" "}
+            <strong>{fmtHolders(modal.skill.holders)}</strong> user{modal.skill.holders === 1 ? "" : "s"} who already hold it keep it. You can unarchive it later.
+          </p>
+          {modal.linked.length > 0 && (
+            <LinkedMasteryNote
+              title={`${modal.linked.length} Mastery Skill${modal.linked.length === 1 ? "" : "s"} will become unearnable for new users`}
+              linked={modal.linked}
+            >
+              {modal.skill.name} is one of their required Skills, and an archived Skill can’t be earned. Ideally remove it from each Mastery Skill’s criteria first.
+            </LinkedMasteryNote>
+          )}
+        </ConfirmModal>
+      )}
+
+      {modal.kind === "archive-mastery" && (
+        <ConfirmModal
+          title="Archive this Mastery Skill?"
+          confirmLabel="Archive Mastery Skill"
+          danger
+          onCancel={() => setModal({ kind: "none" })}
+          onConfirm={() => { setMasteryStatus(modal.mastery.id, "Archived"); setModal({ kind: "none" }); }}
+        >
+          <p>
+            Archive <strong>{modal.mastery.name}</strong> ({modal.mastery.id})? New users can no longer earn it and its group folds under the archived rows. The{" "}
+            <strong>{fmtHolders(modal.mastery.holders)}</strong> user{modal.mastery.holders === 1 ? "" : "s"} who already hold it keep it, and its {modal.mastery.skillIds.length} Skill{modal.mastery.skillIds.length === 1 ? "" : "s"} stay active. You can unarchive it later.
+          </p>
         </ConfirmModal>
       )}
 
@@ -640,21 +799,15 @@ export function SkillsPage() {
           onConfirm={() => {
             const first = modal.linked[0];
             setModal({ kind: "none" });
-            setTab("mastery");
             setMode({ kind: "edit-mastery", mastery: first });
           }}
         >
-          <div className="form-warning" style={{ marginBottom: 0 }}>
-            <span className="form-warning-icon"><WarnIcon /></span>
-            <div>
-              <strong>{modal.skill.name}</strong> is referenced by {modal.linked.length} Mastery Skill{modal.linked.length === 1 ? "" : "s"} and can’t be deleted. Remove it from their criteria first, then delete it.
-              <div className="sk-warn-chips">
-                {modal.linked.map((m) => (
-                  <span key={m.id} className="sk-chip"><SkillBadge emoji={m.image} size={18} mastery />{m.name}</span>
-                ))}
-              </div>
-            </div>
-          </div>
+          <p>
+            <strong>{modal.skill.name}</strong> ({modal.skill.id}) is required by {modal.linked.length} Mastery Skill{modal.linked.length === 1 ? "" : "s"}, so it can’t be deleted yet.
+          </p>
+          <LinkedMasteryNote title="Remove it from their criteria first" linked={modal.linked}>
+            Edit each Mastery Skill below and take this Skill out of its required Skills, then delete it.
+          </LinkedMasteryNote>
         </ConfirmModal>
       )}
 
@@ -666,7 +819,7 @@ export function SkillsPage() {
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { deleteSkill(modal.skill.id); setModal({ kind: "none" }); }}
         >
-          <p className="sk-modal-text">
+          <p>
             Delete <strong>{modal.skill.name}</strong> ({modal.skill.id})? This permanently removes it from the{" "}
             <strong>{fmtHolders(modal.skill.holders)}</strong> user{modal.skill.holders === 1 ? "" : "s"} who earned it — they will no longer hold this Skill. This can’t be undone.
           </p>
@@ -681,9 +834,9 @@ export function SkillsPage() {
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { deleteMastery(modal.mastery.id); setModal({ kind: "none" }); }}
         >
-          <p className="sk-modal-text">
+          <p>
             Delete <strong>{modal.mastery.name}</strong> ({modal.mastery.id})? This removes it from the{" "}
-            <strong>{fmtHolders(modal.mastery.holders)}</strong> user{modal.mastery.holders === 1 ? "" : "s"} who earned it. The constituent Skills are not affected. This can’t be undone.
+            <strong>{fmtHolders(modal.mastery.holders)}</strong> user{modal.mastery.holders === 1 ? "" : "s"} who earned it. The constituent Skills are not affected — they move to Unlinked Skills. This can’t be undone.
           </p>
         </ConfirmModal>
       )}
@@ -691,17 +844,15 @@ export function SkillsPage() {
   );
 }
 
-/* ─────────────── Sorting ─────────────── */
+/* ─────────────── Sorting ───────────────
+   The same key orders the Mastery Skill groups and the Skills inside each
+   group; the Unlinked group is pinned last regardless. */
 
-function compareSkill(a: Skill, b: Skill, key: string, mastery: MasterySkill[]): number {
+function compareSkill(a: Skill, b: Skill, key: string): number {
   switch (key) {
     case "name": return a.name.localeCompare(b.name);
     case "id": return a.id.localeCompare(b.id);
-    case "criteria": return a.taskIds.length - b.taskIds.length;
-    case "mastery": return masteryUsing(a.id, mastery).length - masteryUsing(b.id, mastery).length;
     case "status": return a.status.localeCompare(b.status);
-    case "holders": return a.holders - b.holders;
-    case "createdBy": return a.createdBy.localeCompare(b.createdBy);
     case "dateCreated": return (Date.parse(a.dateCreated) || 0) - (Date.parse(b.dateCreated) || 0);
     case "dateModified": return (Date.parse(a.dateModified) || 0) - (Date.parse(b.dateModified) || 0);
     default: return 0;
@@ -712,10 +863,7 @@ function compareMastery(a: MasterySkill, b: MasterySkill, key: string): number {
   switch (key) {
     case "name": return a.name.localeCompare(b.name);
     case "id": return a.id.localeCompare(b.id);
-    case "skills": return a.skillIds.length - b.skillIds.length;
     case "status": return a.status.localeCompare(b.status);
-    case "holders": return a.holders - b.holders;
-    case "createdBy": return a.createdBy.localeCompare(b.createdBy);
     case "dateCreated": return (Date.parse(a.dateCreated) || 0) - (Date.parse(b.dateCreated) || 0);
     case "dateModified": return (Date.parse(a.dateModified) || 0) - (Date.parse(b.dateModified) || 0);
     default: return 0;
@@ -724,19 +872,14 @@ function compareMastery(a: MasterySkill, b: MasterySkill, key: string): number {
 
 /* ─────────────── Rows ─────────────── */
 
-function SkillColGroup({ cols }: { cols: Record<SkillColKey, boolean> }) {
+function ColGroup({ cols }: { cols: { key: string; width: number }[] }) {
   return (
     <colgroup>
-      <col style={{ width: 240 }} />
-      {cols.id && <col style={{ width: 100 }} />}
-      {cols.tasks && <col style={{ width: 200 }} />}
-      {cols.criteria && <col style={{ width: 110 }} />}
-      {cols.mastery && <col style={{ width: 200 }} />}
-      {cols.status && <col style={{ width: 110 }} />}
-      {cols.holders && <col style={{ width: 110 }} />}
-      {cols.dateCreated && <col style={{ width: 130 }} />}
-      {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 40 }} />
+      <col style={{ width: NAME_W }} />
+      {cols.map((c) => (
+        <col key={c.key} style={{ width: c.width }} />
+      ))}
+      <col style={{ width: ACTIONS_W }} />
     </colgroup>
   );
 }
@@ -745,32 +888,101 @@ function StatusBadge({ status }: { status: Skill["status"] }) {
   return <span className={`sk-status sk-status--${status.toLowerCase()}`}>{status}</span>;
 }
 
-/** First name in a list, plus a "+N" pill when there are more. */
+/** The cell's hover text: every value on its own line, or nothing when there
+    is only one (the cell already shows it) or none. Matches Tasks/Certs. */
+function listTip(names: string[]): string | undefined {
+  return names.length > 1 ? names.join("\n") : undefined;
+}
+
+/** First name in a list, plus a muted "+N" when there are more — the shared
+    `used-extra` treatment from the Tasks/Certifications "Used in" columns, so
+    hovering the cell reveals the rest. An empty list reads as an em dash, the
+    app-wide empty-cell treatment; a Skill can reach no Certification, and so
+    no Industry, at all. */
 function NamesCell({ names }: { names: string[] }) {
-  if (names.length === 0) return null;
-  const extra = names.length - 1;
+  if (names.length === 0) return "—";
   return (
-    <span className="sk-tasks-cell">
-      <span className="sk-tasks-name">{names[0]}</span>
-      {extra > 0 && <span className="sk-tasks-more">+{extra}</span>}
-    </span>
+    <>
+      {names[0]}
+      {names.length > 1 && <span className="used-extra">+{names.length - 1}</span>}
+    </>
   );
 }
 
-/** Awarding Tasks: first Task name, plus a "+N" pill when the Skill has more. */
-function TasksCell({ skill }: { skill: Skill }) {
-  const names = skill.taskIds.map((id) => taskById(id)?.name ?? id);
-  return <NamesCell names={names} />;
+/* Group row (Figma 1119:1543): the 10% grey wash, no separator, a 16px caret
+   before the name that turns down when the group is open. Clicking anywhere on
+   the row folds/unfolds it; the caret is a real button for the keyboard. The
+   Unlinked pseudo-group has no record behind it, so no row menu.
+   `flat` (Type = Mastery Skills) drops the wash, the caret and the toggle:
+   the Mastery Skill is then an ordinary record row. */
+function GroupRow({
+  group, flat, cols, open, onToggle, onEdit, onMenu, menuOpen,
+}: {
+  group: Group;
+  flat: boolean;
+  cols: Col[];
+  open: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onMenu: (rect: DOMRect) => void;
+  menuOpen: boolean;
+}) {
+  const m = group.mastery;
+  const archived = m?.status === "Archived";
+  const n = group.members.length;
+  return (
+    <tr
+      className={`${flat ? "" : "skg-group"} ${archived ? "skg-archived" : ""} ${menuOpen ? "menu-open" : ""}`}
+      onClick={flat ? undefined : onToggle}
+      aria-expanded={flat ? undefined : open}
+    >
+      <td className="col-name">
+        {!flat && (
+          <button
+            type="button"
+            className={`skg-caret ${open ? "is-open" : ""}`}
+            aria-label={open ? "Collapse" : "Expand"}
+            aria-expanded={open}
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          >
+            <TreeCaretIcon />
+          </button>
+        )}
+        {/* The pseudo-group's one datum — how many Skills sit under it — rides
+            in the name: "Unlinked Skills · 3". Its other cells stay blank. */}
+        {/* The badges never shrink, so a long name is what gives way; carry
+            it on hover the way every other truncating cell does. */}
+        <span className="skg-name" data-tip={m?.name}>{m ? m.name : `${UNLINKED_LABEL} · ${n}`}</span>
+        {/* The atom's accent "Mastery Skill" type pill beside the name (the
+            shared name flag, orange). Only a real Mastery Skill's group row
+            has it — not the Unlinked pseudo-group, and not the flat rows of
+            the Mastery-Skills-only view, where every row is one. */}
+        {/* Archived (1126:1704) swaps the type pill for the grey "Archived" one. */}
+        {archived
+          ? <span className="pr-name-flag pr-name-flag--grey">Archived</span>
+          : m && !flat && <span className="pr-name-flag pr-name-flag--accent">Mastery Skill</span>}
+      </td>
+      {cols.map((c) => (
+        <td key={c.key} className={c.className}>{m ? c.renderGroup?.(m) : null}</td>
+      ))}
+      {m ? <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Mastery Skill" /> : <td className="col-actions" />}
+    </tr>
+  );
 }
 
+/* Child row (Figma 1119:1561): the standard row, with the name indented past
+   the group row's caret slot. `indented` is off when Skills are listed on
+   their own (Type = Skills) — no groups, so nothing to sit under.
+   `alsoIn`: the OTHER Mastery Skills this Skill rolls up into — the row is
+   repeated under each, and the yellow "Also in …" flag (the shared Table
+   Pills - Yellow name flag) says so. Only meaningful under a group. */
 function SkillRow({
-  skill, cols, masteryLinked, selected, onClick, onEdit, onMenu, menuOpen,
+  skill, indented, alsoIn, cols, onEdit, onMenu, menuOpen,
 }: {
   skill: Skill;
-  cols: Record<SkillColKey, boolean>;
-  masteryLinked: MasterySkill[];
-  selected: boolean;
-  onClick: () => void;
+  indented: boolean;
+  alsoIn: string[];
+  cols: Col[];
   onEdit: () => void;
   onMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
@@ -778,65 +990,25 @@ function SkillRow({
 }) {
   const archived = skill.status === "Archived";
   return (
-    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
+    <tr className={`skg-row ${indented ? "skg-child" : ""} ${archived ? "skg-archived" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className="col-name">
-        {skill.name}
-        {archived && <span className="hidden-badge">Archived</span>}
+        <span className="skg-name" data-tip={skill.name}>{skill.name}</span>
+        {/* Archived (1126:1686): grey pill, muted name, dimmed list columns —
+            `.skg-archived`, not the shared 50%-opacity `task-hidden`. */}
+        {archived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
+        {/* Same hover contract as the "+N" list cells: `data-tip`, one Mastery
+            Skill per line, and none when the single name is already spelled
+            out in the flag itself. */}
+        {alsoIn.length > 0 && (
+          <span className="pr-name-flag" data-tip={listTip(alsoIn)}>
+            Also in {alsoIn[0]}{alsoIn.length > 1 ? ` +${alsoIn.length - 1}` : ""}
+          </span>
+        )}
       </td>
-      {cols.id && <td className="col-id">{skill.id}</td>}
-      {cols.tasks && <td className="col-used"><TasksCell skill={skill} /></td>}
-      {cols.criteria && <td className="col-type">{criteriaRule(skill)}</td>}
-      {cols.mastery && <td className="col-used"><NamesCell names={masteryLinked.map((m) => m.name)} /></td>}
-      {cols.status && <td className="col-type"><StatusBadge status={skill.status} /></td>}
-      {cols.holders && <td className="col-type">{fmtHolders(skill.holders)}</td>}
-      {cols.dateCreated && <td className="col-date">{skill.dateCreated}</td>}
-      {cols.dateModified && <td className="col-date">{skill.dateModified}</td>}
+      {cols.map((c) => (
+        <td key={c.key} className={c.className} data-tip={c.tip?.(skill)} data-tip-head={c.tipHead?.(skill)}>{c.render(skill)}</td>
+      ))}
       <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Skill" />
-    </tr>
-  );
-}
-
-function MasteryColGroup({ cols }: { cols: Record<MasteryColKey, boolean> }) {
-  return (
-    <colgroup>
-      <col style={{ width: 240 }} />
-      {cols.id && <col style={{ width: 100 }} />}
-      {cols.skills && <col style={{ width: 200 }} />}
-      {cols.status && <col style={{ width: 110 }} />}
-      {cols.holders && <col style={{ width: 110 }} />}
-      {cols.dateCreated && <col style={{ width: 130 }} />}
-      {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 40 }} />
-    </colgroup>
-  );
-}
-
-function MasteryRow({
-  mastery, cols, selected, onClick, onEdit, onMenu, menuOpen,
-}: {
-  mastery: MasterySkill;
-  cols: Record<MasteryColKey, boolean>;
-  selected: boolean;
-  onClick: () => void;
-  onEdit: () => void;
-  onMenu: (rect: DOMRect) => void;
-  /** This row's 3-dot menu is open — hold the hover treatment. */
-  menuOpen: boolean;
-}) {
-  const archived = mastery.status === "Archived";
-  return (
-    <tr className={`${selected ? "selected" : ""} ${archived ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
-      <td className="col-name">
-        {mastery.name}
-        {archived && <span className="hidden-badge">Archived</span>}
-      </td>
-      {cols.id && <td className="col-id">{mastery.id}</td>}
-      {cols.skills && <td className="col-used"><NamesCell names={mastery.skillIds.map((id) => skillById(id)?.name ?? id)} /></td>}
-      {cols.status && <td className="col-type"><StatusBadge status={mastery.status} /></td>}
-      {cols.holders && <td className="col-type">{fmtHolders(mastery.holders)}</td>}
-      {cols.dateCreated && <td className="col-date">{mastery.dateCreated}</td>}
-      {cols.dateModified && <td className="col-date">{mastery.dateModified}</td>}
-      <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Mastery Skill" />
     </tr>
   );
 }
@@ -848,20 +1020,26 @@ function RowActions({
   onMenu: (rect: DOMRect) => void;
   editTitle: string;
 }) {
+  /* A mouse click must not focus these. When the table overflows sideways,
+     Chrome scrolls a newly focused button in the sticky actions column to its
+     UNSTUCK position (off the right edge), and that scroll event closes the
+     menu the click just opened. Keyboard focus (Tab) is unaffected. */
+  const noFocus = (e: React.MouseEvent) => e.preventDefault();
   return (
     <td className="col-actions">
       <button
         className="row-action-btn lone-dots"
         aria-label="More"
+        onMouseDown={noFocus}
         onClick={(e) => { e.stopPropagation(); onMenu(e.currentTarget.getBoundingClientRect()); }}
       >
         <RowKebabIcon />
       </button>
       <div className="row-action-bar">
-        <button className="row-action-btn" aria-label="Edit" title={editTitle} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+        <button className="row-action-btn" aria-label="Edit" title={editTitle} onMouseDown={noFocus} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
           <RowEditIcon />
         </button>
-        <button className="row-action-btn" aria-label="More" onClick={(e) => { e.stopPropagation(); onMenu(e.currentTarget.getBoundingClientRect()); }}>
+        <button className="row-action-btn" aria-label="More" onMouseDown={noFocus} onClick={(e) => { e.stopPropagation(); onMenu(e.currentTarget.getBoundingClientRect()); }}>
           <RowKebabIcon />
         </button>
       </div>
@@ -870,7 +1048,7 @@ function RowActions({
 }
 
 function SortableHeader({
-  col, label, className, sort, toggle, sortable = true,
+  col, label, className, sort, toggle, sortable = true, lead,
 }: {
   col: string;
   label: string;
@@ -878,11 +1056,13 @@ function SortableHeader({
   sort: { key: string; dir: SortDir };
   toggle: (k: string) => void;
   sortable?: boolean;
+  /** Something before the label (the Name header's group toggle). */
+  lead?: React.ReactNode;
 }) {
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{lead}{label}</span>
       </th>
     );
   }
@@ -890,6 +1070,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
+        {lead}
         {label}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
@@ -897,16 +1078,19 @@ function SortableHeader({
   );
 }
 
-/* ─────────────── Actions menu (fixed-positioned) ─────────────── */
+/* ─────────────── Actions menu (fixed-positioned) ───────────────
+   The shared row menu (`.u-menu`, the Question Bank shape, 1085:1082): no
+   header, three bare verbs — Edit, Archive (Unarchive when archived),
+   Delete. Identical for a Skill and a Mastery Skill; `noun` only feeds the
+   aria-label. */
 
 function ActionsMenu({
-  rect, title, subtitle, archived, archiveLabel, onClose, onArchive, onEdit, onDelete,
+  rect, archived, noun, onClose, onArchive, onEdit, onDelete,
 }: {
   rect: DOMRect;
-  title: string;
-  subtitle: string;
   archived: boolean;
-  archiveLabel: string;
+  /** "Skill" or "Mastery Skill" — names the menu for assistive tech. */
+  noun: string;
   onClose: () => void;
   onArchive: () => void;
   onEdit: () => void;
@@ -957,6 +1141,8 @@ function ActionsMenu({
     <div
       ref={ref}
       className="u-menu"
+      role="menu"
+      aria-label={`${noun} actions`}
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -964,20 +1150,34 @@ function ActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{title}</div>
-        <div className="u-menu-head-id">{subtitle}</div>
-      </div>
-      {archived
-        ? item(<MenuPlaceholderIcon />, `Unarchive ${archiveLabel}`, onArchive)
-        : item(<MenuArchiveIcon />, `Archive ${archiveLabel}`, onArchive)}
       {item(<RowEditIcon />, "Edit", onEdit)}
+      {/* 1085:1082's archive glyph, for both directions — as Question Bank does. */}
+      {item(<MenuArchiveOffIcon />, archived ? "Unarchive" : "Archive", onArchive)}
       {item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );
 }
 
-/* ─────────────── Confirm modal ─────────────── */
+/* ─────────────── Confirm modal ───────────────
+   The shared shell (PrmModal, Figma 667:884 "General Modal"): body copy is
+   plain white 16px in the `.prm-content` slot — no page-local text class —
+   and any warning is the design-system `.note-card`. */
+
+/** The linked-Mastery-Skills callout — `.note-card` (Figma 1121:1671) with the
+    affected names as its last line. */
+function LinkedMasteryNote({ title, linked, children }: { title: string; linked: MasterySkill[]; children: React.ReactNode }) {
+  return (
+    <div className="note-card">
+      <span className="note-card-icon"><AlertCircleFilledIcon /></span>
+      <div className="note-card-text">
+        <p className="note-card-title">{title}</p>
+        <p className="note-card-body">{children}</p>
+        <p className="note-card-body"><strong>{linked.map((m) => m.name).join(", ")}</strong></p>
+      </div>
+    </div>
+  );
+}
+
 
 function ConfirmModal({
   title, confirmLabel, danger = false, children, onCancel, onConfirm,
@@ -997,7 +1197,7 @@ function ConfirmModal({
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      <div className="prm-content">{children}</div>
+      <div className="prm-content skg-modal-content">{children}</div>
     </PrmModal>
   );
 }
@@ -1010,7 +1210,7 @@ function StatusPill({ value, onApply }: { value: string[]; onApply: (v: string[]
     <Dropdown
       width={200}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} />
+        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.status} />
       )}
     >
       {({ close }) => (
@@ -1024,90 +1224,21 @@ function StatusPill({ value, onApply }: { value: string[]; onApply: (v: string[]
   );
 }
 
-function CreatedByPill({ value, onApply }: { value: string[]; onApply: (v: string[]) => void }) {
-  const summary = summarize(value, ALL_CREATORS);
+function TypePill({ value, onApply }: { value: string[]; onApply: (v: string[]) => void }) {
+  const summary = summarize(value, [...TYPES]);
   return (
     <Dropdown
-      width={300}
+      width={220}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Created By" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} />
+        <PillTrigger label="Type" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.type} />
       )}
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[
-            { label: "Made in house", items: CREATED_BY_IN_HOUSE },
-            { label: "B2B customers", items: [...CREATED_BY_B2B].sort() },
-          ]}
-          subsectionStyle
-          searchable
-          searchPlaceholder="Search Creators..."
+          sections={[{ items: [...TYPES] }]}
           value={value}
           onApply={(v) => { onApply(v); close(); }}
         />
-      )}
-    </Dropdown>
-  );
-}
-
-/* ─────────────── Columns editor ─────────────── */
-
-function ColumnsMenu({
-  optional, fixed, value, onChange,
-}: {
-  optional: { key: string; label: string }[];
-  fixed: string;
-  value: Record<string, boolean>;
-  onChange: (v: Record<string, boolean>) => void;
-}) {
-  // Available columns read alphabetically — it is a lookup list, not an
-  // ordering (see ColumnsBody in Filters.tsx).
-  const active = optional.filter((c) => value[c.key]);
-  const available = optional
-    .filter((c) => !value[c.key])
-    .sort((a, b) => a.label.localeCompare(b.label));
-  return (
-    <Dropdown
-      width={240}
-      align="right"
-      trigger={({ toggle }) => (
-        <button
-          className="edit-columns-btn"
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
-          aria-label="Edit columns"
-          data-tooltip="Edit Columns"
-        >
-          <EditColumnsIcon />
-        </button>
-      )}
-    >
-      {() => (
-        <div className="dropdown-list cols-menu">
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Fixed columns</div>
-            <div className="cols-fixed-row">{fixed}</div>
-          </div>
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Active columns</div>
-            {active.length === 0 ? (
-              <div className="cols-empty">No active columns</div>
-            ) : (
-              active.map((c) => (
-                <CheckRow key={c.key} label={c.label} checked draggable onChange={() => onChange({ ...value, [c.key]: false })} />
-              ))
-            )}
-          </div>
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Available columns</div>
-            {available.length === 0 ? (
-              <div className="cols-empty">All columns are active</div>
-            ) : (
-              available.map((c) => (
-                <CheckRow key={c.key} label={c.label} checked={false} onChange={() => onChange({ ...value, [c.key]: true })} />
-              ))
-            )}
-          </div>
-        </div>
       )}
     </Dropdown>
   );

@@ -4,16 +4,40 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173,
       "url": "http://localhost:5173"
     },
     {
       "name": "dev-alt",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5178", "--strictPort", "--host", "127.0.0.1"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5178",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
       "port": 5178,
       "url": "http://localhost:5178"
+    },
+    {
+      "name": "dev-5179",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5179",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5179,
+      "url": "http://localhost:5179"
     }
   ]
 }

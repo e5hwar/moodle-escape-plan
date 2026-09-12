@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
+import { FileNameLink } from "./FileNameLink";
 import { DocumentIcon, SmallXIcon, UploadTrayIcon } from "./icons";
 
 /** One picked image. `size` is in bytes; `ext` is the upper-cased extension. */
-export type PickedImage = { name: string; size: number; ext: string };
+export type PickedImage = { name: string; size: number; ext: string; url?: string };
 
 /* File Upload - Single Language (Figma 678:2012): the same .drop-big zone as
    the dual-language columns, minus the bordered shell and language tag, at full
@@ -35,6 +36,7 @@ export function ImageUploadField({
       name: f.name,
       size: f.size,
       ext: (f.name.split(".").pop() ?? "").toUpperCase(),
+      url: URL.createObjectURL(f),
     });
   }
 
@@ -44,9 +46,9 @@ export function ImageUploadField({
         <div className="file-row">
           <span className="file-icon"><DocumentIcon /></span>
           <div className="file-meta">
-            <div className="file-name">{value.name}</div>
+            <FileNameLink name={value.name} url={value.url} />
             <div className="file-sub">
-              {(value.size / 1024 / 1024).toFixed(1)} MB · {value.ext}
+              {value.ext} · {(value.size / 1024 / 1024).toFixed(1)} MB
             </div>
           </div>
           <button className="file-remove" onClick={() => onChange(null)} aria-label="Remove file">

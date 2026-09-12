@@ -29,6 +29,7 @@ export function SelectField<T extends string>({
   renderTrigger,
   searchPlaceholder,
   optionDetail,
+  optionPrimary,
   optionSecondary,
   optionSearchText,
   popupMenu = false,
@@ -55,6 +56,10 @@ export function SelectField<T extends string>({
   searchPlaceholder?: string;
   /** Right-aligned muted text on an option's row (Figma 668:943). */
   optionDetail?: (option: T) => ReactNode;
+  /** The row's own name, when it should read differently from the option
+   *  string — e.g. a Question Bank category, whose option is unique only as
+   *  "Sub · Parent" while the row wants the sub name alone in white. */
+  optionPrimary?: (option: T) => ReactNode;
   /** Muted text set immediately after the option's name, inside the same row
    *  (Figma 955:976 — an employee's email beside their name). Unlike
    *  `optionDetail` it hugs the name rather than the row's far edge. */
@@ -143,6 +148,7 @@ export function SelectField<T extends string>({
             onChange={onChange}
             searchPlaceholder={searchPlaceholder}
             optionDetail={optionDetail}
+            optionPrimary={optionPrimary}
             optionSecondary={optionSecondary}
             optionSearchText={optionSearchText}
             maxVisibleOptions={maxVisibleOptions}
@@ -165,6 +171,7 @@ function SelectMenu<T extends string>({
   close,
   searchPlaceholder,
   optionDetail,
+  optionPrimary,
   optionSecondary,
   optionSearchText,
   maxVisibleOptions,
@@ -175,6 +182,7 @@ function SelectMenu<T extends string>({
   close: () => void;
   searchPlaceholder?: string;
   optionDetail?: (option: T) => ReactNode;
+  optionPrimary?: (option: T) => ReactNode;
   optionSecondary?: (option: T) => ReactNode;
   optionSearchText?: (option: T) => string;
   maxVisibleOptions?: number;
@@ -276,6 +284,7 @@ function SelectMenu<T extends string>({
     >
       {shown.map((opt, i) => {
         const detail = optionDetail?.(opt);
+        const primary = optionPrimary?.(opt) ?? opt;
         const secondary = optionSecondary?.(opt);
         return (
           <button
@@ -297,7 +306,7 @@ function SelectMenu<T extends string>({
             {detail != null || secondary != null ? (
               <>
                 <span className="dropdown-item-name">
-                  {opt}
+                  {primary}
                   {secondary != null && (
                     <span className="dropdown-item-secondary">{secondary}</span>
                   )}

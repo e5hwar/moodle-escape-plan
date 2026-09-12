@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -7,9 +7,17 @@ import {
   type QuestionType,
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
-import { ArrowRightIcon, SmallXIcon, MoveIcon, InfoIcon, PlusThinIcon } from "./icons";
+import {
+  ArrowRightIcon,
+  SmallXIcon,
+  MoveIcon,
+  InfoIcon12,
+  PlusThinIcon,
+  ChevronRightIcon,
+} from "./icons";
 import { SectionHeading } from "./SectionHeading";
 import { RichTextField } from "./RichTextField";
+import { SelectField } from "./SelectField";
 
 /* ─────────────────  Types  ───────────────── */
 
@@ -59,27 +67,26 @@ const MAX_OPTIONS = 10;
 /* Per-option labels down the left of each MCQ row (Figma 414:427). */
 const OPTION_LETTERS = "ABCDEFGHIJ".split("");
 
-/* Options a question is expected to have. Below this the add card counts down
-   to it ("Add 1 More" at 4, Figma 416:578); past it it's a plain "Add option"
-   up to MAX_OPTIONS. */
-const TARGET_OPTIONS = 5;
-
+/* Title Case throughout, per the Question Type menu's spec — the label is a
+   proper name for the type, so it reads the same in the dropdown, in the page
+   title and in the grading rail's explanation. */
 const TYPE_LABELS: Record<QType, string> = {
-  mcq: "Multiple choice",
-  "true-false": "True or False",
-  match: "Match the following",
-  short: "Short answer",
-  file: "File upload",
-  scale: "Linear scale",
+  mcq: "Multiple Choice",
+  "true-false": "True/False",
+  match: "Match the Following",
+  short: "Short Answer",
+  file: "File Upload",
+  scale: "Linear Scale",
 };
 
-const TYPE_ORDER: QType[] = ["mcq", "true-false", "match", "short", "file", "scale"];
+const TYPE_ORDER: QType[] = ["mcq", "true-false", "match", "short", "scale", "file"];
+const TYPE_BY_LABEL = new Map(TYPE_ORDER.map((t) => [TYPE_LABELS[t], t]));
 
 /* The editor's page title names the type it is on (Figma 739:1504 — "New
    Multiple-Choice Question"), so it changes with the Question Type dropdown. */
 const TYPE_TITLES: Record<QType, string> = {
   mcq: "Multiple-Choice",
-  "true-false": "True or False",
+  "true-false": "True/False",
   match: "Match the Following",
   short: "Short Answer",
   file: "File Upload",
@@ -104,15 +111,16 @@ const GRADE_STEPS = [
 ];
 
 /* Figma 814:1705 writes a positive share as a bare percentage ("100%") and no
-   grade as "0%"; only the negative steps carry a sign. */
+   grade as "None" (814:1723, 2026-09-10 — it read "0%" before); only the
+   negative steps carry a sign. */
 function fmtPct(v: number): string {
-  if (v === 0) return "0%";
+  if (v === 0) return "None";
   const rounded = Math.round(Math.abs(v) * 1000) / 1000;
   return `${v > 0 ? "" : "−"}${rounded}%`;
 }
 
 const GRADE_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: "0%" },
+  { value: 0, label: fmtPct(0) },
   ...GRADE_STEPS.map((v) => ({ value: v, label: fmtPct(v) })),
   ...GRADE_STEPS.map((v) => ({ value: -v, label: fmtPct(-v) })),
 ];
@@ -174,7 +182,9 @@ function buildInitial(
     status: "Active",
     text: "",
     textEs: "",
-    choices: [blankChoice(100), blankChoice(0), blankChoice(0), blankChoice(0)],
+    /* Every option starts on "None" — the author sets the correct one, and a
+       pre-filled 100% on A reads as an answer nobody chose. */
+    choices: [blankChoice(), blankChoice(), blankChoice(), blankChoice()],
     otherOption: false,
     tfAnswer: true,
     pairs: [blankPair(), blankPair(), blankPair()],
@@ -285,7 +295,7 @@ function translationEntries(d: QuestionDraft): TransEntry[] {
 
 type Props = {
   onClose: () => void;
-  // Called with the built question when "Create question" is clicked
+  // Called with the built question when "Create Question" is clicked
   // (creation only — edits still just close, as before).
   onCreate?: (q: Question) => void;
   initialCategoryPath?: string[];
@@ -378,7 +388,18 @@ export function NewQuestionWizard({
   const [showHistory, setShowHistory] = useState(false);
   const update = (patch: Partial<QuestionDraft>) => setData((d) => ({ ...d, ...patch }));
 
-  const catOptions = useMemo(() => flattenCategories(seedCategories), []);
+  /* A-Z by category, then by sub-category inside it. Sorting on the flattened
+     "Parent > Sub" label does both at once and keeps a parent immediately
+     above its own sub-categories (">" sorts after the end of the parent's
+     name). `flattenCategories` keeps the Question Bank index's own order, so
+     the sort lives here rather than in the shared helper. */
+  const catOptions = useMemo(
+    () =>
+      [...flattenCategories(seedCategories)].sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
+    [],
+  );
   const catLabel =
     catOptions.find((o) => o.key === data.catKey)?.label.replace(" > ", " / ") ??
     "Uncategorized";
@@ -414,7 +435,23 @@ export function NewQuestionWizard({
       <div className="wizard-body">
         <div className="wizard-main">
           <div className="wizard-content">
-            <h1 className={`wizard-title${desc ? "" : " qed-title-solo"}`}>{title}</h1>
+            {/* Shared crumb row (.rvc-pagehead) — the editor is reached from
+                the Question Bank, and "Question Bank" is also the way back out,
+                so it stays a button; the question itself is the current crumb. */}
+            <div className="rvc-pagehead qed-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <button
+                  className="rvc-crumb"
+                  onClick={onClose}
+                  title="Back to the Question Bank"
+                >
+                  Question Bank
+                </button>
+                <ChevronRightIcon />
+                <span className="rvc-crumb rvc-crumb--current">{title}</span>
+              </nav>
+              <h1 className={`wizard-title${desc ? "" : " qed-title-solo"}`}>{title}</h1>
+            </div>
             {desc && <p className="wizard-desc">{desc}</p>}
 
             <QuestionTextSection data={data} update={update} />
@@ -480,7 +517,7 @@ export function NewQuestionWizard({
               onClose();
             }}
           >
-            {isEditing ? "Save Changes" : "Create question"}
+            {isEditing ? "Save Changes" : "Create Question"}
           </button>
         </div>
       </footer>
@@ -508,6 +545,22 @@ function SetupSection({
   isEditing: boolean;
   catOptions: { key: string; label: string }[];
 }) {
+  /* Figma 955:976 reads "<name> · <qualifier>", so a category option is
+     "<sub-category> · <category>" — a sub-category name is not unique on its
+     own ("Heat Pumps" sits under two parents), the pair is. A top-level
+     category has no qualifier and stands alone. */
+  const catLabelOf = (key: string) => {
+    const label = catOptions.find((o) => o.key === key)?.label;
+    if (!label) return "";
+    const [parent, sub] = label.split(" > ");
+    return sub ? `${sub} · ${parent}` : parent;
+  };
+  const catSubOf = (label: string) => label.split(" · ")[0];
+  const catParentOf = (label: string) => {
+    const parent = label.split(" · ")[1];
+    return parent ? `· ${parent}` : null;
+  };
+
   const changeType = (t: QType) => {
     const gradable = typeSupportsGrading(t);
     const wasRandomisable = data.type === "mcq" || data.type === "match";
@@ -522,45 +575,25 @@ function SetupSection({
     });
   };
 
-  /* Archived / Active, in the Figma order. "Draft" is not one of the design's
-     segments — it only appears when a question already saved as a draft is
-     being edited, so its state stays representable. */
-  const statuses: QuestionDraft["status"][] =
-    data.status === "Draft" ? ["Draft", "Archived", "Active"] : ["Archived", "Active"];
-
   return (
     <>
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">
-            Question Status <span className="req">*</span>
-          </label>
-          {/* Single-Select (Figma 359:2373), accent-active variant */}
-          <div className="seg-control">
-            {statuses.map((st) => (
-              <button
-                key={st}
-                className={`seg-btn ${data.status === st ? "active accent" : ""}`}
-                onClick={() => update({ status: st })}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-          <p className="form-help">Archived questions are not shown to users</p>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">
             Category <span className="req">*</span>
           </label>
-          <Select
-            value={data.catKey}
-            onChange={(v) => update({ catKey: v })}
-            options={catOptions.map((o) => ({
-              value: o.key,
-              label: o.label.replace(" > ", " / "),
-            }))}
+          {/* Searchable single-select (Figma 668:943) — the Question Bank runs
+              to dozens of category / sub-category rows, so the picker filters. */}
+          <SelectField
+            value={catLabelOf(data.catKey)}
+            options={catOptions.map((o) => catLabelOf(o.key))}
+            onChange={(label) =>
+              update({ catKey: catOptions.find((o) => catLabelOf(o.key) === label)?.key ?? "" })
+            }
+            optionPrimary={catSubOf}
+            optionSecondary={catParentOf}
+            searchPlaceholder="Search Categories…"
+            className="select-field--full"
           />
           <p className="form-help">Where it goes in the Question Bank</p>
         </div>
@@ -569,11 +602,17 @@ function SetupSection({
           <label className="form-label">
             Question Type <span className="req">*</span>
           </label>
-          <Select
-            value={data.type}
+          {/* Same single-select as Category, without the search header — six
+              fixed types is a glance, not a lookup. */}
+          <SelectField
+            value={TYPE_LABELS[data.type]}
             disabled={isEditing}
-            onChange={(v) => changeType(v as QType)}
-            options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
+            options={TYPE_ORDER.map((t) => TYPE_LABELS[t])}
+            onChange={(label) => {
+              const t = TYPE_BY_LABEL.get(label);
+              if (t) changeType(t);
+            }}
+            className="select-field--full"
           />
           {isEditing && (
             <p className="form-help">Type can't change on a saved question.</p>
@@ -602,12 +641,84 @@ function QuestionTextSection({
           es={data.textEs}
           onChangeEn={(v) => update({ text: v })}
           onChangeEs={(v) => update({ textEs: v })}
-          placeholderEn="Write the question…"
-          placeholderEs="Escribe la pregunta…"
+          placeholderEn="Question Text…"
+          placeholderEs="Texto de la pregunta…"
         />
       </div>
     </div>
   );
+}
+
+/* Drag-to-reorder for the Options table (Figma 814:1679 draws a grip on every
+   row). HTML5 drag, the same mechanic the Spotlights queue and the Edit Columns
+   menu use — but the drag SOURCE is the grip, not the row: a draggable row
+   swallows the caret and text selection inside the option's own inputs. The
+   row is still the drop target, and the whole row is used as the drag image so
+   what follows the cursor is the option, not the 16px handle. `dragRef`
+   mirrors the dragged id so a drop landing in the same render tick reads it. */
+function useRowDrag<T extends { id: string }>(
+  rows: T[],
+  onReorder: (next: T[]) => void,
+) {
+  const dragRef = useRef<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  const end = () => {
+    dragRef.current = null;
+    setDragId(null);
+    setOverId(null);
+  };
+
+  const drop = (targetId: string) => {
+    const from = dragRef.current;
+    if (from && from !== targetId) {
+      const next = [...rows];
+      const fromIdx = next.findIndex((r) => r.id === from);
+      const toIdx = next.findIndex((r) => r.id === targetId);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, moved);
+        onReorder(next);
+      }
+    }
+    end();
+  };
+
+  return {
+    /* Spread on the row — the drop target. */
+    rowProps: (id: string) => ({
+      onDragEnter: () => {
+        if (dragRef.current) setOverId(id);
+      },
+      onDragOver: (e: React.DragEvent) => {
+        // Without this the drop never fires: the default is "no drop here".
+        if (dragRef.current) e.preventDefault();
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        drop(id);
+      },
+      className: `${dragId === id ? " is-dragging" : ""}${
+        overId === id && dragId !== id ? " is-drop-target" : ""
+      }`,
+    }),
+    /* Spread on the grip — the drag source. */
+    gripProps: (id: string) => ({
+      draggable: true,
+      onDragStart: (e: React.DragEvent<HTMLElement>) => {
+        // Firefox refuses to start a drag with no payload.
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", id);
+        const row = e.currentTarget.closest(".qed-tbl-row");
+        if (row) e.dataTransfer.setDragImage(row, 24, row.clientHeight / 2);
+        dragRef.current = id;
+        setDragId(id);
+      },
+      onDragEnd: end,
+      title: "Drag to reorder",
+    }),
+  };
 }
 
 function McqSection({
@@ -626,13 +737,17 @@ function McqSection({
 
   const addChoice = () => {
     if (choices.length >= MAX_OPTIONS) return;
-    update({ choices: [...choices, blankChoice(grading ? -25 : 0)] });
+    update({ choices: [...choices, blankChoice()] });
   };
 
   const removeChoice = (id: string) => {
     if (choices.length <= 2) return;
     update({ choices: choices.filter((c) => c.id !== id) });
   };
+
+  /* The grade travels with the option it belongs to — the letters are just
+     positional labels, so moving an option re-letters the list around it. */
+  const drag = useRowDrag(choices, (next) => update({ choices: next }));
 
   /* Figma 814:1679 "Create Question - MCQ" — one boxed table: an
      OPTION / GRADE header, a row per option (drag handle, letter, dual-language
@@ -655,16 +770,18 @@ function McqSection({
                   className="qed-tbl-info"
                   title="Share of the question's mark this option earns."
                 >
-                  <InfoIcon />
+                  <InfoIcon12 />
                 </span>
               </span>
             )}
           </div>
 
-          {choices.map((c, i) => (
-            <div className="qed-tbl-row" key={c.id}>
+          {choices.map((c, i) => {
+            const { className: dragClass, ...rowDrag } = drag.rowProps(c.id);
+            return (
+            <div className={`qed-tbl-row${dragClass}`} key={c.id} {...rowDrag}>
               <span className="qed-tbl-ord">
-                <span className="qed-tbl-grip" aria-hidden>
+                <span className="qed-tbl-grip" {...drag.gripProps(c.id)}>
                   <MoveIcon />
                 </span>
                 {/* Figma 814:1695 labels each option A, B, C… — the grade
@@ -696,40 +813,36 @@ function McqSection({
                 <SmallXIcon />
               </button>
             </div>
-          ))}
+            );
+          })}
 
           {!grading && data.otherOption && (
-            <div className="qed-tbl-row">
-              <span className="qed-tbl-ord">
-                <span className="qed-tbl-grip" aria-hidden>
-                  <MoveIcon />
-                </span>
-                <span className="qed-tbl-letter" aria-hidden>
-                  {OPTION_LETTERS[choices.length] ?? choices.length + 1}
+            /* Figma 1094:1183 — the "Other" row is a 44px caption line, not an
+               option: "Other" over the 955:976 name-plus-qualifier pattern. No
+               letter, no grade and no remove ✕ — the rail's toggle is what
+               takes it away. The node's drag handle is dropped (Other is not in
+               `choices`, so it has nothing to be reordered against); the row
+               keeps its 20px gutter so "Other" stays in the letters' column. */
+            <div className="qed-tbl-row qed-tbl-row--other">
+              <span className="qed-tbl-other">
+                <span className="qed-tbl-other-name">Other</span>
+                <span className="qed-tbl-other-desc">
+                  · Allows the user to type in their own answer
                 </span>
               </span>
-              <span className="qed-tbl-static">
-                Other — learner types a free-text answer
-              </span>
-              <button
-                className="qed-tbl-x"
-                aria-label="Remove Other option"
-                onClick={() => update({ otherOption: false })}
-              >
-                <SmallXIcon />
-              </button>
             </div>
           )}
 
+          {/* Figma 1091:1178 (2026-09-10) — the footer's Primary CTA became a
+              plain orange text link with a 16px plus. */}
           <div className="qed-tbl-foot">
             <button
-              className="cta-primary"
+              className="qed-tbl-add"
               onClick={addChoice}
               disabled={choices.length >= MAX_OPTIONS}
             >
-              {choices.length < TARGET_OPTIONS
-                ? `Add ${TARGET_OPTIONS - choices.length} More`
-                : "Add option"}
+              <PlusThinIcon />
+              Add Option
             </button>
           </div>
         </div>
@@ -1115,7 +1228,7 @@ function GradingSection({
     : lockedByQuizzes
       ? `Used in ${usedInQuizzes} quiz${usedInQuizzes === 1 ? "" : "zes"} — remove it from them first`
       : lockedByOther
-        ? "Remove the “Other” option to enable grading"
+        ? "Remove the “Other” option to enable"
         : "Required for use in Quizzes";
 
   const canRandomise = data.type === "mcq" || data.type === "match";
@@ -1145,7 +1258,7 @@ function GradingSection({
           disabled={grading}
           onChange={(v) => update({ otherOption: v })}
           label="“Other” Free-Text Option"
-          sub="Only when grading is off"
+          sub="User can enter an answer of their own"
           info="A learner who picks it types their own answer, so the question can't be auto-graded."
         />
       )}
@@ -1187,7 +1300,7 @@ function FeedbackSection({
             disabled={singleAnswer}
             placeholder={
               singleAnswer
-                ? "Not used for single-answer questions"
+                ? "Only available for questions with MCQs with multiple correct answers"
                 : "Shown for a partially correct response…"
             }
             esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
@@ -1231,7 +1344,9 @@ function FeedbackRow({
 }) {
   return (
     <div className="qed-tbl-row">
-      <span className="qed-fb-label">{label}</span>
+      {/* The label dims with the field it names, so a row that can't be filled
+          in reads as one control rather than a live label over a dead box. */}
+      <span className={`qed-fb-label${disabled ? " is-disabled" : ""}`}>{label}</span>
       <div className="qed-tbl-field">
         <RichTextField
           en={en}
@@ -1339,7 +1454,7 @@ function ToggleRow({
             {sub}
             {info && (
               <span className="qed-tbl-info" title={info}>
-                <InfoIcon />
+                <InfoIcon12 />
               </span>
             )}
           </p>
@@ -1390,21 +1505,31 @@ function GradeSelect({
     const found = GRADE_OPTIONS.find((o) => Math.abs(o.value - v) < 0.001);
     return found ? found.label : fmtPct(v);
   };
+  /* A grade the steps don't cover (an imported question, say) joins the list
+     rather than being silently rounded to one that is. */
   const opts = GRADE_OPTIONS.some((o) => Math.abs(o.value - value) < 0.001)
     ? GRADE_OPTIONS
     : [{ value, label: label(value) }, ...GRADE_OPTIONS];
+  const byLabel = new Map(opts.map((o) => [o.label, o.value]));
+  /* The shared single-select, like Category and Question Type. It works in
+     display strings, so the percentage round-trips through its label — every
+     one of them is distinct. Capped at 6 rows: the full list is 31 long and
+     would otherwise fill the pane. */
   return (
-    <select
-      className="form-select qed-grade"
-      value={String(value)}
-      onChange={(e) => onChange(Number(e.target.value))}
-    >
-      {opts.map((o) => (
-        <option key={o.label} value={String(o.value)}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <SelectField
+      value={label(value)}
+      options={opts.map((o) => o.label)}
+      onChange={(l) => {
+        const v = byLabel.get(l);
+        if (v !== undefined) onChange(v);
+      }}
+      /* Figma 1090:1153 "Dropdown Menu - Grade": a plain list, no search
+         header, 8px inset and 35px rows at 16px, opening at the field's own
+         92px. Capped at 6 rows so the 41 steps don't fill the pane. */
+      maxVisibleOptions={6}
+      panelClass="qed-grade-menu"
+      className="qed-grade"
+    />
   );
 }
 

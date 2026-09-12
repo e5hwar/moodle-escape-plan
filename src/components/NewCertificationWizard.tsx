@@ -9,6 +9,7 @@ import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIc
 import { DropdownSearch } from "./SearchPanelParts";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { PrmModal } from "./PrmModal";
@@ -726,6 +727,11 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
     setShowIndustries(true);
   }
 
+  /* ⌘/Ctrl+Enter is the footer's primary button. Off while the split Task
+     wizard has taken over the screen — that wizard answers the shortcut with
+     its own footer instead. */
+  useWizardEnterShortcut(handlePublish, undefined, !splitTask);
+
   // Append a built CertTask to a Course (or a Lesson within it). Shared by both
   // the "Create New" split-screen flow and the "Add Existing" picker.
   function appendTask(courseId: string, lessonId: string | undefined, task: CertTask) {
@@ -874,7 +880,8 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
         <div className="wizard-actions">
           <button className="btn-save-draft" onClick={onClose}>Save as draft</button>
           <button className="btn-publish" onClick={handlePublish}>
-            {isEditing ? "Save Changes" : "Publish"}
+            {isEditing ? "Save Changes" : "Create Certification"}
+            <WizardKeyHint />
           </button>
         </div>
       </footer>

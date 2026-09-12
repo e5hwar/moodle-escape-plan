@@ -202,18 +202,25 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
 
 /* ─────────────────────────────────────────────────────────────── */
 
+/* NOTE: a byte-for-byte copy of `Filters.tsx`'s exported `PillTrigger` (and
+   `summarize` below is duplicated the same way). Kept in step by hand — any
+   change to one belongs in both until they are deduplicated. */
 function PillTrigger({
   label,
   value,
   open,
   toggle,
   onClear,
+  tip,
 }: {
   label: string;
   value: string | null;
   open: boolean;
   toggle: () => void;
   onClear?: () => void;
+  /** Hover line saying what this filter does — a native `title`, adopted by
+      the app's single tooltip. On the label button, not the clear ×. */
+  tip?: string;
 }) {
   if (value && onClear) {
     return (
@@ -221,7 +228,7 @@ function PillTrigger({
         <button className="filter-applied-clear" onClick={onClear} aria-label={`Clear ${label}`}>
           <XCircleIcon />
         </button>
-        <button className="filter-applied-main" onClick={toggle}>
+        <button className="filter-applied-main" onClick={toggle} title={tip}>
           <span className="label">{label}</span>
           <span className="sep" />
           <span className="value">{value}</span>
@@ -233,7 +240,7 @@ function PillTrigger({
     );
   }
   return (
-    <button className={`filter-pill-dashed ${open ? "open" : ""}`} onClick={toggle}>
+    <button className={`filter-pill-dashed ${open ? "open" : ""}`} onClick={toggle} title={tip}>
       <span className="icon">
         <PlusCircleIcon />
       </span>
@@ -257,6 +264,7 @@ export function MultiPill({
   searchable = false,
   searchPlaceholder,
   width = 260,
+  tip,
 }: {
   label: string;
   all: string[];
@@ -265,6 +273,8 @@ export function MultiPill({
   searchable?: boolean;
   searchPlaceholder?: string;
   width?: number;
+  /** Hover line explaining what this filter does — see `PillTrigger`. */
+  tip?: string;
 }) {
   return (
     <Dropdown
@@ -276,6 +286,7 @@ export function MultiPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={tip}
         />
       )}
     >

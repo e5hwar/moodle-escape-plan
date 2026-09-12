@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { FileNameLink } from "./FileNameLink";
 import { CloseXIcon, SmallXIcon, UploadTrayIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import { formatShortDate } from "../formatDate";
@@ -179,7 +180,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, resu
                   <img src={image.url} alt="" />
                 </span>
                 <div className="file-meta">
-                  <div className="file-name">{image.name}</div>
+                  <FileNameLink name={image.name} url={image.url} />
                   <div className="file-sub">{formatSize(image.size)}</div>
                 </div>
                 <button

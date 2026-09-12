@@ -4,9 +4,10 @@ import { useEffect } from "react";
 
    Opt-in per cell: a `<td data-copyable>` gets the behaviour, nothing else
    does. Today that is the Email and Phone columns on Exam Reviews
-   (ProctoringPage) and ID Re-Uploads (PendingIdReuploadsPage) — the two
-   tables whose values admins actually paste elsewhere. Marking more columns
-   later is a one-attribute change; no other file needs to know.
+   (ProctoringPage), ID Re-Uploads (PendingIdReuploadsPage) and Hands-On Task
+   Submissions (ReviewHandsOnPage, via its column registry's `copyable` flag)
+   — the tables whose values admins actually paste elsewhere. Marking more
+   columns later is a one-attribute change; no other file needs to know.
 
    One document-level handler, like HoverTooltip. Hovering a marked cell
    marks it `data-copy="fit" | "clip"` and the CSS paints a copy glyph (a

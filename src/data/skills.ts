@@ -121,6 +121,21 @@ export const skills: Skill[] = [
   S("SK-112", "Airflow Balancing", "💨", ["T-2061"], "all", 433, "Apr 10, 2025", "Apr 24, 2026", {
     nameEs: "Equilibrio de flujo de aire",
   }),
+  // SK-113 – SK-116 belong to no Mastery Skill: they populate "Unlinked Skills".
+  S("SK-113", "Thermostat Wiring", "🔌", ["T-2165"], "all", 618, "Mar 22, 2025", "Apr 11, 2026", {
+    nameEs: "Cableado de termostato",
+    description: "Wires a low-voltage thermostat and verifies call-for-heat and call-for-cool.",
+  }),
+  S("SK-114", "Heat Pump Diagnostics", "🌀", ["T-2287", "T-2391"], "any", 254, "Mar 02, 2025", "Apr 18, 2026", {
+    nameEs: "Diagnóstico de bombas de calor",
+  }),
+  S("SK-115", "PEX & PVC Joining", "🔩", ["T-1521", "T-1555"], "all", 391, "Oct 02, 2025", "Apr 17, 2026", {
+    nameEs: "Unión de PEX y PVC",
+    description: "Joins PEX and PVC supply lines to code with leak-free connections.",
+  }),
+  S("SK-116", "Gas Line Pressure Testing", "🧯", ["T-1121"], "all", 176, "Feb 01, 2026", "Apr 19, 2026", {
+    nameEs: "Prueba de presión de líneas de gas",
+  }),
 ];
 
 const M = (
@@ -150,12 +165,23 @@ export const masterySkills: MasterySkill[] = [
     nameEs: "Maestría EPA 608",
     description: "Awarded when a technician holds every core refrigerant-handling Skill.",
   }),
-  M("MS-02", "HVAC Field Readiness", "🎖️", ["SK-101", "SK-106", "SK-112"], 268, "Apr 02, 2024", "Apr 28, 2026", {
+  // SK-104 is also in MS-01 — the one seed Skill shared by two Mastery Skills,
+  // which exercises the Skills table's "Also in …" flag.
+  // SK-107 Electrical Safety Basics sits in THREE Mastery Skills (MS-02, MS-03,
+  // MS-04) — safety fundamentals every trade requires, and the one seed Skill
+  // that exercises the "+N" on the Skills table's "Also in …" flag.
+  M("MS-02", "HVAC Field Readiness", "🎖️", ["SK-101", "SK-106", "SK-112", "SK-104", "SK-107"], 268, "Apr 02, 2024", "Apr 28, 2026", {
     nameEs: "Preparación para el campo HVAC",
     description: "Recognizes hands-on readiness across brazing, charge verification, and airflow.",
   }),
   M("MS-03", "Electrical Competency", "⚙️", ["SK-107", "SK-108"], 531, "Apr 12, 2025", "Apr 21, 2026", {
     nameEs: "Competencia eléctrica",
+  }),
+  // The one archived Mastery Skill — exercises the archived group row.
+  M("MS-04", "Gas Furnace Service", "🔥", ["SK-109", "SK-110", "SK-107"], 143, "Sep 03, 2024", "Feb 14, 2026", {
+    nameEs: "Servicio de hornos de gas",
+    status: "Archived",
+    description: "Retired rollup for furnace diagnostics; superseded by the HVAC Field Readiness track.",
   }),
 ];
 

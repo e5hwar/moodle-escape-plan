@@ -130,22 +130,11 @@ export type Category = {
   label: string;
   count: number;
   subcategories?: Subcategory[];
-  /** Optional grouping picked when the category is created (design S4). */
-  tradeGroup?: string;
 };
 
-/** Trade groups a new category can be filed under — the New Category
- * popover's optional select. */
-export const TRADE_GROUPS: readonly string[] = [
-  "HVAC",
-  "Plumbing",
-  "Electrical",
-  "Appliance",
-  "Solar",
-  "Property Maintenance",
-  "Safety & Compliance",
-  "General",
-];
+/* `tradeGroup` and the `TRADE_GROUPS` list it was picked from were removed
+   2026-09-10, with the New Category modal's optional Trade Group select — a
+   category is just a name and its subcategories now. */
 
 // A category-tree selection, shared by the left rail, the "Category" filter pill,
 // and the search box's CATEGORY: token. `all` means no category filter is applied.
@@ -214,6 +203,15 @@ export function questionDates(q: Question): { created: string; modified: string 
   return { created: rows[rows.length - 1].date, modified: rows[0].date };
 }
 
+/* Every attempt ever made on the question, across all its versions — the list's
+   "Attempts" column, and the fact the row menu splits Archive from Delete on.
+   Form responses count: a Feedback Form question is "attempted" the same way,
+   which is why the version history page labels the number
+   "attempts/responses". */
+export function attemptCount(q: Question): number {
+  return versionHistory(q).reduce((sum, v) => sum + v.attempts, 0);
+}
+
 const VERSION_AUTHORS = ["Priya N.", "Marcus L.", "Dana R.", "Eshwar V."];
 const VERSION_NOTES = [
   "Edited question text",
@@ -233,15 +231,21 @@ function hashId(s: string): number {
 
 export function versionHistory(q: Question): QuestionVersion[] {
   const h = hashId(q.id);
-  const inUse = q.quizzes.length + q.forms.length > 0;
+  /* Whether a question has EVER been answered is its own fact, not a
+     restatement of where it is used today: a question can hold years of
+     attempts after being pulled from every quiz, and one added to a quiz this
+     morning has none yet. Keeping the two independent is what gives the row
+     menu its four real cases — see `attemptCount`. Roughly 1 in 5 questions
+     has never been answered. */
+  const everAnswered = h % 5 !== 0;
   const out: QuestionVersion[] = [];
   // Walk back from the prototype's fixed "today".
   let day = new Date(2026, 5, 24 - (h % 18));
   for (let v = q.version; v >= 1; v--) {
     const isCurrent = v === q.version;
-    // Old versions of an in-use question usually have pinned attempts; some
-    // (and any never-published edit) have none and can be deleted.
-    const attempts = !inUse
+    // Old versions usually have pinned attempts; some (and any never-published
+    // edit) have none and can be deleted.
+    const attempts = !everAnswered
       ? 0
       : isCurrent
         ? (h % 90) + 8

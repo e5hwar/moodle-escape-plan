@@ -724,7 +724,7 @@ function PurchaserActionsMenu({
       ref={ref}
       /* Figma 786:1719 / 785:1699: the panel is the single Revoke Access row —
          no name/email head — so it hugs its content. */
-      className="u-menu u-menu--hug"
+      className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,

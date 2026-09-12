@@ -27,6 +27,7 @@ export function PrmModal({
   danger,
   wide,
   pick,
+  pickWide,
   onCancel,
   onCancelButton,
   onConfirm,
@@ -52,6 +53,10 @@ export function PrmModal({
   /** A table picker — Figma 682:2321's fixed 884px shell, sized to its content
    *  rather than pinned to `wide`'s viewport-height card. */
   pick?: boolean;
+  /** The Select Tasks picker only (Figma 682:2321, widened to 1050px on
+   *  2026-09-12 for its Industry column). The other pickers stay at the 884px
+   *  their own nodes still draw. */
+  pickWide?: boolean;
   /** Dismisses the modal — overlay click and the close glyph. */
   onCancel: () => void;
   /** The footer's text button, when it does something other than dismiss
@@ -63,7 +68,9 @@ export function PrmModal({
   return (
     <div className="pr-confirm-overlay" onClick={onCancel}>
       <div
-        className={`prm ${wide ? "prm--wide" : ""}${pick ? " prm--pick" : ""}`}
+        className={`prm ${wide ? "prm--wide" : ""}${pick ? " prm--pick" : ""}${
+          pickWide ? " prm--pick-wide" : ""
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

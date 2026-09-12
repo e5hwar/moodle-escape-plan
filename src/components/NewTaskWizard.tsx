@@ -4,7 +4,9 @@ import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, PriceIdMatrix, newPriceIds, type PriceIds } from "./PriceIdFields";
-import { UploadIcon, UploadTrayIcon, DocumentIcon, SmallXIcon, DragHandleIcon, MoveIcon, LockIcon, SearchIcon, CheckIcon, InfoTipIcon } from "./icons";
+import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, LockIcon, SearchIcon, CheckIcon, InfoTipIcon, InfoIcon12, PlusThinIcon } from "./icons";
+import { FileNameLink } from "./FileNameLink";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { NewQuestionWizard } from "./NewQuestionWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
@@ -81,6 +83,8 @@ type UploadedFile = {
   name: string;
   size: number;
   ext: string;
+  /** Blob URL of the picked file, so its row can download it. */
+  url?: string;
 };
 
 type StaticQuestion = {
@@ -113,7 +117,7 @@ type QuizSection = {
   id: string;
   name: string;
   nameEs: string;
-  // Grading attributes are configured in Step 4 (Grading & Completion) but
+  // Grading attributes are configured in Step 2 (Structure & Grading) but
   // modeled on the Section object per the spec — they have no meaning until a
   // grading model is chosen.
   passingPct: string;
@@ -148,6 +152,8 @@ type QuizResource = {
   /** Upload-only display metadata. */
   size?: number;
   ext?: string;
+  /** Blob URL of the picked file, so its row can download it. */
+  url?: string;
 };
 
 type ReviewOptions = {
@@ -223,7 +229,7 @@ type WizardData = {
   questionOrder: QuestionOrder;
   shuffleScope: ShuffleScope;
 
-  // Quiz – Grading & Completion (Step 4)
+  // Quiz – pass marks (Step 2, Structure & Grading) and completion (Step 4)
   gradingModel: GradingModel;
   quizPassingPct: string;
   quizCompletion: CompletionCriterion;
@@ -384,6 +390,12 @@ type StepDef = { id: string; label: string; sub: string; desc: string; tip?: str
 const AUDIENCE_TIP =
   "Every filter you set narrows the audience. A company must match all the filters you set (Audience, Trade and Partnership). Within a single filter, matching one value is enough — content tagged Residential HVAC and Commercial HVAC is visible to a company in either.";
 
+/* Figma 742:1061 — the Structure & Grading step's subtext glyph. Carries the detail that
+   used to sit in the radio-card copy and the field subtext: which structure to
+   pick, and what Sections change about grading. */
+const STRUCTURE_TIP =
+  "Most Quizzes use a single block: one flat question list with one overall score \u2014 best for mid-course assessments and simple final exams.\n\nSections split the Quiz into named groups, each with its own questions and its own grading rules. Used for EPA/NATE-style exams; the grading model and pass marks are set further down this step.";
+
 const XAPI_STEPS: StepDef[] = [
   { id: "details", label: "Task Details", sub: "Name, file, time, visibility", desc: "Name and describe the Task, upload the xAPI package per language, estimate the duration, and set its visibility." },
   { id: "launch", label: "Launch Behaviour", sub: "Orientation", desc: "How the package handles screen rotation when a learner opens it on a mobile phone." },
@@ -391,10 +403,10 @@ const XAPI_STEPS: StepDef[] = [
 ];
 
 const QUIZ_STEPS: StepDef[] = [
-  { id: "basics", label: "Task Basics", sub: "Name, visibility, time", desc: "Name the Quiz, set its visibility, and add an optional description and duration." },
-  { id: "structure", label: "Structure", sub: "Single block or sections", desc: "Choose whether this Quiz is one block of questions or split into independently graded Sections. Most Quizzes use a single block; Sections are for EPA/NATE-style exams." },
+  { id: "basics", label: "Task Details", sub: "Name, visibility, time", desc: "Name the Quiz, set its visibility, and add an optional description and duration." },
+  { id: "structure", label: "Structure & Grading", sub: "Structure, grading model, pass marks", desc: "Choose whether this Quiz is one block of questions or split into independently graded Quiz Sections, then set how it is graded and what it takes to pass", tip: STRUCTURE_TIP },
   { id: "questions", label: "Questions", sub: "Static, pools, order", desc: "Pick questions from the Question Bank — hand-picked statics and/or random pools — set per-Quiz weightage, and choose the order learners see them in." },
-  { id: "grading", label: "Grading & Completion", sub: "Pass marks and completion", desc: "Choose the grading model, set passing thresholds, and decide what marks the Quiz complete." },
+  { id: "completion", label: "Completion", sub: "What marks the Quiz complete", desc: "Decide what marks this Quiz Task complete for a learner." },
   { id: "attempts", label: "Attempts & Timing", sub: "Attempts, cooldown, time limit", desc: "How many times a learner can attempt the Quiz, the gap between attempts, auto-unlocked attempts, and the per-attempt time limit." },
   { id: "integrity", label: "Integrity & Resources", sub: "Proctoring and resources", desc: "Turn on proctoring and attach resources learners can open during the attempt (PT charts, PDFs, etc.)." },
   { id: "review", label: "Post-Submission Review", sub: "What learners see after", desc: "Select what a learner sees after submitting an attempt." },
@@ -402,13 +414,13 @@ const QUIZ_STEPS: StepDef[] = [
 ];
 
 const RESOURCE_STEPS: StepDef[] = [
-  { id: "basics", label: "Basic Info", sub: "Type, content, time, visibility", desc: "Name the Task, choose whether it points at a file or a link, add the content, estimate how long it takes to complete, and set its visibility." },
+  { id: "basics", label: "Task Details", sub: "Type, content, time, visibility", desc: "Name the Task, choose whether it points at a file or a link, add the content, estimate how long it takes to complete, and set its visibility." },
   { id: "launch", label: "Launch Behaviour", sub: "How it opens", desc: "Choose how the Task opens for the learner" },
-  { id: "completion", label: "Completion", sub: "How completion is determined", desc: "Decide what marks this Task as complete for a learner." },
+  { id: "completion", label: "Completion", sub: "Completion criteria", desc: "Decide what marks this Task as complete for a learner." },
 ];
 
 const HANDSON_STEPS: StepDef[] = [
-  { id: "basics", label: "Basic Info", sub: "Name, description, time, visibility", desc: "Name the Task, describe it, estimate how long it takes to complete, and set its visibility." },
+  { id: "basics", label: "Task Details", sub: "Name, description, time, visibility", desc: "Name the Task, describe it, estimate how long it takes to complete, and set its visibility." },
   { id: "reference", label: "Reference Files", sub: "Files, instructions, checklist", desc: "Give learners the files, instructions, and materials they need, and write the checklist reviewers grade against." },
   { id: "submission", label: "Submission Fields", sub: "Description and media limits", desc: "Define what a learner submits — the project description limit and how many media files of which types they can attach." },
   { id: "completion", label: "Completion", sub: "Attempts and passing rule", desc: "How many times a learner can submit, and what marks the Task complete." },
@@ -588,11 +600,26 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     return new Set([...missingKeys].filter((k) => still.has(k)));
   }, [missingKeys, collectMissing, data]);
 
+  /* Every mandatory field still empty, right now — the gate on publishing.
+     Re-derived each render, so filling the last one enables the button on the
+     keystroke rather than on the next attempt. */
+  const gaps = useMemo(() => collectMissing(data), [collectMissing, data]);
+  const canPublish = gaps.length === 0;
+
   /** Steps that still hold an empty mandatory field, whatever owns it. */
-  const gapSteps = useMemo(
-    () => new Set(collectMissing(data).map((g) => g.step)),
-    [collectMissing, data],
-  );
+  const gapSteps = useMemo(() => new Set(gaps.map((g) => g.step)), [gaps]);
+
+  /* What the disabled Create Task button says on hover: the fields that are
+     holding it back, each with the step that owns it. Without this the button
+     is just dim — the admin has no way to tell what is left. */
+  const blockedTip = canPublish
+    ? undefined
+    : [
+        "Fill in every required field to publish:",
+        ...gaps.map(
+          (g) => `• ${REQUIRED_FIELD_LABELS[g.key] ?? g.key} — ${steps[g.step].label}`,
+        ),
+      ].join("\n");
 
   /* The quiet rail. A step flags "needs input" once you've moved past it — or
      skipped it from the rail — with a mandatory field still empty, never while
@@ -605,15 +632,16 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     flagAll: attemptedSubmit,
   });
 
-  /* "Save & Publish" and the last step's "Publish" are the same action: check
-     every mandatory field on every step, then create the Task with whatever
-     visibility the Basic Info step's control is set to. A gap sends you to the
-     step that owns the first missing field with it flagged. */
+  /* The footer's "Create Task" and the last step's "Publish" are the same action: create
+     the Task with whatever visibility the Task Details step's control is set to.
+     Both buttons are unavailable until every mandatory field on every step is
+     filled (`canPublish`), so this only ever runs on a complete Task — the gap
+     branch below is what a click on the *unavailable* button does instead:
+     flag every missing field and jump to the step that owns the first one. */
   function handlePublish() {
-    const gaps = collectMissing(data);
     setAttemptedSubmit(true);
     setMissingKeys(new Set(gaps.map((g) => g.key)));
-    if (gaps.length > 0) {
+    if (!canPublish) {
       goStep(gaps[0].step);
       return;
     }
@@ -630,6 +658,17 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
   const isLast = step === lastStep;
   const publishLabel = primaryLabel ?? (isEditing ? "Save Changes" : "Publish");
+
+  /* ⌘/Ctrl+Enter fires the primary button (Continue, or Publish on the last
+     step); adding Shift fires Create Task from any step. The two footer badges
+     spell both out. */
+  useWizardEnterShortcut(
+    () => {
+      if (!isLast) goStep(step + 1);
+      else if (canPublish) handlePublish();
+    },
+    handlePublish,
+  );
 
   return (
     <div className="wizard">
@@ -700,9 +739,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             <XapiCompletionStep data={data} update={update} missing={missing} {...gateProps} />
           ) : isQuiz ? (
             step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} /> :
-            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} /> :
+            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} {...gateProps} /> :
             step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
-            step === 3 ? <QuizGradingStep data={data} update={update} locked={isEditing} {...gateProps} /> :
+            step === 3 ? <QuizCompletionStep data={data} update={update} {...gateProps} /> :
             step === 4 ? <QuizAttemptsStep data={data} update={update} /> :
             step === 5 ? <QuizIntegrityStep data={data} update={update} /> :
             step === 6 ? <QuizReviewStep data={data} update={update} /> :
@@ -741,18 +780,39 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               <span className="wizard-gate-btn-inner">Back</span>
             </button>
           )}
-          {/* Publishes from any step (validating every step), rather than
-              stashing a draft. `.btn-save-draft` is just the footer's neutral
-              button — the same class Back uses. */}
-          <button className="btn-save-draft" onClick={handlePublish}>
-            Save &amp; Publish
+          {/* Publishes from any step, rather than stashing a draft, and is
+              unavailable until every mandatory field on every step is filled.
+              `aria-disabled` rather than `disabled`: a disabled button fires no
+              mouse events, so it could neither show the tooltip that says what
+              is missing nor answer a click by pointing at it.
+              `.btn-save-draft` is just the footer's neutral button — the same
+              class Back uses. Labelled "Create Task" (Figma 1113:1109) — it is
+              the create action, not a draft save; editing keeps "Save
+              Changes", since there is nothing to create. */}
+          <button
+            className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
+            aria-disabled={!canPublish}
+            data-tip={blockedTip}
+            onClick={handlePublish}
+          >
+            {isEditing ? "Save Changes" : "Create Task"}
+            <WizardKeyHint shift />
           </button>
           <button
-            className="btn-publish wizard-gate-btn"
+            className={`btn-publish wizard-gate-btn${
+              isLast && !canPublish ? " is-disabled" : ""
+            }`}
+            /* The last step's primary IS the publish action, so it carries the
+               same gate; on every earlier step it is Continue and always live. */
+            aria-disabled={isLast && !canPublish}
+            data-tip={isLast ? blockedTip : undefined}
             onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
             <span className="wizard-gate-fill" ref={gate.nextFillRef} />
-            <span className="wizard-gate-btn-inner">{isLast ? publishLabel : "Continue"}</span>
+            <span className="wizard-gate-btn-inner">
+              {isLast ? publishLabel : "Continue"}
+              <WizardKeyHint />
+            </span>
           </button>
         </div>
       </footer>
@@ -802,6 +862,17 @@ const REQUIRED_FIELD_KEYS = {
   nateId: "nateId",
 } as const;
 
+/** Reader-facing name of each mandatory field, for the tooltip that says why
+ *  Create Task is unavailable. Keep in step with REQUIRED_FIELD_KEYS. */
+const REQUIRED_FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  package: "xAPI Package",
+  file: "File",
+  link: "Link",
+  completion: "Completion Criteria",
+  nateId: "NATE External IDs",
+};
+
 /** Stable empty set, so the "nothing missing" memo doesn't churn its consumers. */
 const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();
 
@@ -846,21 +917,7 @@ function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
   return (
     <>
       <div className="wizard-fields">
-        <div className="form-group">
-          <label className="form-label">
-            Name <span className="req">*</span>
-          </label>
-          <LangField
-            en={data.nameEn}
-            es={data.nameEs}
-            onChangeEn={(v) => update({ nameEn: v })}
-            onChangeEs={(v) => update({ nameEs: v })}
-            placeholderEn="Name"
-            placeholderEs="Nombre"
-            error={nameError}
-            errorMessage="Enter a name to publish."
-          />
-        </div>
+        <NameField data={data} update={update} nameError={nameError} />
 
         <div className="form-group">
           <label className="form-label">Description</label>
@@ -889,6 +946,7 @@ function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
             setEnFiles={(files) => update({ packageEn: files })}
             setEsFiles={(files) => update({ packageEs: files })}
             error={missing?.has("package")}
+            single
           />
           {missing?.has("package") && (
             <p className="form-error-text">Upload the English xAPI package to publish.</p>
@@ -917,10 +975,10 @@ function XapiLaunchStep({ data, update }: StepProps) {
 
 function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, missing }: StepProps) {
   const options: { key: CompletionMode; title: string; desc: string }[] = [
-    { key: "none", title: "No completion tracking", desc: "Task is reference content only — never marked complete." },
-    { key: "on-view", title: "Completion upon viewing", desc: "Marks complete as soon as the learner opens the package." },
-    { key: "manual", title: "User manually marks completion", desc: "Learner clicks \"Mark complete\" after finishing the content." },
-    { key: "xapi", title: "xAPI completion statement", desc: "The package fires a completion statement to the LRS. Recommended for xAPI content." },
+    { key: "none", title: "No Completion Tracking", desc: "Task is reference content only — never marked complete." },
+    { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the package." },
+    { key: "manual", title: "User Manually Marks Completion", desc: "Learner clicks \"Mark complete\" after finishing the content." },
+    { key: "xapi", title: "xAPI Completion Statement", desc: "The package fires a completion statement to the LRS. Recommended for xAPI content." },
   ];
 
   return (
@@ -928,7 +986,7 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mi
       <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
         <div className="form-group">
           <label className="form-label">
-            How completion is determined <span className="req">*</span>
+            Completion Criteria <span className="req">*</span>
           </label>
           <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
             {options.map((o) => (
@@ -947,40 +1005,45 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mi
         </div>
       </CompletionCriteriaGate>
 
-      <div className="form-group">
-        <Toggle
-          checked={data.scoreCapture}
-          onChange={(v) => update({ scoreCapture: v })}
-          label="Score Capture"
-          sub="Completion only records whether the Task was finished. When on, SkillCat also stores the score the xAPI/SCORM content sends. Off by default — only completion is tracked."
+      <ScoreCaptureField data={data} update={update} />
+    </>
+  );
+}
+
+/* One Score Capture field, assembled the same way as {@link OrientationField}:
+   the old capture toggle + "Score displayed" card pair collapse into a single
+   three-card choice, since "which score is shown" only ever mattered when
+   capture was on. Still writes the same two data fields. */
+function ScoreCaptureField({ data, update }: StepProps) {
+  const value = data.scoreCapture ? data.scoreDisplayMode : "off";
+  return (
+    <div className="form-group">
+      <label className="form-label">Score Capture</label>
+      <div className="radio-card-group">
+        <RadioCard
+          selected={value === "off"}
+          onSelect={() => update({ scoreCapture: false })}
+          title="No Score Capture"
+          desc="Only completion is recorded — any score the package reports is ignored."
+        />
+        <RadioCard
+          selected={value === "highest"}
+          onSelect={() => update({ scoreCapture: true, scoreDisplayMode: "highest" })}
+          title="Capture Highest Score"
+          desc="Store the reported score and show the learner their best score across all attempts."
+        />
+        <RadioCard
+          selected={value === "recent"}
+          onSelect={() => update({ scoreCapture: true, scoreDisplayMode: "recent" })}
+          title="Capture Most Recent Score"
+          desc="Store the reported score and show the learner the score from their latest attempt."
         />
       </div>
-
-      <div className="form-group">
-        <label className="form-label">Score displayed</label>
-        <div className="radio-card-group">
-          <RadioCard
-            selected={data.scoreDisplayMode === "highest"}
-            onSelect={() => update({ scoreDisplayMode: "highest" })}
-            disabled={!data.scoreCapture}
-            title="Highest"
-            desc="Show the learner their best score across all attempts."
-          />
-          <RadioCard
-            selected={data.scoreDisplayMode === "recent"}
-            onSelect={() => update({ scoreDisplayMode: "recent" })}
-            disabled={!data.scoreCapture}
-            title="Most recent"
-            desc="Show the score from the learner's latest attempt."
-          />
-        </div>
-        {!data.scoreCapture && (
-          <p className="form-help">
-            Turn on score capture to choose which score learners see.
-          </p>
-        )}
-      </div>
-    </>
+      <p className="form-help">
+        Completion only records whether the Task was finished. Capturing also
+        stores the score the xAPI/SCORM package sends.
+      </p>
+    </div>
   );
 }
 
@@ -991,7 +1054,7 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mi
 function OrientationField({
   data,
   update,
-  sub = "Applies to mobile phones only. On iPad and tablets orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there.",
+  sub = "On iPad and tablets, orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there.",
 }: StepProps & { sub?: string }) {
   const value = data.allowRotation ? "rotate" : data.lockedOrientation;
   return (
@@ -1024,16 +1087,16 @@ function OrientationField({
 
 function UrlCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, missing }: StepProps) {
   const options: { key: CompletionMode; title: string; desc: string }[] = [
-    { key: "none", title: "No completion tracking", desc: "Reference content only — the Task is never marked complete." },
-    { key: "on-view", title: "Completion upon viewing", desc: "Marks complete as soon as the learner opens the Resource. When it opens outside the app (External Browser or External Application) the Task completes on launch, since the app can't observe it once it opens elsewhere." },
-    { key: "manual", title: "User manually marks completion", desc: "The learner taps \"Mark complete\" from the UI after they finish." },
+    { key: "none", title: "No Completion Tracking", desc: "Reference content only — the Task is never marked complete." },
+    { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the Resource. When it opens outside the app (External Browser or External Application) the Task completes on launch, since the app can't observe it once it opens elsewhere." },
+    { key: "manual", title: "User Manually Marks Completion", desc: "The learner taps \"Mark complete\" from the UI after they finish." },
   ];
 
   return (
     <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
       <div className="form-group">
         <label className="form-label">
-          How completion is determined <span className="req">*</span>
+          Completion Criteria <span className="req">*</span>
         </label>
         <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
           {options.map((o) => (
@@ -1105,6 +1168,7 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
             setEsFiles={(files) => update({ fileEs: files })}
             accept="PDF, DOCX, PPTX, images"
             error={missing?.has("file")}
+            single
           />
           {missing?.has("file") && (
             <p className="form-error-text">Upload the English file to publish.</p>
@@ -1206,7 +1270,7 @@ function ResourceLaunchStep({ data, update }: StepProps) {
         <OrientationField
           data={data}
           update={update}
-          sub="Rotation settings only applicable for the In-App Browser. Applies to mobile phones only. On iPads, orientation is never locked. On Web the layout adapts to the window size — these settings have no effect there."
+          sub="Rotation settings only applicable for the In-App Browser. On iPad and tablets, orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there."
         />
       )}
     </div>
@@ -1415,7 +1479,7 @@ function HandsOnCompletionStep({ data, update, criteriaLocked, onUnlockCriteria 
   );
 }
 
-/* Visible/Hidden itself moved to Basic Info; this step keeps what's left of the
+/* Visible/Hidden itself moved to Task Details; this step keeps what's left of the
    old Visibility page — search/browse discoverability and Content Tags. */
 function HandsOnDiscoveryStep({ data, update }: StepProps) {
   return (
@@ -1538,21 +1602,7 @@ function ContentTagsSection({ data, update }: StepProps) {
 function QuizBasicsStep({ data, update, nameError }: StepProps) {
   return (
     <>
-      <div className="form-group">
-        <label className="form-label">
-          Quiz name <span className="req">*</span>
-        </label>
-        <LangField
-          en={data.nameEn}
-          es={data.nameEs}
-          onChangeEn={(v) => update({ nameEn: v })}
-          onChangeEs={(v) => update({ nameEs: v })}
-          placeholderEn="Quiz name"
-          placeholderEs="Nombre del cuestionario"
-          error={nameError}
-          errorMessage="Enter a Quiz name to publish."
-        />
-      </div>
+      <NameField data={data} update={update} nameError={nameError} />
 
       <div className="form-group">
         <label className="form-label">Description</label>
@@ -1574,128 +1624,255 @@ function QuizBasicsStep({ data, update, nameError }: StepProps) {
   );
 }
 
-function QuizStructureStep({ data, update, locked }: StepProps) {
+/* Section ids only have to be unique within one Quiz; the counter keeps two
+   Sections seeded in the same tick from colliding on `Date.now()`. */
+let sectionSeq = 0;
+const blankSection = (): QuizSection => ({
+  id: `sec${Date.now().toString(36)}${(sectionSeq++).toString(36)}`,
+  name: "",
+  nameEs: "",
+  passingPct: "70",
+  requiredToPass: false,
+  staticQuestions: [],
+  randomPools: [],
+});
+
+function QuizStructureStep({
+  data,
+  update,
+  locked,
+  criteriaLocked,
+  onUnlockCriteria,
+}: StepProps) {
   const sectioned = data.structure === "sectioned";
+  const sectionLevel = data.gradingModel === "section_level";
 
   const updateSection = (id: string, patch: Partial<QuizSection>) =>
     update({
       sections: data.sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     });
 
-  const addSection = () =>
-    update({
-      sections: [
-        ...data.sections,
-        {
-          id: `sec${Date.now()}`,
-          name: "",
-          nameEs: "",
-          passingPct: "70",
-          requiredToPass: false,
-          staticQuestions: [],
-          randomPools: [],
-        },
-      ],
-    });
+  const addSection = () => update({ sections: [...data.sections, blankSection()] });
 
   const removeSection = (id: string) =>
     update({ sections: data.sections.filter((s) => s.id !== id) });
 
+  const setPct = (v: string, apply: (pct: string) => void) => {
+    if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100)) apply(v);
+  };
+
   return (
-    <div className={`step-lockable ${locked ? "locked" : ""}`}>
-      {locked && (
-        <div className="step-lock-overlay" role="note">
-          <div className="step-lock-card">
-            <div className="step-lock-icon">
-              <LockIcon />
+    <>
+      {/* Structure and the grading model are the two structural choices: both
+          are frozen once the Quiz exists, so they share the lock. Pass marks
+          live below, outside it — they recompute from existing attempts. */}
+      <div className={`step-lockable ${locked ? "locked" : ""}`}>
+        {locked && (
+          <div className="step-lock-overlay" role="note">
+            <div className="step-lock-card">
+              <div className="step-lock-icon">
+                <LockIcon />
+              </div>
+              <div className="step-lock-title">Structure can't be changed after a Quiz is created</div>
+              <p className="step-lock-text">
+                Adding or removing Sections, or switching between a single block and Sections, is a
+                structural change. Past attempts don't carry the data to re-evaluate completion under
+                the new structure, so it can't be changed in place.
+              </p>
+              <p className="step-lock-text">
+                You can still adjust recomputable settings like the passing percentages below. To
+                change the structure itself, create a new Quiz Task instead.
+              </p>
             </div>
-            <div className="step-lock-title">Structure can't be changed after a Quiz is created</div>
-            <p className="step-lock-text">
-              Adding or removing Sections, or switching between a single block and Sections, is a
-              structural change. Past attempts don't carry the data to re-evaluate completion under
-              the new structure, so it can't be changed in place.
-            </p>
-            <p className="step-lock-text">
-              You can still adjust recomputable settings like passing grades in{" "}
-              <strong>Grading &amp; Completion</strong>. To change the structure itself, create a new
-              Quiz Task instead.
-            </p>
           </div>
-        </div>
-      )}
+        )}
 
-      <fieldset className="step-lock-content" disabled={locked}>
-        <div className="form-group">
-          <label className="form-label">Structure</label>
-          <div className="radio-card-group">
-            <RadioCard
-              selected={!sectioned}
-              onSelect={() => update({ structure: "single_block", gradingModel: "quiz_level" })}
-              title="Single block of questions"
-              desc="One question list, one overall score. The default — best for mid-course assessments and simple final exams."
-              disabled={locked}
-            />
-            <RadioCard
-              selected={sectioned}
-              onSelect={() => update({ structure: "sectioned" })}
-              title="One or more Quiz Sections"
-              desc="Each Section has its own questions and can be graded independently. Used for EPA/NATE-style exams. Grading rules are set in the Grading & Completion step."
-              disabled={locked}
-            />
+        <fieldset className="step-lock-content" disabled={locked}>
+          <div className="form-group">
+            <label className="form-label">Structure</label>
+            <div className="radio-card-group">
+              <RadioCard
+                selected={!sectioned}
+                onSelect={() => update({ structure: "single_block", gradingModel: "quiz_level" })}
+                title="Single Block of Questions"
+                desc="One question list, one overall score. The default — best for mid-course assessments and simple final exams."
+                disabled={locked}
+              />
+              <RadioCard
+                selected={sectioned}
+                onSelect={() =>
+                  update({
+                    structure: "sectioned",
+                    /* The table opens with two rows — one Section is not a
+                       split, so an empty list would just be a chore. Sections
+                       the admin already has are left alone. */
+                    ...(data.sections.length === 0
+                      ? { sections: [blankSection(), blankSection()] }
+                      : {}),
+                  })
+                }
+                title="One or More Sections"
+                desc="Each Section has its own questions and can be graded independently."
+                disabled={locked}
+              />
+            </div>
           </div>
-          <p className="form-help">
-            A single block is one flat question list with one overall score.
-            Sectioned splits the Quiz into named groups that can be graded
-            independently.
-          </p>
-        </div>
 
+          <div className="form-group">
+            <label className="form-label">Grading Model</label>
+            <div className="radio-card-group">
+              <RadioCard
+                selected={!sectionLevel}
+                onSelect={() => update({ gradingModel: "quiz_level" })}
+                title="Quiz-level"
+                desc="One overall passing threshold for the whole Quiz."
+                disabled={locked}
+              />
+              <RadioCard
+                selected={sectionLevel}
+                onSelect={() => update({ gradingModel: "section_level" })}
+                disabled={locked || !sectioned}
+                title="Section-level"
+                desc={
+                  sectioned
+                    ? "Each Section has its own passing grade and is completed independently."
+                    : "Add Sections above to enable section-level grading."
+                }
+              />
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      {/* The pass marks — the Sections table carries the per-Section ones, so
+          both sit behind the completion gate when an existing Quiz is edited.
+          The structural controls inside the table stay disabled either way. */}
+      <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
         {sectioned && (
           <div className="form-group">
             <label className="form-label">Sections</label>
-            <div className="section-list">
-                {data.sections.map((s, i) => (
-                  <div key={s.id} className="section-row">
-                    <button className="section-drag" aria-label="Drag to reorder">
-                      <DragHandleIcon />
-                    </button>
-                    <span className="section-order">{i + 1}</span>
-                    <div className="section-fields">
-                      <input
-                        className="form-input"
-                        placeholder="Section name (English)"
-                        value={s.name}
-                        onChange={(e) => updateSection(s.id, { name: e.target.value })}
-                      />
-                      <input
-                        className="form-input"
-                        placeholder="Nombre de la sección (Español)"
-                        value={s.nameEs}
-                        onChange={(e) => updateSection(s.id, { nameEs: e.target.value })}
-                      />
-                    </div>
-                    <button
-                      className="section-remove"
-                      aria-label="Remove section"
-                      onClick={() => removeSection(s.id)}
-                    >
-                      <SmallXIcon />
-                    </button>
-                  </div>
-                ))}
+            {/* Figma 1097:1205 "Quiz Sections" — one boxed table: an
+                ORDER / SECTION NAME (/ % TO PASS / MUST PASS) header, a row per
+                Section, and an Add Section row closing the card. The two
+                grading columns only exist under section-level grading; under
+                quiz-level the Sections are display-only groupings. */}
+            <div className="qsec">
+              <div className="qsec-hd">
+                <span className="qsec-ord">
+                  {/* The grip column keeps its 16px in the header, but with no
+                      glyph — there is nothing to drag on a header row. */}
+                  <span className="qsec-grip" aria-hidden />
+                  <span className="qsec-num">ORDER</span>
+                </span>
+                <span className="qsec-name">SECTION NAME</span>
+                {sectionLevel && (
+                  <>
+                    <span className="qsec-pct">% TO PASS</span>
+                    <span className="qsec-must">
+                      MUST PASS
+                      <span
+                        className="qed-tbl-info"
+                        title="The learner has to pass this Section to complete the Quiz, whatever the other Sections score."
+                      >
+                        <InfoIcon12 />
+                      </span>
+                    </span>
+                  </>
+                )}
+                <span className="qsec-x" aria-hidden />
               </div>
-              <button className="resource-add" onClick={addSection}>
-                + Add Section
-              </button>
+
+              {data.sections.map((sec, i) => (
+                <div className="qsec-row" key={sec.id}>
+                  <span className="qsec-ord">
+                    <span className="qsec-grip" title="Drag to reorder">
+                      <MoveIcon />
+                    </span>
+                    <span className="qsec-num">{i + 1}</span>
+                  </span>
+                  <div className="qsec-name">
+                    <LangField
+                      en={sec.name}
+                      es={sec.nameEs}
+                      onChangeEn={(v) => updateSection(sec.id, { name: v })}
+                      onChangeEs={(v) => updateSection(sec.id, { nameEs: v })}
+                      placeholderEn="Section Name…"
+                      placeholderEs="Nombre de la Sección"
+                    />
+                  </div>
+                  {sectionLevel && (
+                    <>
+                      <span className="qsec-pct">
+                        <input
+                          className="qsec-pct-input no-spinner"
+                          inputMode="numeric"
+                          aria-label={`Section ${i + 1} passing percentage`}
+                          value={sec.passingPct}
+                          onChange={(e) =>
+                            setPct(e.target.value, (pct) => updateSection(sec.id, { passingPct: pct }))
+                          }
+                        />
+                        <span className="qsec-pct-sign">%</span>
+                      </span>
+                      <span className="qsec-must">
+                        <button
+                          type="button"
+                          className={`toggle ${sec.requiredToPass ? "on" : ""}`}
+                          aria-label={`Section ${i + 1} must be passed`}
+                          aria-pressed={sec.requiredToPass}
+                          disabled={locked}
+                          onClick={() =>
+                            !locked && updateSection(sec.id, { requiredToPass: !sec.requiredToPass })
+                          }
+                        >
+                          <span className="toggle-knob" />
+                        </button>
+                      </span>
+                    </>
+                  )}
+                  <button
+                    className="qsec-x"
+                    aria-label="Remove Section"
+                    disabled={locked}
+                    onClick={() => removeSection(sec.id)}
+                  >
+                    <SmallXIcon />
+                  </button>
+                </div>
+              ))}
+
+              <div className="qsec-foot">
+                <button className="qsec-add" onClick={addSection} disabled={locked}>
+                  <PlusThinIcon />
+                  Add Section
+                </button>
+              </div>
+            </div>
             <p className="form-help">
-              Drag to reorder. Each Section needs a name; its questions are set
-              in the next step and its passing rules in Grading &amp;
-              Completion.
+              {sectionLevel
+                ? "Drag to reorder. Each Section is graded on its own — set the mark it takes to pass and whether the learner has to pass it."
+                : "Drag to reorder. Sections are scored and shown separately but don't affect pass/fail — the Quiz passing percentage below does."}
             </p>
           </div>
         )}
-      </fieldset>
-    </div>
+
+        {!sectionLevel && (
+          <div className="form-group">
+            <label className="form-label">Quiz Passing Percentage</label>
+            <div className="time-row">
+              <input
+                className="form-input no-spinner small"
+                inputMode="numeric"
+                value={data.quizPassingPct}
+                onChange={(e) => setPct(e.target.value, (pct) => update({ quizPassingPct: pct }))}
+              />
+              <span className="form-suffix">% to pass</span>
+            </div>
+            <p className="form-help">Enter a percentage from 0-100.</p>
+          </div>
+        )}
+      </CompletionCriteriaGate>
+    </>
   );
 }
 
@@ -1715,7 +1892,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
       {sectioned ? (
         data.sections.length === 0 ? (
           <p className="form-help">
-            Add at least one Section in the Structure step to configure questions.
+            Add at least one Section in the Structure & Grading step to configure questions.
           </p>
         ) : (
           data.sections.map((s, i) => (
@@ -2323,107 +2500,11 @@ function CompletionCriteriaGate({
   );
 }
 
-function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteria }: StepProps) {
-  const sectioned = data.structure === "sectioned";
+function QuizCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: StepProps) {
   const sectionLevel = data.gradingModel === "section_level";
 
-  const updateSection = (id: string, patch: Partial<QuizSection>) =>
-    update({
-      sections: data.sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-    });
-
   return (
-    <>
-      <div className="form-group">
-        <label className="form-label">Grading Model</label>
-        <div className="radio-card-group">
-          <RadioCard
-            selected={!sectionLevel}
-            onSelect={() => update({ gradingModel: "quiz_level" })}
-            title="Quiz-level"
-            desc="One overall passing threshold for the whole Quiz."
-            disabled={locked}
-          />
-          <RadioCard
-            selected={sectionLevel}
-            onSelect={() => update({ gradingModel: "section_level" })}
-            disabled={locked || !sectioned}
-            title="Section-level"
-            desc={
-              sectioned
-                ? "Each Section has its own passing grade and is completed independently."
-                : "Add Sections in the Structure step to enable section-level grading."
-            }
-          />
-        </div>
-        <p className="form-help">
-          {locked
-            ? "The grading model is part of the Quiz structure and is locked after creation. Passing percentages below can still be adjusted."
-            : sectioned
-            ? "Quiz-level uses one overall threshold across all Sections (NATE-style — Sections exist for display only). Section-level grades each Section independently (EPA-style)."
-            : "Single-block Quizzes are always graded at the Quiz level."}
-        </p>
-      </div>
-
-      <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-      {sectionLevel ? (
-        <div className="form-group">
-          <label className="form-label">Section Passing Percentages</label>
-          <div className="grade-rows">
-            {data.sections.map((s, i) => (
-              <div key={s.id} className="grade-row">
-                <div className="grade-row-name">
-                  Section {i + 1}: <strong>{s.name || "Untitled"}</strong>
-                </div>
-                <div className="grade-row-pct">
-                  <input
-                    className="form-input no-spinner small"
-                    inputMode="numeric"
-                    value={s.passingPct}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100))
-                        updateSection(s.id, { passingPct: v });
-                    }}
-                  />
-                  <span className="form-suffix">% to pass</span>
-                </div>
-                <Toggle
-                  inline
-                  checked={s.requiredToPass}
-                  onChange={(v) => updateSection(s.id, { requiredToPass: v })}
-                  label="Required to pass"
-                  disabled={locked}
-                />
-              </div>
-            ))}
-          </div>
-          <p className="form-help">
-            {locked
-              ? "Enter a percentage from 0-100. Editing one recomputes completion from existing attempts. Whether a Section is Required to pass is structural and is locked after creation."
-              : "Enter a percentage from 0-100 for each Section."}
-          </p>
-        </div>
-      ) : (
-        <div className="form-group">
-          <label className="form-label">Passing Percentage</label>
-          <div className="time-row">
-            <input
-              className="form-input no-spinner small"
-              inputMode="numeric"
-              value={data.quizPassingPct}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100))
-                  update({ quizPassingPct: v });
-              }}
-            />
-            <span className="form-suffix">% to pass</span>
-          </div>
-          <p className="form-help">Enter a percentage from 0-100.</p>
-        </div>
-      )}
-
+    <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
       <div className="form-group">
         <label className="form-label">Completion Criterion</label>
         <div className="radio-card-group">
@@ -2444,10 +2525,12 @@ function QuizGradingStep({ data, update, locked, criteriaLocked, onUnlockCriteri
             desc="The Quiz is never marked complete — useful for practice or ungraded checks."
           />
         </div>
-        <p className="form-help">What marks this Quiz Task complete for a learner.</p>
+        <p className="form-help">
+          What marks this Quiz Task complete for a learner. The pass marks themselves are set in
+          Structure &amp; Grading.
+        </p>
       </div>
-      </CompletionCriteriaGate>
-    </>
+    </CompletionCriteriaGate>
   );
 }
 
@@ -2813,6 +2896,7 @@ function ResourceEditor({ data, update }: StepProps) {
           name: f.name,
           size: f.size,
           ext: f.ext,
+          url: f.url,
         })),
       ],
     });
@@ -2839,10 +2923,10 @@ function ResourceEditor({ data, update }: StepProps) {
                 <DocumentIcon />
               </span>
               <div className="file-meta">
-                <div className="file-name">{r.name}</div>
+                <FileNameLink name={r.name} url={r.url} />
                 {r.size != null && (
                   <div className="file-sub">
-                    {formatSize(r.size)} · {r.ext}
+                    {r.ext} · {formatSize(r.size)}
                   </div>
                 )}
               </div>
@@ -3106,24 +3190,32 @@ function PerAttemptPrices({ data, update }: StepProps) {
 
 /* ─────────────────  Shared sub-blocks  ───────────────── */
 
+/* The one Name field every Task wizard uses (Quiz included — it used to carry
+   its own "Quiz name" label/placeholders). Dual-language, EN Name / ES Nombre. */
+function NameField({ data, update, nameError }: StepProps) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        Name <span className="req">*</span>
+      </label>
+      <LangField
+        en={data.nameEn}
+        es={data.nameEs}
+        onChangeEn={(v) => update({ nameEn: v })}
+        onChangeEs={(v) => update({ nameEs: v })}
+        placeholderEn="Name"
+        placeholderEs="Nombre"
+        error={nameError}
+        errorMessage="Enter a name to publish."
+      />
+    </div>
+  );
+}
+
 function NameAndDescription({ data, update, nameError }: StepProps) {
   return (
     <>
-      <div className="form-group">
-        <label className="form-label">
-          Name <span className="req">*</span>
-        </label>
-        <LangField
-          en={data.nameEn}
-          es={data.nameEs}
-          onChangeEn={(v) => update({ nameEn: v })}
-          onChangeEs={(v) => update({ nameEs: v })}
-          placeholderEn="Name"
-          placeholderEs="Nombre"
-          error={nameError}
-          errorMessage="Enter a name to publish."
-        />
-      </div>
+      <NameField data={data} update={update} nameError={nameError} />
 
       <div className="form-group">
         <label className="form-label">Description</label>
@@ -3378,6 +3470,7 @@ function PackageField({
   accept = "ZIP",
   maxSize = "250 MB",
   error = false,
+  single = false,
 }: {
   enFiles: UploadedFile[];
   esFiles: UploadedFile[];
@@ -3387,6 +3480,9 @@ function PackageField({
   maxSize?: string;
   /** Publish attempt found the (mandatory) English side empty. */
   error?: boolean;
+  /** One file per language (xAPI): the picked file fills the column as a card
+      and there is no add-more row — Figma 1100:1351. */
+  single?: boolean;
 }) {
   return (
     <div className={`upload-2lang${error ? " has-error" : ""}`}>
@@ -3396,6 +3492,7 @@ function PackageField({
         setFiles={setEnFiles}
         accept={accept}
         maxSize={maxSize}
+        single={single}
       />
       <UploadLangColumn
         tag="Español"
@@ -3403,6 +3500,7 @@ function PackageField({
         setFiles={setEsFiles}
         accept={accept}
         maxSize={maxSize}
+        single={single}
       />
     </div>
   );
@@ -3414,22 +3512,27 @@ function UploadLangColumn({
   setFiles,
   accept,
   maxSize,
+  single = false,
 }: {
   tag: string;
   files: UploadedFile[];
   setFiles: (f: UploadedFile[]) => void;
   accept: string;
   maxSize: string;
+  single?: boolean;
 }) {
   return (
     <div className="upload-lang-col">
       <span className="upload-lang-tag">{tag}</span>
       {files.length === 0 ? (
         <BigDropZone
-          onAdd={(picked) => setFiles(picked)}
+          onAdd={(picked) => setFiles(single ? picked.slice(0, 1) : picked)}
           accept={accept}
           maxSize={maxSize}
+          multiple={!single}
         />
+      ) : single ? (
+        <SingleFileCard file={files[0]} onRemove={() => setFiles([])} />
       ) : (
         <>
           <FileList
@@ -3439,6 +3542,41 @@ function UploadLangColumn({
           <SlimDrop onAdd={(picked) => setFiles([...files, ...picked])} />
         </>
       )}
+    </div>
+  );
+}
+
+/* The picked file when a column takes only one (Figma 1100:1351): it replaces
+   the drop zone entirely — same grey wash as a .file-row, filling the column,
+   glyph over a centred name/size block, with the ✕ alone in the top-right. */
+function SingleFileCard({
+  file,
+  onRemove,
+}: {
+  file: UploadedFile;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="file-card">
+      <button
+        className="file-card-remove"
+        onClick={onRemove}
+        type="button"
+        aria-label="Remove file"
+      >
+        <SmallXIcon />
+      </button>
+      <div className="file-card-body">
+        <span className="file-icon">
+          <DocumentIcon />
+        </span>
+        <div className="file-card-meta">
+          <FileNameLink name={file.name} url={file.url} />
+          <div className="file-sub">
+            {file.ext} · {formatSize(file.size)}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3458,9 +3596,9 @@ function FileList({
             <DocumentIcon />
           </span>
           <div className="file-meta">
-            <div className="file-name">{f.name}</div>
+            <FileNameLink name={f.name} url={f.url} />
             <div className="file-sub">
-              {formatSize(f.size)} · {f.ext}
+              {f.ext} · {formatSize(f.size)}
             </div>
           </div>
           <button
@@ -3480,13 +3618,15 @@ function BigDropZone({
   onAdd,
   accept = "ZIP",
   maxSize = "250 MB",
+  multiple = true,
 }: {
   onAdd: (files: UploadedFile[]) => void;
   accept?: string;
   maxSize?: string;
+  multiple?: boolean;
 }) {
   return (
-    <FilePicker onPick={onAdd}>
+    <FilePicker onPick={onAdd} multiple={multiple}>
       {(open) => (
         <button className="drop-big" onClick={open} type="button">
           <span className="drop-big-icon">
@@ -3508,8 +3648,8 @@ function SlimDrop({ onAdd }: { onAdd: (files: UploadedFile[]) => void }) {
     <FilePicker onPick={onAdd}>
       {(open) => (
         <button className="drop-slim" onClick={open} type="button">
-          <UploadIcon />
-          DROP MORE OR CLICK TO ADD
+          <UploadTrayIcon />
+          Drag and drop, or click to upload
         </button>
       )}
     </FilePicker>
@@ -3519,9 +3659,11 @@ function SlimDrop({ onAdd }: { onAdd: (files: UploadedFile[]) => void }) {
 function FilePicker({
   onPick,
   children,
+  multiple = true,
 }: {
   onPick: (files: UploadedFile[]) => void;
   children: (open: () => void) => JSX.Element;
+  multiple?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -3529,7 +3671,7 @@ function FilePicker({
       <input
         ref={ref}
         type="file"
-        multiple
+        multiple={multiple}
         style={{ display: "none" }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           const list = Array.from(e.target.files ?? []);
@@ -3540,6 +3682,7 @@ function FilePicker({
               name: f.name,
               size: f.size,
               ext: f.name.split(".").pop()?.toUpperCase() ?? "FILE",
+              url: URL.createObjectURL(f),
             })),
           );
           e.target.value = "";

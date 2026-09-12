@@ -83,6 +83,36 @@ export const certifications: Certification[] = [
   C("C-0540", "HVACR Safety Refresher", "OSHA & Safety › General Industry", "0.7", 4, "HVACR", "Dec 05, 2025", "Apr 10, 2026", { careerStage: "Apprentice", type: "Credential", keywords: ["hvacr", "safety", "refresher"] }),
 ];
 
+/* Tasks reference their Certifications by NAME in `usedIn`, and a few of those
+   labels are short aliases rather than the Certification's full name. This is
+   the canonical name→Certification resolver for anything walking that edge
+   (the Skills table's Certifications / Industry columns). `certLookup.ts` and
+   `certPreview.ts` keep their own alias maps because they resolve to cert IDs
+   for a different purpose; if those are ever unified, unify them here. */
+const USEDIN_ALIASES: Record<string, string> = {
+  "NATE RTW": "NATE Ready-to-Work",
+  "Safety Bundle": "Refrigerant Safety Bundle",
+  "OSHA 10": "OSHA 10 — General Industry",
+};
+
+export const CERT_BY_USEDIN: Map<string, Certification> = (() => {
+  const byName = new Map(certifications.map((c) => [c.name, c]));
+  const m = new Map(byName);
+  for (const [alias, name] of Object.entries(USEDIN_ALIASES)) {
+    const c = byName.get(name);
+    if (c) m.set(alias, c);
+  }
+  return m;
+})();
+
+/* A Certification stores its Industry as a full path ("HVAC › Residential").
+   The top-level Industry is everything before the first separator — what a
+   column headed "Industry" shows, so two sub-Industries of one Industry read
+   as that one Industry rather than as two entries. */
+export function topIndustry(path: string): string {
+  return path.split(" › ")[0];
+}
+
 // ─── Filter option constants ──────────────────────────────────────────────────
 export const CAREER_STAGES: CareerStage[] = ["Pre-Apprentice", "Apprentice", "Journeyman", "Master"];
 export const CERT_TYPES: CertType[] = ["Unit", "Credential", "Program", "Bundle"];

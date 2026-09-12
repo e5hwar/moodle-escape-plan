@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "../data/users";
 import { PrmModal } from "./PrmModal";
+import { MultiSelectTags } from "./MultiSelectTags";
 import { Dropdown } from "./Dropdown";
 import { Stepper } from "./Stepper";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -10,7 +11,6 @@ import {
   DropdownCaretIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  SmallXIcon,
   SortIcon,
 } from "./icons";
 
@@ -52,8 +52,6 @@ const MAX_GRANT = 10;
 /** Named tags the Users field shows before it collapses the rest into "+N".
  *  Two, not the Skill wizard's three: the field is 470px inside the modal and
  *  a third name pushed the "+N" past the caret, where the field clips it. */
-const TAG_LIMIT = 2;
-
 const USER_TYPES = ["B2C", "B2B"];
 const SUBSCRIPTIONS = ["Starter", "Subscriber", "Scholarship", "Free Trial"];
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
@@ -136,28 +134,13 @@ export function GrantAttemptsModal({
                 {chosen.length === 0 ? (
                   <span className="multiselect-placeholder">Select Users</span>
                 ) : (
-                  <div className="multiselect-tags">
-                    {chosen.slice(0, TAG_LIMIT).map((u) => (
-                      <span key={u.id} className="multiselect-tag">
-                        {u.name}
-                        <button
-                          className="multiselect-tag-remove"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPicked((p) => p.filter((x) => x !== u.id));
-                          }}
-                          aria-label={`Remove ${u.name}`}
-                        >
-                          <SmallXIcon />
-                        </button>
-                      </span>
-                    ))}
-                    {chosen.length > TAG_LIMIT && (
-                      <span className="multiselect-tag multiselect-tag-more">
-                        +{chosen.length - TAG_LIMIT}
-                      </span>
-                    )}
-                  </div>
+                  <MultiSelectTags
+                    tags={chosen.map((u) => ({
+                      key: u.id,
+                      label: u.name,
+                      onRemove: () => setPicked((p) => p.filter((x) => x !== u.id)),
+                    }))}
+                  />
                 )}
                 <span className="field-chevron">
                   <DropdownCaretIcon />

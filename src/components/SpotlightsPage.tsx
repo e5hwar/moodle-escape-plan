@@ -11,7 +11,7 @@ import {
 import { PrmModal } from "./PrmModal";
 import { FullscreenViewer } from "./FullscreenViewer";
 import { SearchTrailing } from "./SearchPanelParts";
-import { SearchIcon, AddIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, RowEyeIcon, RowEyeOffIcon, MenuPreviewIcon, InfoIcon, ChevronDownSquareIcon } from "./icons";
+import { SearchIcon, AddIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, RowEyeIcon, RowEyeOffIcon, MenuPreviewIcon, InfoIcon14, ChevronDownSquareIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";
@@ -448,7 +448,8 @@ export function SpotlightsPage() {
                   aria-label="How Spotlights work"
                   aria-describedby="sp-infotip"
                 >
-                  <InfoIcon />
+                  {/* The 14px cut (742:1061), same as the Skills subtext. */}
+                  <InfoIcon14 />
                 </button>
                 <SpotlightInfoTip />
               </div>
@@ -973,7 +974,7 @@ function SpotlightActionsMenu({
       ref={ref}
       /* --hug, like every other row menu: three one-word labels have no use for
          the shared panel's 210px floor. */
-      className="u-menu u-menu--hug"
+      className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,

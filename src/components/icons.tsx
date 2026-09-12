@@ -579,6 +579,20 @@ export const InfoFilledIcon = () => (
 /* Tree caret — the Figma Tree's 16px Icon Library triangle (861:2277 closed,
    859:2235 open). One glyph: the closed right-pointing triangle, which
    `.tree-caret-btn.is-open` rotates 90° into the exact open asset. */
+/* Header-row group toggles (Skills table, Figma 1119:1577 expand-vertical /
+   1127:1755 shrink-vertical): 16px, 1.333 stroke, square caps, white. */
+export const ExpandVerticalIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M12.6667 1.66667L3.33333 1.66667M12.6667 14.3333H3.33333M10.3333 6L8 3.66667L5.66667 6M5.66667 10L8 12.3333L10.3333 10M8 11.5L8 4.5" />
+  </svg>
+);
+
+export const ShrinkVerticalIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M10.3333 12.3333L8 10L5.66667 12.3333M13.3333 8H2.66667M10.3333 3.66667L8 6L5.66667 3.66667M8 1.66667V5.16667M8 14.3333V10.8333" />
+  </svg>
+);
+
 export const TreeCaretIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
     <path d="M10 8L6.33333 4.33333V11.6667L10 8Z" />
@@ -876,6 +890,17 @@ export const MenuAttemptsIcon = () => (
   </svg>
 );
 
+/* Mouse pointer inside a slashed circle — the QUESTION BANK's Archive glyph
+   (Figma 1085:1082 "3-Dot Menu - Question Bank"): an archived question can no
+   longer be picked into a Quiz or a Feedback Form. Other pages' Archive rows
+   keep the octagon-✕ `MenuArchiveIcon` below; the designer only re-cut this
+   one menu. */
+export const MenuArchiveOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
+    <path d="M9.133 6.047L10.468 5.533L9.955 6.868M5.255 1.923C6.118 1.534 7.054 1.333 8 1.333C11.682 1.333 14.667 4.318 14.667 8C14.667 8.978 14.456 9.907 14.077 10.744M3.287 3.287C2.667 3.905 2.175 4.64 1.84 5.448C1.505 6.257 1.332 7.124 1.333 8C1.333 11.682 4.318 14.667 8 14.667C8.876 14.668 9.743 14.496 10.552 14.161C11.361 13.826 12.096 13.334 12.714 12.714M2 2L14 14M8.339 11.067L7.439 8.563L4.933 7.662L6.905 6.903L9.097 9.096L8.339 11.067Z" />
+  </svg>
+);
+
 /* Octagon with an ✕ — the archive/deactivate glyph (Figma node 7:1812). */
 export const MenuArchiveIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3333" strokeLinecap="square">
@@ -996,6 +1021,28 @@ export const RangeArrowIcon = () => (
    stroke only lands cleanly in an odd-width box. Re-centring it on 12 splits
    each stroke across two pixel columns and the glyph turns to mush at this
    size. */
+/* Icon Library "info" at the 12px size the question editor uses (Figma
+   814:1689 / 814:1829). Drawn natively on a 12 viewBox rather than scaling the
+   11px one — a 1px stroke scaled by 12/11 lands off the pixel grid and the
+   glyph goes soft. Circle r5.5 at (6,6), so both edges sit on a half pixel. */
+export const InfoIcon12 = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
+    <path d="M0.5 6C0.5 2.9624 2.9624 0.5 6 0.5C9.0376 0.5 11.5 2.9624 11.5 6C11.5 9.0376 9.0376 11.5 6 11.5C2.9624 11.5 0.5 9.0376 0.5 6Z" />
+    <path d="M6 8.5V5.5M6 3.5H5.998V3.498H6V3.5Z" />
+  </svg>
+);
+
+/* Page-subtext info glyph (Figma 742:1061 → Icon Library 7:5006 at 14px): the
+   circle-i drawn AT 14px — 1.1667 stroke, square caps, 8.33% inset — so it
+   renders crisp. `InfoIcon` below is the 11px cut; scaling it to 14px via CSS
+   blurred the strokes, which is what "the info icon isn't clear" was. */
+export const InfoIcon14 = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M1.16667 7C1.16667 3.77825 3.77825 1.16667 7 1.16667C10.2218 1.16667 12.8333 3.77825 12.8333 7C12.8333 10.2218 10.2218 12.8333 7 12.8333C3.77825 12.8333 1.16667 10.2218 1.16667 7Z" />
+    <path d="M7 9.625V6.41667M7 4.375H6.99767V4.37267H7V4.375Z" />
+  </svg>
+);
+
 export const InfoIcon = () => (
   <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeLinecap="square">
     <path d="M0.5 5.5C0.5 2.7385 2.7385 0.5 5.5 0.5C8.2615 0.5 10.5 2.7385 10.5 5.5C10.5 8.2615 8.2615 10.5 5.5 10.5C2.7385 10.5 0.5 8.2615 0.5 5.5Z" />
@@ -1065,6 +1112,22 @@ export const KeyArrowLeftIcon = () => (
 export const KeyCommandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667">
     <path d="M8.45833 5.54167V8.45833M8.45833 5.54167H5.54167M8.45833 5.54167V3.79167C8.45833 3.44555 8.56097 3.1072 8.75326 2.81942C8.94555 2.53163 9.21887 2.30733 9.53864 2.17488C9.85841 2.04242 10.2103 2.00777 10.5497 2.07529C10.8892 2.14282 11.201 2.30949 11.4458 2.55423C11.6905 2.79897 11.8572 3.11079 11.9247 3.45026C11.9922 3.78973 11.9576 4.14159 11.8251 4.46136C11.6927 4.78113 11.4684 5.05445 11.1806 5.24674C10.8928 5.43903 10.5545 5.54167 10.2083 5.54167H8.45833ZM8.45833 8.45833H5.54167M8.45833 8.45833H10.2083C10.5545 8.45833 10.8928 8.56097 11.1806 8.75326C11.4684 8.94555 11.6927 9.21887 11.8251 9.53864C11.9576 9.85841 11.9922 10.2103 11.9247 10.5497C11.8572 10.8892 11.6905 11.201 11.4458 11.4458C11.201 11.6905 10.8892 11.8572 10.5497 11.9247C10.2103 11.9922 9.85841 11.9576 9.53864 11.8251C9.21887 11.6927 8.94555 11.4684 8.75326 11.1806C8.56097 10.8928 8.45833 10.5545 8.45833 10.2083V8.45833ZM5.54167 5.54167V8.45833M5.54167 5.54167H3.79167C3.44555 5.54167 3.1072 5.43903 2.81942 5.24674C2.53163 5.05445 2.30733 4.78113 2.17488 4.46136C2.04242 4.14159 2.00777 3.78973 2.07529 3.45026C2.14282 3.11079 2.30949 2.79897 2.55423 2.55423C2.79897 2.30949 3.11079 2.14282 3.45026 2.07529C3.78973 2.00777 4.14159 2.04242 4.46136 2.17488C4.78113 2.30733 5.05445 2.53163 5.24674 2.81942C5.43903 3.1072 5.54167 3.44555 5.54167 3.79167V5.54167ZM5.54167 8.45833V10.2083C5.54167 10.5545 5.43903 10.8928 5.24674 11.1806C5.05445 11.4684 4.78113 11.6927 4.46136 11.8251C4.14159 11.9576 3.78973 11.9922 3.45026 11.9247C3.11079 11.8572 2.79897 11.6905 2.55423 11.4458C2.30949 11.201 2.14282 10.8892 2.07529 10.5497C2.00777 10.2103 2.04242 9.85841 2.17488 9.53864C2.30733 9.21887 2.53163 8.94555 2.81942 8.75326C3.1072 8.56097 3.44555 8.45833 3.79167 8.45833H5.54167Z" />
+  </svg>
+);
+
+/* ↵ and ⇧ keycap glyphs (Figma 756:3772 / 1113:1109) — the wizard footer's
+   ⌘+Enter and ⌘+Shift+Enter hints, drawn on the same 14px Icon Library box as
+   {@link KeyCommandIcon}. Paths are the Figma exports verbatim, recoloured to
+   currentColor so the keycap's own tone drives them. */
+export const KeyEnterIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M3.35417 9.33333H9.33333C10.2998 9.33333 11.0833 8.54983 11.0833 7.58333L11.0833 2.91667M4.66667 7.29167L2.625 9.33333L4.66667 11.375" />
+  </svg>
+);
+
+export const KeyShiftIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M10.2083 6.41667L7 2.1875L3.79167 6.41667H5.83333V12.25H8.16667V6.41667H10.2083Z" />
   </svg>
 );
 

@@ -713,7 +713,7 @@ function FormActionsMenu({
   return (
     <div
       ref={ref}
-      className="u-menu u-menu--hug"
+      className="u-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,

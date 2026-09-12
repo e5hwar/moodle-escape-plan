@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { CheckBoldIcon, SearchIcon, CheckIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { certifications } from "../data/certifications";
 import {
   MERIT_TIERS,
@@ -79,6 +80,14 @@ export function NewAwardWizard(props: Props) {
     step,
     count: STEPS.length,
     incomplete: (i) => (i === 0 ? !certValid : !appearanceValid),
+  });
+
+  /* ⌘/Ctrl+Enter is the footer's primary button: Next on step 1, then Create
+     Award — and only when the step's mandatory choice is made, the same gate
+     the button itself wears. */
+  useWizardEnterShortcut(() => {
+    if (step === 0) gate.goStep(1);
+    else if (certValid && appearanceValid) handleSave();
   });
 
   function handleSave() {
@@ -183,7 +192,10 @@ export function NewAwardWizard(props: Props) {
           {step === 0 ? (
             <button className="btn-publish wizard-gate-btn" onClick={() => gate.goStep(1)}>
               <span className="wizard-gate-fill" ref={gate.nextFillRef} />
-              <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
+              <span className="wizard-gate-btn-inner">
+                Next: {STEPS[1].label}
+                <WizardKeyHint />
+              </span>
             </button>
           ) : (
             <button
@@ -192,6 +204,7 @@ export function NewAwardWizard(props: Props) {
               onClick={handleSave}
             >
               {isEditing ? "Save Changes" : "Create Award"}
+              <WizardKeyHint />
             </button>
           )}
         </div>
