@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
+import { PillTrigger } from "./Filters";
+import { useTipWhileClosed } from "./HoverTooltip";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -15,6 +17,9 @@ const MONTHS = [
    its own two-letter heads from 552:1520). */
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** The preset key of the everything-window. Named because it doubles as the
+ *  "unapplied" value on pills that treat All Time as no filter. */
+const ALL_TIME_PRESET = "all";
 
 // Local (not UTC) YYYY-MM-DD parse/format — same trap DateField documents: a
 // plain `new Date("2026-03-01")` parses as UTC midnight and can render as the
@@ -116,7 +121,7 @@ function buildPresets(today: Date): Preset[] {
        assumes both ends exist, and 20 years back reaches past any record the
        admin holds. */
     {
-      key: "all",
+      key: ALL_TIME_PRESET,
       label: "All Time",
       pillLabel: "All Time",
       range: (t) => ({ start: new Date(t.getFullYear() - 20, 0, 1), end: t }),
@@ -137,9 +142,15 @@ export function defaultDateRange(): DateRangeState {
 }
 
 /** The everything-window default, for lists that must open showing their whole
- *  backlog (the review queues). */
+ *  backlog (the review queues). On a pill with `allTimeIsEmpty` it is also the
+ *  UNAPPLIED value — "no date filter" and "every date" are the same set. */
 export function allTimeDateRange(): DateRangeState {
-  return resolvePreset("all");
+  return resolvePreset(ALL_TIME_PRESET);
+}
+
+/** True when the range is the all-time window — i.e. narrows nothing. */
+export function isAllTimeRange(range: DateRangeState): boolean {
+  return range.preset === ALL_TIME_PRESET;
 }
 
 /** Whether a date string (any Date.parse-able format) falls inside the range,
@@ -153,16 +164,73 @@ export function dateRangeIncludes(range: DateRangeState, date: string): boolean 
   return t >= s && t <= e;
 }
 
+/** The always-applied pill: label | value | chevron, no ⊗ (Figma 673:1409) —
+ *  the range cannot be removed, only changed, so the chevron is its only "this
+ *  opens something" affordance. Its own component rather than inline markup
+ *  because `useTipWhileClosed` is a hook and the trigger is a render prop. */
+function AlwaysAppliedTrigger({
+  label,
+  value,
+  open,
+  toggle,
+  tip,
+}: {
+  label: string;
+  value: React.ReactNode;
+  open: boolean;
+  toggle: () => void;
+  tip?: string;
+}) {
+  const hint = useTipWhileClosed(tip, open);
+  return (
+    <span className={`filter-applied drp-pill ${open ? "open" : ""}`}>
+      <button className="filter-applied-main" onClick={toggle} data-tip={hint}>
+        <span className="label">{label}</span>
+        <span className="sep" />
+        <span className="value">{value}</span>
+        <span className="caret">
+          <ChevronDownSquareIcon />
+        </span>
+      </button>
+    </span>
+  );
+}
+
 /** The Date Range filter pill + its dual-calendar dropdown (Figma 673:1409 /
- *  673:1421 pill states, 606:1688 panel). Always applied — there is no empty
- *  state and no ⊗: the range cannot be removed, only changed — pick another
- *  preset, or a pair of dates, and Apply. */
+ *  673:1421 pill states, 606:1688 panel).
+ *
+ *  Two shapes, by `allTimeIsEmpty`:
+ *  - DEFAULT — always applied: no empty state and no ⊗, because the range
+ *    cannot be removed, only changed. This is right where the range scopes a
+ *    COLUMN (Companies' Seat Changes, Feedback Forms' response counts): every
+ *    row is always listed, so "no range" would mean nothing. The chevron is the
+ *    pill's only "this opens something" affordance, which is why it keeps one
+ *    where other applied pills hide theirs.
+ *  - `allTimeIsEmpty` — a real filter: All Time IS the empty state, so the pill
+ *    goes dashed "+ Label" like every other unapplied filter, and an applied
+ *    range clears back to All Time through the standard ⊗ (which replaces the
+ *    chevron). For pages where the range decides whether a row is listed. */
 export function DateRangePill({
   value,
   onChange,
+  tip,
+  label = "Date Range",
+  allTimeIsEmpty = false,
+  align = "right",
 }: {
   value: DateRangeState;
   onChange: (v: DateRangeState) => void;
+  /** Hover line saying what the range narrows — see `PillTrigger`. */
+  tip?: string;
+  /** Name the date being filtered on where the page knows it ("Submission
+   *  Date"). The generic default is for the pages where the range scopes a
+   *  COLUMN rather than the rows, and so has no one date to name. */
+  label?: string;
+  /** Treat All Time as "unapplied" — see above. */
+  allTimeIsEmpty?: boolean;
+  /** "right" suits the pill parked at the row's right edge; an inline pill
+   *  anchors "left" so its wide panel opens along the row. */
+  align?: "left" | "right";
 }) {
   const preset = value.preset
     ? buildPresets(startOfToday()).find((p) => p.key === value.preset)
@@ -170,35 +238,52 @@ export function DateRangePill({
   const start = parseISO(value.start);
   const end = parseISO(value.end);
 
+  /* The applied value, either way: a preset's own pill wording, or the two
+     dates around the arrow glyph. */
+  const valueNode = preset ? (
+    preset.pillLabel
+  ) : (
+    <span className="drp-pill-range">
+      {start ? fmtShort(start) : "—"}
+      <RangeArrowIcon />
+      {end ? fmtShort(end) : "—"}
+    </span>
+  );
+  const unapplied = allTimeIsEmpty && isAllTimeRange(value);
+
   return (
     <Dropdown
       width="auto"
-      align="right"
+      align={align}
+      /* An inline pill's panel is ~710px starting at the row's left, so on a
+         narrow window it would run off the right edge — the in-flow panel is
+         CSS-positioned and never clamped. Portalling it (as DateField's
+         calendar already does) puts it under the viewport-clamping path. The
+         right-edge pill opens leftward and always fits, so it stays in flow. */
+      overlay={align === "left"}
       panelClass="dropdown--cal drp-panel"
-      trigger={({ open, toggle }) => (
-        // No ⊗ (Figma 673:1409) — the range always has a value and cannot be
-        // removed, only changed.
-        <span className={`filter-applied drp-pill ${open ? "open" : ""}`}>
-          <button className="filter-applied-main" onClick={toggle}>
-            <span className="label">Date Range</span>
-            <span className="sep" />
-            <span className="value">
-              {preset ? (
-                preset.pillLabel
-              ) : (
-                <span className="drp-pill-range">
-                  {start ? fmtShort(start) : "—"}
-                  <RangeArrowIcon />
-                  {end ? fmtShort(end) : "—"}
-                </span>
-              )}
-            </span>
-            <span className="caret">
-              <ChevronDownSquareIcon />
-            </span>
-          </button>
-        </span>
-      )}
+      trigger={({ open, toggle }) =>
+        allTimeIsEmpty ? (
+          /* The shared pill, so this reads and clears exactly like the filters
+             beside it — dashed when All Time, ⊗ back to All Time when set. */
+          <PillTrigger
+            label={label}
+            value={unapplied ? null : valueNode}
+            open={open}
+            toggle={toggle}
+            onClear={unapplied ? undefined : () => onChange(allTimeDateRange())}
+            tip={tip}
+          />
+        ) : (
+          <AlwaysAppliedTrigger
+            label={label}
+            value={valueNode}
+            open={open}
+            toggle={toggle}
+            tip={tip}
+          />
+        )
+      }
     >
       {({ close }) => (
         <DateRangePanel
@@ -217,7 +302,9 @@ export function DateRangePill({
 
 type MyMenu = { cal: 0 | 1; kind: "month" | "year" };
 
-function DateRangePanel({
+/* Exported for the cascading "More Filters" menu, which mounts this same panel
+   as a `date` section's submenu — one calendar UI everywhere a range is picked. */
+export function DateRangePanel({
   applied,
   onApply,
 }: {

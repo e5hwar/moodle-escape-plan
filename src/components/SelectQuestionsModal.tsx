@@ -9,6 +9,7 @@ import {
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -249,6 +250,7 @@ export function SelectQuestionsModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Question Type"
+                  tip={FILTER_TIPS.questionPicker.type}
                   value={summarize(types, typeOptions)}
                   open={open}
                   toggle={t}
@@ -273,6 +275,7 @@ export function SelectQuestionsModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Category"
+                  tip={FILTER_TIPS.questionPicker.category}
                   value={summarize(cats, allCats)}
                   open={open}
                   toggle={t}

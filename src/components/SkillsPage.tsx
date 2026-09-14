@@ -12,6 +12,7 @@ import {
 import { CERT_BY_USEDIN, topIndustry } from "../data/certifications";
 import { industries as allIndustries } from "../data/industries";
 import { Dropdown } from "./Dropdown";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   PillTrigger,
   summarize,
@@ -65,15 +66,10 @@ type ColKey = "tasks" | "certifications" | "industry" | "dateModified" | "id" | 
    "Unlinked Skills", which is always the last group — it has no record of
    its own, so no ID/status/dates and no row menu. A Skill that belongs to two
    Mastery Skills appears under each. */
-/* What each filter pill does, shown on hover (the shared `title` tooltip).
-   Written as the effect on the list, not as a restatement of the label. */
-const FILTER_TIPS = {
-  type: "Show only Skills, only Mastery Skills, or both grouped together.",
-  certification: "Show Skills whose Tasks count towards the chosen Certifications.",
-  task: "Show Skills awarded by the chosen Tasks.",
-  industry: "Show Skills whose Certifications sit in the chosen Industries.",
-  status: "Show only Active or only Archived Skills.",
-};
+/* What each filter pill does, shown on hover (the shared `title` tooltip)
+   started here and is now the app-wide convention; the lines themselves live in
+   `data/filterTips.ts` with every other page's. */
+const TIPS = FILTER_TIPS.skills;
 
 const UNLINKED_KEY = "unlinked";
 const UNLINKED_LABEL = "Unlinked Skills";
@@ -594,7 +590,7 @@ export function SkillsPage() {
                   searchable
                   searchPlaceholder="Search Certifications..."
                   width={300}
-                  tip={FILTER_TIPS.certification}
+                  tip={TIPS.certification}
                 />
                 <MultiPill
                   label="Task"
@@ -604,7 +600,7 @@ export function SkillsPage() {
                   searchable
                   searchPlaceholder="Search Tasks..."
                   width={300}
-                  tip={FILTER_TIPS.task}
+                  tip={TIPS.task}
                 />
                 <MultiPill
                   label="Industry"
@@ -614,7 +610,7 @@ export function SkillsPage() {
                   searchable
                   searchPlaceholder="Search Industries/Sub-Industries..."
                   width={300}
-                  tip={FILTER_TIPS.industry}
+                  tip={TIPS.industry}
                 />
                 <StatusPill value={statusFilter} onApply={setStatusFilter} />
                 {filterCount > 0 && (
@@ -1210,7 +1206,7 @@ function StatusPill({ value, onApply }: { value: string[]; onApply: (v: string[]
     <Dropdown
       width={200}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.status} />
+        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={TIPS.status} />
       )}
     >
       {({ close }) => (
@@ -1230,7 +1226,7 @@ function TypePill({ value, onApply }: { value: string[]; onApply: (v: string[]) 
     <Dropdown
       width={220}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Type" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.type} />
+        <PillTrigger label="Type" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={TIPS.type} />
       )}
     >
       {({ close }) => (

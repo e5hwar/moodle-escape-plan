@@ -323,7 +323,7 @@ export const recordSamples: Record<string, RecordSample[]> = {
     { name: "Fast Starter", meta: "Earned Dec 2023" },
   ],
   "Path entries": [
-    { name: "HVAC Field Skills Path", meta: "In progress · 60%" },
+    { name: "HVAC JobReady Path", meta: "In progress · 60%" },
     { name: "Plumbing Fundamentals Path", meta: "Completed" },
   ],
 };

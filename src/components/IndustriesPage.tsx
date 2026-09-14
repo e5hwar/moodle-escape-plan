@@ -24,6 +24,7 @@ import {
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { SectionHeading } from "./SectionHeading";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
@@ -1426,6 +1427,7 @@ function AddCertsModal({
               blank="All"
               options={["All", ...CAREER_STAGES]}
               onChange={(v) => setStageFilter(v as CareerStage | "All")}
+              tip={FILTER_TIPS.industries.careerStage}
             />
             <SelectPill
               label="Industry Tag"
@@ -1433,6 +1435,7 @@ function AddCertsModal({
               blank="All"
               options={["All", "Tagged", "Untagged"]}
               onChange={(v) => setTagFilter(v as "All" | "Untagged" | "Tagged")}
+              tip={FILTER_TIPS.industries.industryTag}
             />
             <SelectPill
               label="Time"
@@ -1440,6 +1443,7 @@ function AddCertsModal({
               blank="Any"
               options={["Any", "Short", "Medium", "Long"]}
               onChange={(v) => setTimeFilter(v as "Any" | "Short" | "Medium" | "Long")}
+              tip={FILTER_TIPS.industries.time}
             />
             {hasFilters && (
               <button
@@ -1545,12 +1549,15 @@ function SelectPill({
   blank,
   options,
   onChange,
+  tip,
 }: {
   label: string;
   value: string;
   blank: string;
   options: string[];
   onChange: (v: string) => void;
+  /** Hover line saying what this filter does — see `PillTrigger`. */
+  tip?: string;
 }) {
   return (
     <Dropdown
@@ -1562,6 +1569,7 @@ function SelectPill({
           open={open}
           toggle={toggle}
           onClear={() => onChange(blank)}
+          tip={tip}
         />
       )}
     >

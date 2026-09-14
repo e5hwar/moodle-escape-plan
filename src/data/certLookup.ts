@@ -23,8 +23,14 @@
 import { users, type User } from "./users";
 import { companies as appCompanies, getCompanyUsers } from "./companies";
 import { certifications as appCerts } from "./certifications";
-import { tasks as appTasks, type Task, type TaskType } from "./tasks";
-import type { Attempt } from "./attempts";
+import {
+  handsOnGrading,
+  tasks as appTasks,
+  type HandsOnGrading,
+  type Task,
+  type TaskType,
+} from "./tasks";
+import { gradeStatus, type Attempt } from "./attempts";
 
 /* ───────────────────────── deterministic RNG ───────────────────────── */
 
@@ -70,10 +76,6 @@ export type Cell = {
   /** Who marked the task complete — an instructor for reviewed Hands-On work,
    *  the admin for manual overrides, null when it was earned in-product. */
   markedBy: string | null;
-  /** Attempt numbers an admin has deleted (each frees one attempt slot). */
-  deletedAttempts: number[];
-  /** The reason typed into the apply-changes dialog, when one was given. */
-  note: string | null;
 };
 
 export type CertTask = {
@@ -88,6 +90,10 @@ export type CertTask = {
   proctored: boolean;
   /** Quizzes and Hands-On tasks are attempt-limited; the rest are open. */
   attemptLimit: number | null;
+  /** Hands-On scoring — the scale a reviewer grades on and the score that
+   *  passes, or `{ graded: false }` for a Task that passes on submission.
+   *  `null` on every other task type. */
+  handsOn: HandsOnGrading | null;
 };
 
 export type CertDef = {
@@ -103,12 +109,17 @@ export type Employee = {
   name: string;
   initials: string;
   contact: string;
+  /** Second identifier on a search row — the scope picker shows
+   *  "email · phone" (Figma 1162:1454). */
+  phone: string;
   cohort: string | null;
   isB2B: boolean;
 };
 
 export type CellMap = Record<string, Cell>;
-export type CertManual = Record<string, { at: number }>;
+/** Manually awarded certifications, keyed `uid_certId`. `by` is the admin the
+ *  card credits — a manual award always names who made it. */
+export type CertManual = Record<string, { at: number; by: string }>;
 
 export type CertData = {
   employees: Employee[];
@@ -131,8 +142,9 @@ const USEDIN_TO_CERT: Record<string, string> = {
   "EPA 608 Universal": "C-0421",
   "EPA 609": "C-0417",
   "NATE RTW": "C-0410",
+  "Building Science Principles": "C-0406",
   "Safety Bundle": "C-0405",
-  "HVAC Field Skills": "C-0398",
+  "HVAC JobReady": "C-0398",
   "OSHA 10": "C-0341",
   // "OSHA 30" has no matching certification — ignored.
 };
@@ -235,6 +247,24 @@ function tasksForCert(
   });
 }
 
+/** Has this learner finished this certification outright? A deterministic
+ *  coin-flip per (employee, certification) pair — about half land true. */
+function certFinished(uid: string, certId: string): boolean {
+  return hash(uid + "|" + certId + "|finished") % 2 === 0;
+}
+
+/** The slot's scenario, promoted so the task reads as done. A manual
+ *  completion stays manual (it IS complete, and the flag is worth keeping in
+ *  the demo); everything else lands on the finished state its type earns —
+ *  a graded pass for Quizzes and scored Hands-On work, a plain completion for
+ *  xAPI, Resources and the Hands-On Tasks nobody grades. */
+function finishedScenario(task: CertTask, scenario: Scenario): Scenario {
+  if (scenario === "manual") return "manual";
+  if (task.type === "Quiz") return "passed";
+  if (task.type === "Hands-On Task") return task.handsOn?.graded ? "graded" : "complete";
+  return "complete";
+}
+
 /* ─────────────────────────── build the model ────────────────────────── */
 
 /** Instructors credited on reviewed Hands-On completions (hash-picked). */
@@ -254,13 +284,29 @@ function genCell(uid: string, task: CertTask, scenario: Scenario): Cell {
      generated counts, not a limit the UI enforces. */
   const limit = task.attemptLimit ?? 3;
   const handsOn = task.type === "Hands-On Task";
+  /* The task's own scale, when a reviewer grades it at all. */
+  const hoScale = task.handsOn?.graded ? task.handsOn : null;
+  /* A Hands-On task nobody grades can't be graded, failing or pending review —
+     it is done the moment it is submitted. Fold those scenarios onto the plain
+     completion so the row never claims a review that will never happen. */
+  if (handsOn && !hoScale) {
+    if (scenario === "graded" || scenario === "failing" || scenario === "pending") {
+      scenario = "complete";
+    }
+  }
   const assignedAt = NOW - r(40, 70) * DAY;
   const startedAt = assignedAt + r(1, 5) * DAY;
   const submittedAt = startedAt + r(1, 10) * DAY;
   const completedAt = submittedAt + r(0, 3) * DAY;
   const timeSpent = tracksTime(task) ? r(8, 95) : 0;
-  const pass = () => (handsOn ? r(6, 10) * 10 : r(70, 100));
-  const fail = () => (handsOn ? r(1, 5) * 10 : r(15, 65));
+  /* Grades are stored as a percentage whatever the task; a Hands-On score is
+     drawn on the task's own scale and converted, so it round-trips back to a
+     whole score through `formatGrade`. */
+  const onScale = (score: number) => Math.round((score / hoScale!.maxScore) * 100);
+  const pass = () =>
+    hoScale ? onScale(r(hoScale.passScore, hoScale.maxScore)) : r(QUIZ_PASS_PCT, 100);
+  const fail = () =>
+    hoScale ? onScale(r(1, hoScale.passScore - 1)) : r(15, QUIZ_PASS_PCT - 5);
 
   const base: Cell = {
     status: "incomplete",
@@ -275,8 +321,6 @@ function genCell(uid: string, task: CertTask, scenario: Scenario): Cell {
     attemptGrants: [],
     manual: false,
     markedBy: null,
-    deletedAttempts: [],
-    note: null,
   };
   const done = {
     status: "complete" as const,
@@ -350,6 +394,7 @@ export function buildData(): CertData {
     name: u.name,
     initials: initialsOf(u.name),
     contact: u.email,
+    phone: u.phone,
     cohort: u.companyName ?? null,
     isB2B: u.userType === "B2B",
   }));
@@ -366,6 +411,7 @@ export function buildData(): CertData {
         name: u.name,
         initials: initialsOf(u.name),
         contact: u.email,
+        phone: synthPhone(u.id),
         cohort: c.name,
         isB2B: true,
       });
@@ -416,6 +462,7 @@ export function buildData(): CertData {
         isFinal: !!t.finalExam,
         proctored: t.type === "Quiz" && !!t.finalExam,
         attemptLimit: attemptLimitFor(t),
+        handsOn: handsOnGrading(t),
       };
       tasksById[t.id] = ct;
       tasks.push(ct);
@@ -425,11 +472,20 @@ export function buildData(): CertData {
   const certsById: Record<string, CertDef> = {};
   certifications.forEach((c) => (certsById[c.id] = c));
 
-  // Baseline cells for every (employee, task) pair, in the slot's state.
+  /* Baseline cells for every (employee, task) pair, in the slot's state —
+     except that roughly HALF of the (employee, certification) pairs are
+     finished outright. The PLAN alone gave every learner the same part-done
+     certification, so every combination read ~40% and a completed one could
+     only be reached by marking it by hand. `certFinished` flips a coin per
+     pair (deterministic, like everything else here) and the slot's scenario
+     is promoted to its finished equivalent. */
   const cells: CellMap = {};
   employees.forEach((e) => {
     tasks.forEach((t) => {
-      cells[e.id + "_" + t.id] = genCell(e.id, t, scenarioOf[t.id]);
+      const scenario = certFinished(e.id, t.certId)
+        ? finishedScenario(t, scenarioOf[t.id])
+        : scenarioOf[t.id];
+      cells[e.id + "_" + t.id] = genCell(e.id, t, scenario);
     });
   });
 
@@ -466,6 +522,8 @@ export type Progress = {
   certified: boolean;
   certManual: boolean;
   certAt: number | null;
+  /** Who awarded it by hand — null when it was earned in-product. */
+  certBy: string | null;
 };
 
 export function progress(
@@ -498,11 +556,13 @@ export function progress(
   let certified = inc === 0 && rv === 0 && taskList.length > 0;
   let certAt: number | null = certified ? last : null;
   let manual = false;
+  let certBy: string | null = null;
   const ov = certManual[uid + "_" + certId];
   if (ov) {
     certified = true;
     manual = true;
     certAt = ov.at;
+    certBy = ov.by;
   }
   return {
     c,
@@ -515,6 +575,7 @@ export function progress(
     certified,
     certManual: manual,
     certAt,
+    certBy,
   };
 }
 
@@ -563,11 +624,7 @@ export function attemptInfo(t: CertTask, c: Cell): AttemptInfo {
   const attemptLimit = t.attemptLimit ?? null;
   const grants = c.attemptGrants || [];
   const grantedTotal = grants.reduce((s, g) => s + g.amount, 0);
-  /* A deleted attempt frees its slot. */
-  const attemptsUsed = Math.max(
-    0,
-    (c.attempts || 0) - (c.deletedAttempts?.length ?? 0),
-  );
+  const attemptsUsed = Math.max(0, c.attempts || 0);
   /* Capped at all — only a final-exam quiz is, so this also gates the
      exhausted state and the Grant Attempts action. */
   const hasLimit = attemptLimit != null;
@@ -638,7 +695,6 @@ export function attemptsForTask(
   const endBase = cell.completedAt ?? cell.submittedAt ?? startBase + DAY;
   const span = Math.max(endBase - startBase, DAY);
 
-  const deleted = new Set(cell.deletedAttempts ?? []);
   const out: Attempt[] = [];
   for (let i = 1; i <= n; i++) {
     const isLast = i === n;
@@ -657,15 +713,13 @@ export function attemptsForTask(
       phone,
       quizName: task.name,
       attemptNumber: i,
-      status: "Completed",
+      status: gradeStatus(grade),
       startedAt: fmtDT(startedAtTs),
       completedAt: fmtDT(completedAtTs),
       grade,
     });
   }
-  /* Admin-deleted attempts drop out of the history but keep their numbering,
-     so "#3" still names the same attempt after "#2" is deleted. */
-  return out.filter((a) => !deleted.has(a.attemptNumber));
+  return out;
 }
 
 /* ──────────────────────────── formatting ───────────────────────────── */
@@ -705,12 +759,47 @@ export function tracksAttempts(t: CertTask): boolean {
   return t.type === "Quiz" || t.type === "Hands-On Task";
 }
 
-/** A grade as the table shows it: Quizzes as a percentage, Hands-On out of 10
- *  (stored as tens on the shared scale). Other task types carry no grade. */
+/** A quiz's pass mark. Quizzes are all graded on the same percentage scale;
+ *  only Hands-On tasks carry their own (see {@link HandsOnGrading}). */
+export const QUIZ_PASS_PCT = 70;
+
+/** Grades are STORED as a 0–100 percentage whatever the task type, so one
+ *  field serves a quiz's 72% and a Hands-On task's 18-out-of-25. These two
+ *  functions are the only places that translation happens.
+ *
+ *  A Quiz reads as the percentage itself; a Hands-On task reads on the scale
+ *  its author set — "6/10", "18/25". A Hands-On task that isn't graded at all
+ *  (it passes on submission) has nothing to show, and neither does an xAPI or
+ *  Resource task. */
+export function formatGrade(t: CertTask, grade: number | null): string {
+  if (grade == null) return "";
+  if (t.type === "Quiz") return `${grade}%`;
+  if (t.type === "Hands-On Task") {
+    const g = t.handsOn;
+    if (!g?.graded) return "";
+    return `${Math.round((grade / 100) * g.maxScore)}/${g.maxScore}`;
+  }
+  return "";
+}
+
 export function gradeLabel(t: CertTask, c: Cell): string {
-  if (c.grade == null) return "";
-  if (t.type === "Quiz") return `${c.grade}%`;
-  if (t.type === "Hands-On Task") return String(Math.round(c.grade / 10));
+  return formatGrade(t, c.grade);
+}
+
+/** Whether a stored 0–100 grade clears the task's own pass mark. */
+export function gradePasses(t: CertTask, grade: number | null): boolean {
+  if (grade == null) return false;
+  const g = t.handsOn;
+  if (g?.graded) return Math.round((grade / 100) * g.maxScore) >= g.passScore;
+  return grade >= QUIZ_PASS_PCT;
+}
+
+/** The pass mark, phrased for a tooltip — "Passes at 7 out of 10". Empty when
+ *  the task has no mark to name (ungraded Hands-On, xAPI, Resource). */
+export function passMarkLabel(t: CertTask): string {
+  const g = t.handsOn;
+  if (g) return g.graded ? `Passes at ${g.passScore} out of ${g.maxScore}.` : "";
+  if (t.type === "Quiz") return `Passes at ${QUIZ_PASS_PCT}%.`;
   return "";
 }
 
@@ -880,10 +969,17 @@ export function buildDetail(
   };
 }
 
-/** Only Quizzes and Hands-On tasks carry a grade, so only they ask for one
- *  when marked complete by hand. */
+/** Only graded tasks ask for a grade when marked complete by hand — every
+ *  Quiz, and the Hands-On tasks a reviewer actually scores. */
 export function needsGradePrompt(task: CertTask): boolean {
-  return task.type === "Quiz" || task.type === "Hands-On Task";
+  if (task.type === "Quiz") return true;
+  return !!task.handsOn?.graded;
+}
+
+/** The scale an admin types a grade on for this task: the Hands-On task's own
+ *  max, or a percentage for everything else. */
+export function gradeScale(task: CertTask): number {
+  return task.handsOn?.graded ? task.handsOn.maxScore : 100;
 }
 
 /* ──────────────────── mutations (return new state) ───────────────────── */
@@ -899,7 +995,6 @@ export function applyMarkComplete(
   tid: string,
   grade: number | null,
   markedBy: string | null = null,
-  note: string | null = null,
 ): CellMap {
   const key = uid + "_" + tid;
   const c = cells[key];
@@ -912,7 +1007,6 @@ export function applyMarkComplete(
     completedAt: NOW,
     manual: true,
     markedBy: markedBy ?? c.markedBy,
-    note: note ?? c.note,
     attempts: c.attempts || 1,
     timeSpent: c.timeSpent || 30,
     grade:
@@ -940,27 +1034,9 @@ export function applyMarkIncomplete(
     completedAt: null,
     manual: false,
     markedBy: null,
-    note: null,
     grade: c.attempts > 0 ? c.grade : null,
   };
   return { ...cells, [key]: next };
-}
-
-/** Deletes one attempt from a quiz's history — the attempt number disappears
- *  from `attemptsForTask` and `attemptInfo` counts one more remaining slot. */
-export function applyDeleteAttempt(
-  cells: CellMap,
-  uid: string,
-  tid: string,
-  attemptNumber: number,
-): CellMap {
-  const key = uid + "_" + tid;
-  const c = cells[key];
-  if (!c || c.deletedAttempts.includes(attemptNumber)) return cells;
-  return {
-    ...cells,
-    [key]: { ...c, deletedAttempts: [...c.deletedAttempts, attemptNumber] },
-  };
 }
 
 export function applyGrantAttempt(
@@ -982,8 +1058,9 @@ export function applyMarkCert(
   certManual: CertManual,
   uid: string,
   certId: string,
+  by: string = ADMIN_ACTOR,
 ): CertManual {
-  return { ...certManual, [uid + "_" + certId]: { at: NOW } };
+  return { ...certManual, [uid + "_" + certId]: { at: NOW, by } };
 }
 
 export function applyClearCert(

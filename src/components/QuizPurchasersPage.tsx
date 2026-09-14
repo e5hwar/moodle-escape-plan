@@ -5,7 +5,6 @@ import {
   type UserRole,
   type SubscriptionStatus,
 } from "../data/users";
-import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import {
   buildAllQuizPurchases,
   buildGrantedAttempt,
@@ -18,10 +17,10 @@ import {
   UsersFilters,
   UsersEditColumns,
   MultiPill,
-  type UserColumnKey,
   type UserFilterState,
 } from "./UsersFilters";
 import { useColumnOrder, orderedColumns } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, ChevronLeftIcon, AddIcon, RowKebabIcon, MenuLockIcon, ChevronRightIcon } from "./icons";
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
@@ -29,9 +28,14 @@ import { PrmModal } from "./PrmModal";
 
 const PAGE_SIZE = 50;
 
-/* ─── columns: every Users column plus the five attempt columns ─── */
+/* ─── columns: the user identity columns plus the attempt columns ─── */
 type QuizColumnKey =
-  | UserColumnKey
+  | "email"
+  | "phone"
+  | "userType"
+  | "company"
+  | "role"
+  | "subscription"
   | "quizName"
   | "attemptNumber"
   | "access"
@@ -46,8 +50,8 @@ const ACCESS_OPTIONS = ["Free", "Paid"];
 
 type QuizColumnState = Record<QuizColumnKey, boolean>;
 
-// Name (fixed) + Email + Phone + the five attempt columns show by default;
-// every other Users column is available under Edit Columns.
+// Name (fixed) + Email + Phone + the attempt columns show by default; User
+// Type / Company / Role / Subscription are available under Edit Columns.
 const DEFAULT_COLUMNS: QuizColumnState = {
   email: true,
   phone: true,
@@ -63,14 +67,6 @@ const DEFAULT_COLUMNS: QuizColumnState = {
   company: false,
   role: false,
   subscription: false,
-  language: false,
-  goal: false,
-  attribution: false,
-  zipCode: false,
-  industryPreference: false,
-  lastAccess: false,
-  dashboardLastAccess: false,
-  joinedOn: false,
 };
 
 const EMPTY_FILTERS: UserFilterState = {
@@ -90,21 +86,33 @@ function formatDate(iso: string | null): string {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/* Every empty data cell reads as an em dash, the app's standing empty-cell
+   convention (see ReviewHandsOnPage). Here that covers the columns that can
+   genuinely be blank: a purchased row has no Grant Date, a comped row no
+   Purchase Date, an unfinished attempt no Score or Result, and a B2C user no
+   Company. CopyCells treats "—" as no value, so a dashed cell stays inert
+   instead of copying a dash. */
+function orDash(node: React.ReactNode): React.ReactNode {
+  return node === null || node === undefined || node === "" ? "—" : node;
+}
+
 type SortKey = "name" | QuizColumnKey;
 type SortDir = "asc" | "desc";
 
 const ROLE_ORDER: Record<UserRole, number> = { "Self-Learner": 0, Employee: 1, Manager: 2, Admin: 3 };
 const SUB_ORDER: Record<SubscriptionStatus, number> = { "Free Trial": 0, Starter: 1, Subscriber: 2, Scholarship: 3 };
-const GOAL_ORDER: Record<string, number> = { "Looking for my first trades job": 0, "Exploring careers in the skilled trades": 1, "Focused on advancing my career": 2, Other: 3 };
 const STATUS_ORDER: Record<string, number> = { "Not Started": 0, "In Progress": 1, Completed: 2 };
 
-type Row = { u: User; f: ProfileFields; p: QuizPurchase };
+type Row = { u: User; p: QuizPurchase };
 
 type ColMeta = {
   key: QuizColumnKey;
   label: string;
   className: string;
   width: number;
+  /** Click-to-copy cell (CopyCells.tsx) — the Email/Phone opt-in the
+   * Exam Reviews and Hands-On submission tables already carry. */
+  copyable?: boolean;
   /** Tooltip on the cell — where a grant's admin/date detail now lives. */
   tip?: (r: Row) => string | undefined;
   render: (r: Row) => React.ReactNode;
@@ -118,13 +126,13 @@ type ColMeta = {
    own label spills over the next one.
 
    Order here is the on-screen column order: the quiz and attempt columns sit
-   right after Email / Phone, with the rest of the Users columns available
+   right after Email / Phone, with the remaining user columns available
    afterwards under Edit Columns. */
 const COLS: ColMeta[] = [
-  { key: "email", label: "Email", className: "col-u-email", width: 190, render: ({ u }) => u.email, sortValue: ({ u }) => u.email.toLowerCase() },
-  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: ({ u }) => u.phone, sortValue: ({ u }) => u.phone },
+  { key: "email", label: "Email", copyable: true, className: "col-u-email", width: 190, render: ({ u }) => u.email, sortValue: ({ u }) => u.email.toLowerCase() },
+  { key: "phone", label: "Phone", copyable: true, className: "col-u-phone", width: 165, render: ({ u }) => u.phone, sortValue: ({ u }) => u.phone },
   { key: "quizName", label: "Quiz Name", className: "col-qp-quiz", width: 230, tip: ({ p }) => p.quizName, render: ({ p }) => p.quizName, sortValue: ({ p }) => p.quizName.toLowerCase() },
-  { key: "attemptNumber", label: "Attempt Purchased", className: "col-qp-attempt", width: 190, render: ({ p }) => `#${p.attemptNumber}`, sortValue: ({ p }) => p.attemptNumber },
+  { key: "attemptNumber", label: "Attempt", className: "col-qp-attempt", width: 120, render: ({ p }) => `#${p.attemptNumber}`, sortValue: ({ p }) => p.attemptNumber },
   { key: "access", label: "Access", className: "col-cp-access", width: 110, tip: ({ p }) => (p.granted ? `Free attempt granted by ${p.grantedBy ?? "an admin"}` : undefined), render: ({ p }) => (p.granted ? "Free" : "Paid"), sortValue: ({ p }) => (p.granted ? 0 : 1) },
   { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
   { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 145, tip: ({ p }) => (p.grantDate && p.grantedBy ? `Granted by ${p.grantedBy}` : undefined), render: ({ p }) => formatDate(p.grantDate), sortValue: ({ p }) => p.grantDate ?? "" },
@@ -135,18 +143,11 @@ const COLS: ColMeta[] = [
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : ""), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
-  { key: "language", label: "Language", className: "col-u-lang", width: 120, render: ({ f }) => f.language, sortValue: ({ f }) => f.language },
-  { key: "goal", label: "Goal", className: "col-u-stage", width: 200, tip: ({ f }) => f.goal, render: ({ f }) => f.goal, sortValue: ({ f }) => GOAL_ORDER[f.goal] ?? 0 },
-  { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: ({ f }) => f.attribution, sortValue: ({ f }) => f.attribution.toLowerCase() },
-  { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 115, render: ({ f }) => f.zipCode, sortValue: ({ f }) => f.zipCode },
-  { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 210, render: ({ f }) => f.industryPreference, sortValue: ({ f }) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "Last Access", className: "col-u-date", width: 145, render: ({ u }) => formatDate(u.lastAccess), sortValue: ({ u }) => u.lastAccess },
-  { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 175, render: ({ u }) => formatDate(u.joinedOn), sortValue: ({ u }) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
 // Columns where sorting is not meaningful (free-text, contact info, tags)
-const NON_SORTABLE_KEYS = new Set<QuizColumnKey>(["email", "phone", "company", "attribution", "zipCode"]);
+const NON_SORTABLE_KEYS = new Set<QuizColumnKey>(["email", "phone", "company"]);
 
 const FIXED_COLUMNS = [{ label: "Name" }];
 const OPTIONAL_COLUMNS = COLS.map((c) => ({ key: c.key as string, label: c.label }));
@@ -167,10 +168,6 @@ export function QuizPurchasersPage({
   task: Task;
   onBack: () => void;
 }) {
-  const profiles = useMemo(
-    () => new Map(allUsers.map((u) => [u.id, buildUserProfile(u).fields] as const)),
-    [],
-  );
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
   /* The Task this page was opened from may sit outside the seeded paid-Quiz
@@ -210,10 +207,10 @@ export function QuizPurchasersPage({
       purchases
         .map((p) => {
           const u = userById.get(p.userId);
-          return u ? { u, f: profiles.get(u.id)!, p } : null;
+          return u ? { u, p } : null;
         })
         .filter((r): r is Row => r !== null),
-    [purchases, userById, profiles],
+    [purchases, userById],
   );
 
   const purchaserUsers = useMemo(() => {
@@ -258,15 +255,13 @@ export function QuizPurchasersPage({
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
-    return rows.filter(({ u, f, p }) => {
+    return rows.filter(({ u, p }) => {
       if (quizzes.length && !quizzes.includes(p.quizName)) return false;
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
       if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
-      if (filters.goals.length && !filters.goals.includes(f.goal)) return false;
-      if (filters.industries.length && !filters.industries.includes(f.industryPreference)) return false;
       if (!q) return true;
       return (
         u.name.toLowerCase().includes(q) ||
@@ -405,6 +400,7 @@ export function QuizPurchasersPage({
                     searchable
                     searchPlaceholder="Search Quizzes..."
                     width={300}
+                    tip={FILTER_TIPS.whoPaid.quiz}
                   />
                 }
                 extra={
@@ -413,8 +409,10 @@ export function QuizPurchasersPage({
                     all={ACCESS_OPTIONS}
                     value={accessTypes}
                     onApply={setAccessTypes}
+                    tip={FILTER_TIPS.whoPaid.access}
                   />
                 }
+                more={[]}
                 extraActive={quizzes.length > 0 || accessTypes.length > 0}
                 onClearExtra={() => {
                   setQuizzes([]);
@@ -565,8 +563,13 @@ function PurchaserRow({
         </span>
       </td>
       {cols.map((c) => (
-        <td key={c.key} className={c.className} data-tip={c.tip?.(row)}>
-          {c.render(row)}
+        <td
+          key={c.key}
+          className={c.className}
+          data-tip={c.tip?.(row)}
+          data-copyable={c.copyable ? "" : undefined}
+        >
+          {orDash(c.render(row))}
         </td>
       ))}
       <td className="col-actions">

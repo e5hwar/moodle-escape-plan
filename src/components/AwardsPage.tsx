@@ -21,6 +21,7 @@ import {
 } from "../data/awards";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CheckRow } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { NewAwardWizard } from "./NewAwardWizard";
 import { PrmModal } from "./PrmModal";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
@@ -788,7 +789,7 @@ function TierPill({ value, onApply }: { value: string[]; onApply: (v: string[]) 
     <Dropdown
       width={200}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Merit Tier" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} />
+        <PillTrigger label="Merit Tier" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.awards.meritTier} />
       )}
     >
       {({ close }) => (
@@ -808,7 +809,7 @@ function StatusPill({ value, onApply }: { value: string[]; onApply: (v: string[]
     <Dropdown
       width={200}
       trigger={({ open, toggle }) => (
-        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} />
+        <PillTrigger label="Status" value={summary} open={open} toggle={toggle} onClear={() => onApply([])} tip={FILTER_TIPS.awards.status} />
       )}
     >
       {({ close }) => (

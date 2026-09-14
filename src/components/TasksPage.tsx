@@ -26,7 +26,8 @@ import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, ty
 const LM_COLS: LandingCol[] = [
   { key: "type", label: "Type", width: 160, fixed: true },
   { key: "used", label: "Used in", width: 180 },
-  { key: "creator", label: "Created By", width: 200 },
+  /* No Created By — it left the table's defaults, and a column the landing
+     shows but the table doesn't would flicker in and out across the morph. */
   { key: "modified", label: "Date Modified", width: 130 },
 ];
 
@@ -221,7 +222,7 @@ export function TasksPage({
     type: true,
     paid: false,
     usedIn: true,
-    createdBy: true,
+    createdBy: false,
     tradeTag: false,
     partnershipTag: false,
     audience: false,
@@ -316,8 +317,9 @@ export function TasksPage({
   const morph = useLandingMorph(Boolean(initialCertificationFilter));
 
   // The two quick filters this page offers (user-specified): the dominant task
-  // type, and the HVAC job-readiness certification. "HVAC JobReady" is the
-  // label for the seed data's `HVAC Field Skills` certification.
+  // type, and the HVAC job-readiness certification. The pill's label used to be
+  // an alias for a differently-named certification; the certification itself is
+  // now called HVAC JobReady, so the two finally agree.
   const quickFilterPills: LandingPill[] = [
     {
       key: "hands-on",
@@ -333,7 +335,7 @@ export function TasksPage({
       onPick: () => {
         setFilters((prev) => ({
           ...prev,
-          certifications: Array.from(new Set([...prev.certifications, "HVAC Field Skills"])),
+          certifications: Array.from(new Set([...prev.certifications, "HVAC JobReady"])),
         }));
         morph.showTable();
       },
@@ -342,8 +344,22 @@ export function TasksPage({
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map((t) => ({
     key: t.id,
-    name: t.name,
-    dim: t.hidden || t.usedIn.length === 0,
+    /* The "Hidden" pill rides the morph with the row (it fades in on `--lmt`
+       like the rest of the table chrome), so the name doesn't gain a badge at
+       the hand-off to the real table. */
+    name: t.hidden ? (
+      <>
+        {t.name}
+        <span className="pr-name-flag pr-name-flag--grey">Hidden</span>
+      </>
+    ) : (
+      t.name
+    ),
+    /* Dim = hidden, and nothing else. It used to also dim a Task that sits in
+       no Certification, which read as a second kind of "inactive" the full
+       table never shows — there an unused Task is an ordinary row with an
+       em-dash in Used in. */
+    dim: t.hidden,
     cells: {
       type: t.type,
       used:
@@ -352,7 +368,6 @@ export function TasksPage({
           : t.usedIn.length === 1
             ? t.usedIn[0]
             : `${t.usedIn[0]} +${t.usedIn.length - 1}`,
-      creator: t.createdBy,
       modified: t.dateModified ?? "",
     },
   }));
@@ -847,7 +862,11 @@ function TableRow({
   return (
     <tr className={`${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className="col-name" data-tip={task.name}>
-        {task.name}
+        <span className="tsk-name">{task.name}</span>
+        {/* Hidden reads exactly as an archived Skill row (1126:1686): grey pill
+            beside a muted name, every other cell dimmed — see `.task-dim` in
+            the CSS, which shares the Skills rules. */}
+        {task.hidden && <span className="pr-name-flag pr-name-flag--grey">Hidden</span>}
       </td>
       {cols.map((c) => (
         <td key={c.key} className={c.className} data-tip={c.tip?.(task)}>

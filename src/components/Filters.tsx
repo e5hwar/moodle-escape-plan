@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
+import { useTipWhileClosed } from "./HoverTooltip";
 import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
 import {
@@ -15,6 +16,8 @@ import {
   FIXED_COLUMNS,
   type OptionalColumn,
 } from "../data/filters";
+import { DateRangePanel, defaultDateRange, type DateRangeState } from "./DateRangeFilter";
+import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
 
 export type FilterState = {
   creators: string[];
@@ -124,15 +127,20 @@ export function PillTrigger({
   tip,
 }: {
   label: string;
-  value: string | null;
+  /** Node rather than string: a custom date range draws "date → date" around an
+   *  arrow glyph. Falsy renders the unapplied dashed pill. */
+  value: React.ReactNode;
   open: boolean;
   toggle: () => void;
   onClear?: () => void;
-  /** One line saying what this filter does, shown on hover. A native `title`,
-      which the app's single tooltip adopts (see [[tooltip-and-hover-convention]]).
-      Sits on the label button, not the clear button, which has its own label. */
+  /** One line saying what this filter does, shown on hover — see
+      [[tooltip-and-hover-convention]]. Withheld while the menu is OPEN: the
+      panel already says more than the tip can, and the card would land on top
+      of it. Sits on the label button, not the clear button, which has its own
+      label. */
   tip?: string;
 }) {
+  const hint = useTipWhileClosed(tip, open);
   if (value && onClear) {
     return (
       <span className={`filter-applied ${open ? "open" : ""}`}>
@@ -143,7 +151,7 @@ export function PillTrigger({
         >
           <XCircleIcon />
         </button>
-        <button className="filter-applied-main" onClick={toggle} title={tip}>
+        <button className="filter-applied-main" onClick={toggle} data-tip={hint}>
           <span className="label">{label}</span>
           <span className="sep" />
           <span className="value">{value}</span>
@@ -158,7 +166,7 @@ export function PillTrigger({
     <button
       className={`filter-pill-dashed ${open ? "open" : ""}`}
       onClick={toggle}
-      title={tip}
+      data-tip={hint}
     >
       <span className="icon">
         <PlusCircleIcon />
@@ -205,9 +213,12 @@ export function summarize(values: string[], all: string[]): string | null {
 export function CreatedByPill({
   value,
   onApply,
+  tip = CREATED_BY_TIP,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  /** Overridable, but every page so far wants the shared line. */
+  tip?: string;
 }) {
   const all = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
   const summary = summarize(value, all);
@@ -222,6 +233,7 @@ export function CreatedByPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={tip}
         />
       )}
     >
@@ -264,6 +276,7 @@ function CertificationsPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.tasks.certifications}
         />
       )}
     >
@@ -302,6 +315,7 @@ function TaskTypePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.tasks.type}
         />
       )}
     >
@@ -559,11 +573,21 @@ export function SectionedMultiSelect({
 /* A stable default for `texts` — an inline {} would be a new object every
    render, and the effect that syncs the draft would never settle. */
 const EMPTY_TEXTS: Record<string, string> = {};
+/* …and the same for `dates`. */
+const EMPTY_DATES: Record<string, DateRangeState | null> = {};
+
+function sameRange(a: DateRangeState | null, b: DateRangeState | null): boolean {
+  if (!a || !b) return a === b;
+  return a.start === b.start && a.end === b.end;
+}
 
 /* Geometry of the cascading submenu, mirroring `.cascading-sub` in index.css —
    the flip decision has to know how much room the panel will want before it
    renders, so these two must stay in step with the stylesheet. */
 const SUBMENU_WIDTH = 280;
+/* A date section's submenu holds the presets rail and two 252px calendars, so
+   it needs roughly two and a half times the width — `.cascading-sub--date`. */
+const SUBMENU_WIDTH_DATE = 710;
 const SUBMENU_GAP = 6;
 const VIEWPORT_MARGIN = 8;
 
@@ -581,6 +605,11 @@ export type CascadingSection = {
      long option lists (e.g. Quizzes, Feedback Forms) where scanning unaided
      doesn't scale. Omit for short, fixed option sets like Tasks' Type/Visibility. */
   searchPlaceholder?: string;
+  /** Makes the submenu the shared dual-calendar range picker (the same panel
+     the Date Range pill drops), rather than a checklist. Its value lives in
+     `dates`, and the panel brings its own Apply — so the submenu renders no
+     footer of its own. Wider than a checklist: see SUBMENU_WIDTH_DATE. */
+  date?: boolean;
 };
 
 /* The shared "More Filters" body: a list of submenu rows, each revealing its own
@@ -594,16 +623,25 @@ export function CascadingMultiSelect({
   sections,
   value,
   texts = EMPTY_TEXTS,
+  dates = EMPTY_DATES,
   onApply,
 }: {
   sections: CascadingSection[];
   value: Record<string, string[]>;
   /** Applied values for the `text` sections, keyed the same way. */
   texts?: Record<string, string>;
-  onApply: (v: Record<string, string[]>, texts: Record<string, string>) => void;
+  /** Applied ranges for the `date` sections; null means the section filters
+   *  nothing yet. */
+  dates?: Record<string, DateRangeState | null>;
+  onApply: (
+    v: Record<string, string[]>,
+    texts: Record<string, string>,
+    dates: Record<string, DateRangeState | null>,
+  ) => void;
 }) {
   const [draft, setDraft] = useState<Record<string, string[]>>(value);
   const [textDraft, setTextDraft] = useState<Record<string, string>>(texts);
+  const [dateDraft, setDateDraft] = useState<Record<string, DateRangeState | null>>(dates);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
   const [query, setQuery] = useState("");
@@ -613,9 +651,13 @@ export function CascadingMultiSelect({
   // the document and scrolls the whole page sideways.
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [flip, setFlip] = useState(false);
+  /* Horizontal nudge that keeps a too-wide submenu inside the window — see the
+     layout effect below. 0 whenever it already fits. */
+  const [shift, setShift] = useState(0);
 
   useEffect(() => setDraft(value), [value]);
   useEffect(() => setTextDraft(texts), [texts]);
+  useEffect(() => setDateDraft(dates), [dates]);
 
   /* Text fields are trimmed on apply, so trailing whitespace isn't a change. */
   const trimmedTexts = () =>
@@ -626,10 +668,12 @@ export function CascadingMultiSelect({
   const unchanged = sections.every((s) =>
     s.text
       ? (textDraft[s.key] ?? "").trim() === (texts[s.key] ?? "")
-      : sameSelection(draft[s.key] ?? [], value[s.key] ?? []),
+      : s.date
+        ? sameRange(dateDraft[s.key] ?? null, dates[s.key] ?? null)
+        : sameSelection(draft[s.key] ?? [], value[s.key] ?? []),
   );
 
-  const apply = () => onApply(draft, trimmedTexts());
+  const apply = (nextDates = dateDraft) => onApply(draft, trimmedTexts(), nextDates);
 
   function toggleIn(sectionKey: string, item: string) {
     setDraft((d) => {
@@ -657,10 +701,22 @@ export function CascadingMultiSelect({
     const el = menuRef.current;
     if (!hovered || !el) return;
     const { right, left } = el.getBoundingClientRect();
-    const needed = SUBMENU_WIDTH + SUBMENU_GAP + VIEWPORT_MARGIN;
+    const width = sections.find((s) => s.key === hovered)?.date
+      ? SUBMENU_WIDTH_DATE
+      : SUBMENU_WIDTH;
+    const needed = width + SUBMENU_GAP + VIEWPORT_MARGIN;
     // Only flip when the left side actually has the room the right side lacks.
-    setFlip(right + needed > window.innerWidth && left - needed >= 0);
-  }, [hovered]);
+    const flipped = right + needed > window.innerWidth && left - needed >= 0;
+    setFlip(flipped);
+    /* A date submenu is wide enough that a window can be too narrow for EITHER
+       side (the flip above then keeps it on the right). Pull it back inside by
+       however much it overhangs, rather than letting it widen the document and
+       scroll the page sideways. */
+    const overhang = flipped
+      ? 0
+      : right + SUBMENU_GAP + width + VIEWPORT_MARGIN - window.innerWidth;
+    setShift(overhang > 0 ? -overhang : 0);
+  }, [hovered, sections]);
 
   return (
     <div
@@ -689,10 +745,26 @@ export function CascadingMultiSelect({
           : openSection.groups ?? [];
         return (
           <div
-            className={`cascading-sub ${flip ? "is-left" : ""}`}
-            style={{ top: hoveredTop }}
+            className={`cascading-sub ${openSection.date ? "cascading-sub--date" : ""} ${flip ? "is-left" : ""}`}
+            style={shift ? { top: hoveredTop, marginLeft: SUBMENU_GAP + shift } : { top: hoveredTop }}
           >
-            {openSection.text ? (
+            {openSection.date ? (
+              /* The range panel owns its own Apply, so this submenu renders no
+                 footer — applying there commits the whole draft, the same way a
+                 checklist's Apply does. A section nobody has set yet is seeded
+                 with the picker's own default (Last 30 Days) so its calendars
+                 open on the current months rather than 20 years back — and
+                 since the panel disables Apply until something actually moves,
+                 seeding a preset can't commit a filter the user didn't pick. */
+              <DateRangePanel
+                applied={dateDraft[openSection.key] ?? defaultDateRange()}
+                onApply={(v) => {
+                  const next = { ...dateDraft, [openSection.key]: v };
+                  setDateDraft(next);
+                  apply(next);
+                }}
+              />
+            ) : openSection.text ? (
               <div className="dropdown-list filter-textfield">
                 <input
                   className="filter-textfield-input"
@@ -751,11 +823,13 @@ export function CascadingMultiSelect({
               </div>
               </>
             )}
-            <div className="dropdown-footer">
-              <button className="btn-apply" disabled={unchanged} onClick={apply}>
-                Apply
-              </button>
-            </div>
+            {!openSection.date && (
+              <div className="dropdown-footer">
+                <button className="btn-apply" disabled={unchanged} onClick={() => apply()}>
+                  Apply
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}

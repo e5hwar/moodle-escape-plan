@@ -41,7 +41,7 @@ export const nodes: ContentNode[] = [
   // Links page can focus it (by name — see certToFocusNode in App.tsx) and so it
   // can be picked as a link target. Names must match certifications.ts exactly.
   { id: "n-epa3", name: "EPA 608 Type III", kind: "Certification", level: "Advanced", tasksCount: 5, enrolled: 372, industry: "HVAC › Commercial" },
-  { id: "n-hfs", name: "HVAC Field Skills", kind: "Certification", level: "Intermediate", tasksCount: 11, enrolled: 458, industry: "HVAC" },
+  { id: "n-hfs", name: "HVAC JobReady", kind: "Certification", level: "Intermediate", tasksCount: 11, enrolled: 458, industry: "HVAC" },
   { id: "n-plumb1", name: "Plumbing Apprentice Year 1", kind: "Certification", level: "Beginner", tasksCount: 18, enrolled: 214, industry: "Plumbing" },
   { id: "n-ecr", name: "Electrical Code Refresher", kind: "Certification", level: "Intermediate", tasksCount: 8, enrolled: 331, industry: "Electrical" },
   { id: "n-solar", name: "Solar PV Installer Basics", kind: "Certification", level: "Beginner", tasksCount: 12, enrolled: 276, industry: "Solar & Renewables › Solar PV" },
@@ -107,7 +107,7 @@ export const links: Link[] = [
   { from: "n-epa3", to: "n-hfs", kind: "recommended", strength: 50 },
   { from: "n-epa3", to: "n-nextech", kind: "related", strength: 45 },
 
-  // NATE + HVAC Field Skills hub.
+  // NATE + HVAC JobReady hub.
   { from: "n-nate", to: "n-hfs", kind: "recommended", strength: 60 },
   { from: "n-brc", to: "n-hfs", kind: "prerequisite", strength: 55 },
   { from: "n-rtb", to: "n-hfs", kind: "prerequisite", strength: 60 },

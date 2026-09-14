@@ -1,6 +1,7 @@
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CascadingMultiSelect, EditColumnsButton } from "./Filters";
 import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   TIERS,
   SUBSCRIPTION_STATUSES,
@@ -101,7 +102,11 @@ export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }:
       {/* Date Range holds the row's right edge (Figma 673:1409). It always has
           a value and cannot be removed — Clear Filters leaves it alone. */}
       <span className="filters-end">
-        <DateRangePill value={dateRange} onChange={setDateRange} />
+        <DateRangePill
+          value={dateRange}
+          onChange={setDateRange}
+          tip={FILTER_TIPS.companies.dateRange}
+        />
       </span>
     </div>
   );
@@ -127,6 +132,7 @@ function TierPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.companies.tier}
         />
       )}
     >
@@ -164,6 +170,7 @@ function StatusPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.companies.status}
         />
       )}
     >
@@ -198,6 +205,7 @@ function IndustryPill({
           value={summary}
           open={open}
           toggle={toggle}
+          tip={FILTER_TIPS.companies.industry}
           onClear={() => onApply([])}
         />
       )}
@@ -235,6 +243,7 @@ function PartnershipPill({
           value={summary}
           open={open}
           toggle={toggle}
+          tip={FILTER_TIPS.companies.partnership}
           onClear={() => onApply([])}
         />
       )}

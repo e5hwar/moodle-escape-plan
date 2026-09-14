@@ -7,6 +7,7 @@ import {
 import { SortIcon, ChevronLeftIcon, ChevronRightIcon, RowChevronIcon } from "./icons";
 import { ProctoringSearch } from "./ProctoringSearch";
 import { MultiPill } from "./UsersFilters";
+import { FILTER_TIPS } from "../data/filterTips";
 
 const PAGE_SIZE = 50;
 
@@ -164,6 +165,7 @@ export function PendingIdReuploadsPage({
                   searchable
                   searchPlaceholder="Search Quizzes..."
                   width={300}
+                  tip={FILTER_TIPS.examReviews.reuploadQuiz}
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>

@@ -3,6 +3,7 @@ import { mergeUsers, userTypeOf, type MergeUser } from "../data/mergeAccounts";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -187,6 +188,7 @@ export function SelectUsersModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="User Type"
+                  tip={FILTER_TIPS.userPicker.type}
                   value={summarize(types, USER_TYPES)}
                   open={open}
                   toggle={t}
@@ -211,6 +213,7 @@ export function SelectUsersModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Subscription"
+                  tip={FILTER_TIPS.userPicker.subscription}
                   value={summarize(subs, SUBSCRIPTIONS)}
                   open={open}
                   toggle={t}
@@ -235,6 +238,7 @@ export function SelectUsersModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Company"
+                  tip={FILTER_TIPS.userPicker.company}
                   value={summarize(companies, allCompanies)}
                   open={open}
                   toggle={t}
@@ -259,6 +263,7 @@ export function SelectUsersModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Role"
+                  tip={FILTER_TIPS.userPicker.role}
                   value={summarize(roles, ROLES)}
                   open={open}
                   toggle={t}

@@ -3,6 +3,7 @@ import { nodes as contentNodes, type ContentNode } from "../data/contentLinks";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -176,6 +177,7 @@ export function SelectCertificationsModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Industry"
+                  tip={FILTER_TIPS.certificationPicker.industry}
                   value={summarize(industries, allIndustries)}
                   open={open}
                   toggle={t}
@@ -200,6 +202,7 @@ export function SelectCertificationsModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Level"
+                  tip={FILTER_TIPS.certificationPicker.level}
                   value={summarize(levels, LEVELS)}
                   open={open}
                   toggle={t}

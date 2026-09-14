@@ -43,6 +43,26 @@ function resolve(target: EventTarget | null): HTMLElement | null {
   return null;
 }
 
+/** A trigger's tip, withheld while the trigger is OPEN.
+ *
+ *  Returned as a `data-tip` value, not a `title`: `adopt()` above MOVES a
+ *  native title into `data-tip` on first hover, so a React-controlled `title`
+ *  can never be taken back once it has been adopted. `data-tip` stays
+ *  React's to add and remove.
+ *
+ *  The dispatch is what makes it act at the moment of the click rather than on
+ *  the next hover: the pointer is still on the pill when its menu opens, so a
+ *  card is already on screen with nothing left to re-trigger it. `tip-refresh`
+ *  makes the live tooltip re-read the anchor it is showing — the same hook
+ *  CopyCells uses when a cell's tip changes under the pointer — which drops the
+ *  card when the tip is gone and restores it when the menu closes. */
+export function useTipWhileClosed(tip: string | undefined, open: boolean) {
+  useEffect(() => {
+    window.dispatchEvent(new Event("tip-refresh"));
+  }, [open]);
+  return open ? undefined : tip;
+}
+
 /* `below`/`above` are the two candidate y positions — which one is used is
    settled after the card is measured, since a long tip near the bottom of the
    window would otherwise run off it. */

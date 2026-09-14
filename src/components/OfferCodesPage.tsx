@@ -21,6 +21,7 @@ import {
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { MultiSelect } from "./NewCompanyWizard";
 import { DateField } from "./DateField";
@@ -269,6 +270,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                   trigger={({ open, toggle }) => (
                     <PillTrigger
                       label="Plan"
+                      tip={FILTER_TIPS.offerCodes.plan}
                       value={summarize(planFilter, PLAN_OPTIONS)}
                       open={open}
                       toggle={toggle}
@@ -293,6 +295,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                   trigger={({ open, toggle }) => (
                     <PillTrigger
                       label="Countries/Regions"
+                      tip={FILTER_TIPS.offerCodes.regions}
                       value={summarize(regionFilter, REGION_BANK)}
                       open={open}
                       toggle={toggle}

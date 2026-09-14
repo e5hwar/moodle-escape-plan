@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Dropdown } from "./Dropdown";
+import { FILTER_TIPS } from "../data/filterTips";
 import { EditColumnsIcon } from "./icons";
 import {
   PillTrigger,
@@ -127,6 +128,7 @@ function IndustryPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.certifications.industry}
         />
       )}
     >
@@ -165,6 +167,7 @@ function CareerStagePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.certifications.careerStage}
         />
       )}
     >
@@ -201,6 +204,7 @@ function TypePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={FILTER_TIPS.certifications.type}
         />
       )}
     >

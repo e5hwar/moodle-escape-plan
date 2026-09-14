@@ -4,6 +4,7 @@ import { certifications } from "../data/certifications";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -228,7 +229,7 @@ export function SelectTasksModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Task Type"
-                  tip="Filter by Task Type"
+                  tip={FILTER_TIPS.taskPicker.type}
                   value={summarize(types, TASK_TYPES)}
                   open={open}
                   toggle={t}
@@ -253,7 +254,7 @@ export function SelectTasksModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Task Visibility"
-                  tip="Filter by whether the Task is visible to learners"
+                  tip={FILTER_TIPS.taskPicker.visibility}
                   value={summarize(vis, VISIBILITIES)}
                   open={open}
                   toggle={t}
@@ -278,7 +279,7 @@ export function SelectTasksModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Certifications"
-                  tip="Filter by the Certifications a Task is used in"
+                  tip={FILTER_TIPS.taskPicker.certifications}
                   value={summarize(certs, allCerts)}
                   open={open}
                   toggle={t}
@@ -303,7 +304,7 @@ export function SelectTasksModal({
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Industry"
-                  tip="Filter by the Industry a Task’s Certifications belong to"
+                  tip={FILTER_TIPS.taskPicker.industry}
                   value={summarize(inds, allIndustries)}
                   open={open}
                   toggle={t}

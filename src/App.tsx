@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
 import { CopyCells } from "./components/CopyCells";
@@ -9,7 +9,7 @@ import { AttemptsPage } from "./components/AttemptsPage";
 import { AttemptViewerPage } from "./components/AttemptViewerPage";
 import { type Attempt, type AttemptStatus } from "./data/attempts";
 import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
-import { tasks, type Task } from "./data/tasks";
+import { tasks, type Task, type TaskType } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard, ArchiveCertificationPage } from "./components/NewCertificationWizard";
@@ -46,6 +46,7 @@ import { UserProfilePage } from "./components/UserProfilePage";
 import { PortfolioPage } from "./components/PortfolioPage";
 import { StripeInvoicesPage } from "./components/StripeInvoicesPage";
 import { users as allUsers } from "./data/users";
+import { submissionForLearner, type TaskSubmission } from "./data/reviewSubmissions";
 import {
   activeLinks,
   feedbackForms as seedForms,
@@ -84,7 +85,14 @@ type View =
   | { name: "certs" }
   | { name: "new-task"; taskType: TaskTypeKey }
   | { name: "edit-task"; task: Task }
-  | { name: "attempts"; quizName: string }
+  | {
+      name: "attempts";
+      quizName: string;
+      /** Deep link from Manage Completions: one learner's attempts. */
+      nameFilter?: string;
+      statusFilter?: AttemptStatus;
+      extraAttempts?: Attempt[];
+    }
   | { name: "attempt-viewer"; attempt: Attempt; quizName: string }
   | { name: "quiz-purchasers"; task: Task }
   | { name: "new-cert-start" }
@@ -112,7 +120,16 @@ type View =
   | { name: "manage-subscription"; company: Company }
   | { name: "users"; companyFilter?: string }
   | { name: "offer-codes" }
-  | { name: "review-hands-on" }
+  /* `taskFilter` deep-links the page with one Task pre-selected — a Hands-On
+     Task's "View All Attempts" lands here (its attempts ARE submissions),
+     where a Quiz/xAPI lands on Quiz Attempts. */
+  | {
+      name: "review-hands-on";
+      taskFilter?: string;
+      /** Deep link from Manage Completions: one learner on one Task. */
+      userFilter?: string;
+      extraSubmissions?: TaskSubmission[];
+    }
   | { name: "name-change-requests" }
   | { name: "pending-id-reuploads" }
   /* Manage Completions is not a nav landing page — it is only reached scoped,
@@ -231,19 +248,14 @@ export default function App() {
   const portfolioId = params.get("portfolio");
   const stripeCustomerId = params.get("stripeInvoices");
   const loginAsCompany = params.get("loginAs");
-  const attemptsUid = params.get("attemptsUid");
-  const attemptsTaskId = params.get("attemptsTaskId");
-  /** Optional: lands the Attempts page with its Status filter already applied. */
-  const attemptsStatus = params.get("attemptsStatus") as AttemptStatus | null;
   const editTaskId = params.get("editTask");
-  if (attemptsUid && attemptsTaskId) {
-    return (
-      <StandaloneAttemptsPage
-        uid={attemptsUid}
-        taskId={attemptsTaskId}
-        status={attemptsStatus ?? undefined}
-      />
-    );
+  /* The Hands-On review screen's task link (a reviewer wants the brief, not the
+     editor): its own tab, holding a placeholder until the real read-only brief
+     exists. */
+  const taskBriefId = params.get("taskBrief");
+  if (taskBriefId) {
+    const t = tasks.find((x) => x.id === taskBriefId);
+    return <TaskBriefPlaceholder name={t?.name ?? taskBriefId} />;
   }
   // Task editor in its own tab — opened from the Hands-On review screen.
   if (editTaskId) {
@@ -278,48 +290,82 @@ export default function App() {
   return <AdminApp />;
 }
 
-/* Standalone Attempts page, opened in a new tab from Manage Completions
- * (Certification Lookup) via ?attemptsUid=&attemptsTaskId=. Rebuilds the same
- * deterministic Certification Lookup data set (buildData() is a pure, seeded
- * function of fixed inputs, so it's identical to what the originating tab
- * saw) and synthesizes that employee's real attempt history for the task, so
- * the page always has rows to show whenever they've actually attempted it —
- * instead of relying on the unrelated Attempts mock dataset. Keeps its own
- * tiny attempts ⇄ attempt-viewer state since there's no Tasks page to return
- * to in this tab. */
-function StandaloneAttemptsPage({
-  uid,
-  taskId,
-  status,
-}: {
-  uid: string;
-  taskId: string;
-  status?: AttemptStatus;
-}) {
-  const data = useMemo(() => buildData(), []);
+/* A "View All Attempts" deep link from Manage Completions, resolved into a
+ * normal View so the new tab renders the REAL page inside the admin shell —
+ * sidebar, breadcrumb, the same table — rather than a bare standalone screen.
+ *
+ * Both destinations rebuild the same deterministic Certification Lookup data
+ * set (buildData() is a pure, seeded function of fixed inputs, so it matches
+ * what the originating tab saw) and hand the page the rows it would otherwise
+ * lack: the Attempts and Hands-On datasets are unrelated to that model, so a
+ * real pairing can be missing from either. */
+function deepLinkView(params: URLSearchParams): View | null {
+  const attemptsUid = params.get("attemptsUid");
+  const attemptsTaskId = params.get("attemptsTaskId");
+  const handsOnUid = params.get("handsOnUid");
+  const handsOnTaskId = params.get("handsOnTaskId");
+  const uid = attemptsUid ?? handsOnUid;
+  const taskId = attemptsTaskId ?? handsOnTaskId;
+  if (!uid || !taskId) return null;
+
+  const data = buildData();
   const employee = data.employeesById[uid];
   const task = data.tasksById[taskId];
-  if (!employee || !task) return <StandaloneNotFound id={uid} />;
+  if (!employee || !task) return null;
   const cell = data.cells[uid + "_" + taskId];
-  const history = attemptsForTask(uid, employee.name, employee.contact, task, cell);
 
-  return (
-    <AttemptsPage
-      quizName={task.name}
-      initialNameFilter={employee.name}
-      initialStatusFilter={status}
-      extraAttempts={history}
-    />
-  );
+  if (handsOnUid && handsOnTaskId) {
+    const libraryTask = tasks.find((t) => t.name === task.name);
+    const user = allUsers.find((u) => u.id === uid);
+    return {
+      name: "review-hands-on",
+      taskFilter: task.name,
+      userFilter: employee.name,
+      extraSubmissions: [
+        submissionForLearner({
+          userId: employee.id,
+          userName: employee.name,
+          email: user?.email ?? employee.contact,
+          phone: user?.phone ?? employee.contact,
+          userType: employee.isB2B ? "B2B" : "B2C",
+          companyName: user?.companyName,
+          taskName: task.name,
+          taskId: libraryTask?.id ?? task.id,
+          certifications: libraryTask?.usedIn ?? [task.certName],
+          createdBy: libraryTask?.createdBy ?? "SkillCat",
+          attempts: cell?.attempts ?? 1,
+          reviewPending: cell?.status === "review",
+          complete: cell?.status === "complete",
+        }),
+      ],
+    };
+  }
+
+  return {
+    name: "attempts",
+    quizName: task.name,
+    nameFilter: employee.name,
+    statusFilter: (params.get("attemptsStatus") as AttemptStatus | null) ?? undefined,
+    extraAttempts: attemptsForTask(uid, employee.name, employee.contact, task, cell),
+  };
 }
 
-/** Opens the Attempts page for one employee's task attempts in a new tab. */
+/** Opens one employee's attempts on a task in a new tab — the Quiz Attempts
+ *  page for a Quiz, the Hands-On submissions page for a Hands-On Task. Both
+ *  land filtered to that Task and that learner. */
 function openAttemptsForUser(uid: string, taskId: string) {
-  window.open(
-    `${window.location.origin}${window.location.pathname}?attemptsUid=${encodeURIComponent(uid)}&attemptsTaskId=${encodeURIComponent(taskId)}`,
-    "_blank",
-    "noopener",
-  );
+  const handsOn = certTaskType(taskId) === "Hands-On Task";
+  const query = handsOn
+    ? `handsOnUid=${encodeURIComponent(uid)}&handsOnTaskId=${encodeURIComponent(taskId)}`
+    : `attemptsUid=${encodeURIComponent(uid)}&attemptsTaskId=${encodeURIComponent(taskId)}`;
+  window.open(`${window.location.origin}${window.location.pathname}?${query}`, "_blank", "noopener");
+}
+
+/** The certification model's type for a task id — the opener needs it to pick
+ *  a destination, and rebuilding the (pure, seeded) model is cheap enough for
+ *  a click handler. */
+function certTaskType(taskId: string): TaskType | null {
+  return buildData().tasksById[taskId]?.type ?? null;
 }
 
 /* Placeholder shown when an admin clicks "Open Company Dashboard" on a
@@ -361,6 +407,19 @@ function openLoginAsLibrary(company: string) {
   );
 }
 
+/* Placeholder for the Task brief a reviewer opens from the review screen —
+   Instructions, Materials Required and the uploaded Reference Files. */
+function TaskBriefPlaceholder({ name }: { name: string }) {
+  return (
+    <div style={{ padding: 48, fontFamily: "var(--font-sans)" }}>
+      <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, color: "#fff" }}>{name}</h1>
+      <p style={{ marginTop: 12, fontSize: 16, color: "#a8a8a8" }}>
+        Instructions, Materials Required and Reference Files for this Task will appear here.
+      </p>
+    </div>
+  );
+}
+
 function StandaloneNotFound({ id }: { id: string }) {
   return (
     <div style={{ padding: 48, color: "#9a9aa0", fontFamily: "var(--font-sans)" }}>
@@ -370,7 +429,11 @@ function StandaloneNotFound({ id }: { id: string }) {
 }
 
 function AdminApp() {
-  const [view, setView] = useState<View>(viewFromUrl);
+  /* A "View All Attempts" link lands here, not on a standalone screen — the
+     tab looks exactly as if the page had been navigated to. */
+  const [view, setView] = useState<View>(
+    () => deepLinkView(new URLSearchParams(window.location.search)) ?? viewFromUrl(),
+  );
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
@@ -579,7 +642,14 @@ function AdminApp() {
               onNewTask={(t) => setView({ name: "new-task", taskType: t })}
               onEditTask={(task) => setView({ name: "edit-task", task })}
               onOpenCompanyDashboard={openLoginAsLibrary}
-              onViewAttempts={(task) => setView({ name: "attempts", quizName: task.name })}
+              onViewAttempts={(task) =>
+                /* A Hands-On Task has no Quiz Attempts row — its attempts are
+                   the review submissions, so send it to Hands-On scoped to
+                   that Task instead. */
+                task.type === "Hands-On Task"
+                  ? setView({ name: "review-hands-on", taskFilter: task.name })
+                  : setView({ name: "attempts", quizName: task.name })
+              }
               onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
               onManageProgress={(task) =>
                 setView({ name: "content-overrides", taskId: task.id, origin: "tasks" })
@@ -593,6 +663,9 @@ function AdminApp() {
       ) : view.name === "attempts" ? (
         <AttemptsPage
           quizName={view.quizName}
+          initialNameFilter={view.nameFilter}
+          initialStatusFilter={view.statusFilter}
+          extraAttempts={view.extraAttempts}
           onBack={() => setView({ name: "tasks" })}
         />
       ) : view.name === "attempt-viewer" ? (
@@ -726,7 +799,11 @@ function AdminApp() {
       ) : view.name === "offer-codes" ? (
         <OfferCodesPage onBack={() => navigate("manage-users")} />
       ) : view.name === "review-hands-on" ? (
-        <ReviewHandsOnPage />
+        <ReviewHandsOnPage
+          initialTaskFilter={view.taskFilter}
+          initialQuery={view.userFilter}
+          extraSubmissions={view.extraSubmissions}
+        />
       ) : view.name === "pending-id-reuploads" ? (
         <PendingIdReuploadsPage
           onBack={() => setView({ name: "proctoring" })}

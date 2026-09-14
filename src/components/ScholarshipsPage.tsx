@@ -19,6 +19,7 @@ import {
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { SelectField } from "./SelectField";
 import { DateField } from "./DateField";
@@ -257,6 +258,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                   trigger={({ open, toggle }) => (
                     <PillTrigger
                       label="Assigned By"
+                      tip={FILTER_TIPS.scholarships.assignedBy}
                       value={summarize(assignerFilter, ASSIGNERS)}
                       open={open}
                       toggle={toggle}

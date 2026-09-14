@@ -352,6 +352,15 @@ export const DownloadIcon = () => (
   </svg>
 );
 
+/* Icon Library "download" at 12px (756:3157) — the glyph on the media stage's
+   Download chip. Square caps and a 1px stroke on a 12 box, path verbatim from
+   the Figma export; `DownloadIcon` above is the rounded 24-box generic. */
+export const DownloadIcon12 = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
+    <path d="M8.25 5.25L6 7.5L3.75 5.25M6 6.875V2M10.25 7.5V10H1.75V7.5" />
+  </svg>
+);
+
 export const DocumentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" />
@@ -590,6 +599,16 @@ export const ExpandVerticalIcon = () => (
 export const ShrinkVerticalIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M10.3333 12.3333L8 10L5.66667 12.3333M13.3333 8H2.66667M10.3333 3.66667L8 6L5.66667 3.66667M8 1.66667V5.16667M8 14.3333V10.8333" />
+  </svg>
+);
+
+/* Solid caret down (1169:1600, "Icon Library") — the disclosure wedge on the
+   attempts dropdown's trigger. Same 16-box solid family as TreeCaretIcon, NOT
+   one of the stroked chevrons; the path is the Figma export verbatim and the
+   fill is currentColor so the trigger can tint it #a8a8a8. */
+export const CaretDownIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 10L11.6667 6.33333H4.33333L8 10Z" />
   </svg>
 );
 
@@ -879,6 +898,33 @@ export const MenuGrantAttemptsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333">
     <circle cx="8" cy="8" r="6.667" />
     <path d="M11 8H5M8 5V11" strokeLinecap="square" />
+  </svg>
+);
+
+/* Small arrow-right — the "subject → change" separator in the Changes Made
+   hover card (node 1155:1166). Drawn at the node's own 10.286 box so the
+   0.857 stroke stays as fine as the design's. */
+export const ChangeArrowIcon = () => (
+  <svg width="10.2857" height="10.2857" viewBox="0 0 10.2857 10.2857" fill="none">
+    <path
+      d="M5.57143 7.5L7.92857 5.14286L5.57143 2.78571M7.39286 5.14286H1.82143"
+      stroke="currentColor"
+      strokeWidth="0.857143"
+      strokeLinecap="square"
+    />
+  </svg>
+);
+
+/* tdesign:close at the 14px size the Changes Made card's per-row dismiss uses
+   (node 1155:1187). The 20px `ModalCloseIcon` is a different cut. */
+export const SmallCloseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path
+      d="M10.5 3.5L7 7M7 7L3.5 10.5M7 7L10.5 10.5M7 7L3.5 3.5"
+      stroke="currentColor"
+      strokeWidth="1.69697"
+      strokeLinecap="square"
+    />
   </svg>
 );
 

@@ -24,6 +24,7 @@ import {
 } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   EditColumnsButton,
   PillTrigger,
@@ -357,12 +358,14 @@ export function FeedbackFormsPage({
                   options={STATUS_OPTIONS}
                   value={filters.statuses}
                   onApply={(v) => setFilters((p) => ({ ...p, statuses: v }))}
+                  tip={FILTER_TIPS.feedbackForms.status}
                 />
                 <MultiPill
                   label="Created By"
                   options={creators}
                   value={filters.creators}
                   onApply={(v) => setFilters((p) => ({ ...p, creators: v }))}
+                  tip={FILTER_TIPS.feedbackForms.createdBy}
                 />
                 {filters.statuses.length + filters.creators.length > 0 && (
                   <button
@@ -376,7 +379,11 @@ export function FeedbackFormsPage({
                     value — it scopes the Responses count, so Clear Filters
                     leaves it alone. */}
                 <span className="filters-end">
-                  <DateRangePill value={dateRange} onChange={setDateRange} />
+                  <DateRangePill
+                    value={dateRange}
+                    onChange={setDateRange}
+                    tip={FILTER_TIPS.feedbackForms.dateRange}
+                  />
                 </span>
               </div>
 
@@ -484,11 +491,14 @@ function MultiPill({
   options,
   value,
   onApply,
+  tip,
 }: {
   label: string;
   options: string[];
   value: string[];
   onApply: (v: string[]) => void;
+  /** Hover line saying what this filter does — see `PillTrigger`. */
+  tip?: string;
 }) {
   return (
     <Dropdown
@@ -500,6 +510,7 @@ function MultiPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={tip}
         />
       )}
     >

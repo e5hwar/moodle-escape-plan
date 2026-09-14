@@ -100,18 +100,26 @@ const DESCRIPTIONS = [
   "I set up the recovery machine with the correct hoses and a recovery cylinder rated for the refrigerant type. I verified the cylinder was not overfilled by weight, opened the appropriate valves in sequence, and started recovery while monitoring pressures. I purged the hoses at the end and recorded the recovered weight.",
 ];
 
+/* The task author's checklist, verbatim from the design's worked example
+   (Figma 1172:2196) — written for the HVAC system-identification task the
+   frame shows, and used for every seeded submission. */
 const CRITERIA: EvaluationCriterion[] = [
-  { id: "c1", label: "Evidence quality and relevance" },
-  { id: "c2", label: "Safety and compliance with procedure" },
-  { id: "c3", label: "Execution accuracy and completeness" },
-  { id: "c4", label: "Professional communication in notes" },
+  { id: "c1", label: "Clearly shows real equipment in its installed location" },
+  { id: "c2", label: "Student selects one system type (Split AC/Heat Pump/Package Unit)" },
+  {
+    id: "c3",
+    label:
+      "Explanation references specific visible evidence (labeling, form factor, installation style, line configuration)",
+  },
+  { id: "c4", label: "No panel removal described or implied" },
+  { id: "c5", label: "Explanation is logical and consistent with the photo" },
 ];
 
 const FAIL_CRITERIA: EvaluationCriterion[] = [
-  { id: "f1", label: "Media does not clearly show the work being described" },
-  { id: "f2", label: "Unsafe practice shown or described (live circuits, removed guards)" },
-  { id: "f3", label: "Required steps skipped or performed out of sequence" },
-  { id: "f4", label: "Notes contradict the submitted evidence" },
+  { id: "f1", label: "Guessing system type without referencing any clues" },
+  { id: "f2", label: "Internet image used instead of real equipment" },
+  { id: "f3", label: "Unsafe behavior described (touching moving fan, opening electrical areas)" },
+  { id: "f4", label: "System type selected contradicts evidence in photo" },
 ];
 
 function uhash(s: string): number {
@@ -221,6 +229,76 @@ function buildSubmissions(): TaskSubmission[] {
 }
 
 export const reviewSubmissions: TaskSubmission[] = buildSubmissions();
+
+/** One submission for a learner × Hands-On Task that the seeded queue above
+ *  may not happen to contain.
+ *
+ *  Manage Completions works off its own certification model, where any learner
+ *  can have attempts on any Task; this queue only gives each learner the 1–3
+ *  Tasks its own hash picked. Deep-linking "View All Attempts" into this page
+ *  would therefore usually land on an empty table, so the opening tab supplies
+ *  the row it is promising — the same trick the standalone Attempts page uses
+ *  for quizzes. Built from the same deterministic hash as the seed, so the
+ *  synthesized row is stable across reloads and indistinguishable from a real
+ *  one. `attempts` (from the Manage Completions cell) drives the version list;
+ *  `reviewPending` decides the status. */
+export function submissionForLearner(args: {
+  userId: string;
+  userName: string;
+  email: string;
+  phone: string;
+  userType: "B2C" | "B2B";
+  companyName?: string;
+  taskName: string;
+  taskId: string;
+  certifications: string[];
+  createdBy: string;
+  attempts: number;
+  reviewPending: boolean;
+  complete: boolean;
+}): TaskSubmission {
+  const k = uhash(`${args.userId}:${args.taskId}:link`);
+  const submittedDaysAgo = (k % 21) + 1;
+  const mediaCount = 2 + (k % 3);
+  const media: SubmissionMedia[] = Array.from({ length: mediaCount }, (_, m) =>
+    m === 0
+      ? {
+          kind: "video" as const,
+          seed: `${args.userId}-link-${m}`,
+          duration: `0:${String(4 + (k % 50)).padStart(2, "0")}`,
+        }
+      : { kind: "image" as const, seed: `${args.userId}-link-${m}` },
+  );
+  const versionCount = Math.max(1, args.attempts);
+  return {
+    id: `RS-L${k % 9000}`,
+    userId: args.userId,
+    userName: args.userName,
+    email: args.email,
+    phone: args.phone,
+    userType: args.userType,
+    companyName: args.companyName,
+    taskName: args.taskName,
+    taskId: args.taskId,
+    certifications: args.certifications,
+    submittedOn: isoDaysAgo(submittedDaysAgo),
+    createdBy: args.createdBy,
+    durationLabel: "Hands-on Task · 2 Hours",
+    status: args.reviewPending ? "Review Pending" : args.complete ? "Completed" : "Rejected",
+    progress: 100,
+    completion: isoDaysAgo(submittedDaysAgo),
+    dueDate: args.userType === "B2B" ? isoDaysAhead(15 + (k % 30)) : undefined,
+    lastActivity: activityLabel(submittedDaysAgo),
+    versions: Array.from({ length: versionCount }, (_, vi) => `V${versionCount - vi}`),
+    media,
+    description: DESCRIPTIONS[k % DESCRIPTIONS.length],
+    hasAudio: k % 3 !== 0,
+    audioLabel: "Voice note",
+    audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
+    criteria: CRITERIA,
+    failCriteria: FAIL_CRITERIA,
+  };
+}
 
 /** A company-created Task is graded by that company, so SkillCat reviewers can
  * only look at it — the review console opens it read-only. */

@@ -1,13 +1,34 @@
 import { tasks } from "./tasks";
 
-// "In Review" and "Rejected" only occur on proctored exams: a passing attempt
-// enters In Review until the Proctoring Team approves the footage, and is
-// Rejected (with a reason) if the footage fails review.
+// A finished attempt is Passed or Failed — the grade decides, so the status
+// never has to be stored independently of the score (see `gradeStatus`).
+// "In Review" and "Rejected" only occur on a REVIEWED Quiz (see `AttemptReview`):
+// a passing attempt enters In Review until the Exam Reviews team signs off, and
+// is Rejected (with a reason) if that review fails.
 export type AttemptStatus =
   | "In Progress"
-  | "Completed"
+  | "Passed"
+  | "Failed"
   | "In Review"
   | "Rejected";
+
+/** How a Quiz's attempts are checked before they count — the same two kinds
+ *  the Exam Reviews console handles (PROCTORED_EXAMS / ID_ONLY_EXAMS in
+ *  data/proctoring.ts):
+ *  - "proctored" — live webcam footage plus the ID document.
+ *  - "id-only"   — the ID document alone; no footage is captured.
+ *  Absent on an ordinary Quiz, whose attempts nobody reviews. */
+export type AttemptReview = "proctored" | "id-only";
+
+/** The app-wide pass mark, the same 70% the attempt viewer and the paid-attempt
+ *  records use (PASS_THRESHOLD in quizPurchases). */
+export const ATTEMPT_PASS_MARK = 70;
+
+/** Whether a finished, un-proctored attempt reads as Passed or Failed. The one
+ *  place the grade → status rule lives; every builder goes through it. */
+export function gradeStatus(grade: number): AttemptStatus {
+  return grade >= ATTEMPT_PASS_MARK ? "Passed" : "Failed";
+}
 
 export type Attempt = {
   id: string;
@@ -24,11 +45,15 @@ export type Attempt = {
   completedAt: string | null;
   /** Whole-number percentage out of 100, or null while In Progress. */
   grade: number | null;
-  /** True when this attempt belongs to a proctored exam — the only place the
-   *  In Review / Rejected statuses can appear. */
-  proctored?: boolean;
-  /** Why the proctoring review rejected the attempt. Set only when the status
-   *  is "Rejected". */
+  /** Set when this attempt's Quiz is reviewed — the only place the In Review /
+   *  Rejected statuses, and a Reviewed On date, can appear. */
+  review?: AttemptReview;
+  /** When the review was decided. Set only once it HAS been — a Passed or
+   *  Rejected attempt on a reviewed Quiz — so an In Review row reads empty
+   *  rather than claiming a date it hasn't earned. */
+  reviewedAt?: string;
+  /** Why the review rejected the attempt. Set only when the status is
+   *  "Rejected". */
   rejectionReason?: string;
 };
 
@@ -37,7 +62,6 @@ export type Attempt = {
    resolves to a populated set. Keep in sync with ATTEMPTS_TYPES in TasksPage. */
 const QUIZ_NAMES = [
   "EPA 608 Type I Final Exam",
-  "NATE RTW Final Exam",
   "Airflow Calibration Quiz",
   "Combustion Analysis",
   "Manifold Gauge Use",
@@ -47,9 +71,13 @@ const QUIZ_NAMES = [
   "OSHA 10 Safety Course",
 ];
 
-/** A proctored certification exam. Its attempts carry the extra In Review /
- *  Rejected statuses that only proctored exams can reach. */
+/* The two reviewed exams, one of each kind — kept OUT of QUIZ_NAMES so their
+   attempts come only from `buildReviewedAttempts`, and every row on them
+   carries a coherent review state. The exams match the Exam Reviews console's
+   own lists: EPA 608 Universal is live-proctored, NATE Ready To Work is an ID
+   check only. */
 const PROCTORED_EXAM = "EPA 608 Universal Final Exam";
+const ID_ONLY_EXAM = "NATE RTW Final Exam";
 
 /** Reasons the Proctoring Team gives when rejecting an attempt's footage. */
 const REJECTION_REASONS = [
@@ -59,6 +87,14 @@ const REJECTION_REASONS = [
   "Tab-switching away from the exam window was detected mid-attempt.",
   "The webcam was covered before the attempt was submitted.",
   "ID verification photo did not match the candidate on camera.",
+];
+
+/** …and the reasons an ID-only review gives, where the document IS the review
+ *  and there is no footage to fault. */
+const ID_REJECTION_REASONS = [
+  "The name on the ID did not match the name on the account.",
+  "The ID document had expired at the time of the attempt.",
+  "The uploaded ID was too blurred to read.",
 ];
 
 const FIRST = [
@@ -170,7 +206,7 @@ function buildAttempts(): Attempt[] {
       phone,
       quizName,
       attemptNumber,
-      status: "Completed",
+      status: gradeStatus(grade),
       startedAt,
       completedAt,
       grade,
@@ -179,30 +215,39 @@ function buildAttempts(): Attempt[] {
   return out;
 }
 
-/** Attempts for the proctored EPA 608 Universal Final Exam. Every proctoring
- *  status is represented, and each attempt is graded on submission; the status
- *  reflects where the footage review stands rather than the score alone. */
-function buildProctoredAttempts(): Attempt[] {
-  // Status mix, in row order: two approved (Completed), two awaiting the
-  // Proctoring Team (In Review), two Rejected with a reason, one still running.
-  const plan: { status: AttemptStatus; reasonIdx?: number }[] = [
-    { status: "Completed" },
+/** Attempts for one reviewed exam. Every review state is represented, and each
+ *  attempt is graded on submission; the status reflects where the review stands
+ *  rather than the score alone. Called once per review kind — the two differ
+ *  only in their rejection reasons and in how long the review takes. */
+function buildReviewedAttempts(
+  exam: string,
+  review: AttemptReview,
+  /** Offsets the id / name / phone seeds so each exam reads as its own roster. */
+  base: number,
+): Attempt[] {
+  /* Status mix, in row order: two whose review signed off (the grade then
+     decides Passed / Failed — `graded` below), two still awaiting review, two
+     Rejected with a reason, one still running. */
+  const plan: { status: AttemptStatus | "graded"; reasonIdx?: number }[] = [
+    { status: "graded" },
     { status: "In Review" },
     { status: "Rejected", reasonIdx: 0 },
     { status: "In Review" },
-    { status: "Completed" },
-    { status: "Rejected", reasonIdx: 3 },
-    { status: "Rejected", reasonIdx: 5 },
+    { status: "graded" },
+    { status: "Rejected", reasonIdx: 1 },
+    { status: "Rejected", reasonIdx: 2 },
     { status: "In Progress" },
   ];
+  const reasons = review === "proctored" ? REJECTION_REASONS : ID_REJECTION_REASONS;
+  /* Footage takes longer to sit through than a single ID photo, so the two
+     kinds turn their reviews around at different speeds. */
+  const reviewHours = review === "proctored" ? 30 : 6;
 
   const out: Attempt[] = [];
   const attemptCounts = new Map<string, number>();
 
   plan.forEach((p, i) => {
-    // Offset the name/phone seeds away from buildAttempts() so the roster reads
-    // as different people.
-    const seed = i + 100;
+    const seed = i + base;
     const first = pick(FIRST, seed * 3 + 2);
     const last = pick(LAST, seed * 5 + 1);
     const name = `${first} ${last}`;
@@ -212,7 +257,7 @@ function buildProctoredAttempts(): Attempt[] {
     const area = pick(AREA, seed * 7);
     const phone = `(${area}) ${pad(200 + ((seed * 37) % 700))}-${pad(1000 + ((seed * 53) % 9000)).slice(-4)}`;
 
-    const key = `${name}::${PROCTORED_EXAM}`;
+    const key = `${name}::${exam}`;
     const attemptNumber = (attemptCounts.get(key) ?? 0) + 1;
     attemptCounts.set(key, attemptNumber);
 
@@ -220,46 +265,65 @@ function buildProctoredAttempts(): Attempt[] {
     const startMinute = Math.floor(rng(seed + 5) * 600);
     const startedAt = stamp(dayOffset, startMinute);
 
-    const base = {
-      id: `A-${5100 + i}`,
+    const row = {
+      id: `A-${5000 + base + i}`,
       name,
       email,
       phone,
-      quizName: PROCTORED_EXAM,
+      quizName: exam,
       attemptNumber,
       startedAt,
-      proctored: true,
+      review,
     };
 
     if (p.status === "In Progress") {
-      out.push({ ...base, status: "In Progress", completedAt: null, grade: null });
+      out.push({ ...row, status: "In Progress", completedAt: null, grade: null });
       return;
     }
 
     const durMinutes = 42 + Math.floor(rng(seed + 9) * 70); // 42–111 min
-    const completedAt = stamp(dayOffset, startMinute + durMinutes);
+    const endMinute = startMinute + durMinutes;
+    const completedAt = stamp(dayOffset, endMinute);
     // Rejected/In Review attempts still passed the quiz — the hold is on the
-    // footage, not the score — so grades skew high.
+    // review, not the score — so grades skew high.
     const grade = Math.min(100, 72 + Math.floor(rng(seed + 13) * 26));
+    /* The review lands some hours after the attempt was submitted, spread so
+       the column doesn't read as one fixed turnaround. */
+    const reviewedAt = stamp(
+      dayOffset,
+      endMinute + 60 * (1 + Math.floor(rng(seed + 17) * reviewHours)),
+    );
 
     if (p.status === "Rejected") {
       out.push({
-        ...base,
+        ...row,
         status: "Rejected",
         completedAt,
         grade,
-        rejectionReason: REJECTION_REASONS[p.reasonIdx ?? 0],
+        reviewedAt,
+        rejectionReason: reasons[(p.reasonIdx ?? 0) % reasons.length],
       });
       return;
     }
 
-    out.push({ ...base, status: p.status, completedAt, grade });
+    /* An In Review row is exactly the one that has NO decision yet, so it is
+       the one case that leaves `reviewedAt` off. */
+    if (p.status === "In Review") {
+      out.push({ ...row, status: "In Review", completedAt, grade });
+      return;
+    }
+
+    out.push({ ...row, status: gradeStatus(grade), completedAt, grade, reviewedAt });
   });
 
   return out;
 }
 
-export const attempts: Attempt[] = [...buildAttempts(), ...buildProctoredAttempts()];
+export const attempts: Attempt[] = [
+  ...buildAttempts(),
+  ...buildReviewedAttempts(PROCTORED_EXAM, "proctored", 100),
+  ...buildReviewedAttempts(ID_ONLY_EXAM, "id-only", 200),
+];
 
 /** Minutes elapsed for an attempt, derived from its start/complete stamps.
  *  Stored alongside so the table can show Duration without re-parsing labels. */
@@ -275,6 +339,17 @@ export function attemptDuration(a: Attempt): string {
   return durationLabel(Math.round(ms / 60000));
 }
 
+/** The Reviewed On date to show for an attempt, if any. The rule in one place:
+ *  only a REVIEWED Quiz has a review at all, and only a decided attempt — one
+ *  that Passed or was Rejected — has a date to show for it. An In Review row is
+ *  still waiting, a Failed one never reached the review, and an ordinary Quiz
+ *  has none. */
+export function attemptReviewedOn(a: Attempt): string | null {
+  if (!a.review) return null;
+  if (a.status !== "Passed" && a.status !== "Rejected") return null;
+  return a.reviewedAt ?? null;
+}
+
 /** Distinct quiz names present in the attempt set, for the Quiz filter. */
 export const ATTEMPT_QUIZ_NAMES: string[] = [...new Set(attempts.map((a) => a.quizName))].sort();
 
@@ -282,7 +357,8 @@ export const ATTEMPT_QUIZ_NAMES: string[] = [...new Set(attempts.map((a) => a.qu
  *  rather than alphabetical, so the list reads as a progression. */
 export const ATTEMPT_STATUSES: AttemptStatus[] = [
   "In Progress",
-  "Completed",
+  "Passed",
+  "Failed",
   "In Review",
   "Rejected",
 ];

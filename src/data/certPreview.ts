@@ -50,7 +50,7 @@ const USEDIN_TO_CERT: Record<string, string> = {
   "EPA 608 Universal": "C-0421",
   "NATE RTW": "C-0410",
   "Safety Bundle": "C-0405",
-  "HVAC Field Skills": "C-0398",
+  "HVAC JobReady": "C-0398",
   "OSHA 10": "C-0341",
 };
 

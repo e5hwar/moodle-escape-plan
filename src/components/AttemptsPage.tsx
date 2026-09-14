@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attempts as seed,
   attemptDuration,
+  attemptReviewedOn,
   attemptCertifications,
   ATTEMPT_QUIZ_NAMES,
   ATTEMPT_CERTIFICATION_NAMES,
@@ -10,6 +11,10 @@ import {
   type AttemptStatus,
 } from "../data/attempts";
 import { MultiPill } from "./UsersFilters";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, CascadingMultiSelect } from "./Filters";
+import { dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
+import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -25,9 +30,20 @@ type SortKey =
   | "status"
   | "startedAt"
   | "completedAt"
+  | "reviewedAt"
   | "duration"
   | "grade";
 type SortDir = "asc" | "desc";
+
+/** Whether a row's stamp falls inside a More Filters range. The stamps are the
+ *  page's own "Mon DD, YYYY · h:mm AM" labels, which `Date.parse` can't read —
+ *  `stampTime` already knows how, so hand the range an ISO date instead. */
+function inRange(range: DateRangeState, stamp: string | null): boolean {
+  if (!stamp) return false;
+  const t = stampTime(stamp);
+  if (!t) return false;
+  return dateRangeIncludes(range, new Date(t).toISOString());
+}
 
 /** Parse the "Mon DD, YYYY · h:mm AM" stamp to a sortable epoch. */
 function stampTime(s: string | null): number {
@@ -48,34 +64,68 @@ type ColMeta = {
   className: string;
   width: number;
   sortable?: boolean;
+  /** Click-to-copy cell (CopyCells.tsx) — the Email/Phone opt-in Exam Reviews
+   *  and both Who Paid tables already carry. */
+  copyable?: boolean;
   /** Tooltip text for the cell — the one place a rejection reason is shown. */
   tip?: (a: Attempt) => string | undefined;
   render: (a: Attempt) => React.ReactNode;
 };
 
-/* Plain-text columns, per the table convention — Status included: it is one of
-   the four lifecycle values and nothing else, with the proctoring rejection
-   reason demoted to a hover tooltip. */
+/* Every empty data cell reads as an em dash, the app's standing empty-cell
+   convention (see ReviewHandsOnPage). Here that is the In Progress row: an
+   attempt still running has no Completed stamp, no Duration and no Grade.
+   CopyCells treats "—" as no value, so a dashed cell stays inert instead of
+   copying a dash. */
+function orDash(node: React.ReactNode): React.ReactNode {
+  return node === null || node === undefined || node === "" ? "—" : node;
+}
+
+/* Status is the shared "Table Pills" set (Figma 652:925 — `.co-status-pill`,
+   the same pills Manage Companies and Manage IDs use): a 10% wash behind the
+   colour at full strength. Green reads as cleared, red as thrown out, yellow as
+   still running, and Failed takes the neutral #737373 pill — a finished attempt
+   that simply didn't make the mark is not an alarm. The two undecided states
+   split the greys and the warm tone between them: In Review is yellow (someone
+   still has to look at it), In Progress the lighter #a8a8a8 secondary (nothing
+   to look at yet). The Rejected pill keeps the cell's rejection-reason
+   tooltip. */
+const STATUS_TONE: Record<AttemptStatus, string> = {
+  "In Progress": "secondary",
+  Passed: "green",
+  Failed: "grey",
+  "In Review": "yellow",
+  Rejected: "red",
+};
+
+/* Plain-text columns otherwise, per the table convention. */
 const COLS: ColMeta[] = [
   { key: "name", label: "Name", className: "col-name", width: 190, render: (a) => a.name },
-  { key: "email", label: "Email", className: "att-col-email", width: 220, sortable: false, render: (a) => a.email },
-  { key: "phone", label: "Phone Number", className: "att-col-phone", width: 170, sortable: false, render: (a) => a.phone },
+  { key: "email", label: "Email", className: "att-col-email", width: 220, sortable: false, copyable: true, render: (a) => a.email },
+  { key: "phone", label: "Phone Number", className: "att-col-phone", width: 170, sortable: false, copyable: true, render: (a) => a.phone },
   { key: "quizName", label: "Quiz Name", className: "att-col-quiz", width: 230, render: (a) => a.quizName },
   { key: "attemptNumber", label: "Attempt", className: "att-col-attempt", width: 110, render: (a) => `#${a.attemptNumber}` },
   {
-    key: "status", label: "Status", className: "att-col-status", width: 160,
+    /* `col-status` is what re-enables the pill chrome past the table's
+       strip-all-spans rule — see the `.co-status-pill` block in index.css. */
+    key: "status", label: "Status", className: "col-status att-col-status", width: 160,
     tip: (a) => a.rejectionReason,
-    render: (a) => a.status,
+    render: (a) => (
+      <span className={`co-status-pill co-status-pill--${STATUS_TONE[a.status]}`}>{a.status}</span>
+    ),
   },
   { key: "startedAt", label: "Started", className: "att-col-date", width: 200, render: (a) => a.startedAt },
-  { key: "completedAt", label: "Completed", className: "att-col-date", width: 200, render: (a) => a.completedAt ?? "" },
-  { key: "duration", label: "Duration", className: "att-col-duration", width: 110, render: (a) => attemptDuration(a) },
+  { key: "completedAt", label: "Completed", className: "att-col-date", width: 200, render: (a) => orDash(a.completedAt) },
+  /* Only a reviewed Quiz's decided attempts have one — every other row dashes
+     (see `attemptReviewedOn`), which is most of them on an ordinary Quiz. */
+  { key: "reviewedAt", label: "Reviewed On", className: "att-col-date", width: 200, render: (a) => orDash(attemptReviewedOn(a)) },
+  { key: "duration", label: "Duration", className: "att-col-duration", width: 110, render: (a) => orDash(attemptDuration(a)) },
   /* Sized to the header, not the data: a grade is at most "100%". The mini
      progress bar this cell used to draw was inert anyway — the plain-text
      column convention flattens any span inside a data cell. */
   {
     key: "grade", label: "Grade", className: "att-col-grade", width: 90,
-    render: (a) => (a.grade === null ? "" : `${a.grade}%`),
+    render: (a) => orDash(a.grade === null ? "" : `${a.grade}%`),
   },
 ];
 
@@ -87,6 +137,11 @@ type Filters = {
   quizzes: string[];
   certifications: string[];
   statuses: AttemptStatus[];
+  /* Behind "More Filters". Attempt is a checklist of the numbers present in the
+     data; the two dates are ranges, null until one is picked. */
+  attemptNumbers: string[];
+  startedRange: DateRangeState | null;
+  completedRange: DateRangeState | null;
 };
 
 export function AttemptsPage({
@@ -113,13 +168,18 @@ export function AttemptsPage({
     quizzes: [quizName],
     certifications: [],
     statuses: initialStatusFilter ? [initialStatusFilter] : [],
+    attemptNumbers: [],
+    startedRange: null,
+    completedRange: null,
   });
   // Commit-on-Enter, like every other page on this bar: `search` is what the
   // table filters on, never the half-typed draft inside the component.
   const [search, setSearch] = useState(initialNameFilter ?? "");
-  // Newest completion first — an admin opens this page to see what just came in.
+  /* Newest attempt first — an admin opens this page to see what just came in,
+     and Started is the one stamp EVERY row has (an In Progress attempt has no
+     completion to sort by, so sorting on that buried them all at one end). */
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "completedAt",
+    key: "startedAt",
     dir: "desc",
   });
   const [page, setPage] = useState(1);
@@ -129,12 +189,12 @@ export function AttemptsPage({
 
   /* The attempt screen is out of scope here: an admin opening an attempt will
      land on the very page the learner saw, so there is nothing separate to
-     build. Until that page is wired up, every View Attempt entry point says so
-     rather than opening a half-built viewer. */
+     build. Until that page is wired up, View Attempt opens the new tab it
+     eventually will — carrying the note instead of a half-built viewer, so the
+     entry point already behaves like the real one (a tab of its own, this page
+     left exactly as it was) rather than a modal alert that blocks it. */
   function viewAttempt() {
-    window.alert(
-      "View Attempt will open the same attempt page that users see. That page isn’t wired up in this prototype yet.",
-    );
+    openAttemptPlaceholder();
   }
 
   /* The Task this page was opened from may be outside the mock attempt set, so
@@ -143,6 +203,15 @@ export function AttemptsPage({
   const quizOptions = useMemo(
     () => [...new Set([quizName, ...ATTEMPT_QUIZ_NAMES])].sort(),
     [quizName],
+  );
+  /* Every attempt number the current set actually reaches, so the checklist
+     never offers a "#4" nobody has. */
+  const attemptOptions = useMemo(
+    () =>
+      [...new Set(list.map((a) => a.attemptNumber))]
+        .sort((a, b) => a - b)
+        .map((n) => `#${n}`),
+    [list],
   );
   const certOptions = useMemo(
     () => [...new Set([...attemptCertifications(quizName), ...ATTEMPT_CERTIFICATION_NAMES])].sort(),
@@ -182,6 +251,12 @@ export function AttemptsPage({
         const certs = attemptCertifications(a.quizName);
         if (!filters.certifications.some((c) => certs.includes(c))) return false;
       }
+      if (filters.attemptNumbers.length && !filters.attemptNumbers.includes(`#${a.attemptNumber}`))
+        return false;
+      if (filters.startedRange && !inRange(filters.startedRange, a.startedAt)) return false;
+      /* A running attempt has no completion, so a Completion Date range
+         excludes it rather than treating "no date" as a match. */
+      if (filters.completedRange && !inRange(filters.completedRange, a.completedAt)) return false;
       if (q && !(
         a.name.toLowerCase().includes(q) ||
         a.email.toLowerCase().includes(q) ||
@@ -203,6 +278,7 @@ export function AttemptsPage({
         case "status": return a.status.localeCompare(b.status);
         case "startedAt": return stampTime(a.startedAt) - stampTime(b.startedAt);
         case "completedAt": return stampTime(a.completedAt) - stampTime(b.completedAt);
+        case "reviewedAt": return stampTime(attemptReviewedOn(a)) - stampTime(attemptReviewedOn(b));
         case "duration": return durationMinutes(a) - durationMinutes(b);
         case "grade": return (a.grade ?? -1) - (b.grade ?? -1);
       }
@@ -227,11 +303,26 @@ export function AttemptsPage({
     setDeleting(null);
   }
 
+  const moreCount =
+    (filters.attemptNumbers.length > 0 ? 1 : 0) +
+    (filters.startedRange ? 1 : 0) +
+    (filters.completedRange ? 1 : 0);
+
   const hasFilters =
-    filters.quizzes.length > 0 || filters.certifications.length > 0 || filters.statuses.length > 0;
+    filters.quizzes.length > 0 ||
+    filters.certifications.length > 0 ||
+    filters.statuses.length > 0 ||
+    moreCount > 0;
 
   function clearFilters() {
-    setFilters({ quizzes: [], certifications: [], statuses: [] });
+    setFilters({
+      quizzes: [],
+      certifications: [],
+      statuses: [],
+      attemptNumbers: [],
+      startedRange: null,
+      completedRange: null,
+    });
   }
 
   return (
@@ -281,6 +372,7 @@ export function AttemptsPage({
                   searchable
                   searchPlaceholder="Search Quizzes..."
                   width={300}
+                  tip={FILTER_TIPS.quizAttempts.quiz}
                 />
                 <MultiPill
                   label="Certification"
@@ -290,6 +382,7 @@ export function AttemptsPage({
                   searchable
                   searchPlaceholder="Search Certifications..."
                   width={300}
+                  tip={FILTER_TIPS.quizAttempts.certification}
                 />
                 <MultiPill
                   label="Status"
@@ -297,6 +390,13 @@ export function AttemptsPage({
                   value={filters.statuses}
                   onApply={(v) => setFilters((f) => ({ ...f, statuses: v as AttemptStatus[] }))}
                   width={220}
+                  tip={FILTER_TIPS.quizAttempts.status}
+                />
+                <MoreFiltersPill
+                  attemptOptions={attemptOptions}
+                  value={filters}
+                  count={moreCount}
+                  onApply={(v) => setFilters((f) => ({ ...f, ...v }))}
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
@@ -399,6 +499,125 @@ export function AttemptsPage({
   );
 }
 
+/* What lives behind "More Filters" — the three that didn't earn a pill of their
+   own. Attempt is a plain checklist; the two dates mount the shared
+   dual-calendar range panel as their submenu (`date` sections, see
+   CascadingMultiSelect), so a range is picked here exactly as it is on the Date
+   Range pill. */
+type MoreFilters = Pick<Filters, "attemptNumbers" | "startedRange" | "completedRange">;
+
+const EMPTY_MORE: MoreFilters = {
+  attemptNumbers: [],
+  startedRange: null,
+  completedRange: null,
+};
+
+function MoreFiltersPill({
+  attemptOptions,
+  value,
+  count,
+  onApply,
+}: {
+  attemptOptions: string[];
+  value: MoreFilters;
+  count: number;
+  onApply: (v: MoreFilters) => void;
+}) {
+  return (
+    <Dropdown
+      width={260}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="More Filters"
+          value={count > 0 ? `${count} Active` : null}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply(EMPTY_MORE)}
+        />
+      )}
+    >
+      {({ close }) => (
+        <MoreFiltersBody
+          attemptOptions={attemptOptions}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+function MoreFiltersBody({
+  attemptOptions,
+  value,
+  onApply,
+}: {
+  attemptOptions: string[];
+  value: MoreFilters;
+  onApply: (v: MoreFilters) => void;
+}) {
+  const selection = useMemo(
+    () => ({ attemptNumbers: value.attemptNumbers }),
+    [value.attemptNumbers],
+  );
+  const dates = useMemo(
+    () => ({ startedRange: value.startedRange, completedRange: value.completedRange }),
+    [value.startedRange, value.completedRange],
+  );
+
+  return (
+    <CascadingMultiSelect
+      sections={[
+        { key: "attemptNumbers", label: "Attempt", groups: [{ items: attemptOptions }] },
+        { key: "startedRange", label: "Start Date", date: true },
+        { key: "completedRange", label: "Completion Date", date: true },
+      ]}
+      value={selection}
+      dates={dates}
+      onApply={(v, _texts, d) =>
+        onApply({
+          attemptNumbers: v.attemptNumbers ?? [],
+          startedRange: d.startedRange ?? null,
+          completedRange: d.completedRange ?? null,
+        })
+      }
+    />
+  );
+}
+
+/* The note View Attempt shows until the learner-facing attempt page exists. */
+const ATTEMPT_PLACEHOLDER =
+  "View Attempt will open the same attempt page that users see. That page isn\u2019t wired up in this prototype yet.";
+
+/* A tab of its own, painted from the app's own tokens so it reads as part of
+   the product rather than a browser dialog. Written directly into the new
+   window: there is no route to give it, and inventing one would outlive the
+   placeholder. A blocked popup falls back to the alert. */
+function openAttemptPlaceholder() {
+  const tab = window.open("", "_blank");
+  if (!tab) {
+    window.alert(ATTEMPT_PLACEHOLDER);
+    return;
+  }
+  tab.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>View Attempt</title>` +
+      `<style>
+         html,body{height:100%;margin:0}
+         body{display:flex;align-items:center;justify-content:center;padding:40px;
+              background:#0b0b0c;color:#e7e7e8;
+              font:14px/1.6 "Fira Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+         p{max-width:440px;margin:0;text-align:center;color:#8b8b8f}
+       </style></head><body><p></p></body></html>`,
+  );
+  tab.document.close();
+  // Text, not markup — the note goes in as a value, never as HTML.
+  const p = tab.document.querySelector("p");
+  if (p) p.textContent = ATTEMPT_PLACEHOLDER;
+}
+
 function ColGroup() {
   return (
     <colgroup>
@@ -425,7 +644,7 @@ function AttemptRow({
   return (
     <tr className={menuOpen ? "menu-open" : ""} onClick={onView}>
       {COLS.map((c) => (
-        <td key={c.key} className={c.className} data-tip={c.tip?.(a)}>
+        <td key={c.key} className={c.className} data-tip={c.tip?.(a)} data-copyable={c.copyable ? "" : undefined}>
           {c.render(a)}
         </td>
       ))}

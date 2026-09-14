@@ -677,7 +677,7 @@ export const questions: Question[] = [
     }),
   Q("Q-10425", "Multiple select",
     "Which devices can be used to identify refrigerant type in a sealed system? (Select all that apply)",
-    "Active", ["EPA Universal Exam", "NATE RTW", "HVAC Field Skills"], {
+    "Active", ["EPA Universal Exam", "NATE RTW", "HVAC JobReady"], {
       version: 4,
       hasSpanish: true,
       options: [

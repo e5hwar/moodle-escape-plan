@@ -9,6 +9,7 @@ import { type Question, type QuestionType } from "../data/questionBank";
 import { InfoTipIcon, SearchIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   DateRangePill,
   dateRangeIncludes,
@@ -228,6 +229,7 @@ export function FormOverview({ form, bank, responses }: Props) {
               open={open}
               toggle={toggle}
               onClear={() => setTriggerSel([])}
+              tip={FILTER_TIPS.feedbackForms.trigger}
             />
           )}
         >
@@ -242,7 +244,11 @@ export function FormOverview({ form, bank, responses }: Props) {
             />
           )}
         </Dropdown>
-        <DateRangePill value={dateRange} onChange={setDateRange} />
+        <DateRangePill
+          value={dateRange}
+          onChange={setDateRange}
+          tip={FILTER_TIPS.feedbackForms.responsesDateRange}
+        />
         <label className="fb-inactive-check">
           <input
             type="checkbox"

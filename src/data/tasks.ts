@@ -14,6 +14,19 @@ export type TaskQuizSection = {
   requiredToPass: boolean;
 };
 
+/** How a Hands-On Task is scored.
+ *
+ *  A reviewer grades the submission out of `maxScore`, and `passScore` is the
+ *  lowest score that passes — both are set per Task, so a quick photo check can
+ *  be out of 5 while a rubric-scored field visit is out of 25.
+ *
+ *  `graded: false` is a Task that needs no judgement at all — an ID upload, a
+ *  tool-inventory photo. It completes the moment it is submitted and carries no
+ *  grade, so the Grade column stays empty for it. */
+export type HandsOnGrading =
+  | { graded: true; maxScore: number; passScore: number }
+  | { graded: false };
+
 export type Task = {
   id: string;
   name: string;
@@ -34,6 +47,9 @@ export type Task = {
   /** True when a paywall is defined on the Task. Only Quiz Tasks support a
    * paywall — see {@link canHavePaywall}. */
   paywall?: boolean;
+  /** Hands-On scoring — see {@link HandsOnGrading}. Read it through
+   * {@link handsOnGrading}, which fills in the default scale. */
+  handsOn?: HandsOnGrading;
   /** Section-level Quiz configuration. When set, the Quiz uses the sectioned
    * structure with section-level grading. */
   quizSections?: TaskQuizSection[];
@@ -65,10 +81,10 @@ export const tasks: Task[] = [
   T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026", { hidden: true }),
   T("T-1876", "EPA Certification Lookup", "Resource", ["EPA 608 Type I"], "SkillCat", [], "Feb 21, 2024", "Apr 03, 2026", { hidden: true }),
   T("T-1654", "HVAC Field Tools Walkthrough", "xAPI",
-    ["HVAC Field Skills", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
+    ["HVAC JobReady", "EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "Safety Bundle"],
     "SkillCat", ["B2B Companies Only", "HVACR"], "Jan 28, 2024", "Apr 19, 2026"),
   T("T-1543", "Refrigerant Pressure Chart", "Resource", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["Residential HVAC", "Commercial HVAC"], "Dec 02, 2023", "Mar 14, 2026", { hidden: true }),
-  T("T-1432", "Field Visit – Brazing Joints", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat",
+  T("T-1432", "Field Visit – Brazing Joints", "Hands-On Task", ["HVAC JobReady", "EPA 608 Type II"], "SkillCat",
     ["HVAC", "Field", "Brazing"], "Apr 09, 2024", "Apr 28, 2026", {
       description: "Practical brazing skill assessment. Technicians document at least one brazed joint completed in the field, with photos and reflection on quality control measures.",
       updated: "2 days ago by Jordan Patel",
@@ -86,6 +102,9 @@ export const tasks: Task[] = [
   T("T-1344", "R-1234yf Safety Overview", "Resource", ["EPA 609"], "SkillCat", [], "Mar 15, 2024", "Mar 30, 2026", { hidden: true }),
   T("T-1289", "NATE RTW Final Exam", "Quiz", ["NATE RTW"], "SkillCat", ["B2B Companies Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"], "Mar 06, 2024", "Apr 25, 2026", { finalExam: true, paywall: true }),
   T("T-1156", "EPA 608 Type I Final Exam", "Quiz", ["EPA 608 Type I"], "SkillCat", [], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
+  T("T-1149", "EPA 608 Type II Final Exam", "Quiz", ["EPA 608 Type II"], "SkillCat", ["Commercial HVAC"], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
+  T("T-1142", "EPA 608 Type III Final Exam", "Quiz", ["EPA 608 Type III"], "SkillCat", ["Commercial HVAC"], "Feb 02, 2024", "Apr 18, 2026", { finalExam: true }),
+  T("T-1135", "Building Science Principles Final Exam", "Quiz", ["Building Science Principles"], "SkillCat", ["Residential HVAC"], "Jan 29, 2024", "Apr 08, 2026", { finalExam: true }),
   T("T-1198", "EPA 608 Universal Final Exam", "Quiz", ["EPA 608 Universal"], "SkillCat", [], "Feb 14, 2024", "Apr 20, 2026", {
     finalExam: true,
     timeToComplete: "~90 minutes",
@@ -105,21 +124,21 @@ export const tasks: Task[] = [
     ["EPA 608 Type I", "EPA 608 Type II", "NATE RTW", "OSHA 10", "OSHA 30", "Safety Bundle"],
     "SkillCat", [], "Sep 11, 2023", "Mar 30, 2026"),
 
-  T("T-2391", "Compressor Diagnostics Module", "xAPI", ["EPA 608 Type II", "HVAC Field Skills"], "HVACR", [], "Jan 09, 2025", "Apr 02, 2026"),
+  T("T-2391", "Compressor Diagnostics Module", "xAPI", ["EPA 608 Type II", "HVAC JobReady"], "HVACR", [], "Jan 09, 2025", "Apr 02, 2026"),
   T("T-2350", "Refrigerant Charging Procedure", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Universal"], "SkillCat", ["Residential HVAC"], "Feb 11, 2025", "Apr 15, 2026"),
-  T("T-2287", "Heat Pump Troubleshooting", "xAPI", ["HVAC Field Skills"], "ARS", [], "Mar 02, 2025", "Apr 18, 2026"),
+  T("T-2287", "Heat Pump Troubleshooting", "xAPI", ["HVAC JobReady", "Building Science Principles"], "ARS", [], "Mar 02, 2025", "Apr 18, 2026"),
   T("T-2244", "Gas Furnace Safety Check", "Hands-On Task", ["EPA 608 Type II", "Safety Bundle"], "NexTech", [], "Mar 12, 2025", "Apr 09, 2026"),
-  T("T-2199", "Ductwork Installation Guide", "Resource", ["HVAC Field Skills"], "Premium HVAC Services", [], "Mar 18, 2025", "Apr 06, 2026"),
-  T("T-2165", "Thermostat Wiring Lab", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type I"], "SkillCat", ["Residential HVAC"], "Mar 22, 2025", "Apr 11, 2026"),
+  T("T-2199", "Ductwork Installation Guide", "Resource", ["HVAC JobReady"], "Premium HVAC Services", [], "Mar 18, 2025", "Apr 06, 2026"),
+  T("T-2165", "Thermostat Wiring Lab", "Hands-On Task", ["HVAC JobReady", "EPA 608 Type I"], "SkillCat", ["Residential HVAC"], "Mar 22, 2025", "Apr 11, 2026"),
   T("T-2132", "Capacitor Replacement Walkthrough", "xAPI", ["EPA 608 Type II"], "HVACR", [], "Apr 01, 2025", "Apr 21, 2026"),
-  T("T-2098", "Coil Cleaning Procedure", "Hands-On Task", ["HVAC Field Skills"], "ARS", [], "Apr 04, 2025", "Apr 14, 2026"),
-  T("T-2061", "Airflow Calibration Quiz", "Quiz", ["HVAC Field Skills"], "SkillCat", [], "Apr 10, 2025", "Apr 24, 2026", { paywall: true }),
+  T("T-2098", "Coil Cleaning Procedure", "Hands-On Task", ["HVAC JobReady"], "ARS", [], "Apr 04, 2025", "Apr 14, 2026"),
+  T("T-2061", "Airflow Calibration Quiz", "Quiz", ["HVAC JobReady"], "SkillCat", [], "Apr 10, 2025", "Apr 24, 2026", { paywall: true }),
   T("T-2024", "Electrical Panel Lab", "Hands-On Task", ["Safety Bundle", "OSHA 30"], "NexTech", [], "Apr 12, 2025", "Apr 16, 2026"),
 
-  T("T-1989", "Indoor Air Quality Test", "xAPI", ["HVAC Field Skills"], "SkillCat", ["Residential HVAC"], "May 02, 2025", "Apr 07, 2026"),
+  T("T-1989", "Indoor Air Quality Test", "xAPI", ["HVAC JobReady"], "SkillCat", ["Residential HVAC"], "May 02, 2025", "Apr 07, 2026"),
   T("T-1955", "Combustion Analysis", "Quiz", ["EPA 608 Type II"], "HVACR", [], "May 14, 2025", "Apr 02, 2026"),
   T("T-1922", "Boiler Inspection Checklist", "Resource", ["EPA 608 Universal"], "Premium HVAC Services", [], "Jun 03, 2025", "Mar 28, 2026"),
-  T("T-1888", "Mini-Split Install Guide", "xAPI", ["HVAC Field Skills"], "ARS", [], "Jun 12, 2025", "Apr 17, 2026"),
+  T("T-1888", "Mini-Split Install Guide", "xAPI", ["HVAC JobReady"], "ARS", [], "Jun 12, 2025", "Apr 17, 2026"),
   T("T-1855", "Recovery Machine Setup", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Universal"], "SkillCat", [], "Jun 25, 2025", "Apr 19, 2026"),
   T("T-1821", "Vacuum Pump Operation", "Hands-On Task", ["EPA 608 Type I"], "HVACR", [], "Jul 02, 2025", "Apr 03, 2026"),
   T("T-1788", "Manifold Gauge Use", "Quiz", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", [], "Jul 14, 2025", "Apr 05, 2026", { paywall: true }),
@@ -127,9 +146,9 @@ export const tasks: Task[] = [
   T("T-1722", "Subcooling Calculation Quiz", "Quiz", ["EPA 608 Type I"], "SkillCat", [], "Aug 04, 2025", "Apr 14, 2026"),
   T("T-1689", "Superheat Reading Lab", "Hands-On Task", ["EPA 608 Type I"], "ARS", [], "Aug 12, 2025", "Apr 18, 2026"),
 
-  T("T-1655", "VRF System Overview", "xAPI", ["HVAC Field Skills"], "Premium HVAC Services", [], "Aug 25, 2025", "Apr 22, 2026"),
-  T("T-1621", "Chiller Maintenance Module", "Resource", ["HVAC Field Skills"], "HVACR", [], "Sep 01, 2025", "Apr 09, 2026"),
-  T("T-1588", "Cooling Tower Basics", "xAPI", ["HVAC Field Skills"], "Premium HVAC Services", [], "Sep 11, 2025", "Apr 06, 2026"),
+  T("T-1655", "VRF System Overview", "xAPI", ["HVAC JobReady"], "Premium HVAC Services", [], "Aug 25, 2025", "Apr 22, 2026"),
+  T("T-1621", "Chiller Maintenance Module", "Resource", ["HVAC JobReady"], "HVACR", [], "Sep 01, 2025", "Apr 09, 2026"),
+  T("T-1588", "Cooling Tower Basics", "xAPI", ["HVAC JobReady"], "Premium HVAC Services", [], "Sep 11, 2025", "Apr 06, 2026"),
   T("T-1555", "PVC Pipe Joining Lab", "Hands-On Task", [], "SkillCat", ["Residential Plumbing"], "Sep 22, 2025", "Apr 11, 2026"),
   T("T-1521", "PEX Tubing Install Walkthrough", "xAPI", [], "ARS", [], "Oct 02, 2025", "Apr 13, 2026"),
   T("T-1488", "Sweat Soldering Lab", "Hands-On Task", [], "SkillCat", ["Residential Plumbing"], "Oct 12, 2025", "Apr 17, 2026"),
@@ -145,8 +164,8 @@ export const tasks: Task[] = [
   T("T-1188", "Hose Bibb Replacement", "Hands-On Task", [], "SkillCat", ["Residential Plumbing"], "Jan 12, 2026", "Apr 11, 2026"),
   T("T-1155", "Slab Leak Detection", "xAPI", [], "HVACR", [], "Jan 20, 2026", "Apr 15, 2026"),
   T("T-1121", "Gas Line Pressure Test", "Hands-On Task", ["Safety Bundle"], "Premium HVAC Services", [], "Feb 01, 2026", "Apr 19, 2026"),
-  T("T-1088", "Flame Sensor Cleaning", "xAPI", ["HVAC Field Skills"], "ARS", [], "Feb 09, 2026", "Apr 23, 2026"),
-  T("T-1055", "Igniter Replacement Module", "Hands-On Task", ["HVAC Field Skills"], "NexTech", [], "Feb 18, 2026", "Apr 25, 2026"),
+  T("T-1088", "Flame Sensor Cleaning", "xAPI", ["HVAC JobReady"], "ARS", [], "Feb 09, 2026", "Apr 23, 2026"),
+  T("T-1055", "Igniter Replacement Module", "Hands-On Task", ["HVAC JobReady"], "NexTech", [], "Feb 18, 2026", "Apr 25, 2026"),
   T("T-1021", "Hotel Maintenance Walkthrough", "xAPI", [], "Premium HVAC Services", [], "Feb 26, 2026", "Apr 27, 2026"),
   T("T-0988", "MultiFamily Service Visit", "Hands-On Task", [], "ARS", [], "Mar 06, 2026", "Apr 29, 2026"),
   T("T-0955", "NexStar Onboarding", "Resource", [], "SkillCat", ["B2B Companies Only", "NexStar"], "Mar 14, 2026", "Apr 28, 2026"),
@@ -154,15 +173,15 @@ export const tasks: Task[] = [
   /* The Hands-On Tasks that the review queue draws submissions from — every
      task name in data/reviewSubmissions.ts resolves to one of these, so the
      review screen can open a submission's task in its editor. */
-  T("T-2299", "HVAC Install", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Jan 14, 2026", "Apr 22, 2026"),
-  T("T-2240", "Condenser Coil Cleaning", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Maintenance"], "Jan 22, 2026", "Apr 18, 2026"),
-  T("T-2210", "Ductwork Sealing", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Jan 29, 2026", "Apr 16, 2026"),
-  T("T-2088", "Brazing Copper Lines", "Hands-On Task", ["HVAC Field Skills", "EPA 608 Type II"], "SkillCat", ["HVAC", "Brazing"], "Feb 05, 2026", "Apr 20, 2026"),
-  T("T-2020", "Electrical Panel Labeling", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["Electrical", "Safety"], "Feb 11, 2026", "Apr 14, 2026"),
-  T("T-1930", "Compressor Replacement", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Field"], "Feb 19, 2026", "Apr 21, 2026"),
+  T("T-2299", "HVAC Install", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["HVAC", "Field"], "Jan 14, 2026", "Apr 22, 2026"),
+  T("T-2240", "Condenser Coil Cleaning", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["HVAC", "Maintenance"], "Jan 22, 2026", "Apr 18, 2026"),
+  T("T-2210", "Ductwork Sealing", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["HVAC", "Field"], "Jan 29, 2026", "Apr 16, 2026"),
+  T("T-2088", "Brazing Copper Lines", "Hands-On Task", ["HVAC JobReady", "EPA 608 Type II"], "SkillCat", ["HVAC", "Brazing"], "Feb 05, 2026", "Apr 20, 2026"),
+  T("T-2020", "Electrical Panel Labeling", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["Electrical", "Safety"], "Feb 11, 2026", "Apr 14, 2026"),
+  T("T-1930", "Compressor Replacement", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["HVAC", "Field"], "Feb 19, 2026", "Apr 21, 2026"),
   T("T-1810", "Vacuum & Evacuation", "Hands-On Task", ["EPA 608 Type I", "EPA 608 Type II"], "SkillCat", ["HVAC", "Refrigerant"], "Feb 27, 2026", "Apr 11, 2026"),
   T("T-1690", "Leak Detection Test", "Hands-On Task", ["EPA 608 Type II"], "SkillCat", ["HVAC", "Refrigerant"], "Mar 04, 2026", "Apr 09, 2026"),
-  T("T-1610", "Furnace Ignition Check", "Hands-On Task", ["HVAC Field Skills"], "SkillCat", ["HVAC", "Heating"], "Mar 12, 2026", "Apr 07, 2026"),
+  T("T-1610", "Furnace Ignition Check", "Hands-On Task", ["HVAC JobReady"], "SkillCat", ["HVAC", "Heating"], "Mar 12, 2026", "Apr 07, 2026"),
 ];
 
 // Only Hands-On Tasks can be discoverable (surfaced in search/browse); every
@@ -183,6 +202,48 @@ for (const t of tasks) {
   if (t.discoverable === undefined) {
     t.discoverable = t.type === "Hands-On Task" && DISCOVERABLE.has(t.id);
   }
+}
+
+// Hands-On scoring, per Task. The scale a reviewer grades on is set by the
+// Task author, so it varies: a photo check is out of 5, a rubric-scored field
+// visit out of 25. Anything not listed uses DEFAULT_HANDS_ON — out of 10,
+// passing at 6 — and the UNGRADED set is the other end: Tasks that are simply
+// evidence, passed the moment they're submitted, with no score at all.
+const DEFAULT_HANDS_ON = { graded: true, maxScore: 10, passScore: 6 } as const;
+
+const UNGRADED = new Set([
+  "T-0234", // Government ID Upload — checked for legibility, not scored
+  "T-2104", // Tool Inventory Photo
+  "T-2020", // Electrical Panel Labeling
+  "T-0988", // MultiFamily Service Visit — a visit log, not an assessment
+]);
+
+const HANDS_ON_SCALES: Record<string, { maxScore: number; passScore: number }> = {
+  "T-1432": { maxScore: 10, passScore: 7 }, // Field Visit – Brazing Joints (its own copy says 7/10)
+  "T-2350": { maxScore: 25, passScore: 18 }, // Refrigerant Charging Procedure — full rubric
+  "T-1855": { maxScore: 25, passScore: 18 }, // Recovery Machine Setup
+  "T-1121": { maxScore: 20, passScore: 15 }, // Gas Line Pressure Test — safety-critical
+  "T-2244": { maxScore: 20, passScore: 15 }, // Gas Furnace Safety Check
+  "T-2024": { maxScore: 20, passScore: 14 }, // Electrical Panel Lab
+  "T-1821": { maxScore: 5, passScore: 3 }, // Vacuum Pump Operation — quick check
+  "T-1689": { maxScore: 5, passScore: 3 }, // Superheat Reading Lab
+  "T-2098": { maxScore: 5, passScore: 4 }, // Coil Cleaning Procedure
+  "T-1188": { maxScore: 5, passScore: 3 }, // Hose Bibb Replacement
+  "T-1362": { maxScore: 100, passScore: 70 }, // Automotive A/C Recovery — EPA 609 field eval
+};
+
+for (const t of tasks) {
+  if (t.type !== "Hands-On Task" || t.handsOn !== undefined) continue;
+  t.handsOn = UNGRADED.has(t.id)
+    ? { graded: false }
+    : { graded: true, ...(HANDS_ON_SCALES[t.id] ?? DEFAULT_HANDS_ON) };
+}
+
+/** A Hands-On Task's scoring, with the default scale filled in. `null` for
+ *  every other Task type — nothing else is reviewer-graded. */
+export function handsOnGrading(t: Pick<Task, "type" | "handsOn">): HandsOnGrading | null {
+  if (t.type !== "Hands-On Task") return null;
+  return t.handsOn ?? { ...DEFAULT_HANDS_ON };
 }
 
 // Tasks available during the Free Trial. Everything else needs a paid

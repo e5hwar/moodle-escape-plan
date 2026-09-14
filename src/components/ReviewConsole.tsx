@@ -5,7 +5,7 @@ import {
   pastVersionOf,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, CommandIcon, DownloadIcon, EditOffIcon, EnterKeyIcon, KeyArrowLeftIcon, KeyArrowRightIcon, SortIcon } from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, CaretDownIcon, ChevronLeftIcon, ChevronRightIcon, CommandIcon, DownloadIcon12, EditOffIcon, EnterKeyIcon, InfoIcon14, KeyArrowLeftIcon, KeyArrowRightIcon, SortIcon } from "./icons";
 import { tasks } from "../data/tasks";
 import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
 import { UserDetailsHover } from "./UserDetailsHover";
@@ -28,6 +28,13 @@ type Draft = { score: number | null; feedback: string };
 type Reviewed = { score: number; feedback: string };
 
 const EMPTY_DRAFT: Draft = { score: null, feedback: "" };
+
+/** "Sep 12, 2026" — the attempts dropdown's SUBMITTED column (Figma 1169:2137). */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 /** "22nd July 2025" — the queue table's submitted-on format (Figma 263:1926). */
 function longDate(iso: string): string {
@@ -139,6 +146,12 @@ export function ReviewConsole({
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const queueWrapRef = useRef<HTMLDivElement>(null);
   const [viewAttempt, setViewAttempt] = useState<number | null>(null); // 0-based chip; null = current
+  /* Attempts dropdown (Figma 1169:1598 trigger / 1169:2024 panel). `attHi` is
+     the keyboard-highlighted row, counted in steps back from the current
+     attempt — the same unit the rows are keyed on. */
+  const [attOpen, setAttOpen] = useState(false);
+  const [attHi, setAttHi] = useState(0);
+  const attWrapRef = useRef<HTMLDivElement>(null);
   const [mediaIndex, setMediaIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [submitted, setSubmitted] = useState<Record<string, Reviewed>>({});
@@ -165,6 +178,32 @@ export function ReviewConsole({
     () => (stepsBack === 0 ? null : pastReviewOf(sub, stepsBack)),
     [sub, stepsBack],
   );
+
+  /* One row per attempt for the dropdown (Figma 1169:2024), newest first — the
+     same order (and the same `stepsBack` index) as the chips it replaced. The
+     current attempt has no verdict yet unless it was graded in this session. */
+  const attemptRows = useMemo(
+    () =>
+      sub.versions.map((_, v) => {
+        const done = v === 0 ? submitted[sub.id] : null;
+        const review = v === 0 ? null : pastReviewOf(sub, v);
+        return {
+          v,
+          num: attemptCount - v,
+          submittedOn: v === 0 ? sub.submittedOn : pastVersionOf(sub, v).submittedOn,
+          reviewer: review?.reviewer ?? (done ? "You" : null),
+          score: review?.score ?? done?.score ?? null,
+          feedback: review?.feedback || done?.feedback || null,
+        };
+      }),
+    [sub, attemptCount, submitted],
+  );
+
+  function selectAttempt(v: number) {
+    setViewAttempt(v === 0 ? null : attemptCount - 1 - v);
+    setMediaIndex(0);
+    setAttOpen(false);
+  }
 
   const media = view.media;
   const mi = media.length ? Math.min(Math.max(mediaIndex, 0), media.length - 1) : 0;
@@ -281,6 +320,15 @@ export function ReviewConsole({
       if (e.key === "Escape") (e.target as HTMLElement).blur();
       return;
     }
+    /* The attempts dropdown owns the keyboard while it's open, per its own
+       legend (Figma 1169:2087): ↑↓ navigate, ⏎ selects, Esc closes. */
+    if (attOpen) {
+      if (e.key === "Escape") { setAttOpen(false); return; }
+      if (e.key === "Enter") { e.preventDefault(); selectAttempt(attHi); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setAttHi((i) => Math.min(attemptCount - 1, i + 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setAttHi((i) => Math.max(0, i - 1)); return; }
+      return;
+    }
     /* While the queue popover is open it owns the keyboard, per its own footer
        legend (Figma 263:1607): ↑↓ navigate, ⏎ selects, Esc closes, Q saves and
        closes. The score keys stay inert until it's dismissed. */
@@ -327,6 +375,22 @@ export function ReviewConsole({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueKey]);
 
+  /* Opening the dropdown highlights whatever attempt is on screen. */
+  useEffect(() => {
+    if (attOpen) setAttHi(stepsBack);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attOpen]);
+
+  /* Click outside the attempts dropdown closes it. */
+  useEffect(() => {
+    if (!attOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!attWrapRef.current?.contains(e.target as Node)) setAttOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [attOpen]);
+
   /* Click outside the queue popover closes it. */
   useEffect(() => {
     if (!queueOpen) return;
@@ -346,6 +410,9 @@ export function ReviewConsole({
     <div className="main">
       <div className="workspace">
         <div className="rvc-root rvc-hor">
+          {/* The two columns share a row; the footer (1164:1509) spans both
+              beneath them. ── */}
+          <div className="rvc-cols">
           {/* ── left column (Figma 756:2986) — the page header with the attempt
                  switcher on its right, then the write-up, voice note and media.
                  There's no breadcrumb any more; the rail footer's "Back" is the
@@ -359,8 +426,8 @@ export function ReviewConsole({
                   {taskRecord ? (
                     <button
                       className="rvc-headlink"
-                      onClick={() => openInNewTab(`editTask=${taskRecord.id}`)}
-                      title="Open this task's editor in a new tab"
+                      onClick={() => openInNewTab(`taskBrief=${taskRecord.id}`)}
+                      title="View this Task's Instructions, Materials Required and the Reference Files uploaded"
                     >
                       {sub.taskName}
                     </button>
@@ -389,29 +456,87 @@ export function ReviewConsole({
               </div>
             </div>
             <div className="rvc-flex" />
+            {/* ── attempts dropdown (Figma 1169:1598 / 1169:2024) — replaced the
+                "PAST SUBMISSIONS" V5…V1 chip row: one Secondary Button naming
+                the attempt on screen, opening a table of every attempt with the
+                verdict and feedback it drew. ── */}
             {attemptCount > 1 && (
-              <div className="rvc-versions">
-                <span className="rvc-versions-label">Past submissions</span>
-                <div className="rvc-version-chips">
-                  {/* `versions` is newest-first, and so is this row (V5 … V1).
-                      Chip v is v submissions back from the current one. */}
-                  {sub.versions.map((label, v) => {
-                    const active = attemptCount - 1 - v === attemptIdx;
-                    return (
-                      <button
-                        key={label}
-                        className={`rvc-version ${active ? "is-active" : ""}`}
-                        aria-pressed={active}
-                        onClick={() => {
-                          setViewAttempt(v === 0 ? null : attemptCount - 1 - v);
-                          setMediaIndex(0);
-                        }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="rvc-att" ref={attWrapRef}>
+                <button
+                  className="btn-save-draft rvc-att-trigger"
+                  aria-expanded={attOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => setAttOpen((v) => !v)}
+                >
+                  Attempt {attemptCount - stepsBack}
+                  <span className="rvc-att-caret"><CaretDownIcon /></span>
+                </button>
+
+                {attOpen && (
+                  <div className="rvc-apanel" role="dialog" aria-label="Attempts">
+                    <div className="rvc-arow rvc-arow--head">
+                      <span className="rvc-ac rvc-ac--idx">#</span>
+                      <span className="rvc-ac rvc-ac--date">Submitted</span>
+                      <span className="rvc-ac rvc-ac--who">Reviewed By</span>
+                      <span className="rvc-ac rvc-ac--result">Result</span>
+                      <span className="rvc-ac rvc-ac--fb">Feedback</span>
+                    </div>
+                    <div className="rvc-alist">
+                      {attemptRows.map((r) => {
+                        const passed = r.score != null && r.score >= PASS_MIN;
+                        return (
+                          <button
+                            key={r.v}
+                            /* An attempt with no verdict yet dims its empty
+                               cells to #7a7a7a (1169:2135); a reviewed row's
+                               own blanks stay at the row colour (1169:2084). */
+                            className={`rvc-arow ${attHi === r.v ? "is-hi" : ""} ${
+                              r.score == null ? "is-ungraded" : ""
+                            }`}
+                            onMouseEnter={() => setAttHi(r.v)}
+                            onClick={() => selectAttempt(r.v)}
+                          >
+                            <span className="rvc-ac rvc-ac--idx">{r.num}</span>
+                            <span className="rvc-ac rvc-ac--date">{shortDate(r.submittedOn)}</span>
+                            <span className={`rvc-ac rvc-ac--who ${r.reviewer ? "" : "is-empty"}`}>
+                              {r.reviewer ?? "—"}
+                            </span>
+                            <span
+                              className={`rvc-ac rvc-ac--result ${
+                                r.score == null ? "is-empty" : passed ? "is-pass" : "is-fail"
+                              }`}
+                            >
+                              {r.score == null ? "—" : `${passed ? "Passed" : "Rejected"} · ${r.score}/10`}
+                            </span>
+                            <span className={`rvc-ac rvc-ac--fb ${r.feedback ? "" : "is-empty"}`}>
+                              {r.feedback ?? "—"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Same legend atoms as the queue popover (1169:2087). */}
+                    <div className="rvc-qpanel-foot">
+                      <div className="rvc-qhints">
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkeypair">
+                            <span className="rvc-qkey"><ArrowUpIcon /></span>
+                            <span className="rvc-qkey"><ArrowDownIcon /></span>
+                          </span>
+                          To navigate
+                        </span>
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkey"><EnterKeyIcon /></span>
+                          To select
+                        </span>
+                        <span className="rvc-qhint">
+                          <span className="rvc-qkey rvc-qkey--text">Esc</span>
+                          To close
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -422,7 +547,11 @@ export function ReviewConsole({
             {/* 4:3 stage with the remaining media stacked down its right side
                 (Figma 756:3147). */}
             <div className="rvc-stagecol">
-              <p className="rvc-desc">{view.description}</p>
+              {/* The write-up is labelled now (Figma 1108:1069/1108:1070). */}
+              <div className="rvc-notes">
+                <p className="rvc-notes-label">Learner&rsquo;s Notes:</p>
+                <p className="rvc-desc">{view.description}</p>
+              </div>
 
               {/* Voice note, when the learner recorded one (Figma 440:812) */}
               {view.hasAudio && (
@@ -468,7 +597,7 @@ export function ReviewConsole({
                     )
                   }
                 >
-                  <DownloadIcon /> Download
+                  <DownloadIcon12 /> Download
                 </button>
               </div>
 
@@ -516,10 +645,19 @@ export function ReviewConsole({
               {!railReadOnly && (
                 <div className="rvc-field">
                   <div className="rvc-field-head">
-                    <span className="form-label">Reviewer’s Checklist</span>
-                    <p className="form-help">
-                      Hidden from the user. Only for the grader’s reference
-                    </p>
+                    <span className="form-label rvc-check-label">
+                      Reviewer’s Checklist
+                      {/* The grey subtext moved into this glyph's tooltip
+                          (Figma 1172:2237/1172:2238). */}
+                      <span
+                        className="rvc-check-info"
+                        tabIndex={0}
+                        aria-label="About the checklist"
+                        title="Hidden from the user. Only for the grader’s reference"
+                      >
+                        <InfoIcon14 />
+                      </span>
+                    </span>
                   </div>
                   <div className="rvc-checklist">
                     <ul>
@@ -540,6 +678,9 @@ export function ReviewConsole({
                   </div>
                 </div>
               )}
+              {/* The rail's ONE rule, 28px clear of both neighbours — Score and
+                  Feedback are no longer separated by one (1172:2245). */}
+              {!railReadOnly && <div className="rvc-rail-rule" />}
 
               {/* Score + Feedback. A company task with no grade yet shows the
                   notice on its own (298:1924). */}
@@ -603,16 +744,22 @@ export function ReviewConsole({
                 </>
               )}
             </div>
+          </div>
+          </div>
 
-          {/* ── footer (Figma 756:3763) — now the bottom of the rail column, not
-              a page-wide bar: "Back" out to the table on the left, then Skip and
-              the primary CTA 16px apart. This design drops the View Queue
-              button; the popover it used to open still hangs here and is reached
-              with Q. ── */}
+          {/* ── footer (Figma 1164:1509) — a page-wide bar under BOTH columns
+              again (it used to sit inside the rail): "Back" out to the table on
+              the left, then Skip and the primary CTA 16px apart. This design
+              drops the View Queue button; the popover it used to open still
+              hangs here and is reached with Q. ── */}
           <div className="wizard-footer rvc-footer">
-            <button className="wizard-cancel" onClick={() => onExit(submitted)}>
-              Back
-            </button>
+            {/* Esc isn't printed on the button, so hovering names it
+                (Figma 437:638). */}
+            <ShortcutHint label="Back to Submissions List" keyLabel="ESC">
+              <button className="wizard-cancel" onClick={() => onExit(submitted)}>
+                Back
+              </button>
+            </ShortcutHint>
             {/* Zero-size anchor — the popover keeps its right-aligned,
                 opens-upward placement now that it has no trigger of its own. */}
             <div className="rvc-queue-wrap" ref={queueWrapRef}>
@@ -702,7 +849,10 @@ export function ReviewConsole({
               {/* Skip prints its own N keycap now (756:3836), so it no longer
                   needs the hover hint that used to name the shortcut. */}
               <button className="btn-save-draft rvc-skip" onClick={doSkip}>
-                Skip
+                <span className="rvc-skip-label">
+                  Skip to Next{" "}
+                  <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                </span>
                 <span className="kbd-letter">N</span>
               </button>
               {isPast ? (
@@ -727,7 +877,6 @@ export function ReviewConsole({
                 </span>
               ) : null}
             </div>
-          </div>
           </div>
 
           {toast && <div className="rvc-toast">{toast}</div>}

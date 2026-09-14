@@ -29,6 +29,8 @@ export type QueueFilter = {
   /** Splits the options into labelled subsections with their own All/None — how
    * Created By is drawn everywhere else. Defaults to one flat list of `all`. */
   sections?: { label?: string; items: string[] }[];
+  /** Hover line saying what this filter does to the queue — see `PillTrigger`. */
+  tip?: string;
 };
 
 export function QueueFilters({ filters }: { filters: QueueFilter[] }) {
@@ -108,6 +110,7 @@ function QueuePill({ filter: f }: { filter: QueueFilter }) {
           open={open}
           toggle={toggle}
           onClear={() => f.onApply([])}
+          tip={f.tip}
         />
       )}
     >

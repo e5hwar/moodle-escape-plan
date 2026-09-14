@@ -21,6 +21,7 @@ import {
   PillTrigger,
 } from "./Filters";
 import { Dropdown } from "./Dropdown";
+import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
@@ -201,17 +202,33 @@ const FIXED_COLUMNS = [{ label: "User's Name" }, { label: "Task" }];
 type SortKey = "name" | "task" | ColKey;
 type SortDir = "asc" | "desc";
 
-export function ReviewHandsOnPage() {
-  const [list, setList] = useState<TaskSubmission[]>(seed);
+export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmissions }: {
+  /* Deep link from a Hands-On Task's "View All Attempts" in the Tasks table:
+     the page opens on the TABLE (not the review-run landing) with just that
+     Task selected. The defaults that scope the reviewer's own queue — Review
+     Pending, Created By SkillCat — are cleared in that case, since the ask is
+     every attempt on this Task, whoever made it and wherever it stands. */
+  initialTaskFilter?: string;
+  /** Seeds the search bar — Manage Completions deep-links one LEARNER's
+   *  attempts on the Task, and the search already matches the submitter. */
+  initialQuery?: string;
+  /** Rows the opening tab supplies because this page's own queue may not hold
+   *  them — see `submissionForLearner`. Prepended, so the deep-linked row is
+   *  the first thing under the filters. */
+  extraSubmissions?: TaskSubmission[];
+} = {}) {
+  const [list, setList] = useState<TaskSubmission[]>(() =>
+    extraSubmissions?.length ? [...extraSubmissions, ...seed] : seed,
+  );
   const [columns, setColumns] = useState<ColState>(DEFAULT_COLUMNS);
-  const [statuses, setStatuses] = useState<string[]>(["Review Pending"]);
+  const [statuses, setStatuses] = useState<string[]>(initialTaskFilter ? [] : ["Review Pending"]);
   const [types, setTypes] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
-  const [tasks, setTasks] = useState<string[]>([]);
+  const [tasks, setTasks] = useState<string[]>(initialTaskFilter ? [initialTaskFilter] : []);
   const [certs, setCerts] = useState<string[]>([]);
   // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
-  const [creators, setCreators] = useState<string[]>(["SkillCat"]);
-  const [committedQuery, setCommittedQuery] = useState("");
+  const [creators, setCreators] = useState<string[]>(initialTaskFilter ? [] : ["SkillCat"]);
+  const [committedQuery, setCommittedQuery] = useState(initialQuery ?? "");
   // Longest waiting first — the landing's framing, and the default review-run
   // order, so the table below the morph reads in the same order as the queue.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
@@ -222,7 +239,7 @@ export function ReviewHandsOnPage() {
 
   // Landing morph — the page opens as the review-run landing and the wheel (or
   // any pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph();
+  const morph = useLandingMorph(!!initialTaskFilter);
 
   const companyNames = useMemo(() => {
     const set = new Set<string>();
@@ -367,7 +384,14 @@ export function ReviewHandsOnPage() {
   // when nothing is applied (Status, Created By); applied filters take
   // precedence and the rest fall into its "More Filters".
   const queueFilters: QueueFilter[] = [
-    { label: "Status", all: STATUS_OPTIONS, value: statuses, onApply: setStatuses, primary: true },
+    {
+      label: "Status",
+      all: STATUS_OPTIONS,
+      value: statuses,
+      onApply: setStatuses,
+      primary: true,
+      tip: FILTER_TIPS.handsOn.status,
+    },
     {
       label: "Created By",
       all: CREATOR_OPTIONS,
@@ -381,6 +405,7 @@ export function ReviewHandsOnPage() {
       searchable: true,
       searchPlaceholder: "Search Creators...",
       primary: true,
+      tip: CREATED_BY_TIP,
     },
     {
       label: "Task",
@@ -389,6 +414,7 @@ export function ReviewHandsOnPage() {
       onApply: setTasks,
       searchable: true,
       searchPlaceholder: "Search Tasks...",
+      tip: FILTER_TIPS.handsOn.task,
     },
     {
       label: "Parent Certification",
@@ -397,8 +423,15 @@ export function ReviewHandsOnPage() {
       onApply: setCerts,
       searchable: true,
       searchPlaceholder: "Search Certifications...",
+      tip: FILTER_TIPS.handsOn.parentCertification,
     },
-    { label: "User Type", all: ["B2C", "B2B"], value: types, onApply: setTypes },
+    {
+      label: "User Type",
+      all: ["B2C", "B2B"],
+      value: types,
+      onApply: setTypes,
+      tip: FILTER_TIPS.handsOn.userType,
+    },
     {
       label: "User's Company",
       all: companyNames,
@@ -406,6 +439,7 @@ export function ReviewHandsOnPage() {
       onApply: setCompanies,
       searchable: true,
       searchPlaceholder: "Search Companies...",
+      tip: FILTER_TIPS.handsOn.userCompany,
     },
   ];
 
@@ -591,7 +625,7 @@ export function ReviewHandsOnPage() {
               </div>
 
               <div className="filters">
-                <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} />
+                <MultiPill label="Status" all={STATUS_OPTIONS} value={statuses} onApply={setStatuses} tip={FILTER_TIPS.handsOn.status} />
                 <CreatedByPill value={creators} onApply={setCreators} />
                 <MultiPill
                   label="Task"
@@ -601,6 +635,7 @@ export function ReviewHandsOnPage() {
                   searchable
                   searchPlaceholder="Search Tasks..."
                   width={300}
+                  tip={FILTER_TIPS.handsOn.task}
                 />
                 <MultiPill
                   label="Parent Certification"
@@ -610,6 +645,7 @@ export function ReviewHandsOnPage() {
                   searchable
                   searchPlaceholder="Search Certifications..."
                   width={300}
+                  tip={FILTER_TIPS.handsOn.parentCertification}
                 />
                 {/* The lower-traffic filters, same cascading menu the Tasks page
                     uses for its "More filters" pill. */}

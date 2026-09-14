@@ -12,7 +12,7 @@ export const CERTIFICATIONS = [
   "EPA 608 Type II",
   "EPA 608 Type III",
   "EPA 608 Universal",
-  "HVAC Field Skills",
+  "HVAC JobReady",
   "NATE RTW",
   "OSHA 10",
   "OSHA 30",

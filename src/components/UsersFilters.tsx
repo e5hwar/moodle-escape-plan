@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
-import { ColumnsBody, sameSelection, CascadingMultiSelect } from "./Filters";
-import { PlusCircleIcon, XCircleIcon, ChevronDownIcon, CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { FILTER_TIPS } from "../data/filterTips";
+import { ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger } from "./Filters";
+import { CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
 import { companies } from "../data/companies";
 
@@ -53,6 +54,12 @@ export type UserFilterState = {
   industries: string[];
 };
 
+/** The three filters that live inside the "More Filters" menu. Pages that
+ *  don't show the backing column pass a narrower list — a filter with no
+ *  column behind it has nothing to reveal. */
+export type UserMoreFilterKey = "roles" | "goals" | "industries";
+const MORE_ALL: UserMoreFilterKey[] = ["roles", "goals", "industries"];
+
 export const USER_TYPES = ["B2C", "B2B"];
 export const SUBSCRIPTIONS = ["Free Trial", "Starter", "Subscriber", "Scholarship"];
 export const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
@@ -67,6 +74,7 @@ export function UsersFilters({
   extra,
   extraActive = false,
   onClearExtra,
+  more = MORE_ALL,
 }: {
   filters: UserFilterState;
   setFilters: (next: UserFilterState) => void;
@@ -79,9 +87,10 @@ export function UsersFilters({
    *  honest about the pills this component doesn't own. */
   extraActive?: boolean;
   onClearExtra?: () => void;
+  /** Which filters the "More Filters" menu offers — defaults to all three. */
+  more?: UserMoreFilterKey[];
 }) {
-  const moreCount =
-    filters.roles.length + filters.goals.length + filters.industries.length;
+  const moreCount = more.reduce((n, k) => n + filters[k].length, 0);
 
   const hasFilters =
     extraActive ||
@@ -111,12 +120,14 @@ export function UsersFilters({
         all={USER_TYPES}
         value={filters.types}
         onApply={(v) => setFilters({ ...filters, types: v })}
+        tip={FILTER_TIPS.users.type}
       />
       <MultiPill
         label="Subscription"
         all={SUBSCRIPTIONS}
         value={filters.subscriptions}
         onApply={(v) => setFilters({ ...filters, subscriptions: v })}
+        tip={FILTER_TIPS.users.subscription}
       />
       <MultiPill
         label="Company"
@@ -126,22 +137,30 @@ export function UsersFilters({
         searchable
         searchPlaceholder="Search Companies..."
         width={300}
-      />
-      <MoreFiltersPill
-        roles={filters.roles}
-        goals={filters.goals}
-        industries={filters.industries}
-        count={moreCount}
-        onApply={(v) =>
-          setFilters({
-            ...filters,
-            roles: v.roles,
-            goals: v.goals,
-            industries: v.industries,
-          })
-        }
+        tip={FILTER_TIPS.users.company}
       />
       {extra}
+      {/* "More Filters" is always the last pill in the row, whatever
+          page-specific pills sit before it — and it disappears entirely when
+          a page offers none of the three (`more={[]}`), rather than opening an
+          empty menu. */}
+      {more.length > 0 && (
+        <MoreFiltersPill
+          roles={filters.roles}
+          goals={filters.goals}
+          industries={filters.industries}
+          keys={more}
+          count={moreCount}
+          onApply={(v) =>
+            setFilters({
+              ...filters,
+              roles: v.roles,
+              goals: v.goals,
+              industries: v.industries,
+            })
+          }
+        />
+      )}
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
           Clear Filters
@@ -201,53 +220,6 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
 }
 
 /* ─────────────────────────────────────────────────────────────── */
-
-/* NOTE: a byte-for-byte copy of `Filters.tsx`'s exported `PillTrigger` (and
-   `summarize` below is duplicated the same way). Kept in step by hand — any
-   change to one belongs in both until they are deduplicated. */
-function PillTrigger({
-  label,
-  value,
-  open,
-  toggle,
-  onClear,
-  tip,
-}: {
-  label: string;
-  value: string | null;
-  open: boolean;
-  toggle: () => void;
-  onClear?: () => void;
-  /** Hover line saying what this filter does — a native `title`, adopted by
-      the app's single tooltip. On the label button, not the clear ×. */
-  tip?: string;
-}) {
-  if (value && onClear) {
-    return (
-      <span className={`filter-applied ${open ? "open" : ""}`}>
-        <button className="filter-applied-clear" onClick={onClear} aria-label={`Clear ${label}`}>
-          <XCircleIcon />
-        </button>
-        <button className="filter-applied-main" onClick={toggle} title={tip}>
-          <span className="label">{label}</span>
-          <span className="sep" />
-          <span className="value">{value}</span>
-          <span className="caret">
-            <ChevronDownIcon />
-          </span>
-        </button>
-      </span>
-    );
-  }
-  return (
-    <button className={`filter-pill-dashed ${open ? "open" : ""}`} onClick={toggle} title={tip}>
-      <span className="icon">
-        <PlusCircleIcon />
-      </span>
-      {label}
-    </button>
-  );
-}
 
 function summarize(values: string[], all: string[]): string | null {
   if (values.length === 0) return null;
@@ -310,12 +282,14 @@ function MoreFiltersPill({
   roles,
   goals,
   industries,
+  keys,
   count,
   onApply,
 }: {
   roles: string[];
   goals: string[];
   industries: string[];
+  keys: UserMoreFilterKey[];
   count: number;
   onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
@@ -328,7 +302,13 @@ function MoreFiltersPill({
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ roles: [], goals: [], industries: [] })}
+          onClear={() =>
+            onApply({
+              roles: keys.includes("roles") ? [] : roles,
+              goals: keys.includes("goals") ? [] : goals,
+              industries: keys.includes("industries") ? [] : industries,
+            })
+          }
         />
       )}
     >
@@ -337,6 +317,7 @@ function MoreFiltersPill({
           roles={roles}
           goals={goals}
           industries={industries}
+          keys={keys}
           onApply={(v) => {
             onApply(v);
             close();
@@ -416,11 +397,13 @@ function MoreFiltersBody({
   roles,
   goals,
   industries,
+  keys,
   onApply,
 }: {
   roles: string[];
   goals: string[];
   industries: string[];
+  keys: UserMoreFilterKey[];
   onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
   /* Memoised: CascadingMultiSelect re-seeds its draft whenever `value` changes
@@ -433,7 +416,7 @@ function MoreFiltersBody({
         { key: "roles", label: "Role", groups: [{ items: [...ROLES] }] },
         { key: "goals", label: "Goal", groups: [{ items: [...GOALS] }] },
         { key: "industries", label: "Industry Preference", groups: [{ items: [...INDUSTRIES] }] },
-      ]}
+      ].filter((sec) => keys.includes(sec.key as UserMoreFilterKey))}
       value={value}
       onApply={(v) =>
         onApply({ roles: v.roles, goals: v.goals, industries: v.industries })

@@ -9,9 +9,11 @@ import {
 } from "../data/proctoring";
 import { ProctoringConsole } from "./ProctoringConsole";
 import { MultiPill } from "./UsersFilters";
+import { FILTER_TIPS } from "../data/filterTips";
 import {
   DateRangePill,
   allTimeDateRange,
+  isAllTimeRange,
   dateRangeIncludes,
   type DateRangeState,
 } from "./DateRangeFilter";
@@ -292,11 +294,15 @@ export function ProctoringPage({
     [quizRanked],
   );
 
-  const hasFilters = reviewTypeFilter.length + examFilter.length > 0;
+  /* All Time IS the Submission Date filter's empty state, so a set range counts
+     towards Clear Filters exactly like a chosen Review Type or Quiz. */
+  const hasFilters =
+    reviewTypeFilter.length + examFilter.length > 0 || !isAllTimeRange(dateRange);
 
   function clearFilters() {
     setReviewTypeFilter([]);
     setExamFilter([]);
+    setDateRange(allTimeDateRange());
   }
 
   /** Start a run: clear the filters, order the whole pending queue by the run's
@@ -682,6 +688,7 @@ export function ProctoringPage({
                   all={REVIEW_TYPE_OPTIONS}
                   value={reviewTypeFilter}
                   onApply={setReviewTypeFilter}
+                  tip={FILTER_TIPS.examReviews.reviewType}
                 />
                 <MultiPill
                   label="Quiz"
@@ -691,21 +698,28 @@ export function ProctoringPage({
                   searchable
                   searchPlaceholder="Search Quizzes..."
                   width={300}
+                  tip={FILTER_TIPS.examReviews.quiz}
+                />
+                {/* A filter like the two before it, not the right-edge pill
+                    Companies parks: on this page the range really does decide
+                    whether a row is listed, so it names the date it filters on
+                    ("Submission Date"), sits inline, goes dashed at All Time —
+                    which narrows nothing, so it IS unapplied — and clears with
+                    the rest. `align="left"` opens its wide panel along the row
+                    now that it no longer hangs off the right edge. */}
+                <DateRangePill
+                  label="Submission Date"
+                  value={dateRange}
+                  onChange={setDateRange}
+                  tip={FILTER_TIPS.examReviews.dateRange}
+                  allTimeIsEmpty
+                  align="left"
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
                     Clear Filters
                   </button>
                 )}
-                {/* Date Range holds the row's right edge, as on Companies. It
-                    always has a value and cannot be removed, so Clear Filters
-                    leaves it alone — its own Clear resets it to All Time. */}
-                <span className="filters-end">
-                  <DateRangePill
-                    value={dateRange}
-                    onChange={setDateRange}
-                  />
-                </span>
               </div>
 
               <div className="lm-stage">

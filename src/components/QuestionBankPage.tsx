@@ -20,6 +20,7 @@ import {
 } from "../data/questionBank";
 import { ChevronLeftIcon, MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
+import { FILTER_TIPS } from "../data/filterTips";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
 import { PrmModal } from "./PrmModal";
@@ -573,7 +574,13 @@ export function QuestionBankPage({
       }
     }
     return () => timers.forEach(clearTimeout);
-  }, [atTable, selection, openGroups]);
+    /* NOT `openGroups`: expanding a group with the chevron is a reading
+       gesture somewhere else in the tree, and re-centring the active row on
+       it yanks the list out from under the cursor. Every expansion that DOES
+       need a re-centre (picking a category, a "Parent > Sub" label, ⌘K)
+       changes `selection` in the same batch, so it is still covered. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atTable, selection]);
 
   /* Tooltips for the rail's clipped names, and ONLY those: the tree is 355px
      wide and plenty of these categories run past it, but a tooltip on a name
@@ -1121,12 +1128,14 @@ export function QuestionBankPage({
                   options={TYPE_OPTIONS}
                   value={typeFilter}
                   onApply={setTypeFilter}
+                  tip={FILTER_TIPS.questionBank.type}
                 />
                 <MultiSelectPill
                   label="Status"
                   options={STATUS_OPTIONS}
                   value={statusFilter}
                   onApply={setStatusFilter}
+                  tip={FILTER_TIPS.questionBank.status}
                 />
                 <QbMoreFiltersPill
                   grading={gradingFilter}
@@ -2190,12 +2199,15 @@ function MultiSelectPill({
   value,
   onApply,
   searchPlaceholder,
+  tip,
 }: {
   label: string;
   options: string[];
   value: string[];
   onApply: (v: string[]) => void;
   searchPlaceholder?: string;
+  /** Hover line saying what this filter does — see `PillTrigger`. */
+  tip?: string;
 }) {
   return (
     <Dropdown
@@ -2207,6 +2219,7 @@ function MultiSelectPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
+          tip={tip}
         />
       )}
     >

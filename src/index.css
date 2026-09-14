@@ -1214,7 +1214,8 @@ button.breadcrumb-item:hover {
 
 /* ── Click-to-copy cells (Figma 992:1015; see CopyCells.tsx) ─────────────
    Opt-in: only a `<td data-copyable>` takes part — today the Email and Phone
-   columns on Exam Reviews, ID Re-Uploads and Hands-On Task Submissions.
+   columns on Exam Reviews, ID Re-Uploads, Hands-On Task Submissions, Quiz
+   Attempts and both Who Paid tables.
    A hovered marked cell carries data-copy="fit" (glyph after the text, at
    --copy-x) or "clip" (glyph at the right edge; the cell's right padding was
    grown 16px by the script so the ellipsis truncates a little more text —
@@ -2067,14 +2068,10 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   text-align: right;
 }
 
-/* A hidden Task reads as one flat grey row — no badge on the name, every value
-   at #7a7a7a. The plain-text block above forces `color: inherit` on inline
-   children, so the pills and +n counts follow the cell without extra rules.
-   !important because the per-column colours (.col-name #fff, and the
-   :not()-chained #a8a8a8 default) carry more classes than this selector. */
-.table tbody tr.task-dim td:not(.col-actions):not(.col-checkbox) {
-  color: #7a7a7a !important;
-}
+/* A hidden Task now reads exactly as an archived Skill row does: name #7a7a7a
+   with a grey "Hidden" pill beside it, every other cell #404040. The rules
+   live with the Skills ones (`.skg-archived`, search "1126:1686") — `.task-dim`
+   is listed alongside them there so the two can never drift apart. */
 
 /* Archived rows on Awards, Skills and Certifications keep the older treatment:
    dim the row and badge the name. */
@@ -7796,6 +7793,21 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   flex-direction: column;
   overflow: hidden;
   z-index: 110;
+}
+
+/* A `date` section's submenu (Filters.tsx) holds the shared dual-calendar range
+   panel instead of a checklist: it sizes to the panel (presets rail + two 252px
+   calendars, ~710px — mirrored by SUBMENU_WIDTH_DATE, which the flip decision
+   measures against) and drops the checklist's 440px cap, since the calendar is
+   one fixed block with nothing to scroll. The submenu's own wash and border are
+   the panel's chrome here — `.drp-panel` takes those from `.dropdown--cal` when
+   the Date Range pill drops it, and that shell isn't in play inside a submenu.
+   The viewport clamp is the last resort for a window too narrow to hold the
+   panel on either side. */
+.cascading-sub--date {
+  width: auto;
+  max-width: calc(100vw - 16px);
+  max-height: none;
 }
 
 /* Pill near the right edge — the submenu opens on the other side instead of
@@ -17951,6 +17963,12 @@ a.rh-crumb-link:hover {
 .lm-cell--name .pr-name-flag {
   opacity: var(--lmt, 0);
 }
+/* Grey variant on the landing list (Tasks' "Hidden"): the `.table tbody`-scoped
+   recolour below can't reach the landing's own cell, so it is restated here. */
+.lm-cell--name .pr-name-flag--grey {
+  color: #737373;
+  background: rgba(115, 115, 115, 0.1);
+}
 
 /* The plain-text-column rule strips chrome from spans inside data cells; this
    re-enables it for the flag, the way `.col-status` does for status pills. The
@@ -21307,7 +21325,8 @@ a.rh-crumb-link:hover {
    (#737373 on its 10% wash, the name-flag geometry) beside it, every other
    data cell #404040 (dates included, since the atoms' last re-sync). The
    group row keeps its wash. */
-.table tbody tr.skg-archived td.col-name {
+.table tbody tr.skg-archived td.col-name,
+.table tbody tr.task-dim td.col-name {
   color: #7a7a7a;
 }
 /* Every data cell but the name — Tasks Required, Certifications AND the date
@@ -21317,9 +21336,27 @@ a.rh-crumb-link:hover {
    .col-rh-task):not(.col-actions):not(.col-checkbox)`, (0,6,2)) — the trap
    documented at that rule; it grows a :not() every time a table adds an
    emphasised column, so this one has to keep pace. */
-.table tbody tr.skg-archived td[class]:not(.col-name):not(.col-actions):not(.col-checkbox) {
+.table tbody tr.skg-archived td[class]:not(.col-name):not(.col-actions):not(.col-checkbox),
+.table tbody tr.task-dim td[class]:not(.col-name):not(.col-actions):not(.col-checkbox) {
   color: #404040;
 }
+/* Hidden Task name cell: same flex trick as the Skills rows above — the NAME
+   truncates and the "Hidden" pill stays whole, instead of the pill (last in
+   inline flow) being the first thing clipped. Only applied to hidden rows, so
+   an ordinary row keeps the shared inline cell. */
+.table tbody tr.task-dim td.col-name {
+  display: flex;
+  align-items: center;
+}
+.table tbody tr.task-dim td.col-name > :not(.tsk-name) {
+  flex: none;
+}
+.table tbody td.col-name:not(.col-actions) span.tsk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .table tbody td.col-name:not(.col-actions) .pr-name-flag--grey {
   color: #737373 !important;
   background: rgba(115, 115, 115, 0.1) !important;
@@ -24160,6 +24197,15 @@ a.rh-crumb-link:hover {
    rail owns the right 516px with its own footer pinned to the bottom of it.
    `.rvc-hor` scopes that to this console — ProctoringConsole still stacks. */
 .rvc-hor { flex-direction: row; }
+/* …except the root itself, which now stacks that row over the page-wide footer
+   (1164:1508 + 1164:1509). `.rvc-cols` is the row. */
+.rvc-hor.rvc-root { flex-direction: column; }
+.rvc-cols {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
 /* Left column (756:2986) — page header, write-up, voice note and media, all
    scrolling together behind a 32px gutter. */
 .rvc-main {
@@ -24203,7 +24249,9 @@ a.rh-crumb-link:hover {
 }
 /* In the split layout the column owns the gutter, so the header only keeps the
    28px down to the submission's write-up (756:3783 → 756:3140). */
-.rvc-hor .rvc-header { padding: 0 0 28px; }
+/* The switcher sits at the TOP of the header row in the frame (756:3783: the
+   32px button at y=0 of a 55px row), not centred on the two-line title. */
+.rvc-hor .rvc-header { padding: 0 0 28px; align-items: flex-start; }
 /* The crumb row owns the 12px down to the title; a container `gap` would also
    land between the title and its subtext and override the DS 2px, leaving these
    crumbed pages looser than every plain .tasks-title page. */
@@ -24477,48 +24525,96 @@ span.rvc-crumb--current { cursor: default; }
   text-transform: uppercase;
 }
 
-/* ── version switcher (Figma 295:882, rides on the right of the header) ──
-   "PAST SUBMISSIONS:" over the version chips, newest first. The selected chip
-   takes the accent treatment; the rest are the Secondary Button. */
-.rvc-versions {
+/* ── attempts dropdown (Figma 1169:1598 trigger / 1169:2024 panel) ──
+   Replaced the "PAST SUBMISSIONS" V5…V1 chip row (295:882): one Secondary
+   Button naming the attempt on screen, opening a table of every attempt. The
+   panel hangs off the header's right edge, so this wrapper is its anchor. */
+.rvc-att { position: relative; flex: none; }
+/* `.btn-save-draft` already IS the Figma Secondary Button (32px, 0 16px, gap 8,
+   14/600 white), so the trigger only has to tint its caret — a SOLID 16px wedge
+   at #a8a8a8 (1169:1600), not one of the stroked chevrons, and it does not
+   rotate: the frame only ever shows this one state. */
+.rvc-att-caret { display: inline-flex; color: #a8a8a8; }
+/* Arrowing through the panel leaves keyboard focus on the trigger, and the UA
+   focus ring around it read as a stray white border. The open panel IS the
+   affordance, so the ring is suppressed only while it's open — a trigger with a
+   closed panel still shows focus. */
+.rvc-att-trigger[aria-expanded="true"]:focus-visible { outline: none; }
+
+/* 879px panel, 8px below the trigger and right-aligned to it (1169:2024). */
+.rvc-apanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 879px;
+  max-width: calc(100vw - 80px);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex: none;
-}
-.rvc-versions-label {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  color: #a8a8a8;
-  text-transform: uppercase;
-  text-align: right;
-  white-space: nowrap;
-}
-.rvc-version-chips { display: flex; align-items: flex-start; gap: 8px; }
-.rvc-version {
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  max-height: min(60vh, 420px);
+  border: 1px solid var(--rvc-ctl);
   border-radius: 8px;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+/* Head and rows are the same 12px/8px, 24px-gap grid, so the columns line up
+   without a shared table element (1169:2112 / 1169:2135). */
+.rvc-arow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
   font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+  text-align: left;
+}
+.rvc-arow--head {
+  flex: none;
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
-  cursor: pointer;
-  user-select: none;
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  text-transform: uppercase;
+  border-bottom: 0.5px solid rgba(64, 64, 64, 0.5);
 }
-.rvc-version:hover { filter: brightness(1.15); }
-.rvc-version.is-active {
-  border-color: rgba(240, 85, 35, 0.75);
-  background: linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)), rgba(13, 13, 13, 0.75);
-  font-weight: 700;
+/* Every head cell is the same grey — it must out-rank the per-column colours. */
+.rvc-arow--head .rvc-ac { color: #a8a8a8; }
+.rvc-ac {
+  flex: none;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* Per-column colour, fixed for every row (1169:2050 rev 2): the index and the
+   date are secondary, the reviewer and their feedback are primary, and Result
+   carries the verdict tone. */
+.rvc-ac--idx { width: 17px; text-align: right; }
+.rvc-ac--date { width: 92px; }
+.rvc-ac--who { width: 140px; color: #fff; }
+.rvc-ac--result { width: 108px; }
+.rvc-ac--fb { width: 400px; color: #fff; }
+.rvc-alist { overflow-y: auto; flex: 1; min-height: 0; }
+.rvc-arow:not(.rvc-arow--head) { cursor: pointer; }
+/* Hover — and the keyboard highlight, which is the same state (1169:2068): the
+   wash ALONE, since the row's text already sits at its final colours. Nothing
+   marks the attempt on screen; the trigger already names it. */
+.rvc-arow.is-hi { background: rgba(122, 122, 122, 0.2); }
+/* Verdict tones — the Result column is this table's primary column. */
+.rvc-ac--result.is-pass { font-weight: 500; color: #14b867; }
+.rvc-ac--result.is-fail { font-weight: 500; color: #ff1f31; }
+/* An attempt still awaiting review dims its blank cells (1169:2135); a reviewed
+   row's own blanks keep the row colour (1169:2084). */
+.rvc-arow.is-ungraded .rvc-ac.is-empty { color: #7a7a7a; }
+
+/* Legend (1169:2086) — the queue popover's atoms, on this node's own rule and
+   padding. */
+.rvc-apanel .rvc-qpanel-foot { padding: 9px 18px 8px; border-top-color: #3d3d43; }
 
 /* ── body ── */
 .rvc-body {
@@ -24537,7 +24633,9 @@ span.rvc-crumb--current { cursor: default; }
   gap: 10px;
   overflow-y: auto;
 }
-.rvc-hor .rvc-stagecol { padding: 0; overflow: visible; }
+/* 20px between the write-up, the voice note and the media (756:3140) — it was
+   10px before the notes label landed. */
+.rvc-hor .rvc-stagecol { padding: 0; overflow: visible; gap: 20px; }
 /* Media — a 4:3 main stage with the remaining media stacked down its right
    side. No design system component yet (see handoff note). */
 /* The stage governs the row height (it's the 4:3 element); the media rail is
@@ -24667,7 +24765,18 @@ span.rvc-crumb--current { cursor: default; }
   background: rgba(13, 13, 13, 0.35);
 }
 .rvc-thumb-play svg { width: 20px; height: 20px; }
-/* The submission's own write-up leads the column, unlabelled (Figma 295:1010). */
+/* The submission's own write-up leads the column under a "Learner's Notes:"
+   label (Figma 1108:1069 — it used to be unlabelled, 295:1010). Label and body
+   are both 16px, 8px apart; the label is the DS field-label grey. */
+.rvc-notes { display: flex; flex-direction: column; gap: 8px; }
+.rvc-notes-label {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #a8a8a8;
+}
 .rvc-desc {
   margin: 0;
   font-family: var(--font-sans);
@@ -24695,12 +24804,15 @@ span.rvc-crumb--current { cursor: default; }
 /* Field group — label + subtext, then 8px to the control (Figma 263:1015,
    263:865, 263:1045). Label and subtext sit flush against each other. */
 .rvc-field { display: flex; flex-direction: column; gap: 8px; }
-/* Each following group sits 16px below the previous one behind a hairline, then
-   16px of padding before its label (Figma 756:3719 / 756:3749). */
-.rvc-field + .rvc-field {
-  margin-top: 16px;
-  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
-  padding-top: 16px;
+/* Groups are 28px apart with NO hairline between them (Figma 1172:2197) — the
+   rail's only rule is the one under the checklist, below. */
+.rvc-field + .rvc-field { margin-top: 28px; }
+/* That rule: full-width, 28px clear on both sides (1172:2245). */
+.rvc-rail-rule {
+  flex: none;
+  height: 1px;
+  margin: 28px 0;
+  background: rgba(64, 64, 64, 0.5);
 }
 /* The 8px flex gap owns the rhythm inside a field, so the shared label's and
    subtext's own margins are cleared wherever they sit — otherwise the feedback
@@ -24708,17 +24820,26 @@ span.rvc-crumb--current { cursor: default; }
 .rvc-field .form-label { margin-bottom: 0; }
 .rvc-field .form-help { margin: 0; }
 
-/* Reviewer's checklist (Figma 756:3828) — authored content, read-only. The body
-   is 16px, the same as the feedback box's text: only the grey subtext above it
-   drops to 14. The "Fail if:" run is preceded by a blank line in the design,
-   which at 16px/normal is the 19px margin below. */
+/* Reviewer's checklist (Figma 1172:2190) — authored content, read-only. The body
+   is 16px secondary grey on an 8px inset; the "Fail if:" run is preceded by a
+   blank line in the design, which at 16px/normal is the 19px margin below.
+   Its grey subtext is gone: the title now carries a 14px info glyph whose
+   tooltip says the same thing ([[tooltip-and-hover-convention]]). */
+.rvc-check-label { display: inline-flex; align-items: center; gap: 4px; }
+.rvc-check-info {
+  display: inline-flex;
+  flex: none;
+  color: #fff;
+  cursor: default;
+}
+.rvc-check-info:focus-visible { outline: none; }
 .rvc-checklist {
-  padding: 0 12px;
+  padding: 0 8px;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
   line-height: normal;
-  color: #fff;
+  color: #a8a8a8;
 }
 .rvc-checklist ul {
   margin: 0;
@@ -24821,12 +24942,13 @@ span.rvc-crumb--current { cursor: default; }
 .rvc-footer { gap: 16px; border-top-width: 2px; }
 .rvc-footer .wizard-cancel { font-weight: 600; color: #a8a8a8; padding: 0; }
 .rvc-footer .wizard-cancel:hover { color: #fff; }
-/* Hands-On (756:3763): the footer is the bottom of the rail column, so the rule
-   thins to the design's 0.5px and the column's own fill shows through. */
+/* Hands-On (1164:1509): the footer left the rail and spans both columns again,
+   on the page background behind the design's 0.5px rule. */
 .rvc-hor .rvc-footer {
   position: relative;
   border-top-width: 0.5px;
-  background: transparent;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 /* Skip + the primary CTA, 16px apart (756:3765). */
 .rvc-foot-actions { display: flex; align-items: center; gap: 16px; }
@@ -24843,6 +24965,10 @@ span.rvc-crumb--current { cursor: default; }
    Secondary-Button-plus-keycap atom — the design reuses the component. */
 .rvc-back-current,
 .rvc-skip { gap: 8px; font-weight: 500; }
+/* Skip names the queue it advances into (1164:1513): the label is one text run
+   so the count reads as a phrase, not a second control. */
+.rvc-skip-label { white-space: nowrap; }
+.rvc-skip-count { color: #a8a8a8; }
 .rvc-back-current .kbd-letter,
 .rvc-skip .kbd-letter {
   justify-content: center;
@@ -25621,38 +25747,122 @@ span.rvc-crumb--current { cursor: default; }
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
   padding: 20px 36px 0;
 }
 
-/* min-width forces a wrap rather than letting the bars squash under their
-   own scope token when the workspace is narrow. */
+/* ── the scope bar (Figma 1159:1249) ──
+   ONE 43px shell holding both pickers as equal halves, split by the same
+   hairline the shell is drawn in. The shell owns the search chrome; each
+   half's own `.usearch-bar` is stripped back to its contents so the two read
+   as a single control. */
+.mc-scopebar {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: var(--search-h);
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
+  border-radius: 8px;
+}
+
+.mc-scopebar > .mc-search {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+.mc-scopebar .usearch-bar {
+  height: 100%;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+/* The divider belongs to the first half. It is the only border either half
+   keeps — including on `.open`, where the panel below is the state cue. */
+.mc-scopebar > .mc-search:first-child .usearch-bar,
+.mc-scopebar > .mc-search:first-child .usearch-bar.open {
+  border-right: 1px solid var(--search-border);
+}
+.mc-scopebar > .mc-search + .mc-search .usearch-bar.open {
+  border-color: transparent;
+}
+
 .mc-search {
   width: auto;
-  flex: 1 1 260px;
-  min-width: 220px;
-  max-width: 420px;
 }
 
 /* The committed selection is a scope token, so the bar always has to keep
    enough room to type a replacement beside it. */
-.mc-search .usearch-scope {
-  max-width: 220px;
+/* A committed pick is the field's own value (Figma 1160:1286) — white, in the
+   input's Medium 16px, sitting where the placeholder does. The input already
+   takes the free space, which is what pins the ✕ to the half's right edge. */
+.mc-scopebar .usearch-bar.is-picked .usearch-input::placeholder {
+  color: #fff;
+}
+
+/* ── expanded panel (Figma 1162:1312 / 1162:1385 / 1162:1454) ──
+   The shell, the 18px insets and the keyboard-legend footer are the shared
+   panel's already; these are the two places this one differs. */
+
+/* One muted header for the whole list, not a white heading per section. The
+   query inside it is the brand orange (1162:1388) — a character-level style in
+   the node, so it needs its own span. */
+.mc-search .usearch-head.mc-opt-head {
+  color: #a8a8a8;
+}
+.mc-opt-q {
+  color: #f05523;
+}
+
+/* The keyboard legend stays put while the list scrolls under it. It needs its
+   own background for that — the panel's is on the panel, not each child. */
+.mc-search .usearch-foot {
+  position: sticky;
+  bottom: 0;
+  background: var(--search-bg);
+}
+
+/* 8px rows: 35px on one line, 52px when a person's second line is there. */
+.mc-search .usearch-row {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px;
+}
+
+.mc-opt-text {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  flex-shrink: 1;
 }
 
-.mc-search .usearch-input {
-  flex: 1 1 72px;
-  min-width: 72px;
+.mc-opt-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.mc-scope-sep {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-faint);
+.mc-opt-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What kind of thing the row is, held at the panel's right inset. */
+.mc-opt-kind {
   flex: none;
+  font-size: 16px;
+  font-weight: 400;
+  color: #a8a8a8;
+  white-space: nowrap;
 }
 
 .mc-typeicon {
@@ -25832,26 +26042,78 @@ span.rvc-crumb--current { cursor: default; }
   padding: 0 36px 24px;
 }
 
-/* ── certification card (Figma 965:1401, on the .mc-notice shell) ──
+/* ── certification card (Figma 965:1401 / 1151:1098, on the .mc-notice shell) ──
    Headline + task count on the left, the ⋯ holding every certification
-   action on the right. Its wash is twice the notice's. */
+   action on the right.
+
+   The card IS the progress bar: its wash reads how far along the learner is,
+   so the three states are three fills rather than three components. Nothing
+   earned yet keeps the neutral notice wash (twice the notice's strength). */
 .mc-notice.mc-certcard {
   flex: none;
+  /* Figma-padding-minus-border: the node's 16px inset is measured from the
+     frame edge and its stroke sits inside, so a real 1px CSS border has to
+     come out of the padding or the card lands 2px tall. 1 + 15 + 36 + 15 + 1
+     = the node's 68. */
+  padding: 15px;
   background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
 }
 
+/* In progress (1151:1098): flat amber out to the percentage itself — the stop
+   is `--mc-pct`, set on the element — then a ramp into its own shadow across
+   whatever is left. The whole card fills as the learner advances. */
+.mc-certcard.is-progress {
+  background:
+    linear-gradient(90deg, rgba(255, 197, 36, 0.2) var(--mc-pct, 0%), rgba(107, 78, 0, 0.2) 100%),
+    #0d0d0d;
+}
+
+/* Certified (Figma 1153:1129): there is no "rest of the card" left to ramp
+   into, so the green is flat. Its own green — rgba(41,182,115,.2) from the
+   node, a shade off the status pill's #14b867 tint. */
+.mc-certcard.is-complete {
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+}
+
+/* ── single-task card (`.mc-taskstate`) ──
+   One task has no percentage to fill to, so its states are SOLID washes of the
+   same three colours rather than the certification card's ramp: the base grey
+   stays for untouched, amber for in flight, green once complete. The extra
+   class is what keeps this `.is-progress` from overriding the ramp above. */
+.mc-certcard.mc-taskstate.is-progress {
+  background: linear-gradient(rgba(255, 197, 36, 0.2), rgba(255, 197, 36, 0.2)), #0d0d0d;
+}
+
+/* The card's ⋯ is a standalone control rather than a table row's, so its hover
+   chip is ROUND (Figma 1151:1097) — the square wash `.row-action-btn:hover`
+   gives table kebabs would read as a stray cell on a card with no grid. Square
+   box, 50% radius: the 16px glyph stays centred and the chip is a true circle. */
+.mc-certcard .row-action-btn.lone-dots {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* Both lines are set solid against the node: 16/19 over 14/17 with NOTHING
+   between them (965:1403 stacks a 19px and a 17px text frame to exactly 36,
+   and the 68px card is that plus its 16px padding). The page's inherited
+   1.45 line-height and a stray 2px margin were adding 11px between them. The
+   14/17 subtext is the app-wide subtext metric anyway — see the form-subtext
+   convention. */
 .mc-certcard-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 16px;
+  line-height: 19px;
   font-weight: 600;
   color: #fff;
 }
 
 .mc-certcard-sub {
-  margin-top: 2px;
   font-size: 14px;
+  line-height: 17px;
   font-weight: 400;
   color: #a8a8a8;
 }
@@ -25982,23 +26244,6 @@ span.rvc-crumb--current { cursor: default; }
   color: #a8a8a8;
 }
 
-.mc-rowactions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* ── column plan (attempts modal) ── */
-.mc-table .mc-col-grade { width: 90px; }
-.mc-table .mc-col-act2 { width: 96px; padding-right: 0; }
-.mc-table .mc-col-attnum { width: 90px; }
-.mc-table .mc-col-result { width: 110px; }
-
-/* The attempts modal's rows don't navigate anywhere — actions do the work. */
-.mc-table--flat tbody tr { cursor: default; }
-.mc-table--flat tbody tr:hover { background: transparent; }
-
 /* ── task table (Figma 960:980, the "Quiz Questions" card in its table role) ──
    A half-strength #404040 hairline on r8 around transparent 40px rows; only
    the header row carries the 122-grey wash, with 16px medium white labels.
@@ -26067,9 +26312,11 @@ span.rvc-crumb--current { cursor: default; }
   border-bottom: none;
 }
 
-/* A staged row keeps a faint accent wash until Review & Save applies it. */
+/* A staged row is marked until Review & Save applies it — with the table's
+   own row wash, not a tinted one. The 5% accent this used to carry read as a
+   red cast against the neutral rows around it. */
 .mct-row.is-staged {
-  background: rgba(240, 85, 35, 0.05);
+  background: var(--bg-row-hover);
 }
 
 /* TASK: white name, "· Type" in the 14px muted register, then any pills. */
@@ -26101,7 +26348,9 @@ span.rvc-crumb--current { cursor: default; }
 /* Fixed columns — the design's widths, the date's widened for its flag. */
 .mct-c-time { width: 82px; }
 .mct-c-date { width: 118px; }
-.mct-c-grade { width: 44px; }
+/* Wide enough for a Hands-On score on its own scale ("18/25"), not just the
+   quiz percentage the Figma row was cut with. */
+.mct-c-grade { width: 60px; }
 .mct-c-att { width: 67px; }
 /* Actions cell — the shared table's 40px right-aligned control box, so
    `.row-action-bar`'s tuned offset drops its kebab onto the resting one. */
@@ -26151,6 +26400,12 @@ span.rvc-crumb--current { cursor: default; }
 .mct-att.is-pending { color: #ffc524; }
 .mct-att.is-exhausted { color: #ff1f31; }
 
+/* Each state glyph is its own hover target so the tooltip explaining it is
+   scoped to the icon, not to the whole Attempts cell. */
+.mct-att-glyph {
+  display: inline-flex;
+}
+
 .mct-manual svg,
 .mct-att svg {
   display: block;
@@ -26168,9 +26423,9 @@ span.rvc-crumb--current { cursor: default; }
 /* Row actions follow the shared table convention (Figma 386:269) rather than
    restyling a bare kebab: the row washes on hover, the resting `.lone-dots`
    kebab gives way to the `.row-action-bar` pill, and an open menu holds both
-   open with the orange hairline. The bar carries one cell — the menu is the
-   row's only action — which `.row-action-bar > .row-action-btn:only-child`
-   already rounds on both ends. */
+   open with the orange hairline. The bar carries just the kebab on most rows
+   (`:only-child` rounds it on both ends); an attempt-capped row puts a second
+   icon cell — Grant Additional Attempts — in front of it. */
 .mct-row:hover,
 .mct-row.is-menu {
   background: var(--bg-row-hover);
@@ -26192,110 +26447,113 @@ span.rvc-crumb--current { cursor: default; }
   z-index: 1;
 }
 
-/* Bare-button reset so a .co-status-pill can act as its own undo control. */
-.mc-unbtn {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
+/* The shared save-footer bleeds -32px for the Spotlights page's own gutter;
+   this page is not that page, so the bar spans its column and takes the 36px
+   `.mc-scroll` gutter instead — otherwise it runs under the sidebar on one
+   side and off-screen on the other. */
+.mc-root .sp-save-footer {
+  margin: 0;
+  padding: 20px 36px;
 }
 
-/* The certification menu's one row carries its consequence under the label.
-   .u-menu-item-sub is otherwise scoped to disabled reasons, so the note names
-   its own size and colour. */
-.u-menu-item .mc-menu-note {
-  font-size: 14px;
-  line-height: normal;
-  max-width: 248px;
-  color: #a8a8a8;
+/* ── "N Changes Made" + its hover card (Figma 1155:1140) ──
+   The footer label is the only summary; the changes themselves live in a card
+   that opens on hover, one row each, every row droppable on its own. */
+.mc-changes {
+  position: relative;
+  cursor: default;
 }
 
-/* ── review-changes dialog list ── */
-.mc-review-list {
+/* Transparent bridge: the 8px gap to the label is this wrapper's padding, so
+   the pointer stays inside `.mc-changes` while travelling into the card. */
+.mc-changes-pop {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  padding-bottom: 8px;
+  z-index: 40;
+}
+
+.mc-changes-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.mc-review-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid rgba(122, 122, 122, 0.2);
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 12px;
+  background: #1e1e20;
+  border: 1px solid rgba(122, 122, 122, 0.5);
   border-radius: 8px;
-  background: rgba(122, 122, 122, 0.06);
 }
-.mc-review-item .mc-typeicon { margin-top: 1px; }
-.mc-review-text {
+
+/* Row: subject → action on the left, its dismiss on the right. Every row but
+   the last carries the hairline. */
+.mc-change-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  white-space: nowrap;
+}
+.mc-change-row:last-child {
+  padding-bottom: 4px;
+  border-bottom: none;
+}
+
+.mc-change-text {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  color: #d9d9d9;
-  line-height: 1.45;
-}
-.mc-review-text b {
-  font-weight: 600;
+  line-height: normal;
   color: #fff;
 }
 
-/* ── attempts modal ── */
-.mc-att-table { margin-bottom: 4px; }
-.mc-att-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 12px;
-}
-.mc-att-foot .form-help { margin: 0; }
-.mc-att-foot .btn-save-draft svg { width: 14px; height: 14px; }
-
-/* ── attempt-detail answers list ── */
-.mc-answers .section-heading { margin: 4px 0 8px; }
-.mc-ans {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 0.5px solid var(--mc-hairline);
-}
-.mc-ans:last-child { border-bottom: none; }
-.mc-ans-mark {
-  width: 18px;
-  height: 18px;
+.mc-change-text svg {
   flex: none;
-  border-radius: 50%;
+  color: #a8a8a8;
+}
+
+.mc-change-drop {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #14b867;
-  background: rgba(20, 184, 103, 0.12);
-}
-.mc-ans-mark.is-wrong {
-  color: #ff1f31;
-  background: rgba(255, 31, 49, 0.12);
-}
-.mc-ans-num {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #7a7a7a;
-  width: 26px;
   flex: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #7a7a7a;
+  cursor: pointer;
 }
-.mc-ans-text {
-  font-size: 14px;
-  color: #d9d9d9;
-  line-height: 1.4;
+.mc-change-drop:hover {
+  color: var(--text);
 }
 
-/* Footer summary — first changes inline, ellipsised. */
-.mc-dirty-summary {
-  max-width: 520px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* ── review-changes dialog list ── */
+/* ── confirm-dialog change list ──
+   One change per line, stacked. Plain text on the modal's own surface — the
+   boxed, icon-led rows this used to draw made a confirmation look like a form.
+   Same `subject → action` phrasing as the footer's Changes Made card. */
+.mc-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-review-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+}
+.mc-review-item svg {
+  flex: none;
+  color: #a8a8a8;
 }
 
 /* ── certification notice (Secondary Button shell, 73:495) ── */
@@ -26460,38 +26718,6 @@ span.rvc-crumb--current { cursor: default; }
   font-size: 16px;
   font-weight: 600;
   color: #fff;
-}
-
-/* ── unsaved-changes footer ── */
-.mc-footer {
-  min-height: 72px;
-}
-
-.mc-dirty {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 400;
-  color: #fff;
-}
-
-.mc-dirty strong {
-  font-weight: 600;
-}
-
-.mc-dirty-sub {
-  color: #a8a8a8;
-}
-
-.mc-dirty-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: #f05523;
-  box-shadow: 0 0 0 3px rgba(240, 85, 35, 0.2);
 }
 
 /* ── grade prompt field ── */

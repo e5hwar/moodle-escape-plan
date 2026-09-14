@@ -13,6 +13,7 @@ import {
   summarize,
   type FilterState,
 } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { TasksSearch } from "./TasksSearch";
 import { Dropdown } from "./Dropdown";
 import { SortIcon, CheckIcon, SmallXIcon, SearchIcon } from "./icons";
@@ -530,6 +531,7 @@ function IndustryPill({
       trigger={({ open, toggle }) => (
         <PillTrigger
           label="Industry"
+          tip={FILTER_TIPS.taskPicker.industry}
           value={summary}
           open={open}
           toggle={toggle}

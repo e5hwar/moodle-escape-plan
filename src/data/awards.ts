@@ -136,7 +136,7 @@ export const awards: Award[] = [
   A("AW-104", "C-0420", "Silver", "DT-01", undefined, 1530, "Jan 16, 2026", "Apr 26, 2026"),  // EPA 608 Type I
   A("AW-105", "C-0419", "Silver", "DT-01", undefined, 1422, "Jan 16, 2026", "Apr 26, 2026"),  // EPA 608 Type II
   A("AW-106", "C-0418", "Silver", "DT-01", undefined, 998, "Jan 16, 2026", "Apr 26, 2026"),   // EPA 608 Type III
-  A("AW-107", "C-0398", "Gold", "DT-03", "DT-04", 1187, "Jan 10, 2024", "Mar 30, 2026"),      // HVAC Field Skills
+  A("AW-107", "C-0398", "Gold", "DT-03", "DT-04", 1187, "Jan 10, 2024", "Mar 30, 2026"),      // HVAC JobReady
   A("AW-108", "C-0376", "Bronze", "DT-03", undefined, 742, "Nov 16, 2023", "Feb 22, 2026"),   // Brazing Fundamentals
   A("AW-109", "C-0322", "Gold", "DT-03", "DT-04", 533, "Jul 22, 2023", "Dec 04, 2025"),       // Plumbing Apprentice Year 1
   A("AW-110", "C-0242", "Silver", "DT-03", "DT-04", 401, "Jan 20, 2023", "Sep 12, 2025"),     // Solar PV Installer Basics

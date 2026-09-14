@@ -4,9 +4,10 @@ import { useEffect } from "react";
 
    Opt-in per cell: a `<td data-copyable>` gets the behaviour, nothing else
    does. Today that is the Email and Phone columns on Exam Reviews
-   (ProctoringPage), ID Re-Uploads (PendingIdReuploadsPage) and Hands-On Task
-   Submissions (ReviewHandsOnPage, via its column registry's `copyable` flag)
-   — the tables whose values admins actually paste elsewhere. Marking more
+   (ProctoringPage), ID Re-Uploads (PendingIdReuploadsPage), Hands-On Task
+   Submissions (ReviewHandsOnPage), Quiz Attempts (AttemptsPage) and both Who
+   Paid tables (Quiz/CertPurchasersPage) — the last four via their column
+   registry's `copyable` flag. The tables whose values admins actually paste elsewhere. Marking more
    columns later is a one-attribute change; no other file needs to know.
 
    One document-level handler, like HoverTooltip. Hovering a marked cell
@@ -43,6 +44,11 @@ type Active = {
 
 const copied = new Map<HTMLTableCellElement, number>();
 let active: Active | null = null;
+
+/* Where the pointer actually is, so the active cell can be re-checked when the
+   table re-renders under a still mouse — see `watch` / `revalidate`. */
+let pointer: { x: number; y: number } | null = null;
+let watcher: MutationObserver | null = null;
 
 function cellText(td: HTMLElement): string {
   // innerText honours display:none (hidden pill dots) but not the ellipsis,
@@ -109,18 +115,69 @@ function activate(td: HTMLTableCellElement) {
   place(td);
   if (copied.has(td)) td.dataset.copied = "";
   td.setAttribute("data-tip", tipFor(ownTip, copied.has(td)));
+  watch(td);
 }
 
 function deactivate() {
   if (!active) return;
   const { td, ownTip } = active;
   active = null;
+  unwatch();
   delete td.dataset.copy;
   delete td.dataset.copied;
   td.style.removeProperty("--copy-x");
   td.style.removeProperty("padding-right");
+  /* Restore the cell's own tip only if the tip still reads as the one this
+     module wrote. A reused cell (see `watch`) has already been re-rendered
+     with a new value by then, and stamping the old row's tip back on would be
+     a lie. */
+  const current = td.getAttribute("data-tip");
+  if (current !== tipFor(ownTip, true) && current !== tipFor(ownTip, false)) return;
   if (ownTip) td.setAttribute("data-tip", ownTip);
   else td.removeAttribute("data-tip");
+}
+
+/* React only ever re-renders a marked cell's CONTENT — it never clears the
+   attributes and inline padding this module sets imperatively. So when a table
+   re-renders while a cell is hovered (navigating to another page, paging,
+   sorting, filtering) the browser fires no `mouseout` for the cell React
+   reused, and the copy glyph, the extra padding and the "Click to Copy" tip
+   stay stuck on a row nobody is hovering — the first row, usually, since that
+   is the node React reuses first.
+
+   So while a cell is active, watch its table for mutations and re-check
+   against the real pointer position: still inside the same cell → re-measure,
+   because the value underneath may be a different length now; anywhere else →
+   let go, and pick up whatever cell the pointer is genuinely over. */
+function revalidate() {
+  if (!active) return;
+  const el = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
+  if (el && active.td.contains(el)) {
+    place(active.td);
+    return;
+  }
+  const td = el ? cellOf(el) : null;
+  deactivate();
+  if (td) activate(td);
+  refreshTip();
+}
+
+function watch(td: HTMLTableCellElement) {
+  const table = td.closest("table") ?? td.closest("tbody");
+  if (!table) return;
+  watcher = new MutationObserver(() => revalidate());
+  watcher.observe(table, { childList: true, subtree: true, characterData: true });
+}
+
+function unwatch() {
+  watcher?.disconnect();
+  watcher = null;
+}
+
+/* The marked cell an element sits in, if it has something to copy. */
+function cellOf(target: EventTarget | null): HTMLTableCellElement | null {
+  const td = (target as HTMLElement)?.closest?.(CELL) as HTMLTableCellElement | null;
+  return td && isCopyable(td) ? td : null;
 }
 
 async function writeClipboard(text: string): Promise<boolean> {
@@ -171,15 +228,15 @@ function markCopied(td: HTMLTableCellElement) {
 
 export function CopyCells() {
   useEffect(() => {
-    function cellFrom(target: EventTarget | null): HTMLTableCellElement | null {
-      const td = (target as HTMLElement)?.closest?.(CELL) as HTMLTableCellElement | null;
-      return td && isCopyable(td) ? td : null;
+    function onMove(e: MouseEvent) {
+      pointer = { x: e.clientX, y: e.clientY };
     }
 
     // Capture phase: runs before HoverTooltip's bubble listener, so the tip
     // text is on the cell by the time the tooltip resolves it.
     function onOver(e: MouseEvent) {
-      const td = cellFrom(e.target);
+      pointer = { x: e.clientX, y: e.clientY };
+      const td = cellOf(e.target);
       if (td === active?.td) return;
       deactivate();
       if (td) activate(td);
@@ -192,7 +249,7 @@ export function CopyCells() {
     }
     function onClick(e: MouseEvent) {
       if (e.button !== 0) return;
-      const td = cellFrom(e.target);
+      const td = cellOf(e.target);
       if (!td) return;
       const target = e.target as HTMLElement;
       // Controls inside the cell keep their own click; so does a drag-select.
@@ -215,10 +272,12 @@ export function CopyCells() {
       });
     }
 
+    document.addEventListener("mousemove", onMove, { capture: true, passive: true });
     document.addEventListener("mouseover", onOver, true);
     document.addEventListener("mouseout", onOut, true);
     document.addEventListener("click", onClick, true);
     return () => {
+      document.removeEventListener("mousemove", onMove, true);
       document.removeEventListener("mouseover", onOver, true);
       document.removeEventListener("mouseout", onOut, true);
       document.removeEventListener("click", onClick, true);
