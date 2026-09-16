@@ -1629,6 +1629,14 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   line-height: normal;
 }
 
+/* The muted clause a sentinel option carries after its label — Figma 1201:2151
+   ("None · Not used in any Quiz Task"): same 16px, but Regular #a8a8a8 against
+   the row's Medium white, so the label still reads as the option name. */
+.cols-row-hint {
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
 .dropdown-item:hover {
   background: var(--panel-row-hover);
 }
@@ -3152,6 +3160,25 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   border-color: #ff1f31;
 }
 
+/* The rich-text field carries the same flag — the question text itself is
+   required, and it is the only place that field is mandatory. */
+.rte-field.has-error {
+  border-color: #ff1f31;
+}
+
+/* A required answer table with too few rows to be answerable: the card has no
+   border of its own, so the flag draws one rather than recolouring one. */
+.qed-tbl.has-error {
+  box-shadow: inset 0 0 0 1px #ff1f31;
+}
+
+/* The QUESTION column is a rich-text field and the ANSWER column a plain one,
+   so the flag has to name both shells. */
+.qed-tbl--pairs.has-error .lang-field,
+.qed-tbl--pairs.has-error .rte-field {
+  border-color: #ff1f31;
+}
+
 /* Same flag on the two non-text required controls: the dual-language upload
    shell and a radio-card group with nothing chosen. */
 .upload-2lang.has-error {
@@ -4136,6 +4163,34 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   gap: 8px;
   margin: 32px 0;
 }
+/* A heading action — Figma 1188:1188 puts a 14px plus at the FAR right of the
+   "CATEGORIES · n" row (`justify-content: space-between` there; `margin-left:
+   auto` here, so the heading's own 8px gap still applies to any other trailing
+   content). Same affordance as the landing index head's `.qbl-index-add-btn`,
+   at the heading's smaller 14px. */
+.sh-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-left: auto;
+  padding: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.sh-add-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.sh-add-btn:hover,
+.sh-add-btn.is-open {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+
 .section-heading-label {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -7810,6 +7865,13 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   max-height: none;
 }
 
+/* A checklist carrying `hints` clauses (Filters.tsx) takes the width of the
+   node those rows come from — 280px breaks "None · Not used in any Quiz Task"
+   across two lines. Mirrored by SUBMENU_WIDTH_WIDE, which the flip measures. */
+.cascading-sub--wide {
+  width: 384px;
+}
+
 /* Pill near the right edge — the submenu opens on the other side instead of
    off-screen (an overflowing panel widens the document and scrolls the page). */
 .cascading-sub.is-left {
@@ -8870,13 +8932,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   background: var(--text-faint);
 }
 
-.qb-status--draft {
-  color: #f5d36b;
-}
-.qb-status--draft .qb-status-dot {
-  background: #f5d36b;
-  box-shadow: 0 0 0 2px rgba(245, 211, 107, 0.18);
-}
+/* `.qb-status--draft` (the amber dot) was deleted with the Draft status itself,
+   2026-09-16 — a question is Active or Archived now. */
 
 
 .qb-usage-extra {
@@ -14741,17 +14798,46 @@ a.rh-crumb-link:hover {
 .tree-group {
   display: flex;
   flex-direction: column;
-  /* Horizontal padding only while collapsed: with `.qb-rail .tree`'s gap of 0,
-     vertical padding (or a transparent border standing in for the card's) would
-     push the collapsed rows off the 32px pitch the rail is tuned for — they
-     stack FLUSH, as they did before the card existed. The 4px still lands the
-     row's own 4px inset on the same 8px of ink as "All Questions". */
-  padding: 0 4px;
+  /* No padding at all: 862:2301 was re-drawn 2026-09-16 so the card IS its rows
+     — every variant is now 344 wide with its row frames at x=0 (859:2184 is
+     344×128, 1085:1032 is 344×32, 1187:1148 is 344×166), where they used to be
+     inset 4px inside a 344×40 box. That removes the whole problem the previous
+     revision fought: with nothing added on expand there is no jump to cancel,
+     no 4px bleed into the gap, and so no two open cards meeting edge to edge.
+     The stroke stays an `outline` — it costs no layout, so it cannot shift the
+     row when it appears. */
+  padding: 0;
+  /* The stroke is an `outline`, never a `border`: an outline draws without
+     taking layout space, so it can appear and disappear with the card without
+     nudging the rows a pixel. Reserved transparent here; `.is-open` only
+     recolours it. `-0.5px` sits it flush just inside the box — the card no
+     longer bleeds anywhere (the group has no padding), so adjacent open cards
+     are kept apart by the tree's own 4px gap and need no extra inset. */
+  outline: 0.5px solid transparent;
+  outline-offset: -0.5px;
   border-radius: 8px;
+  transition:
+    background-color 0.18s ease,
+    outline-color 0.18s ease;
 }
+/* The open card, per 1187:1148: a rgba(122,122,122,.1) wash inside a 0.5px
+   rgba(64,64,64,.5) stroke. Both were wrong until 2026-09-16 — there was no
+   fill at all, and the stroke was a full-strength 1px #404040 (the right hue,
+   64/64/64, but double the width and twice the opacity), which drew the card as
+   a hard outline instead of the soft raised panel the node shows. The wash is
+   half the strength of the .2 hover fill, so hovering a row inside the card
+   still reads as a step up from the card's own ground. */
+/* The open card, as it finally settled: a rgba(122,122,122,.05) wash inside a
+   0.5px rgba(64,64,64,.5) stroke. 1187:1148 cycled through five versions in one
+   day — no fill + 1px #404040, → .1 wash + 0.5px, → stroke only at 1px, → wash
+   only, → this. The wash is half the earlier one and a quarter of the .2 row
+   hover, so hovering a row inside an open card still reads as a step up from
+   the card's own ground.
+   Neither property touches layout, which is the point: the card appears and
+   disappears without the rows moving. */
 .tree-group.is-open {
-  padding: 4px;
-  border: 1px solid #404040;
+  background: rgba(122, 122, 122, 0.05);
+  outline-color: rgba(64, 64, 64, 0.5);
 }
 
 /* The tree is a flex column that scrolls, and a flex column squeezes its
@@ -14765,8 +14851,7 @@ a.rh-crumb-link:hover {
 .tree-sublist,
 .tree-sublist-rows,
 .tree-add,
-.tree-add-link,
-.tree-inline {
+.tree-add-link {
   flex-shrink: 0;
 }
 
@@ -14779,9 +14864,24 @@ a.rh-crumb-link:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 4px;
-  border-radius: 8px;
+  /* min-, not a fixed height: a category name runs to TWO lines before it
+     truncates (862:2301 draws "Air Handling and Distribution: Installation and
+     Maintenance of Resid…" over two). The vertical padding is 6.5px and the row
+     is `text block + 13` in BOTH states — 1085:1033 is 32px around a 19px line
+     at y=6.5, and 1187:1144 is 51px around a 38px two-line block at the same
+     y=6.5. Padding, not the min-height, is what sizes a wrapped row: with
+     `padding: 0` its 38px content cleared the 32px floor and the row came out
+     38px with no breathing room at all. The min-height only still matters as
+     the floor for a short name; `flex-shrink: 0` above stops the list squeezing
+     rows when it outgrows the rail. */
+  min-height: 32px;
+  padding: 6.5px 4px;
+  /* 4px, the radius every PAINTED row is drawn with (1086:1149 hover,
+     1085:1068 selected, 1085:1076 a hovered sub). The node gives a resting row
+     8px, but a resting row has neither fill nor stroke, so that radius is
+     unobservable — matching it literally would only make the corners tighten
+     the instant you hover. The CARD around it keeps 8px. */
+  border-radius: 4px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -14804,22 +14904,21 @@ a.rh-crumb-link:hover {
   cursor: pointer;
 }
 
-/* Hover — Figma 1086:1148 "Tree - Collapsed - Hover": the fill belongs to the
-   GROUP box, not to the row inside it, so a collapsed category lights up across
-   the card's full width (including the 4px it is inset by) rather than leaving
-   two unlit strips. Inside an OPEN card the rows carry their own hover instead
-   (1085:1051), and "All Questions" is its own row with no group around it.
+/* Hover — ONLY the inner row lights up, never the group box around it. Every
+   node agrees: 1086:1148 (collapsed), 1085:1076 (a sub) and 1085:1068
+   (selected) leave the outer frame unpainted and put the fill on the row, which
+   is why the group's 4px padding stays dark on both sides of a lit row. This
+   rule used to paint the GROUP while collapsed and the ROW once open, so the
+   highlight changed shape the moment a category was expanded (2026-09-16, per
+   the user — "only the inner thing is highlighted on hover").
    A SELECTED row takes no hover at all (2026-09-10, per the user): it is not
    clickable any more, so lighting up under the cursor would promise an action
-   it does not have. That is what the `:has(.tree-row.is-active)` exclusion and
-   the two `:not(.is-active)`s are for — and the open-card one also stops this
-   rule (4 classes) from out-specifying `.tree-row.is-active` (2).
-   Selected (861:2281): rgba(240,85,35,.1) over the rgba(13,13,13,.75) ground
-   inside a 0.5px rgba(240,85,35,.75) stroke — drawn as an inset ring so the row
-   stays 32px. Selected wins on hover: this rule order keeps the orange flat. */
-.tree-group:not(.is-open):not(:has(.tree-row.is-active)):hover,
-.tree-group.is-open > .tree-row:not(.is-active):hover,
-.tree-row--all:not(.is-active):hover {
+   it does not have — hence `:not(.is-active)`, which also keeps this rule from
+   out-specifying `.tree-row.is-active`.
+   Selected (1085:1068): rgba(240,85,35,.1) over the rgba(13,13,13,.75) ground
+   inside a 0.5px rgba(240,85,35,.75) stroke — drawn as an inset ring, not a
+   border, so the row does not grow by 1px when it is picked. */
+.tree-row:not(.is-active):hover {
   background:
     linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
     rgba(13, 13, 13, 0.75);
@@ -14900,16 +14999,33 @@ a.rh-crumb-link:hover {
    so everything left of the name folds the group. Negative margins let it eat
    that inset without moving the glyph, and the -4px on the right is cancelled
    by the row's 4px gap, so the name starts exactly where it did. */
+/* A category with no sub-categories has no caret — 1195:1672 "Tree - Collapsed
+   - Empty" reserves the 16px icon slot but draws nothing in it, so the label
+   still starts where every other label does and the row simply cannot be
+   expanded. Rendered as a span, not a disabled button, so it is not a tab stop
+   and announces nothing. */
+.tree-caret-btn.is-blank {
+  cursor: default;
+}
+
+/* The hitbox is 28px wide but must ADVANCE only 20px: the node puts the 16px
+   glyph at x=4 and the label at x=24 (4px row padding + 16px icon + 4px gap),
+   so a 28px box centred on its glyph pushed both 2px and 4px right — the last
+   4px of inset the user was still seeing after the group's padding went. The
+   box is now pinned left with a 4px inset (glyph lands at 4) and given -8px on
+   the right so the next item starts at 20 and the gap puts the label at 24.
+   Its last 4px overlaps the label, which is a later sibling and so paints over
+   it and takes those clicks — the 28×32 target from 2026-09-10 survives. */
 .tree-caret-btn {
   width: 28px;
   height: 100%;
-  margin: 0 -4px 0 -4px;
-  padding: 0;
+  margin: 0 -8px 0 -4px;
+  padding: 0 0 0 4px;
   background: none;
   border: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   color: #a8a8a8;
   flex-shrink: 0;
   cursor: pointer;
@@ -14949,9 +15065,22 @@ a.rh-crumb-link:hover {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* A category OR sub-category name gets two lines before it truncates
+     (862:2301 for the parent, 1187:1148 for a child) — a box clamp, so the
+     ellipsis lands at the end of line 2 rather than the name simply being cut.
+     `align-items: center` on the row centres the caret and the kebab against
+     the two-line block, which is how the node draws them. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  /* 19px a line exactly, which is what the node measures (1085:1035 is a 19px
+     text block, 1187:1176 a 38px one) — not the page's inherited 23px, which
+     made a two-line row 46px. Pinned in px rather than left to `normal` so the
+     32/51px row heights do not ride on the browser's font metrics. */
+  line-height: 19px;
 }
 .tree-row-label:disabled,
 .tree-sub-row-label:disabled {
@@ -14993,6 +15122,28 @@ a.rh-crumb-link:hover {
   display: inline-flex;
 }
 
+/* The kebab keeps its slot in EVERY state inside the tree — laid out always,
+   merely invisible until the row is hovered, selected, or has its menu open.
+   Toggling `display` instead handed the label ~20px more width at rest and took
+   it back the moment you hovered, so a name that fitted on one line reflowed
+   onto two under the cursor (the user, 2026-09-16: "the name shouldn't go to
+   the next line when hovered or selected… accommodate the 3-dot menu space even
+   in the default state"). Scoped to the tree rows with `>`, because Industries
+   borrows the bare `.tree-menu-btn` and still wants the display toggle. */
+.tree-row > .tree-menu-btn,
+.tree-sub-row > .tree-menu-btn {
+  display: inline-flex;
+  visibility: hidden;
+}
+.tree-row:hover > .tree-menu-btn,
+.tree-sub-row:hover > .tree-menu-btn,
+.tree-row.is-active > .tree-menu-btn,
+.tree-sub-row.is-active > .tree-menu-btn,
+.tree-row > .tree-menu-btn.is-open,
+.tree-sub-row > .tree-menu-btn.is-open {
+  visibility: visible;
+}
+
 /* The selected row's kebab is white like every other state — it inherits, so
    the old orange override is gone rather than restated. */
 
@@ -15011,11 +15162,36 @@ a.rh-crumb-link:hover {
   color: #737373;
 }
 
-/* Sub-list — Figma Tree 860:2255: the sub rows and the add row stack flush
-   under the category row at the 32px pitch; no gaps, no divider. */
+/* Sub-list — Figma Tree 860:2255: the sub rows stack flush under the category
+   row at the 32px pitch; no gaps, no divider.
+   It opens by animating a grid track from 0fr to 1fr — the one way to
+   transition to a content height CSS cannot know in advance. The rows live in
+   `.tree-sublist-inner`, the clipped grid ITEM; putting the overflow on the
+   track's child is what makes the trick work. The list is always in the DOM
+   (see the `inert` note in QuestionBankPage): a conditional sub-list mounts
+   with no previous height, and mounting is not a transition — which is why the
+   card used to snap open. */
 .tree-sublist {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.18s ease;
+}
+.tree-group.is-open > .tree-sublist {
+  grid-template-rows: 1fr;
+}
+.tree-sublist-inner {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Honour the OS setting: the states still change, they just stop animating. */
+@media (prefers-reduced-motion: reduce) {
+  .tree-group,
+  .tree-sublist {
+    transition: none;
+  }
 }
 
 .tree-sublist-rows {
@@ -15029,9 +15205,18 @@ a.rh-crumb-link:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 4px 0 24px;
-  border-radius: 8px;
+  /* Same box as `.tree-row`: a sub-category name also wraps to two lines before
+     it truncates (1187:1148 draws "Fundamentals Electricity Concepts: / Current,
+     Voltage, Resistance & Capacit…" at 51px beside two 32px siblings). The node
+     re-drew this on 2026-09-16 — it wrapped only the parent the day before, and
+     the children were deliberately left single-line then. */
+  min-height: 32px;
+  /* 36px of left indent, not 24: the child sits 12px past where the parent's
+     NAME starts (24px = the caret's 16px + the row's 4px inset), so the nesting
+     reads without a guide line. Re-drawn on 862:2301 2026-09-16 — every
+     expanded variant moved its sub text from x=24 to x=36 at once. */
+  padding: 6.5px 4px 6.5px 36px;
+  border-radius: 4px; /* same 4px as .tree-row — see there */
   color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -18885,6 +19070,7 @@ a.rh-crumb-link:hover {
   white-space: nowrap;
 }
 .select-field.is-placeholder { color: #404040; }
+.select-field.has-error { border-color: #ff1f31; }
 .select-field:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -22066,8 +22252,15 @@ a.rh-crumb-link:hover {
 
 /* No page-break dividers between sections here (Question / Options / Feedback
    read as one flowing form), so the gap between them is a plain margin. */
-.qed .wizard-content > .wizard-fields + .wizard-fields {
+.qed :is(.wizard-content, .wizard-content > .qed-lock) > .wizard-fields + .wizard-fields {
   margin-top: 40px;
+}
+
+/* The past-version lock (a `display: contents` fieldset) sits between the
+   column and its sections in the DOM, so the two rules that space them have to
+   reach through it — see `.qed-lock`. */
+.qed .wizard-content > .qed-lock:last-child > :last-child {
+  margin-bottom: 0;
 }
 
 /* The type-titled header (Figma 739:1508) carries no subtext on a new
@@ -22084,20 +22277,16 @@ a.rh-crumb-link:hover {
 
 /* Rail groups sit 32px apart — the shared field rhythm — now that the
    section headings between them are gone. */
-.qed-side > .wizard-fields + .wizard-fields {
+:is(.qed-side, .qed-side > .qed-lock) > .wizard-fields + .wizard-fields {
   margin-top: 32px;
 }
 
-.qed-side > .section-heading {
+:is(.qed-side, .qed-side > .qed-lock) > .section-heading {
   margin: 24px 0 12px;
 }
 
-.qed-side > .section-heading:first-child {
+:is(.qed-side, .qed-side > .qed-lock) > .section-heading:first-child {
   margin-top: 0;
-}
-
-.qed-side .qed-select {
-  width: 100%;
 }
 
 .qed-side .radio-card-group {
@@ -22108,43 +22297,7 @@ a.rh-crumb-link:hover {
    question. Below ~1200px the main pane simply narrows (it can scroll on its
    own) and the 380px rail holds its width. */
 
-/* Dropdowns run at the Figma input width (394px), not the 920px field cap. */
-.qed-select {
-  width: 394px;
-  max-width: 100%;
-}
-
-.qed-select-narrow {
-  width: 96px;
-  min-width: 0;
-}
-
 /* ─── Option / pair rows ─── */
-.qed-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.qed-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #404040;
-  border-radius: 9px;
-}
-
-.qed-row--other {
-  border-style: dashed;
-}
-
-.qed-row .lang-field,
-.qed-row .rte-field {
-  flex: 1;
-  min-width: 0;
-}
-
 /* Combined Feedback rows (Figma 814:1774) — a fixed 98px label column beside
    the field, centred against it, rather than a label stacked above. Wraps to
    two or three lines, so the leading is specified. */
@@ -22161,51 +22314,6 @@ a.rh-crumb-link:hover {
 /* Matches .rte-field.is-disabled, so label and field fade together. */
 .qed-fb-label.is-disabled {
   opacity: 0.55;
-}
-
-.qed-row-grip {
-  display: inline-flex;
-  flex: none;
-  color: #7a7a7a;
-  cursor: grab;
-}
-
-.qed-row-num {
-  width: 14px;
-  flex: none;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #7a7a7a;
-}
-
-.qed-row-static {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: #a8a8a8;
-}
-
-.qed-row-remove {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  border-radius: 6px;
-  color: #7a7a7a;
-}
-
-.qed-row-remove:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.qed-row-remove:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 /* A / B / C … down the left of each option (Figma 414:427). Replaces the
@@ -22421,6 +22529,25 @@ a.rh-crumb-link:hover {
   min-width: 0;
 }
 
+/* Match the Following (Figma 1198:1934): the options table with two equal
+   text columns instead of one-plus-grade. The row number runs to 10, which the
+   16px letter cell can't hold, so this variant widens the gutter by 4px — the
+   node only ever draws rows 1–4. */
+.qed-tbl--pairs .qed-tbl-ord {
+  width: 40px;
+}
+
+.qed-tbl--pairs .qed-tbl-letter {
+  width: 20px;
+}
+
+/* Header spacer over the rows' remove ✕, so QUESTION and ANSWER sit above the
+   columns they name rather than drifting 16px right of them. */
+.qed-tbl-hd-x {
+  width: 16px;
+  flex: none;
+}
+
 .qed-tbl-static {
   flex: 1;
   min-width: 0;
@@ -22442,11 +22569,12 @@ a.rh-crumb-link:hover {
   cursor: pointer;
 }
 
-.qed-tbl-x:hover:not(:disabled) {
+.qed-tbl-x:hover:not(:disabled):not([aria-disabled="true"]) {
   color: #fff;
 }
 
-.qed-tbl-x:disabled {
+.qed-tbl-x:disabled,
+.qed-tbl-x[aria-disabled="true"] {
   opacity: 0.3;
   cursor: not-allowed;
 }
@@ -22466,33 +22594,6 @@ a.rh-crumb-link:hover {
   opacity: 0.45;
 }
 
-.qed-row-adds {
-  display: flex;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-/* ─── Match pairs ─── */
-.qed-pair-side {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
-
-.qed-pair-arrow {
-  display: inline-flex;
-  flex: none;
-  color: #7a7a7a;
-}
-
-.qed-distractor {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  pointer-events: none;
-}
-
 /* ─── Linear scale ─── */
 .qed-inline-fields {
   display: flex;
@@ -22500,29 +22601,22 @@ a.rh-crumb-link:hover {
   gap: 8px;
 }
 
+/* Both ends share the row evenly and run to the rail's edge. The wrapper needs
+   the flex basis as well as the button's `select-field--full`: the component's
+   shrink-to-widest-option sizer would otherwise size the wrapper, leaving slack
+   on the right and making the "0 / 1" end narrower than the "2 … 10" one. */
+.qed-inline-fields > .selectfield {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The separator between the two ends of the range: 16px SemiBold #a8a8a8 — it
+   sits between two 45px controls, so it carries the fields' own weight rather
+   than reading as help text. */
 .qed-range-to {
   font-family: var(--font-sans);
   font-size: 16px;
-  color: #a8a8a8;
-}
-
-.qed-scale-preview {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.qed-scale-dot {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px solid #404040;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-weight: 600;
   color: #a8a8a8;
 }
 
@@ -22691,113 +22785,63 @@ a.rh-crumb-link:hover {
   color: var(--text-faint);
 }
 
-/* ─── Version history — full page ─── */
-.qh-page {
-  min-height: 0;
-}
+/* ─── Version History — full page (Question Bank row menu) ─── */
+/* The page is the shared list-page shell — .tasks / .tasks-header / .table /
+   .pagination, the same chrome Quiz Attempts and Who Paid wear — so these are
+   only the column rules the version table adds. The `.qh-*` rules above still
+   belong to the question editor's read-only history peek. */
 
-.qh-page-header {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.qh-page-titleblock {
-  min-width: 0;
-}
-
-.qh-page-titleblock .tasks-title {
-  margin: 4px 0 0;
-}
-
-.qh-page-sub {
-  margin-top: 6px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-style: italic;
-  color: var(--text-muted);
-  max-width: 760px;
+/* The subtext is "<id> · <question>" and the question is already cut to 200
+   characters, so the row holds one line and ellipses anything left over on a
+   narrow page. The full stem is on the hover tip. */
+.tasks-subtitle .qvh-sub-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.qh-page-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 0 0;
-}
-
-.qh-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-/* Header row follows the shared large-table style (Figma 190:285). */
-.qh-table thead th {
-  text-align: left;
-  padding: 8px 16px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  border-bottom: 2px solid rgba(122, 122, 122, 0.5);
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 1;
-}
-
-.qh-table tbody td {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(122, 122, 122, 0.5);
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: #a8a8a8;
-  vertical-align: top;
-}
-
-.qh-trow.is-current td {
-  background: rgba(240, 85, 35, 0.04);
-}
-
-.qh-td-version {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.qh-td-note {
-  color: #e7e7e8;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.qh-td-date,
-.qh-td-author {
+/* Version is the row's name column; the rest hold one line each. The question
+   stem is the only cell long enough to need an ellipsis (its full text is on
+   the cell's tooltip). */
+.table tbody td.qvh-col-version,
+.table tbody td.qvh-col-date,
+.table tbody td.qvh-col-num {
   white-space: nowrap;
 }
 
-.qh-td-usage .qh-usage {
-  margin-top: 0;
-}
-
-.qh-td-actions {
-  text-align: right;
+.table tbody td.qvh-col-question {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.qh-td-actions .qh-action-btn + .qh-action-btn {
-  margin-left: 8px;
+/* ─── Question editor, opened on a past version ─── */
+/* A disabled <fieldset> is what locks the form (see NewQuestionWizard). It has
+   to carry no geometry of its own — `display: contents` drops it out of the
+   layout entirely, so the wizard's column and rail lay out exactly as they do
+   when the fieldset is absent. */
+.qed-lock {
+  display: contents;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.qh-page .qh-foot-note {
-  padding: 16px 0 24px;
+/* Everything inside reads as a record rather than a dimmed-out form: the
+   controls keep their normal colour, they just don't take a cursor. */
+.qed-lock:disabled :where(input, textarea, select, button) {
+  cursor: default;
+  opacity: 1;
+}
+
+/* The option rows' drag grips are spans, not form controls, so the fieldset
+   does not reach them — without this you could still re-order the options of a
+   version you are only looking at. */
+.qed-lock:disabled [draggable="true"] {
+  pointer-events: none;
+  cursor: default;
 }
 
 /* ─── Row-click preview panel ─── */
@@ -28556,6 +28600,12 @@ span.rvc-crumb--current { cursor: default; }
    reaches the morph only at its top) but draws no scrollbar — the panel has
    none in the design. */
 .qb-rail .tree {
+  /* 4px, kept deliberately ON TOP of each group's own 4px padding (the user,
+     2026-09-16 — gap 0 was tried and reverted: "10px is too tight"). So two
+     collapsed rows sit 14px apart: 4 padding + 1px border + 4 gap + 1px + 4.
+     The nodes cannot settle this — 862:2301's variants are isolated artboards
+     with no inter-group spacing drawn — so it is a judgement call, and this is
+     the one that was made. */
   gap: 4px;
   margin: 0;
   padding: 0;
@@ -28564,54 +28614,16 @@ span.rvc-crumb--current { cursor: default; }
 .qb-rail .tree::-webkit-scrollbar {
   display: none;
 }
-/* Add Category (862:2425) — the add row pinned at the panel's foot, 8px under
-   the tree, square-cornered behind a rgba(64,64,64,.5) hairline. Its
-   category-level inset (pl 8) is the shared row's own padding. */
-.qb-rail-add {
-  flex-shrink: 0;
-  margin-top: 8px;
-  padding-left: 8px;
-  border-top: 1px solid rgba(64, 64, 64, 0.5);
-  border-radius: 0;
-}
+/* `.qb-rail-add` — the "+ Add Category" row that used to sit pinned at the
+   panel's foot behind a hairline (862:2425) — was RETIRED 2026-09-16: the plus
+   moved onto the count heading (`.sh-add-btn`, Figma 1188:1188), the same trip
+   "Add Sub-Category" made from the tree card into the kebab. The tree now runs
+   to the bottom of the rail with nothing under it. */
 
 
-/* Inline subcategory editor (design S4): an accent-bordered box in the
-   sub-list, the name on one line and "⏎ save · esc cancel" under it. */
-.tree-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  /* On the sub-row inset, in the add row's place. */
-  margin: 2px 4px 2px 24px;
-  padding: 7px 10px;
-  background: #1a1a1c;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-}
-.tree-inline.is-invalid {
-  border-color: #e8675f;
-}
-.tree-inline-input {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 14px;
-}
-.tree-inline-input::placeholder {
-  color: #7a7a7a;
-}
-.tree-inline-hint {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: #7a7a7a;
-}
-.tree-inline.is-invalid .tree-inline-hint {
-  color: #e8675f;
-}
+/* The inline sub-category editor (`.tree-inline*`, design S4's accent-bordered
+   box in the sub-list) was RETIRED 2026-09-16: Add Sub-Category opens the same
+   `PrmModal` New Category does, so both halves of the flow are one control. */
 
 /* The New Category popover's `.qb-catpop*` surface was deleted 2026-09-10 —
    Create Category is the shared `PrmModal` (Figma 483:588) now. */
@@ -29024,4 +29036,273 @@ span.rvc-crumb--current { cursor: default; }
 .u-menu.qb-row-menu .u-menu-item:disabled .u-menu-item-sub {
   width: 183px;
   max-width: none;
+}
+
+/* The category/sub-category kebab (Figma 1179:1129) draws its reason line in a
+   narrower 143px box than the question row's 183px, so "Only empty categories
+   can be deleted" wraps onto two lines instead of stretching the panel. */
+.u-menu.qb-cat-menu .u-menu-item:disabled .u-menu-item-sub {
+  width: 143px;
+  max-width: none;
+}
+
+/* =============================================================
+ * Question Bank — Bulk Upload
+ * Figma 1116:1321 (pick) / 1196:1806 (errors) / 1195:1690 (success)
+ * =============================================================
+ * Three screens on the shared PrmModal shell, each at its node's own width.
+ * `.prm-body` already draws the 24px gutters the frames have, so the widths
+ * below are the frames' verbatim. */
+.prm.qbu--pick {
+  max-width: 983px;
+  /* Fixed height, not content-driven: the node's drop zone fills whatever the
+     header leaves of the 563px card. */
+  height: min(563px, calc(100vh - 48px));
+}
+
+.prm.qbu--ready {
+  max-width: 750px;
+}
+
+.prm.qbu--errors {
+  max-width: 1181px;
+}
+
+/* ── Drop zone, XL (1193:1625) ──
+   The same dashed shell as `.drop-big`, sized to fill the modal and typed a
+   step up: 28px glyph, a 20px white prompt, and 16px rules under it. */
+.drop-big--xl {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0 16px;
+  gap: 12px;
+}
+
+.drop-big--xl .drop-big-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.drop-big--xl .drop-big-title {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+
+.drop-big--xl .drop-big-hint {
+  font-size: 16px;
+  line-height: normal;
+  color: #a8a8a8;
+  max-width: 499px;
+}
+
+/* Dragging a file over the zone — the accent outline `.drop-primary` uses. */
+.drop-big--xl.is-active {
+  background-color: rgba(233, 114, 55, 0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23e97237' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+}
+
+/* Secondary Button (1193:1667) inside the zone — the `.cta-quiet` recipe with
+   the accent as its label colour. Side padding is Figma's 12 − the 0.5px
+   border. */
+.qbu-template {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 11.5px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.2) 0%, rgba(122, 122, 122, 0.2) 100%),
+    #0d0d0d;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 17px;
+  color: #f05523;
+  cursor: pointer;
+}
+
+.qbu-template:hover {
+  background:
+    linear-gradient(90deg, rgba(122, 122, 122, 0.3) 0%, rgba(122, 122, 122, 0.3) 100%),
+    #0d0d0d;
+}
+
+/* ── Success (1195:1690) ──
+   Green tone of the shared callout (1195:1784) — the same 20%-wash-over-75%-
+   black recipe as `.note-card`, in green, with the check at the node's 16px. */
+.note-card--ok {
+  border-color: rgba(41, 182, 115, 0.1);
+  background:
+    linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+
+.note-card--ok .note-card-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Summary rows (1195:1710): a 112px label column beside the value, on the
+   minimal-state row (40px, 12px gutters, 0.5px rule — the last row has none). */
+.qbu-sum {
+  display: flex;
+  flex-direction: column;
+}
+
+.qbu-sum-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 40px;
+  padding: 10.5px 12px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 19px;
+}
+
+.qbu-sum-row:last-child {
+  border-bottom: 0;
+}
+
+.qbu-sum-label {
+  width: 112px;
+  flex: none;
+  font-weight: 400;
+  color: #fff;
+}
+
+.qbu-sum-val {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The Categories row stacks its headline over the paths it would create. */
+.qbu-sum-val--stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.qbu-sum-lead {
+  font-weight: 500;
+  color: #fff;
+}
+
+.qbu-sum-note {
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Anything that imports in a reduced form (English-only) reads as a warning,
+   not an error — it does not block the import. */
+.qbu-sum-warn {
+  font-weight: 500;
+  color: #ffc524;
+}
+
+/* ── Errors (1196:1806) ──
+   Flex rows rather than a `.table`: the node is a frame stack, the issue and
+   question cells wrap, and the global plain-text-column rules would fight
+   both. Widths are the node's — 31 / 140 / 140 / 240 / 160 / rest at a 24px
+   gap inside 12px gutters. */
+.qbu-err {
+  display: flex;
+  flex-direction: column;
+}
+
+.qbu-err-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 40px;
+  padding: 10.5px 12px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 19px;
+}
+
+.qbu-err-head {
+  border-bottom: 1px solid #404040;
+}
+
+.qbu-err-head span {
+  font-weight: 500;
+  color: #fff;
+}
+
+/* Scrolls under its own header once a file has more than a screenful of bad
+   rows; at the node's four it just sizes to them. The cap is what keeps the
+   "N rows pass" note and the footer in view — the card itself would otherwise
+   grow to the window. */
+.qbu-err-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.qbu-err-body > .qbu-err-row {
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.qbu-err-c-row {
+  width: 31px;
+  flex: none;
+  font-weight: 500;
+  color: #fff;
+}
+
+.qbu-err-c-cat,
+.qbu-err-c-sub {
+  width: 140px;
+  flex: none;
+  color: #a8a8a8;
+}
+
+.qbu-err-c-q {
+  width: 240px;
+  flex: none;
+  color: #fff;
+}
+
+.qbu-err-c-type {
+  width: 160px;
+  flex: none;
+  color: #a8a8a8;
+}
+
+.qbu-err-c-issue {
+  flex: 1;
+  min-width: 0;
+  color: #fff;
+}
+
+/* A long question is clamped at the two lines the node draws it in. */
+.qbu-err-q {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The issue names its column in red, then explains it in plain text. */
+.qbu-err-col {
+  font-weight: 500;
+  color: #ff1f31;
+}
+
+.qbu-err-foot {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-top: 1px solid #404040;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 19px;
+  color: #a8a8a8;
 }

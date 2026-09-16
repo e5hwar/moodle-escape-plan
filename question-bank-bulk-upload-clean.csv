@@ -1,0 +1,11 @@
+Category,Sub-Category,Question Type,Question (EN),Question (ES),Correct Answer,Option 1,Grade 1 %,Match 1,Option 2,Grade 2 %,Match 2,Option 3,Grade 3 %,Match 3,Option 4,Grade 4 %,Match 4
+EPA 608 Universal,Ozone,Multiple Choice,Which class of refrigerant has the highest ozone depletion potential?,¿Qué clase de refrigerante tiene el mayor potencial de agotamiento del ozono?,,CFC,100,,HCFC,-25,,HFC,-25,,HFO,-25,
+EPA 608 Universal,Ozone,True/False,The Montreal Protocol phased out CFC production.,El Protocolo de Montreal eliminó la producción de CFC.,True,,,,,,,,,,,,
+EPA 608 Universal,Ozone,Multiple Choice,What does ODP stand for?,,,Ozone Depletion Potential,100,,Operating Design Pressure,-25,,Overall Discharge Pressure,-25,,Ozone Discharge Point,-25,
+EPA 608 Universal,Refrigerants,Multiple Choice,Which refrigerant is a near-azeotropic blend?,¿Qué refrigerante es una mezcla casi azeotrópica?,,R-410A,100,,R-22,-25,,R-134a,-25,,R-717,-25,
+EPA 608 Universal,Refrigerants,Multiple Choice,Which two refrigerants are HFCs?,,,R-134a,50,,R-410A,50,,R-22,-25,,R-12,-25,
+EPA 608 Universal,Refrigerants,True/False,R-717 is the designation for ammonia.,,True,,,,,,,,,,,,
+EPA 608 Universal,Introduction,Match the Following,Match each EPA 608 certification type to what it covers.,Empareja cada tipo de certificación EPA 608 con lo que cubre.,,Type I,,Small appliances,Type II,,High-pressure appliances,Type III,,Low-pressure appliances,,,
+EPA 608 Universal,Introduction,True/False,"Universal certification covers Types I, II and III.","La certificación universal cubre los tipos I, II y III.",True,,,,,,,,,,,,
+EPA 608,Core,Multiple Choice,What is the minimum fine for knowingly venting refrigerant?,,,"$37,500 per day",100,,"$1,000 per day",-25,,"$10,000 per day",-25,,There is no fine,-25,
+Refrigeration Basics,Tools,Match the Following,Match each gauge to the reading it gives you.,,,Manifold gauge,,System pressures,Micron gauge,,Vacuum level,Thermistor vacuum gauge,,Deep vacuum in microns,,,

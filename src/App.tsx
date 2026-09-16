@@ -21,7 +21,7 @@ import { ContentLinksPage } from "./components/ContentLinksPage";
 import { nodes as contentNodes, type ContentNode, type Level } from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
-import { questions as seedQuestions, type Question, type QuestionType } from "./data/questionBank";
+import { questions as seedQuestions, versionText, type Question, type QuestionType } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
@@ -103,9 +103,15 @@ type View =
   | { name: "content-links"; cert?: Certification }
   | { name: "skills" }
   | { name: "awards" }
-  | { name: "question-bank" }
+  /* `historyForId` opens the bank straight on one question's Version History
+     page — how a version opened in the editor gets back where it came from. */
+  | { name: "question-bank"; historyForId?: string }
   | { name: "new-question"; categoryPath?: string[]; initialType?: QuestionType; forFormId?: string }
-  | { name: "edit-question"; question: Question }
+  /* `atVersion` means the editor was opened from Version History, on that
+     version — so Cancel goes back there. An OLDER version than the question's
+     current one also locks the editor: it loads that version's content and
+     becomes a viewer rather than an edit. */
+  | { name: "edit-question"; question: Question; atVersion?: number }
   | { name: "spotlight" }
   | { name: "proctoring"; openSubmissionId?: string }
   | { name: "manage-ids" }
@@ -606,9 +612,10 @@ function AdminApp() {
   function handleQuestionCreated(q: Question, forFormId?: string) {
     const form = forFormId ? forms.find((f) => f.id === forFormId) : undefined;
     // A question linked straight into a form goes in front of users
-    // immediately — it can't sit in the bank as a Draft.
+    // immediately. It arrives Active either way — the wizard writes no other
+    // status — so only the form link has to be applied here.
     setBank((prev) => [
-      { ...q, status: form ? "Active" : q.status, forms: form ? [form.name] : q.forms },
+      { ...q, forms: form ? [form.name] : q.forms },
       ...prev,
     ]);
     if (form) {
@@ -710,9 +717,10 @@ function AdminApp() {
           onNewQuestion={(categoryPath, initialType) =>
             setView({ name: "new-question", categoryPath, initialType })
           }
-          onEditQuestion={(question) =>
-            setView({ name: "edit-question", question })
+          onEditQuestion={(question, atVersion) =>
+            setView({ name: "edit-question", question, atVersion })
           }
+          initialHistoryId={view.historyForId}
           onBackToTasks={() => navigate("tasks")}
         />
       ) : view.name === "new-question" ? (
@@ -727,10 +735,37 @@ function AdminApp() {
           }
         />
       ) : view.name === "edit-question" ? (
-        <NewQuestionWizard
-          editingQuestion={view.question}
-          onClose={() => setView({ name: "question-bank" })}
-        />
+        (() => {
+          /* Anything but the question's own current version is a record: the
+             editor loads that version's text and locks. Opened from Version
+             History at all — current version included — Cancel and the crumb
+             go back there rather than to the bank's list. */
+          const past =
+            view.atVersion !== undefined && view.atVersion !== view.question.version;
+          return (
+            <NewQuestionWizard
+              key={`${view.question.id}-${view.atVersion ?? "current"}`}
+              editingQuestion={
+                past
+                  ? {
+                      ...view.question,
+                      version: view.atVersion!,
+                      text: versionText(view.question, view.atVersion!),
+                    }
+                  : view.question
+              }
+              atVersion={past ? view.atVersion : undefined}
+              backLabel={view.atVersion !== undefined ? "Version History" : undefined}
+              onClose={() =>
+                setView(
+                  view.atVersion !== undefined
+                    ? { name: "question-bank", historyForId: view.question.id }
+                    : { name: "question-bank" },
+                )
+              }
+            />
+          );
+        })()
       ) : view.name === "spotlight" ? (
         <SpotlightsPage />
       ) : view.name === "proctoring" ? (

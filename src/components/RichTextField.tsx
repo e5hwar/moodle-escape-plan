@@ -23,6 +23,7 @@ export function RichTextField({
   placeholderEn,
   placeholderEs,
   disabled,
+  error,
   minRows,
   maxRows,
 }: {
@@ -33,6 +34,9 @@ export function RichTextField({
   placeholderEn?: string;
   placeholderEs?: string;
   disabled?: boolean;
+  /** Mandatory and still empty after a blocked save — reddens the shell, the
+   * same flag `.lang-field` / `.form-input` carry. */
+  error?: boolean;
   /** Resting height of each language row, in lines. Defaults to the 1-line
    * variant; pass 2 or 4 for the taller Figma variants. */
   minRows?: number;
@@ -40,7 +44,11 @@ export function RichTextField({
   maxRows?: number;
 }) {
   return (
-    <div className={`rte-field${disabled ? " is-disabled" : ""}`}>
+    <div
+      className={`rte-field${disabled ? " is-disabled" : ""}${
+        error ? " has-error" : ""
+      }`}
+    >
       <div className="rte-lang-row">
         <span className="lang-tag">EN</span>
         <AutoTextarea

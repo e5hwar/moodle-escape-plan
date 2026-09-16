@@ -588,6 +588,10 @@ const SUBMENU_WIDTH = 280;
 /* A date section's submenu holds the presets rail and two 252px calendars, so
    it needs roughly two and a half times the width — `.cascading-sub--date`. */
 const SUBMENU_WIDTH_DATE = 710;
+/* A checklist whose rows carry a `hints` clause needs the node's own width or
+   "None · Not used in any Quiz Task" wraps onto a second line (Figma 1201:2151
+   is 384px). Mirrored by .cascading-sub--wide. */
+const SUBMENU_WIDTH_WIDE = 384;
 const SUBMENU_GAP = 6;
 const VIEWPORT_MARGIN = 8;
 
@@ -605,6 +609,9 @@ export type CascadingSection = {
      long option lists (e.g. Quizzes, Feedback Forms) where scanning unaided
      doesn't scale. Omit for short, fixed option sets like Tasks' Type/Visibility. */
   searchPlaceholder?: string;
+  /** Per-item muted clause, keyed by the item's own label — see CheckRow's
+     `hint`. Only sentinel options ("None") carry one so far. */
+  hints?: Record<string, string>;
   /** Makes the submenu the shared dual-calendar range picker (the same panel
      the Date Range pill drops), rather than a checklist. Its value lives in
      `dates`, and the panel brings its own Apply — so the submenu renders no
@@ -701,9 +708,12 @@ export function CascadingMultiSelect({
     const el = menuRef.current;
     if (!hovered || !el) return;
     const { right, left } = el.getBoundingClientRect();
-    const width = sections.find((s) => s.key === hovered)?.date
+    const section = sections.find((s) => s.key === hovered);
+    const width = section?.date
       ? SUBMENU_WIDTH_DATE
-      : SUBMENU_WIDTH;
+      : section?.hints
+        ? SUBMENU_WIDTH_WIDE
+        : SUBMENU_WIDTH;
     const needed = width + SUBMENU_GAP + VIEWPORT_MARGIN;
     // Only flip when the left side actually has the room the right side lacks.
     const flipped = right + needed > window.innerWidth && left - needed >= 0;
@@ -745,7 +755,9 @@ export function CascadingMultiSelect({
           : openSection.groups ?? [];
         return (
           <div
-            className={`cascading-sub ${openSection.date ? "cascading-sub--date" : ""} ${flip ? "is-left" : ""}`}
+            className={`cascading-sub ${openSection.date ? "cascading-sub--date" : ""} ${
+              openSection.hints ? "cascading-sub--wide" : ""
+            } ${flip ? "is-left" : ""}`}
             style={shift ? { top: hoveredTop, marginLeft: SUBMENU_GAP + shift } : { top: hoveredTop }}
           >
             {openSection.date ? (
@@ -813,6 +825,7 @@ export function CascadingMultiSelect({
                         <CheckRow
                           key={item}
                           label={item}
+                          hint={openSection.hints?.[item]}
                           checked={(draft[openSection.key] ?? []).includes(item)}
                           onChange={() => toggleIn(openSection.key, item)}
                         />
@@ -1058,6 +1071,7 @@ export function ColumnsBody<C extends Record<string, boolean>>({
 
 export function CheckRow({
   label,
+  hint,
   checked,
   onChange,
   draggable = false,
@@ -1069,6 +1083,9 @@ export function CheckRow({
   onDragEnd,
 }: {
   label: string;
+  /** Muted "· …" clause after the label — what the option means when the label
+     alone can't say it (e.g. the "None" sentinel). Figma 1201:2151. */
+  hint?: string;
   checked: boolean;
   onChange: () => void;
   draggable?: boolean;
@@ -1107,7 +1124,10 @@ export function CheckRow({
       <span className={`checkbox ${checked ? "checked" : ""}`}>
         {checked && <CheckIcon />}
       </span>
-      <span className="cols-row-label">{label}</span>
+      <span className="cols-row-label">
+        {label}
+        {hint && <span className="cols-row-hint"> · {hint}</span>}
+      </span>
       {draggable && (
         <span className="cols-drag-handle" aria-hidden="true">
           <DragHandleIcon />

@@ -5,26 +5,33 @@ import {
   questions as allQuestions,
   flattenCategories,
   longQuestionType,
+  matchesUsage,
+  NO_FORM,
+  NO_FORM_HINT,
+  NO_QUIZ,
+  NO_QUIZ_HINT,
   questionDates,
   shortQuestionType,
   QUESTION_TYPE_MENU,
   QUESTION_TYPE_OPTIONS,
   supportsGrading,
-  versionHistory,
   type Category,
   type Question,
   type QuestionStatus,
   type QuestionType,
-  type QuestionVersion,
   type Subcategory,
 } from "../data/questionBank";
-import { ChevronLeftIcon, MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import { ChevronLeftIcon, MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { SectionHeading } from "./SectionHeading";
 import { PrmModal } from "./PrmModal";
+import { BulkUploadModal } from "./BulkUploadModal";
+import { CopiedToast } from "./CopiedToast";
+import { questionsFromImport, type ImportReport } from "../data/questionImport";
 import { QuestionSearch } from "./QuestionSearch";
+import { QuestionVersionsPage } from "./QuestionVersionsPage";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 
@@ -37,7 +44,7 @@ const formatCount = (n: number) => n.toLocaleString("en-US");
 /* Every filter is a multi-select, matching the Tasks row: empty = unapplied,
    values inside one filter OR together, filters AND together. */
 const TYPE_OPTIONS = QUESTION_TYPE_OPTIONS;
-const STATUS_OPTIONS: QuestionStatus[] = ["Active", "Archived", "Draft"];
+const STATUS_OPTIONS: QuestionStatus[] = ["Active", "Archived"];
 const GRADING_OPTIONS = ["Graded", "Ungraded"];
 
 /* The landing's RECENT row opens with these until the user has opened three
@@ -122,8 +129,7 @@ type SortDir = "asc" | "desc";
 
 const STATUS_ORDER: Record<QuestionStatus, number> = {
   Active: 0,
-  Draft: 1,
-  Archived: 2,
+  Archived: 1,
 };
 
 function compareQuestions(a: Question, b: Question, key: QSortKey): number {
@@ -260,7 +266,13 @@ type QbColMeta = {
 };
 
 const QB_COLS: QbColMeta[] = [
-  { key: "id", label: "ID", className: "qb-col-id", width: 100, render: (q) => q.id },
+  /* "Question ID", not "ID" (the user, 2026-09-16) — and the 100px this column
+     had was sized to the old two-letter header. A `thead th` never wraps and
+     clips at its width, so the label came first and the width followed it:
+     measured, the header (label + sort caret) is 103px, which with the row's
+     12px insets is 127 — 130, like the two date columns, fits it and nothing
+     more, the way every width in this table is set. */
+  { key: "id", label: "Question ID", className: "qb-col-id", width: 130, render: (q) => q.id },
   {
     /* 170 = the longest value ("Match the Following", 145px at 16px Fira Sans)
        plus the header row's 12px insets — the column fits its content and
@@ -316,19 +328,33 @@ export function QuestionBankPage({
   onEditQuestion,
   onBackToTasks,
   initialQuestions,
+  initialHistoryId,
 }: {
   onNewQuestion?: (categoryPath?: string[], type?: QuestionType) => void;
-  onEditQuestion?: (question: Question) => void;
+  /* `atVersion` is set when the editor is opened from the Version History
+     page. The question's own current version opens as a normal edit; any
+     older one opens loaded with that version's content and locked. Either
+     way the editor's way back out is the history page. */
+  onEditQuestion?: (question: Question, atVersion?: number) => void;
   onBackToTasks?: () => void;
   initialQuestions?: Question[];
+  /** Opens straight onto one question's Version History page (the way back
+   *  from a version opened in the editor). */
+  initialHistoryId?: string;
 } = {}) {
   const [categories, setCategories] = useState<Category[]>(seedCategories);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions ?? allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
-  // Row-click preview panel + version-history modal
-  const [historyQ, setHistoryQ] = useState<Question | null>(null);
+  /* Row-menu target: the question whose Version History page is open. It is
+     held by ID, not as a snapshot — restoring a version bumps the question's
+     own `version`, and the page has to see that land. */
+  const [historyId, setHistoryId] = useState<string | null>(initialHistoryId ?? null);
   // Row-menu target: the delete confirm. (Preview opens its own tab.)
   const [deleteQ, setDeleteQ] = useState<Question | null>(null);
+  /* Row-menu target: the ARCHIVE confirm. Only the archiving direction stops to
+     ask (per the user 2026-09-16) — unarchiving puts a question back in
+     circulation, which is the harmless half of the same toggle. */
+  const [archiveQ, setArchiveQ] = useState<Question | null>(null);
   // Category is a multi-select like every other filter — labels from
   // flattenCategories ("EPA 608" / "EPA 608 > Universal"). Empty = all questions.
   const [selection, setSelection] = useState<string[]>([]);
@@ -343,8 +369,12 @@ export function QuestionBankPage({
   const [catModal, setCatModal] = useState<CatModalState>({ kind: "none" });
   // The last few categories opened — the landing's RECENT row.
   const [recent, setRecent] = useState<string[]>(SEED_RECENT);
-  // Category being given a new subcategory inline in the tree (its key).
-  const [inlineSub, setInlineSub] = useState<string | null>(null);
+  /* Category being given a new Sub-Category (its key). The kebab's Add
+     Sub-Category opens the SAME shell New Category uses (2026-09-16) — the
+     inline editor that used to sit in the tree card is gone: the two halves of
+     one flow were two different controls, and the one in the card lost what you
+     had typed to a stray click anywhere in the rail. */
+  const [subModal, setSubModal] = useState<string | null>(null);
   /* The New Category modal. Both triggers — the rail's "Add Category" row and
      the landing index head's plus — just open it; it is the shared centred
      shell now, so neither needs a ref to anchor to. */
@@ -364,7 +394,7 @@ export function QuestionBankPage({
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  // Draft questions are hidden until the author asks for them.
+  // Archived questions are hidden until the author asks for them.
   const [statusFilter, setStatusFilter] = useState<string[]>(["Active"]);
   const [gradingFilter, setGradingFilter] = useState<string[]>([]);
   // Quizzes/Feedback Forms are also set from the search box's Quizzes: /
@@ -461,8 +491,10 @@ export function QuestionBankPage({
       if (statusFilter.length && !statusFilter.includes(row.status)) return false;
       if (gradingFilter.length && !gradingFilter.includes(isGraded(row) ? "Graded" : "Ungraded"))
         return false;
-      if (quizFilter.length && !row.quizzes.some((n) => quizFilter.includes(n))) return false;
-      if (formFilter.length && !row.forms.some((n) => formFilter.includes(n))) return false;
+      // "None" is a real option in both lists — a question with no links at all
+      // matches only through it, never through a named Quiz / Form.
+      if (quizFilter.length && !matchesUsage(row.quizzes, quizFilter, NO_QUIZ)) return false;
+      if (formFilter.length && !matchesUsage(row.forms, formFilter, NO_FORM)) return false;
       return true;
     });
   }, [inCategory, query, typeFilter, statusFilter, gradingFilter, quizFilter, formFilter]);
@@ -490,13 +522,6 @@ export function QuestionBankPage({
     );
   }
 
-  // Restoring an old version creates a NEW version with its content.
-  function restoreVersion(id: string) {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, version: q.version + 1 } : q)),
-    );
-  }
-
   function startCreate(type: QuestionType) {
     let path: string[] | undefined;
     if (selection.length === 1) {
@@ -519,12 +544,34 @@ export function QuestionBankPage({
   // category collapsed hides the very subcategories the click was about — and
   // a "Parent > Sub" label unfolds its PARENT, which is the group that holds
   // it. `railRef`'s effect below then scrolls the tree to it.
-  function openCategory(label: string) {
+  /* Whether the next selection change may scroll the rail to centre the active
+     row (see the effect below). A rail click sets it false — you picked a row
+     you were already looking at, so moving it is pure disruption. */
+  const centreOnSelect = useRef(true);
+
+  /* `reveal` expands the target's parent group. It is right for a click from the
+     LANDING, where the rail is not on screen yet and the selection would
+     otherwise be hidden inside a folded card — and wrong from the rail itself:
+     **selecting is not expanding** (the caret owns that, 2026-09-10), and
+     auto-expanding a collapsed category shoved every row beneath it down the
+     panel. That is the "select in its place, don't reposition everything on the
+     tree" the user asked for on 2026-09-16. A rail sub-row needs no reveal
+     either — its parent is open by definition, or the row would not be there to
+     click. */
+  function openCategory(label: string, reveal = true) {
+    /* The same split governs scrolling: a landing click needs the rail brought
+       to the selection, a rail click needs the rail left exactly where it is. */
+    centreOnSelect.current = reveal;
     setSelection([label]);
     setRecent((prev) => [label, ...prev.filter((l) => l !== label)].slice(0, RECENT_MAX));
-    const parentLabel = label.split(" > ")[0];
-    const cat = categories.find((c) => c.label === parentLabel);
-    if (cat) setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
+    if (reveal) {
+      const parentLabel = label.split(" > ")[0];
+      const cat = categories.find((c) => c.label === parentLabel);
+      /* Only a category that HAS children is worth opening. Marking an empty one
+         open gave it the card wash with nothing inside it — a stray highlight on
+         a row that has no caret and cannot expand. */
+      if (cat?.subcategories?.length) setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
+    }
     morph.showTable();
   }
 
@@ -544,6 +591,15 @@ export function QuestionBankPage({
      tree is not a positioned ancestor. */
   useEffect(() => {
     if (!atTable) return;
+    /* Skip for a selection made IN the rail: the row is already on screen and
+       centring it scrolls the whole panel out from under the pointer — the
+       "select in its place, don't reposition everything on the tree" the user
+       asked for on 2026-09-16. Consumed here, so the next selection from the
+       landing or ⌘K centres as before. */
+    if (!centreOnSelect.current) {
+      centreOnSelect.current = true;
+      return;
+    }
     const timers: number[] = [];
     const centre = () => {
       const tree = treeRef.current;
@@ -587,14 +643,18 @@ export function QuestionBankPage({
      you can already read is noise. Measured after every render (a rename or a
      new subcategory changes what fits) and handed over as a native `title`,
      which HoverTooltip adopts into the shared tip on first hover — hence the
-     `data-tip` guard: once adopted, the title is gone and the tip owns it. */
+     `data-tip` guard: once adopted, the title is gone and the tip owns it.
+     BOTH axes are measured: a sub-category name is one nowrap line and overflows
+     horizontally, but a category name is a two-line clamp (862:2301) whose
+     overflow is VERTICAL — width alone would have silently dropped the tooltip
+     from exactly the longest names. */
   useEffect(() => {
     const tree = treeRef.current;
     if (!tree) return;
     tree
       .querySelectorAll<HTMLElement>(".tree-row-label, .tree-sub-row-label")
       .forEach((el) => {
-        if (el.scrollWidth > el.clientWidth + 1) {
+        if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) {
           if (!el.dataset.tip) el.setAttribute("title", el.textContent ?? "");
         } else {
           el.removeAttribute("title");
@@ -603,14 +663,15 @@ export function QuestionBankPage({
       });
   });
 
-  // Nothing else is mid-flight: no menu, popover, inline editor or modal.
+  // Nothing else is mid-flight: no menu, popover or modal.
   const idle =
     catModal.kind === "none" &&
     !catMenu &&
     !createMenuOpen &&
     !catModalOpen &&
     !deleteQ &&
-    inlineSub == null;
+    !archiveQ &&
+    subModal == null;
 
   // "C" opens the Create Question menu on every screen; "A" opens the New
   // Category modal from both — the landing's index header carries the same
@@ -697,13 +758,30 @@ export function QuestionBankPage({
     setOpenGroups((prev) => ({ ...prev, [categoryKey]: true }));
   }
 
+  /* A rename has to carry the questions with it: rows are matched to the tree by
+     LABEL (`categoryPath`), not by key, so renaming the category alone used to
+     orphan every question under it — the table went empty and the delete gate
+     then read the category as deletable. Selection/recent are re-pointed too. */
   function renameCategory(key: string, label: string) {
-    setCategories((prev) =>
-      prev.map((c) => (c.key === key ? { ...c, label } : c)),
+    const from = categories.find((c) => c.key === key)?.label;
+    setCategories((prev) => prev.map((c) => (c.key === key ? { ...c, label } : c)));
+    if (!from || from === label) return;
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.categoryPath[0] === from
+          ? { ...q, categoryPath: [label, ...q.categoryPath.slice(1)] }
+          : q,
+      ),
     );
+    const move = (l: string) =>
+      l === from ? label : l.startsWith(`${from} > `) ? `${label}${l.slice(from.length)}` : l;
+    setSelection((prev) => prev.map(move));
+    setRecent((prev) => prev.map(move));
   }
 
   function renameSubcategory(categoryKey: string, subKey: string, label: string) {
+    const cat = categories.find((c) => c.key === categoryKey);
+    const from = cat?.subcategories?.find((s) => s.key === subKey)?.label;
     setCategories((prev) =>
       prev.map((c) => {
         if (c.key !== categoryKey) return c;
@@ -715,6 +793,18 @@ export function QuestionBankPage({
         };
       }),
     );
+    if (!cat || !from || from === label) return;
+    // Same label-matching rule as renameCategory — move the questions with it.
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.categoryPath[0] === cat.label && q.categoryPath[1] === from
+          ? { ...q, categoryPath: [cat.label, label] }
+          : q,
+      ),
+    );
+    const move = (l: string) => (l === `${cat.label} > ${from}` ? `${cat.label} > ${label}` : l);
+    setSelection((prev) => prev.map(move));
+    setRecent((prev) => prev.map(move));
   }
 
   function deleteCategory(key: string) {
@@ -746,9 +836,24 @@ export function QuestionBankPage({
     }
   }
 
+  /* Deletion is gated on the questions that actually exist, NOT on the seeded
+     `count`: those are the mock figures of a much larger bank (see formatCount),
+     so a subcategory the table renders as empty could still carry a count of 31
+     and refuse to delete. Counting rows keeps the gate honest with what the user
+     can see — and it deliberately ignores the status/type filters, since an
+     archived or drafted question still blocks the delete. */
+  function questionCount(catLabel: string, subLabel?: string) {
+    return questions.filter((q) => {
+      const [cat, sub] = q.categoryPath;
+      return cat === catLabel && (subLabel === undefined || sub === subLabel);
+    }).length;
+  }
+
   // A category can be deleted only when it has no questions and no subcategories.
   function categoryIsEmpty(c: Category) {
-    return c.count === 0 && !(c.subcategories && c.subcategories.length > 0);
+    return (
+      questionCount(c.label) === 0 && !(c.subcategories && c.subcategories.length > 0)
+    );
   }
 
   function openCatMenu(e: React.MouseEvent, target: CatTarget) {
@@ -792,18 +897,15 @@ export function QuestionBankPage({
 
   // The rail's category tree (table state only) — Figma 862:2372: "All
   // Questions" (the caret-less row, 862:2391) then every category, each
-  // expandable and, when open, ending in an inline "Add Sub-Category" row.
-  // Picking a row is a table interaction.
+  // expanding into a card of its sub-rows. Picking a row is a table
+  // interaction.
   function renderTree(cats: Category[]) {
     const showAll = openAllQuestions;
     /* Only an UNSELECTED category is a control. The selected one is inert (its
        kebab still isn't — that is its own button): it used to toggle its own
        sublist, which meant the row you were already looking at could fold the
        subcategories away under the cursor. */
-    const pickCategory = (cat: Category) => {
-      openCategory(cat.label);
-      setOpenGroups((prev) => ({ ...prev, [cat.key]: true }));
-    };
+    const pickCategory = (cat: Category) => openCategory(cat.label, false);
     return (
       <div className="tree lm-scroll" ref={treeRef}>
         <div
@@ -832,14 +934,24 @@ export function QuestionBankPage({
                   peek into a category without leaving the one you are in, and
                   the category you are already in can still be folded away. */}
               <div className={`tree-row ${isActiveCat ? "is-active" : ""}`}>
-                <button
-                  className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
-                  onClick={() => toggleGroup(cat.key)}
-                  aria-expanded={isOpen}
-                  aria-label={`${isOpen ? "Collapse" : "Expand"} ${cat.label}`}
-                >
-                  <TreeCaretIcon />
-                </button>
+                {/* No caret on a category with nothing to expand — 1195:1672
+                    keeps the icon slot but draws nothing in it, so the label
+                    still lines up with every other label. 42 of the 67 seeded
+                    categories are in this state. It can still gain children:
+                    the kebab's Add Sub-Category writes one straight into it,
+                    and the caret appears with the first real sub. */}
+                {cat.subcategories?.length ? (
+                  <button
+                    className={`tree-caret-btn ${isOpen ? "is-open" : ""}`}
+                    onClick={() => toggleGroup(cat.key)}
+                    aria-expanded={isOpen}
+                    aria-label={`${isOpen ? "Collapse" : "Expand"} ${cat.label}`}
+                  >
+                    <TreeCaretIcon />
+                  </button>
+                ) : (
+                  <span className="tree-caret-btn is-blank" aria-hidden="true" />
+                )}
                 <span className="tree-main">
                   <button
                     className="tree-row-label"
@@ -859,8 +971,17 @@ export function QuestionBankPage({
                 </button>
               </div>
 
-              {isOpen && (
-                <div className="tree-sublist">
+              {/* Always rendered, never conditional: a sub-list that mounts on
+                  expand has no "before" for CSS to animate from, so the card
+                  used to snap open. It collapses to zero height via the grid
+                  trick in `.tree-sublist` instead. `inert` keeps the hidden
+                  rows out of the tab order and off screen readers — React 18
+                  passes the bare attribute straight through to the DOM. */}
+              <div
+                className="tree-sublist"
+                {...(isOpen ? {} : ({ inert: "" } as Record<string, string>))}
+              >
+                <div className="tree-sublist-inner">
                   {!!cat.subcategories?.length && (
                     <div className="tree-sublist-rows">
                       {cat.subcategories.map((sub) => {
@@ -873,7 +994,7 @@ export function QuestionBankPage({
                           >
                             <button
                               className="tree-sub-row-label"
-                              onClick={() => openCategory(subLabel)}
+                              onClick={() => openCategory(subLabel, false)}
                               disabled={isActive}
                               {...(isActive ? { "aria-current": "true" as const } : {})}
                             >
@@ -897,23 +1018,12 @@ export function QuestionBankPage({
                       })}
                     </div>
                   )}
-                  {inlineSub === cat.key ? (
-                    <TreeInlineAdd
-                      existingNames={(cat.subcategories ?? []).map((s) => s.label.toLowerCase())}
-                      onSave={(label) => {
-                        addSubcategory(cat.key, label);
-                        setInlineSub(null);
-                      }}
-                      onCancel={() => setInlineSub(null)}
-                    />
-                  ) : (
-                    <button className="tree-add-link" onClick={() => setInlineSub(cat.key)}>
-                      <span className="tree-add-icon"><TreeAddIcon /></span>
-                      Add Sub-Category
-                    </button>
-                  )}
+                  {/* No "+ Add Sub-Category" row and no inline editor any
+                      more — 862:2301's expanded card ends at its last sub
+                      (2026-09-16); the action is the kebab's, and it opens the
+                      New Sub-Category modal over the page. */}
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -921,22 +1031,66 @@ export function QuestionBankPage({
     );
   }
 
-  // Bulk import — the header's Import CSV opens the picker; at the landing the
-  // whole page is also a drop target (the footer line says so). Visual only.
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  /* Bulk import (Figma 1116:1321 / 1195:1690 / 1196:1806) — the header's Import
+     CSV opens the modal empty; at the landing the whole page is also a drop
+     target (the footer line says so), and a file dropped there opens the modal
+     already carrying it. `BulkUploadModal` does the reading and checking; the
+     page only applies a confirmed import. */
   const [dropActive, setDropActive] = useState(false);
+  const [bulk, setBulk] = useState<{ file: File | null } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const draggingFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
-  // Version history opens as its own full page (replacing the list), not a modal.
-  if (historyQ) {
+  /* Confirmed import: create whatever categories the file names (counts
+     included, so the landing index keeps telling the truth), add the questions,
+     then open the table scoped to what just arrived. */
+  function applyImport(report: ImportReport) {
+    const created = questionsFromImport(report.rows, new Set(questions.map((q) => q.id)));
+
+    setCategories((prev) => {
+      const next = prev.map((c) => ({
+        ...c,
+        subcategories: [...(c.subcategories ?? [])],
+      }));
+      const stamp = Date.now();
+      let seq = 0;
+      for (const row of report.rows) {
+        const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+        let cat = next.find((c) => same(c.label, row.category));
+        if (!cat) {
+          cat = { key: `cat-${stamp}-${seq++}`, label: row.category, count: 0, subcategories: [] };
+          next.push(cat);
+        }
+        cat.count += 1;
+        if (!row.sub) continue;
+        let sub = cat.subcategories.find((sc) => same(sc.label, row.sub));
+        if (!sub) {
+          sub = { key: `sub-${stamp}-${seq++}`, label: row.sub, count: 0 };
+          cat.subcategories.push(sub);
+        }
+        sub.count += 1;
+      }
+      return next;
+    });
+
+    setQuestions((prev) => [...created, ...prev]);
+    setSelection([...new Set(report.rows.map((r) => r.category))]);
+    setPage(1);
+    setBulk(null);
+    morph.showTable();
+    setToast(`${created.length} ${created.length === 1 ? "Question" : "Questions"} Imported`);
+  }
+
+  /* Version History opens as its own full page (replacing the list), the way a
+     Quiz Task's "View All Attempts" and "Who Paid" do. A question deleted or
+     imported out from under it drops the page back to the list. */
+  const historyQ = historyId ? questions.find((q) => q.id === historyId) : undefined;
+  if (historyId && historyQ) {
     return (
-      <QuestionHistoryPage
+      <QuestionVersionsPage
         question={historyQ}
-        onBack={() => setHistoryQ(null)}
-        onRestore={() => {
-          restoreVersion(historyQ.id);
-          setHistoryQ(null);
-        }}
+        onBack={() => setHistoryId(null)}
+        onView={(version) => onEditQuestion?.(historyQ, version)}
       />
     );
   }
@@ -968,12 +1122,14 @@ export function QuestionBankPage({
             if (atTable) return;
             e.preventDefault();
             setDropActive(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) setBulk({ file });
           }}
         >
           {/* ─── Rail (table state) — Figma 859:1867 "Left Panel": the shared
               `.rail` + `.tree` chrome with no header — search, the count
-              heading, the tree, and the Add Category row pinned at the foot
-              behind a hairline. ─── */}
+              heading (which now carries the Add Category plus), then the
+              tree. ─── */}
           <aside className="rail qb-rail">
             <div className="rail-search">
               <span className="search-icon"><SearchIcon /></span>
@@ -985,18 +1141,27 @@ export function QuestionBankPage({
                 onChange={(e) => setCategorySearch(e.target.value)}
               />
             </div>
-            <SectionHeading label={`Categories · ${categories.length}`} />
+            {/* The count heading carries the Add Category plus (Figma
+                1188:1188) — same move as Add Sub-Category's, and the same
+                pattern the landing's index head already uses. It replaced the
+                "+ Add Category" row that used to sit pinned at the rail's
+                foot. */}
+            <SectionHeading
+              label={`Categories · ${categories.length}`}
+              trailing={
+                <button
+                  className={`sh-add-btn ${catModalOpen && atTable ? "is-open" : ""}`}
+                  onClick={openNewCategory}
+                  title="Add Category"
+                  aria-label="Add Category"
+                >
+                  <TreeAddIcon />
+                </button>
+              }
+            />
             {/* `.lm-scroll`: the wheel scrolls the rail while it has room, and
                 only falls through to the morph (back to the landing) at its top. */}
             {renderTree(filteredCategories)}
-            {/* 862:2425 — the New Category popover anchors here. */}
-            <button
-              className={`tree-add-link qb-rail-add ${catModalOpen ? "is-open" : ""}`}
-              onClick={openNewCategory}
-            >
-              <span className="tree-add-icon"><TreeAddIcon /></span>
-              Add Category
-            </button>
           </aside>
 
           <section className="qb-content">
@@ -1026,16 +1191,9 @@ export function QuestionBankPage({
               <div className="tasks-header-actions">
                 {/* Landing only — bulk import lives here, not on the working
                     screens (it fades with the landing chrome). */}
-                <button className="cta-quiet qb-import" onClick={() => fileRef.current?.click()}>
+                <button className="cta-quiet qb-import" onClick={() => setBulk({ file: null })}>
                   Import CSV
                 </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv"
-                  hidden
-                  onChange={() => {/* noop in mock */}}
-                />
                 {/* Figma 724:1010 menu, one row per question type. */}
                 <Dropdown
                   align="right"
@@ -1316,9 +1474,25 @@ export function QuestionBankPage({
           onClose={() => setRowMenu(null)}
           onEdit={() => onEditQuestion?.(rowMenu.q)}
           onPreview={() => previewAsLearner(rowMenu.q)}
-          onArchive={() => toggleArchive(rowMenu.q.id)}
-          onVersionHistory={() => setHistoryQ(rowMenu.q)}
+          onArchive={() => {
+            /* Archiving warns first; unarchiving is immediate. */
+            if (rowMenu.q.status === "Archived") toggleArchive(rowMenu.q.id);
+            else setArchiveQ(rowMenu.q);
+          }}
+          onVersionHistory={() => setHistoryId(rowMenu.q.id)}
           onDelete={() => setDeleteQ(rowMenu.q)}
+        />
+      )}
+
+      {/* ─── Archive question confirm ─── */}
+      {archiveQ && (
+        <QuestionArchiveConfirm
+          question={archiveQ}
+          onConfirm={() => {
+            toggleArchive(archiveQ.id);
+            setArchiveQ(null);
+          }}
+          onCancel={() => setArchiveQ(null)}
         />
       )}
 
@@ -1339,15 +1513,30 @@ export function QuestionBankPage({
         const target = catMenu.target;
         const cat = categories.find((c) => c.key === target.categoryKey);
         if (!cat) return null;
-        const canDelete =
+        const sub =
+          target.kind === "subcategory"
+            ? cat.subcategories?.find((s) => s.key === target.subKey)
+            : undefined;
+        const used =
           target.kind === "category"
-            ? categoryIsEmpty(cat)
-            : (cat.subcategories?.find((s) => s.key === target.subKey)?.count ?? 0) === 0;
+            ? questionCount(cat.label)
+            : questionCount(cat.label, sub?.label);
+        const canDelete = target.kind === "category" ? categoryIsEmpty(cat) : used === 0;
+        /* Figma 1179:1129 puts the reason INSIDE the disabled row as a 14px
+           second line (the same `.u-menu-item-sub` the question-row menu uses)
+           rather than in a tooltip, and this is its copy, verbatim. It was
+           briefly replaced (2026-09-15) with a line naming which gate was closed
+           — "Has 96 questions — …" — because the generic wording was what left
+           the user staring at an apparently empty category. That confusion came
+           from the GATE reading a stale seeded `count`, though, not from the
+           words; once `questionCount` started counting real rows the node's copy
+           became accurate, so it is back. */
+        const blockedWhy = "Only empty categories can be deleted";
         return (
           <>
             <div className="ind-menu-backdrop" onClick={() => setCatMenu(null)} />
             <div
-              className="u-menu ind-row-menu"
+              className="u-menu ind-row-menu qb-cat-menu"
               style={{ top: catMenu.y + 6, left: catMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1366,19 +1555,42 @@ export function QuestionBankPage({
                   setCatMenu(null);
                 }}
               >
-                <span className="u-menu-item-icon"><RowEditIcon /></span> Edit
+                <span className="u-menu-item-icon"><RowEditIcon /></span>
+                <span className="u-menu-item-text">Edit</span>
               </button>
+              {/* Category rows only — the tree is two levels deep, so a
+                  sub-category has nothing to add under it. It opens the New
+                  Sub-Category modal; the group no longer has to be expanded
+                  first, because `addSubcategory` opens it to reveal the new row
+                  once there is one to reveal. */}
+              {target.kind === "category" && (
+                <button
+                  className="u-menu-item"
+                  onClick={() => {
+                    setSubModal(target.categoryKey);
+                    setCatMenu(null);
+                  }}
+                >
+                  <span className="u-menu-item-icon"><TreeAddSubIcon /></span>
+                  <span className="u-menu-item-text">Add Sub-Category</span>
+                </button>
+              )}
               <button
                 className="u-menu-item u-menu-item--danger"
                 disabled={!canDelete}
-                title={canDelete ? undefined : "Only empty categories can be deleted"}
                 onClick={() => {
                   if (!canDelete) return;
                   setCatModal({ kind: "delete", target });
                   setCatMenu(null);
                 }}
               >
-                <span className="u-menu-item-icon"><RowDeleteIcon /></span> Delete
+                <span className="u-menu-item-icon"><RowDeleteIcon /></span>
+                <span className="u-menu-item-text">
+                  <span>Delete</span>
+                  {!canDelete && blockedWhy && (
+                    <span className="u-menu-item-sub">{blockedWhy}</span>
+                  )}
+                </span>
               </button>
             </div>
           </>
@@ -1392,7 +1604,9 @@ export function QuestionBankPage({
         return (
           <CatNameModal
             title="Rename Category"
-            submitLabel="Save"
+            description="Renaming keeps every question and sub-category inside it."
+            submitLabel="Save Category"
+            duplicateMessage="A category with this name already exists."
             defaultValue={cat.label}
             existingNames={categories
               .filter((c) => c.key !== catModal.categoryKey)
@@ -1412,8 +1626,10 @@ export function QuestionBankPage({
         if (!parent || !sub) return null;
         return (
           <CatNameModal
-            title={`Rename Subcategory in ${parent.label}`}
-            submitLabel="Save"
+            title="Rename Sub-Category"
+            description={`In ${parent.label}. Renaming keeps every question inside it.`}
+            submitLabel="Save Sub-Category"
+            duplicateMessage="A sub-category with this name already exists."
             defaultValue={sub.label}
             existingNames={(parent.subcategories ?? [])
               .filter((s) => s.key !== catModal.subKey)
@@ -1464,61 +1680,60 @@ export function QuestionBankPage({
         />
       )}
 
+      {/* ─── New Sub-Category — the same shell, scoped to one category ─── */}
+      {subModal != null && (() => {
+        const parent = categories.find((c) => c.key === subModal);
+        if (!parent) return null;
+        return (
+          <NewCategoryModal
+            parent={parent.label}
+            existingNames={(parent.subcategories ?? []).map((s) => s.label.toLowerCase())}
+            onCreate={(label) => {
+              addSubcategory(parent.key, label);
+              setSubModal(null);
+            }}
+            onCancel={() => setSubModal(null)}
+          />
+        );
+      })()}
+
+      {/* ─── Bulk Upload — pick → check → import (Figma 1116:1321) ─── */}
+      {bulk && (
+        <BulkUploadModal
+          categories={categories}
+          initialFile={bulk.file}
+          onClose={() => setBulk(null)}
+          onImport={applyImport}
+        />
+      )}
+      {toast && <CopiedToast label={toast} onDone={() => setToast(null)} />}
+
     </div>
   );
 }
 
-/* Inline subcategory editor (design S4): a bordered input in the sub-list's
-   place, ⏎ saves and Esc (or clicking away) cancels. Names must be unique
-   within the parent. */
-function TreeInlineAdd({
-  existingNames,
-  onSave,
-  onCancel,
-}: {
-  existingNames: string[];
-  onSave: (label: string) => void;
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState("");
-  const trimmed = value.trim();
-  const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
-
-  return (
-    <div className={`tree-inline ${isDuplicate ? "is-invalid" : ""}`}>
-      <input
-        autoFocus
-        className="tree-inline-input"
-        placeholder="Subcategory name"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && trimmed && !isDuplicate) onSave(trimmed);
-          else if (e.key === "Escape") onCancel();
-        }}
-        onBlur={onCancel}
-      />
-      <span className="tree-inline-hint">
-        {isDuplicate ? "A subcategory with this name already exists" : "⏎ save · esc cancel"}
-      </span>
-    </div>
-  );
-}
-
-/* New Category — the app's standard modal (`PrmModal`, Figma 483:588) rather
-   than the anchored card design S4 drew: a Name field over the shell's own
-   Cancel / Create footer (the optional Trade Group select the popover carried
-   was dropped 2026-09-10, along with `Category.tradeGroup` and the
-   `TRADE_GROUPS` list behind it). It replaced the popover on
+/* New Category / New Sub-Category — the app's standard modal (`PrmModal`,
+   Figma 483:588) rather than the anchored card design S4 drew: a Name field
+   over the shell's own Cancel / Create footer (the optional Trade Group select
+   the popover carried was dropped 2026-09-10, along with `Category.tradeGroup`
+   and the `TRADE_GROUPS` list behind it). It replaced the popover on
    2026-09-10, which is why neither trigger needs a ref any more — both the
    rail's "Add Category" row and the landing index head's plus just open it.
+   ONE component for both halves of the flow (2026-09-16): `parent` is the
+   category a Sub-Category is being added to, and it only moves the copy —
+   title, footer verb, the duplicate message and the line under the title, which
+   names the parent so a kebab three rows down the rail still says where the new
+   row will land. Uniqueness is scoped by the caller: categories against the
+   tree's top level, sub-categories against that one parent's children.
    Enter submits from the name field and Esc dismisses (PrmModal itself only
    closes on the overlay and the close glyph). */
 function NewCategoryModal({
+  parent,
   existingNames,
   onCreate,
   onCancel,
 }: {
+  parent?: string;
   existingNames: string[];
   onCreate: (label: string) => void;
   onCancel: () => void;
@@ -1540,11 +1755,17 @@ function NewCategoryModal({
     if (isValid) onCreate(trimmed);
   }
 
+  const noun = parent ? "Sub-Category" : "Category";
+
   return (
     <PrmModal
-      title="New Category"
-      description="Categories and Sub-Categories group questions in the Question Bank"
-      confirmLabel="Create Category"
+      title={`New ${noun}`}
+      description={
+        parent
+          ? `A new Sub-Category under ${parent}`
+          : "Categories and Sub-Categories group questions in the Question Bank"
+      }
+      confirmLabel={`Create ${noun}`}
       confirmDisabled={!isValid}
       onCancel={onCancel}
       onConfirm={submit}
@@ -1562,10 +1783,14 @@ function NewCategoryModal({
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
             }}
-            placeholder="Commercial Kitchen Equipment"
+            placeholder={parent ? "Walk-In Coolers" : "Commercial Kitchen Equipment"}
           />
           {isDuplicate && (
-            <p className="form-help oc-error">A category with this name already exists.</p>
+            <p className="form-help oc-error">
+              {parent
+                ? `${parent} already has a Sub-Category with this name.`
+                : "A category with this name already exists."}
+            </p>
           )}
         </div>
       </div>
@@ -1573,18 +1798,28 @@ function NewCategoryModal({
   );
 }
 
+/* Rename Category / Sub-Category — the same shared shell (`PrmModal`,
+   Figma 483:588) the New Category modal uses. It ran on the older, narrower
+   `.pm-*` card until 2026-09-15, which made the two halves of the same flow
+   two different sizes; the `.pm-*` markup is gone from this page now.
+   Enter submits from the name field and Esc dismisses (PrmModal itself only
+   closes on the overlay and the close glyph). */
 function CatNameModal({
   title,
+  description,
   submitLabel,
   defaultValue,
   existingNames,
+  duplicateMessage,
   onSubmit,
   onCancel,
 }: {
   title: string;
+  description: string;
   submitLabel: string;
   defaultValue: string;
   existingNames: string[];
+  duplicateMessage: string;
   onSubmit: (label: string) => void;
   onCancel: () => void;
 }) {
@@ -1593,52 +1828,88 @@ function CatNameModal({
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
   const isValid = !!trimmed && !isDuplicate;
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  function submit() {
+    if (isValid) onSubmit(trimmed);
+  }
+
   return (
-    <div className="pm-overlay" onClick={onCancel}>
-      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <h3 className="pm-title">{title}</h3>
-          <p className="pm-sub">Must be unique.</p>
-        </div>
-        <div className="pm-body">
-          <div className="form-group">
-            <label className="form-label">
-              Name <span className="req">*</span>
-            </label>
-            <input
-              autoFocus
-              className="form-input"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && isValid) onSubmit(trimmed);
-              }}
-              placeholder="EPA 608"
-            />
-            {isDuplicate && (
-              <div className="pm-error">A category with this name already exists.</div>
-            )}
-          </div>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button
-            className="btn-publish"
-            disabled={!isValid}
-            onClick={() => isValid && onSubmit(trimmed)}
-          >
-            {submitLabel}
-          </button>
+    <PrmModal
+      title={title}
+      description={description}
+      confirmLabel={submitLabel}
+      confirmDisabled={!isValid}
+      onCancel={onCancel}
+      onConfirm={submit}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            Name<span className="prm-req">*</span>
+          </span>
+          <input
+            autoFocus
+            className="form-input"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="EPA 608"
+          />
+          {isDuplicate && <p className="form-help oc-error">{duplicateMessage}</p>}
         </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
-/* Delete Question — the row menu's destructive action (Figma 1085:1082 draws it
-   red, with no disabled state: unlike Archive, deleting stays available even
-   while the question is linked, so the confirm names the links instead of the
-   menu blocking the row. */
+/* Archive Question — the shared confirm shell (`PrmModal`, Figma 483:588), the
+   same one Delete Question uses below. **Not the `danger` variant**: archiving
+   is reversible from the same menu, and spending the red CTA on it would leave
+   nothing to distinguish the one action that cannot be undone.
+   **One sentence, no body** (the user, 2026-09-16: "just a simple confirmation
+   message, none of these bullet points"). It briefly carried a three-item
+   consequence list and the question's full text, which made a reversible action
+   look heavier than the irreversible one below it. Delete keeps its list because
+   it has something to enumerate — the Forms a deletion would break — and keeps
+   the quoted text because nothing undoes it. Here the ID is enough: the row you
+   opened the menu on is still on screen behind the card. */
+function QuestionArchiveConfirm({
+  question: q,
+  onConfirm,
+  onCancel,
+}: {
+  question: Question;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <PrmModal
+      title="Archive Question?"
+      description={
+        <>
+          Archive <strong>{q.id}</strong>? You can unarchive it from the same menu at
+          any time.
+        </>
+      }
+      confirmLabel="Archive Question"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
+/* Delete Question — the row menu's destructive action. It is only reachable for
+   a question with no Quiz history at all (see `blockDelete`), so the list here
+   names Feedback Form links only; a question in a Quiz is archived, not deleted. */
 function QuestionDeleteConfirm({
   question: q,
   onConfirm,
@@ -1648,10 +1919,7 @@ function QuestionDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const links = [
-    ...q.quizzes.map((n) => ({ kind: "Quiz", name: n })),
-    ...q.forms.map((n) => ({ kind: "Feedback Form", name: n })),
-  ];
+  const links = q.forms.map((n) => ({ kind: "Feedback Form", name: n }));
   return (
     <PrmModal
       title="Delete Question?"
@@ -1668,7 +1936,7 @@ function QuestionDeleteConfirm({
     >
       <ul className="ind-modal-list">
         {links.length === 0 ? (
-          <li>Not used in any Quiz or Feedback Form.</li>
+          <li>Not used in any Feedback Form — nothing else points at it.</li>
         ) : (
           links.map((l) => (
             <li key={`${l.kind}-${l.name}`}>
@@ -1681,6 +1949,8 @@ function QuestionDeleteConfirm({
   );
 }
 
+/* Delete Category / Sub-Category — the shared shell's danger variant, matching
+   Delete Question above (it used to run on the narrower `.pm-*` card). */
 function CatDeleteConfirm({
   label,
   isCategory,
@@ -1692,33 +1962,27 @@ function CatDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const noun = isCategory ? "Category" : "Sub-Category";
   return (
-    <div className="pm-overlay" onClick={onCancel}>
-      <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <h3 className="pm-title">
-            Delete {isCategory ? "Category" : "Subcategory"}?
-          </h3>
-          <p className="pm-sub">
-            Delete <strong>{label}</strong>? This can't be undone.
-          </p>
-        </div>
-        <div className="pm-body">
-          <ul className="ind-modal-list">
-            <li>
-              This {isCategory ? "category" : "subcategory"} is empty — no questions
-              {isCategory ? " or subcategories" : ""} will be affected.
-            </li>
-          </ul>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className="btn-publish btn-publish--danger" onClick={onConfirm}>
-            Delete {isCategory ? "Category" : "Subcategory"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title={`Delete ${noun}?`}
+      description={
+        <>
+          Delete <strong>{label}</strong>? This can't be undone.
+        </>
+      }
+      danger
+      confirmLabel={`Delete ${noun}`}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <ul className="ind-modal-list">
+        <li>
+          This {noun.toLowerCase()} is empty — no questions
+          {isCategory ? " or sub-categories" : ""} will be affected.
+        </li>
+      </ul>
+    </PrmModal>
   );
 }
 
@@ -1767,149 +2031,6 @@ function QbHeader({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
-  );
-}
-
-/* Version history for a question — a full page (not a modal) with a table of
-   every version. Restoring an old version creates a NEW version with its
-   content; versions with no pinned attempts can be deleted. */
-function QuestionHistoryPage({
-  question,
-  onBack,
-  onRestore,
-}: {
-  question: Question;
-  onBack: () => void;
-  onRestore: (fromVersion: number) => void;
-}) {
-  const [versions, setVersions] = useState<QuestionVersion[]>(() =>
-    versionHistory(question),
-  );
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onBack();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onBack]);
-
-  return (
-    <div className="main">
-      <div className="workspace">
-        <div className="tasks qh-page">
-          <header className="qh-page-header">
-            <button className="fb-back-btn" onClick={onBack}>
-              <ChevronLeftIcon />
-              <span>Question Bank</span>
-            </button>
-            <div className="qh-page-titleblock">
-              <div className="fb-row-id">
-                {question.id} · {shortQuestionType(question.type)} · v
-                {question.version}
-              </div>
-              <h1 className="tasks-title">Version history</h1>
-              <div className="qh-page-sub">{question.text}</div>
-            </div>
-          </header>
-
-          <div className="qh-page-body">
-            {versions.length === 0 ? (
-              <div className="qh-empty">
-                No versions yet — this question hasn't been saved.
-              </div>
-            ) : (
-              <table className="qh-table">
-                <colgroup>
-                  <col style={{ width: 128 }} />
-                  <col />
-                  <col style={{ width: 150 }} />
-                  <col style={{ width: 150 }} />
-                  <col style={{ width: 280 }} />
-                  <col style={{ width: 170 }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>Version</th>
-                    <th>Change</th>
-                    <th>Date</th>
-                    <th>Author</th>
-                    <th>Usage</th>
-                    <th aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {versions.map((v) => {
-                    const isCurrent = v.version === question.version;
-                    const deletable = !isCurrent && v.attempts === 0;
-                    return (
-                      <tr
-                        key={v.version}
-                        className={`qh-trow ${isCurrent ? "is-current" : ""}`}
-                      >
-                        <td className="qh-td-version">
-                          <span className="qh-vtag">v{v.version}</span>
-                          {isCurrent && (
-                            <span className="qh-current-pill">Current</span>
-                          )}
-                        </td>
-                        <td className="qh-td-note">{v.note}</td>
-                        <td className="qh-td-date">{v.date}</td>
-                        <td className="qh-td-author">{v.author}</td>
-                        <td className="qh-td-usage">
-                          <span
-                            className={`qh-usage ${
-                              v.attempts === 0 ? "is-unused" : ""
-                            }`}
-                          >
-                            {v.attempts === 0
-                              ? isCurrent
-                                ? "No attempts yet"
-                                : "Never answered — can be deleted"
-                              : `Pinned to ${v.attempts.toLocaleString()} past attempt${
-                                  v.attempts === 1 ? "" : "s"
-                                }/response${v.attempts === 1 ? "" : "s"}`}
-                          </span>
-                        </td>
-                        <td className="qh-td-actions">
-                          {!isCurrent && (
-                            <button
-                              className="qh-action-btn"
-                              title={`Create a new version with v${v.version}'s content`}
-                              onClick={() => onRestore(v.version)}
-                            >
-                              Restore
-                            </button>
-                          )}
-                          {deletable && (
-                            <button
-                              className="qh-action-btn qh-action-btn--danger"
-                              onClick={() =>
-                                setVersions((prev) =>
-                                  prev.filter((x) => x.version !== v.version),
-                                )
-                              }
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-
-            <div className="qh-foot-note">
-              Past quiz attempts and form responses permanently reference the
-              version they answered. Versions that were never answered can be
-              deleted; used versions are retained.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -2079,17 +2200,35 @@ function QuestionActionsMenu({
   );
 
   const isArchived = q.status === "Archived";
-  /* Archive and Delete are the SAME slot, never both (per the user 2026-09-10).
-     Which one it is turns on whether anyone has answered the question:
-       · answered → Archive, because the attempts have to keep resolving to it;
-         available only once it is out of every Quiz and Feedback Form, and
-         shown disabled with Figma 1085:1082's reason until then.
-       · never answered → Delete, since nothing points back at it.
-     Unarchiving is always allowed — an archived question is already out of
-     circulation, and the row exists to put it back. */
-  const attempts = attemptCount(q);
+  /* Archive and Delete are ONE SLOT again (per the user 2026-09-16): "If Delete
+     is shown, don't show Archive." The two had sat side by side since the
+     2026-09-15 re-sync of Figma 1085:1082, but they are not peers — Archive
+     exists precisely BECAUSE a question can't be deleted ("archive it instead"
+     was the blocked row's own copy), so a menu offering both was offering the
+     consolation prize next to the real thing.
+       · Delete is gated on QUIZ history (per the user 2026-09-15): a question
+         linked to a Quiz, or that anyone has ever answered, can never be
+         deleted — the attempts have to keep resolving to it. When that gate is
+         closed the row is NOT DRAWN AT ALL (2026-09-16), rather than disabled
+         with a reason: Archive's gate is a to-do list ("unlink it and come
+         back"), Delete's is permanent for the life of the question, so a
+         dead control would never become live. 1085:1082 draws no disabled
+         Delete either.
+       · Archive takes the slot whenever Delete has vacated it, and keeps its
+         own disabled-with-a-reason state for a question still sitting in a Quiz
+         or Form (the node's reason line).
+     **`isArchived` is the exception, and it is not a loophole.** An archived
+     question's row reads "Unarchive" — the way BACK, not an alternative to
+     deleting — so it is always drawn, even beside Delete. Dropping it would
+     strand a deletable archived question in Archived with deletion as its only
+     exit.
+     A question with only Feedback Form links and no responses is still
+     deletable; the confirm names those links. */
   const links = q.quizzes.length + q.forms.length;
+  const attempts = attemptCount(q);
+  const blockDelete = q.quizzes.length > 0 || attempts > 0;
   const blockArchive = !isArchived && links > 0;
+  const showArchive = isArchived || blockDelete;
 
   return (
     <div
@@ -2110,20 +2249,19 @@ function QuestionActionsMenu({
       {item(<MenuPreviewIcon />, "Preview as Learner", onPreview)}
       {/* Nothing to show at v1 — there is no earlier version to compare to. */}
       {q.version > 1 && item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
-      {attempts > 0
-        ? item(
-            <MenuArchiveOffIcon />,
-            isArchived ? "Unarchive" : "Archive",
-            onArchive,
-            blockArchive
-              ? {
-                  disabled: true,
-                  title: "Linked to a Quiz or Feedback Form — remove it from all of them before archiving",
-                  note: "Must be removed from all Quizzes and Feedback Forms",
-                }
-              : undefined,
-          )
-        : item(<RowDeleteIcon />, "Delete", onDelete, { danger: true })}
+      {showArchive &&
+        item(
+          <MenuArchiveOffIcon />,
+          isArchived ? "Unarchive" : "Archive",
+          onArchive,
+          blockArchive
+            ? {
+                disabled: true,
+                note: "Must be removed from all Quizzes and Feedback Forms",
+              }
+            : undefined,
+        )}
+      {!blockDelete && item(<RowDeleteIcon />, "Delete", onDelete, { danger: true })}
     </div>
   );
 }
@@ -2167,16 +2305,21 @@ function QbMoreFiltersPill({
             // Grading leads — it kept its slot from the pill row, and its two
             // fixed options need no search box.
             { key: "grading", label: "Grading", groups: [{ items: GRADING_OPTIONS }] },
+            // "None" leads both usage lists (Figma 1201:2151) — it is the only
+            // way to ask for questions that aren't linked anywhere, and the
+            // muted clause says so, since the bare word doesn't.
             {
               key: "quizzes",
               label: "Quizzes",
-              groups: [{ items: quizNames }],
+              groups: [{ items: [NO_QUIZ, ...quizNames] }],
+              hints: { [NO_QUIZ]: NO_QUIZ_HINT },
               searchPlaceholder: "Search Quizzes...",
             },
             {
               key: "forms",
               label: "Feedback Forms",
-              groups: [{ items: formNames }],
+              groups: [{ items: [NO_FORM, ...formNames] }],
+              hints: { [NO_FORM]: NO_FORM_HINT },
               searchPlaceholder: "Search Feedback Forms...",
             },
           ]}

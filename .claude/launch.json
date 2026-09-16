@@ -38,6 +38,20 @@
       ],
       "port": 5179,
       "url": "http://localhost:5179"
+    },
+    {
+      "name": "dev-5181",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5181",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5181,
+      "url": "http://localhost:5181"
     }
   ]
 }

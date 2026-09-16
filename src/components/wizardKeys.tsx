@@ -33,7 +33,9 @@ export function WizardKeyHint({ shift = false }: { shift?: boolean }) {
  * listener is on `document`, so without this ⌘+Enter inside a picker would
  * advance the wizard behind it. `enabled` covers the other direction — a wizard
  * that hands the screen to another wizard (Certification → its split Task
- * wizard) passes false, so only the visible one answers.
+ * wizard) passes false, so only the visible one answers. `isSubWizard` is the
+ * other side of that guard: a wizard that IS the portalled `.qz-qwiz` layer
+ * says so, and keeps its own shortcut.
  *
  * No dependency array: the handler closes over this render's state, so it is
  * re-registered each render rather than going stale.
@@ -42,14 +44,15 @@ export function useWizardEnterShortcut(
   onPrimary: () => void,
   onShift?: () => void,
   enabled = true,
+  isSubWizard?: () => boolean,
 ) {
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       if (e.shiftKey && !onShift) return;
-      if (document.querySelector('[role="dialog"][aria-modal="true"], .qz-qwiz'))
-        return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (!isSubWizard?.() && document.querySelector(".qz-qwiz")) return;
       e.preventDefault();
       if (e.shiftKey) onShift?.();
       else onPrimary();

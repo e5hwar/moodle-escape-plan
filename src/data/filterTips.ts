@@ -67,7 +67,7 @@ export const FILTER_TIPS = {
   /** Question Bank. */
   questionBank: {
     type: "Show only questions of the chosen types.",
-    status: "Show only Active, only Archived or only Draft questions.",
+    status: "Show only Active or only Archived questions.",
   },
 
   /** Skills — the page that set the convention. */

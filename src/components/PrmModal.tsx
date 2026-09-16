@@ -28,6 +28,8 @@ export function PrmModal({
   wide,
   pick,
   pickWide,
+  className,
+  hideFooter,
   onCancel,
   onCancelButton,
   onConfirm,
@@ -37,7 +39,8 @@ export function PrmModal({
   /** Optional description directly under the title (Figma 667:884 groups them
    *  at a 2px gap, tighter than the body's item spacing). */
   description?: ReactNode;
-  confirmLabel: ReactNode;
+  /** Required unless `hideFooter` — a footerless modal has nothing to confirm. */
+  confirmLabel?: ReactNode;
   confirmDisabled?: boolean;
   /** Renders the CTA as an external link (new tab) instead of a button. */
   confirmHref?: string;
@@ -57,20 +60,29 @@ export function PrmModal({
    *  2026-09-12 for its Industry column). The other pickers stay at the 884px
    *  their own nodes still draw. */
   pickWide?: boolean;
+  /** Per-modal shell class, for a node whose card is its own width/height
+   *  (the Question Bank's bulk-upload screens). */
+  className?: string;
+  /** Drops the footer entirely — the Bulk Upload picker (Figma 1116:1321)
+   *  draws none, because nothing is confirmed until a file has been read. */
+  hideFooter?: boolean;
   /** Dismisses the modal — overlay click and the close glyph. */
   onCancel: () => void;
   /** The footer's text button, when it does something other than dismiss
    *  (e.g. "Go back" to a previous step). Defaults to onCancel. */
   onCancelButton?: () => void;
   onConfirm?: () => void;
-  children: ReactNode;
+  /** Optional: a confirm whose whole message is its `description` (Archive
+   *  Question) renders no body at all — `.prm-body`'s 20px gap only applies
+   *  between items that exist, so the title group is left on its own. */
+  children?: ReactNode;
 }) {
   return (
     <div className="pr-confirm-overlay" onClick={onCancel}>
       <div
         className={`prm ${wide ? "prm--wide" : ""}${pick ? " prm--pick" : ""}${
           pickWide ? " prm--pick-wide" : ""
-        }`}
+        }${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -88,32 +100,34 @@ export function PrmModal({
           </div>
           {children}
         </div>
-        <div className={`prm-foot${hideCancel ? " prm-foot--solo" : ""}`}>
-          {!hideCancel && (
-            <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
-              {cancelLabel}
-            </button>
-          )}
-          {confirmHref ? (
-            <a
-              className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
-              href={confirmHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onConfirm}
-            >
-              {confirmLabel}
-            </a>
-          ) : (
-            <button
-              className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
-              onClick={onConfirm}
-              disabled={confirmDisabled}
-            >
-              {confirmLabel}
-            </button>
-          )}
-        </div>
+        {!hideFooter && (
+          <div className={`prm-foot${hideCancel ? " prm-foot--solo" : ""}`}>
+            {!hideCancel && (
+              <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
+                {cancelLabel}
+              </button>
+            )}
+            {confirmHref ? (
+              <a
+                className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
+                href={confirmHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onConfirm}
+              >
+                {confirmLabel}
+              </a>
+            ) : (
+              <button
+                className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
+                onClick={onConfirm}
+                disabled={confirmDisabled}
+              >
+                {confirmLabel}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

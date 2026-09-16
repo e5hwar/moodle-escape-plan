@@ -635,6 +635,17 @@ export const TreeAddIcon = () => (
   </svg>
 );
 
+/* Folder with a plus — the category kebab's "Add Sub-Category" (Figma
+   1188:1617, added 2026-09-16 when the action left the tree card for the menu).
+   Drawn on the node's 14.667×12.333 art at a 1px/1.833px offset so it sits on
+   the 16px grid the rest of the `u-menu` glyph family uses. */
+export const TreeAddSubIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333">
+    <path d="M1.333 2.5H6L7.333 4.167H14.667V13.5H1.333V2.5Z" />
+    <path d="M8 6.833V10.833M10 8.833H6" strokeLinecap="square" />
+  </svg>
+);
+
 /* Tree row kebab (314:2060) — the VERTICAL 3-dot: 1.75px dots at y
    2.625/7/11.375 in a 14px slot (12px on sub rows via `.tree-sub-menu-btn`). */
 export const TreeKebabIcon = () => (

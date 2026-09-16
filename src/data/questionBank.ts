@@ -7,7 +7,13 @@ export type QuestionType =
   | "File upload"
   | "Linear scale";
 
-export type QuestionStatus = "Active" | "Archived" | "Draft";
+/* Two states, not three. A "Draft" status existed until 2026-09-16 — ~7% of the
+   seeded bank carried it — but nothing in the app could put a question into it
+   or take it out (the editor's Status field went 2026-09-10, the wizard and the
+   CSV importer both write Active, and the row menu only toggles Archived), and
+   a Draft could not be picked into a Quiz or Form. It was a dead end you could
+   filter to but never leave, so the user had it removed outright. */
+export type QuestionStatus = "Active" | "Archived";
 
 // Backend authoring type → short label shown in the table.
 // Multiple choice and Multiple select are both MCQ on the backend.
@@ -119,6 +125,20 @@ export type Question = {
   feedback?: { correct?: string; partial?: string; incorrect?: string };
 };
 
+/* Sentinel option labels for filtering questions that link nowhere — the same
+   trick the Certifications pills use for an unset Career Stage / Type. Figma
+   1201:2151 spells the row out: "None · Not used in any Quiz Task". */
+export const NO_QUIZ = "None";
+export const NO_FORM = "None";
+/** "Not used in any …" copy for the two sentinels above. */
+export const NO_QUIZ_HINT = "Not used in any Quiz Task";
+export const NO_FORM_HINT = "Not used in any Feedback Form";
+
+/** A usage filter matches a question with no links only via its "None" option. */
+export function matchesUsage(used: string[], picked: string[], none: string): boolean {
+  return used.length ? used.some((n) => picked.includes(n)) : picked.includes(none);
+}
+
 export type Subcategory = {
   key: string;
   label: string;
@@ -190,10 +210,48 @@ export function selectionLabel(sel: CategorySelection, cats: Category[]): string
 export type QuestionVersion = {
   version: number;
   date: string; // "Jun 12, 2026"
+  /* The same moment with a time on it — "Jun 12, 2026 · 2:14 PM", the stamp
+     format Quiz Attempts uses. The Version History page's "Edited On" column
+     shows this; `date` alone still feeds the list's Created / Last Modified
+     columns, which have no room for a time. */
+  stamp: string;
   author: string;
   note: string;
   attempts: number; // quiz attempts + form responses pinned to this version
+  /* The two halves of `attempts`, so the Version History page can give each a
+     column of its own instead of the one wordy "attempts/responses" line. A
+     question answered only inside Feedback Forms has all of its pinned usage
+     in `formResponses`, and vice versa. */
+  quizAttempts: number;
+  formResponses: number;
+  /* The question stem as it read at this version — the Version History page's
+     "Question" column, and what the editor loads when you View a past version.
+     It only differs from the newer version's where that version's note says
+     the text was edited; every other kind of edit leaves the stem alone. */
+  text: string;
 };
+
+/* How a question stem read one edit earlier. Rough, deterministic, and only
+   ever applied to a version whose note is "Edited question text", so the
+   column and the note agree. The rules are all plain wording swaps, so
+   whichever one fires the result is still a sentence. */
+const EARLIER_EDITS: [string, string][] = [
+  ["What should they check first?", "What should they check?"],
+  ["What should they do first?", "What should they do?"],
+  ["Which of the following ", "Which "],
+  [" should they ", " must they "],
+  [" is the correct ", " is the right "],
+];
+
+function earlierText(t: string): string {
+  for (const [a, b] of EARLIER_EDITS) if (t.includes(a)) return t.replace(a, b);
+  return t;
+}
+
+/** The stem as it read at `version` — falls back to today's text. */
+export function versionText(q: Question, version: number): string {
+  return versionHistory(q).find((v) => v.version === version)?.text ?? q.text;
+}
 
 /* Created / last-modified dates for the list's optional columns. Derived from
    versionHistory so they always agree with the version history page: v1's row
@@ -223,6 +281,20 @@ const VERSION_NOTES = [
   "Replaced an option",
 ];
 
+/* Share of a question's pinned usage that is Feedback-Form responses, for a
+   question whose links don't already settle it. Most questions live in one
+   world or the other, so the list leans on 0 and 1. */
+const FORM_SHARES = [0, 0, 0.35, 1, 1, 0];
+
+/* Working-hours clock for an edit stamp — deterministic, like everything else
+   here, so the same version always reads the same time. */
+function editTime(h: number, v: number): string {
+  const hour24 = 8 + ((h + v * 5) % 10); // 8am–5pm
+  const minute = (h + v * 17) % 60;
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${hour24 < 12 ? "AM" : "PM"}`;
+}
+
 function hashId(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
@@ -235,12 +307,36 @@ export function versionHistory(q: Question): QuestionVersion[] {
      restatement of where it is used today: a question can hold years of
      attempts after being pulled from every quiz, and one added to a quiz this
      morning has none yet. Keeping the two independent is what gives the row
-     menu its four real cases — see `attemptCount`. Roughly 1 in 5 questions
-     has never been answered. */
-  const everAnswered = h % 5 !== 0;
+     menu its four real cases — see `attemptCount`.
+     It is not INDEPENDENT of usage, though — it leans on it. A question sitting
+     in a live Quiz or Form has almost certainly been answered; one attached to
+     nothing is a coin flip. The split matters because attempts are the second
+     half of the Delete gate (`blockDelete` = in a Quiz OR ever answered), so
+     this ratio is what decides how many questions can be deleted at all: at a
+     flat 1-in-5-never-answered it was 615 of 4,793, and barely any unattached
+     question offered Delete. Per the user (2026-09-16) **about half of the
+     questions that are in no Quiz and no Feedback Form now do**. */
+  const attached = q.quizzes.length > 0 || q.forms.length > 0;
+  const everAnswered = attached ? h % 6 !== 0 : h % 2 === 1;
+  /* How a version's pinned usage splits between quiz attempts and form
+     responses — a per-QUESTION trait, not a per-version one, so it is settled
+     once and applied to every row. Where the question's own links answer it
+     they win, so the two columns can never contradict the list's Quizzes /
+     Feedback Forms columns: a question used only in Forms has no quiz
+     attempts, and one used only in Quizzes has no form responses. A question
+     in both, or attached to nothing at all, falls back to the id. */
+  const formShare =
+    q.forms.length > 0 && q.quizzes.length === 0
+      ? 1
+      : q.quizzes.length > 0 && q.forms.length === 0
+        ? 0
+        : FORM_SHARES[h % FORM_SHARES.length];
   const out: QuestionVersion[] = [];
   // Walk back from the prototype's fixed "today".
   let day = new Date(2026, 5, 24 - (h % 18));
+  /* The stem, walked backwards alongside the dates: it starts as today's text
+     and steps back one wording every time we pass a version that edited it. */
+  let text = q.text;
   for (let v = q.version; v >= 1; v--) {
     const isCurrent = v === q.version;
     // Old versions usually have pinned attempts; some (and any never-published
@@ -252,17 +348,25 @@ export function versionHistory(q: Question): QuestionVersion[] {
         : (h + v * 13) % 4 === 0
           ? 0
           : ((h + v * 31) % 380) + 15;
+    const formResponses = Math.round(attempts * formShare);
+    const date = day.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const note = v === 1 ? "Created" : VERSION_NOTES[(h + v * 3) % VERSION_NOTES.length];
     out.push({
       version: v,
-      date: day.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
+      date,
+      text,
+      stamp: `${date} · ${editTime(h, v)}`,
+      quizAttempts: attempts - formResponses,
+      formResponses,
       author: VERSION_AUTHORS[(h + v) % VERSION_AUTHORS.length],
-      note: v === 1 ? "Created" : VERSION_NOTES[(h + v * 3) % VERSION_NOTES.length],
+      note,
       attempts,
     });
+    if (note === "Edited question text") text = earlierText(text);
     day = new Date(day.getTime() - (4 + ((h + v * 7) % 38)) * 86400000);
   }
   return out;
@@ -621,12 +725,12 @@ const Q = (
   forms: [],
   version: 1,
   gradingEnabled: supportsGrading(type),
-  randomise: type === "Multiple choice" || type === "Multiple select" || type === "Match the following",
+  randomise: type === "Multiple choice" || type === "Multiple select",
   hasSpanish: false,
   ...extra,
 });
 
-export const questions: Question[] = [
+const AUTHORED: Question[] = [
   Q("Q-10421", "Multiple choice",
     "Which refrigerant is classified as an HFC and commonly used in residential AC systems?",
     "Active", ["EPA Universal Exam", "NATE RTW"], {
@@ -776,7 +880,7 @@ export const questions: Question[] = [
     "Active", [], {}),
   Q("Q-10442", "File upload",
     "Upload a photo of your manifold gauge setup on the practice rig.",
-    "Draft", [], {
+    "Active", [], {
       forms: [],
       fileRules: { maxFiles: 3, maxSizeMb: 25 },
     }),
@@ -972,6 +1076,167 @@ function FQ(id: string, type: QuestionType, text: string, extra?: Partial<Questi
     ...extra,
   };
 }
+
+/* ─── Filler questions ───────────────────────────────────────────────────────
+   The 38 questions above are hand-written, and every one of them sits in
+   EPA 608 > Universal or Learner Feedback — which left 65 of the 67 categories
+   rendering "No questions match the current filters" even though the tree
+   advertised counts in the hundreds. That gap was also what made the row menu
+   lie: a category the table drew as empty still refused to delete, because the
+   gate read the advertised `count`.
+
+   So the bank is filled in from the tree itself: every subcategory gets exactly
+   as many questions as its `count` claims, minus whatever is already hand-
+   written there. The advertised numbers are now true, and the two hand-written
+   paths keep their real questions and are simply topped up.
+
+   Everything is derived from the id, so a given row is identical on every
+   reload — the same rule versionHistory() already follows. */
+
+/* Text is a template crossed with a rotating detail, never a template alone:
+   with 14 templates and 13 details the pair repeats only after 182 questions,
+   which is more than the largest subcategory holds — so no two rows inside one
+   category read identically. (They did at first, and a sorted page of verbatim
+   duplicates reads as a bug rather than as mock data.) */
+const FILLER_DETAILS = [
+  "a rooftop package unit",
+  "a residential split system",
+  "a walk-in cooler",
+  "a gas furnace",
+  "a heat pump in defrost",
+  "a chilled water loop",
+  "a mini-split head",
+  "a commercial ice machine",
+  "a condensing boiler",
+  "a make-up air unit",
+  "a rack refrigeration system",
+  "an air-cooled condenser",
+  "a variable-speed air handler",
+];
+
+const FILLER_TEMPLATES: [QuestionType, (sub: string, cat: string, on: string) => string][] = [
+  ["Multiple choice", (sub, _c, on) => `Which of the following best describes ${sub} on ${on}?`],
+  ["Multiple choice", (sub, cat, on) => `On ${on}, what is the primary purpose of ${sub} in a ${cat} system?`],
+  ["True/False", (sub, _c, on) => `True or False: ${sub} must be verified on ${on} before it is returned to service.`],
+  ["Multiple choice", (sub, _c, on) => `A technician is troubleshooting ${sub} on ${on}. What should they check first?`],
+  ["Multiple select", (sub, _c, on) => `Select every tool required to work on ${sub} on ${on}.`],
+  ["Short answer", (sub, _c, on) => `Explain how ${sub} affects the performance of ${on}.`],
+  ["Multiple choice", (sub, _c, on) => `Which code requirement applies to ${sub} when installed on ${on}?`],
+  ["Match the following", (sub, _c, on) => `Match each ${sub} term to its definition as it applies to ${on}.`],
+  ["True/False", (sub, cat, on) => `True or False: ${sub} on ${on} falls under the ${cat} certification scope.`],
+  ["Multiple choice", (sub, _c, on) => `What is the most common ${sub} failure mode on ${on}?`],
+  ["Linear scale", (sub, _c, on) => `How confident are you servicing ${sub} on ${on} unsupervised?`],
+  ["Multiple choice", (sub, _c, on) => `Which safety precaution is mandatory before servicing ${sub} on ${on}?`],
+  ["File upload", (sub, _c, on) => `Upload a photo of your completed ${sub} work on ${on}.`],
+  ["Multiple choice", (sub, _c, on) => `Which reading shows ${sub} is within specification on ${on}?`],
+];
+
+const FILLER_QUIZZES = [
+  "EPA Universal Exam",
+  "NATE RTW",
+  "HVAC JobReady",
+  "EPA Type II",
+];
+
+function fillerOptions(type: QuestionType, sub: string): Partial<Question> {
+  switch (type) {
+    case "Multiple choice":
+      return {
+        options: [
+          { text: `The manufacturer's published ${sub} specification`, grade: 100 },
+          { text: "Whatever the previous technician recorded", grade: -25 },
+          { text: "The nameplate rating alone", grade: -25 },
+          { text: "An estimate based on ambient conditions", grade: -25 },
+        ],
+      };
+    case "Multiple select":
+      return {
+        options: [
+          { text: "Manifold gauge set", grade: 50 },
+          { text: "Digital multimeter", grade: 50 },
+          { text: "Torque wrench", grade: -50 },
+          { text: "Combustion analyser", grade: -50 },
+        ],
+      };
+    case "True/False":
+      return { tfAnswer: true };
+    case "Match the following":
+      return {
+        pairs: [
+          { left: "Superheat", right: "Temperature above saturation at the suction line" },
+          { left: "Subcooling", right: "Temperature below saturation at the liquid line" },
+          { left: "Delta T", right: "Temperature split across the evaporator coil" },
+        ],
+        matchGrading: "partial",
+      };
+    case "Linear scale":
+      return { scale: { min: 1, max: 5, minLabel: "Not confident", maxLabel: "Very confident" } };
+    case "File upload":
+      return { fileRules: { maxFiles: 3, maxSizeMb: 10 } };
+    default:
+      return {};
+  }
+}
+
+/* One filler question. `n` is its index within the whole generated run, so the
+   type rotation, status mix and quiz links vary from row to row without any
+   randomness. */
+function fillerQuestion(n: number, cat: string, sub: string): Question {
+  const id = `Q-2${String(10000 + n).slice(-5)}`;
+  const [type, text] = FILLER_TEMPLATES[n % FILLER_TEMPLATES.length];
+  const detail = FILLER_DETAILS[n % FILLER_DETAILS.length];
+  // ~8% archived — enough for the Status filter to have something to do on
+  // every page, without burying the Active rows. (The ~7% Draft slice that sat
+  // beside it went with the status itself, 2026-09-16.)
+  const status: QuestionStatus = n % 13 === 5 ? "Archived" : "Active";
+  // Roughly a third of the bank is live in a Quiz, which is also what gates
+  // Delete in the row menu — so both states show up while clicking around.
+  const quizzes = n % 3 === 0 ? [FILLER_QUIZZES[n % FILLER_QUIZZES.length]] : [];
+  return {
+    id,
+    type,
+    text: text(sub, cat, detail),
+    status,
+    categoryPath: [cat, sub],
+    quizzes,
+    forms: [],
+    version: (n % 4) + 1,
+    gradingEnabled: supportsGrading(type),
+    randomise:
+      type === "Multiple choice" || type === "Multiple select" || type === "Match the following",
+    hasSpanish: n % 5 === 0,
+    ...fillerOptions(type, sub),
+  };
+}
+
+function buildFiller(): Question[] {
+  // What the hand-written set already contributes to each "Cat > Sub" path.
+  const already = new Map<string, number>();
+  for (const q of AUTHORED) {
+    const key = q.categoryPath.join(" > ");
+    already.set(key, (already.get(key) ?? 0) + 1);
+  }
+  const out: Question[] = [];
+  let n = 0;
+  for (const cat of SEED_CATEGORIES) {
+    for (const sub of cat.subcategories ?? []) {
+      const key = `${cat.label} > ${sub.label}`;
+      const need = sub.count - (already.get(key) ?? 0);
+      for (let i = 0; i < need; i++) out.push(fillerQuestion(n++, cat.label, sub.label));
+    }
+    // A category with no subcategories carries its questions directly.
+    if (!cat.subcategories?.length) {
+      const need = cat.count - (already.get(cat.label) ?? 0);
+      for (let i = 0; i < need; i++) {
+        const q = fillerQuestion(n++, cat.label, cat.label);
+        out.push({ ...q, categoryPath: [cat.label] });
+      }
+    }
+  }
+  return out;
+}
+
+export const questions: Question[] = [...AUTHORED, ...buildFiller()];
 
 export function questionById(id: string): Question | undefined {
   return questions.find((q) => q.id === id);
