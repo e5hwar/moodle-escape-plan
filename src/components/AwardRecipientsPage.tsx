@@ -254,9 +254,11 @@ export function AwardRecipientsPage({
         <div className="tasks">
           <header className="tasks-header">
             <div>
+              {/* The Awards list this used to return to is gone — the way in
+                  is now the Award's own page, off its Certification's menu. */}
               <button className="attempts-back" onClick={onBack}>
                 <ChevronLeftIcon />
-                Awards
+                Manage Award
               </button>
               <h1 className="tasks-title">Award Recipients</h1>
               <div className="tasks-subtitle">

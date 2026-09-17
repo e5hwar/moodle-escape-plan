@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckBoldIcon, InfoTipIcon, SmallXIcon } from "./icons";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
@@ -6,13 +7,13 @@ import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { SearchIcon, AddIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
-import { DropdownSearch } from "./SearchPanelParts";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { PrmModal } from "./PrmModal";
+import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 import { MultiSelect } from "./NewCompanyWizard";
 import { type Certification, certifications } from "../data/certifications";
 import { industries } from "../data/industries";
@@ -142,6 +143,10 @@ type CertLesson = {
   hidden: boolean;
   tasks: CertTask[];
 };
+
+/** The four bilingual fields the Lesson modal edits — everything else about a
+    Lesson (its Tasks, expanded/hidden) is set from the tree, not the modal. */
+type LessonDraft = Pick<CertLesson, "nameEn" | "nameEs" | "descEn" | "descEs">;
 
 type CourseChild =
   | { kind: "task"; task: CertTask }
@@ -1423,10 +1428,17 @@ function TasksStep({
   onAddExisting: (courseId: string, lessonId: string | undefined) => void;
 }) {
   const [importing, setImporting] = useState(false);
-  // Which Course/Lesson node currently has its name/description editor open.
-  // Adding a Course or Lesson opens its editor immediately; only one is open at
-  // a time, matching the prototype's focused inline-editing model.
+  // Which Course has its inline name/description editor open. Adding a Course
+  // opens its editor immediately; only one is open at a time, matching the
+  // prototype's focused inline-editing model. Lessons no longer use it — their
+  // name/description is edited in a modal instead (see `lessonModal`).
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The open Lesson modal, or null. `lesson: null` = adding a new one to that
+  // Course; a Lesson = editing that one.
+  const [lessonModal, setLessonModal] = useState<{
+    courseId: string;
+    lesson: CertLesson | null;
+  } | null>(null);
   // The Course shown in the right pane. Falls back to the first Course whenever
   // the selection goes stale (deleted, or replaced by an import).
   const [selectedId, setSelectedId] = useState<string | null>(data.courses[0]?.id ?? null);
@@ -1609,25 +1621,31 @@ function TasksStep({
     });
   }
 
-  // Closing a Lesson editor. A freshly-added Lesson left empty (no name, no
-  // tasks) is dropped on cancel; otherwise the editor just closes.
-  function cancelLessonEditor(courseId: string, lesson: CertLesson) {
-    setEditingId(null);
-    if (!lesson.nameEn.trim() && !lesson.nameEs.trim() && lesson.tasks.length === 0) {
-      removeLesson(courseId, lesson.id);
+  // Save from the Lesson modal — appends a new Lesson when it was opened from
+  // "Add Lesson", otherwise patches the one being edited. Nothing reaches the
+  // tree until Save, so a cancelled add leaves no half-made card behind (the
+  // reason the inline editor needed a cancel-cleanup pass).
+  function saveLesson(vals: LessonDraft) {
+    if (!lessonModal) return;
+    const { courseId, lesson } = lessonModal;
+    if (lesson) {
+      updateLesson(courseId, lesson.id, vals);
+    } else {
+      update({
+        courses: data.courses.map((c) =>
+          c.id === courseId
+            ? {
+                ...c,
+                children: [
+                  ...c.children,
+                  { kind: "lesson" as const, lesson: { ...newLesson(), ...vals } },
+                ],
+              }
+            : c,
+        ),
+      });
     }
-  }
-
-  function addLesson(courseId: string) {
-    const lesson = newLesson();
-    update({
-      courses: data.courses.map((c) =>
-        c.id === courseId
-          ? { ...c, children: [...c.children, { kind: "lesson", lesson }] }
-          : c,
-      ),
-    });
-    setEditingId(lesson.id);
+    setLessonModal(null);
   }
 
   function addCourse() {
@@ -1773,7 +1791,6 @@ function TasksStep({
               index={courseIdx + 1}
               required={data.courses.length <= 1}
               editing={editingId === course.id}
-              editingId={editingId}
               allTasks={allTasks}
               dnd={dnd}
               onUpdateTask={updateTaskById}
@@ -1786,17 +1803,14 @@ function TasksStep({
               onRemove={() => removeCourse(course.id)}
               onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
               onAddExistingTask={() => onAddExisting(course.id, undefined)}
-              onAddLesson={() => addLesson(course.id)}
+              onAddLesson={() => setLessonModal({ courseId: course.id, lesson: null })}
               onCreateTaskInLesson={(lessonId, taskType) => onCreateTask(course.id, lessonId, taskType)}
               onAddExistingTaskInLesson={(lessonId) => onAddExisting(course.id, lessonId)}
-              onUpdateLesson={(lessonId, patch) => updateLesson(course.id, lessonId, patch)}
               onToggleLesson={(lessonId) => toggleLesson(course.id, lessonId)}
               onToggleLessonHidden={(lessonId) =>
                 mapLesson(course.id, lessonId, (l) => ({ ...l, hidden: !l.hidden }))
               }
-              onOpenLessonEditor={(lessonId) => setEditingId(lessonId)}
-              onCancelLessonEditor={(lesson) => cancelLessonEditor(course.id, lesson)}
-              onSaveLessonEditor={() => setEditingId(null)}
+              onOpenLessonEditor={(lesson) => setLessonModal({ courseId: course.id, lesson })}
               onRemoveLesson={(lessonId) => removeLesson(course.id, lessonId)}
             />
           )}
@@ -1808,6 +1822,14 @@ function TasksStep({
           initial={plan}
           onCancel={() => setImporting(false)}
           onConfirm={applyImport}
+        />
+      )}
+
+      {lessonModal && (
+        <LessonModal
+          lesson={lessonModal.lesson}
+          onCancel={() => setLessonModal(null)}
+          onSave={saveLesson}
         />
       )}
     </>
@@ -1904,6 +1926,97 @@ function NodeEditor({
   );
 }
 
+/* Lesson name + description — a standard modal on the shared `PrmModal` shell
+   (Figma 483:588), not the inline editor a Course still uses. Opened by
+   "Add Lesson" in the Course footer and by "Edit Lesson" in a Lesson's kebab.
+
+   Both fields are the app's bilingual controls — the `LangField` EN/ES pair for
+   the name, the shared `RichTextField` for the description, which is rich text.
+
+   The draft lives here and only reaches the tree on Save, so cancelling an
+   "Add Lesson" leaves nothing behind. The English name is required: it's what
+   the Lesson row prints. */
+function LessonModal({
+  lesson,
+  onCancel,
+  onSave,
+}: {
+  /** The Lesson being edited, or null when adding one. */
+  lesson: CertLesson | null;
+  onCancel: () => void;
+  onSave: (vals: LessonDraft) => void;
+}) {
+  const [draft, setDraft] = useState<LessonDraft>({
+    nameEn: lesson?.nameEn ?? "",
+    nameEs: lesson?.nameEs ?? "",
+    descEn: lesson?.descEn ?? "",
+    descEs: lesson?.descEs ?? "",
+  });
+  const patch = (p: Partial<LessonDraft>) => setDraft((d) => ({ ...d, ...p }));
+  const canSave = draft.nameEn.trim().length > 0;
+
+  function submit() {
+    if (!canSave) return;
+    onSave({
+      ...draft,
+      nameEn: draft.nameEn.trim(),
+      nameEs: draft.nameEs.trim(),
+    });
+  }
+
+  // PrmModal closes on the overlay and the close glyph only — Esc is the
+  // modal's own, as on the Question Bank's category modals.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title={lesson ? "Edit Lesson" : "New Lesson"}
+      description="Lessons group the Tasks that follow them inside a Course."
+      confirmLabel={lesson ? "Save Lesson" : "Add Lesson"}
+      confirmDisabled={!canSave}
+      onCancel={onCancel}
+      onConfirm={submit}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            Name<span className="prm-req">*</span>
+          </span>
+          <LangField
+            autoFocus
+            en={draft.nameEn}
+            es={draft.nameEs}
+            onChangeEn={(v) => patch({ nameEn: v })}
+            onChangeEs={(v) => patch({ nameEs: v })}
+            placeholderEn="Lesson name"
+            placeholderEs="Nombre"
+            onEnter={submit}
+          />
+        </div>
+
+        <div className="prm-field">
+          <span className="prm-label">Description</span>
+          <RichTextField
+            en={draft.descEn}
+            es={draft.descEs}
+            onChangeEn={(v) => patch({ descEn: v })}
+            onChangeEs={(v) => patch({ descEs: v })}
+            placeholderEn="Description"
+            placeholderEs="Descripción"
+            minRows={2}
+          />
+        </div>
+      </div>
+    </PrmModal>
+  );
+}
+
 // A Course's children in render order, with runs of consecutive loose Tasks
 // (Tasks pinned straight to the Course rather than to a Lesson) collected into
 // one 6px-gap list so they don't inherit the 20px gap between Lesson blocks.
@@ -1936,7 +2049,6 @@ function CoursePane({
   index,
   required,
   editing,
-  editingId,
   allTasks,
   dnd,
   onUpdateTask,
@@ -1952,19 +2064,15 @@ function CoursePane({
   onAddLesson,
   onCreateTaskInLesson,
   onAddExistingTaskInLesson,
-  onUpdateLesson,
   onToggleLesson,
   onToggleLessonHidden,
   onOpenLessonEditor,
-  onCancelLessonEditor,
-  onSaveLessonEditor,
   onRemoveLesson,
 }: {
   course: CertCourse;
   index: number;
   required: boolean;
   editing: boolean;
-  editingId: string | null;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
@@ -1980,15 +2088,12 @@ function CoursePane({
   onAddLesson: () => void;
   onCreateTaskInLesson: (lessonId: string, taskType: TaskTypeKey) => void;
   onAddExistingTaskInLesson: (lessonId: string) => void;
-  onUpdateLesson: (lessonId: string, patch: Partial<CertLesson>) => void;
   onToggleLesson: (lessonId: string) => void;
   onToggleLessonHidden: (lessonId: string) => void;
-  onOpenLessonEditor: (lessonId: string) => void;
-  onCancelLessonEditor: (lesson: CertLesson) => void;
-  onSaveLessonEditor: () => void;
+  /** Opens the Lesson modal on that Lesson (the pencil in its kebab). */
+  onOpenLessonEditor: (lesson: CertLesson) => void;
   onRemoveLesson: (lessonId: string) => void;
 }) {
-  const esMiss = !course.nameEs.trim();
   const childScope = `course:${course.id}`;
   const groups = groupChildren(course.children);
   return (
@@ -2000,7 +2105,6 @@ function CoursePane({
           <div className="ctb-eyebrow">Course {index}</div>
           <div className="ctb-course-name-row">
             <h2 className="ctb-course-name">{course.nameEn || "Untitled Course"}</h2>
-            {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
             {course.sourceCertName && (
               <span className="cert-source-pill"><LayersIcon />Imported</span>
             )}
@@ -2075,18 +2179,14 @@ function CoursePane({
               key={g.key}
               lesson={g.lesson}
               num={g.num}
-              editing={editingId === g.lesson.id}
               allTasks={allTasks}
               dnd={dnd}
               dndRow={dnd(childScope, g.lesson.id)}
               onUpdateTask={onUpdateTask}
               onRemoveTask={onRemoveTask}
               onToggle={() => onToggleLesson(g.lesson.id)}
-              onUpdate={(patch) => onUpdateLesson(g.lesson.id, patch)}
               onToggleHidden={() => onToggleLessonHidden(g.lesson.id)}
-              onOpenEditor={() => onOpenLessonEditor(g.lesson.id)}
-              onCancelEditor={() => onCancelLessonEditor(g.lesson)}
-              onSaveEditor={onSaveLessonEditor}
+              onOpenEditor={() => onOpenLessonEditor(g.lesson)}
               onRemove={() => onRemoveLesson(g.lesson.id)}
               onCreateTask={(taskType) => onCreateTaskInLesson(g.lesson.id, taskType)}
               onAddExistingTask={() => onAddExistingTaskInLesson(g.lesson.id)}
@@ -2115,41 +2215,32 @@ function CoursePane({
 function LessonCard({
   lesson,
   num,
-  editing,
   allTasks,
   dnd,
   dndRow,
   onUpdateTask,
   onRemoveTask,
   onToggle,
-  onUpdate,
   onToggleHidden,
   onOpenEditor,
-  onCancelEditor,
-  onSaveEditor,
   onRemove,
   onCreateTask,
   onAddExistingTask,
 }: {
   lesson: CertLesson;
   num: number;
-  editing: boolean;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
   dndRow: DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
   onToggle: () => void;
-  onUpdate: (patch: Partial<CertLesson>) => void;
   onToggleHidden: () => void;
   onOpenEditor: () => void;
-  onCancelEditor: () => void;
-  onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
   onAddExistingTask: () => void;
 }) {
-  const esMiss = !lesson.nameEs.trim();
   const taskScope = `lesson:${lesson.id}`;
   return (
     <div className={`ctb-card ctb-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
@@ -2159,7 +2250,6 @@ function LessonCard({
           <div className="ctb-lesson-eyebrow">Lesson {num}</div>
           <div className="ctb-lesson-name-row">
             <span className="ctb-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
-            {esMiss && <span className="cert-es-chip" title="Spanish name missing">ES</span>}
             {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
           </div>
           {lesson.descEn && <div className="ctb-lesson-desc">{lesson.descEn}</div>}
@@ -2190,21 +2280,6 @@ function LessonCard({
           </RowMenu>
         </span>
       </div>
-
-      {editing && (
-        <NodeEditor
-          title={lesson.nameEn.trim() ? "Edit lesson" : "New lesson"}
-          hint="groups the tasks that follow · name + description, EN/ES"
-          nameEn={lesson.nameEn}
-          nameEs={lesson.nameEs}
-          descEn={lesson.descEn}
-          descEs={lesson.descEs}
-          namePlaceholder="Lesson name (required)"
-          onChange={onUpdate}
-          onCancel={onCancelEditor}
-          onSave={onSaveEditor}
-        />
-      )}
 
       {lesson.expanded && (
         <>
@@ -2711,8 +2786,9 @@ function ImportCertsModal({
 /* ─────────────────  Step 4: Completion  ───────────────── */
 
 // Temporary GUI cap (spec 7.3.7.1) — V1 needs at most 2 Condition Sets; more
-// can be enabled later.
-const MAX_CONDITION_SETS = 3;
+// can be enabled later. Raised to 4 with the 2026-09-17 re-sync: 853:1553 now
+// draws a fourth set (856:1824), so three is no longer the ceiling.
+const MAX_CONDITION_SETS = 4;
 
 function CompletionStep({
   data,
@@ -2736,10 +2812,13 @@ function CompletionStep({
     update({ conditionSets: [...sets, newConditionSet()] });
   }
 
-  function addItem(setId: string, item: CompletionItem) {
+  // Added as a batch: the picker is a modal that can return several
+  // requirements at once, and one update has to carry all of them.
+  function addItems(setId: string, items: CompletionItem[]) {
+    if (items.length === 0) return;
     update({
       conditionSets: sets.map((s) =>
-        s.id === setId ? { ...s, items: [...s.items, item] } : s,
+        s.id === setId ? { ...s, items: [...s.items, ...items] } : s,
       ),
     });
   }
@@ -2784,7 +2863,7 @@ function CompletionStep({
                       set={set}
                       index={idx + 1}
                       onRemove={() => removeConditionSet(set.id)}
-                      onAddItem={(item) => addItem(set.id, item)}
+                      onAddItems={(items) => addItems(set.id, items)}
                       onRemoveItem={(itemId) => removeItem(set.id, itemId)}
                     />
                   </Fragment>
@@ -2911,16 +2990,21 @@ function ConditionSetCard({
   set,
   index,
   onRemove,
-  onAddItem,
+  onAddItems,
   onRemoveItem,
 }: {
   set: ConditionSet;
   index: number;
   onRemove: () => void;
-  onAddItem: (item: CompletionItem) => void;
+  onAddItems: (items: CompletionItem[]) => void;
   onRemoveItem: (itemId: string) => void;
 }) {
+  // "+ Add Requirement" opens the shared table picker (Select Tasks / Select
+  // Questions chrome) rather than the 340px dropdown it used to open.
+  const [picking, setPicking] = useState(false);
+
   return (
+    <>
     <div className="cc-panel">
       <div className="cc-row cc-row-head">
         <div className="cc-head-text">
@@ -2958,118 +3042,45 @@ function ConditionSetCard({
       ))}
 
       <div className="cc-row cc-row-foot">
-        {/* Portalled: the panel is clipped to 12px, so an in-flow menu would be
-            cut off by it. */}
-        <Dropdown
-          overlay
-          constrainHeight
-          width={340}
-          trigger={({ toggle }) => (
-            <button className="cc-add-req" onClick={toggle}>
-              <span className="cc-add-icon">
-                <PlusThinIcon />
-              </span>
-              Add Requirement
-            </button>
-          )}
-        >
-          {({ close }) => (
-            <ConditionItemPicker
-              onPick={(item) => {
-                onAddItem(item);
-                close();
-              }}
-            />
-          )}
-        </Dropdown>
+        <button className="cc-add-req" onClick={() => setPicking(true)}>
+          <span className="cc-add-icon">
+            <PlusThinIcon />
+          </span>
+          Add Requirement
+        </button>
       </div>
     </div>
+
+    {/* Portalled to <body>: the panel clips to its 12px radius, and the
+        wizard's step container is transformed, which would otherwise turn the
+        overlay's position:fixed into a local box (the same gotcha the Task
+        wizard's Select Questions hits). */}
+    {picking &&
+      createPortal(
+        <SelectRequirementModal
+          existingNames={set.items.map((i) => i.name)}
+          onCancel={() => setPicking(false)}
+          onConfirm={(picks) => {
+            onAddItems(picks.map(pickToItem));
+            setPicking(false);
+          }}
+        />,
+        document.body,
+      )}
+    </>
   );
 }
 
-// Searchable picker for "+ Add item": switch between Tasks and Certifications,
-// search the full library, and click a result to add it to the Condition Set.
-function ConditionItemPicker({ onPick }: { onPick: (item: CompletionItem) => void }) {
-  const [tab, setTab] = useState<"task" | "cert">("task");
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-
-  const taskResults = useMemo(
-    () =>
-      taskLibrary.filter(
-        (t) => !q || t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q),
-      ),
-    [q],
-  );
-  const certResults = useMemo(
-    () =>
-      certifications.filter(
-        (c) => !q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q),
-      ),
-    [q],
-  );
-
-  return (
-    <div className="cond-picker">
-      <div className="cond-picker-tabs">
-        <button
-          className={`cond-picker-tab ${tab === "task" ? "active" : ""}`}
-          onClick={() => setTab("task")}
-        >
-          Tasks
-        </button>
-        <button
-          className={`cond-picker-tab ${tab === "cert" ? "active" : ""}`}
-          onClick={() => setTab("cert")}
-        >
-          Certifications
-        </button>
-      </div>
-
-      <DropdownSearch
-        autoFocus
-        placeholder={tab === "task" ? "Search Tasks..." : "Search Certifications..."}
-        value={query}
-        onChange={setQuery}
-      />
-
-      <div className="dropdown-list cond-picker-list">
-        {tab === "task" ? (
-          taskResults.length === 0 ? (
-            <div className="cond-picker-empty">No Tasks match your search.</div>
-          ) : (
-            taskResults.map((t) => (
-              <button
-                key={t.id}
-                className="cond-picker-item"
-                onClick={() =>
-                  onPick({ kind: "task", id: nodeId("it"), name: t.name, taskKind: TASK_TYPE_TO_KIND[t.type] })
-                }
-              >
-                <TaskKindBadge kind={TASK_TYPE_TO_KIND[t.type]} />
-                <span className="cond-picker-item-name">{t.name}</span>
-                <span className="cond-picker-item-meta">{t.type}</span>
-              </button>
-            ))
-          )
-        ) : certResults.length === 0 ? (
-          <div className="cond-picker-empty">No Certifications match your search.</div>
-        ) : (
-          certResults.map((c) => (
-            <button
-              key={c.id}
-              className="cond-picker-item"
-              onClick={() => onPick({ kind: "cert", id: nodeId("it"), name: c.name })}
-            >
-              <span className="task-kind-badge cert">C</span>
-              <span className="cond-picker-item-name">{c.name}</span>
-              <span className="cond-picker-item-meta">{c.id}</span>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
+/** The picker hands back source rows; the Condition Set stores its own items. */
+function pickToItem(pick: RequirementPick): CompletionItem {
+  return pick.kind === "task"
+    ? {
+        kind: "task",
+        id: nodeId("it"),
+        name: pick.task.name,
+        taskKind: TASK_TYPE_TO_KIND[pick.task.type],
+      }
+    : { kind: "cert", id: nodeId("it"), name: pick.cert.name };
 }
 
 /* ─────────────────  Step 5: Paywall  ───────────────── */
@@ -3400,6 +3411,8 @@ function LangField({
   placeholderEs,
   error = false,
   errorMessage,
+  autoFocus,
+  onEnter,
 }: {
   en: string;
   es: string;
@@ -3410,7 +3423,20 @@ function LangField({
   /** Flags the field as a missing mandatory value (red shell + message). */
   error?: boolean;
   errorMessage?: string;
+  /** Takes the caret on mount — the first field of a modal form. */
+  autoFocus?: boolean;
+  /** Enter from either language row submits (modal forms only; on a wizard
+   *  step Enter belongs to the footer's own shortcut). */
+  onEnter?: () => void;
 }) {
+  const onKeyDown = onEnter
+    ? (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onEnter();
+        }
+      }
+    : undefined;
   return (
     <>
       <div className={`lang-field ${error ? "has-error" : ""}`}>
@@ -3418,10 +3444,12 @@ function LangField({
           <span className="lang-tag">EN</span>
           <input
             className="lang-field-input"
+            autoFocus={autoFocus}
             value={en}
             placeholder={placeholderEn}
             aria-invalid={error || undefined}
             onChange={(e) => onChangeEn(e.target.value)}
+            onKeyDown={onKeyDown}
           />
         </div>
         <div className="lang-field-divider" />
@@ -3432,6 +3460,7 @@ function LangField({
             value={es}
             placeholder={placeholderEs}
             onChange={(e) => onChangeEs(e.target.value)}
+            onKeyDown={onKeyDown}
           />
         </div>
       </div>

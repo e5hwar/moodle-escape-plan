@@ -114,6 +114,11 @@ export type Employee = {
   phone: string;
   cohort: string | null;
   isB2B: boolean;
+  /** Epoch ms of this person's most recent access to the app — `lastAccess`
+   *  from the Manage Users roster, and the company roster's own "12d ago"
+   *  label for generated employees. 0 when they have never been in (an invite
+   *  nobody has accepted). Orders the scope picker's blank-state shortlist. */
+  lastActiveAt: number;
 };
 
 export type CellMap = Record<string, Cell>;
@@ -387,6 +392,32 @@ function genCell(uid: string, task: CertTask, scenario: Scenario): Cell {
   }
 }
 
+/** Midnight at the start of that day, on the model's fixed clock. */
+function dayStart(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** Both rosters record only the DAY someone was last in, and a shortlist of
+ *  the most recent people is mostly ties at that granularity — ordered, with
+ *  nothing to order them by, in whatever sequence the roster was built. So
+ *  each person gets a deterministic working hour inside their day
+ *  (07:00–19:59) to break them. Never later than "now". */
+function lastActiveTs(dayTs: number, seed: string): number {
+  const h = hash(seed + "|lastactive");
+  const at = dayStart(dayTs) + (7 + (h % 13)) * 3600000 + (h % 60) * 60000;
+  return Math.min(at, NOW - 5 * 60000);
+}
+
+/** The company roster carries last-active as a label ("12d ago", or "—" for an
+ *  invite nobody has accepted). Read it back onto the same fixed clock the
+ *  rest of this model runs on, so both rosters sort against each other. */
+function companyLastActive(label: string, seed: string): number {
+  const m = /^(\d+)d ago$/.exec(label);
+  return m ? lastActiveTs(NOW - Number(m[1]) * DAY, seed) : 0;
+}
+
 export function buildData(): CertData {
   // Employees from the Users list…
   const employees: Employee[] = (users as User[]).map((u) => ({
@@ -397,6 +428,7 @@ export function buildData(): CertData {
     phone: u.phone,
     cohort: u.companyName ?? null,
     isB2B: u.userType === "B2B",
+    lastActiveAt: lastActiveTs(Date.parse(`${u.lastAccess}T00:00:00`), u.id),
   }));
 
   /* …plus each company's own roster. Company employees are generated and live
@@ -414,6 +446,7 @@ export function buildData(): CertData {
         phone: synthPhone(u.id),
         cohort: c.name,
         isB2B: true,
+        lastActiveAt: companyLastActive(u.lastActive, u.id),
       });
     });
   });

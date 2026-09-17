@@ -35,7 +35,6 @@ import {
   type CertTask,
 } from "../data/certLookup";
 import { PrmModal } from "./PrmModal";
-import { SectionHeading } from "./SectionHeading";
 import { SearchHints } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import {
@@ -45,6 +44,7 @@ import {
   EnterKeyIcon,
   ErrorTriangleIcon,
   FlagIcon,
+  KeyCommandIcon,
   HourglassIcon,
   MenuAttemptsIcon,
   MenuGrantAttemptsIcon,
@@ -106,6 +106,11 @@ const SUGGESTED_TASKS = [
   "NATE RTW Final Exam",
   "Building Science Principles Final Exam",
 ];
+
+/* How many people the blank people half offers. Seven two-line rows, the
+   header and the keyboard legend come to exactly the panel's 460px — an
+   eighth would be cut in half by the panel's own edge. */
+const RECENT_PEOPLE = 7;
 
 /** The named entries that exist, in the order they are named. */
 function suggestedIn<T extends { name: string }>(all: T[], names: string[]): T[] {
@@ -225,6 +230,28 @@ export function ContentOverridesPage({
   const [whoQ, setWhoQ] = useState("");
   const [whatQ, setWhatQ] = useState("");
 
+  /* Landing on the page, the half that is still empty opens its own list —
+     the people half first, or the other one when this page was opened from a
+     row menu that already named the person. Nothing opens once both halves
+     arrive filled. Frozen at mount so it never re-opens mid-session. */
+  const [openHalf] = useState<"who" | "what" | null>(() => {
+    if (!(initialUserId && data.employeesById[initialUserId])) return "who";
+    const hasWhat =
+      (initialCertId && data.certsById[initialCertId]) ||
+      (initialTaskId && data.tasksById[initialTaskId]);
+    return hasWhat ? null : "what";
+  });
+
+  /* Whether either half has its dropdown down. The empty state's question
+     dulls back under an open panel — it is the prompt to search, and the
+     search is already up. */
+  const [panelOpen, setPanelOpen] = useState({ who: false, what: false });
+  const searchOpen = panelOpen.who || panelOpen.what;
+
+  /* Opening a half from the empty state's CTA. */
+  const whoHandle = useRef<ScopeHandle | null>(null);
+  const whatHandle = useRef<ScopeHandle | null>(null);
+
   const [gradePrompt, setGradePrompt] = useState<GradePrompt>(null);
   const [gradeInput, setGradeInput] = useState("");
 
@@ -250,12 +277,6 @@ export function ContentOverridesPage({
   }
   function clearWhat() {
     setWhat(null);
-    setWhatQ("");
-  }
-  function setScope(w: string, x: NonNullable<What>) {
-    setWho(w);
-    setWhat(x);
-    setWhoQ("");
     setWhatQ("");
   }
   function openGrant(uid: string, tid: string) {
@@ -414,8 +435,28 @@ export function ContentOverridesPage({
   const taskObj = what?.kind === "task" ? data.tasksById[what.id] : null;
 
   const hasScope = !!(whoUser && what);
+  /* Nothing picked at all — the one empty state that also offers examples. */
   const isLanding = !whoUser && !what;
-  const isHalf = !!whoUser !== !!what;
+
+  /* ⌘K goes to the half the page is still missing — the same thing the empty
+     state's button does, which is why that button wears the keycaps. App's own
+     ⌘K takes the FIRST search bar on the page, which is the wrong half once
+     the person is picked, so this runs ahead of it (capture) and stands in.
+     Only while a half is missing: with a real scope on screen the page has no
+     opinion and the global handler has it back. */
+  useEffect(() => {
+    if (hasScope) return;
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== "k") return;
+      /* An open modal owns the shortcut, exactly as App's handler has it. */
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      (whoUser ? whatHandle : whoHandle).current?.open();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [hasScope, whoUser]);
 
   const certTasks: CertTask[] = certObj
     ? certObj.taskIds.map((id) => data.tasksById[id]).filter(Boolean)
@@ -425,16 +466,35 @@ export function ContentOverridesPage({
   const showUserTask = !!whoUser && !!taskObj;
 
   /* ───── search matches ─────
-     The people half has NO suggested searches — an arbitrary slice of the
-     roster suggests nothing — so it only lists once something is typed. */
+     Blank, the people half offers the roster's MOST RECENTLY ACTIVE — whoever
+     was last in the app. An admin is usually here about someone who just hit a
+     wall, so that shortlist is worth something where an arbitrary slice of the
+     roster would not be. Name order settles anyone who somehow lands on the
+     same minute, so the list can't reshuffle between renders. */
+  const recentPeople = useMemo(
+    () =>
+      [...data.employees]
+        .sort((a, b) => b.lastActiveAt - a.lastActiveAt || a.name.localeCompare(b.name))
+        .slice(0, RECENT_PEOPLE),
+    [data],
+  );
+
+  /* Typed, it searches the three things the row shows: name, email and phone.
+     The phone is matched on DIGITS alone — "(415) 555", "415-555-0142" and
+     "4155550142" all have to find "+1 (415) 555-0142" — from three digits up,
+     since one or two would pull back half the roster. */
   const whoQl = whoQ.trim().toLowerCase();
-  const peopleMatches = (
-    whoQl
-      ? data.employees.filter(
-          (e) => e.name.toLowerCase().includes(whoQl) || e.contact.toLowerCase().includes(whoQl),
+  const whoDigits = whoQl.replace(/\D/g, "");
+  const peopleMatches = whoQl
+    ? data.employees
+        .filter(
+          (e) =>
+            e.name.toLowerCase().includes(whoQl) ||
+            e.contact.toLowerCase().includes(whoQl) ||
+            (whoDigits.length >= 3 && e.phone.replace(/\D/g, "").includes(whoDigits)),
         )
-      : []
-  ).slice(0, 8);
+        .slice(0, 8)
+    : recentPeople;
 
   /* The other half DOES: a fixed shortlist, in this order, whenever nothing is
      typed (SUGGESTED_CERTS / SUGGESTED_TASKS). Typing searches everything. */
@@ -447,9 +507,12 @@ export function ContentOverridesPage({
     : suggestedIn(data.tasks, SUGGESTED_TASKS);
 
   /* ───── combobox option lists (Figma 1162:1312 / 1162:1454) ─────
-     A row is its name and, on the right, what kind of thing it is. People get
-     no kind — their second line identifies them instead. No avatars, chips or
-     type icons: the node draws text only. */
+     A row is its name and, on the right, what kind of thing it is. No avatars,
+     chips or type icons: the node draws text only.
+
+     People get NO right-hand value — the node draws none, and their own line
+     ("email · phone") already says who they are. Recency orders the blank
+     list; it isn't worth a column of its own. */
   const whoOptions: ScopeOption[] = peopleMatches.map((e) => ({
     key: "emp_" + e.id,
     name: e.name,
@@ -482,22 +545,50 @@ export function ContentOverridesPage({
     ? `${taskObj.name} Task`
     : null;
 
-  /* examples (real entities) */
-  const examples = [
-    { who: "Diego Ramirez", what: "EPA 608 Type I", w: "U-10132", x: { kind: "cert", id: "C-0420" } as const },
-    { who: "Ayesha Khan", what: "Refrigerant Charging", w: "U-10157", x: { kind: "task", id: "T-2350" } as const },
-  ].filter((ex) => {
-    // Only show examples whose entities resolve in the built model.
-    const wok = !!data.employeesById[ex.w];
-    const xok = ex.x.kind === "cert" ? !!data.certsById[ex.x.id] : !!data.tasksById[ex.x.id];
-    return wok && xok;
-  });
-
-  /* half-state copy */
-  const half =
-    whoUser && !what
-      ? { title: "Now pick what to check", sub: "Search a certification or a single task above.", num: "2" }
-      : { title: "Now pick who to check", sub: "Search an employee above.", num: "1" };
+  /* Empty-state copy — three of them, one screen. With nothing picked the page
+     explains the pair it is asking for; with one half picked it asks for the
+     other by name, and the line under it says what will land in the backdrop
+     behind it — the record, not the step number the page used to count off. */
+  const half = isLanding
+    ? {
+        title: "Pick an employee, then what to check",
+        sub: (
+          <>
+            A certification shows every task inside it. A single task goes straight to one record.
+            Either way you land on the completions and the controls to override them.
+          </>
+        ),
+        cta: "Search Users",
+        open: () => whoHandle.current?.open(),
+      }
+    : whoUser && !what
+      ? {
+          title: "Which certification or task?",
+          sub: (
+            <>
+              <strong>{whoUser.name}</strong>’s record loads here — every attempt, who marked it,
+              and the controls to override it.
+            </>
+          ),
+          cta: "Search Tasks/Certifications",
+          open: () => whatHandle.current?.open(),
+        }
+      : {
+          title: "Which employee?",
+          sub: whatScope ? (
+            <>
+              Their record for <strong>{whatScope}</strong> loads here — every attempt, who marked
+              it, and the controls to override it.
+            </>
+          ) : (
+            <>
+              Their record loads here — every attempt, who marked it, and the controls to override
+              it.
+            </>
+          ),
+          cta: "Search Users",
+          open: () => whoHandle.current?.open(),
+        };
 
   /* ───── shared row bits handed to the task table ───── */
   const rowCtx: RowCtx = {
@@ -633,6 +724,10 @@ export function ContentOverridesPage({
                 onClearScope={clearWho}
                 options={whoOptions}
                 emptyText="No users match."
+                suggestLabel="Recently Active Users:"
+                openOnMount={openHalf === "who"}
+                onOpenChange={(o) => setPanelOpen((p) => ({ ...p, who: o }))}
+                handleRef={whoHandle}
               />
               <ScopeSearch
                 placeholder="Select a Task/Certification..."
@@ -642,48 +737,36 @@ export function ContentOverridesPage({
                 onClearScope={clearWhat}
                 options={whatOptions}
                 emptyText="No certifications or tasks match."
+                openOnMount={openHalf === "what"}
+                onOpenChange={(o) => setPanelOpen((p) => ({ ...p, what: o }))}
+                handleRef={whatHandle}
               />
             </div>
           </div>
 
-          {/* ===== body ===== */}
+          {/* ===== body =====
+              Until both halves are picked the page is ONE empty state: the
+              record it is about to load drawn as a backdrop, with whatever is
+              still missing asked over the top of it. */}
           <main className="mc-body">
-            {isLanding && (
+            {!hasScope && (
               <div className="mc-empty">
-                <div className="mc-empty-inner">
-                  <span className="mc-empty-icon">
-                    <SearchIcon />
-                  </span>
-                  <div className="mc-empty-title">Find someone, then pick what to check</div>
-                  <div className="mc-empty-sub">
-                    Search an <strong>employee</strong>, then a{" "}
-                    <strong>certification or a single task</strong>, to review their progress and
-                    override completions.
-                  </div>
-                  {examples.length > 0 && (
-                    <>
-                      <SectionHeading label="Jump to an example" />
-                      <div className="mc-examples">
-                        {examples.map((ex, i) => (
-                          <button key={i} className="btn-save-draft mc-example" onClick={() => setScope(ex.w, ex.x)}>
-                            <span>{ex.who}</span>
-                            <ChevronRightIcon />
-                            <span className="mc-example-what">{ex.what}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {isHalf && (
-              <div className="mc-empty">
-                <div className="mc-empty-inner is-narrow">
-                  <span className="mc-empty-step">{half.num}</span>
+                <ScopeGhost />
+                <div className={`mc-empty-inner${searchOpen ? " is-dull" : ""}`}>
                   <div className="mc-empty-title">{half.title}</div>
                   <div className="mc-empty-sub">{half.sub}</div>
+                  <button className="btn-save-draft mc-empty-cta" onClick={half.open}>
+                    {half.cta}
+                    {/* The node ends on the search bar's own ⌘K badge — and it
+                        is honest here: the page's handler below sends ⌘K to
+                        whichever half this button opens. */}
+                    <span className="usearch-kbd">
+                      <span className="kbd-cmd">
+                        <KeyCommandIcon />
+                      </span>
+                      <span className="kbd-letter">K</span>
+                    </span>
+                  </button>
                 </div>
               </div>
             )}
@@ -910,7 +993,81 @@ export function ContentOverridesPage({
   );
 }
 
+/* ─────────────────────────── empty-state backdrop ──────────────────────── */
+
+/** One row of the ghost table — the real column cells, each holding a bar
+ *  instead of a value, so the widths are the table's own. */
+function GhostCells() {
+  return (
+    <>
+      <span className="mct-c-task">
+        <span className="mc-ghost-bar" />
+      </span>
+      <span className="mct-c-time">
+        <span className="mc-ghost-bar" />
+      </span>
+      <span className="mct-c-date">
+        <span className="mc-ghost-bar" />
+      </span>
+      <span className="mct-c-grade">
+        <span className="mc-ghost-bar" />
+      </span>
+      <span className="mct-c-att">
+        <span className="mc-ghost-bar" />
+      </span>
+      <span className="mct-c-menu">
+        <span className="mc-ghost-bar" />
+      </span>
+    </>
+  );
+}
+
+/**
+ * The record the page is about to load, drawn behind the empty state: the same
+ * `.mc-certcard` over the same `.mct` table, every value replaced by a bar. It
+ * is built from the real shells — no new borders, radii or colours — so what
+ * fills in lands exactly where its outline was.
+ *
+ * Decoration only: aria-hidden, no pointer events, and held right down at the
+ * bottom of the page's contrast — enough of an outline to say the record lands
+ * here, never enough to compete with the question in front of it or with an
+ * open scope dropdown.
+ */
+function ScopeGhost() {
+  return (
+    <div className="mc-ghost" aria-hidden="true">
+      <div className="mc-notice mc-certcard mc-ghost-card">
+        <div className="mc-notice-text mc-ghost-lines">
+          <span className="mc-ghost-bar mc-ghost-bar--title" />
+          <span className="mc-ghost-bar mc-ghost-bar--sub" />
+        </div>
+        <span className="mc-ghost-dot" />
+      </div>
+      <div className="mct">
+        <div className="mct-hd mc-ghost-row">
+          <GhostCells />
+        </div>
+        <div className="mct-rows">
+          {GHOST_ROWS.map((i) => (
+            <div className="mct-row mc-ghost-row" key={i}>
+              <GhostCells />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Enough rows to run past the bottom of any workspace this page fits in (24
+   at 40px is ~990px of table); the table clips the rest, exactly as the real
+   one clips its own scroll. */
+const GHOST_ROWS = Array.from({ length: 24 }, (_, i) => i);
+
 /* ───────────────────── scope search combobox (Figma "Expanded Search") ──── */
+
+/** What the page can do to a half from outside it. */
+type ScopeHandle = { open: () => void };
 
 type ScopeOption = {
   key: string;
@@ -937,6 +1094,10 @@ function ScopeSearch({
   onClearScope,
   options,
   emptyText,
+  suggestLabel = "Suggested Searches:",
+  openOnMount = false,
+  onOpenChange,
+  handleRef,
 }: {
   placeholder: string;
   /** The committed pick, shown as the field's value. */
@@ -946,13 +1107,54 @@ function ScopeSearch({
   onClearScope: () => void;
   options: ScopeOption[];
   emptyText: string;
+  /** Panel header over the blank-state list — what this half is offering. */
+  suggestLabel?: string;
+  /** Open (and focus) this half as soon as the page is drawn — the half the
+   *  admin still has to fill in. Read once, at mount. */
+  openOnMount?: boolean;
+  /** Told whenever the panel opens or closes — the empty state's question
+   *  steps aside under an open one. */
+  onOpenChange?: (open: boolean) => void;
+  /** Lets the page open this half from outside — the empty state's CTA. */
+  handleRef?: React.MutableRefObject<ScopeHandle | null>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openOnMount);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setActive(-1), [query, scope]);
+
+  /* Landing on the page puts the caret in the half that still needs a pick,
+     with its list already down — no click needed before typing. Mount only:
+     re-opening on every later render would fight the ✕ and outside clicks. */
+  useEffect(() => {
+    if (openOnMount) inputRef.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Lets the empty state's CTA open this half. Re-published every render so
+     the closure stays current. */
+  useEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = {
+      open: () => {
+        setOpen(true);
+        inputRef.current?.focus({ preventScroll: true });
+      },
+    };
+    return () => {
+      handleRef.current = null;
+    };
+  });
+
+  /* Held in a ref so a fresh closure each render doesn't re-fire this — it
+     reports only when the panel actually turns over. */
+  const reportOpen = useRef(onOpenChange);
+  reportOpen.current = onOpenChange;
+  useEffect(() => {
+    reportOpen.current?.(open);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -1033,8 +1235,9 @@ function ScopeSearch({
         )}
       </div>
 
-      {/* With nothing typed and nothing to suggest — the people half has no
-          suggestions — there is no panel to show. */}
+      {/* With nothing typed and nothing to suggest, there is no panel to show —
+          both halves do suggest something now, so this only holds for a half
+          whose shortlist came back empty. */}
       {open && (options.length > 0 || query.trim()) && (
         <div className="usearch-panel">
           {/* One header for the panel (1162:1312 / 1162:1385): what the list is
@@ -1045,7 +1248,7 @@ function ScopeSearch({
                 Showing Results for “<span className="mc-opt-q">{query.trim()}</span>”
               </>
             ) : (
-              "Suggested Searches:"
+              suggestLabel
             )}
           </div>
           {options.length === 0 ? (

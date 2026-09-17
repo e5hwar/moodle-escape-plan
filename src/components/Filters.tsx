@@ -484,6 +484,8 @@ export function SectionedMultiSelect({
   searchable = false,
   searchPlaceholder,
   subsectionStyle = false,
+  labels,
+  hints,
 }: {
   sections: { label?: string; items: string[] }[];
   value: string[];
@@ -491,6 +493,14 @@ export function SectionedMultiSelect({
   searchable?: boolean;
   searchPlaceholder?: string;
   subsectionStyle?: boolean;
+  /** Row text when it differs from the value — a Question Bank category's
+   *  value is its whole path, but the row shows only the leaf. Search still
+   *  runs over the VALUE, so typing a parent finds its children. */
+  labels?: Record<string, string>;
+  /** Muted "· …" clause after the row text (Figma 1215:1354 / 1201:2151), the
+   *  same shape `CascadingSection.hints` uses. A menu with these needs the
+   *  node's 384px or the clause wraps. */
+  hints?: Record<string, string>;
 }) {
   const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
@@ -549,7 +559,8 @@ export function SectionedMultiSelect({
             {s.items.map((item) => (
               <CheckRow
                 key={item}
-                label={item}
+                label={labels?.[item] ?? item}
+                hint={hints?.[item]}
                 checked={draft.includes(item)}
                 onChange={() => toggle(item)}
               />

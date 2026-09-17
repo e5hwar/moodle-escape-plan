@@ -4,10 +4,9 @@ import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, PriceIdMatrix, newPriceIds, type PriceIds } from "./PriceIdFields";
-import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, LockIcon, SearchIcon, CheckIcon, InfoTipIcon, InfoIcon12, PlusThinIcon } from "./icons";
+import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, LockIcon, InfoTipIcon, InfoIcon12, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
-import { NewQuestionWizard } from "./NewQuestionWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
@@ -16,6 +15,8 @@ import { SelectField } from "./SelectField";
 import { MultiSelect } from "./NewCompanyWizard";
 import { questions as QUESTION_BANK, type Question } from "../data/questionBank";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
+import { PrmModal } from "./PrmModal";
+import { CheckRow } from "./Filters";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -117,9 +118,9 @@ type QuizSection = {
   id: string;
   name: string;
   nameEs: string;
-  // Grading attributes are configured in Step 2 (Structure & Grading) but
-  // modeled on the Section object per the spec — they have no meaning until a
-  // grading model is chosen.
+  // Per-Section grading attributes live in the Structure step's Sections table
+  // (the grading model that switches them on is on Grading & Completion) —
+  // modeled on the Section object per the spec.
   passingPct: string;
   requiredToPass: boolean;
   // Questions are configured in Step 3 (Questions), per Section.
@@ -229,7 +230,7 @@ type WizardData = {
   questionOrder: QuestionOrder;
   shuffleScope: ShuffleScope;
 
-  // Quiz – pass marks (Step 2, Structure & Grading) and completion (Step 4)
+  // Quiz – grading model, pass mark and completion (Step 4, Grading & Completion)
   gradingModel: GradingModel;
   quizPassingPct: string;
   quizCompletion: CompletionCriterion;
@@ -390,11 +391,11 @@ type StepDef = { id: string; label: string; sub: string; desc: string; tip?: str
 const AUDIENCE_TIP =
   "Every filter you set narrows the audience. A company must match all the filters you set (Audience, Trade and Partnership). Within a single filter, matching one value is enough — content tagged Residential HVAC and Commercial HVAC is visible to a company in either.";
 
-/* Figma 742:1061 — the Structure & Grading step's subtext glyph. Carries the detail that
+/* Figma 742:1061 — the Structure step's subtext glyph. Carries the detail that
    used to sit in the radio-card copy and the field subtext: which structure to
    pick, and what Sections change about grading. */
 const STRUCTURE_TIP =
-  "Most Quizzes use a single block: one flat question list with one overall score \u2014 best for mid-course assessments and simple final exams.\n\nSections split the Quiz into named groups, each with its own questions and its own grading rules. Used for EPA/NATE-style exams; the grading model and pass marks are set further down this step.";
+  "Most Quizzes use a single block: one flat question list with one overall score \u2014 best for mid-course assessments and simple final exams.\n\nSections split the Quiz into named groups, each with its own questions and its own grading rules. Used for EPA/NATE-style exams; the grading model and pass marks are set on the Grading & Completion step.";
 
 const XAPI_STEPS: StepDef[] = [
   { id: "details", label: "Task Details", sub: "Name, file, time, visibility", desc: "Name and describe the Task, upload the xAPI package per language, estimate the duration, and set its visibility." },
@@ -404,11 +405,11 @@ const XAPI_STEPS: StepDef[] = [
 
 const QUIZ_STEPS: StepDef[] = [
   { id: "basics", label: "Task Details", sub: "Name, visibility, time", desc: "Name the Quiz, set its visibility, and add an optional description and duration." },
-  { id: "structure", label: "Structure & Grading", sub: "Structure, grading model, pass marks", desc: "Choose whether this Quiz is one block of questions or split into independently graded Quiz Sections, then set how it is graded and what it takes to pass", tip: STRUCTURE_TIP },
+  { id: "structure", label: "Structure", sub: "Single block or Sections", desc: "Choose whether this Quiz is one block of questions or split into independently graded Quiz Sections", tip: STRUCTURE_TIP },
   { id: "questions", label: "Questions", sub: "Static, pools, order", desc: "Pick questions from the Question Bank — hand-picked statics and/or random pools — set per-Quiz weightage, and choose the order learners see them in." },
-  { id: "completion", label: "Completion", sub: "What marks the Quiz complete", desc: "Decide what marks this Quiz Task complete for a learner." },
-  { id: "attempts", label: "Attempts & Timing", sub: "Attempts, cooldown, time limit", desc: "How many times a learner can attempt the Quiz, the gap between attempts, auto-unlocked attempts, and the per-attempt time limit." },
-  { id: "integrity", label: "Integrity & Resources", sub: "Proctoring and resources", desc: "Turn on proctoring and attach resources learners can open during the attempt (PT charts, PDFs, etc.)." },
+  { id: "completion", label: "Grading & Completion", sub: "Completion, grading model, pass mark", desc: "Decide what marks this Quiz Task complete for a learner, how it is graded, and what it takes to pass." },
+  { id: "attempts", label: "Attempt Limits", sub: "Maximum attempts, cooldown, auto-unlock", desc: "How many times a learner can attempt the Quiz, the gap they wait between attempts, and the extra attempts they can earn by completing other Tasks." },
+  { id: "integrity", label: "Integrity & Resources", sub: "Time limit, proctoring, resources", desc: "The clock on a single attempt, whether attempts are proctored, and the resources learners can open during one (PT charts, PDFs, etc.)." },
   { id: "review", label: "Post-Submission Review", sub: "What learners see after", desc: "Select what a learner sees after submitting an attempt." },
   { id: "payments", label: "Payments & Integrations", sub: "Paywall and NATE", desc: "Per-attempt pricing and NATE exam integration." },
 ];
@@ -421,7 +422,7 @@ const RESOURCE_STEPS: StepDef[] = [
 
 const HANDSON_STEPS: StepDef[] = [
   { id: "basics", label: "Task Details", sub: "Name, description, time, visibility", desc: "Name the Task, describe it, estimate how long it takes to complete, and set its visibility." },
-  { id: "reference", label: "Reference Files", sub: "Files, instructions, checklist", desc: "Give learners the files, instructions, and materials they need, and write the checklist reviewers grade against." },
+  { id: "reference", label: "Reference Files", sub: "Materials, instructions, files, checklist", desc: "Give learners the materials, instructions, and files they need, and write the checklist reviewers grade against." },
   { id: "submission", label: "Submission Fields", sub: "Description and media limits", desc: "Define what a learner submits — the project description limit and how many media files of which types they can attach." },
   { id: "completion", label: "Completion", sub: "Attempts and passing rule", desc: "How many times a learner can submit, and what marks the Task complete." },
   { id: "discovery", label: "Discovery & Audience", sub: "Discovery, audience", desc: "Whether learners can find this Task on its own, and which companies can see it. Leave the Audience, Trade, and Partnership fields alone for public content.", tip: AUDIENCE_TIP },
@@ -444,7 +445,7 @@ type Props = {
   editingTask?: Task;
   /** Embedding hooks — used when the Task creation UI is shown inside the
    * Certification split-screen editor. When `onPrimary` is provided, the footer's
-   * primary action calls it (with the Task's current name) instead of `onClose`,
+   * create action calls it (with the Task's current name) instead of `onClose`,
    * and shows `primaryLabel`. `savedLabel` adds the "Last saved…" note on the left. */
   primaryLabel?: string;
   onPrimary?: (taskName: string) => void;
@@ -468,10 +469,11 @@ function parseTimeToComplete(value: string | undefined): { timeValue: string; ti
 /** Build the wizard's starting state, prefilling from an existing Task in edit mode. */
 function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData {
   let base: WizardData;
-  // Resource Tasks have no default completion mode in the spec — the admin
-  // picks one.
+  // Resource Tasks default to completing on view — the common case for a file
+  // or link, and the only mode the app can observe once the content opens in an
+  // external browser or app.
   if (taskType === "file")
-    base = { ...INITIAL_DATA, completion: null };
+    base = { ...INITIAL_DATA, completion: "on-view" };
   // xAPI Tasks default to rotation off, locked to landscape.
   else if (taskType === "xapi")
     base = { ...INITIAL_DATA, allowRotation: false, lockedOrientation: "landscape" };
@@ -583,11 +585,81 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       } else if (!d.url.trim()) {
         gaps.push({ step: basics, key: K.link });
       }
-      // Resource Tasks start with no completion mode — the admin must pick one.
       if (!d.completion) gaps.push({ step: stepIndex("completion"), key: K.completion });
     }
     if (isQuiz && d.nateExam && (!d.nateIdEn.trim() || !d.nateIdEs.trim())) {
       gaps.push({ step: stepIndex("payments"), key: K.nateId });
+    }
+    /* Splitting a Quiz into ONE Section isn't a split. The table won't let the
+       last two rows be removed, so this only ever fires on a Quiz that arrived
+       with fewer — an existing Task opened for editing. */
+    if (isQuiz && d.structure === "sectioned") {
+      if (d.sections.length < MIN_SECTIONS) {
+        gaps.push({ step: stepIndex("structure"), key: K.sections });
+      }
+      /* English only, the way every other dual-language required field works —
+         a Section with no Spanish name falls back to its English one. */
+      if (d.sections.some((sec) => !sec.name.trim())) {
+        gaps.push({ step: stepIndex("structure"), key: K.sectionName });
+      }
+    }
+    /* One pass mark under quiz-level grading, one per Section under
+       section-level — both live on Grading & Completion, and whichever table is
+       drawn has to be filled. */
+    if (isQuiz) {
+      const blank =
+        d.gradingModel === "quiz_level"
+          ? !d.quizPassingPct.trim()
+          : d.sections.some((sec) => !sec.passingPct.trim());
+      if (blank) gaps.push({ step: stepIndex("completion"), key: K.passingPct });
+    }
+    /* Each of these is required only while its field is actually DRAWN. A
+       cooldown value is asked for under the uniform mode only (the variable
+       editor has its own per-attempt boxes), and the unlock count only when
+       auto-unlock is both on and available — it goes inert under Unlimited
+       attempts, and gating a field nobody can see is a trap. */
+    if (isQuiz && d.cooldownMode === "uniform" && !d.cooldownMinutes.trim()) {
+      gaps.push({ step: stepIndex("attempts"), key: K.cooldown });
+    }
+    if (
+      isQuiz &&
+      d.autoAttempts &&
+      d.maxAttemptsMode !== "unlimited" &&
+      !d.autoAttemptsCount.trim()
+    ) {
+      gaps.push({ step: stepIndex("attempts"), key: K.autoAttempts });
+    }
+    /* A timed Quiz with no number isn't timed — the field only exists once
+       "Yes: Timed Attempts" is picked, and then it has to say how long. */
+    if (isQuiz && d.timeLimitOn && !d.timeLimitMinutes.trim()) {
+      gaps.push({ step: stepIndex("integrity"), key: K.timeLimit });
+    }
+    /* A Quiz with nothing to answer isn't a Quiz. Sectioned Quizzes need every
+       Section filled — each one is independently graded, so an empty one has no
+       score to give — and a Quiz with no Sections at all has no questions by
+       definition (the fix for that one is on the Structure step). */
+    if (isQuiz) {
+      const bare = (st: StaticQuestion[], po: RandomPool[]) =>
+        st.length === 0 && po.length === 0;
+      const empty =
+        d.structure === "sectioned"
+          ? d.sections.length === 0 ||
+            d.sections.some((sec) => bare(sec.staticQuestions, sec.randomPools))
+          : bare(d.blockStatic, d.blockPools);
+      if (empty) gaps.push({ step: stepIndex("questions"), key: K.questions });
+    }
+    /* A paid Quiz can't be sold on a store it has no product for, so every
+       channel of every priced entry is required once the paywall is on. Which
+       entries those are follows the structure: one set for a single price, one
+       per attempt column (plus "all subsequent") for per-attempt pricing. */
+    if (isQuiz && d.paywallOn) {
+      const entries =
+        d.paywallMode === "per_attempt"
+          ? [...d.attemptPrices.map((r) => r.priceIds), d.subsequentPriceIds]
+          : [d.commonPriceIds];
+      if (entries.some((e) => Object.values(e).some((v) => !v.trim()))) {
+        gaps.push({ step: stepIndex("payments"), key: K.priceIds });
+      }
     }
     return gaps.sort((a, b) => a.step - b.step);
   }, [isXapi, isFile, isQuiz, stepIndex]);
@@ -632,12 +704,13 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     flagAll: attemptedSubmit,
   });
 
-  /* The footer's "Create Task" and the last step's "Publish" are the same action: create
-     the Task with whatever visibility the Task Details step's control is set to.
-     Both buttons are unavailable until every mandatory field on every step is
-     filled (`canPublish`), so this only ever runs on a complete Task — the gap
-     branch below is what a click on the *unavailable* button does instead:
-     flag every missing field and jump to the step that owns the first one. */
+  /* Create Task — the footer's secondary on every step but the last, where it
+     is the primary: create the Task with whatever visibility the Task Details
+     step's control is set to. It is unavailable until every mandatory field on
+     every step is filled (`canPublish`), so this only ever runs on a complete
+     Task — the gap branch below is what a click on the *unavailable* button
+     does instead: flag every missing field and jump to the step that owns the
+     first one. */
   function handlePublish() {
     setAttemptedSubmit(true);
     setMissingKeys(new Set(gaps.map((g) => g.key)));
@@ -657,11 +730,16 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   }
 
   const isLast = step === lastStep;
-  const publishLabel = primaryLabel ?? (isEditing ? "Save Changes" : "Publish");
+  /* One label for one action. The footer's create button is the secondary on
+     every step but the last, where it IS the primary — so both spellings read
+     the same. `primaryLabel` is the host's override (the Certification
+     split-screen editor calls it "Add to Certification"). */
+  const createLabel = primaryLabel ?? (isEditing ? "Save Changes" : "Create Task");
 
-  /* ⌘/Ctrl+Enter fires the primary button (Continue, or Publish on the last
-     step); adding Shift fires Create Task from any step. The two footer badges
-     spell both out. */
+  /* ⌘/Ctrl+Enter fires the primary button (Continue, or Create Task on the
+     last step); adding Shift fires Create Task from any step. The two footer
+     badges spell both out — on the last step only ⌘+Enter is drawn, since the
+     two buttons have merged into one. */
   useWizardEnterShortcut(
     () => {
       if (!isLast) goStep(step + 1);
@@ -739,11 +817,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             <XapiCompletionStep data={data} update={update} missing={missing} {...gateProps} />
           ) : isQuiz ? (
             step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} /> :
-            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} {...gateProps} /> :
+            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} {...gateProps} /> :
             step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
-            step === 3 ? <QuizCompletionStep data={data} update={update} {...gateProps} /> :
-            step === 4 ? <QuizAttemptsStep data={data} update={update} /> :
-            step === 5 ? <QuizIntegrityStep data={data} update={update} /> :
+            step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} {...gateProps} /> :
+            step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} /> :
+            step === 5 ? <QuizIntegrityStep data={data} update={update} missing={missing} /> :
             step === 6 ? <QuizReviewStep data={data} update={update} /> :
             <QuizPaymentsStep data={data} update={update} missing={missing} />
           ) : isFile ? (
@@ -780,7 +858,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               <span className="wizard-gate-btn-inner">Back</span>
             </button>
           )}
-          {/* Publishes from any step, rather than stashing a draft, and is
+          {/* Creates from any step, rather than stashing a draft, and is
               unavailable until every mandatory field on every step is filled.
               `aria-disabled` rather than `disabled`: a disabled button fires no
               mouse events, so it could neither show the tooltip that says what
@@ -788,29 +866,35 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               `.btn-save-draft` is just the footer's neutral button — the same
               class Back uses. Labelled "Create Task" (Figma 1113:1109) — it is
               the create action, not a draft save; editing keeps "Save
-              Changes", since there is nothing to create. */}
+              Changes", since there is nothing to create.
+
+              Hidden on the last step: there it IS the primary, so the footer
+              ends on one button rather than two that do the same thing. */}
+          {!isLast && (
+            <button
+              className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
+              aria-disabled={!canPublish}
+              data-tip={blockedTip}
+              onClick={handlePublish}
+            >
+              {createLabel}
+              <WizardKeyHint shift />
+            </button>
+          )}
+          {/* Continue, until the last step — where it becomes the create
+              action itself, carrying the same gate the secondary had. There is
+              no separate Publish: creating the Task IS publishing it. */}
           <button
-            className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
-            aria-disabled={!canPublish}
-            data-tip={blockedTip}
-            onClick={handlePublish}
-          >
-            {isEditing ? "Save Changes" : "Create Task"}
-            <WizardKeyHint shift />
-          </button>
-          <button
-            className={`btn-publish wizard-gate-btn${
+            className={`btn-publish${isLast ? "" : " wizard-gate-btn"}${
               isLast && !canPublish ? " is-disabled" : ""
             }`}
-            /* The last step's primary IS the publish action, so it carries the
-               same gate; on every earlier step it is Continue and always live. */
             aria-disabled={isLast && !canPublish}
             data-tip={isLast ? blockedTip : undefined}
             onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
-            <span className="wizard-gate-fill" ref={gate.nextFillRef} />
+            {!isLast && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
             <span className="wizard-gate-btn-inner">
-              {isLast ? publishLabel : "Continue"}
+              {isLast ? createLabel : "Continue"}
               <WizardKeyHint />
             </span>
           </button>
@@ -860,6 +944,14 @@ const REQUIRED_FIELD_KEYS = {
   link: "link",
   completion: "completion",
   nateId: "nateId",
+  priceIds: "priceIds",
+  questions: "questions",
+  sections: "sections",
+  sectionName: "sectionName",
+  passingPct: "passingPct",
+  timeLimit: "timeLimit",
+  cooldown: "cooldown",
+  autoAttempts: "autoAttempts",
 } as const;
 
 /** Reader-facing name of each mandatory field, for the tooltip that says why
@@ -867,6 +959,14 @@ const REQUIRED_FIELD_KEYS = {
 const REQUIRED_FIELD_LABELS: Record<string, string> = {
   name: "Name",
   package: "xAPI Package",
+  priceIds: "Product/Price IDs",
+  questions: "Questions",
+  sections: "Sections",
+  sectionName: "Section Names",
+  passingPct: "Passing Percentage",
+  timeLimit: "Time Limit",
+  cooldown: "Cooldown",
+  autoAttempts: "Attempts to Unlock",
   file: "File",
   link: "Link",
   completion: "Completion Criteria",
@@ -1295,19 +1395,14 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Reference Files</label>
-        <PackageField
-          enFiles={data.hoFilesEn}
-          esFiles={data.hoFilesEs}
-          setEnFiles={(files) => update({ hoFilesEn: files })}
-          setEsFiles={(files) => update({ hoFilesEs: files })}
-          accept="PDF, images, video"
+        <label className="form-label">Tools/Materials Required</label>
+        <RichTextField
+          en={data.hoToolsEn}
+          es={data.hoToolsEs}
+          onChangeEn={(v) => update({ hoToolsEn: v })}
+          onChangeEs={(v) => update({ hoToolsEs: v })}
+          minRows={4}
         />
-        <p className="form-help">
-          Files learners download before they start — separate uploads per
-          language, multiple files allowed. If no Spanish file is added, Spanish
-          learners get the English files.
-        </p>
       </div>
 
       <div className="form-group">
@@ -1322,14 +1417,19 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Tools/Materials Required</label>
-        <RichTextField
-          en={data.hoToolsEn}
-          es={data.hoToolsEs}
-          onChangeEn={(v) => update({ hoToolsEn: v })}
-          onChangeEs={(v) => update({ hoToolsEs: v })}
-          minRows={4}
+        <label className="form-label">Reference Files</label>
+        <PackageField
+          enFiles={data.hoFilesEn}
+          esFiles={data.hoFilesEs}
+          setEnFiles={(files) => update({ hoFilesEn: files })}
+          setEsFiles={(files) => update({ hoFilesEs: files })}
+          accept="PDF, images, video"
         />
+        <p className="form-help">
+          Files learners download before they start — separate uploads per
+          language, multiple files allowed. If no Spanish file is added, Spanish
+          learners get the English files.
+        </p>
       </div>
 
       <div className="form-group">
@@ -1401,16 +1501,19 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
         <label className="form-label">Media File Types Allowed</label>
         <div className="review-list">
           <Toggle
+            row
             checked={types.images}
             onChange={(v) => setType("images", v)}
             label="Images"
           />
           <Toggle
+            row
             checked={types.videos}
             onChange={(v) => setType("videos", v)}
             label="Videos"
           />
           <Toggle
+            row
             checked={types.audio}
             onChange={(v) => setType("audio", v)}
             label="Audio"
@@ -1438,41 +1541,43 @@ function HandsOnCompletionStep({ data, update, criteriaLocked, onUnlockCriteria 
         help="How many times a learner can submit this Task. Admins can grant more later."
       />
 
+      {/* Named and marked the same way the xAPI and Resource steps name theirs —
+          one Completion Criteria field per Task type. No subtext: the two cards
+          already say what each one means. */}
       <div className="form-group">
-        <label className="form-label">Completion</label>
+        <label className="form-label">
+          Completion Criteria <span className="req">*</span>
+        </label>
         <div className="radio-card-group">
           <RadioCard
             selected={reviewerGrade}
             onSelect={() => update({ hoCompletion: "reviewer_grade" })}
-            title="Passing grade from reviewer"
+            title="Passing Grade from Reviewer"
             desc="Completes when the learner receives a score equal to or greater than the passing grade from the reviewer."
           />
           <RadioCard
             selected={!reviewerGrade}
             onSelect={() => update({ hoCompletion: "submission_made" })}
-            title="Submission made"
+            title="Submission Made"
             desc="The Task is completed as soon as the learner makes a submission. No review or scoring is required."
           />
         </div>
-        <p className="form-help">What marks this Task complete for a learner.</p>
       </div>
 
       {reviewerGrade && (
         <div className="form-group">
           <label className="form-label">Passing Grade</label>
-          <div className="time-row">
-            <input
-              className="form-input no-spinner small"
-              inputMode="numeric"
-              value={data.hoPassingGrade}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
-                  update({ hoPassingGrade: v });
-              }}
-            />
-            <span className="form-suffix">out of 10 (default 5)</span>
-          </div>
+          <input
+            className="form-input no-spinner small"
+            inputMode="numeric"
+            value={data.hoPassingGrade}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
+                update({ hoPassingGrade: v });
+            }}
+          />
+          <p className="form-help">Maximum Grade: 10</p>
         </div>
       )}
     </CompletionCriteriaGate>
@@ -1637,15 +1742,19 @@ const blankSection = (): QuizSection => ({
   randomPools: [],
 });
 
+/** Sections only mean something in twos — one Section is just the Quiz. The
+ *  table seeds this many and refuses to go below it. */
+const MIN_SECTIONS = 2;
+
 function QuizStructureStep({
   data,
   update,
   locked,
+  missing,
   criteriaLocked,
   onUnlockCriteria,
 }: StepProps) {
   const sectioned = data.structure === "sectioned";
-  const sectionLevel = data.gradingModel === "section_level";
 
   const updateSection = (id: string, patch: Partial<QuizSection>) =>
     update({
@@ -1654,18 +1763,20 @@ function QuizStructureStep({
 
   const addSection = () => update({ sections: [...data.sections, blankSection()] });
 
-  const removeSection = (id: string) =>
-    update({ sections: data.sections.filter((s) => s.id !== id) });
+  const atFloor = data.sections.length <= MIN_SECTIONS;
 
-  const setPct = (v: string, apply: (pct: string) => void) => {
-    if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100)) apply(v);
+  const removeSection = (id: string) => {
+    if (atFloor) return;
+    update({ sections: data.sections.filter((s) => s.id !== id) });
   };
 
   return (
     <>
-      {/* Structure and the grading model are the two structural choices: both
-          are frozen once the Quiz exists, so they share the lock. Pass marks
-          live below, outside it — they recompute from existing attempts. */}
+      {/* The structure itself is frozen once the Quiz exists. The Sections
+          table below sits OUTSIDE the lock — its pass marks recompute from
+          existing attempts — with its own structural controls disabled
+          individually. The grading model and the Quiz pass mark moved to the
+          Grading & Completion step. */}
       <div className={`step-lockable ${locked ? "locked" : ""}`}>
         {locked && (
           <div className="step-lock-overlay" role="note">
@@ -1703,44 +1814,21 @@ function QuizStructureStep({
                 onSelect={() =>
                   update({
                     structure: "sectioned",
-                    /* The table opens with two rows — one Section is not a
+                    /* The table opens at the floor — one Section is not a
                        split, so an empty list would just be a chore. Sections
                        the admin already has are left alone. */
                     ...(data.sections.length === 0
-                      ? { sections: [blankSection(), blankSection()] }
+                      ? { sections: Array.from({ length: MIN_SECTIONS }, blankSection) }
                       : {}),
                   })
                 }
-                title="One or More Sections"
+                title="Two or More Sections"
                 desc="Each Section has its own questions and can be graded independently."
                 disabled={locked}
               />
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Grading Model</label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={!sectionLevel}
-                onSelect={() => update({ gradingModel: "quiz_level" })}
-                title="Quiz-level"
-                desc="One overall passing threshold for the whole Quiz."
-                disabled={locked}
-              />
-              <RadioCard
-                selected={sectionLevel}
-                onSelect={() => update({ gradingModel: "section_level" })}
-                disabled={locked || !sectioned}
-                title="Section-level"
-                desc={
-                  sectioned
-                    ? "Each Section has its own passing grade and is completed independently."
-                    : "Add Sections above to enable section-level grading."
-                }
-              />
-            </div>
-          </div>
         </fieldset>
       </div>
 
@@ -1750,7 +1838,9 @@ function QuizStructureStep({
       <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
         {sectioned && (
           <div className="form-group">
-            <label className="form-label">Sections</label>
+            <label className="form-label">
+              Sections <span className="req">*</span>
+            </label>
             {/* Figma 1097:1205 "Quiz Sections" — one boxed table: an
                 ORDER / SECTION NAME (/ % TO PASS / MUST PASS) header, a row per
                 Section, and an Add Section row closing the card. The two
@@ -1765,20 +1855,6 @@ function QuizStructureStep({
                   <span className="qsec-num">ORDER</span>
                 </span>
                 <span className="qsec-name">SECTION NAME</span>
-                {sectionLevel && (
-                  <>
-                    <span className="qsec-pct">% TO PASS</span>
-                    <span className="qsec-must">
-                      MUST PASS
-                      <span
-                        className="qed-tbl-info"
-                        title="The learner has to pass this Section to complete the Quiz, whatever the other Sections score."
-                      >
-                        <InfoIcon12 />
-                      </span>
-                    </span>
-                  </>
-                )}
                 <span className="qsec-x" aria-hidden />
               </div>
 
@@ -1798,45 +1874,29 @@ function QuizStructureStep({
                       onChangeEs={(v) => updateSection(sec.id, { nameEs: v })}
                       placeholderEn="Section Name…"
                       placeholderEs="Nombre de la Sección"
+                      error={!!missing?.has(REQUIRED_FIELD_KEYS.sectionName) && !sec.name.trim()}
                     />
                   </div>
-                  {sectionLevel && (
-                    <>
-                      <span className="qsec-pct">
-                        <input
-                          className="qsec-pct-input no-spinner"
-                          inputMode="numeric"
-                          aria-label={`Section ${i + 1} passing percentage`}
-                          value={sec.passingPct}
-                          onChange={(e) =>
-                            setPct(e.target.value, (pct) => updateSection(sec.id, { passingPct: pct }))
-                          }
-                        />
-                        <span className="qsec-pct-sign">%</span>
-                      </span>
-                      <span className="qsec-must">
-                        <button
-                          type="button"
-                          className={`toggle ${sec.requiredToPass ? "on" : ""}`}
-                          aria-label={`Section ${i + 1} must be passed`}
-                          aria-pressed={sec.requiredToPass}
-                          disabled={locked}
-                          onClick={() =>
-                            !locked && updateSection(sec.id, { requiredToPass: !sec.requiredToPass })
-                          }
-                        >
-                          <span className="toggle-knob" />
-                        </button>
-                      </span>
-                    </>
-                  )}
+                  {/* Two ways to be unavailable, deliberately spelled
+                      differently. `locked` uses the real `disabled` attribute —
+                      the step's lock card already explains it. The floor uses
+                      `aria-disabled` + `.is-disabled`, because a `disabled`
+                      button fires no mouse events and so could never show the
+                      tooltip that says why it won't budge. `removeSection`
+                      guards the click either way. */}
                   <button
-                    className="qsec-x"
+                    className={`qsec-x${atFloor ? " is-disabled" : ""}`}
                     aria-label="Remove Section"
                     disabled={locked}
+                    aria-disabled={atFloor || undefined}
+                    title={
+                      atFloor
+                        ? `A sectioned Quiz needs at least ${MIN_SECTIONS} Sections. Add another before removing this one.`
+                        : undefined
+                    }
                     onClick={() => removeSection(sec.id)}
                   >
-                    <SmallXIcon />
+                    <RowCloseIcon />
                   </button>
                 </div>
               ))}
@@ -1849,28 +1909,12 @@ function QuizStructureStep({
               </div>
             </div>
             <p className="form-help">
-              {sectionLevel
-                ? "Drag to reorder. Each Section is graded on its own — set the mark it takes to pass and whether the learner has to pass it."
-                : "Drag to reorder. Sections are scored and shown separately but don't affect pass/fail — the Quiz passing percentage below does."}
+              Drag to reorder. Each Section holds its own questions; what it
+              takes to pass one is set on Grading &amp; Completion.
             </p>
           </div>
         )}
 
-        {!sectionLevel && (
-          <div className="form-group">
-            <label className="form-label">Quiz Passing Percentage</label>
-            <div className="time-row">
-              <input
-                className="form-input no-spinner small"
-                inputMode="numeric"
-                value={data.quizPassingPct}
-                onChange={(e) => setPct(e.target.value, (pct) => update({ quizPassingPct: pct }))}
-              />
-              <span className="form-suffix">% to pass</span>
-            </div>
-            <p className="form-help">Enter a percentage from 0-100.</p>
-          </div>
-        )}
       </CompletionCriteriaGate>
     </>
   );
@@ -1892,12 +1936,15 @@ function QuizQuestionsStep({ data, update }: StepProps) {
       {sectioned ? (
         data.sections.length === 0 ? (
           <p className="form-help">
-            Add at least one Section in the Structure & Grading step to configure questions.
+            Add at least one Section in the Structure step to configure questions.
           </p>
         ) : (
           data.sections.map((s, i) => (
             <div key={s.id} className="form-group">
-              <label className="form-label">{`Section ${i + 1}: ${s.name || "Untitled"}`}</label>
+              <label className="form-label">
+                {`Section ${i + 1}: ${s.name || "Untitled"}`}{" "}
+                <span className="req">*</span>
+              </label>
               <QuestionGroupEditor
                 staticQuestions={s.staticQuestions}
                 pools={s.randomPools}
@@ -1909,7 +1956,9 @@ function QuizQuestionsStep({ data, update }: StepProps) {
         )
       ) : (
         <div className="form-group">
-          <label className="form-label">Questions</label>
+          <label className="form-label">
+            Questions <span className="req">*</span>
+          </label>
           <QuestionGroupEditor
             staticQuestions={data.blockStatic}
             pools={data.blockPools}
@@ -1928,47 +1977,55 @@ function QuizQuestionsStep({ data, update }: StepProps) {
         </div>
       )}
 
+      {/* One field, not two: a sectioned Quiz has THREE mutually exclusive
+          orders, so the old "Shuffled → now pick a scope" pair collapses into a
+          single choice. A single-block Quiz has no Sections to shuffle within,
+          so it keeps the plain two. `shuffleScope` only means anything while
+          `questionOrder` is "shuffled"; picking a shuffle option here sets both
+          at once. */}
       <div className="form-group">
         <label className="form-label">Question Order</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.questionOrder === "fixed"}
             onSelect={() => update({ questionOrder: "fixed" })}
-            title="Fixed order"
-            desc="Questions appear in the order they were added."
+            title="Fixed Order"
+            desc="Questions appear in the order they were set in."
           />
-          <RadioCard
-            selected={data.questionOrder === "shuffled"}
-            onSelect={() => update({ questionOrder: "shuffled" })}
-            title="Shuffled"
-            desc="Questions are randomised on each attempt — the same learner sees a different order each time."
-          />
+          {sectioned ? (
+            <>
+              <RadioCard
+                selected={data.questionOrder === "shuffled" && data.shuffleScope === "within_section"}
+                onSelect={() =>
+                  update({ questionOrder: "shuffled", shuffleScope: "within_section" })
+                }
+                title="Shuffle within Section"
+                desc="Questions within each Section are shuffled, but the Sections themselves appear in the configured order."
+              />
+              <RadioCard
+                selected={data.questionOrder === "shuffled" && data.shuffleScope === "all"}
+                onSelect={() => update({ questionOrder: "shuffled", shuffleScope: "all" })}
+                title="Shuffle All"
+                desc="All questions across all Sections are shuffled together. Sections lose their visual grouping for the learner."
+              />
+            </>
+          ) : (
+            <RadioCard
+              selected={data.questionOrder === "shuffled"}
+              onSelect={() => update({ questionOrder: "shuffled" })}
+              title="Shuffled"
+              desc="Questions appear in a randomised order on each attempt. The same learner sees a different order on different attempts."
+            />
+          )}
         </div>
         <p className="form-help">
-          Controls how Static questions are ordered. Random pool questions are
-          always drawn in an unpredictable order.
+          Random pool questions are already in an unpredictable order by nature —
+          the system draws them afresh on each attempt, so learners see them
+          differently even under Fixed Order. This setting mainly affects Static
+          questions, and where Static and random pool questions sit relative to
+          each other in the final list.
         </p>
       </div>
-
-      {sectioned && data.questionOrder === "shuffled" && (
-        <div className="form-group">
-          <label className="form-label">Shuffle Scope</label>
-          <div className="radio-card-group">
-            <RadioCard
-              selected={data.shuffleScope === "within_section"}
-              onSelect={() => update({ shuffleScope: "within_section" })}
-              title="Within each Section"
-              desc="Questions shuffle inside their Section; Sections keep their configured order."
-            />
-            <RadioCard
-              selected={data.shuffleScope === "all"}
-              onSelect={() => update({ shuffleScope: "all" })}
-              title="Across all Sections"
-              desc="All questions shuffle together. Sections lose their visual grouping for the learner."
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -2000,7 +2057,6 @@ function QuestionGroupEditor({
     null | { mode: "static" } | { mode: "pool"; poolId?: string }
   >(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const addWrapRef = useRef<HTMLDivElement>(null);
 
   // Statics and pools live in separate arrays but render as one ordered list;
@@ -2031,13 +2087,6 @@ function QuestionGroupEditor({
             weight: "1",
             seq: nextSeq + i,
           })),
-      ],
-    });
-  const addCreatedQuestion = (q: Question) =>
-    onChange({
-      staticQuestions: [
-        ...staticQuestions,
-        { id: q.id, text: q.text, type: q.type, weight: "1", seq: nextSeq },
       ],
     });
   const setWeight = (id: string, weight: string) =>
@@ -2137,10 +2186,6 @@ function QuestionGroupEditor({
   const rowDragClass = (key: string) =>
     `${drag === key ? " dragging" : ""}${drag && over === key && drag !== key ? " drag-over" : ""}`;
 
-  const openCreate = () => {
-    setMenuOpen(false);
-    setCreating(true);
-  };
   const openBank = () => {
     setMenuOpen(false);
     setPicker({ mode: "static" });
@@ -2152,12 +2197,12 @@ function QuestionGroupEditor({
 
   useCreateShortcut(
     () => setMenuOpen(true),
-    shortcut && !menuOpen && !picker && !creating,
+    shortcut && !menuOpen && !picker,
     "q",
   );
 
-  // While the menu is open: C / Q / R fire its rows, Escape and outside
-  // clicks dismiss. Escape is captured so it can't also cancel the wizard.
+  // While the menu is open: Q / R fire its rows, Escape and outside clicks
+  // dismiss. Escape is captured so it can't also cancel the wizard.
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -2167,9 +2212,6 @@ function QuestionGroupEditor({
         e.preventDefault();
         e.stopPropagation();
         setMenuOpen(false);
-      } else if (k === "c") {
-        e.preventDefault();
-        openCreate();
       } else if (k === "q") {
         e.preventDefault();
         openBank();
@@ -2221,7 +2263,7 @@ function QuestionGroupEditor({
 
       {items.length === 0 && (
         <div className="qz-empty">
-          No questions yet — Add Question below creates one, picks from the
+          No questions yet — Add Questions below creates one, picks from the
           Bank, or builds a random set.
         </div>
       )}
@@ -2265,7 +2307,7 @@ function QuestionGroupEditor({
                 aria-label="Remove question"
                 onClick={() => removeStatic(q.id)}
               >
-                <SmallXIcon />
+                <RowCloseIcon />
               </button>
             </div>
           );
@@ -2315,7 +2357,7 @@ function QuestionGroupEditor({
                   className="qz-pool-add"
                   onClick={() => setPicker({ mode: "pool", poolId: p.id })}
                 >
-                  ADD
+                  Add/Remove
                 </button>
               </div>
               <span className="qz-pt">
@@ -2335,7 +2377,7 @@ function QuestionGroupEditor({
                 aria-label="Remove random set"
                 onClick={() => removePool(p.id)}
               >
-                <SmallXIcon />
+                <RowCloseIcon />
               </button>
             </div>
             {overDrawn && (
@@ -2356,7 +2398,7 @@ function QuestionGroupEditor({
                       aria-label="Remove question from the random set"
                       onClick={() => removePoolQuestion(p.id, q.id)}
                     >
-                      <SmallXIcon />
+                      <RowCloseIcon />
                     </button>
                   </div>
                 ))}
@@ -2366,34 +2408,32 @@ function QuestionGroupEditor({
         );
       })}
 
-      <div className="qz-foot">
-        <div className="qz-add-wrap" ref={addWrapRef}>
-          <button
-            className="cta-primary qz-add"
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-          >
-            Add Question
-            <span className="qz-kbd">Q</span>
-          </button>
-          {menuOpen && (
-            <div className="u-menu qz-menu" role="menu">
-              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
-                <span className="qz-menu-label">Create New Question</span>
-                <span className="qz-kbd">C</span>
-              </button>
-              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
-                <span className="qz-menu-label">Add from Question Bank</span>
-                <span className="qz-kbd">Q</span>
-              </button>
-              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openRandomSet}>
-                <span className="qz-menu-label">Add Random Set</span>
-                <span className="qz-kbd">R</span>
-              </button>
-            </div>
-          )}
-        </div>
+      {/* Figma 1206:1134 — the add affordance is the table's LAST ROW now, a
+          plus + orange label on the rows' own gutter, not a filled CTA below
+          the card. The node draws no keycap on it; the "Q" shortcut still
+          opens the menu, and the menu's own rows keep their C/Q/R caps. */}
+      <div className="qz-addrow" ref={addWrapRef}>
+        <button
+          className="qz-addrow-btn"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+        >
+          <TreeAddIcon />
+          Add Questions
+        </button>
+        {menuOpen && (
+          <div className="u-menu qz-menu" role="menu">
+            <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
+              <span className="qz-menu-label">Add from Question Bank</span>
+              <span className="qz-kbd">Q</span>
+            </button>
+            <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openRandomSet}>
+              <span className="qz-menu-label">Add Random Set</span>
+              <span className="qz-kbd">R</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Portalled to <body>: the wizard's step container is transformed, which
@@ -2415,18 +2455,6 @@ function QuestionGroupEditor({
           }}
           onCancel={() => setPicker(null)}
         />,
-        document.body,
-      )}
-
-      {/* Full-screen Question editor, portalled over the Task wizard — Create
-          question drops the new question onto this Quiz as a static row. */}
-      {creating && createPortal(
-        <div className="qz-qwiz">
-          <NewQuestionWizard
-            onCreate={addCreatedQuestion}
-            onClose={() => setCreating(false)}
-          />
-        </div>,
         document.body,
       )}
     </div>
@@ -2500,43 +2528,208 @@ function CompletionCriteriaGate({
   );
 }
 
-function QuizCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: StepProps) {
+function QuizCompletionStep({
+  data,
+  update,
+  locked,
+  missing,
+  criteriaLocked,
+  onUnlockCriteria,
+}: StepProps) {
+  const sectioned = data.structure === "sectioned";
   const sectionLevel = data.gradingModel === "section_level";
+
+  const setPct = (v: string, apply: (pct: string) => void) => {
+    if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100)) apply(v);
+  };
 
   return (
     <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+      {/* Named and marked like every other Task type's completion field. No
+          subtext: the cards already say what each one means, and the pass mark
+          they refer to is now the field two below. */}
       <div className="form-group">
-        <label className="form-label">Completion Criterion</label>
+        <label className="form-label">
+          Completion Criteria <span className="req">*</span>
+        </label>
+        {/* No Completion Tracking leads, the way it does on every other Task
+            type's Completion Criteria (and the way spec 4.3.4.3 tables it) —
+            the Quiz was the only one starting with its graded option. */}
         <div className="radio-card-group">
+          <RadioCard
+            selected={data.quizCompletion === "none"}
+            onSelect={() => update({ quizCompletion: "none" })}
+            title="No Completion Tracking"
+            desc="The Quiz is never marked complete — useful for practice or ungraded checks."
+          />
           <RadioCard
             selected={data.quizCompletion === "passing_grade"}
             onSelect={() => update({ quizCompletion: "passing_grade" })}
-            title="Passing grade"
+            title="Passing Grade"
             desc={
               sectionLevel
                 ? "Completes when the learner has Section completion for every Section in the Quiz."
                 : "Completes when the learner reaches the Quiz passing grade in a single attempt."
             }
           />
+        </div>
+      </div>
+
+      {/* Moved here from the Structure step 2026-09-17. It stays frozen while
+          editing — switching quiz-level ↔ section-level re-scores every past
+          attempt — but it is one field among three here, so it takes the
+          ordinary disabled treatment with a line saying why, rather than the
+          full-step lock card the Structure step draws. */}
+      <div className="form-group">
+        <label className="form-label">
+          Grading Model <span className="req">*</span>
+        </label>
+        <div className="radio-card-group">
           <RadioCard
-            selected={data.quizCompletion === "none"}
-            onSelect={() => update({ quizCompletion: "none" })}
-            title="No completion tracking"
-            desc="The Quiz is never marked complete — useful for practice or ungraded checks."
+            selected={!sectionLevel}
+            onSelect={() => update({ gradingModel: "quiz_level" })}
+            title="Quiz-level"
+            desc="One overall passing threshold for the whole Quiz."
+            disabled={locked}
+          />
+          <RadioCard
+            selected={sectionLevel}
+            onSelect={() => update({ gradingModel: "section_level" })}
+            disabled={locked || !sectioned}
+            title="Section-level"
+            desc={
+              sectioned
+                ? "Each Section has its own passing grade and is completed independently."
+                : "Split the Quiz into Sections on the Structure step to enable section-level grading."
+            }
           />
         </div>
-        <p className="form-help">
-          What marks this Quiz Task complete for a learner. The pass marks themselves are set in
-          Structure &amp; Grading.
-        </p>
+        {locked && (
+          <p className="form-help">
+            The grading model can't be changed after a Quiz is created — past
+            attempts can't be re-scored under a different model.
+          </p>
+        )}
       </div>
+
+      {/* Figma 1211:1139 — the Sections' own pass marks, split out of the
+          Structure step's table (1097:1205, now names and order only) so that
+          everything about grading sits on this one step. Same `.qsec` card;
+          the node widens the column gap to 40px and the name is read-only text
+          rather than the editable LangField. */}
+      {sectionLevel && (
+        <div className="form-group">
+          <label className="form-label">
+            Section Pass Marks <span className="req">*</span>
+          </label>
+          <div className="qsec qsec--pass">
+            <div className="qsec-hd">
+              <span className="qsec-name">SECTION</span>
+              <span className="qsec-pct">% TO PASS</span>
+              <span className="qsec-must">
+                MUST PASS
+                <span
+                  className="qed-tbl-info"
+                  /* Spec 4.3.2.1 — the rule is about the whole ATTEMPT, not
+                     just this Section: failing a Must Pass Section nullifies
+                     every other Section pass in that attempt. The old copy
+                     ("has to pass this Section to complete the Quiz") described
+                     a different, weaker rule. */
+                  title="If the learner fails a Section marked Must Pass, no Section completion is recorded from that attempt — not even for the Sections they passed."
+                >
+                  <InfoIcon12 />
+                </span>
+              </span>
+            </div>
+
+            {data.sections.map((sec, i) => {
+              const name = sec.name.trim() || `Section ${i + 1}`;
+              return (
+                <div className="qsec-row" key={sec.id}>
+                  <span className="qsec-secname">{name}</span>
+                  <span className="qsec-pct">
+                    <input
+                      className={`qsec-pct-input no-spinner${
+                        missing?.has(REQUIRED_FIELD_KEYS.passingPct) && !sec.passingPct.trim()
+                          ? " has-error"
+                          : ""
+                      }`}
+                      inputMode="numeric"
+                      aria-label={`${name} passing percentage`}
+                      value={sec.passingPct}
+                      onChange={(e) =>
+                        setPct(e.target.value, (pct) =>
+                          update({
+                            sections: data.sections.map((x) =>
+                              x.id === sec.id ? { ...x, passingPct: pct } : x,
+                            ),
+                          }),
+                        )
+                      }
+                    />
+                    <span className="qsec-pct-sign">%</span>
+                  </span>
+                  <span className="qsec-must">
+                    {/* Which Sections are required-to-pass is structural — past
+                        attempts can't be re-evaluated against a new rule — so it
+                        keeps the same lock the Structure step's controls take. */}
+                    <button
+                      type="button"
+                      className={`toggle ${sec.requiredToPass ? "on" : ""}`}
+                      aria-label={`${name} must be passed`}
+                      aria-pressed={sec.requiredToPass}
+                      disabled={locked}
+                      onClick={() =>
+                        !locked &&
+                        update({
+                          sections: data.sections.map((x) =>
+                            x.id === sec.id ? { ...x, requiredToPass: !x.requiredToPass } : x,
+                          ),
+                        })
+                      }
+                    >
+                      <span className="toggle-knob" />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="form-help">
+            Sections are named and ordered on the Structure step. Enter a
+            percentage from 0-100.
+          </p>
+        </div>
+      )}
+
+      {!sectionLevel && (
+        <div className="form-group">
+          <label className="form-label">
+            Quiz Passing Percentage <span className="req">*</span>
+          </label>
+          {/* No "% to pass" beside the box — the label names the unit and the
+              subtext gives the range. */}
+          <input
+            className={`form-input no-spinner small${
+              missing?.has(REQUIRED_FIELD_KEYS.passingPct) ? " has-error" : ""
+            }`}
+            inputMode="numeric"
+            value={data.quizPassingPct}
+            onChange={(e) => setPct(e.target.value, (pct) => update({ quizPassingPct: pct }))}
+          />
+          <p className="form-help">Enter a percentage from 0-100.</p>
+        </div>
+      )}
     </CompletionCriteriaGate>
   );
 }
 
-function QuizAttemptsStep({ data, update }: StepProps) {
+function QuizAttemptsStep({ data, update, missing }: StepProps) {
   return (
     <>
+      {/* How many attempts a learner gets and the gap between them. The clock
+          on a SINGLE attempt is a different question, and lives on Integrity &
+          Resources with the other rules about how an attempt is taken. */}
       <MaxAttemptsField
         data={data}
         update={update}
@@ -2565,25 +2758,6 @@ function QuizAttemptsStep({ data, update }: StepProps) {
           />
         </div>
 
-        {data.cooldownMode === "uniform" && (
-          <div className="form-sub-group" style={{ marginTop: 16 }}>
-            <div className="time-row">
-              <input
-                className="form-input no-spinner small"
-                inputMode="numeric"
-                value={data.cooldownMinutes}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d+$/.test(v)) update({ cooldownMinutes: v });
-                }}
-              />
-              <span className="form-suffix">minutes</span>
-            </div>
-          </div>
-        )}
-        {data.cooldownMode === "variable" && (
-          <VariableCooldownEditor data={data} update={update} />
-        )}
         <p className="form-help">
           Optional wait before a learner can start the next attempt. Begins when
           an attempt is submitted, or when the timer runs out — whichever is
@@ -2591,57 +2765,44 @@ function QuizAttemptsStep({ data, update }: StepProps) {
         </p>
       </div>
 
-      <div className="form-group">
-        <Toggle
-          checked={data.autoAttempts}
-          onChange={(v) => update({ autoAttempts: v })}
-          label="Auto-Unlock Additional Attempts"
-          sub="Automatically grant extra attempts once the learner completes specific Tasks. All trigger Tasks must complete to unlock; the extras stack with remaining and manually granted attempts."
-        />
-        {data.autoAttempts && (
-          <div className="form-sub-group" style={{ marginTop: 16 }}>
-            <label className="form-sub-label">Attempts to unlock</label>
-            <input
-              className="form-input no-spinner small"
-              inputMode="numeric"
-              value={data.autoAttemptsCount}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "" || /^\d+$/.test(v)) update({ autoAttemptsCount: v });
-              }}
-            />
-            <label className="form-sub-label" style={{ marginTop: 18 }}>
-              Unlock after completing all of
-            </label>
-            <TriggerTaskEditor data={data} update={update} />
-          </div>
-        )}
-      </div>
+      {/* Whichever cooldown was chosen is CONFIGURED in its own labelled field,
+          the same way Time Limit and its minutes are two fields — the value
+          used to hang off the radio group as an unlabelled input. */}
+      {data.cooldownMode === "uniform" && (
+        <div className="form-group">
+          <label className="form-label">
+            Set Cooldown in Minutes <span className="req">*</span>
+          </label>
+          <input
+            className={`form-input no-spinner small${
+              missing?.has(REQUIRED_FIELD_KEYS.cooldown) ? " has-error" : ""
+            }`}
+            inputMode="numeric"
+            value={data.cooldownMinutes}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "" || /^\d+$/.test(v)) update({ cooldownMinutes: v });
+            }}
+          />
+          <p className="form-help">
+            How long a learner waits before every next attempt.
+          </p>
+        </div>
+      )}
 
-      <div className="form-group">
-        <Toggle
-          checked={data.timeLimitOn}
-          onChange={(v) => update({ timeLimitOn: v })}
-          label="Time Limit"
-          sub="Optional. The timer starts when questions first appear and can't be paused — the attempt auto-submits at zero."
-        />
-        {data.timeLimitOn && (
-          <div className="form-sub-group" style={{ marginTop: 16 }}>
-            <div className="time-row">
-              <input
-                className="form-input no-spinner small"
-                inputMode="numeric"
-                value={data.timeLimitMinutes}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d+$/.test(v)) update({ timeLimitMinutes: v });
-                }}
-              />
-              <span className="form-suffix">minutes</span>
-            </div>
-          </div>
-        )}
-      </div>
+      {data.cooldownMode === "variable" && (
+        <div className="form-group">
+          <label className="form-label">Cooldown Before Specific Attempts</label>
+          <VariableCooldownEditor data={data} update={update} />
+          <p className="form-help">
+            Set a gap before the attempts that need one; any attempt you leave
+            unset falls back to the uniform cooldown.
+          </p>
+        </div>
+      )}
+
+
+      <AutoUnlockField data={data} update={update} missing={missing} />
     </>
   );
 }
@@ -2662,209 +2823,238 @@ function VariableCooldownEditor({ data, update }: StepProps) {
   const remove = (id: string) =>
     update({ variableCooldowns: rows.filter((r) => r.id !== id) });
 
+  /* The Section Pass Marks table's component (Figma 1211:1139) again: the same
+     `.qsec` card, header, hairlines and Add row — one pair per row, the gap it
+     applies to on the left and the value on the right. Replaces a `.price-rows`
+     list that was borrowed from the paywall and looked nothing like the other
+     tables on this wizard. */
   return (
-    <div className="form-sub-group" style={{ marginTop: 16 }}>
-      <div className="price-rows">
-        {rows.map((r) => (
-          <div key={r.id} className="price-row">
-            <div className="price-row-text">
-              <div className="price-row-title">
-                Between attempts {r.fromAttempt} and {r.fromAttempt + 1}
-              </div>
-            </div>
-            <div className="time-row">
-              <input
-                className="form-input no-spinner small"
-                inputMode="numeric"
-                value={r.minutes}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d+$/.test(v)) set(r.id, v);
-                }}
-              />
-              <span className="form-suffix">min</span>
-            </div>
-            <button className="price-row-x" aria-label="Remove cooldown" onClick={() => remove(r.id)}>
-              <SmallXIcon />
-            </button>
-          </div>
-        ))}
-        <button className="price-add" onClick={add}>
-          + Add a cooldown pair
+    <div className="qsec qsec--cool">
+      <div className="qsec-hd">
+        <span className="qsec-secname">BETWEEN ATTEMPTS</span>
+        <span className="qsec-mins">COOLDOWN</span>
+        <span className="qsec-x" aria-hidden />
+      </div>
+
+      {rows.length === 0 && (
+        <div className="qsec-row">
+          <span className="qsec-empty">
+            No pairs yet — every attempt uses the uniform cooldown.
+          </span>
+        </div>
+      )}
+
+      {rows.map((r) => (
+        <div className="qsec-row" key={r.id}>
+          <span className="qsec-secname">
+            {r.fromAttempt} and {r.fromAttempt + 1}
+          </span>
+          <span className="qsec-mins">
+            <input
+              className="qsec-pct-input no-spinner"
+              inputMode="numeric"
+              aria-label={`Cooldown between attempts ${r.fromAttempt} and ${r.fromAttempt + 1}`}
+              value={r.minutes}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "" || /^\d+$/.test(v)) set(r.id, v);
+              }}
+            />
+            <span className="qsec-pct-sign">min</span>
+          </span>
+          <button
+            className="qsec-x"
+            aria-label={`Remove the cooldown between attempts ${r.fromAttempt} and ${r.fromAttempt + 1}`}
+            onClick={() => remove(r.id)}
+          >
+            <RowCloseIcon />
+          </button>
+        </div>
+      ))}
+
+      <div className="qsec-foot">
+        <button className="qsec-add" onClick={add}>
+          <PlusThinIcon />
+          Add Cooldown Pair
         </button>
       </div>
     </div>
   );
 }
 
-function TriggerTaskEditor({ data, update }: StepProps) {
-  const rows = data.autoAttemptTriggers;
-  const [pickerOpen, setPickerOpen] = useState(false);
+/* Auto-Unlock lives on Integrity & Resources, under Maximum Attempts: both
+   fields answer "how many attempts does a learner get", one as a floor and one
+   as something earned. The flag is a seg-control, and its two dependants are
+   sibling fields rather than a nested sub-group — the same shape the paywall
+   uses. Trigger Tasks are picked with the shared MultiSelect, exactly as a
+   Mastery Skill picks its linked Skills: a Task name is the whole decision
+   here, so a table picker was more chrome than the choice needs. */
+function AutoUnlockField({ data, update, missing }: StepProps) {
+  /* Nothing to unlock when a learner already has every attempt they want, so
+     the whole field goes inert under Unlimited. The stored `autoAttempts` is
+     left alone rather than forced off — switching back to a limit restores
+     whatever the admin had configured. */
+  const noLimit = data.maxAttemptsMode === "unlimited";
+  const on = data.autoAttempts && !noLimit;
 
-  const remove = (id: string) =>
-    update({ autoAttemptTriggers: rows.filter((t) => t.id !== id) });
+  // MultiSelect speaks names; the trigger list stores {id, name} pairs. Task
+  // names are unique in the catalogue, so the round-trip is lossless.
+  const byName = useMemo(() => new Map(ALL_TASKS.map((t) => [t.name, t.id])), []);
 
-  return (
-    <div className="trigger-list">
-      {rows.length === 0 && (
-        <div className="qbag-empty">No trigger Tasks yet — add the Tasks that unlock the extra attempts.</div>
-      )}
-      {rows.map((t) => (
-        <div key={t.id} className="trigger-row">
-          <span className="trigger-name">{t.name}</span>
-          <span className="trigger-id">{t.id}</span>
-          <button className="section-remove" aria-label="Remove trigger" onClick={() => remove(t.id)}>
-            <SmallXIcon />
-          </button>
-        </div>
-      ))}
-      <button className="resource-add" onClick={() => setPickerOpen(true)}>
-        + Add trigger Tasks
-      </button>
-
-      {pickerOpen && (
-        <TriggerTaskPickerModal
-          selected={rows}
-          onConfirm={(sel) => {
-            update({ autoAttemptTriggers: sel });
-            setPickerOpen(false);
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-/** Simple table picker over the Tasks list for auto-unlock triggers. Selection
- * is applied on confirm, so the modal handles both adding and removing. */
-function TriggerTaskPickerModal({
-  selected,
-  onConfirm,
-  onClose,
-}: {
-  selected: TriggerTask[];
-  onConfirm: (sel: TriggerTask[]) => void;
-  onClose: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [sel, setSel] = useState<TriggerTask[]>(selected);
-
-  const q = query.trim().toLowerCase();
-  const candidates = ALL_TASKS.filter(
-    (t) => !q || t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
-  );
-
-  const isSelected = (id: string) => sel.some((t) => t.id === id);
-  const toggle = (t: Task) =>
-    setSel((s) =>
-      isSelected(t.id) ? s.filter((x) => x.id !== t.id) : [...s, { id: t.id, name: t.name }],
-    );
-
-  return (
-    <div className="fb-modal-scrim" onClick={onClose}>
-      <div
-        className="fb-modal fb-modal--picker"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="fb-modal-head">
-          <div>
-            <div className="sp-panel-eyebrow">TASKS</div>
-            <h2 className="sp-panel-title">Select trigger Tasks</h2>
-            <p className="sp-panel-sub">
-              The learner must complete every selected Task to unlock the additional attempts.
-            </p>
-          </div>
-          <button className="sp-panel-close" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="fb-picker-controls">
-          <div className="search-wrap fb-picker-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search Tasks by Name or ID..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-          </div>
-        </div>
-
-        <div className="fb-picker-list">
-          {candidates.length === 0 ? (
-            <div className="fb-empty">No matching Tasks.</div>
-          ) : (
-            <table className="tt-table">
-              <thead>
-                <tr>
-                  <th />
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((t) => {
-                  const on = isSelected(t.id);
-                  return (
-                    <tr
-                      key={t.id}
-                      className={on ? "is-selected" : ""}
-                      onClick={() => toggle(t)}
-                    >
-                      <td>
-                        <span className={`checkbox ${on ? "checked" : ""}`}>
-                          {on && <CheckIcon />}
-                        </span>
-                      </td>
-                      <td className="tt-id">{t.id}</td>
-                      <td>{t.name}</td>
-                      <td className="tt-type">{t.type}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="fb-modal-footer">
-          <div className="qpick-hint">
-            {sel.length === 0 ? "No Tasks selected." : `${sel.length} Task${sel.length === 1 ? "" : "s"} selected.`}
-          </div>
-          <div className="fb-modal-footer-right">
-            <button className="btn-save-draft" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="btn-publish" onClick={() => onConfirm(sel)}>
-              Save selection
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QuizIntegrityStep({ data, update }: StepProps) {
   return (
     <>
       <div className="form-group">
-        <Toggle
-          checked={data.proctoring}
-          onChange={(v) => update({ proctoring: v })}
-          label="Proctoring"
-          stateOn="Yes: Proctoring Required"
-          stateOff="No: Proctoring Not Required"
-          sub="Quiz-level — capture frequency is a system-level setting and isn't configured here. Passing attempts enter In-Review until the Proctoring Team approves the footage; completion isn't recorded until then."
-        />
+        <label className="form-label">Auto-Unlock Additional Attempts</label>
+        <div className={`seg-control${noLimit ? " is-disabled" : ""}`}>
+          <button
+            type="button"
+            className={`seg-btn${!on ? " active" : ""}`}
+            aria-pressed={!on}
+            disabled={noLimit}
+            onClick={() => update({ autoAttempts: false })}
+          >
+            No: Don't Unlock Extra Attempts
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${on ? " active accent" : ""}`}
+            aria-pressed={on}
+            disabled={noLimit}
+            onClick={() => update({ autoAttempts: true })}
+          >
+            Yes: Unlock on Task Completion
+          </button>
+        </div>
+        <p className="form-help">
+          {noLimit
+            ? "Only for Quizzes with a limited number of attempts — set Maximum Attempts to a number to use this."
+            : "Automatically grant extra attempts once the learner completes specific Tasks. All trigger Tasks must complete to unlock; the extras stack with remaining and manually granted attempts."}
+        </p>
+      </div>
+
+      {on && (
+        <div className="form-group">
+          <label className="form-label">
+            Attempts to Unlock <span className="req">*</span>
+          </label>
+          <input
+            className={`form-input no-spinner small${
+              missing?.has(REQUIRED_FIELD_KEYS.autoAttempts) ? " has-error" : ""
+            }`}
+            inputMode="numeric"
+            value={data.autoAttemptsCount}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "" || /^\d+$/.test(v)) update({ autoAttemptsCount: v });
+            }}
+          />
+          <p className="form-help">How many extra attempts the trigger Tasks grant.</p>
+        </div>
+      )}
+
+      {on && (
+        <div className="form-group">
+          <label className="form-label">Unlock After Completing All Of</label>
+          <MultiSelect
+            options={ALL_TASKS.map((t) => t.name)}
+            value={data.autoAttemptTriggers.map((t) => t.name)}
+            onChange={(names) =>
+              update({
+                autoAttemptTriggers: names
+                  .map((n) => ({ id: byName.get(n) ?? "", name: n }))
+                  .filter((t) => t.id),
+              })
+            }
+            placeholder="Select Tasks"
+            searchPlaceholder="Search Tasks..."
+          />
+          <p className="form-help">
+            The learner must complete every selected Task before the extra
+            attempts are granted.
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function QuizIntegrityStep({ data, update, missing }: StepProps) {
+  return (
+    <>
+      {/* A seg-control rather than a toggle (standalone yes/no fields moved onto
+          seg-controls), and the minutes get their own labelled field instead of
+          a suffixed input tucked under the switch. */}
+      <div className="form-group">
+        <label className="form-label">Time Limit</label>
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn${!data.timeLimitOn ? " active" : ""}`}
+            aria-pressed={!data.timeLimitOn}
+            onClick={() => update({ timeLimitOn: false })}
+          >
+            No: Untimed
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${data.timeLimitOn ? " active accent" : ""}`}
+            aria-pressed={data.timeLimitOn}
+            onClick={() => update({ timeLimitOn: true })}
+          >
+            Yes: Timed Attempts
+          </button>
+        </div>
+        <p className="form-help">
+          Optional. The timer starts when questions first appear and can't be
+          paused — the attempt auto-submits at zero.
+        </p>
+      </div>
+
+      {data.timeLimitOn && (
+        <div className="form-group">
+          <label className="form-label">
+            Set Time in Minutes <span className="req">*</span>
+          </label>
+          <input
+            className={`form-input no-spinner small${
+              missing?.has(REQUIRED_FIELD_KEYS.timeLimit) ? " has-error" : ""
+            }`}
+            inputMode="numeric"
+            value={data.timeLimitMinutes}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "" || /^\d+$/.test(v)) update({ timeLimitMinutes: v });
+            }}
+          />
+          <p className="form-help">How long a learner has to finish one attempt.</p>
+        </div>
+      )}
+
+      <div className="form-group">
+        <label className="form-label">Proctoring</label>
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn${!data.proctoring ? " active" : ""}`}
+            aria-pressed={!data.proctoring}
+            onClick={() => update({ proctoring: false })}
+          >
+            No: Proctoring Not Required
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${data.proctoring ? " active accent" : ""}`}
+            aria-pressed={data.proctoring}
+            onClick={() => update({ proctoring: true })}
+          >
+            Yes: Proctoring Required
+          </button>
+        </div>
+        <p className="form-help">
+          Quiz-level — capture frequency is a system-level setting and isn't
+          configured here. Passing attempts enter In-Review until the Proctoring
+          Team approves the footage; completion isn't recorded until then.
+        </p>
       </div>
 
       <div className="form-group">
@@ -2879,12 +3069,43 @@ function QuizIntegrityStep({ data, update }: StepProps) {
   );
 }
 
-// Existing Resources learners can open in-quiz, selectable alongside uploads.
-const EXISTING_QUIZ_RESOURCES = ["PT Chart (Old)", "PT Chart (New)"];
+/* Resources already in the library, offered by "Select from Existing
+   Resources". They carry an ext and a size because a picked one lands in the
+   SAME `.file-row` as an upload, and that row draws a "TYPE · SIZE" sub-line. */
+const EXISTING_QUIZ_RESOURCES: { name: string; ext: string; size: number }[] = [
+  { name: "PT Chart (Old).pdf", ext: "PDF", size: 1_140_000 },
+  { name: "PT Chart (New).pdf", ext: "PDF", size: 1_320_000 },
+];
 
+/* In-Quiz Resources (Figma 1218:1414). One LIST of resource rows and one
+   orange "Add Resource" CTA. The shape it replaces made the admin pick a
+   MECHANISM first — an "Upload files" stack over a permanently-drawn
+   "Existing Resources" checkbox list — so an empty field showed two headings
+   and two controls for a field most Quizzes leave empty. Now the field starts
+   empty, and the CTA opens the same kind of menu the Questions step's
+   `+ Add Questions` row does. Either route lands a row in the same list.
+
+   Both panels hang off one `position: relative` wrapper rather than being
+   portalled: the Questions step anchors `.qz-menu` the same way, and nothing
+   on this step clips them. */
 function ResourceEditor({ data, update }: StepProps) {
   const rows = data.inQuizResources;
-  const uploads = rows.filter((r) => r.kind === "upload");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  /** `null` = closed, `menu` = the two-item chooser, `existing` = the 774:1298
+   *  checklist that replaces it. The upload modal is separate — it is a modal,
+   *  so it survives the wrapper closing. */
+  const [panel, setPanel] = useState<null | "menu" | "existing">(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  // Both panels dismiss on an outside click, like every other menu here.
+  useEffect(() => {
+    if (!panel) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setPanel(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [panel]);
 
   const addUploads = (files: UploadedFile[]) =>
     update({
@@ -2900,30 +3121,41 @@ function ResourceEditor({ data, update }: StepProps) {
         })),
       ],
     });
+
   const remove = (id: string) =>
     update({ inQuizResources: rows.filter((r) => r.id !== id) });
 
-  const hasExisting = (name: string) =>
-    rows.some((r) => r.kind === "existing" && r.name === name);
-  const toggleExisting = (name: string) =>
+  const addExisting = (names: string[]) =>
     update({
-      inQuizResources: hasExisting(name)
-        ? rows.filter((r) => !(r.kind === "existing" && r.name === name))
-        : [...rows, { id: `r-${name}`, kind: "existing" as const, name }],
+      inQuizResources: [
+        ...rows,
+        ...EXISTING_QUIZ_RESOURCES.filter((r) => names.includes(r.name)).map((r) => ({
+          id: `r-${r.name}`,
+          kind: "existing" as const,
+          name: r.name,
+          ext: r.ext,
+          size: r.size,
+        })),
+      ],
     });
 
   return (
     <div className="resource-edit-list">
-      <label className="form-sub-label">Upload files</label>
-      {uploads.length > 0 && (
+      {rows.length > 0 && (
         <div className="file-list">
-          {uploads.map((r) => (
+          {rows.map((r) => (
             <div key={r.id} className="file-row">
               <span className="file-icon">
                 <DocumentIcon />
               </span>
               <div className="file-meta">
-                <FileNameLink name={r.name} url={r.url} />
+                {/* An upload has a blob URL to download; a library Resource is
+                    a reference, so its name is plain text. */}
+                {r.url ? (
+                  <FileNameLink name={r.name} url={r.url} />
+                ) : (
+                  <span className="file-name">{r.name}</span>
+                )}
                 {r.size != null && (
                   <div className="file-sub">
                     {r.ext} · {formatSize(r.size)}
@@ -2932,7 +3164,7 @@ function ResourceEditor({ data, update }: StepProps) {
               </div>
               <button
                 className="file-remove"
-                aria-label="Remove file"
+                aria-label={`Remove ${r.name}`}
                 onClick={() => remove(r.id)}
               >
                 <SmallXIcon />
@@ -2941,34 +3173,224 @@ function ResourceEditor({ data, update }: StepProps) {
           ))}
         </div>
       )}
-      <FilePicker onPick={addUploads}>
-        {(open) => (
-          <button className="resource-add" onClick={open} type="button">
-            + Upload a file
-          </button>
-        )}
-      </FilePicker>
 
-      <label className="form-sub-label" style={{ marginTop: 18 }}>
-        Existing Resources
-      </label>
-      {EXISTING_QUIZ_RESOURCES.map((name) => {
-        const on = hasExisting(name);
-        return (
-          <button
-            key={name}
-            type="button"
-            className={`qres-existing ${on ? "is-on" : ""}`}
-            onClick={() => toggleExisting(name)}
-          >
-            <span className={`checkbox ${on ? "checked" : ""}`}>
-              {on && <CheckIcon />}
-            </span>
-            {name}
-          </button>
-        );
-      })}
+      <div className="res-add-wrap" ref={wrapRef}>
+        <button
+          type="button"
+          className="res-add"
+          aria-haspopup="menu"
+          aria-expanded={panel !== null}
+          onClick={() => setPanel((p) => (p ? null : "menu"))}
+        >
+          <TreeAddIcon />
+          Add Resource
+        </button>
+
+        {panel === "menu" && (
+          <div className="u-menu res-menu" role="menu">
+            <button
+              className="u-menu-item res-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setPanel(null);
+                setUploadOpen(true);
+              }}
+            >
+              Upload New File
+            </button>
+            <button
+              className="u-menu-item res-menu-item"
+              role="menuitem"
+              onClick={() => setPanel("existing")}
+            >
+              Select from Existing Resources
+            </button>
+          </div>
+        )}
+
+        {panel === "existing" && (
+          <ExistingResourcePicker
+            chosen={rows.map((r) => r.name)}
+            onAdd={(names) => {
+              addExisting(names);
+              setPanel(null);
+            }}
+          />
+        )}
+      </div>
+
+      {uploadOpen && createPortal(
+        <ResourceUploadModal
+          onClose={() => setUploadOpen(false)}
+          onAdd={(files) => {
+            addUploads(files);
+            setUploadOpen(false);
+          }}
+        />,
+        document.body,
+      )}
     </div>
+  );
+}
+
+/* Figma 774:1298 "Filters Dropdown - Simple" — the flat checklist panel with an
+   Apply footer, reused verbatim off the shared `.dropdown` shell and `CheckRow`.
+   Only the CTA's label differs: "Add Resource", because this one appends rather
+   than narrowing a list. Resources already on the Quiz are drawn ticked and
+   disabled, so the panel can't add a duplicate. */
+function ExistingResourcePicker({
+  chosen,
+  onAdd,
+}: {
+  chosen: string[];
+  onAdd: (names: string[]) => void;
+}) {
+  const [sel, setSel] = useState<string[]>([]);
+  const toggle = (name: string) =>
+    setSel((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]));
+
+  return (
+    <div className="dropdown res-picker">
+      <div className="dropdown-list">
+        {EXISTING_QUIZ_RESOURCES.map((r) => {
+          const already = chosen.includes(r.name);
+          return (
+            <CheckRow
+              key={r.name}
+              label={r.name}
+              hint={already ? "already added" : undefined}
+              checked={already || sel.includes(r.name)}
+              onChange={() => !already && toggle(r.name)}
+            />
+          );
+        })}
+      </div>
+      <div className="dropdown-footer">
+        <button
+          className="btn-apply"
+          disabled={sel.length === 0}
+          onClick={() => onAdd(sel)}
+        >
+          Add Resource
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* "Upload New File" — the Question Bank's bulk-upload picker (Figma 1116:1321)
+   at this field's scale: the same `PrmModal` + `.drop-big--xl` drop zone, minus
+   the CSV template (any file type is a valid resource) and minus the parse
+   screens (there is nothing to validate — the file IS the resource). Files are
+   staged in the modal so the admin can see what they picked before committing. */
+function ResourceUploadModal({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (files: UploadedFile[]) => void;
+}) {
+  const [staged, setStaged] = useState<UploadedFile[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const take = (list: FileList | null | undefined) => {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
+    setStaged((s) => [
+      ...s,
+      ...files.map((f) => ({
+        id: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 8)}`,
+        name: f.name,
+        size: f.size,
+        ext: f.name.split(".").pop()?.toUpperCase() ?? "FILE",
+        url: URL.createObjectURL(f),
+      })),
+    ]);
+  };
+
+  return (
+    <PrmModal
+      className="qbu qbu--pick"
+      title="Upload New File"
+      description="Add a file learners can open throughout the attempt"
+      confirmLabel={
+        staged.length === 0
+          ? "Add Resource"
+          : `Add ${staged.length === 1 ? "Resource" : `${staged.length} Resources`}`
+      }
+      confirmDisabled={staged.length === 0}
+      onConfirm={() => onAdd(staged)}
+      onCancel={onClose}
+    >
+      <div
+        className={`drop-big drop-big--xl ${dragging ? "is-active" : ""}`}
+        role="button"
+        tabIndex={0}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          take(e.dataTransfer.files);
+        }}
+      >
+        <span className="drop-big-icon"><UploadTrayIcon /></span>
+        <div className="drop-big-title">Drag and drop, or click to upload</div>
+        <div className="drop-big-hint">
+          PDFs, charts, spreadsheets and images · Learners can open these at any
+          point during an attempt
+        </div>
+      </div>
+
+      {staged.length > 0 && (
+        <div className="file-list res-staged">
+          {staged.map((f) => (
+            <div key={f.id} className="file-row">
+              <span className="file-icon">
+                <DocumentIcon />
+              </span>
+              <div className="file-meta">
+                <FileNameLink name={f.name} url={f.url} />
+                <div className="file-sub">
+                  {f.ext} · {formatSize(f.size)}
+                </div>
+              </div>
+              <button
+                className="file-remove"
+                aria-label={`Remove ${f.name}`}
+                onClick={() => setStaged((s) => s.filter((x) => x.id !== f.id))}
+              >
+                <SmallXIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          take(e.target.files);
+          e.target.value = "";
+        }}
+      />
+    </PrmModal>
   );
 }
 
@@ -2978,78 +3400,118 @@ function QuizReviewStep({ data, update }: StepProps) {
   const r = data.review;
   const setR = (patch: Partial<ReviewOptions>) => update({ review: { ...r, ...patch } });
 
+  /* Figma 1213:1255 — one boxed table on the `.qsec` shell: a
+     REVIEW SETTING / SHOWN? header, then a row per setting with its name over a
+     note on the left and the switch on the right. Row ORDER and two names are
+     the node's (Quiz Result → Result, Quiz Score → Score).
+
+     `sub` is the node's copy while the row is available; when a dependency
+     isn't met it says why instead, which the node doesn't cover — every row it
+     draws is switched on. */
+  const rows: {
+    key: string;
+    label: string;
+    sub: string;
+    on: boolean;
+    disabled: boolean;
+    toggle: (v: boolean) => void;
+  }[] = [
+    {
+      key: "attempt",
+      label: "Attempt",
+      sub: "Questions in the attempt and the learner's selected answers.",
+      on: r.attempt,
+      disabled: false,
+      toggle: (v) => setR({ attempt: v }),
+    },
+    {
+      key: "result",
+      label: "Result",
+      sub: !r.attempt
+        ? "Requires Attempt review."
+        : quizLevel
+          ? "Whether the user passed or failed the Quiz overall"
+          : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead.",
+      on: r.attempt && quizLevel && r.quizResult,
+      disabled: !r.attempt || !quizLevel,
+      toggle: (v) => setR({ quizResult: v }),
+    },
+    {
+      key: "perSection",
+      label: "Per-Section Results",
+      sub: !r.attempt
+        ? "Requires Attempt review."
+        : sectioned
+          ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
+          : "Only available when the Quiz is sectioned.",
+      on: r.attempt && sectioned && r.perSectionResults,
+      disabled: !r.attempt || !sectioned,
+      toggle: (v) => setR({ perSectionResults: v }),
+    },
+    {
+      key: "score",
+      label: "Score",
+      sub: !r.attempt
+        ? "Requires Attempt review."
+        : "The overall score achieved for the Quiz Attempt",
+      on: r.attempt && r.quizScore,
+      disabled: !r.attempt,
+      toggle: (v) => setR({ quizScore: v }),
+    },
+    {
+      key: "correct",
+      label: "Whether Correct",
+      sub: !r.attempt
+        ? "Requires Attempt review."
+        : "Per question: correct, incorrect, or partially correct.",
+      on: r.attempt && r.whetherCorrect,
+      disabled: !r.attempt,
+      toggle: (v) => setR({ whetherCorrect: v }),
+    },
+    {
+      key: "feedback",
+      label: "Per-Question Feedback",
+      sub: !r.attempt
+        ? "Requires Attempt review."
+        : !r.whetherCorrect
+          ? "Only available when Whether Correct is on — feedback is shown against each judged question."
+          : "The feedback authored on each question.",
+      on: r.attempt && r.whetherCorrect && r.perQuestionFeedback,
+      disabled: !r.attempt || !r.whetherCorrect,
+      toggle: (v) => setR({ perQuestionFeedback: v }),
+    },
+  ];
+
   return (
-    <div className="form-group">
-      <label className="form-label">What the Learner Sees After Submitting</label>
-      <div className="review-list">
-        <Toggle
-          checked={r.attempt}
-          onChange={(v) => setR({ attempt: v })}
-          label="Attempt"
-          sub="The questions in the attempt and the learner's own answers. Everything else builds on this."
-        />
-        <Toggle
-          checked={r.attempt && quizLevel && r.quizResult}
-          onChange={(v) => setR({ quizResult: v })}
-          disabled={!r.attempt || !quizLevel}
-          label="Quiz Result"
-          sub={
-            !r.attempt
-              ? "Requires Attempt review."
-              : quizLevel
-                ? "Overall pass/fail for the Quiz."
-                : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead."
-          }
-        />
-        <Toggle
-          checked={r.attempt && r.quizScore}
-          onChange={(v) => setR({ quizScore: v })}
-          disabled={!r.attempt}
-          label="Quiz Score"
-          sub={!r.attempt ? "Requires Attempt review." : "The overall score achieved."}
-        />
-        <Toggle
-          checked={r.attempt && r.whetherCorrect}
-          onChange={(v) => setR({ whetherCorrect: v })}
-          disabled={!r.attempt}
-          label="Whether Correct"
-          sub={
-            !r.attempt
-              ? "Requires Attempt review."
-              : "Per question: correct, incorrect, or partially correct."
-          }
-        />
-        <Toggle
-          checked={r.attempt && r.whetherCorrect && r.perQuestionFeedback}
-          onChange={(v) => setR({ perQuestionFeedback: v })}
-          disabled={!r.attempt || !r.whetherCorrect}
-          label="Per-Question Feedback"
-          sub={
-            !r.attempt
-              ? "Requires Attempt review."
-              : !r.whetherCorrect
-                ? "Only available when Whether Correct is on — feedback is shown against each judged question."
-                : "The feedback authored on each question."
-          }
-        />
-        <Toggle
-          checked={r.attempt && sectioned && r.perSectionResults}
-          onChange={(v) => setR({ perSectionResults: v })}
-          disabled={!r.attempt || !sectioned}
-          label="Per-Section Results"
-          sub={
-            !r.attempt
-              ? "Requires Attempt review."
-              : sectioned
-                ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
-                : "Only available when the Quiz is sectioned."
-          }
-        />
+    <div className="qsec qsec--rev">
+      <div className="qsec-hd">
+        <span className="qsec-revtext">REVIEW SETTING</span>
+        <span className="qsec-shown">SHOWN?</span>
       </div>
-      <p className="form-help">
-        Select everything that should appear on the results screen after an
-        attempt is submitted.
-      </p>
+
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          className={`qsec-row${row.disabled ? " is-disabled" : ""}`}
+        >
+          <span className="qsec-revtext">
+            <span className="qsec-revname">{row.label}</span>
+            <span className="qsec-revsub">{row.sub}</span>
+          </span>
+          <span className="qsec-shown">
+            <button
+              type="button"
+              className={`toggle ${row.on ? "on" : ""}`}
+              aria-label={`Show ${row.label} after submitting`}
+              aria-pressed={row.on}
+              disabled={row.disabled}
+              onClick={() => !row.disabled && row.toggle(!row.on)}
+            >
+              <span className="toggle-knob" />
+            </button>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3057,30 +3519,72 @@ function QuizReviewStep({ data, update }: StepProps) {
 function QuizPaymentsStep({ data, update, missing }: StepProps) {
   return (
     <>
+      {/* Three sibling fields rather than one Toggle with everything nested
+          under it: whether attempts are charged, how the pricing is shaped, and
+          the store IDs themselves are three separate decisions. The last two
+          only exist once the paywall is on. */}
       <div className="form-group">
-        <Toggle
-          checked={data.paywallOn}
-          onChange={(v) => update({ paywallOn: v })}
-          label="Paywall"
-          stateOn="Yes: Attempts Are Charged"
-          stateOff="No: Attempts Are Free"
-          sub="Charge for attempts. By default one price applies to every attempt; pricing can also differ by attempt number — e.g. NATE RTW is $60 for the first attempt and $45 thereafter."
-        />
-        {data.paywallOn && <PaywallPricing data={data} update={update} />}
+        <label className="form-label">Quiz Attempts Paywall</label>
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn${!data.paywallOn ? " active" : ""}`}
+            aria-pressed={!data.paywallOn}
+            onClick={() => update({ paywallOn: false })}
+          >
+            No: Attempts Are Free
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${data.paywallOn ? " active accent" : ""}`}
+            aria-pressed={data.paywallOn}
+            onClick={() => update({ paywallOn: true })}
+          >
+            Yes: Attempts Are Charged
+          </button>
+        </div>
+        <p className="form-help">Whether learners are charged to attempt this Quiz.</p>
       </div>
 
+      {data.paywallOn && <PaywallStructureField data={data} update={update} />}
+      {data.paywallOn && (
+        <PaywallPriceIdsField data={data} update={update} missing={missing} />
+      )}
+
       <div className="form-group">
-        <Toggle
-          checked={data.nateExam}
-          onChange={(v) => update({ nateExam: v })}
-          label="NATE Exam"
-          stateOn="Yes: This is a NATE Exam"
-          stateOff="No: Not a NATE Exam"
-          sub="Flag this Quiz as a NATE exam to trigger NATE-specific behaviour. The External IDs are sent when communicating with NATE's API."
-        />
-        {data.nateExam && (
-          <div className="form-sub-group" style={{ marginTop: 16 }}>
-            <label className="form-sub-label">
+        <label className="form-label">Requires NATE Integration</label>
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn${!data.nateExam ? " active" : ""}`}
+            aria-pressed={!data.nateExam}
+            onClick={() => update({ nateExam: false })}
+          >
+            No: Not a NATE Exam
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${data.nateExam ? " active accent" : ""}`}
+            aria-pressed={data.nateExam}
+            onClick={() => update({ nateExam: true })}
+          >
+            Yes: This is a NATE Exam
+          </button>
+        </div>
+        <p className="form-help">
+          Flag this Quiz as a NATE exam to trigger NATE-specific behaviour. The
+          External IDs are sent when communicating with NATE's API.
+        </p>
+      </div>
+
+      {/* The pair sits side by side at equal width (`.form-row-2`) — they are one
+          decision in two languages, not two fields to read in sequence. No
+          subtext: the label + asterisk say it, and the blocked-create message
+          lands under whichever one is actually empty. */}
+      {data.nateExam && (
+        <div className="form-row-2">
+          <div className="form-group">
+            <label className="form-label">
               External ID (English) <span className="req">*</span>
             </label>
             <input
@@ -3089,7 +3593,12 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
               placeholder="NATE-assigned exam ID (EN)"
               onChange={(e) => update({ nateIdEn: e.target.value })}
             />
-            <label className="form-sub-label" style={{ marginTop: 18 }}>
+            {missing?.has("nateId") && !data.nateIdEn.trim() && (
+              <p className="form-error-text">Required when NATE Exam is enabled.</p>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">
               External ID (Spanish) <span className="req">*</span>
             </label>
             <input
@@ -3098,23 +3607,22 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
               placeholder="NATE-assigned exam ID (ES)"
               onChange={(e) => update({ nateIdEs: e.target.value })}
             />
-            {missing?.has("nateId") ? (
-              <p className="form-error-text">Both IDs are required when NATE Exam is enabled.</p>
-            ) : (
-              <p className="form-help">Both IDs are required when NATE Exam is enabled.</p>
+            {missing?.has("nateId") && !data.nateIdEs.trim() && (
+              <p className="form-error-text">Required when NATE Exam is enabled.</p>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }
 
-function PaywallPricing({ data, update }: StepProps) {
+function PaywallStructureField({ data, update }: StepProps) {
   const perAttempt = data.paywallMode === "per_attempt";
 
   return (
-    <div className="form-sub-group" style={{ marginTop: 16 }}>
+    <div className="form-group">
+      <label className="form-label">Paywall Structure</label>
       <div className="radio-card-group">
         <RadioCard
           selected={!perAttempt}
@@ -3129,25 +3637,40 @@ function PaywallPricing({ data, update }: StepProps) {
           desc="Set the first attempt and all subsequent attempts, and optionally specific attempts in between."
         />
       </div>
-
-      {perAttempt ? (
-        <PerAttemptPrices data={data} update={update} />
-      ) : (
-        <div className="form-sub-group" style={{ marginTop: 16 }}>
-          <label className="form-sub-label">Product IDs for every attempt</label>
-          <PriceIdFields
-            value={data.commonPriceIds}
-            onChange={(ids) => update({ commonPriceIds: ids })}
-          />
-        </div>
-      )}
-
-      <p className="form-help">Enter the Product IDs from the respective stores.</p>
     </div>
   );
 }
 
-function PerAttemptPrices({ data, update }: StepProps) {
+/* The store IDs themselves. Which shape they take follows Paywall Structure:
+   one column for a single price, the attempt matrix for per-attempt pricing. */
+function PaywallPriceIdsField({ data, update, missing }: StepProps) {
+  const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.priceIds);
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        Product/Price IDs <span className="req">*</span>
+      </label>
+      {data.paywallMode === "per_attempt" ? (
+        <PerAttemptPrices data={data} update={update} flagEmpty={flagEmpty} />
+      ) : (
+        <PriceIdFields
+          value={data.commonPriceIds}
+          onChange={(ids) => update({ commonPriceIds: ids })}
+          flagEmpty={flagEmpty}
+        />
+      )}
+      {flagEmpty ? (
+        <p className="form-error-text">
+          Every channel needs an ID while the paywall is on.
+        </p>
+      ) : (
+        <p className="form-help">Enter the Product IDs from the respective stores.</p>
+      )}
+    </div>
+  );
+}
+
+function PerAttemptPrices({ data, update, flagEmpty }: StepProps & { flagEmpty?: boolean }) {
   const rows = data.attemptPrices;
   const nextNum = rows.length + 1;
 
@@ -3163,28 +3686,29 @@ function PerAttemptPrices({ data, update }: StepProps) {
   // Removing the last numbered attempt keeps the list contiguous (1, 2, 3 …).
   const removeLast = () => update({ attemptPrices: rows.slice(0, -1) });
 
+  // No wrapper margin — it is the Product/Price IDs field's own control now,
+  // sitting directly under that label like any other input.
   return (
-    <div className="form-sub-group" style={{ marginTop: 16 }}>
-      <PriceIdMatrix
-        columns={[
-          ...rows.map((row, i) => ({
-            key: row.id,
-            title: `Attempt ${row.attempt}`,
-            value: row.priceIds,
-            onChange: (ids: PriceIds) => setRow(row.id, ids),
-            onRemove: i === rows.length - 1 && rows.length > 1 ? removeLast : undefined,
-          })),
-          // All subsequent attempts — always present, always the last column.
-          {
-            key: "subsequent",
-            title: "All Subsequent Attempts",
-            value: data.subsequentPriceIds,
-            onChange: (ids: PriceIds) => update({ subsequentPriceIds: ids }),
-          },
-        ]}
-        onAdd={addNext}
-      />
-    </div>
+    <PriceIdMatrix
+      columns={[
+        ...rows.map((row, i) => ({
+          key: row.id,
+          title: `Attempt ${row.attempt}`,
+          value: row.priceIds,
+          onChange: (ids: PriceIds) => setRow(row.id, ids),
+          onRemove: i === rows.length - 1 && rows.length > 1 ? removeLast : undefined,
+        })),
+        // All subsequent attempts — always present, always the last column.
+        {
+          key: "subsequent",
+          title: "All Subsequent Attempts",
+          value: data.subsequentPriceIds,
+          onChange: (ids: PriceIds) => update({ subsequentPriceIds: ids }),
+        },
+      ]}
+      onAdd={addNext}
+      flagEmpty={flagEmpty}
+    />
   );
 }
 
@@ -3409,6 +3933,7 @@ function Toggle({
   label,
   sub,
   inline,
+  row,
   disabled,
   stateOn = "Yes",
   stateOff = "No",
@@ -3418,6 +3943,10 @@ function Toggle({
   label: string;
   sub?: string;
   inline?: boolean;
+  /** Switch-first row (Figma 373:233) — the shape a list of related settings
+   * uses, where one stacked label/state/sub field per setting would be six
+   * fields deep. */
+  row?: boolean;
   disabled?: boolean;
   stateOn?: string;
   stateOff?: string;
@@ -3433,6 +3962,21 @@ function Toggle({
       <span className="toggle-knob" />
     </button>
   );
+
+  /* Figma 373:233: the switch leads, with the title sitting flush on its note
+     beside it — no state word, since the switch itself is the answer. The same
+     row the Question editor's rail uses (739:1821). */
+  if (row) {
+    return (
+      <div className={`toggle-srow ${disabled ? "disabled" : ""}`}>
+        {control}
+        <div className="toggle-text">
+          <span className="toggle-label">{label}</span>
+          {sub && <p className="toggle-sub">{sub}</p>}
+        </div>
+      </div>
+    );
+  }
 
   // The compact variant is a single line, so it keeps its label-then-switch read.
   if (inline) {

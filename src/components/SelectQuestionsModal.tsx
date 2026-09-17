@@ -3,7 +3,11 @@ import {
   questions as QUESTION_BANK,
   categories as QB_CATEGORIES,
   flattenCategories,
+  longQuestionType,
   questionDates,
+  supportsGrading,
+  QUESTION_TYPE_MENU,
+  QUESTION_TYPE_OPTIONS,
   type Question,
 } from "../data/questionBank";
 import { PrmModal } from "./PrmModal";
@@ -14,6 +18,7 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  RowChevronIcon,
   SearchIcon,
   SortIcon,
 } from "./icons";
@@ -35,22 +40,20 @@ import {
 
 const PAGE_SIZE = 50;
 
-/** Menu order for the Question Type pill — the Bank's graded types. */
-const GRADED_TYPES = [
-  "Multiple choice",
-  "Multiple select",
-  "True/False",
-  "Match the following",
-];
+/* The Question Type pill lists exactly what the Question Bank page's own pill
+   lists — `QUESTION_TYPE_OPTIONS`, the LONG names. This picker used to spell
+   its own shorter list, which got two things wrong: the casing ("Match the
+   following" vs the Bank's "Match the Following"), and it offered "Multiple
+   select" as a separate option. It isn't one — `longQuestionType` folds
+   Multiple choice and Multiple select into a single "Multiple Choice", which is
+   why the Bank offers six options and not seven. */
+const ALL_TYPES = QUESTION_TYPE_OPTIONS;
 
-/** Feedback Forms take any Active question, graded or not — grading data on a
- *  linked question is simply ignored, so the ungraded types come along. */
-const ALL_TYPES = [
-  ...GRADED_TYPES,
-  "Short answer",
-  "File upload",
-  "Linear scale",
-];
+/** Quizzes only take graded questions, so the pill only offers graded types.
+ *  Derived from the Bank rather than re-listed, so it can't drift again. */
+const GRADED_TYPES = QUESTION_TYPE_OPTIONS.filter((label) =>
+  QUESTION_TYPE_MENU.some((m) => m.label === label && supportsGrading(m.type)),
+);
 
 type SortKey = "question" | "type" | "category" | "dateModified";
 type SortDir = "asc" | "desc";
@@ -89,7 +92,7 @@ function compare(a: Question, b: Question, key: SortKey): number {
     case "question":
       return a.text.localeCompare(b.text);
     case "type":
-      return a.type.localeCompare(b.type);
+      return longQuestionType(a.type).localeCompare(longQuestionType(b.type));
     case "category":
       return categoryOf(a).localeCompare(categoryOf(b));
     case "dateModified":
@@ -125,6 +128,9 @@ export function SelectQuestionsModal({
   const [cats, setCats] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>(value);
   const [page, setPage] = useState(1);
+  /** The row whose "Preview" was clicked — a read-only look at the question,
+   *  stacked over this picker. */
+  const [preview, setPreview] = useState<Question | null>(null);
   // Default sort is by last edited — newest first.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "dateModified",
@@ -136,13 +142,17 @@ export function SelectQuestionsModal({
   const locked = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
+  // The preview stacks on top, so it gets the key first — otherwise one Escape
+  // would close both.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      if (preview) setPreview(null);
+      else onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, preview]);
 
   const pool = useMemo(() => QUESTION_BANK.filter((q) => eligible(q, gradedOnly)), [gradedOnly]);
 
@@ -153,6 +163,26 @@ export function SelectQuestionsModal({
         .map((opt) => opt.label)
         .filter((label) => pool.some((q) => matchesCategoryLabel(q, label))),
     [pool],
+  );
+
+  /* Figma 1215:1354 — a category row leads with its own name and carries its
+     parent as the muted "· …" clause, instead of repeating the whole
+     "Parent > Child" path. Five sub-categories of one parent used to read as
+     five near-identical three-line rows. The VALUE stays the full path, so
+     filtering and search are unchanged — typing a parent still finds its
+     children. */
+  const catLabels = useMemo(
+    () => Object.fromEntries(allCats.map((c) => [c, c.split(" > ").pop() ?? c])),
+    [allCats],
+  );
+  const catHints = useMemo(
+    () =>
+      Object.fromEntries(
+        allCats
+          .filter((c) => c.includes(" > "))
+          .map((c) => [c, c.split(" > ").slice(0, -1).join(" > ")]),
+      ),
+    [allCats],
   );
 
   const filtered = useMemo(() => {
@@ -167,7 +197,8 @@ export function SelectQuestionsModal({
         )
       )
         return false;
-      if (types.length && !types.includes(question.type)) return false;
+      if (types.length && !types.includes(longQuestionType(question.type)))
+        return false;
       if (cats.length && !cats.some((c) => matchesCategoryLabel(question, c)))
         return false;
       return true;
@@ -187,6 +218,27 @@ export function SelectQuestionsModal({
   function toggle(id: string) {
     if (locked.has(id)) return;
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  /* Select-all covers every row the current search and filters match, not just
+     the visible page — the same scope the Grant Attempts picker uses. Rows
+     already on the Quiz are locked, so they sit out of both the count and the
+     toggle. */
+  const selectable = useMemo(() => sorted.filter((q) => !locked.has(q.id)), [sorted, locked]);
+  const pickedHere = useMemo(
+    () => selectable.filter((q) => picked.includes(q.id)).length,
+    [selectable, picked],
+  );
+  const allOn = selectable.length > 0 && pickedHere === selectable.length;
+  const someOn = pickedHere > 0 && !allOn;
+
+  function toggleAll() {
+    const ids = new Set(selectable.map((q) => q.id));
+    setPicked((p) =>
+      allOn
+        ? p.filter((id) => !ids.has(id))
+        : [...p, ...selectable.filter((q) => !p.includes(q.id)).map((q) => q.id)],
+    );
   }
 
   function toggleSort(key: SortKey) {
@@ -221,9 +273,10 @@ export function SelectQuestionsModal({
             ? "Only Active questions with grading enabled are shown here. Questions join the Quiz in the order you pick them"
             : "Every Active question in the Bank is shown here. Questions join the form in the order you pick them"
       }
-      confirmLabel="Continue"
+      confirmLabel="Add Questions"
       confirmDisabled={picked.length === 0}
       pick
+      pickFull
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >
@@ -271,7 +324,9 @@ export function SelectQuestionsModal({
             </Dropdown>
 
             <Dropdown
-              width={280}
+              /* The 384px a hints clause needs (same as `.cascading-sub--wide`)
+                 — at 280 every row wrapped to three lines. */
+              width={384}
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
                   label="Category"
@@ -287,6 +342,12 @@ export function SelectQuestionsModal({
                 <SectionedMultiSelect
                   sections={[{ items: allCats }]}
                   value={cats}
+                  /* The Bank has hundreds of categories and sub-categories —
+                     unusable as a plain scroll list. */
+                  searchable
+                  searchPlaceholder="Search Categories..."
+                  labels={catLabels}
+                  hints={catHints}
                   onApply={(v) => {
                     resetPage(setCats)(v);
                     close();
@@ -300,23 +361,32 @@ export function SelectQuestionsModal({
         <div className="stm-table-wrap">
           {/* Column-width floor, per the shared table convention — below it the
               table scrolls sideways instead of crushing the cells. 44 check +
-              260 question + 150 type + 190 category + 126 edited. */}
+              260 question + 150 type + 190 category + 126 edited + 104
+              actions. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "770px" } as React.CSSProperties}
+            style={{ "--table-min": "874px" } as React.CSSProperties}
           >
             <table className="table table-head stm-table sqm-table">
               <ColGroup />
               <thead>
                 <tr>
-                  {/* Spacer only — the node's header carries a Radial Button
-                      with a transparent border to hold the column, not a
-                      select-all control. */}
-                  <th className="stm-col-check no-sort" />
+                  <th className="stm-col-check no-sort">
+                    <button
+                      className={`checkbox ${allOn ? "checked" : someOn ? "partial" : ""}`}
+                      aria-label={allOn ? "Deselect all" : "Select all"}
+                      aria-pressed={allOn}
+                      disabled={selectable.length === 0}
+                      onClick={toggleAll}
+                    >
+                      {allOn ? <CheckIcon /> : someOn ? <span className="checkbox-dash" /> : null}
+                    </button>
+                  </th>
                   <Th col="question" label="Question" cls="sqm-col-question" sort={sort} toggle={toggleSort} />
                   <Th col="type" label="Question Type" cls="sqm-col-type" sort={sort} toggle={toggleSort} />
                   <Th col="category" label="Category" cls="sqm-col-cat" sort={sort} toggle={toggleSort} />
                   <Th col="dateModified" label="Edited On" cls="sqm-col-edited" sort={sort} toggle={toggleSort} />
+                  <th className="col-actions no-sort" />
                 </tr>
               </thead>
             </table>
@@ -327,7 +397,7 @@ export function SelectQuestionsModal({
                 <tbody>
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         No graded questions match your search and filters.
                       </td>
                     </tr>
@@ -372,11 +442,42 @@ export function SelectQuestionsModal({
                           <td className="sqm-col-question col-name" title={question.text}>
                             {question.text}
                           </td>
-                          <td className="sqm-col-type">{question.type}</td>
+                          {/* The Bank's long name, so the column reads the same
+                              as the filter that narrows it. */}
+                          <td className="sqm-col-type">{longQuestionType(question.type)}</td>
                           <td className="sqm-col-cat" title={categoryOf(question)}>
                             {categoryOf(question)}
                           </td>
                           <td className="sqm-col-edited">{modifiedOf(question)}</td>
+                          {/* Row-end affordance, the same two-layer machinery as
+                              Hands-On's "Review Task ›": a resting chevron that
+                              hides on hover, and a labelled bar that takes its
+                              place. `stopPropagation` matters here — the row
+                              itself ticks the checkbox. */}
+                          <td className="col-actions">
+                            <button
+                              className="row-action-btn lone-dots row-chevron"
+                              aria-label={`Preview ${question.text}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreview(question);
+                              }}
+                            >
+                              <RowChevronIcon />
+                            </button>
+                            <div className="row-action-bar">
+                              <button
+                                className="row-action-btn row-action-btn--label"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreview(question);
+                                }}
+                              >
+                                Preview
+                                <RowChevronIcon />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -389,8 +490,8 @@ export function SelectQuestionsModal({
           <div className="pagination stm-pagination">
             <span className="sqm-picked">
               {isPool
-                ? `${picked.length} in pool`
-                : `${picked.length} selected`}
+                ? `${picked.length} in Pool`
+                : `${picked.length} Selected`}
             </span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
@@ -417,6 +518,89 @@ export function SelectQuestionsModal({
           </div>
         </div>
       </div>
+
+      {preview && (
+        <QuestionPreviewModal question={preview} onClose={() => setPreview(null)} />
+      )}
+    </PrmModal>
+  );
+}
+
+/* Placeholder read-only look at a question, stacked over the picker. It draws
+   what the Bank already holds — the prompt, where it lives, and whatever answer
+   data its type carries — rather than the learner-facing player, which doesn't
+   exist yet. */
+function QuestionPreviewModal({
+  question,
+  onClose,
+}: {
+  question: Question;
+  onClose: () => void;
+}) {
+  return (
+    <PrmModal
+      title="Question Preview"
+      description={`${question.type} · ${categoryOf(question)}`}
+      confirmLabel="Close"
+      hideCancel
+      onCancel={onClose}
+      onConfirm={onClose}
+    >
+      <div className="qpv">
+        <p className="qpv-text">{question.text}</p>
+        {question.options && question.options.length > 0 && (
+          <ul className="qpv-list">
+            {question.options.map((o, i) => (
+              <li key={i} className={`qpv-opt${o.grade > 0 ? " is-correct" : ""}`}>
+                <span className="qpv-opt-mark">{o.grade > 0 ? <CheckIcon /> : null}</span>
+                <span>{o.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {question.type === "True/False" && (
+          <ul className="qpv-list">
+            {[true, false].map((v) => (
+              <li
+                key={String(v)}
+                className={`qpv-opt${question.tfAnswer === v ? " is-correct" : ""}`}
+              >
+                <span className="qpv-opt-mark">
+                  {question.tfAnswer === v ? <CheckIcon /> : null}
+                </span>
+                <span>{v ? "True" : "False"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {question.pairs && question.pairs.length > 0 && (
+          <ul className="qpv-list">
+            {question.pairs.map((p, i) => (
+              <li key={i} className="qpv-pair">
+                <span className="qpv-pair-left">{p.left || "—"}</span>
+                <span className="qpv-pair-right">{p.right}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {question.scale && (
+          <p className="qpv-note">
+            Scale {question.scale.min}–{question.scale.max}
+            {question.scale.minLabel || question.scale.maxLabel
+              ? ` (${question.scale.minLabel ?? ""} … ${question.scale.maxLabel ?? ""})`
+              : ""}
+          </p>
+        )}
+        {question.fileRules && (
+          <p className="qpv-note">
+            Up to {question.fileRules.maxFiles} file
+            {question.fileRules.maxFiles === 1 ? "" : "s"}, {question.fileRules.maxSizeMb} MB each
+          </p>
+        )}
+        {question.type === "Short answer" && (
+          <p className="qpv-note">Free-text answer — graded by a reviewer.</p>
+        )}
+      </div>
     </PrmModal>
   );
 }
@@ -429,6 +613,10 @@ function ColGroup() {
       <col style={{ width: 150 }} />
       <col style={{ width: 190 }} />
       <col style={{ width: 126 }} />
+      {/* Wide enough to seat the whole "Preview ›" bar. The shared 40px
+          `col-actions` lets the bar float over the previous column, which here
+          is a date it would cut in half. */}
+      <col style={{ width: 104 }} />
     </colgroup>
   );
 }

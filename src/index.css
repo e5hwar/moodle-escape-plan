@@ -3156,6 +3156,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 /* Missing required text field inside a wizard step. */
 .lang-field.has-error,
+/* The Section pass-marks table's % input is its own 51px control, not a
+   `.form-input`, so it has to be named here to get the flagged border. */
+.qsec-pct-input.has-error,
 .form-input.has-error {
   border-color: #ff1f31;
 }
@@ -3395,6 +3398,16 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 .wizard-cancel:hover {
   color: var(--text);
+}
+
+/* A destructive footer action in the Cancel type — the Award page's "Delete
+   Award". It reads as text, not a button, so it can sit at the quiet end of
+   the footer without competing with the primary CTA. */
+.wizard-cancel--danger {
+  color: #ff1f31;
+}
+.wizard-cancel--danger:hover {
+  color: #ff5666;
 }
 
 .wizard-actions {
@@ -3929,6 +3942,30 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 .form-help.error {
   color: var(--danger, #e5484d);
+}
+
+/* The 14px info glyph a subtext can end on when a field has more to say than
+   its one line — the Skills / Spotlights subtitle glyph (742:1061), in a form.
+   It sits 4px after the text, on the text's own baseline, and brightens with
+   the line so the whole subtext reads as one hoverable thing. */
+.form-help-info {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: #a8a8a8;
+  cursor: default;
+  transition: color 0.12s ease;
+}
+
+.form-help:hover .form-help-info,
+.form-help-info:focus-visible {
+  color: #fff;
+}
+
+.form-help-info svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ===== Composite address field (Figma 101:337) =====
@@ -5417,6 +5454,25 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: #fff;
 }
 
+/* Switch-first row (Figma 373:233 "Toggle Disabled"): the switch leads, 8px to
+   a title sitting flush on its note — no state word, since the switch itself is
+   the answer. The `.toggle-field` shape above is the same component's
+   labelled-field form; this one is for a LIST of related settings, where six
+   stacked fields would bury them. */
+.toggle-srow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-srow .toggle-text {
+  gap: 0;
+}
+
+.toggle-srow.disabled {
+  opacity: 0.45;
+}
+
 /* Legacy row shape: control first, then a title/sub stack. Still used by the
    Question and Certification wizards' own toggles. */
 .toggle-row {
@@ -5649,24 +5705,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .resource-remove:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-}
-
-.resource-add {
-  align-self: flex-start;
-  padding: 8px 14px;
-  background: transparent;
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.resource-add:hover {
-  color: var(--text);
-  border-color: var(--text-faint);
 }
 
 /* ============== Per-attempt pricing rows ============== */
@@ -5950,6 +5988,17 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   /* Figma insets the segments 5px from the outer edge with the hairline inside
      that inset, so 4px of padding sits on top of the 1px border (43px tall). */
   padding: 4px;
+}
+
+/* A whole segmented control that doesn't apply — e.g. Auto-Unlock Additional
+   Attempts under Unlimited attempts. Dims the pair and kills the pointer; the
+   field's subtext says which setting has to change to re-enable it. */
+.seg-control.is-disabled {
+  opacity: 0.45;
+}
+
+.seg-control.is-disabled .seg-btn {
+  cursor: not-allowed;
 }
 .seg-btn {
   padding: 8px 16px;
@@ -6793,24 +6842,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   height: 16px;
 }
 
-/* Inline editors: the Course's sits between header and groups; a Lesson's
-   insets to the card. */
-.ctb-lesson > .cert-editor {
-  margin: 12px;
-}
-
-/* Missing-Spanish warning chip on a Course / Lesson name */
-.cert-es-chip {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  color: var(--skill-yellow);
-  border: 1px solid rgba(245, 211, 107, 0.4);
-  border-radius: 4px;
-  padding: 0 5px;
-}
-
+/* The Course's inline editor sits between its header and its groups. A Lesson
+   has no inline editor — its name/description is edited in a modal. */
 
 /* Row menus on the tree pull glyphs from a few different icon sets — pin them
    all to the 14px slot the rows themselves use. */
@@ -7275,7 +7308,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .cc-stack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 853:1594 — 12px between the OR'd sets and the "Add Condition Set" card. */
+  gap: 12px;
   max-width: none;
 }
 
@@ -7395,12 +7429,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: #fff;
 }
 
-/* The picker's portal wrapper is a block box, so the body's 1.45 leading would
-   add a 5px strut to the 19px button and push the row past its 43px. */
-.cc-row-foot .dropdown-wrap {
-  display: flex;
-}
-
 /* Both "+" actions are a 16px glyph beside a 16px SemiBold label — a step above
    the Medium of the requirement names they sit under. The in-panel one is the
    accent; Add Condition Set stays muted until hover. */
@@ -7499,193 +7527,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    8px gap under it to 10. Scoped to this field rather than every .form-label. */
 .form-label.cc-label {
   line-height: 19px;
-}
-
-/* Searchable "+ Add item" picker (Tasks / Certifications) */
-.cond-picker {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.cond-picker-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 8px 0;
-  flex-shrink: 0;
-}
-.cond-picker-tab {
-  flex: 1;
-  padding: 7px 10px;
-  border-radius: 7px;
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-}
-.cond-picker-tab:hover {
-  color: var(--text);
-}
-.cond-picker-tab.active {
-  color: var(--text);
-  background: var(--bg-pill);
-  border-color: var(--border);
-}
-.cond-picker-list {
-  max-height: 280px;
-}
-.cond-picker-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text);
-}
-.cond-picker-item:hover {
-  background: var(--bg-pill);
-}
-.cond-picker-item-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cond-picker-item-meta {
-  flex-shrink: 0;
-  font-size: 10.5pt;
-  color: var(--text-faint);
-}
-.cond-picker-empty {
-  padding: 16px 12px;
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-/* ===== Create Certification — method chooser ===== */
-.cert-start {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  background: var(--bg);
-}
-.cert-start-inner {
-  max-width: none;
-  margin: 0 auto;
-  padding: 48px 32px 64px;
-}
-.cert-start-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.cert-start-title {
-  font-family: var(--font-sans);
-  font-size: 24pt;
-  font-weight: 700;
-  color: var(--text);
-}
-.cert-start-sub {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text-muted);
-  margin-top: 6px;
-  margin-bottom: 28px;
-}
-.cert-start-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-.cert-start-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  text-align: left;
-  padding: 22px 20px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-pill);
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-.cert-start-card:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-pill-strong);
-}
-.cert-start-card.selected {
-  border-color: var(--accent);
-  background: rgba(233, 114, 55, 0.08);
-}
-.cert-start-card-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-pill-strong);
-  border: 1px solid var(--border-strong);
-  color: var(--accent);
-}
-.cert-start-card.selected .cert-start-card-icon {
-  background: rgba(233, 114, 55, 0.16);
-  border-color: rgba(233, 114, 55, 0.5);
-}
-.cert-start-card-title {
-  font-family: var(--font-sans);
-  font-size: 14pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.cert-start-card-desc {
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-.cert-start-upload {
-  margin-top: 22px;
-}
-.cert-start-upload-foot {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-.cert-start-btn {
-  padding: 11px 22px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-}
-.cert-start-btn:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
-.cert-start-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-@media (max-width: 760px) {
-  .cert-start-options {
-    grid-template-columns: 1fr;
-  }
 }
 
 .form-subsection-title {
@@ -8498,88 +8339,10 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   transform: translateY(-50%);
 }
 
-/* CSV dropzone */
+/* CSV upload */
 /* Page rhythm for the Question Bank's .drop-primary bulk-upload zone. */
 .qb-bulk-upload {
   margin-bottom: 18px;
-}
-
-/* Older dropzone — still used by NewCertificationStart's CSV import. */
-.qb-dropzone {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 18px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
-  margin-bottom: 18px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.qb-dropzone:hover,
-.qb-dropzone.is-active {
-  border-color: var(--accent);
-  background: rgba(233, 114, 55, 0.04);
-}
-
-.qb-dropzone-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-pill-strong);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.qb-dropzone-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.qb-dropzone-title {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-.qb-dropzone-sub {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.qb-dropzone-link {
-  color: #4ea1ff;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.qb-dropzone-link:hover {
-  color: #79bbff;
-}
-
-.qb-dropzone-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.qb-dropzone-btn:hover {
-  background: var(--bg-pill);
 }
 
 /* Filters row */
@@ -11518,6 +11281,17 @@ a.spc-hero-pill--link:hover {
    so this is a modifier rather than a change to `.prm--pick`. */
 .prm--pick-wide {
   max-width: 1050px;
+}
+
+/* Select Questions runs on the whole screen. Its source list is the Question
+   Bank — thousands of rows — so a fixed 884px card spends most of the viewport
+   on nothing while the reader pages through 50 at a time. The card fills the
+   scrim's 24px gutter in both axes (`.prm`'s own max-height already caps the
+   height there), and the row area below grows with it — see the override on
+   `.stm-table-wrap > .table-xscroll`, whose default is pinned to 80vh. */
+.prm--pick-full {
+  max-width: none;
+  height: calc(100vh - 48px);
 }
 
 .prm-body {
@@ -17057,20 +16831,26 @@ a.rh-crumb-link:hover {
   margin-bottom: 12px;
 }
 
+/* Figma's `pb` INCLUDES the hairline — its row frames measure 61 (12 + 36
+   content + 13) and 34 (8 + 17 + 9) with the border drawn inside that bottom
+   band. CSS adds `border-bottom` outside the padding, so each bottom inset is
+   the node's minus 1: 13 → 12 and 9 → 8. Same
+   Figma-padding-minus-border rule the bordered upload shells follow. */
 .qsec-hd,
 .qsec-row,
 .qsec-foot {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 12px 16px 13px;
+  padding: 12px 16px 12px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
 .qsec-hd {
-  padding: 8px 16px 9px;
+  padding: 8px 16px 8px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 17px;
   color: #a8a8a8;
 }
 
@@ -17122,8 +16902,110 @@ a.rh-crumb-link:hover {
   min-width: 0;
 }
 
-/* % TO PASS: a 49px single-language input, 4px, the % sign — 69px all in,
-   which is what the header column reserves. */
+/* Section pass marks (Figma 1211:1139) — the same card as the Sections table
+   (1097:1205) with three differences: the node widens the column gap to 40px,
+   the Section name is read-only 16px Medium text instead of the editable
+   LangField, and there is no ORDER / ✕ / Add row (names and order belong to the
+   Structure step). */
+.qsec--pass .qsec-hd,
+.qsec--pass .qsec-row {
+  gap: 40px;
+}
+
+/* Post-Submission Review (Figma 1213:1255) — the same `.qsec` shell again, at
+   its own default 24px gap: a REVIEW SETTING / SHOWN? header, then a row per
+   setting with the name over its note on the left and the switch right. */
+.qsec-revtext {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Leading is SPECIFIED, not inherited. The app's body line-height is 1.45,
+   which renders these at 23.2/20.3 and the row at 69.5px — Figma draws them at
+   its auto leading, which for Fira Sans is 19px at 16 and 17px at 14 (the same
+   pair `.toggle-label` / `.toggle-sub` were cut to). 12 + 19 + 17 + 13 = the
+   node's 61px row. */
+.qsec-revname {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #fff;
+}
+
+.qsec-revsub {
+  font-size: 14px;
+  line-height: 17px;
+  color: #a8a8a8;
+}
+
+/* 55px, wider than the 41px switch it centres — the node's own column. */
+.qsec-shown {
+  width: 55px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qsec-hd .qsec-shown {
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+/* A row whose dependency isn't met: the switch is off and unavailable, and its
+   note says which setting has to come first. */
+.qsec-row.is-disabled {
+  opacity: 0.45;
+}
+
+.qsec-row.is-disabled .toggle {
+  cursor: not-allowed;
+}
+
+/* Variable cooldowns on the same table (1211:1139's component): the pair on the
+   left, its value on the right. Wider than `.qsec-pct` because minutes run to
+   four digits where a percentage never passes three. */
+.qsec-mins {
+  width: 104px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.qsec-hd .qsec-mins {
+  justify-content: flex-start;
+}
+
+.qsec-mins .qsec-pct-input {
+  width: 64px;
+}
+
+/* Placeholder row while no pair has been added — the app-wide `::placeholder`
+   treatment, as on the Questions card's empty state. */
+.qsec-empty {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 19px;
+  color: #404040;
+}
+
+.qsec-secname {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #fff;
+}
+
+/* % TO PASS: a 51px single-language input (25px of centred value inside the
+   node's 12px insets), 4px, the % sign — inside the 69px the header column
+   reserves. Only the pass-marks table draws these now. */
 .qsec-pct {
   width: 69px;
   flex: none;
@@ -17134,7 +17016,7 @@ a.rh-crumb-link:hover {
 }
 
 .qsec-pct-input {
-  width: 49px;
+  width: 51px;
   height: 35px;
   padding: 8px 12px;
   border: 1px solid #404040;
@@ -17147,7 +17029,7 @@ a.rh-crumb-link:hover {
 }
 
 .qsec-pct-sign {
-  font-size: 16px;
+  font-size: 14px;
   color: #a8a8a8;
 }
 
@@ -17187,9 +17069,16 @@ a.rh-crumb-link:hover {
 }
 
 .qsec-x:disabled,
+/* `aria-disabled` rather than the attribute when the ✕ is held by the
+   two-Section floor, so it can still answer a hover with the reason. */
+.qsec-x.is-disabled,
 .qsec-add:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.qsec-x.is-disabled:hover {
+  color: #a8a8a8;
 }
 
 /* "Add Section" closing the card — the same orange text link as the Options
@@ -17218,49 +17107,6 @@ a.rh-crumb-link:hover {
   text-decoration: underline;
 }
 
-.section-remove {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.section-remove:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-}
-
-.trigger-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: none;
-}
-
-.trigger-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.trigger-name {
-  flex: 1;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text);
-}
-
 .resource-edit-list {
   display: flex;
   flex-direction: column;
@@ -17268,17 +17114,9 @@ a.rh-crumb-link:hover {
   max-width: none;
 }
 
-.resource-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.resource-edit-row .form-input {
-  flex: 1;
-  min-width: 0;
-}
-
+/* A group of related settings, one switch-first row each (Figma 373:233),
+   inside one bordered card. The rows carry the padding and the hairlines — the
+   card only clips them to its radius. */
 .review-list {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -17286,8 +17124,13 @@ a.rh-crumb-link:hover {
   max-width: none;
 }
 
-.review-list .toggle-row {
+.review-list .toggle-srow {
   padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-list .toggle-srow:last-child {
+  border-bottom: none;
 }
 
 .form-select:disabled {
@@ -20539,6 +20382,14 @@ a.rh-crumb-link:hover {
 .pc-tabs {
   margin: 0 -32px;
   padding: 0 32px;
+  /* Seven tabs outrun a narrow window. The ROW scrolls sideways — without
+     this, focusing a tab at the far end scrolls the page itself (it is
+     overflow:hidden, which is still scriptable) and slides the title away. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pc-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 /* Body */
@@ -20548,6 +20399,18 @@ a.rh-crumb-link:hover {
   overflow-y: auto;
   padding: 36px 32px 60px;
   max-width: 820px;
+}
+
+/* Award Templates' body: a record table, not a settings form, so it drops the
+   820px reading column and takes the Tasks-page shell instead — search on top,
+   the table scrolling between it and a pinned pagination row. */
+.pc-table-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px 0;
 }
 
 /* Section */
@@ -21366,28 +21229,6 @@ a.rh-crumb-link:hover {
 /* Skills & Mastery Skills (spec §11)                                    */
 /* ===================================================================== */
 
-/* Tab bar placement — the shared .tabbar switches the list between Skills
-   and Mastery Skills (Awards reuses it too).
-
-   Both pages take the Tasks *table* header→search-bar gap: .tasks-header's own
-   22px bottom margin, with no extra lead (the 56px offset in .tasks.lm .toolbar
-   only applies while the Tasks landing hero is expanded). The margin below the
-   tabs repeats that gap, so header→tabs→search reads as one rhythm.
-
-   Awards is the base case: its header ends on the subtext, so 22px above and
-   below are the same gap as drawn. */
-.sk-tabbar {
-  margin-top: 0;
-  margin-bottom: 22px;
-}
-
-/* Skills dropped its page subtext, so its header ends on the title — and the
-   header box sits 2px lower than the h1 because the Create CTA is taller. The
-   gap above the tabs therefore draws as 24px; match it below. */
-.sk-tabbar--lead {
-  margin-bottom: 24px;
-}
-
 /* Badge artwork — complete + auto-greyed states */
 .sk-badge {
   display: inline-flex;
@@ -21624,61 +21465,6 @@ a.rh-crumb-link:hover {
   color: #fff;
 }
 
-/* Task / Skill pickers (wizard) */
-.sk-picker {
-  position: relative;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-panel);
-}
-.sk-picker-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-}
-.sk-picker-search .search-icon { color: var(--text-faint); display: inline-flex; }
-.sk-picker-search-input {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  outline: none;
-}
-.sk-picker-search-input::placeholder { color: var(--text-faint); }
-.sk-picker-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 40;
-  max-height: 340px;
-  overflow-y: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--bg-panel);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-}
-.sk-picker-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 14px;
-  text-align: left;
-  border-bottom: 1px solid rgba(46, 46, 51, 0.5);
-}
-.sk-picker-row:last-child { border-bottom: none; }
-.sk-picker-row:hover { background: var(--bg-row-hover); }
-.sk-picker-row.is-selected { background: var(--bg-row-selected); }
-.sk-picker-row-name { color: var(--text); }
-.sk-picker-row-id { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: 10pt; }
-.sk-picker-empty { padding: 18px 14px; color: var(--text-faint); }
-.sk-picker-note { padding: 8px 14px; color: var(--text-faint); font-size: 10.5pt; border-bottom: 1px solid var(--border); }
-.sk-picker .checkbox { flex: none; }
-
 /* Chips */
 .sk-chip {
   display: inline-flex;
@@ -21755,23 +21541,6 @@ a.rh-crumb-link:hover {
   color: #a8a8a8;
 }
 
-/* Retroactive-award informational note — the Award wizard's "Shared identity"
-   note still runs on this older blue style. */
-.sk-retro-note {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(47, 93, 156, 0.08);
-  border: 1px solid rgba(47, 93, 156, 0.25);
-  color: var(--text-muted);
-  font-size: 11pt;
-  line-height: 1.5;
-}
-.sk-retro-note strong { color: var(--text); font-weight: 600; }
-.sk-retro-icon { color: #6f9fe0; flex: none; margin-top: 1px; }
-
 /* Skills confirm modals (Figma 667:884 "General Modal"): body copy is the
    shared `.prm-content` white (the old `.sk-modal-text` grey is gone); this
    wrapper only adds the node's 32px item spacing between the sentence and
@@ -21839,136 +21608,186 @@ a.rh-crumb-link:hover {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
-/* ── Award wizard — Merit Tier picker ── */
-.aw-tier-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-}
-.aw-tier-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  text-align: left;
-  padding: 14px 14px 13px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-.aw-tier-card:hover { border-color: var(--border-strong); }
-.aw-tier-card.selected {
-  border-color: var(--tier);
-  background: color-mix(in srgb, var(--tier) 9%, var(--bg-panel));
-}
-.aw-tier-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--tier);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--tier) 55%, transparent);
-}
-.aw-tier-name { font-size: 12pt; font-weight: 700; color: var(--text); }
-.aw-tier-intent { font-size: 10pt; color: var(--text-muted); line-height: 1.35; }
-
-/* ── Award wizard — Certification radio in picker rows ── */
-.aw-radio {
-  width: 18px;
-  height: 18px;
+/* ── Award form — Design Template thumbnail ──
+   A Design Template is a picture, so the Single-Select shows it: the row leads
+   with the artwork the way the Countries menu (938:961) leads with a flag, and
+   the collapsed control repeats it, because a visual choice has to stay visible
+   once it is made. "None" is the dashed box. 19px tall — the height of the
+   field's own line box — so a thumbnail leaves the 45px control at 45px and a
+   menu row at 35px. (`.aw-swatch` is taken: it is the Design Template wizard's
+   colour chip.) */
+.aw-tpl-thumb {
+  width: 28px;
+  height: 19px;
   flex: none;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #1a0f08;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
-.aw-radio.checked { background: var(--accent); border-color: var(--accent); }
-.aw-radio svg { width: 11px; height: 11px; }
-.sk-picker-row:disabled { opacity: 0.45; cursor: not-allowed; }
-
-/* ── Award wizard — appearance template picker ── */
-.aw-template-pick {
+.aw-tpl-thumb--none {
+  border-style: dashed;
+  box-shadow: none;
+}
+/* The default trigger is a grid that reinstates a native select's width from a
+   hidden sizer; this one is full-width with a leading thumbnail, so it is a
+   plain row instead. */
+.aw-tpl-field {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 10px;
+  align-items: center;
+  gap: 11px;
 }
-.aw-template-opt {
+.aw-tpl-field .select-field-value { flex: 1; }
+.ss-menu--tpl .dropdown-item-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: visible;
+}
+.ss-menu--tpl .aw-tpl-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Award form — preview rail ──
+   The same right-hand rail the company wizard's billing preview runs in
+   (`.cw-impact`, Figma 616:969): 380px, 32px gutter, a 0.1 grey wash over
+   #0d0d0d. It renders whatever Design Templates are picked, so the artwork a
+   dropdown row can only name is actually on screen. */
+.aw-preview {
+  width: 380px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  width: 132px;
-  padding: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
+  gap: 24px;
+  padding: 32px;
+  overflow-y: auto;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
 }
-.aw-template-thumb {
-  position: relative;
-  width: 132px;
-  height: 84px;
-  border-radius: 9px;
-  border: 2px solid var(--border);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  transition: border-color 0.12s;
-}
-.aw-template-opt:hover .aw-template-thumb { border-color: var(--border-strong); }
-.aw-template-opt.selected .aw-template-thumb { border-color: var(--accent); }
-.aw-template-check {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #1a0f08;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.aw-template-check svg { width: 13px; height: 13px; }
-.aw-template-none-box {
-  width: 132px;
-  height: 84px;
-  border-radius: 9px;
-  border: 2px dashed var(--border-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  font-size: 10.5pt;
-  transition: border-color 0.12s, color 0.12s;
-}
-.aw-template-none:hover .aw-template-none-box { color: var(--text-muted); }
-.aw-template-none.selected .aw-template-none-box {
-  border-style: solid;
-  border-color: var(--accent);
-  color: var(--text);
-}
-.aw-template-opt-name {
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-.aw-template-opt.selected .aw-template-opt-name { color: var(--text); }
-
-.aw-link-btn {
-  margin-top: 14px;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: 11pt;
+.aw-preview-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
   font-weight: 600;
-  cursor: pointer;
+  line-height: normal;
+  color: #fff;
 }
-.aw-link-btn:hover { color: var(--accent-strong); }
+.aw-preview-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.aw-preview-slot .section-heading { margin: 0; }
+.aw-preview-empty {
+  padding: 28px 16px;
+  border: 1px dashed #404040;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 14px;
+  color: #7a7a7a;
+}
+/* The template's own name, under the artwork it drew. */
+.aw-preview-cap {
+  margin: 0;
+  font-size: 12px;
+  color: #a8a8a8;
+}
+.aw-preview-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7a7a7a;
+}
+
+/* Both appearances sit on the template's artwork, so every value on top is
+   white with a shadow rather than a token colour — the artwork underneath is
+   arbitrary. */
+.aw-card,
+.aw-cert {
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.aw-card {
+  /* 8:5, the Portfolio card's shape. */
+  aspect-ratio: 8 / 5;
+}
+.aw-cert {
+  /* Landscape document, the shape a diploma prints at. */
+  aspect-ratio: 1.41 / 1;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  gap: 5px;
+}
+.aw-card-tier { align-self: flex-start; }
+.aw-card-body { margin-top: auto; }
+.aw-card-cert {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.aw-card-holder {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.aw-card-foot,
+.aw-cert-foot {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.aw-card-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.85);
+}
+.aw-card-date {
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.aw-cert-kicker {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+.aw-cert-holder {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.aw-cert-line {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.aw-cert-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.aw-cert-foot { margin-top: 14px; text-align: left; }
+.aw-qr {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px #fff;
+}
 
 /* ── Design Template wizard — background picker ── */
 .aw-bg-picker {
@@ -23375,32 +23194,6 @@ a.rh-crumb-link:hover {
 
 /* ----- Question Bank picker modal ----- */
 
-.fb-modal--picker {
-  width: min(720px, calc(100vw - 80px));
-  max-height: calc(100vh - 120px);
-  display: flex;
-  flex-direction: column;
-}
-
-.fb-picker-controls {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 0 24px 14px;
-}
-
-.fb-picker-search {
-  flex: 1;
-}
-
-.fb-picker-list {
-  flex: 1;
-  min-height: 200px;
-  overflow: auto;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
 .fb-picker-row {
   display: flex;
   align-items: center;
@@ -24083,104 +23876,74 @@ a.rh-crumb-link:hover {
   font-weight: 600;
 }
 
-.qpick-hint {
-  flex: 1;
-  padding-right: 16px;
-  font-size: 10pt;
-  color: var(--text-faint);
+/* ----- In-quiz resources: existing-Resource checkboxes ----- */
+
+/* ----- In-Quiz Resources: the add CTA and its two panels (Figma 1218:1414) --
+   The CTA is the same orange text-link recipe as the Sections table's Add
+   Section (`.qsec-add`) and the Questions table's Add Questions row: 16px
+   SemiBold #f05523, a 16px plus, 4px between them. It is repeated rather than
+   shared because both of those are rows INSIDE a bordered card and carry that
+   card's gutters; this one is a bare field-level CTA. */
+.res-add-wrap {
+  position: relative;
+  align-self: flex-start;
 }
 
-/* ----- Quiz Attempts: trigger-Task picker + rows ----- */
-
-.trigger-id {
-  font-family: var(--font-mono);
-  font-size: 9.5pt;
-  color: var(--text-faint);
-}
-
-.tt-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 10.5pt;
-}
-
-.tt-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bg-panel);
-  text-align: left;
-  padding: 8px 12px;
-  font-size: 8.5pt;
+.res-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  border-bottom: 1px solid var(--border);
-}
-
-.tt-table th:first-child,
-.tt-table td:first-child {
-  padding-left: 24px;
-  width: 40px;
-}
-
-.tt-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-
-.tt-table tbody tr {
+  line-height: 19px;
+  color: #f05523;
   cursor: pointer;
 }
 
-.tt-table tbody tr:hover td {
-  background: var(--bg-row-hover);
+.res-add svg {
+  width: 16px;
+  height: 16px;
 }
 
-.tt-table tbody tr.is-selected td {
-  background: rgba(233, 114, 55, 0.08);
+.res-add:hover {
+  text-decoration: underline;
 }
 
-.tt-id {
-  font-family: var(--font-mono);
-  font-size: 9.5pt;
-  color: var(--text-muted);
+/* The chooser. `.qz-menu` is the same panel on the Questions step, but it is
+   anchored to a full-width table row and re-says that row's 16px gutter; this
+   one hangs off the CTA itself, so it starts at 0. */
+.res-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  min-width: 241px;
+  z-index: 50;
 }
 
-.tt-type {
-  color: var(--text-muted);
+.res-menu-item {
   white-space: nowrap;
 }
 
-/* ----- In-quiz resources: existing-Resource checkboxes ----- */
-
-.qres-existing {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 480px;
-  padding: 10px 14px;
-  margin-top: 8px;
-  background: var(--bg-pill);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 11pt;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
+/* 774:1298's own 304px. The `.dropdown` shell brings the wash, hairline, radius
+   and shadow; `.dropdown-list` + `CheckRow` + `.dropdown-footer` bring the rest,
+   so nothing here restates them. */
+.res-picker {
+  width: 304px;
+  left: 0;
+  top: calc(100% + 6px);
 }
 
-.qres-existing:hover {
-  border-color: var(--border-strong);
-}
-
-.qres-existing.is-on {
-  border-color: rgba(233, 114, 55, 0.55);
-  background: rgba(233, 114, 55, 0.06);
+/* Files staged in the upload modal sit under the drop zone, which is `flex: 1`
+   — without this the list would be squeezed to nothing. */
+.res-staged {
+  flex: 0 0 auto;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 /* ═══════════════ Review Console (Hands-On submissions) ═══════════════
@@ -25976,67 +25739,56 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* ── empty / half states ── */
+/* Every empty state on this page is the record it is about to load, drawn as
+   a backdrop (`.mc-ghost`) with the question centred over it. Same insets as
+   `.mc-scroll`, so the outline sits where the content will. */
 .mc-empty {
+  position: relative;
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 32px;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 36px 24px;
+  overflow: hidden;
 }
 
+/* The question floats over the middle of the backdrop rather than pushing it
+   around. Sized by its own text, capped at the reading column — a fixed width
+   would strand the "Jump to an example" heading at the far left of the
+   block. */
 .mc-empty-inner {
-  max-width: 520px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: min(520px, calc(100% - 72px));
   text-align: center;
+  transition: opacity 0.12s ease;
 }
 
-.mc-empty-inner.is-narrow {
-  max-width: 320px;
+/* A scope dropdown is open: the question was the prompt to search, and the
+   search is now up. It recedes rather than competing with the panel — still
+   there, no longer the thing being read. Nothing in it is clickable while it
+   sits back, so a stray click on the CTA closes the panel instead of
+   re-opening the half it is already showing. */
+.mc-empty-inner.is-dull {
+  opacity: 0.25;
+  pointer-events: none;
 }
 
-.mc-empty-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 20px;
-  border: 1px solid var(--mc-ctl);
-  border-radius: 12px;
-  color: #7a7a7a;
-}
-
-.mc-empty-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.mc-empty-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 16px;
-  border-radius: 50%;
-  background: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.91%), #0d0d0d;
-  border: 0.5px solid rgba(240, 85, 35, 0.15);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 500;
-  color: #fff;
-}
-
+/* Figma 1070:1301 — 20px SemiBold #e7e7e8, the file's page-level heading. */
 .mc-empty-title {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
-  color: #fff;
+  color: #e7e7e8;
 }
 
 .mc-empty-sub {
   margin-top: 8px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.5;
   color: #a8a8a8;
@@ -26047,30 +25799,114 @@ span.rvc-crumb--current { cursor: default; }
   color: #e7e7e8;
 }
 
-.mc-empty-inner .section-heading {
-  margin: 28px 0 12px;
+/* The CTA that opens the half the page is still missing — Figma 1229:1439
+   "Secondary Button": the app's own `.btn-save-draft` shell and 14px SemiBold
+   label, with the search bar's ⌘K badge riding on the end. The node's white
+   keycaps are the one difference from the badge in a search bar, which is
+   muted against the bar's own text. */
+.mc-empty-cta {
+  margin-top: 20px;
+  gap: 8px;
 }
 
-.mc-examples {
+.mc-empty-cta .usearch-kbd {
+  color: #fff;
+}
+
+/* ── empty-state backdrop (`.mc-ghost`) ──
+   Behind the question, the page draws the record it is about to load: the
+   real `.mc-certcard` over the real `.mct` table, with every value replaced
+   by a bar. Nothing here introduces a shell, a border or a colour of its own
+   — the card, the hairlines and the column widths come from those two
+   components, and the bars are the neutral wash the card already carries — so
+   the outline sits exactly where the content will.
+
+   It is the backdrop, not the message: it never takes the pointer, and it sits
+   at the very bottom of the page's contrast — just enough of an outline to
+   read as "the record lands here", never enough to compete with the question
+   in front of it or with an open scope dropdown. */
+.mc-ghost {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
+  flex-direction: column;
+  min-height: 0;
+  opacity: 0.08;
+  pointer-events: none;
+  user-select: none;
 }
 
-.mc-example {
-  gap: 8px;
-  font-weight: 500;
+.mc-ghost-bar {
+  display: block;
+  flex: none;
+  width: 70%;
+  height: 10px;
+  border-radius: 4px;
+  background: rgba(122, 122, 122, 0.2);
 }
 
-.mc-example svg {
-  width: 12px;
+/* Card: the two text lines and the round ⋯, at the metrics of the real ones —
+   12 + 14 + 10 is the card's 36px text block, so the ghost is 68px too. */
+.mc-ghost-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mc-ghost-bar--title {
+  width: 172px;
   height: 12px;
-  color: var(--text-faint);
 }
 
-.mc-example-what {
-  color: #f05523;
+.mc-ghost-bar--sub {
+  width: 108px;
+}
+
+.mc-ghost-dot {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(122, 122, 122, 0.2);
+}
+
+/* Table: the head keeps its band, the rows their height and hairlines, and the
+   whole thing fills the page and clips its last row the way the real one clips
+   its own scroll — rather than floating a short block mid-body. */
+.mc-ghost .mct {
+  flex: 1;
+}
+
+.mc-ghost .mct-rows {
+  overflow: hidden;
+}
+
+/* The task bar varies row to row, so the column reads as names of different
+   lengths rather than a stack of identical blocks. */
+.mc-ghost-row .mct-c-task .mc-ghost-bar {
+  width: 62%;
+}
+
+.mc-ghost-row:nth-child(2n) .mct-c-task .mc-ghost-bar {
+  width: 78%;
+}
+
+.mc-ghost-row:nth-child(3n) .mct-c-task .mc-ghost-bar {
+  width: 45%;
+}
+
+.mc-ghost-row:nth-child(5n) .mct-c-task .mc-ghost-bar {
+  width: 88%;
+}
+
+.mc-ghost-row.mct-hd .mc-ghost-bar {
+  height: 11px;
+}
+
+/* The actions cell sizes anything inside it to the 40px control box, which
+   would make this bar read as a button. */
+.mc-ghost-row .mct-c-menu .mc-ghost-bar {
+  width: 16px;
+  margin-left: auto;
 }
 
 /* ── scoped view (employee × certification / employee × task) ──
@@ -27640,6 +27476,21 @@ span.rvc-crumb--current { cursor: default; }
   height: max(200px, calc(80vh - 323px));
 }
 
+/* Add Requirement (the Certification wizard's Completion Criteria picker) puts
+   a 40px tab row above the search block, which the body's 20px rhythm turns
+   into 60px of extra chrome. The table gives that back — otherwise the card
+   grows past the 80vh the shared picker is sized to and its title scrolls off
+   the top of the screen. */
+.prm.srq .stm-table-wrap > .table-xscroll {
+  height: max(200px, calc(80vh - 383px));
+}
+
+/* Full-screen picker: same 323px of chrome, but taken off the whole viewport
+   (less the scrim's 24px top and bottom) rather than 80% of it. */
+.prm--pick-full .stm-table-wrap > .table-xscroll {
+  height: max(200px, calc(100vh - 48px - 323px));
+}
+
 /* The shared sticky header paints itself #0d0d0d so body rows can't bleed under
    it. Inside this card — a grey wash OVER #0d0d0d — that reads as a darker band
    across the header, which the node (682:2567) doesn't have: its header row is
@@ -27666,6 +27517,151 @@ span.rvc-crumb--current { cursor: default; }
 
 .stm-pagination {
   padding-right: 12px;
+}
+
+/* Row-end "Preview ›" (the Hands-On "Review Task ›" affordance). Three fixes
+   the shared machinery needs inside this card — all the same root cause as the
+   row washes above: the page-level rules paint FLAT DARKS tuned for a #0d0d0d
+   page, and inside a 20%-washed card every one of them reads as a dark hole.
+
+   1. The sticky cell paints an opaque `--actions-bg` to mask content scrolling
+      under it. Its three values (#0d0d0d resting, --bg-row-hover, and
+      --bg-row-selected) all sit BELOW this card, so the cell showed as a dark
+      patch at the end of a hovered or ticked row. Each is re-said as the card's
+      own surface with the row's own translucent wash composited on top, so the
+      cell is invisible against whatever the row is painting.
+   2. The bar itself is 15% grey over #0d0d0d — lighter than a #0d0d0d page,
+      darker than this card. Re-laid over `--prm-surface` so it lifts off the
+      card by the same 15% it lifts off the page elsewhere.
+   3. `.selected` here means TICKED, not "the row the menu belongs to", so the
+      shared rule that pins the bar open on a selected row would leave every
+      ticked row showing "Preview ›". Hover is the only trigger in this table. */
+.sqm-table .col-actions {
+  --actions-bg: var(--prm-surface);
+  /* Seats the whole bar instead of letting it float over the date beside it. */
+  width: 104px;
+}
+
+.sqm-table tbody tr:hover .col-actions {
+  --actions-bg:
+    linear-gradient(rgba(122, 122, 122, 0.05), rgba(122, 122, 122, 0.05)),
+    var(--prm-surface);
+}
+
+.sqm-table tbody tr.selected .col-actions,
+.sqm-table tbody tr.selected:hover .col-actions {
+  --actions-bg:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    var(--prm-surface);
+}
+
+.sqm-table .row-action-bar {
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    var(--prm-surface);
+}
+
+.sqm-table tbody tr.selected .row-action-bar {
+  display: none;
+}
+
+.sqm-table tbody tr.selected:hover .row-action-bar {
+  display: inline-flex;
+}
+
+.sqm-table tbody tr.selected .lone-dots {
+  visibility: visible;
+}
+
+.sqm-table tbody tr.selected:hover .lone-dots {
+  visibility: hidden;
+}
+
+/* Question preview (placeholder) — prompt, then whatever answer data the type
+   carries. Correct options wear the accent tick; everything else is plain. */
+.qpv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.qpv-text {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  line-height: 22px;
+}
+
+.qpv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qpv-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 18px;
+  color: #a8a8a8;
+}
+
+.qpv-opt.is-correct {
+  border-color: #f05523;
+  color: #fff;
+}
+
+/* Holds the tick's column even on the options that don't have one, so every
+   label starts on the same x. */
+.qpv-opt-mark {
+  width: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f05523;
+}
+
+.qpv-opt-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+.qpv-pair {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.qpv-pair-left {
+  flex: 1;
+  min-width: 0;
+  color: #fff;
+}
+
+.qpv-pair-right {
+  flex: 1;
+  min-width: 0;
+  color: #a8a8a8;
+}
+
+.qpv-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 17px;
+  color: #a8a8a8;
 }
 
 /* Row checkboxes take the "Radial Button" skin (8:13495/8:13497) the filter
@@ -27753,9 +27749,12 @@ span.rvc-crumb--current { cursor: default; }
 
 /* The pagination row is justify-end, so the count takes the left edge. */
 .sum-picked,
+/* The selection count reads at the pagination row's own scale, not the dimmer
+   muted grey: 16px #a8a8a8. */
 .sqm-picked {
   margin-right: auto;
-  color: var(--text-muted);
+  font-size: 16px;
+  color: #a8a8a8;
 }
 
 .stm-empty-row:hover {
@@ -28683,13 +28682,18 @@ span.rvc-crumb--current { cursor: default; }
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
-/* Header — 14px muted column labels over the same 16px gutters as the rows. */
+/* Header — 14px muted column labels over the same 16px gutters as the rows.
+   Medium, not Regular: 751:2512/2522/2527 were re-cut to Fira Sans Medium on
+   2026-09-17 (the only change in that pull of 750:1672). */
+/* Same Figma-padding-minus-border correction as `.qsec-hd` — 9 → 8. */
 .qz-hd {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 16px 9px;
+  padding: 8px 16px 8px;
   font-size: 14px;
+  font-weight: 500;
+  line-height: 17px;
   color: #a8a8a8;
 }
 
@@ -28785,13 +28789,16 @@ span.rvc-crumb--current { cursor: default; }
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 16px 13px;
+  padding: 12px 16px 12px;
 }
 
+/* Reads as a placeholder, because that is what it is: the app-wide
+   `::placeholder` treatment (#404040 on the field's own 16px Fira Sans), not
+   muted help text. */
 .qz-empty {
-  padding: 12px 16px 13px;
-  font-size: 14px;
-  color: var(--text-muted);
+  padding: 12px 16px 12px;
+  font-size: 16px;
+  color: #404040;
 }
 
 .qz-q {
@@ -28799,14 +28806,19 @@ span.rvc-crumb--current { cursor: default; }
   min-width: 0;
 }
 
+/* Same specified-leading rule as `.qsec-revname` / `.qsec-revsub` above —
+   750:1672 draws this pair at Fira Sans' auto leading, so the row lands on the
+   node's 61px instead of the 68.5px the inherited 1.45 produced. */
 .qz-q-title {
   font-size: 16px;
   font-weight: 500;
+  line-height: 19px;
   color: #fff;
 }
 
 .qz-q-type {
   font-size: 14px;
+  line-height: 17px;
   color: #a8a8a8;
 }
 
@@ -28920,8 +28932,9 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
 }
 
-/* The pool's ADD affordance — brand orange (the literal #f05523, as on the
-   other Figma-synced accents), underlined, pushed to the line's right edge. */
+/* The pool's Add/Remove affordance — brand orange (the literal #f05523, as on
+   the other Figma-synced accents), pushed to the line's right edge. Not
+   underlined: 750:2224 draws it as plain coloured text. */
 .qz-pool-add {
   margin-left: auto;
   padding: 0 4px;
@@ -28931,7 +28944,6 @@ span.rvc-crumb--current { cursor: default; }
   font-size: 14px;
   font-weight: 500;
   color: #f05523;
-  text-decoration: underline;
   cursor: pointer;
 }
 
@@ -28960,8 +28972,39 @@ span.rvc-crumb--current { cursor: default; }
   padding: 12px 16px 13px;
 }
 
+/* The last member row draws no hairline (751:2673), so it alone keeps the
+   node's full 13px; the others give a pixel back to their border. */
 .qz-pool-q:not(:last-child) {
+  padding-bottom: 12px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+/* Add row (Figma 1206:1134) — the Quiz card's add affordance is the table's
+   LAST ROW, not a filled CTA below it: a 16px plus + orange SemiBold label on
+   the rows' own 16/12/13 gutter, carrying the same hairline every other row
+   does. The `.qz-foot` / `.cta-primary.qz-add` shape below is still what the
+   Feedback Forms editor draws (its own node, 810:1285). */
+.qz-addrow {
+  position: relative;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.qz-addrow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px 12px;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #f05523;
+  cursor: pointer;
+}
+
+.qz-addrow-btn:hover {
+  filter: brightness(1.15);
 }
 
 /* Footer row — the Add Question CTA and its anchored menu. */
@@ -28995,11 +29038,18 @@ span.rvc-crumb--current { cursor: default; }
    the button instead of fixed-positioned, rows at SemiBold with keycaps. */
 .qz-menu {
   position: absolute;
-  left: 0;
+  /* The Quiz card anchors this to the full-width add ROW, so the gutter has to
+     be re-said; the Feedback editor anchors it to an inline-block wrapper that
+     already sits inside `.qz-foot`'s padding, and overrides it back to 0. */
+  left: 16px;
   top: calc(100% + 6px);
   width: max-content;
   min-width: 241px;
   z-index: 50;
+}
+
+.qz-foot .qz-menu {
+  left: 0;
 }
 
 .qz-menu-item {

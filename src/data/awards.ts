@@ -191,13 +191,6 @@ export function templateUsageCount(
   return n;
 }
 
-/** Certification IDs that already have an Award — used to enforce one-per-cert. */
-export function certIdsWithAward(list: Award[] = awards, exceptId?: string): Set<string> {
-  return new Set(
-    list.filter((a) => a.id !== exceptId).map((a) => a.certificationId),
-  );
-}
-
 /** Short summary of an Award's appearances, e.g. "Card + Certificate". */
 export function appearanceSummary(award: Award): string {
   const hasCard = !!award.cardTemplateId;
@@ -212,28 +205,7 @@ export function fmtHolders(n: number): string {
   return n.toLocaleString();
 }
 
-// ─── Table column config ──────────────────────────────────────────────────────
-export type AwardColKey =
-  | "id"
-  | "tier"
-  | "appearances"
-  | "status"
-  | "holders"
-  | "createdBy"
-  | "dateCreated"
-  | "dateModified";
-
-export const AWARD_COLS: { key: AwardColKey; label: string }[] = [
-  { key: "id", label: "ID" },
-  { key: "tier", label: "Merit Tier" },
-  { key: "appearances", label: "Appearances" },
-  { key: "status", label: "Status" },
-  { key: "holders", label: "Holders" },
-  { key: "createdBy", label: "Created By" },
-  { key: "dateCreated", label: "Date Created" },
-  { key: "dateModified", label: "Date Modified" },
-];
-
+// ─── Award Template table column config ──────────────────────────────────────────────────────
 export type TemplateColKey =
   | "id"
   | "usage"

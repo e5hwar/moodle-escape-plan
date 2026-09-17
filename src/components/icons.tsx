@@ -629,6 +629,17 @@ export const RemoveRowIcon = () => (
   </svg>
 );
 
+/* tdesign:close — the remove ✕ the Quiz tables draw (Figma 750:1672 rows and
+   pool members, 1097:1205 Sections). 16px on a 16 grid, arms running corner to
+   corner at 4/12 with a HEAVY 1.94 stroke and square caps. Deliberately not
+   `SmallXIcon` (13px, round caps, 48 call sites elsewhere) and not
+   `RemoveRowIcon` (the Icon Library close at a lighter 1.333). */
+export const RowCloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.93939" strokeLinecap="square">
+    <path d="M12 4L8 8M8 8L4 12M8 8L12 12M8 8L4 4" />
+  </svg>
+);
+
 export const TreeAddIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M8 3.33333V12.6667M12.6667 8H3.33333" />
@@ -995,6 +1006,17 @@ export const MenuAllTasksIcon = () => (
     <g transform="translate(0 1.6667)">
       <path d="M0.666667 11.6667H13L15 5H2.66667L0.666667 11.6667ZM0.666667 11.6667V0.666667H4.66667L6.66667 2.33333H13V5" />
     </g>
+  </svg>
+);
+
+/* Certificate card with a seal — "Add Award" / "Manage Award" in the
+   Certification row menu (node 1226:1425). An Award is a Card and/or a
+   Certificate, so the glyph is the card itself rather than a rosette. */
+export const MenuAwardIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M1.333 3.333H14.667V12.667H1.333V3.333Z" />
+    <path d="M6 7.333C6 8.069 5.403 8.667 4.667 8.667C3.93 8.667 3.333 8.069 3.333 7.333C3.333 6.597 3.93 6 4.667 6C5.403 6 6 6.597 6 7.333Z" />
+    <path d="M8.667 6.667H12.667M8.667 9.333H11.333" />
   </svg>
 );
 

@@ -303,7 +303,10 @@ function SelectMenu<T extends string>({
               close();
             }}
           >
-            {detail != null || secondary != null ? (
+            {/* `optionPrimary` counts too: a row whose name is a composed node
+                (the Design Template swatch + label) has neither a detail nor a
+                secondary value, and the plain branch would drop it. */}
+            {detail != null || secondary != null || optionPrimary != null ? (
               <>
                 <span className="dropdown-item-name">
                   {primary}

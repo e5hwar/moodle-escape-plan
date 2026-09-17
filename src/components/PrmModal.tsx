@@ -28,6 +28,7 @@ export function PrmModal({
   wide,
   pick,
   pickWide,
+  pickFull,
   className,
   hideFooter,
   onCancel,
@@ -60,6 +61,11 @@ export function PrmModal({
    *  2026-09-12 for its Industry column). The other pickers stay at the 884px
    *  their own nodes still draw. */
   pickWide?: boolean;
+  /** Full-screen picker: the card fills the viewport inside the scrim's 24px
+   *  gutter, and its row area grows with it. For a picker whose source list is
+   *  thousands of rows deep (Select Questions), where a fixed card spends most
+   *  of the screen on nothing. */
+  pickFull?: boolean;
   /** Per-modal shell class, for a node whose card is its own width/height
    *  (the Question Bank's bulk-upload screens). */
   className?: string;
@@ -82,7 +88,7 @@ export function PrmModal({
       <div
         className={`prm ${wide ? "prm--wide" : ""}${pick ? " prm--pick" : ""}${
           pickWide ? " prm--pick-wide" : ""
-        }${className ? ` ${className}` : ""}`}
+        }${pickFull ? " prm--pick-full" : ""}${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

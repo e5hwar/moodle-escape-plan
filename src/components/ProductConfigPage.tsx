@@ -1,9 +1,17 @@
 import { useRef, useState } from "react";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import { UploadIcon, GlobeIcon, LockIcon } from "./icons";
+import {
+  designTemplates as seedTemplates,
+  type Award,
+  type AwardDesignTemplate,
+} from "../data/awards";
+import { AddIcon, UploadIcon, GlobeIcon, LockIcon } from "./icons";
 import { RichTextField } from "./RichTextField";
 import { PermissionsSection } from "./PermissionsPage";
+import { AwardTemplatesSection } from "./AwardTemplatesSection";
+import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 /* ─── Icons ─── */
 const TrashIcon = () => (
@@ -38,16 +46,19 @@ const RedirectIcon = () => (
 );
 
 /* ─── Types ─── */
-type Tab = "general" | "display" | "b2c" | "b2b" | "legal" | "permissions";
+type Tab = "general" | "display" | "award-templates" | "b2c" | "b2b" | "legal" | "permissions";
 
 const TAB_LABELS: Record<Tab, string> = {
   general: "General Settings",
   display: "Display Settings",
+  "award-templates": "Award Templates",
   b2c: "B2C Management",
   b2b: "B2B Management",
   legal: "Legal",
   permissions: "Permissions",
 };
+
+const TAB_ORDER: Tab[] = ["general", "display", "award-templates", "b2c", "b2b", "legal", "permissions"];
 
 type TabRow = {
   id: string;
@@ -896,7 +907,15 @@ function PlaceholderSection({ title, desc }: { title: string; desc: string }) {
 }
 
 /* ─── Main page ─── */
-export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
+export function ProductConfigPage({
+  initialTab,
+  onEditAward,
+}: {
+  initialTab?: Tab;
+  /** Leaves for the Awards page, on one Award — the Award Templates tab uses
+   *  it to reach an Award that still holds a template you tried to delete. */
+  onEditAward?: (award: Award) => void;
+} = {}) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   const [forceUpdates, setForceUpdates] = useState<ForceUpdate[]>(DEFAULT_FORCE_UPDATES);
   const [webcamFrequency, setWebcamFrequency] = useState("20");
@@ -917,9 +936,36 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
   const [trades, setTrades] = useState<string[]>(DEFAULT_TRADES);
   const [saved, setSaved] = useState(false);
 
+  /* Award Templates is a record list, not a settings form: it saves through its
+     own wizard and modals, so it keeps its state (and its Create CTA) here
+     rather than under the page's Save Changes button. */
+  const [templates, setTemplates] = useState<AwardDesignTemplate[]>(seedTemplates);
+  const [templateWizard, setTemplateWizard] = useState<
+    { kind: "new" } | { kind: "edit"; template: AwardDesignTemplate } | null
+  >(null);
+  const onTemplatesTab = tab === "award-templates";
+  useCreateShortcut(() => setTemplateWizard({ kind: "new" }), onTemplatesTab && !templateWizard);
+
   function handleSave() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (templateWizard) {
+    return (
+      <NewDesignTemplateWizard
+        editingTemplate={templateWizard.kind === "edit" ? templateWizard.template : undefined}
+        allTemplates={templates}
+        onClose={() => setTemplateWizard(null)}
+        onSave={(t) =>
+          setTemplates((prev) => {
+            const i = prev.findIndex((x) => x.id === t.id);
+            if (i < 0) return [t, ...prev];
+            const next = [...prev]; next[i] = t; return next;
+          })
+        }
+      />
+    );
   }
 
   return (
@@ -930,18 +976,26 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
           <header className="pc-header">
             <div className="pc-header-top">
               <h1 className="pc-page-title">Product Config</h1>
-              <button
-                className="btn-primary"
-                onClick={handleSave}
-                disabled={saved}
-              >
-                {saved ? "Saved!" : "Save Changes"}
-              </button>
+              {onTemplatesTab ? (
+                <button className="new-task" onClick={() => setTemplateWizard({ kind: "new" })}>
+                  <AddIcon />
+                  Create Design Template
+                  <span className="cta-kbd">C</span>
+                </button>
+              ) : (
+                <button
+                  className="btn-primary"
+                  onClick={handleSave}
+                  disabled={saved}
+                >
+                  {saved ? "Saved!" : "Save Changes"}
+                </button>
+              )}
             </div>
 
             {/* Tabs */}
             <nav className="tabbar pc-tabs">
-              {(["general", "display", "b2c", "b2b", "legal", "permissions"] as Tab[]).map((t) => {
+              {TAB_ORDER.map((t) => {
                 const label = TAB_LABELS[t];
                 return (
                   <button
@@ -956,7 +1010,16 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
             </nav>
           </header>
 
-          {/* Body */}
+          {/* Body — the Award Templates tab brings its own full-height table
+              shell, so it replaces the settings body rather than sitting in it. */}
+          {onTemplatesTab ? (
+            <AwardTemplatesSection
+              templates={templates}
+              onEdit={(template) => setTemplateWizard({ kind: "edit", template })}
+              onDelete={(id) => setTemplates((prev) => prev.filter((t) => t.id !== id))}
+              onEditLinkedAward={onEditAward}
+            />
+          ) : (
           <div className="pc-body">
             {tab === "general" && (
               <>
@@ -1086,6 +1149,7 @@ export function ProductConfigPage({ initialTab }: { initialTab?: Tab } = {}) {
 
             {tab === "permissions" && <PermissionsSection />}
           </div>
+          )}
         </div>
       </div>
     </div>

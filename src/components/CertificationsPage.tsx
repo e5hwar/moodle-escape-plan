@@ -7,16 +7,18 @@ import {
   CERT_FIXED_COLUMNS,
   type Certification,
 } from "../data/certifications";
+import { type Award } from "../data/awards";
 import {
   CertFilters,
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
-import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PrmModal } from "./PrmModal";
+import { Dropdown } from "./Dropdown";
+import { CertImportModal, type CertImportMode } from "./CertImportModal";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { CertificationsSearch } from "./CertificationsSearch";
 import { LandingFilterRow, LandingOverlay, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
@@ -34,6 +36,16 @@ const LM_COLS: LandingCol[] = [
 ];
 
 const PAGE_SIZE = 50;
+
+/* The Create Certification menu. Each row keeps the letter of its own
+   distinctive word: S(cratch), B(ackup), C(SV). "C" doing double duty is safe
+   — it only picks CSV Upload while the menu is already open, and opening it is
+   all "C" does while it is closed. */
+const CREATE_OPTIONS: { key: "scratch" | CertImportMode; label: string; shortcut: string }[] = [
+  { key: "scratch", label: "From Scratch", shortcut: "S" },
+  { key: "backup", label: "Upload Backup", shortcut: "B" },
+  { key: "csv", label: "CSV Upload", shortcut: "C" },
+];
 
 // Trigger a client-side file download (used for Certification backups).
 function downloadTextFile(filename: string, content: string, mime: string) {
@@ -127,8 +139,9 @@ export function CertificationsPage({
   onManageContentLinks,
   onManageProgress,
   onArchiveCert,
+  onManageAward,
+  awardForCert,
   onOpenIndustries,
-  onOpenAwards,
   onOpenFeedback,
 }: {
   onNewCert: () => void;
@@ -139,11 +152,19 @@ export function CertificationsPage({
   onManageContentLinks: (cert: Certification) => void;
   onManageProgress: (cert: Certification) => void;
   onArchiveCert: (cert: Certification) => void;
+  /** Opens this Certification's Award — adding one, or managing the one it
+   *  already has. Awards have no page of their own any more. */
+  onManageAward: (cert: Certification) => void;
+  /** The Certification's Award, when it has one — it decides whether the row
+   *  menu reads "Add Award" or "Manage Award". */
+  awardForCert: (cert: Certification) => Award | undefined;
   onOpenIndustries?: () => void;
-  onOpenAwards?: () => void;
   onOpenFeedback?: () => void;
 }) {
-  useCreateShortcut(onNewCert);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  // The upload path picked from the Create menu, if any — each opens its own
+  // modal, and confirming it continues into the wizard.
+  const [importMode, setImportMode] = useState<CertImportMode | null>(null);
   // Local working copy so visibility/archive/delete persist in-session.
   const [certList, setCertList] = useState<Certification[]>(allCerts);
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
@@ -180,6 +201,54 @@ export function CertificationsPage({
   });
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "id", dir: "desc" });
   const [page, setPage] = useState(1);
+
+  // From Scratch goes straight to the wizard; the two upload paths stop at
+  // their modal first.
+  const startCreate = (key: "scratch" | CertImportMode) => {
+    if (key === "scratch") onNewCert();
+    else setImportMode(key);
+  };
+
+  // Keyboard shortcuts, mirroring the Tasks page: "C" opens the Create menu;
+  // once open, each method's letter starts it. Ignored while typing in a field,
+  // with a modifier held, or while an upload modal owns the screen.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (importMode) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (!createMenuOpen) {
+        if (key === "c") {
+          e.preventDefault();
+          setCreateMenuOpen(true);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        setCreateMenuOpen(false);
+        return;
+      }
+      const option = CREATE_OPTIONS.find((o) => o.shortcut.toLowerCase() === key);
+      if (option) {
+        e.preventDefault();
+        setCreateMenuOpen(false);
+        startCreate(option.key);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createMenuOpen, importMode, onNewCert]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -321,24 +390,54 @@ export function CertificationsPage({
             <div>
               <h1 className="tasks-title">Certifications</h1>
             </div>
-            {/* Figma 633:1865 — same move as the Tasks header: Industries,
-                Awards, and Feedback left the sidebar's Content group and are
-                now reached from here, left of the Create Certification CTA. */}
+            {/* Figma 633:1865 — same move as the Tasks header: Industries and
+                Feedback left the sidebar's Content group and are now reached
+                from here, left of the Create Certification CTA. Awards was a
+                third button until Awards stopped being a page: an Award belongs
+                to one Certification, so it is reached from that row's menu. */}
             <div className="tasks-header-actions">
               <button className="cta-quiet" onClick={() => onOpenIndustries?.()}>
                 Industries
               </button>
-              <button className="cta-quiet" onClick={() => onOpenAwards?.()}>
-                Awards
-              </button>
               <button className="cta-quiet" onClick={() => onOpenFeedback?.()}>
                 Feedback
               </button>
-              <button className="new-task" onClick={onNewCert}>
-                <AddIcon />
-                Create Certification
-                <span className="cta-kbd">C</span>
-              </button>
+              {/* The three creation methods used to be cards on a full-page
+                  chooser between this button and the wizard. They are rows in
+                  the CTA's menu now, on the Tasks page's Create Task shell
+                  (Figma 724:1010): label + shortcut badge, no icons. */}
+              <Dropdown
+                align="right"
+                width="auto"
+                panelClass="ct-menu"
+                open={createMenuOpen}
+                onOpenChange={setCreateMenuOpen}
+                trigger={({ toggle }) => (
+                  <button className="new-task" onClick={toggle}>
+                    <AddIcon />
+                    Create Certification
+                    <span className="cta-kbd">C</span>
+                  </button>
+                )}
+              >
+                {({ close }) => (
+                  <>
+                    {CREATE_OPTIONS.map(({ key, label, shortcut }) => (
+                      <button
+                        key={key}
+                        className="ct-menu-item"
+                        onClick={() => {
+                          startCreate(key);
+                          close();
+                        }}
+                      >
+                        <span className="ct-menu-label">{label}</span>
+                        <span className="ct-menu-kbd">{shortcut}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </Dropdown>
             </div>
           </header>
 
@@ -457,10 +556,23 @@ export function CertificationsPage({
           onDelete={() => setDeleting(menu.cert)}
           onViewPayers={() => onViewPayers(menu.cert)}
           onViewAllTasks={() => onViewAllTasks(menu.cert)}
+          hasAward={!!awardForCert(menu.cert)}
+          onManageAward={() => onManageAward(menu.cert)}
           onBackup={() => backupCertification(menu.cert)}
           onManageContentLinks={() => onManageContentLinks(menu.cert)}
           onManageProgress={() => onManageProgress(menu.cert)}
           onArchive={() => onArchiveCert(menu.cert)}
+        />
+      )}
+
+      {importMode && (
+        <CertImportModal
+          mode={importMode}
+          onClose={() => setImportMode(null)}
+          onConfirm={() => {
+            setImportMode(null);
+            onNewCert();
+          }}
         />
       )}
 
@@ -638,6 +750,8 @@ function CertActionsMenu({
   onDelete,
   onViewPayers,
   onViewAllTasks,
+  hasAward,
+  onManageAward,
   onBackup,
   onManageContentLinks,
   onManageProgress,
@@ -651,6 +765,8 @@ function CertActionsMenu({
   onDelete: () => void;
   onViewPayers: () => void;
   onViewAllTasks: () => void;
+  hasAward: boolean;
+  onManageAward: () => void;
   onBackup: () => void;
   onManageContentLinks: () => void;
   onManageProgress: () => void;
@@ -738,6 +854,10 @@ function CertActionsMenu({
       {/* Opens the Tasks page with this Certification already in the filter
           row — the Tasks a Cert is built from, without retyping the name. */}
       {item(<MenuAllTasksIcon />, "View All Tasks", onViewAllTasks)}
+      {/* Figma 1226:1425 — "Add Award", between View All Tasks and Backup.
+          A Certification can hold at most one Award, so the entry is the
+          Award's whole life cycle: it reads "Manage Award" once there is one. */}
+      {item(<MenuAwardIcon />, hasAward ? "Manage Award" : "Add Award", onManageAward)}
       {item(<MenuBackupIcon />, "Backup Certification", onBackup)}
       {/* Archiving used to be an edit-only step inside the Cert wizard; it's
           now this entry, opening its own full-page Archive & Replace view. An

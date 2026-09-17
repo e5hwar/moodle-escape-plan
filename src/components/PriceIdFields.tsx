@@ -56,10 +56,13 @@ export function PriceIdMatrix({
   columns,
   onAdd,
   addLabel = "Add Attempt Price",
+  flagEmpty = false,
 }: {
   columns: PriceIdColumnSpec[];
   onAdd: () => void;
   addLabel?: string;
+  /** True after a blocked create attempt: redden every cell still empty. */
+  flagEmpty?: boolean;
 }) {
   return (
     <div className="price-id-matrix">
@@ -91,7 +94,7 @@ export function PriceIdMatrix({
             {PRICE_CHANNELS.map((ch) => (
               <input
                 key={ch.key}
-                className="form-input"
+                className={`form-input${flagEmpty && !col.value[ch.key].trim() ? " has-error" : ""}`}
                 /* Every column shows the same placeholder, so the column's own
                    heading has to carry into the accessible name. */
                 placeholder={`${ch.name}...`}
@@ -120,9 +123,12 @@ export function PriceIdMatrix({
 export function PriceIdFields({
   value,
   onChange,
+  flagEmpty = false,
 }: {
   value: PriceIds;
   onChange: (ids: PriceIds) => void;
+  /** True after a blocked create attempt: redden every input still empty. */
+  flagEmpty?: boolean;
 }) {
   // Several of these sit on the Quiz wizard's payments step (one per attempt),
   // so the label/input pairing needs ids unique to this instance.
@@ -141,7 +147,9 @@ export function PriceIdFields({
             </label>
             <input
               id={id}
-              className="form-input price-id-input"
+              className={`form-input price-id-input${
+                flagEmpty && !value[ch.key].trim() ? " has-error" : ""
+              }`}
               placeholder={`${ch.name}...`}
               value={value[ch.key]}
               onChange={(e) => onChange({ ...value, [ch.key]: e.target.value })}

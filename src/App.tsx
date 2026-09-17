@@ -13,10 +13,16 @@ import { tasks, type Task, type TaskType } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard, ArchiveCertificationPage } from "./components/NewCertificationWizard";
-import { NewCertificationStart } from "./components/NewCertificationStart";
 import { SkillsPage } from "./components/SkillsPage";
-import { AwardsPage } from "./components/AwardsPage";
+import { NewAwardWizard } from "./components/NewAwardWizard";
+import { AwardRecipientsPage } from "./components/AwardRecipientsPage";
 import { type Certification } from "./data/certifications";
+import {
+  awards as seedAwards,
+  designTemplates,
+  certForAward,
+  type Award,
+} from "./data/awards";
 import { ContentLinksPage } from "./components/ContentLinksPage";
 import { nodes as contentNodes, type ContentNode, type Level } from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
@@ -95,14 +101,18 @@ type View =
     }
   | { name: "attempt-viewer"; attempt: Attempt; quizName: string }
   | { name: "quiz-purchasers"; task: Task }
-  | { name: "new-cert-start" }
   | { name: "new-cert" }
   | { name: "edit-cert"; cert: Certification }
   | { name: "archive-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
   | { name: "content-links"; cert?: Certification }
   | { name: "skills" }
-  | { name: "awards" }
+  /* Awards have no page of their own: one belongs to one Certification and is
+     opened from that row's menu, so the Certification IS the route. Product
+     Config's Award Templates tab sends you here too, on the Certification
+     whose Award still holds a template you tried to delete. */
+  | { name: "cert-award"; cert: Certification }
+  | { name: "award-recipients"; award: Award; cert: Certification }
   /* `historyForId` opens the bank straight on one question's Version History
      page — how a version opened in the editor gets back where it came from. */
   | { name: "question-bank"; historyForId?: string }
@@ -148,7 +158,10 @@ type View =
       taskId?: string;
       origin: "tasks" | "certs" | "users" | "companies";
     }
-  | { name: "product-config"; tab?: "general" | "display" | "b2c" | "b2b" | "legal" | "permissions" }
+  | {
+      name: "product-config";
+      tab?: "general" | "display" | "award-templates" | "b2c" | "b2b" | "legal" | "permissions";
+    }
   | { name: "merge-accounts" }
   | { name: "transfer-subscription" };
 
@@ -166,7 +179,6 @@ const VIEW_SLUGS: Record<string, string> = {
   certs: "certifications",
   industries: "industries",
   skills: "skills",
-  awards: "awards",
   feedback: "feedback",
   "review-hands-on": "review-hands-on",
   proctoring: "proctoring-review",
@@ -196,7 +208,6 @@ const NAV_KEY_TO_VIEW: Record<string, View> = {
   certs: { name: "certs" },
   tasks: { name: "tasks" },
   skills: { name: "skills" },
-  awards: { name: "awards" },
   "question-bank": { name: "question-bank" },
   spotlight: { name: "spotlight" },
   "proctoring-review": { name: "proctoring" },
@@ -443,6 +454,10 @@ function AdminApp() {
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
+  /* Awards used to live on the Awards page's own state. That page is gone, so
+     the list sits here: the Certifications table reads it to label each row's
+     menu, and the Award form writes back into it. */
+  const [awards, setAwards] = useState<Award[]>(seedAwards);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
   // Tasks published from the wizard this session. They sit on top of the seed
   // list; TasksPage re-seeds from this every time it mounts.
@@ -520,13 +535,14 @@ function AdminApp() {
   }, []);
 
   const sidebarActive =
-    view.name === "certs" || view.name === "new-cert-start" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "archive-cert" || view.name === "cert-purchasers" || view.name === "content-links"
+    view.name === "certs" || view.name === "new-cert" || view.name === "edit-cert" || view.name === "archive-cert" || view.name === "cert-purchasers" || view.name === "content-links"
       ? "certs"
       : view.name === "skills"
       ? "skills"
-      : // Industries, Awards, and Feedback are reached from the Certifications
-        // header (their sidebar entries are gone), so Certifications stays lit.
-      view.name === "awards"
+      : // Industries and Feedback are reached from the Certifications header
+        // (their sidebar entries are gone), and an Award from a Certification
+        // row's menu — so Certifications stays lit for all of them.
+      view.name === "cert-award" || view.name === "award-recipients"
       ? "certs"
       : view.name === "new-question" && view.forFormId
       ? "certs"
@@ -684,7 +700,7 @@ function AdminApp() {
         <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks" })} />
       ) : view.name === "certs" ? (
         <CertificationsPage
-          onNewCert={() => setView({ name: "new-cert-start" })}
+          onNewCert={() => setView({ name: "new-cert" })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
@@ -694,8 +710,9 @@ function AdminApp() {
             setView({ name: "content-overrides", certId: cert.id, origin: "certs" })
           }
           onArchiveCert={(cert) => setView({ name: "archive-cert", cert })}
+          onManageAward={(cert) => setView({ name: "cert-award", cert })}
+          awardForCert={(cert) => awards.find((a) => a.certificationId === cert.id)}
           onOpenIndustries={() => navigate("industries")}
-          onOpenAwards={() => navigate("awards")}
           onOpenFeedback={() => navigate("feedback")}
         />
       ) : view.name === "cert-purchasers" ? (
@@ -708,8 +725,47 @@ function AdminApp() {
         />
       ) : view.name === "skills" ? (
         <SkillsPage />
-      ) : view.name === "awards" ? (
-        <AwardsPage onBackToCerts={() => navigate("certs")} />
+      ) : view.name === "cert-award" ? (
+        (() => {
+          const existing = awards.find((a) => a.certificationId === view.cert.id);
+          return (
+            <NewAwardWizard
+              key={view.cert.id}
+              certification={view.cert}
+              editingAward={existing}
+              allAwards={awards}
+              templates={designTemplates}
+              onClose={() => navigate("certs")}
+              onSave={(a) =>
+                setAwards((prev) => {
+                  const i = prev.findIndex((x) => x.id === a.id);
+                  if (i < 0) return [a, ...prev];
+                  const next = [...prev];
+                  next[i] = a;
+                  return next;
+                })
+              }
+              onDelete={
+                existing
+                  ? () => {
+                      setAwards((prev) => prev.filter((x) => x.id !== existing.id));
+                      navigate("certs");
+                    }
+                  : undefined
+              }
+              onViewRecipients={
+                existing
+                  ? () => setView({ name: "award-recipients", award: existing, cert: view.cert })
+                  : undefined
+              }
+            />
+          );
+        })()
+      ) : view.name === "award-recipients" ? (
+        <AwardRecipientsPage
+          award={view.award}
+          onBack={() => setView({ name: "cert-award", cert: view.cert })}
+        />
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
           key={bank.length}
@@ -856,7 +912,13 @@ function AdminApp() {
           onBack={() => setView(CONTENT_OVERRIDES_BACK[view.origin].view)}
         />
       ) : view.name === "product-config" ? (
-        <ProductConfigPage initialTab={view.tab} />
+        <ProductConfigPage
+          initialTab={view.tab}
+          onEditAward={(award) => {
+            const cert = certForAward(award);
+            if (cert) setView({ name: "cert-award", cert });
+          }}
+        />
       ) : view.name === "merge-accounts" ? (
         <MergeAccountsPage onClose={() => navigate("manage-users")} />
       ) : view.name === "transfer-subscription" ? (
@@ -919,11 +981,6 @@ function AdminApp() {
           taskType={taskTypeKey(view.task.type)}
           editingTask={view.task}
           onClose={() => setView({ name: "tasks" })}
-        />
-      ) : view.name === "new-cert-start" ? (
-        <NewCertificationStart
-          onFromScratch={() => setView({ name: "new-cert" })}
-          onClose={() => setView({ name: "certs" })}
         />
       ) : view.name === "edit-cert" ? (
         <NewCertificationWizard
