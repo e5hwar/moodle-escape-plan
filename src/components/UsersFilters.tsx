@@ -61,9 +61,9 @@ export type UserMoreFilterKey = "roles" | "goals" | "industries";
 const MORE_ALL: UserMoreFilterKey[] = ["roles", "goals", "industries"];
 
 export const USER_TYPES = ["B2C", "B2B"];
-export const SUBSCRIPTIONS = ["Free Trial", "Starter", "Subscriber", "Scholarship"];
+export const SUBSCRIPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled", "Starter"];
 export const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
-export const GOALS = ["Looking for my first trades job", "Exploring careers in the skilled trades", "Focused on advancing my career", "Other"];
+export const GOALS = ["Looking for First Trades Job", "Exploring Careers in the Skilled Trades", "Focussed on Advancing Career", "Other"];
 export const INDUSTRIES = ["HVAC", "Electrical", "Plumbing", "Solar", "Refrigeration", "Appliance Repair"];
 const COMPANY_NAMES = companies.map((c) => c.name);
 

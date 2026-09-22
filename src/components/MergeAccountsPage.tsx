@@ -1,27 +1,32 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   mergeUsers,
-  recordSamples,
+  categoryRecords,
   conflictDefs,
   type MergeUser,
   type ConflictDef,
 } from "../data/mergeAccounts";
 import {
-  AlertTriangleIcon,
-  CheckBoldIcon,
-  ChevronDownIcon,
-  CreditCardIcon,
+  ArrowLeftLongIcon,
+  ExpandVerticalIcon,
   InfoCircleIcon,
-  LockIcon,
-  PlusCircleIcon,
+  InfoTipIcon,
+  KeyCommandIcon,
+  ClearXIcon,
   SearchIcon,
-  SmallXIcon,
-  SwapIcon,
-  XCircleIcon,
+  ShrinkVerticalIcon,
+  SwapRolesIcon,
+  TreeCaretIcon,
+  TrendUpIcon,
+  WarnTriangleIcon,
 } from "./icons";
-import { WizardStepRail, type WizardStepStatus } from "./WizardStepRail";
-import { SectionHeading } from "./SectionHeading";
+import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
+import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
+import { NoteCard } from "./NoteCard";
 import { PrmModal } from "./PrmModal";
+import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { TableCard } from "./TableCard";
 import { SelectUsersModal } from "./SelectUsersModal";
 
 /**
@@ -33,54 +38,60 @@ import { SelectUsersModal } from "./SelectUsersModal";
  * final confirmation modal, after which the merge "runs" and an audit-log entry
  * is shown.
  *
- * Everything here is assembled from shared design-system parts — the page owns
- * no visual language of its own:
- *   shell        -> .wizard / .wizard-nav / .wizard-content / .wizard-footer
- *                   (Figma 625:1459 rail, 73:515 footer), WizardStepRail
- *   sections     -> SectionHeading (Figma 104:376)
+ * Everything here is assembled from the parts every other wizard uses — the
+ * page owns no visual language of its own (re-synced 2026-09-22, the same
+ * pass Transfer Subscription had):
+ *   shell        -> .wizard-nav rail + .wizard-main behind the edge-line gate
+ *                   (wizardGate.tsx) and the ⌘+Enter footer keycap (wizardKeys.tsx)
  *   comparisons  -> the shared .table (Figma 79:443/79:445) + .co-status-pill
- *   callouts     -> .mc-notice (neutral notice with a trailing action slot)
- *   disclosure   -> the .mc-acc accordion
+ *   callouts     -> NoteCard (Figma 1121:1671), with a trailing action slot
+ *   disclosure   -> the Skills page's grouped table (1117:1537): collapsible
+ *                   `.skg-group` category rows over `.skg-child` sample rows
  *   choices      -> .radio-card (Figma 134:1790) and .seg-control (359:2373)
- *   account search -> the Manage-Users combobox (.usearch-*)
+ *   accounts     -> AccountPicker fields opening SelectUsersModal (682:2321)
+ *   gating       -> the disabled CTA explains itself on hover (aria-disabled +
+ *                   data-tip); the rail locks steps not yet reached
  *   confirmation -> PrmModal (Figma 483:588) with the destructive CTA (495:2247)
  *   result       -> .wizard-body--success / .success-summary
- * The page root is `.wizard .mc-root` — .mc-root only carries the --mc-* tokens
- * that .mc-notice / .mc-acc read, and otherwise restates .wizard exactly.
  * The page-local .mgf-* rules are layout-only (see the block in index.css).
  *
  * All data is demo data (see ../data/mergeAccounts). Nothing is persisted.
  */
 
 type Side = "primary" | "secondary";
-type Phase = "idle" | "processing" | "done";
+/* There is no "done": the run hands off to the caller and this page goes. */
+type Phase = "idle" | "processing";
 
+/* Each step's `desc` is the one line the screen needs; `tip` is the longer
+   explanation behind the ⓘ beside it — what actually happens to a learner's
+   data, which is the part an admin is accountable for and the part the short
+   line can't carry. */
 const STEPS = [
   {
     id: "accounts",
     label: "Accounts",
     title: "Choose Accounts to Merge",
     desc: "Choose two accounts. One account remains and the other is permanently deleted at the end of this process.",
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    title: "Subscriptions & add-ons",
-    desc: "Decide what carries over to the merged account. Billing decisions are explicit and run before the merge.",
+    tip: "A merge moves everything off one account and onto the other, then deletes it. The account you keep holds on to its own login, password and auth methods — nothing about how that person signs in changes. Everything on the account you delete moves across: completions, certifications, skills, awards, one-time purchases and, if you choose it, the subscription. A company-affiliated account can never be the one deleted, so a B2B account always has to be the one you keep.",
   },
   {
     id: "conflicts",
     label: "Conflicts",
     title: "Merge learning records",
     desc: "All records from the Secondary merge into the Primary. Expand any row to see what's moving. Where only one record can exist, resolve the conflict.",
+    tip: "Records simply move across unless the merged account can only hold one of them — one proficiency per skill, one entry per certification path. Those are the conflicts listed here, and the record you do not keep is discarded rather than archived, so the choice is final.",
   },
   {
     id: "review",
     label: "Review",
     title: "Review the merge",
     desc: "A preview of everything that will happen. Nothing has changed yet — confirm on the next step to run the merge.",
+    tip: "Nothing has been written yet. The merge runs only once you confirm in the dialog after this step, and it cannot be undone — the deleted account and its login are gone for good, and an audit-log entry is written naming both accounts and every decision made here.",
   },
 ];
+
+/** How long the "running…" screen is held before the result. Demo timing. */
+const RUN_MS = 1700;
 
 function getUser(id: string | null): MergeUser | null {
   return mergeUsers.find((u) => u.id === id) ?? null;
@@ -102,129 +113,188 @@ export function Avatar({ user, size = 32 }: { user: MergeUser; size?: number }) 
   );
 }
 
-/** B2B / B2C account type, as a shared status pill (Figma 109:1237). */
-export function TypePill({ user }: { user: MergeUser }) {
-  return (
-    <span className={`co-status-pill co-status-pill--${user.company ? "purple" : "secondary"}`}>
-      {user.company ? "B2B" : "B2C"}
-    </span>
-  );
-}
-
+/** The account-details rows, at the node's labels (1282:2418). Subscription
+ *  joined them when Billing stopped being a step of its own: it is a fact
+ *  about each account now, compared like every other, not a decision. */
 export function detailRows(u: MergeUser) {
   return [
     { k: "Email", v: u.email },
-    { k: "Phone", v: u.phone },
-    { k: "Account created", v: u.created },
-    { k: "Login method", v: u.login },
-    { k: "Company", v: u.company ? `${u.company} · B2B` : "None (individual)" },
+    { k: "Phone Number", v: u.phone },
+    { k: "Login Method", v: u.login },
+    { k: "Account Created", v: u.created },
+    { k: "Subscription", v: u.sub.active ? u.sub.plan : "" },
+    { k: "Company Details", v: u.company ?? "" },
   ];
 }
 
-/** Neutral notice with an optional leading glyph, status pill and trailing
- *  action — the design system's .mc-notice. */
-export function Notice({
-  tone = "info",
-  icon,
-  pill,
-  pillTone = "secondary",
-  title,
-  sub,
-  action,
-}: {
-  tone?: "info" | "warn" | "danger" | "ok";
-  icon?: ReactNode;
-  pill?: string;
-  pillTone?: "accent" | "red" | "yellow" | "green" | "secondary" | "purple" | "grey";
-  title: ReactNode;
-  sub?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="mc-notice">
-      {icon && <span className={`mgf-lead mgf-lead--${tone}`}>{icon}</span>}
-      <div className="mc-notice-text">
-        <div className="mc-notice-title">{title}</div>
-        {sub && <div className="mc-notice-sub">{sub}</div>}
-      </div>
-      {pill && <span className={`co-status-pill co-status-pill--${pillTone}`}>{pill}</span>}
-      {action}
-    </div>
-  );
-}
+/**
+ * One row of a comparison table (Figma 1282:2418 / 1282:2333). Both nodes
+ * carry the same three columns — a muted label, the kept account's value, the
+ * deleted account's — and the same three treatments on top of them, each of
+ * which belongs to one side, so they ride on the row rather than the cell.
+ */
+export type CompareRow = {
+  k: string;
+  /** Account Kept — white, Medium. */
+  a: ReactNode;
+  /** Account Deleted — muted. */
+  b: ReactNode;
+  /** The deleted value goes with the account, so it reads struck through. */
+  strikeB?: boolean;
+  /** The deleted value is what blocks the merge: red, with the node's flag. */
+  flagB?: boolean;
+  /** What the deleted account adds to the kept one — the green "+N ↑". */
+  delta?: number;
+};
 
-export type CompareRow = { k: string; a: ReactNode; b: ReactNode };
+/** Empty cell, at the app's table convention — the node draws a hyphen. */
+const DASH = "—";
 
-/** Placeholder for a side that has not been picked yet. */
-const EMPTY = "";
-
-/** The five identity rows, with either side allowed to be empty. */
-export function accountCompareRows(a: MergeUser | null, b: MergeUser | null): CompareRow[] {
+/**
+ * The identity rows, with either side allowed to be empty.
+ *
+ * The right-hand values are struck through by default, because in a merge that
+ * column belongs to the account being deleted and every one of those values
+ * goes with it. Transfer Subscription compares the same two accounts without
+ * deleting either, so it passes `strike: false` — striking an address that
+ * survives the operation would say something untrue.
+ */
+export function accountCompareRows(
+  a: MergeUser | null,
+  b: MergeUser | null,
+  { strike = true }: { strike?: boolean } = {},
+): CompareRow[] {
+  const keys = detailRows((a ?? b)!).map((d) => d.k);
   const av = a ? detailRows(a) : null;
   const bv = b ? detailRows(b) : null;
-  const keys = detailRows((a ?? b)!).map((d) => d.k);
-  return keys.map((k, i) => ({ k, a: av ? av[i].v : EMPTY, b: bv ? bv[i].v : EMPTY }));
+  return keys.map((k, i) => {
+    const left = av ? av[i].v : "";
+    const right = bv ? bv[i].v : "";
+    // A company on the account being DELETED is what blocks the merge, so that
+    // is the one value here the table flags rather than strikes.
+    const flagB = strike && k === "Company Details" && !!right;
+    return {
+      k,
+      a: left || DASH,
+      b: right || DASH,
+      strikeB: strike && !!right && !flagB,
+      flagB,
+    };
+  });
 }
 
-/** Completion-record counts plus a total, with either side allowed to be empty. */
+/* Training Progress (1282:2333) reports four totals, not the seven record
+   categories step 3 moves — the labels are the node's, the counts come from
+   the same `data` those categories are keyed by. */
+const PROGRESS_ROWS: [label: string, key: string][] = [
+  ["Tasks Completed", "Task completions"],
+  ["Certifications Completed", "Certifications"],
+  ["Awards Received", "Awards"],
+  ["Skills Earned", "Skills"],
+];
+
+/** The four progress totals, with either side allowed to be empty. */
 export function recordCompareRows(a: MergeUser | null, b: MergeUser | null): CompareRow[] {
-  const keys = Object.keys((a ?? b)!.data);
-  const total = (u: MergeUser) => Object.values(u.data).reduce((x, y) => x + y, 0);
-  return [
-    ...keys.map((k) => ({ k, a: a ? a.data[k] : EMPTY, b: b ? b.data[k] : EMPTY })),
-    { k: "Total", a: a ? total(a) : EMPTY, b: b ? total(b) : EMPTY },
-  ];
+  return PROGRESS_ROWS.map(([label, key]) => {
+    const av = a ? a.data[key] ?? 0 : 0;
+    const bv = b ? b.data[key] ?? 0 : 0;
+    return {
+      k: label,
+      // Zero reads as empty — unless something is moving in, where the count
+      // it is moving into is the point.
+      a: av || bv ? av : DASH,
+      b: bv || DASH,
+      strikeB: bv > 0,
+      delta: bv || undefined,
+    };
+  });
 }
 
-/** Two accounts side by side on the shared .table. The role pills live in the
- *  header row — the plain-text-column rule strips pill chrome inside <td>. */
+/**
+ * Two accounts side by side, on the shared `.table` inside a `TableCard`.
+ *
+ * The Merge nodes (1282:2418 / 1282:2333) name the COLUMNS rather than the
+ * accounts, so the role pills the header used to carry are gone — which is
+ * also what lets the header hold its 36px instead of wrapping — and the kept
+ * column is the emphasised one.
+ *
+ * Transfer Subscription shares the table and the reading: its columns are the
+ * destination and the source, named the same way, with the account that comes
+ * out of the operation holding the plan on the emphasised left. Where neither
+ * side is the outcome — its step-1 "what these two hold today" — it passes
+ * `emphasis="none"` rather than implying one of them is the kept one.
+ */
 export function CompareTable({
+  keptLabel = "Account Kept",
+  goneLabel = "Account Deleted",
   leftLabel,
   leftPill,
   leftTone,
   rightLabel,
   rightPill,
   rightTone,
+  emphasis = "kept",
   rows,
 }: {
-  leftLabel: string;
+  keptLabel?: string;
+  goneLabel?: string;
+  /** Names the accounts in the header instead, with a pill each. */
+  leftLabel?: string;
   leftPill?: string;
   leftTone?: string;
-  rightLabel: string;
+  rightLabel?: string;
   rightPill?: string;
   rightTone?: string;
+  /** "none" leaves both value columns muted — neither side is the kept one. */
+  emphasis?: "kept" | "none";
   rows: CompareRow[];
 }) {
+  const named = !!leftLabel || !!rightLabel;
+  const head = (label?: string, pill?: string, tone?: string) => (
+    <span className="mgf-th">
+      {label}
+      {pill && <span className={`co-status-pill co-status-pill--${tone}`}>{pill}</span>}
+    </span>
+  );
   return (
-    <table className="table sch-table mgf-table">
+    <table className="table mgf-table mgf-compare">
       <colgroup>
-        <col style={{ width: "34%" }} />
+        <col style={{ width: 216 }} />
         <col />
         <col />
       </colgroup>
       <thead>
         <tr>
           <th />
-          <th>
-            <span className="mgf-th">
-              {leftLabel}
-              {leftPill && <span className={`co-status-pill co-status-pill--${leftTone}`}>{leftPill}</span>}
-            </span>
-          </th>
-          <th>
-            <span className="mgf-th">
-              {rightLabel}
-              {rightPill && <span className={`co-status-pill co-status-pill--${rightTone}`}>{rightPill}</span>}
-            </span>
-          </th>
+          <th>{named ? head(leftLabel, leftPill, leftTone) : keptLabel}</th>
+          <th>{named ? head(rightLabel, rightPill, rightTone) : goneLabel}</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.k}>
-            <td className="col-name">{r.k}</td>
-            <td>{r.a}</td>
-            <td>{r.b}</td>
+            <td className="mgf-c-label">{r.k}</td>
+            {/* `col-name` IS this table's emphasised column — white and Medium,
+                and already excluded from the muted-cell rule. */}
+            <td className={emphasis === "kept" ? "col-name" : undefined}>
+              {r.a}
+              {r.delta ? (
+                <span className="mgf-delta">
+                  +{r.delta}
+                  <TrendUpIcon />
+                </span>
+              ) : null}
+            </td>
+            <td className={r.strikeB ? "mgf-c-gone" : undefined}>
+              {r.flagB ? (
+                <span className="mgf-flag">
+                  {r.b}
+                  <WarnTriangleIcon />
+                </span>
+              ) : (
+                r.b
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -232,234 +302,192 @@ export function CompareTable({
   );
 }
 
-/** From → to strip, built from the table's user cell (.mc-cell-user). */
+/**
+ * The step-1 empty state's backdrop: the two comparisons this step is about to
+ * load — Account details over Completion records — drawn on the REAL shells
+ * (`TableCard` + the page's own `.mgf-table`) with every value replaced by a
+ * bar. Nothing here introduces a border, a radius or a colour of its own, so
+ * the outline sits exactly where the content will; the bars are the same
+ * `.mc-ghost-bar` atom, at the same 0.08, that Manage Completions' empty state
+ * uses.
+ *
+ * Decoration only: aria-hidden, no pointer events, and held right down at the
+ * bottom of the page's contrast — enough of an outline to say the comparison
+ * lands here, never enough to compete with the question in front of it.
+ */
+function MergeGhost() {
+  return (
+    <div className="mgf-ghost" aria-hidden="true">
+      {/* The real row counts — five identity rows, then four progress totals —
+          so the backdrop is the right shape, both titles included. */}
+      <span className="mc-ghost-bar mgf-ghost-heading mgf-ghost-heading--first" />
+      <GhostCompare rows={5} />
+      <span className="mc-ghost-bar mgf-ghost-heading" />
+      <GhostCompare rows={4} />
+    </div>
+  );
+}
+
+/** One ghost comparison card — shared with the Transfer Subscription flow,
+ *  whose step 1 draws the same backdrop over its own two tables. */
+export function GhostCompare({ rows }: { rows: number }) {
+  return (
+    <TableCard className="mgf-tcard">
+      <table className="table mgf-table mgf-compare">
+        <colgroup>
+          <col style={{ width: 216 }} />
+          <col />
+          <col />
+        </colgroup>
+        <thead>
+          <tr>
+            <th />
+            <th>
+              <span className="mc-ghost-bar mgf-ghost-th" />
+            </th>
+            <th>
+              <span className="mc-ghost-bar mgf-ghost-th" />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }, (_, i) => (
+            <tr key={i}>
+              <td className="col-name">
+                <span className="mc-ghost-bar" />
+              </td>
+              <td>
+                <span className="mc-ghost-bar" />
+              </td>
+              <td>
+                <span className="mc-ghost-bar" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableCard>
+  );
+}
+
+/**
+ * The flow card (Figma 1289:2883): where things end up, an arrow pointing into
+ * it, and where they came from. No avatars — the two accounts are named, and
+ * the direction is the arrow's job.
+ *
+ * The surviving account is on the LEFT, which is the same reading as the
+ * comparison tables (Account Kept then Account Deleted) and why the arrow
+ * points left. The right-hand account is muted, and `fromStruck` strikes it
+ * through for the case where it does not survive the operation at all.
+ */
 export function FlowStrip({
-  from,
-  fromNote,
   to,
-  toNote,
+  toSub,
+  from,
+  fromSub,
+  fromStruck = false,
 }: {
-  from: MergeUser;
-  fromNote: string;
+  /** Left: what receives. */
   to: MergeUser;
-  toNote: string;
+  /** Its second line — the account's email unless the flow needs to say more. */
+  toSub?: ReactNode;
+  /** Right: what it comes from. */
+  from: MergeUser;
+  fromSub?: ReactNode;
+  /** The right-hand account is deleted by this operation, not just emptied. */
+  fromStruck?: boolean;
 }) {
   return (
-    <div className="mc-notice mgf-flow">
-      <span className="mc-cell-user">
-        <Avatar user={from} size={28} />
-        <span className="mc-cell-user-text">
-          <span className="mc-cell-user-name">{from.email}</span>
-          <span className="mc-cell-user-sub">{fromNote}</span>
-        </span>
+    <div className="note-card mgf-flow">
+      <span className="mgf-flow-side">
+        <span className="mgf-flow-name">{to.name}</span>
+        <span className="mgf-flow-sub">{toSub ?? to.email}</span>
       </span>
       <span className="mgf-flow-arrow">
-        <ArrowGlyph />
+        <ArrowLeftLongIcon />
       </span>
-      <span className="mc-cell-user">
-        <Avatar user={to} size={28} />
-        <span className="mc-cell-user-text">
-          <span className="mc-cell-user-name">{to.email}</span>
-          <span className="mc-cell-user-sub">{toNote}</span>
-        </span>
+      <span className={`mgf-flow-side mgf-flow-side--from${fromStruck ? " is-struck" : ""}`}>
+        <span className="mgf-flow-name">{from.name}</span>
+        <span className="mgf-flow-sub">{fromSub ?? from.email}</span>
       </span>
     </div>
   );
 }
 
-const ArrowGlyph = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-/** Account picker — the shared search combobox, then the picked-account row. */
+/**
+ * Account picker (Figma 1284:2532 empty / 1284:2662 picked) — the shared 43px
+ * search bar standing in for the Select Users table picker (682:2321) it
+ * opens. Picking an account does NOT swap the field for a card: the bar keeps
+ * its chrome and its search icon, and the value reads inline as the name
+ * followed by a muted "· email", with a ✕ at the far end.
+ *
+ * That is why both states measure the same 43px — a filled field beside an
+ * empty one leaves the row level. Both admin flows use this, so the two fields
+ * read as one control.
+ */
 export function AccountPicker({
   user,
-  query,
-  results,
   placeholder,
-  emptyText,
-  onQuery,
   onPick,
   onClear,
-  onOpenPicker,
 }: {
   user: MergeUser | null;
-  query: string;
-  results: MergeUser[];
   placeholder: string;
-  /** Overrides the default "no accounts match" copy (Transfer flags B2B accounts). */
-  emptyText?: string;
-  onQuery: (q: string) => void;
-  onPick: (id: string) => void;
+  /** Opens the table picker — a filled field is a second way back into it,
+   *  opening pre-ticked. */
+  onPick: () => void;
   onClear: () => void;
-  /** When set, the empty field is a trigger for a table picker instead of an
-   *  inline combobox — Merge Accounts opens SelectUsersModal this way, Transfer
-   *  keeps the combobox. The bar keeps its search chrome either way, so the two
-   *  flows still read as the same control. */
-  onOpenPicker?: () => void;
 }) {
-  if (user) {
-    // With a table picker the filled row is a second way back into it, opening
-    // pre-ticked; the ✕ still clears just this side.
-    return (
-      <div
-        className={`mgf-picked${onOpenPicker ? " mgf-picked--clickable" : ""}`}
-        onClick={onOpenPicker}
-      >
-        <span className="mc-cell-user">
-          <Avatar user={user} />
-          <span className="mc-cell-user-text">
-            <span className="mc-cell-user-name">{user.name}</span>
-            <span className="mc-cell-user-sub">{user.email}</span>
-          </span>
-        </span>
-        <TypePill user={user} />
-        <button
-          className="mc-iconbtn"
-          aria-label="Clear"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-        >
-          <SmallXIcon />
-        </button>
-      </div>
-    );
-  }
-
-  if (onOpenPicker) {
-    return (
-      <div className="usearch mgf-usearch">
-        <button className="usearch-bar mgf-usearch-trigger" onClick={onOpenPicker}>
+  return (
+    <div className="usearch mgf-usearch">
+      {/* The bar is the shell, not the control: it has to hold the ✕ as well
+          as the trigger, and a button cannot nest inside a button. */}
+      <div className="usearch-bar mgf-usearch-bar">
+        <button className="mgf-usearch-trigger" onClick={onPick}>
           <span className="usearch-icon">
             <SearchIcon />
           </span>
-          <span className="mgf-usearch-placeholder">{placeholder}</span>
-        </button>
-      </div>
-    );
-  }
-
-  const open = query.trim().length > 0;
-  return (
-    <div className="usearch mgf-usearch">
-      <div className={`usearch-bar ${open ? "open" : ""}`}>
-        <span className="usearch-icon">
-          <SearchIcon />
-        </span>
-        <input
-          className="usearch-input"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          placeholder={placeholder}
-        />
-      </div>
-      {open && (
-        <div className="usearch-panel">
-          <div className="usearch-head">Accounts</div>
-          {results.length === 0 ? (
-            <div className="usearch-empty">{emptyText ?? `No accounts match "${query}"`}</div>
+          {user ? (
+            <span className="mgf-usearch-value">
+              <span className="mgf-usearch-name">{user.name}</span>
+              {/* No whitespace between the spans — the 4px is a margin, so a
+                  stray text node would add a space on top of it. */}
+              <span className="mgf-usearch-sub">· {user.email}</span>
+            </span>
           ) : (
-            results.map((u) => (
-              <button key={u.id} className="usearch-row" onClick={() => onPick(u.id)}>
-                <span className="usearch-avatar">{u.initials}</span>
-                <span className="usearch-user-text">
-                  <span className="usearch-user-name">{u.name}</span>
-                  <span className="usearch-user-sub">{u.email}</span>
-                </span>
-                <span className="mgf-row-pill">
-                  <TypePill user={u} />
-                </span>
-              </button>
-            ))
+            <span className="mgf-usearch-placeholder">{placeholder}</span>
           )}
-        </div>
-      )}
+        </button>
+        {/* Clears just this side, without re-opening the picker. */}
+        {user && (
+          <button className="mgf-usearch-clear" aria-label="Clear" onClick={onClear}>
+            <ClearXIcon />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-/** Shared wizard chrome for the "running…" and "done" screens.
+/** The "running…" screen.
  *  Both use the same 720px column and the same footer band, so handing over
  *  from one to the other moves nothing but the words. */
 export function FlowProcessing({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="wizard mc-root">
+    <div className="wizard">
       <div className="wizard-body wizard-body--success">
         <div className="wizard-content wizard-success-content mgf-done">
           <span className="mgf-spinner" />
           <h1 className="wizard-title">{title}</h1>
-          <p className="wizard-desc">{sub}</p>
+          {/* The "don't navigate away" note lives up here with the copy it
+              belongs to, not as footer status text. */}
+          <p className="wizard-desc">{sub} This takes a moment — don't navigate away.</p>
         </div>
       </div>
 
       <footer className="wizard-footer">
-        <div className="wizard-footer-left">
-          <span className="wizard-saved">This takes a moment — don't navigate away.</span>
-        </div>
+        <div className="wizard-footer-left" />
         <div className="wizard-actions" />
-      </footer>
-    </div>
-  );
-}
-
-export type AuditLog = { id: string; rows: { k: string; v: string; mono: boolean }[] };
-
-export function FlowDone({
-  title,
-  lead,
-  audit,
-  primaryLabel,
-  onPrimary,
-  onClose,
-}: {
-  title: string;
-  lead: ReactNode;
-  audit: AuditLog;
-  primaryLabel: string;
-  onPrimary: () => void;
-  onClose?: () => void;
-}) {
-  return (
-    <div className="wizard mc-root">
-      <div className="wizard-body wizard-body--success">
-        <div className="wizard-content wizard-success-content mgf-done">
-          <div className="wizard-success-icon">
-            <CheckBoldIcon />
-          </div>
-          <h1 className="wizard-title">{title}</h1>
-          <p className="wizard-desc">{lead}</p>
-
-          <SectionHeading
-            label="Audit log entry"
-            trailing={<span className="co-status-pill co-status-pill--secondary">{audit.id}</span>}
-          />
-          <div className="success-summary">
-            {audit.rows.map((r) => (
-              <div className="success-detail-row" key={r.k}>
-                <span className="success-detail-label">{r.k}</span>
-                <span className={`success-detail-value${r.mono ? " is-mono" : ""}`}>{r.v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <footer className="wizard-footer">
-        <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>
-            Back to Manage Users
-          </button>
-        </div>
-        <div className="wizard-actions">
-          <button className="btn-save-draft">View full audit log</button>
-          <button className="btn-publish" onClick={onPrimary}>
-            {primaryLabel}
-          </button>
-        </div>
       </footer>
     </div>
   );
@@ -479,58 +507,111 @@ export function useEscape(active: boolean, onClose: () => void) {
 
 /* ─────────────── The page ─────────────── */
 
-export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
+export function MergeAccountsPage({
+  onClose,
+  onMerged,
+}: {
+  onClose?: () => void;
+  /** A finished merge leaves the wizard: the caller navigates back to Manage
+   *  Users and raises this as its success toast. There is no done screen. */
+  onMerged?: (message: string) => void;
+}) {
   const [step, setStep] = useState(0);
-  // Furthest step cleared — the rail is navigable up to here, so stepping Back
-  // does not re-lock the steps already answered.
+  // Furthest step reached — the rail is navigable up to here, so stepping Back
+  // does not re-lock the steps already answered. Follows `step` upward; only
+  // an account change on step 1 pulls it back down.
   const [maxStep, setMaxStep] = useState(0);
-  const [qPrim, setQPrim] = useState("");
-  const [qSec, setQSec] = useState("");
   const [primId, setPrimId] = useState<string | null>(null);
   const [secId, setSecId] = useState<string | null>(null);
-  const [subChoice, setSubChoice] = useState<"primary" | "secondary" | "neither">("primary");
-  const [addonChoices, setAddonChoices] = useState<Record<string, Side>>({});
   const [conflictChoices, setConflictChoices] = useState<Record<string, Side>>({});
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ Skills: true, "Path entries": true });
+  /* Every category starts collapsed — the table opens as the list of what is
+     moving, and a category is expanded to read it. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showModal, setShowModal] = useState(false);
   // Both account fields open the same Select Users picker (Figma 682:2321).
   const [showPicker, setShowPicker] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [mergedAt, setMergedAt] = useState<Date | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scroller = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  // Each step starts at its own top, not wherever the previous one was scrolled.
-  useEffect(() => { scroller.current?.scrollTo({ top: 0 }); }, [step]);
+  /* The run itself: being in "processing" is what arms the hand-off back to
+     Manage Users. Deliberately an effect keyed on the phase, NOT a timeout
+     stashed in a ref at click time. A ref'd timer is cleared by the cleanup
+     that runs on every hot reload and on StrictMode's second mount, and since
+     nothing but that timer can leave "processing" — the screen has no buttons
+     and this flow has no result screen of its own — losing it strands the
+     merge on a spinner for good. Re-running this effect re-arms it.
+     Deps are the phase alone on purpose: `onMerged` is an inline arrow from
+     App, so listing it would restart the timer on every render up there. */
+  useEffect(() => {
+    if (phase !== "processing") return;
+    const t = setTimeout(() => {
+      onMerged?.(
+        p && s
+          ? `Accounts merged — ${totalMerged} records from ${s.email} moved into ${p.email}`
+          : "Accounts merged",
+      );
+    }, RUN_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+  useEffect(() => { setMaxStep((m) => Math.max(m, step)); }, [step]);
   useEscape(showModal, () => setShowModal(false));
+
+  /* ⌘K opens the account picker while step 1 is still missing a side — the
+     shortcut the empty state's CTA advertises. Off once both are picked, and
+     off behind the confirm modal and the picker itself. */
+  const pickerOpen = showPicker || showModal;
+  const needsAccounts = step === 0 && !(primId && secId);
+  useEffect(() => {
+    if (!needsAccounts || pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowPicker(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [needsAccounts, pickerOpen]);
 
   const p = getUser(primId);
   const s = getUser(secId);
   const both = !!p && !!s;
-  const b2bViolation = !!(s && s.company);
+  /* Two different B2B problems, and only one of them has a way out. A company
+     account can never be the one deleted — so if just the DELETE side is
+     company-affiliated, swapping the roles fixes it. If BOTH are, there is no
+     arrangement of these two accounts that works and the merge is off.
+     Both wait for BOTH sides to be picked: with one account chosen there is no
+     arrangement to judge yet, so the screen stays quiet rather than raising an
+     alarm about a pairing that does not exist. */
+  const bothB2B = !!(p?.company && s?.company);
+  const b2bViolation = both && !!s?.company && !bothB2B;
 
-  function filter(q: string, excludeId: string | null) {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return [];
-    return mergeUsers.filter(
-      (u) =>
-        u.id !== excludeId &&
-        (u.name.toLowerCase().includes(needle) ||
-          u.email.toLowerCase().includes(needle) ||
-          u.id.toLowerCase().includes(needle))
-    );
-  }
+  /* S swaps the roles, the shortcut the B2B banner's button advertises — so it
+     is live on exactly the terms that button is, and never in the dead-end
+     case, where there is no button. `swapRoles` is hoisted, so it is in scope
+     here. */
+  useCreateShortcut(swapRoles, step === 0 && b2bViolation && !pickerOpen, "s");
 
-  const resP = filter(qPrim, secId);
-  const resS = filter(qSec, primId);
+  /* What the empty state asks for depends on which side is still missing —
+     one picker serves both, so only the words change. */
+  const emptyAsk = !p && !s
+    ? {
+        title: "Pick the account to keep, then the one to delete",
+        sub: "The account you keep holds onto its login, password and auth methods. Everything on the other one — completions, skills, awards and purchases — moves across before it is deleted.",
+        cta: "Search Accounts",
+      }
+    : !s
+    ? {
+        title: "Now pick the account to delete",
+        sub: "Its completions, skills, awards and purchases move into the account you are keeping, and the account itself is permanently deleted at the end.",
+        cta: "Search Accounts",
+      }
+    : {
+        title: "Now pick the account to keep",
+        sub: "Everything merges into the account you keep, and it is the login, password and auth methods that survive the merge.",
+        cta: "Search Accounts",
+      };
 
-  const addonConflicts = useMemo(() => {
-    if (!p || !s) return [];
-    const sa = s.addons;
-    return p.addons.filter((a) => sa.some((b) => b.id === a.id));
-  }, [p, s]);
-  const dupIds = addonConflicts.map((a) => a.id);
 
   const activeConflicts = useMemo<ConflictDef[]>(() => {
     if (!both) return [];
@@ -540,52 +621,57 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
   const openConflicts = activeConflicts.filter((c) => !conflictChoices[c.id]).length;
   const allResolved = openConflicts === 0;
 
-  const preservedAddons = useMemo(() => {
-    if (!p || !s) return [];
-    const out: { name: string; type: string; price: string; source: string }[] = [];
-    p.addons.filter((a) => !dupIds.includes(a.id)).forEach((a) => out.push({ ...a, source: "Primary" }));
-    s.addons.filter((a) => !dupIds.includes(a.id)).forEach((a) => out.push({ ...a, source: "Secondary" }));
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p, s, dupIds.join()]);
-
   const totalMerged = s ? Object.values(s.data).reduce((a, b) => a + b, 0) : 0;
 
-  function subText() {
-    if (subChoice === "primary") return "Keep Primary's — " + (p ? p.sub.plan : "");
-    if (subChoice === "secondary") return "Transfer Secondary's — " + (s ? s.sub.plan : "");
-    return "Neither — no active subscription on the merged account";
-  }
-
-  function canContinue() {
-    if (step === 0) return both && !b2bViolation;
-    if (step === 1) return !!subChoice;
-    if (step === 2) return allResolved;
+  /* Whether step `i` has what it needs to be left going forwards. */
+  function cleared(i: number) {
+    if (i === 0) return both && !b2bViolation && !bothB2B;
+    if (i === 1) return allResolved;
     return true;
   }
+  const lastStep = STEPS.length - 1;
+  const isLast = step === lastStep;
+  const cont = cleared(step);
+  /* The greyed-out Continue names the first unmet requirement on hover. */
+  const blockedTip = cont
+    ? undefined
+    : step === 0
+      ? !both
+        ? "Select both accounts"
+        : "A company account must be the Account to Keep — swap the roles"
+      : `${openConflicts} ${openConflicts === 1 ? "conflict" : "conflicts"} still ${
+          openConflicts === 1 ? "needs" : "need"
+        } a decision`;
 
-  function back() {
-    if (step > 0) setStep(step - 1);
-  }
+  const gate = useEdgeLineGate({ step, setStep, lastStep, canGoNext: cont });
+  const stepStatuses = useWizardStepStatuses({
+    step,
+    count: STEPS.length,
+    incomplete: (i) => !cleared(i),
+  });
+
   function advance() {
-    if (!canContinue()) return;
-    if (step < STEPS.length - 1) {
-      setStep(step + 1);
-      setMaxStep((m) => Math.max(m, step + 1));
-    } else setShowModal(true);
+    if (!cont) return;
+    if (step < lastStep) gate.goStep(step + 1);
+    else setShowModal(true);
   }
+  useWizardEnterShortcut(advance);
+
   /* Changing who is Primary invalidates the billing and conflict decisions
      downstream, so the rail's reach collapses back to this step. */
   function pickAccount(set: (id: string | null) => void, id: string | null) {
     set(id);
     setMaxStep(0);
   }
-  /* The picker returns the ticked accounts in tick order: first is kept,
-     second is deleted. One tick fills the kept side and leaves the other empty,
-     which is exactly the half-picked state the step already handles. */
+  /* The picker hands back up to two ids in tick order. An account that already
+     held a role keeps it, so re-opening from one field to change the other
+     never silently swaps which one is kept. */
   function applyPicked(ids: string[]) {
-    setPrimId(ids[0] ?? null);
-    setSecId(ids[1] ?? null);
+    const keepP = primId && ids.includes(primId) ? primId : null;
+    const keepS = secId && ids.includes(secId) ? secId : null;
+    const fresh = ids.filter((id) => id !== keepP && id !== keepS);
+    setPrimId(keepP ?? fresh.shift() ?? null);
+    setSecId(keepS ?? fresh.shift() ?? null);
     setMaxStep(0);
     setShowPicker(false);
   }
@@ -595,85 +681,25 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
     setMaxStep(0);
   }
   function confirmMerge() {
-    if (timer.current) clearTimeout(timer.current);
     setShowModal(false);
     setPhase("processing");
-    setMergedAt(new Date());
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      setPhase("done");
-    }, 1700);
   }
-  function restart() {
-    if (timer.current) clearTimeout(timer.current);
-    setStep(0);
-    setMaxStep(0);
-    setQPrim("");
-    setQSec("");
-    setPrimId(null);
-    setSecId(null);
-    setSubChoice("primary");
-    setAddonChoices({});
-    setConflictChoices({});
-    setExpanded({ Skills: true, "Path entries": true });
-    setShowModal(false);
-    setPhase("idle");
-    setMergedAt(null);
-  }
-
   /* ── derived for steps 3 & 4 ── */
   const recordRows = both && s
     ? Object.keys(s.data).map((key) => {
         const count = s.data[key];
-        // Never list more samples than the category actually moves.
-        const samples = (recordSamples[key] || []).slice(0, count);
-        const more = Math.max(0, count - samples.length);
+        // Every record the category moves — expanding it lists all of them.
+        const samples = categoryRecords(key, count);
         const def = activeConflicts.find((d) => d.cat === key) || null;
         const resolved = def ? !!conflictChoices[def.id] : true;
-        return { key, count, samples, more, def, resolved, isExpanded: !!expanded[key] };
+        return { key, count, samples, def, resolved, isExpanded: !!expanded[key] };
       })
     : [];
-
-  const reviewRows = both && p && s
-    ? [
-        { icon: <SwapIcon />, tone: "info" as const, title: `${totalMerged} learning records merged`, detail: "Tasks, quizzes, sections, hands-on submissions, skills, awards and paths move from the Secondary into the Primary." },
-        { icon: <CheckBoldIcon />, tone: "ok" as const, title: `${activeConflicts.length} record conflicts resolved`, detail: activeConflicts.map((d) => d.title.split(" — ")[0] + ": kept " + (conflictChoices[d.id] === "secondary" ? "Secondary" : "Primary") + "'s").join(" · ") },
-        { icon: <CreditCardIcon />, tone: "info" as const, title: "Subscription", detail: subText() },
-        { icon: <PlusCircleIcon />, tone: "ok" as const, title: `${preservedAddons.length + addonConflicts.length} add-ons settled`, detail: addonConflicts.length ? addonConflicts.map((a) => a.name + ": keep " + ((addonChoices[a.id] || "primary") === "secondary" ? "Secondary" : "Primary") + ", refund other (" + a.price + ")").join(" · ") : "No duplicate add-ons" },
-        { icon: <XCircleIcon />, tone: "danger" as const, title: "Secondary account deleted", detail: s ? `${s.name} · ${s.email} is permanently removed, including its login.` : "" },
-      ]
-    : [];
-
-  const modalPoints = both && p && s
-    ? [`${totalMerged} records merged into ${p.name}'s account`, subText(), `Secondary login (${s.login}) permanently removed`]
-    : [];
-
-  const audit = useMemo<AuditLog | null>(() => {
-    if (phase !== "done" || !mergedAt || !p || !s) return null;
-    const tstr =
-      mergedAt.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC";
-    const cSummary = activeConflicts.map((d) => d.id + ": kept " + (conflictChoices[d.id] === "secondary" ? "Secondary" : "Primary")).join(" · ");
-    const aSummary = addonConflicts.length
-      ? addonConflicts.map((a) => a.name + " → kept " + ((addonChoices[a.id] || "primary") === "secondary" ? "Secondary" : "Primary") + ", refunded " + a.price).join(" · ")
-      : "none";
-    return {
-      id: "MERGE-" + mergedAt.getTime().toString(36).toUpperCase(),
-      rows: [
-        { k: "Primary (kept)", v: `${p.name}  ·  ${p.email}  ·  ${p.id}`, mono: true },
-        { k: "Secondary (removed)", v: `${s.name}  ·  ${s.email}  ·  ${s.id}`, mono: true },
-        { k: "Performed by", v: "Sarah Chen · sarah.chen@skillcat.com", mono: false },
-        { k: "Timestamp", v: tstr, mono: false },
-        { k: "Records merged", v: `${totalMerged} learning records`, mono: false },
-        { k: "Subscription", v: subText(), mono: false },
-        { k: "Add-on refunds", v: aSummary, mono: false },
-        { k: "Conflicts resolved", v: `${activeConflicts.length} — ${cSummary}`, mono: false },
-      ],
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, mergedAt, primId, secId, conflictChoices, addonChoices]);
-
-  const cont = canContinue();
-  const isLast = step === STEPS.length - 1;
+  const allCollapsed = recordRows.every((r) => !r.isExpanded);
+  function toggleAll() {
+    const open = allCollapsed;
+    setExpanded(Object.fromEntries(recordRows.map((r) => [r.key, open])));
+  }
 
   if (phase === "processing") {
     return (
@@ -683,26 +709,16 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
       />
     );
   }
-  if (phase === "done" && p && s && audit) {
-    return (
-      <FlowDone
-        title="Accounts merged successfully"
-        lead={
-          <>
-            <strong>{totalMerged} records</strong> from {s.email} were merged into {p.name}'s account. The
-            secondary account has been removed.
-          </>
-        }
-        audit={audit}
-        primaryLabel="Merge another pair"
-        onPrimary={restart}
-        onClose={onClose}
-      />
-    );
-  }
+  /* The card head's own button (Figma 1285:2768) — 24px, so it sits inside the
+     head row rather than growing it. */
+  const swapButton = (
+    <button className="btn-dialog" onClick={swapRoles}>
+      <SwapRolesIcon /> Swap Roles
+    </button>
+  );
 
   return (
-    <div className="wizard mc-root">
+    <div className="wizard">
       <div className="wizard-body">
         {/* ── left rail (Figma 625:1459) ── */}
         <aside className="wizard-nav">
@@ -713,18 +729,16 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
 
           <ol className="wizard-steps">
             {STEPS.map((x, i) => {
-              // A step already cleared keeps its check when you step back to an
-              // earlier one — otherwise it reads identical to a locked step.
-              const status: WizardStepStatus =
-                i === step ? "active" : i < step || i <= maxStep ? "done" : "upcoming";
+              // Steps not yet reached stay locked — jumping ahead would skip a
+              // required decision.
               const locked = i > maxStep;
               return (
                 <li
                   key={x.id}
-                  className={`wizard-step ${status}${locked ? " is-locked" : ""}`}
-                  onClick={locked ? undefined : () => setStep(i)}
+                  className={`wizard-step ${stepStatuses[i]}${locked ? " is-locked" : ""}`}
+                  onClick={locked ? undefined : () => gate.goStep(i)}
                 >
-                  <WizardStepRail status={status} num={i + 1} />
+                  <WizardStepRail status={stepStatuses[i]} num={i + 1} />
                   <div className="wizard-step-text">
                     <div className="wizard-step-title">{x.label}</div>
                   </div>
@@ -732,87 +746,108 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
               );
             })}
           </ol>
-
         </aside>
 
-        {/* ── content ── */}
-        <div className="wizard-content" ref={scroller}>
+        {/* ── content, behind the shared edge-line gate ── */}
+        <div className="wizard-main">
+          <WizardGateEdges
+            gate={gate}
+            step={step}
+            lastStep={lastStep}
+            labels={STEPS.map((x) => x.label)}
+          />
+          <div className="wizard-content" ref={gate.scrollRef}>
+            <div className="wizard-paneout" ref={gate.paneOutRef}>
+              <div className="wizard-pane" key={step}>
           <h1 className="wizard-title">{STEPS[step].title}</h1>
-          <p className="wizard-desc">{STEPS[step].desc}</p>
+          <p className="wizard-desc">
+            {STEPS[step].desc}
+            {/* The step's long explanation hangs off the subtext as one ⓘ —
+                the app's rule for a field's own help, applied to the page's. */}
+            <span
+              className="form-help-info wizard-desc-info"
+              tabIndex={0}
+              role="note"
+              aria-label={STEPS[step].tip}
+              data-tip={STEPS[step].tip}
+            >
+              <InfoTipIcon />
+            </span>
+          </p>
 
           {/* ───────────── STEP 1 — Accounts ───────────── */}
           {step === 0 && (
             <>
-              <div className="form-row-2">
+              <div className="form-row-2 mgf-pickers">
                 <div className="form-group">
-                  <div className="form-label-row">
-                    <label className="form-label">Account to Keep</label>
-                    <span className="co-status-pill co-status-pill--accent">Kept</span>
-                  </div>
+                  <label className="form-label">
+                    Account to Keep<span className="req">*</span>
+                  </label>
                   <AccountPicker
                     user={p}
-                    query={qPrim}
-                    results={resP}
-                    placeholder="Search the Account to Keep..."
-                    onQuery={setQPrim}
-                    onPick={(id) => { pickAccount(setPrimId, id); setQPrim(""); }}
+                    placeholder="Search Account to Keep..."
+                    onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setPrimId, null)}
-                    onOpenPicker={() => setShowPicker(true)}
                   />
-                  <p className="form-help">
-                    Everything merges into this account. Its login, password and auth methods are preserved.
-                  </p>
+                  <p className="form-help">The user continues to have access to this account</p>
                 </div>
 
                 <div className="form-group">
-                  <div className="form-label-row">
-                    <label className="form-label">Account to Delete</label>
-                    <span className="co-status-pill co-status-pill--red">Deleted</span>
-                  </div>
+                  <label className="form-label">
+                    Account to Delete<span className="req">*</span>
+                  </label>
                   <AccountPicker
                     user={s}
-                    query={qSec}
-                    results={resS}
-                    placeholder="Search the Account to Remove..."
-                    onQuery={setQSec}
-                    onPick={(id) => { pickAccount(setSecId, id); setQSec(""); }}
+                    placeholder="Search Account to Delete..."
+                    onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setSecId, null)}
-                    onOpenPicker={() => setShowPicker(true)}
                   />
-                  <p className="form-help">
-                    All data from this account is transferred and the account is permanently deleted.
-                  </p>
+                  <p className="form-help">The user loses access to this account</p>
                 </div>
               </div>
 
               {b2bViolation && s && (
-                <Notice
+                <NoteCard
                   tone="danger"
-                  icon={<AlertTriangleIcon />}
-                  pill="Action required"
-                  pillTone="red"
-                  title={
-                    <>
-                      <strong>{s.name}</strong> belongs to the B2B company <strong>{s.company}</strong>
-                    </>
-                  }
-                  sub="Company-affiliated accounts must be the Primary. Swap the roles to continue."
+                  icon={<WarnTriangleIcon />}
+                  className="mgf-note"
+                  /* One SemiBold run, company in parentheses — the node draws
+                     no emphasis inside the line. */
+                  title={`${s.name} belongs to a B2B Company (${s.company})`}
+                  body="Company-affiliated accounts cannot be removed as they are linked to their dashboard."
                   action={
-                    <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
-                      Make it Primary
+                    <button className="cta-quiet" onClick={swapRoles}>
+                      Swap Roles
+                      <span className="cta-kbd">S</span>
                     </button>
                   }
                 />
               )}
 
-              {both && p && s && p.name === s.name && !b2bViolation && (
-                <Notice
-                  tone="info"
+              {/* The dead end: swapping just moves the same problem to the
+                  other side, so this one carries no action — the way out is to
+                  change an account, not to rearrange these two. */}
+              {bothB2B && p && s && (
+                <NoteCard
+                  tone="danger"
+                  icon={<WarnTriangleIcon />}
+                  className="mgf-note"
+                  title="Both accounts belong to a B2B Company"
+                  body={
+                    p.company === s.company
+                      ? `${p.name} and ${s.name} are both linked to ${p.company}'s dashboard, so neither one can be removed. Replace one of them with an account that isn't company-affiliated.`
+                      : `${p.name} is linked to ${p.company}'s dashboard and ${s.name} to ${s.company}'s, so neither one can be removed. Replace one of them with an account that isn't company-affiliated.`
+                  }
+                />
+              )}
+
+              {both && p && s && p.name === s.name && !b2bViolation && !bothB2B && (
+                <NoteCard
+                  tone="accent"
                   icon={<InfoCircleIcon />}
-                  pill="Likely duplicate"
-                  pillTone="accent"
+                  className="mgf-note"
                   title="These accounts share the same name"
-                  sub="They likely belong to the same learner — a good merge candidate."
+                  body="They likely belong to the same learner — a good merge candidate."
                 />
               )}
 
@@ -821,55 +856,50 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
                   than a table of em-dashes. */}
               {both && p && s ? (
                 <>
-                  <SectionHeading
-                    label="Account details"
-                    trailing={
-                      <button className="btn-save-draft mc-btn-sm" onClick={swapRoles}>
-                        <SwapIcon /> Swap roles
-                      </button>
-                    }
-                  />
-                  <CompareTable
-                    leftLabel={p.name}
-                    leftPill="Account to keep"
-                    leftTone="accent"
-                    rightLabel={s.name}
-                    rightPill="Account to delete"
-                    rightTone="red"
-                    rows={accountCompareRows(p, s)}
-                  />
+                  {/* No swap in the dead end either — rearranging two company
+                      accounts changes nothing about why they can't merge. */}
+                  <TableCard
+                    title="Account Details"
+                    trailing={bothB2B ? undefined : swapButton}
+                    className="mgf-tcard"
+                  >
+                    <CompareTable rows={accountCompareRows(p, s)} />
+                  </TableCard>
 
-                  <SectionHeading label="Completion records" />
-                  <CompareTable
-                    leftLabel={p.name}
-                    leftPill="Kept"
-                    leftTone="accent"
-                    rightLabel={s.name}
-                    rightPill="Moves into the kept account"
-                    rightTone="secondary"
-                    rows={recordCompareRows(p, s)}
-                  />
-
-                  <Notice
-                    tone="ok"
-                    icon={<LockIcon />}
-                    title={`${p.name}'s login is preserved`}
-                    sub={`${s.name}'s login (${s.login}) is deleted with the account to delete.`}
-                  />
+                  <TableCard title="Training Progress" className="mgf-tcard">
+                    <CompareTable rows={recordCompareRows(p, s)} />
+                  </TableCard>
                 </>
               ) : (
                 <>
-                  <SectionHeading label="Account details" />
-                  <div className="co-empty-state mgf-empty">
-                    <span className="co-empty-glyph">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 8h13M14 5l3 3-3 3" />
-                        <path d="M20 16H7M10 13l-3 3 3 3" />
-                      </svg>
-                    </span>
-                    <div className="co-empty-title">Nothing to compare yet</div>
-                    <div className="co-empty-sub">
-                      Select both accounts to see their details and completion records side by side.
+                  {/* Nothing above the backdrop in this state: no heading (it
+                      would sit over a ghost of itself) and no Swap Roles, which
+                      only means something once BOTH accounts are picked and so
+                      lives on the Account Details card. That also keeps the
+                      question below fixed — there is nothing here that can
+                      appear and push it down. */}
+                  {/* One empty state, the way Manage Completions does it: the
+                      comparison this step is about to load drawn as a backdrop,
+                      with whatever is still missing asked over the top of it. */}
+                  <div className="mgf-empty">
+                    <MergeGhost />
+                    <div className="mgf-empty-inner">
+                      <div className="mc-empty-title">{emptyAsk.title}</div>
+                      <div className="mc-empty-sub">{emptyAsk.sub}</div>
+                      {/* The node ends on the search bar's own ⌘K badge, and it
+                          is honest here: step 1 binds ⌘K to this same picker. */}
+                      <button
+                        className="btn-save-draft mc-empty-cta"
+                        onClick={() => setShowPicker(true)}
+                      >
+                        {emptyAsk.cta}
+                        <span className="usearch-kbd">
+                          <span className="kbd-cmd">
+                            <KeyCommandIcon />
+                          </span>
+                          <span className="kbd-letter">K</span>
+                        </span>
+                      </button>
                     </div>
                   </div>
                 </>
@@ -877,280 +907,196 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
             </>
           )}
 
-          {/* ───────────── STEP 2 — Billing ───────────── */}
-          {step === 1 && p && s && (
+          {/* ───────────── STEP 2 — Conflicts ───────────── */}
+          {step === 1 && both && (
             <>
-              <FlowStrip
-                from={s}
-                fromNote="Removed account"
-                to={p}
-                toNote="Merged account (kept)"
+              {/* Figma 1291:2998. A standing statement of what this step is,
+                  not a progress counter: it says the same thing after a
+                  decision is made as before, and stays red throughout, because
+                  the decisions do not stop being consequential once they are
+                  answered. The count is the number of decisions on the screen
+                  (always 2 in this data, which is what the body's "These two"
+                  is written against). */}
+              <NoteCard
+                tone="danger"
+                icon={<WarnTriangleIcon />}
+                className="mgf-note"
+                title={`${activeConflicts.length} Decisions Required`}
+                body="These two require a confirmation on how to proceed. Please check with the Product or Engineering Teams in case of any questions"
               />
 
-              <SectionHeading label="Subscription" />
-              <CompareTable
-                leftLabel={p.name}
-                leftPill="Primary"
-                leftTone="accent"
-                rightLabel={s.name}
-                rightPill="Secondary · removed"
-                rightTone="red"
-                rows={[
-                  { k: "Plan", a: p.sub.plan, b: s.sub.plan },
-                  { k: "Status", a: p.sub.detail, b: s.sub.detail },
-                  { k: "Price", a: p.sub.price, b: s.sub.price },
-                ]}
-              />
-
-              <div className="radio-card-group mgf-choices">
-                {[
-                  { key: "primary" as const, title: "Keep the Primary's subscription", desc: p.sub.active ? `${p.sub.plan} stays active.` + (s.sub.active ? ` ${s.sub.plan} on the secondary is cancelled.` : "") : "Primary has no paid plan to keep." },
-                  { key: "secondary" as const, title: "Transfer the Secondary's subscription", desc: s.sub.active ? `Move ${s.sub.plan} to the merged account.` + (p.sub.active ? ` ${p.sub.plan} is cancelled & refunded pro-rata.` : "") : "Secondary has nothing to transfer." },
-                  { key: "neither" as const, title: "Proceed with neither", desc: "Cancel both subscriptions. The merged account keeps no active plan. Add-ons below are still preserved." },
-                ].map((o) => (
-                  <button
-                    key={o.key}
-                    className={`radio-card ${subChoice === o.key ? "selected" : ""}`}
-                    onClick={() => setSubChoice(o.key)}
-                  >
-                    <span className="radio-dot" />
-                    <span className="radio-card-text">
-                      <span className="radio-card-title">{o.title}</span>
-                      <span className="radio-card-desc">{o.desc}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <SectionHeading label="Add-ons & one-time purchases" />
-              <p className="form-help mgf-lede">
-                Permanent purchases (paid certifications, quiz-attempt packs). Always kept on the merged account —
-                except where the same item was bought on both.
-              </p>
-
-              {addonConflicts.map((ac) => {
-                const ch = addonChoices[ac.id] || "primary";
+              {/* Each conflict is a flat field: the record as its label, the two
+                  candidates as radio cards, the rule as its subtext. */}
+              {recordRows.filter((row) => row.def).map((row) => {
+                const def = row.def!;
                 return (
-                  <div className="mc-notice" key={ac.id}>
-                    <span className="mgf-lead mgf-lead--warn">
-                      <AlertTriangleIcon />
-                    </span>
-                    <div className="mc-notice-text">
-                      <div className="mc-notice-title">{ac.name}</div>
-                      <div className="mc-notice-sub">
-                        Purchased on both · {ac.type}. Only one can exist on the merged account; the other is
-                        refunded ({ac.price}).
-                      </div>
-                    </div>
-                    <div className="seg-control">
+                  <div className="form-group" key={def.id}>
+                    <label className="form-label">
+                      {row.key} · {def.title}
+                    </label>
+                    <div className="radio-card-group">
                       {(["primary", "secondary"] as const).map((side) => (
                         <button
                           key={side}
-                          className={`seg-btn ${ch === side ? "active" : ""}`}
-                          onClick={() => setAddonChoices((c) => ({ ...c, [ac.id]: side }))}
+                          className={`radio-card ${conflictChoices[def.id] === side ? "selected" : ""}`}
+                          onClick={() => setConflictChoices((c) => ({ ...c, [def.id]: side }))}
                         >
-                          Keep {side === "primary" ? "Primary's" : "Secondary's"}
+                          <span className="radio-dot" />
+                          <span className="radio-card-text">
+                            <span className="radio-card-title">
+                              Keep {side === "primary" ? "Primary's" : "Secondary's"}
+                            </span>
+                            {/* One subtext line, not two: the component
+                                (134:1790) carries a single 14px line under its
+                                title, so the detail and its metadata are joined
+                                with the app's middle dot. */}
+                            <span className="radio-card-desc">
+                              {side === "primary"
+                                ? [def.primDetail, def.primMeta].filter(Boolean).join(" · ")
+                                : [def.secDetail, def.secMeta].filter(Boolean).join(" · ")}
+                            </span>
+                          </span>
                         </button>
                       ))}
                     </div>
+                    <p className="form-help">
+                      {def.note.charAt(0).toUpperCase() + def.note.slice(1)}
+                    </p>
                   </div>
                 );
               })}
 
-              <SectionHeading label="Always preserved on the merged account" />
-              {preservedAddons.length === 0 ? (
-                <p className="form-help mgf-lede">No one-time purchases on either account.</p>
-              ) : (
-                <table className="table sch-table mgf-table">
+            </>
+          )}
+
+          {/* ───────────── STEP 3 — Review ───────────── */}
+          {step === 2 && p && s && (
+            <>
+              {/* The Learning-records row says what moves in the delta column
+                  rather than in the prose, the way Training Progress does. */}
+              <TableCard title="Summary of Updates" className="mgf-tcard">
+                <CompareTable
+                  rows={[
+                    { k: "Email", a: p.email, b: s.email, strikeB: true },
+                    {
+                      k: "Login Method",
+                      a: `${p.login} · preserved`,
+                      b: s.login,
+                      strikeB: true,
+                    },
+                    {
+                      k: "Learning Records",
+                      a: Object.values(p.data).reduce((x, y) => x + y, 0),
+                      b: totalMerged || "—",
+                      delta: totalMerged || undefined,
+                      strikeB: totalMerged > 0,
+                    },
+                    { k: "Account After Merge", a: "Active", b: "Permanently deleted" },
+                  ]}
+                />
+              </TableCard>
+
+              {/* What moves, per category — the Skills page's grouped table:
+                  a collapsible category row over its sample records. Titled by
+                  the card, like every other card table on the page. */}
+              <TableCard title="Complete List of Changes" className="mgf-tcard">
+                <table className="table mgf-table mgf-records">
                   <colgroup>
                     <col />
-                    <col style={{ width: 170 }} />
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 90 }} />
+                    <col style={{ width: "38%" }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Type</th>
-                      <th>From</th>
-                      <th>Price</th>
+                      <th>
+                        <span className="th-content">
+                          <button
+                            type="button"
+                            className="skg-toggle-all"
+                            title={allCollapsed ? "Expand All" : "Collapse All"}
+                            aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+                            onClick={toggleAll}
+                          >
+                            {allCollapsed ? <ExpandVerticalIcon /> : <ShrinkVerticalIcon />}
+                          </button>
+                          Record
+                        </span>
+                      </th>
+                      <th>Detail</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {preservedAddons.map((a, i) => (
-                      <tr key={i}>
-                        <td className="col-name">{a.name}</td>
-                        <td>{a.type}</td>
-                        <td>{a.source}</td>
-                        <td>{a.price}</td>
-                      </tr>
+                    {recordRows.map((row) => (
+                      <Fragment key={row.key}>
+                        <tr
+                          className="skg-group"
+                          aria-expanded={row.isExpanded}
+                          onClick={() => setExpanded((e) => ({ ...e, [row.key]: !e[row.key] }))}
+                        >
+                          <td className="col-name">
+                            <button
+                              type="button"
+                              className={`skg-caret ${row.isExpanded ? "is-open" : ""}`}
+                              aria-label={row.isExpanded ? "Collapse" : "Expand"}
+                              aria-expanded={row.isExpanded}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpanded((x) => ({ ...x, [row.key]: !x[row.key] }));
+                              }}
+                            >
+                              <TreeCaretIcon />
+                            </button>
+                            <span className="skg-name">{row.key}</span>
+                          </td>
+                          <td>+{row.count} moving from the Secondary</td>
+                        </tr>
+                        {row.isExpanded &&
+                          row.samples.map((it, i) => (
+                            <tr className="skg-row skg-child" key={i}>
+                              <td className="col-name">{it.name}</td>
+                              <td>{it.meta}</td>
+                            </tr>
+                          ))}
+
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
-              )}
+              </TableCard>
             </>
           )}
-
-          {/* ───────────── STEP 3 — Conflicts ───────────── */}
-          {step === 2 && both && (
-            <>
-              <Notice
-                tone={allResolved ? "ok" : "warn"}
-                icon={allResolved ? <CheckBoldIcon /> : <AlertTriangleIcon />}
-                pill={allResolved ? "Ready" : `${openConflicts} to resolve`}
-                pillTone={allResolved ? "green" : "yellow"}
-                title={
-                  allResolved
-                    ? "All conflicts resolved — records are ready to merge"
-                    : `${openConflicts} of ${activeConflicts.length} conflicts still need a decision`
-                }
-                sub="Expand a category to see what is moving and, where only one record can exist, pick which one survives."
-              />
-
-              <div className="mc-acc-list">
-                {recordRows.map((row) => (
-                  <div className={`mc-acc${row.isExpanded ? " is-open" : ""}`} key={row.key}>
-                    <div
-                      className="mc-acc-head"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setExpanded((e) => ({ ...e, [row.key]: !e[row.key] }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setExpanded((x) => ({ ...x, [row.key]: !x[row.key] }));
-                        }
-                      }}
-                    >
-                      <div className="mc-acc-text">
-                        <div className="mc-acc-titlerow">
-                          <span className="mc-acc-name">{row.key}</span>
-                          {row.def && (
-                            <span className={`co-status-pill co-status-pill--${row.resolved ? "green" : "yellow"}`}>
-                              {row.resolved ? "Resolved" : "1 conflict"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mc-acc-meta">
-                          <span className="mc-acc-metatext">+{row.count} moving from the Secondary</span>
-                        </div>
-                      </div>
-                      <span className="mc-acc-caret">
-                        <ChevronDownIcon />
-                      </span>
-                    </div>
-
-                    {row.isExpanded && (
-                      <div className="mc-acc-body">
-                        {row.def && (
-                          <>
-                            <SectionHeading label="Resolve conflict" />
-                            <p className="form-help mgf-lede">
-                              <strong>{row.def.title}</strong> — {row.def.note}
-                            </p>
-                            <div className="radio-card-group">
-                              {(["primary", "secondary"] as const).map((side) => (
-                                <button
-                                  key={side}
-                                  className={`radio-card ${conflictChoices[row.def!.id] === side ? "selected" : ""}`}
-                                  onClick={() => setConflictChoices((c) => ({ ...c, [row.def!.id]: side }))}
-                                >
-                                  <span className="radio-dot" />
-                                  <span className="radio-card-text">
-                                    <span className="radio-card-title">
-                                      Keep {side === "primary" ? "Primary's" : "Secondary's"}
-                                    </span>
-                                    <span className="radio-card-desc">
-                                      {side === "primary" ? row.def!.primDetail : row.def!.secDetail}
-                                    </span>
-                                    <span className="mgf-meta">
-                                      {side === "primary" ? row.def!.primMeta : row.def!.secMeta}
-                                    </span>
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-
-                        <SectionHeading label="Sample records" />
-                        <table className="table sch-table mgf-table">
-                          <colgroup>
-                            <col />
-                            <col style={{ width: "38%" }} />
-                          </colgroup>
-                          <thead>
-                            <tr>
-                              <th>Record</th>
-                              <th>Detail</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {row.samples.map((it, i) => (
-                              <tr key={i}>
-                                <td className="col-name">{it.name}</td>
-                                <td>{it.meta}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {row.more > 0 && (
-                          <p className="form-help">+ {row.more} more not shown</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
-            </>
-          )}
-
-          {/* ───────────── STEP 4 — Review ───────────── */}
-          {step === 3 && p && s && (
-            <>
-              <CompareTable
-                leftLabel={p.name}
-                leftPill="Kept — primary"
-                leftTone="accent"
-                rightLabel={s.name}
-                rightPill="Deleted — secondary"
-                rightTone="red"
-                rows={[
-                  { k: "Email", a: p.email, b: s.email },
-                  { k: "Login method", a: `${p.login} · preserved`, b: `${s.login} · removed` },
-                  {
-                    k: "Learning records",
-                    a: `${Object.values(p.data).reduce((x, y) => x + y, 0)} + ${totalMerged} merged in`,
-                    b: `${totalMerged} moved out`,
-                  },
-                  { k: "Account after merge", a: "Active", b: "Permanently deleted" },
-                ]}
-              />
-
-              <SectionHeading label="What will happen" />
-              {reviewRows.map((r, i) => (
-                <Notice key={i} tone={r.tone} icon={r.icon} title={r.title} sub={r.detail} />
-              ))}
-            </>
-          )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── footer (Figma 73:515) ── */}
+      {/* ── footer (Figma 73:515, keycap 756:3772) ── */}
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
-            <button className="btn-save-draft" onClick={back}>Back</button>
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => gate.goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
           )}
+          {/* `aria-disabled` rather than `disabled`: a disabled button fires no
+              mouse events, so it could not show the tooltip that says what is
+              still missing. On the last step the button is the merge itself
+              and opens the final confirmation. */}
           <button
-            className={`btn-publish${isLast ? " btn-publish--danger" : ""}`}
-            disabled={!cont}
+            className={`btn-publish${isLast ? "" : " wizard-gate-btn"}${cont ? "" : " is-disabled"}`}
+            aria-disabled={!cont}
+            data-tip={blockedTip}
             onClick={advance}
           >
-            {isLast ? "Merge accounts" : "Continue"}
+            {!isLast && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
+            <span className="wizard-gate-btn-inner">
+              {isLast ? "Merge Accounts" : "Continue"}
+              <WizardKeyHint />
+            </span>
           </button>
         </div>
       </footer>
@@ -1167,25 +1113,22 @@ export function MergeAccountsPage({ onClose }: { onClose?: () => void }) {
       {showModal && p && s && (
         <PrmModal
           title="Permanently merge these accounts?"
+          /* Prose, not a summary list: the review step behind this dialog is
+             where the detail lives, and repeating a digest of it here just
+             asks to be read twice. */
           description={
             <>
-              This cannot be undone. The secondary account <strong>{s.email}</strong> and its login will be
-              permanently deleted.
+              Everything on <strong>{s.email}</strong> — {totalMerged} learning records, its
+              certifications, skills, awards and purchases — moves into{" "}
+              <strong>{p.email}</strong>, which keeps its own login. {s.name}'s account and
+              login are then permanently deleted. This cannot be undone.
             </>
           }
           confirmLabel="Yes, merge accounts"
           danger
           onCancel={() => setShowModal(false)}
           onConfirm={confirmMerge}
-        >
-          <div className="co-cancel-summary">
-            {modalPoints.map((m, i) => (
-              <div className="co-cancel-summary-row" key={i}>
-                <span>{m}</span>
-              </div>
-            ))}
-          </div>
-        </PrmModal>
+        />
       )}
     </div>
   );

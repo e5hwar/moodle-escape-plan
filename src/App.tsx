@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
 import { CopyCells } from "./components/CopyCells";
@@ -34,7 +34,6 @@ import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
 import { FeedbackFormsPage } from "./components/FeedbackFormsPage";
 import { FeedbackFormWizard } from "./components/FeedbackFormWizard";
-import { FeedbackFormResponsesPage } from "./components/FeedbackFormResponsesPage";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
 import { NewCompanyWizard } from "./components/NewCompanyWizard";
@@ -51,15 +50,16 @@ import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage"
 import { UserProfilePage } from "./components/UserProfilePage";
 import { PortfolioPage } from "./components/PortfolioPage";
 import { StripeInvoicesPage } from "./components/StripeInvoicesPage";
-import { users as allUsers } from "./data/users";
+import { users as allUsers, type User } from "./data/users";
 import { submissionForLearner, type TaskSubmission } from "./data/reviewSubmissions";
 import {
   activeLinks,
   feedbackForms as seedForms,
+  formResponses,
   inactiveLinks,
-  makeDuplicateForm,
   type FeedbackForm,
 } from "./data/feedbackForms";
+import { buildRows, exportFormCsv } from "./components/FeedbackFormResponses";
 import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
 
 // Map a certification onto a content-graph focus node. If the certification
@@ -128,7 +128,6 @@ type View =
   | { name: "scholarship" }
   | { name: "feedback" }
   | { name: "feedback-detail"; formId: string; creating?: boolean }
-  | { name: "feedback-responses"; formId: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
@@ -265,6 +264,7 @@ export default function App() {
   const portfolioId = params.get("portfolio");
   const stripeCustomerId = params.get("stripeInvoices");
   const loginAsCompany = params.get("loginAs");
+  const loginAsUserId = params.get("loginAsUser");
   const editTaskId = params.get("editTask");
   /* The Hands-On review screen's task link (a reviewer wants the brief, not the
      editor): its own tab, holding a placeholder until the real read-only brief
@@ -291,7 +291,13 @@ export default function App() {
     // Company employees live outside the Manage Users roster but their profile
     // links resolve too — see findCompanyUserProfile.
     const u = allUsers.find((x) => x.id === profileId) ?? findCompanyUserProfile(profileId);
-    return u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />;
+    // The Full Profile keeps the admin shell: it is a real admin screen, so the
+    // left rail stays with it even in its own tab.
+    return (
+      <StandaloneShell active="manage-users">
+        {u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />}
+      </StandaloneShell>
+    );
   }
   if (portfolioId) {
     const u = allUsers.find((x) => x.id === portfolioId);
@@ -303,8 +309,38 @@ export default function App() {
   if (loginAsCompany) {
     return <LoginAsLibraryPage company={loginAsCompany} />;
   }
+  if (loginAsUserId) {
+    const u = allUsers.find((x) => x.id === loginAsUserId) ?? findCompanyUserProfile(loginAsUserId);
+    return u ? <LoginAsUserPage user={u} /> : <StandaloneNotFound id={loginAsUserId} />;
+  }
 
   return <AdminApp />;
+}
+
+/* A standalone (own-tab) screen that still wears the admin shell — left rail
+ * included. Sidebar clicks leave the standalone URL behind and load the real
+ * page, since nothing but this one screen lives in this tab. */
+function StandaloneShell({
+  active,
+  children,
+}: {
+  active: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="app">
+      <HoverTooltip />
+      <CopyCells />
+      <Sidebar
+        active={active}
+        onNavigate={(key) => {
+          const view = NAV_KEY_TO_VIEW[key];
+          if (view) window.location.href = urlForView(view);
+        }}
+      />
+      {children}
+    </div>
+  );
 }
 
 /* A "View All Attempts" deep link from Manage Completions, resolved into a
@@ -415,6 +451,59 @@ function LoginAsLibraryPage({ company }: { company: string }) {
   );
 }
 
+/* Placeholder shown when an admin clicks "Login As" on a user — the row menu
+ * on Manage Users and the button on the Full Profile. The learner app isn't
+ * part of this prototype, so the new tab names the session it stands for.
+ * Opened via ?loginAsUser=; see components/loginAs.ts. */
+function LoginAsUserPage({ user }: { user: User }) {
+  const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  return (
+    <div style={{ minHeight: "100vh", background: "#0b0b0c", fontFamily: "var(--font-sans)" }}>
+      <div
+        style={{
+          background: "#7a3a18",
+          color: "#ffd9c2",
+          padding: "10px 20px",
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+      >
+        ⚠ Admin impersonation session — you are viewing SkillCat as this user. Your own session is
+        unaffected.
+      </div>
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
+        <div
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            margin: "0 auto 18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 28,
+            fontWeight: 800,
+            color: "#fff",
+            background: "radial-gradient(70% 70% at 50% 40%, #e97237, #8a3114)",
+          }}
+        >
+          {initials}
+        </div>
+        <h1 style={{ fontSize: 24, margin: "0 0 6px", color: "#e7e7e8" }}>{user.name}</h1>
+        <p style={{ color: "#9a9aa0", margin: 0 }}>{user.email}</p>
+        <p style={{ color: "#7a7a7a", fontSize: 14, margin: "4px 0 0" }}>
+          {user.id}
+          {user.companyName ? ` · ${user.companyName}` : ""}
+        </p>
+        <p style={{ color: "#9a9aa0", lineHeight: 1.6, marginTop: 24 }}>
+          This is a placeholder for the learner session an admin lands in. The SkillCat app isn't
+          wired into this prototype yet.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Opens the "Login As" Library placeholder for a company in a new tab. */
 function openLoginAsLibrary(company: string) {
   window.open(
@@ -459,6 +548,9 @@ function AdminApp() {
      menu, and the Award form writes back into it. */
   const [awards, setAwards] = useState<Award[]>(seedAwards);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
+  /* A one-line success handed back by a flow that finished and navigated away
+     — raised as a toast on the page it returns to. */
+  const [flash, setFlash] = useState<string | null>(null);
   // Tasks published from the wizard this session. They sit on top of the seed
   // list; TasksPage re-seeds from this every time it mounts.
   const [createdTasks, setCreatedTasks] = useState<Task[]>([]);
@@ -559,7 +651,7 @@ function AdminApp() {
       : /* Name Changes hangs off Manage Users now, not Exam Reviews. */
         view.name === "scholarship" || view.name === "name-change-requests"
       ? "manage-users"
-      : view.name === "feedback" || view.name === "feedback-detail" || view.name === "feedback-responses"
+      : view.name === "feedback" || view.name === "feedback-detail"
       ? "certs"
       : view.name === "industries"
       ? "certs"
@@ -648,9 +740,7 @@ function AdminApp() {
   }
 
   const activeForm =
-    view.name === "feedback-detail" || view.name === "feedback-responses"
-      ? forms.find((f) => f.id === view.formId)
-      : null;
+    view.name === "feedback-detail" ? forms.find((f) => f.id === view.formId) : null;
 
   return (
     <div className="app">
@@ -886,6 +976,8 @@ function AdminApp() {
           onOpenMergeAccounts={() => navigate("merge-accounts")}
           onOpenTransferSubscription={() => navigate("transfer-subscription")}
           initialCompanyFilter={view.companyFilter}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
         />
       ) : view.name === "offer-codes" ? (
         <OfferCodesPage onBack={() => navigate("manage-users")} />
@@ -920,14 +1012,36 @@ function AdminApp() {
           }}
         />
       ) : view.name === "merge-accounts" ? (
-        <MergeAccountsPage onClose={() => navigate("manage-users")} />
+        <MergeAccountsPage
+          onClose={() => navigate("manage-users")}
+          /* A finished merge has no screen of its own: it lands back on Manage
+             Users and says what happened there. */
+          onMerged={(message) => {
+            setFlash(message);
+            navigate("manage-users");
+          }}
+        />
       ) : view.name === "transfer-subscription" ? (
-        <TransferSubscriptionPage onClose={() => navigate("manage-users")} />
+        <TransferSubscriptionPage
+          onClose={() => navigate("manage-users")}
+          /* Like a finished merge: no screen of its own, it lands back on
+             Manage Users and says what happened there. */
+          onTransferred={(message) => {
+            setFlash(message);
+            navigate("manage-users");
+          }}
+        />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
           onOpen={(id, creating) => setView({ name: "feedback-detail", formId: id, creating })}
-          onViewResponses={(id) => setView({ name: "feedback-responses", formId: id })}
+          /* The responses viewer is shelved for now — the menu action just
+             downloads the form's responses as CSV. */
+          onExportResponses={(id) => {
+            const form = forms.find((f) => f.id === id);
+            if (!form) return;
+            exportFormCsv(form, buildRows(form, bank), formResponses[form.id] ?? []);
+          }}
           onCreate={(form) => upsertForm(form)}
           onUpdate={(form) => upsertForm(form)}
           /* Deleting is a tombstone, not a purge: the record stays so its
@@ -939,18 +1053,6 @@ function AdminApp() {
           }
           onBackToCerts={() => navigate("certs")}
         />
-      ) : view.name === "feedback-responses" && activeForm ? (
-        <FeedbackFormResponsesPage
-          form={activeForm}
-          bank={bank}
-          onBack={() => setView({ name: "feedback" })}
-          onEdit={() => setView({ name: "feedback-detail", formId: activeForm.id })}
-          onDuplicate={() => {
-            const copy = makeDuplicateForm(forms, activeForm);
-            upsertForm(copy);
-            setView({ name: "feedback-detail", formId: copy.id, creating: true });
-          }}
-        />
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormWizard
           form={activeForm}
@@ -958,6 +1060,13 @@ function AdminApp() {
           allForms={forms}
           bank={bank}
           onBack={() => setView({ name: "feedback" })}
+          /* A never-finished new form is purged outright, not tombstoned: it
+             has no responses to keep resolving. */
+          onDiscard={() => {
+            const id = activeForm.id;
+            setForms((prev) => prev.filter((f) => f.id !== id));
+            setView({ name: "feedback" });
+          }}
           onUpdate={upsertForm}
           onCreateQuestion={() =>
             setView({

@@ -56,12 +56,15 @@ export function nextFormId(taken: FeedbackForm[]): string {
 
 /* Duplicate links the SAME Question Bank questions, same order, same mandatory
    flags. The two forms' lists are fully independent after this copy; triggers
-   do NOT carry over per spec. */
+   do NOT carry over per spec — and neither does the NAME: a copy opens unnamed
+   so the admin types what this one is for, the same blank field a brand-new
+   form starts on (the wizard autofocuses it, and its gate blocks until it is
+   filled). */
 export function makeDuplicateForm(all: FeedbackForm[], src: FeedbackForm): FeedbackForm {
   const today = new Date().toISOString().slice(0, 10);
   return {
     id: nextFormId(all),
-    name: `${src.name || "Untitled form"} (copy)`,
+    name: "",
     status: "active",
     questions: activeLinks(src).map((l) => ({
       questionId: l.questionId,
@@ -182,7 +185,12 @@ export const feedbackForms: FeedbackForm[] = [
     name: "NATE Ready To Work — Exam Feedback",
     status: "active",
     questions: [link("Q-10461", true, "2026-05-12")],
-    triggers: [],
+    /* Every seeded form carries at least one trigger — a form with none can
+       never be shown to anyone, so the wizard refuses to finish without one
+       ([[feedback-forms-architecture]]). */
+    triggers: [
+      { id: "tr-12", kind: "certification", refId: "C-0411", refName: "NATE Ready To Work", mappedAt: "2026-05-12" },
+    ],
     createdBy: "You",
     createdAt: "2026-05-12",
     updatedAt: "2026-05-12",

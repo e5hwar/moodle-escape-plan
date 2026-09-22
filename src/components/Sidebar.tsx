@@ -3,6 +3,7 @@ import skillcatLogo from "../assets/SkillCat-Logo.png";
 import { submissions } from "../data/proctoring";
 import { displayStatus, reviewSubmissions } from "../data/reviewSubmissions";
 import { spotlights } from "../data/spotlights";
+import { nameChangeRequests } from "../data/nameChangeRequests";
 
 type IconProps = { className?: string };
 
@@ -104,6 +105,10 @@ const pendingHandsOn = cap(
    "In-Review". Those are exactly the `pending` ones: an approved Spotlight
    only ever moves on to Active or Ended, never back into the queue. */
 const spotlightsInReview = cap(spotlights.filter((s) => s.status === "pending").length);
+/* Name Change Requests are reached from the Manage Users header, so their open
+   count badges Users — the same figure that header's own pill carries. Every
+   seeded request is still open; a decided one leaves the list. */
+const openNameChanges = cap(nameChangeRequests.length);
 
 type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 // Figma 421:1419 — every destination is a top-level entry; sections are plain
@@ -131,10 +136,11 @@ const sections: NavSection[] = [
   {
     label: "Customers",
     items: [
-      { key: "manage-users", label: "Users", icon: "users", navKey: "manage-users" },
+      { key: "manage-users", label: "Users", icon: "users", navKey: "manage-users", badge: openNameChanges },
       { key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
       // Name Change Requests left the rail 2026-08-25 — it's reached from the
-      // Exam Reviews header's "Name Changes" button now (the route stays).
+      // Manage Users header's "Name Changes" button now (the route stays), and
+      // its open count rides on Users above.
       { key: "proctoring-review", label: "Exam Reviews", icon: "examReviews", navKey: "proctoring-review", badge: pendingExamReviews },
     ],
   },

@@ -15,15 +15,16 @@ type Props = {
   form: FeedbackForm;
   bank: Question[];
   onBack: () => void;
-  onEdit: () => void;
-  onDuplicate: () => void;
 };
 
 /* Feedback Response Viewer (design "Feedback Response Viewer v2"): one page
    header + tabbar over two views — the aggregate Overview and the per-user
-   Responses browser. Questions and Triggers are managed in Edit Form, so
-   their tabs are present but inert, matching the design. */
-export function FeedbackFormResponsesPage({ form, bank, onBack, onEdit, onDuplicate }: Props) {
+   Responses browser.
+
+   Shelved for now: nothing routes to this page — the Feedback Forms row menu
+   exports the CSV directly — but it is kept intact so the viewer can be wired
+   back up later. */
+export function FeedbackFormResponsesPage({ form, bank, onBack }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
   const responses = formResponses[form.id] ?? [];
   const rows = useMemo(() => buildRows(form, bank), [form, bank]);
@@ -45,22 +46,13 @@ export function FeedbackFormResponsesPage({ form, bank, onBack, onEdit, onDuplic
                   {form.name || "Untitled form"}
                 </span>
               </nav>
-              <div className="fb-viewer-titlerow">
-                <h1 className="tasks-title">{form.name || "Untitled form"}</h1>
-                <span
-                  className={`fb-status ${form.status === "active" ? "fb-status--active" : "fb-status--archived"}`}
-                >
-                  {form.status === "active" ? "Active" : "Disabled"}
-                </span>
-              </div>
+              <h1 className="tasks-title">{form.name || "Untitled form"}</h1>
               <div className="tasks-subtitle">
                 <span>
                   {triggerNames.length === 0
                     ? "No triggers mapped"
                     : `Triggers: ${triggerNames.join(" · ")}`}
                 </span>
-                <span className="tasks-subtitle-dot" />
-                <span>One submission per user, ever</span>
               </div>
             </div>
             <div className="tasks-header-actions">
@@ -70,13 +62,7 @@ export function FeedbackFormResponsesPage({ form, bank, onBack, onEdit, onDuplic
                 title={responses.length === 0 ? "No responses to export" : undefined}
                 onClick={() => exportFormCsv(form, rows, responses)}
               >
-                Export CSV
-              </button>
-              <button className="cta-quiet" onClick={onDuplicate}>
-                Duplicate
-              </button>
-              <button className="new-task" onClick={onEdit}>
-                Edit Form
+                Export Responses
               </button>
             </div>
           </header>
@@ -94,12 +80,6 @@ export function FeedbackFormResponsesPage({ form, bank, onBack, onEdit, onDuplic
             >
               Responses
             </button>
-            <span className="tab is-disabled" title="Managed in Edit Form">
-              Questions
-            </span>
-            <span className="tab is-disabled" title="Managed in Edit Form">
-              Triggers
-            </span>
           </div>
 
           {/* Keyed by tab so switching views starts back at the top. */}

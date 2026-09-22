@@ -990,7 +990,7 @@ function SkillRow({
       <td className="col-name">
         <span className="skg-name" data-tip={skill.name}>{skill.name}</span>
         {/* Archived (1126:1686): grey pill, muted name, dimmed list columns —
-            `.skg-archived`, not the shared 50%-opacity `task-hidden`. */}
+            `.skg-archived`, not the shared dim-row treatment. */}
         {archived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
         {/* Same hover contract as the "+N" list cells: `data-tip`, one Mastery
             Skill per line, and none when the single name is already spelled

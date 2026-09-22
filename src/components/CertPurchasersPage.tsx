@@ -98,7 +98,7 @@ type SortKey = "name" | PurchaserColumnKey;
 type SortDir = "asc" | "desc";
 
 const ROLE_ORDER: Record<UserRole, number> = { "Self-Learner": 0, Employee: 1, Manager: 2, Admin: 3 };
-const SUB_ORDER: Record<SubscriptionStatus, number> = { "Free Trial": 0, Starter: 1, Subscriber: 2, Scholarship: 3 };
+const SUB_ORDER: Record<SubscriptionStatus, number> = { Subscriber: 0, "Company Plan": 1, Scholarship: 2, "Free Trial": 3, Cancelled: 4, Starter: 5 };
 
 type Row = { u: User; p: CertPurchase };
 

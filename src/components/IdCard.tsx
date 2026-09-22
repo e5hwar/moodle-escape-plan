@@ -182,6 +182,7 @@ export function ZoomableIdCard({
   onFullViewChange,
   hideTools,
   noMagnify,
+  caption,
 }: {
   data: IdCardData;
   /** Fires when the full-view overlay opens/closes. Host pages that bind their
@@ -191,13 +192,16 @@ export function ZoomableIdCard({
   onFullViewChange?: (open: boolean) => void;
   /** Drops the "Click to see full view" / "Rotate" row under the card. The
    *  behaviour is unchanged — clicking the card still opens full view, and the
-   *  overlay still rotates. Set on the Proctoring report; Name Change Requests
-   *  keeps the row. */
+   *  overlay still rotates. Set wherever the design shows the document alone
+   *  (the Proctoring report, the Manage IDs popup, Review Name Change). */
   hideTools?: boolean;
   /** Drops the hover magnifier (the lens over the card and the panel beside it).
    *  Set on the Manage IDs popup, where the card sits in a modal that has no
    *  room beside it for the panel — clicking still opens full view. */
   noMagnify?: boolean;
+  /** The design's caption under a tool-less card (Figma 460:2445) — a plain
+   *  line of copy, not a control: the card itself is the target. */
+  caption?: boolean;
 }) {
   const [rotation, setRotation] = useState(0);
   const [fullView, setFullViewState] = useState(false);
@@ -298,10 +302,14 @@ export function ZoomableIdCard({
                 </div>
               </div>
             </div>
-            <div className="idhz-panel-cap">Click for the Full-Screen View</div>
+            {/* The card already carries this line when `caption` is on —
+                don't say it twice while the panel is up. */}
+            {!caption && <div className="idhz-panel-cap">Click for the Full-Screen View</div>}
           </div>
         )}
       </div>
+
+      {caption && <p className="idhz-cap">Click for the Full-Screen View</p>}
 
       {/* Both tools are redundant with the card itself: clicking the card is
           already the way into full view, and rotating only matters once you're

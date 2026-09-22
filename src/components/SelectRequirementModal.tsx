@@ -74,15 +74,32 @@ function compareCert(a: Certification, b: Certification, key: CertSortKey): numb
 
 export function SelectRequirementModal({
   existingNames,
+  only,
+  title = "Add Requirement",
+  description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
+  confirmNoun = "Requirement",
+  lockedTip = "Already in this Condition Set",
+  full,
   onCancel,
   onConfirm,
 }: {
   /** Names already in this Condition Set — those rows open ticked and locked. */
   existingNames: string[];
+  /** Restrict the modal to one kind: the tab row is hidden and only that
+   *  catalog is listed (Feedback Forms' "Add Tasks" / "Add Certifications"). */
+  only?: Tab;
+  title?: string;
+  description?: string;
+  /** Singular noun in the confirm button — "Add Requirement" / "Add 3 Tasks". */
+  confirmNoun?: string;
+  lockedTip?: string;
+  /** Open at the Select Questions size — the picker fills the viewport
+   *  (`pickFull`) instead of the default 80vh card. */
+  full?: boolean;
   onCancel: () => void;
   onConfirm: (picks: RequirementPick[]) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("task");
+  const [tab, setTab] = useState<Tab>(only ?? "task");
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
   const [inds, setInds] = useState<string[]>([]);
@@ -181,18 +198,23 @@ export function SelectRequirementModal({
 
   return (
     <PrmModal
-      title="Add Requirement"
-      description="Pick what a learner must complete for this Condition Set. Everything added to one set is required."
-      confirmLabel={pickedCount > 1 ? `Add ${pickedCount} Requirements` : "Add Requirement"}
+      title={title}
+      description={description}
+      confirmLabel={
+        pickedCount > 1 ? `Add ${pickedCount} ${confirmNoun}s` : `Add ${confirmNoun}`
+      }
       confirmDisabled={pickedCount === 0}
-      pick
+      pick={!full}
+      pickFull={full}
       className="srq"
       onCancel={onCancel}
       onConfirm={confirm}
     >
       <div className="stm">
         {/* The shared tab row (Figma 659:896) — full-bleed inside the card, so
-            its hairline reads as a divider rather than a floating rule. */}
+            its hairline reads as a divider rather than a floating rule. A
+            single-kind modal has nothing to switch between, so it has none. */}
+        {!only && (
         <div className="tabbar srq-tabs">
           <button
             className={`tab ${tab === "task" ? "is-active" : ""}`}
@@ -207,6 +229,7 @@ export function SelectRequirementModal({
             Certifications
           </button>
         </div>
+        )}
 
         <div className="stm-toolbar">
           <div className="search-wrap stm-search">
@@ -340,7 +363,7 @@ export function SelectRequirementModal({
                                   aria-label={on ? "Deselect" : "Select"}
                                   aria-pressed={on}
                                   disabled={locked}
-                                  title={locked ? "Already in this Condition Set" : undefined}
+                                  title={locked ? lockedTip : undefined}
                                   tabIndex={-1}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -405,7 +428,7 @@ export function SelectRequirementModal({
                                   aria-label={on ? "Deselect" : "Select"}
                                   aria-pressed={on}
                                   disabled={locked}
-                                  title={locked ? "Already in this Condition Set" : undefined}
+                                  title={locked ? lockedTip : undefined}
                                   tabIndex={-1}
                                   onClick={(e) => {
                                     e.stopPropagation();

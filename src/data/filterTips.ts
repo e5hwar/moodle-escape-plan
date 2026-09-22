@@ -106,7 +106,13 @@ export const FILTER_TIPS = {
   },
 
   /** Scholarships. */
+  /** The Full Profile's Purchases & Bills card. */
+  profile: {
+    purchaseType: "Show only subscription charges, certification purchases, quiz attempts or physical products.",
+  },
+
   scholarships: {
+    status: "Show only Active or only Expired scholarships.",
     assignedBy: "Show only scholarships the chosen admins assigned.",
   },
 

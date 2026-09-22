@@ -12,7 +12,7 @@ import {
 import { buildAwardRecipients, type AwardRecipient } from "../data/awardRecipients";
 import { UsersFilters, type UserFilterState } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
-import { ChevronLeftIcon, SortIcon, AddIcon, ChevronRightIcon } from "./icons";
+import { ChevronLeftIcon, SortIcon, AddIcon, ChevronRightIcon, DownloadIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -448,8 +448,3 @@ function SortableHeader({
   );
 }
 
-const DownloadIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3v12M7 11l5 5 5-5M5 21h14" />
-  </svg>
-);

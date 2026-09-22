@@ -25,6 +25,8 @@ export function PrmModal({
   cancelLabel = "Cancel",
   hideCancel,
   danger,
+  go,
+  footerExtra,
   wide,
   pick,
   pickWide,
@@ -52,6 +54,13 @@ export function PrmModal({
   /** Destructive confirm — the CTA takes the red variant of the button's own
    *  gradient recipe (Figma 495:2247). */
   danger?: boolean;
+  /** Affirmative confirm — the green variant of the same recipe (Figma
+   *  1004:1298, the review footer's Approve). */
+  go?: boolean;
+  /** Extra actions seated to the LEFT of the CTA, in the footer's own 16px
+   *  group (Figma 445:878 runs Secondary + Reject + Approve together). Use
+   *  `.prm-quiet` for a secondary and `.prm-cta--danger` for a red primary. */
+  footerExtra?: ReactNode;
   /** A form-carrying modal runs wider than the 640px confirm shell. */
   wide?: boolean;
   /** A table picker — Figma 682:2321's fixed 884px shell, sized to its content
@@ -113,25 +122,28 @@ export function PrmModal({
                 {cancelLabel}
               </button>
             )}
-            {confirmHref ? (
-              <a
-                className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
-                href={confirmHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onConfirm}
-              >
-                {confirmLabel}
-              </a>
-            ) : (
-              <button
-                className={`prm-cta${danger ? " prm-cta--danger" : ""}`}
-                onClick={onConfirm}
-                disabled={confirmDisabled}
-              >
-                {confirmLabel}
-              </button>
-            )}
+            <div className="prm-foot-end">
+              {footerExtra}
+              {confirmHref ? (
+                <a
+                  className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
+                  href={confirmHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onConfirm}
+                >
+                  {confirmLabel}
+                </a>
+              ) : (
+                <button
+                  className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
+                  onClick={onConfirm}
+                  disabled={confirmDisabled}
+                >
+                  {confirmLabel}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

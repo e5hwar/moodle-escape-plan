@@ -11,6 +11,10 @@ export type Scholarship = {
   assignedOn: string; // ISO date
   expiresOn: string; // ISO date
   assignedBy: string;
+  /** Set when an admin ended it early — the record stays, expired as of this
+   *  date. Distinguishes "revoked today" from "ran its term out today", which
+   *  the dates alone can't, since revoking also pulls `expiresOn` back. */
+  revokedOn?: string; // ISO date
 };
 
 /** A bank of users that can be selected when adding a new scholarship.

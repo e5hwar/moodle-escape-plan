@@ -1,49 +1,56 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as seedUsers,
+  removedUserIds,
+  removeUser,
+  updateUserContact,
+  accessMoment,
   type User,
   type UserType,
   type UserRole,
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
-import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
 import { nameChangeRequests } from "../data/nameChangeRequests";
-import { IdModal } from "./IdModal";
 import { PrmModal } from "./PrmModal";
+import { CopiedToast } from "./CopiedToast";
+import { EditUserModal } from "./UserProfilePage";
 import {
   UsersFilters,
   UsersEditColumns,
+  GOALS,
   type UserColumnKey,
   type UserColumnState,
   type UserFilterState,
 } from "./UsersFilters";
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
+import { loginAs } from "./loginAs";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { LandingFilterRow, LandingOverlay, BackToSearch, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
 
 /* Landing-morph columns — mirror the table's default visible columns (key,
    label, width) so the p=1 hand-off to the real table lines up. */
 const LM_COLS: LandingCol[] = [
   { key: "email", label: "Email", width: 190 },
   { key: "phone", label: "Phone", width: 165 },
-  { key: "userType", label: "User Type", width: 114 },
   { key: "company", label: "Company", width: 175 },
-  { key: "role", label: "Role", width: 130 },
-  { key: "subscription", label: "Subscription", width: 195, fixed: true },
+  // Hidden on the landing, grows in with the morph — the table's default
+  // columns must all be here, in table order, or one pops in at the hand-off.
+  { key: "subscription", label: "Subscription", width: 240 },
+  { key: "lastAccess", label: "App Last Access", width: 160, fixed: true },
 ];
-import { SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuIdDocIcon, MenuMergeIcon, MenuTransferIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
 const DEFAULT_COLUMNS: UserColumnState = {
   email: true,
   phone: true,
-  userType: true,
+  userType: false,
   company: true,
-  role: true,
+  role: false,
   subscription: true,
   language: false,
   goal: false,
@@ -71,14 +78,26 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/* ─── local icons (match the Tasks/Certifications action bar) ─── */
+/* Last-access stamps read relative ("Today", "2 days ago") — the same wording
+   Companies' Last Access column uses (getDashboardLastAccess). */
+function formatDaysAgo(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.max(0, Math.round((today.getTime() - d.getTime()) / 86400000));
+  if (days === 0) return "Today";
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
 
-const VerifiedIcon = () => (
-  <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
+/* Hover tip on a relative stamp: the exact date and time behind it, always
+   in Eastern Time whatever the viewer's own zone. */
+function LastAccessCell({ userId, iso, salt }: { userId: string; iso: string; salt: string }) {
+  const at = accessMoment(userId, iso, salt);
+  const tz = "America/New_York";
+  const tip = `${at.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz })} · ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })} ET`;
+  return <span title={tip}>{formatDaysAgo(iso)}</span>;
+}
 
 type SortKey = "name" | UserColumnKey;
 type SortDir = "asc" | "desc";
@@ -89,13 +108,34 @@ const ROLE_ORDER: Record<UserRole, number> = {
   Manager: 2,
   Admin: 3,
 };
+/* Sort runs most-engaged plan first, lapsed/none last — the order the pills
+   read down the column. */
 const SUB_ORDER: Record<SubscriptionStatus, number> = {
-  "Free Trial": 0,
-  Starter: 1,
-  Subscriber: 2,
-  Scholarship: 3,
+  Subscriber: 0,
+  "Company Plan": 1,
+  Scholarship: 2,
+  "Free Trial": 3,
+  Cancelled: 4,
+  Starter: 5,
 };
-const GOAL_ORDER: Record<string, number> = { "Looking for my first trades job": 0, "Exploring careers in the skilled trades": 1, "Focused on advancing my career": 2, Other: 3 };
+const FIRST_JOB_GOAL = GOALS[0];
+const GOAL_ORDER: Record<string, number> = { "Looking for First Trades Job": 0, "Exploring Careers in the Skilled Trades": 1, "Focussed on Advancing Career": 2, Other: 3 };
+
+/* A Subscriber with an upcoming cancellation ("Stripe · Cancels Jul 9, 2026")
+   files under Cancelled for the Subscription filter and sort, not Subscriber.
+   The raw status stays "Subscriber" — they keep access until `cancelsOn`. */
+function filterStatus(u: User): SubscriptionStatus {
+  return u.subscriptionStatus === "Subscriber" && u.cancelsOn ? "Cancelled" : u.subscriptionStatus;
+}
+
+/* Plan rank first; inside Cancelled, by cancellation date — an upcoming
+   cancellation's `cancelsOn` (future) or a lapsed plan's `cancelledOn` — so
+   desc reads cancelling-soon, then most recently cancelled. The whole list
+   reverses on desc, so the date part is ascending here. */
+function subscriptionSortValue(u: User): string {
+  const rank = SUB_ORDER[filterStatus(u)];
+  return `${rank}|${u.cancelsOn ?? u.cancelledOn ?? ""}`;
+}
 
 type Row = { u: User; f: ProfileFields };
 
@@ -105,24 +145,27 @@ type ColMeta = {
   label: string;
   className: string;
   width: number;
+  /** Click-to-copy cell (CopyCells.tsx) — the Email/Phone opt-in, the same
+      two columns every other admin table marks. */
+  copyable?: boolean;
   render: (u: User, f: ProfileFields) => React.ReactNode;
   sortValue: (u: User, f: ProfileFields) => string | number;
 };
 
 const COLS: ColMeta[] = [
-  { key: "email", label: "Email", className: "col-u-email", width: 190, render: (u) => <VerifiedCell text={u.email} verified={u.emailVerified} />, sortValue: (u) => u.email.toLowerCase() },
-  { key: "phone", label: "Phone", className: "col-u-phone", width: 165, render: (u) => <VerifiedCell text={u.phone} verified={u.phoneVerified} />, sortValue: (u) => u.phone },
+  { key: "email", label: "Email", copyable: true, className: "col-u-email", width: 190, render: (u) => u.email, sortValue: (u) => u.email.toLowerCase() },
+  { key: "phone", label: "Phone", copyable: true, className: "col-u-phone", width: 165, render: (u) => u.phone, sortValue: (u) => u.phone },
   { key: "userType", label: "User Type", className: "col-u-type", width: 114, render: (u) => <TypePill type={u.userType} />, sortValue: (u) => u.userType },
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: (u) => (u.userType === "B2B" && u.companyName ? u.companyName : null), sortValue: (u) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: (u) => u.role, sortValue: (u) => ROLE_ORDER[u.role] },
-  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: (u) => <SubscriptionCell user={u} />, sortValue: (u) => SUB_ORDER[u.subscriptionStatus] },
+  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 240, render: (u) => subscriptionLabel(u), sortValue: subscriptionSortValue },
   { key: "language", label: "Language", className: "col-u-lang", width: 114, render: (_u, f) => f.language, sortValue: (_u, f) => f.language },
   { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: (_u, f) => f.goal, sortValue: (_u, f) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
   { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: (_u, f) => f.zipCode, sortValue: (_u, f) => f.zipCode },
   { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 188, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 160, render: (u) => formatDate(u.lastAccess), sortValue: (u) => u.lastAccess },
-  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 210, render: (u) => (u.dashboardLastAccess ? formatDate(u.dashboardLastAccess) : null), sortValue: (u) => u.dashboardLastAccess ?? "" },
+  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 160, render: (u) => <LastAccessCell userId={u.id} iso={u.lastAccess} salt="app" />, sortValue: (u) => u.lastAccess },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 210, render: (u) => (u.dashboardLastAccess ? <LastAccessCell userId={u.id} iso={u.dashboardLastAccess} salt="dashboard" /> : null), sortValue: (u) => u.dashboardLastAccess ?? "" },
   { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: (u) => formatDate(u.joinedOn), sortValue: (u) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
@@ -142,12 +185,15 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
 export function UsersPage({
   onViewCompany,
   onManageCompletions,
-  onOpenOfferCodes,
+  /* Offer Codes is hidden from the header — App still passes the handler so
+     the page can bring the button back without rewiring. */
   onOpenScholarships,
   onOpenNameChanges,
   onOpenMergeAccounts,
   onOpenTransferSubscription,
   initialCompanyFilter,
+  flash,
+  onFlashDone,
 }: {
   onViewCompany?: (companyName: string) => void;
   onManageCompletions: (userId: string) => void;
@@ -157,11 +203,17 @@ export function UsersPage({
   onOpenMergeAccounts?: () => void;
   onOpenTransferSubscription?: () => void;
   initialCompanyFilter?: string;
+  /** A one-line success raised by something that finished and came back here
+   *  (a merge, a transfer) — shown as the shared toast. */
+  flash?: string | null;
+  onFlashDone?: () => void;
 }) {
-  const [list] = useState<User[]>(seedUsers);
-  // "O" / "S" open Offer Codes / Scholarships (badges shown on the buttons).
-  useCreateShortcut(() => onOpenOfferCodes?.(), !!onOpenOfferCodes, "o");
+  const [list, setList] = useState<User[]>(() => seedUsers.filter((u) => !removedUserIds.has(u.id)));
+  // "S" opens Scholarships from the page 3-dot menu. Offer Codes is hidden
+  // from the header for now, so it keeps no shortcut of its own.
   useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships, "s");
+  // "N" is the landing banner's Review Names badge.
+  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges, "n");
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
@@ -186,17 +238,12 @@ export function UsersPage({
   // status since access runs to the end of the billing period anyway.
   const [cancelSub, setCancelSub] = useState<User | null>(null);
   const [canceledSubs, setCanceledSubs] = useState<ReadonlySet<string>>(new Set());
-  // "View User IDs" opens the shared ID popup on that user's document. Replace
-  // and Approve edit the open record only — like the cancellations above, the
-  // decision is session-local, and the table has no ID column to reflect it.
-  const [idRecord, setIdRecord] = useState<IdRecord | null>(null);
-
-  const counts = useMemo(() => {
-    let b2c = 0;
-    let b2b = 0;
-    list.forEach((u) => (u.userType === "B2C" ? b2c++ : b2b++));
-    return { b2c, b2b };
-  }, [list]);
+  // Remove User: row menu → danger confirm → the user leaves the list and a
+  // success toast (the shared CopiedToast chrome) acknowledges it.
+  const [removing, setRemoving] = useState<User | null>(null);
+  // Edit User — the Full Profile's own modal, from the row pencil or the menu.
+  const [editing, setEditing] = useState<User | null>(null);
+  const [removedToast, setRemovedToast] = useState(0);
 
   const rows = useMemo<Row[]>(
     () => list.map((u) => ({ u, f: profiles.get(u.id)! })),
@@ -208,7 +255,7 @@ export function UsersPage({
     return rows.filter(({ u, f }) => {
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
-      if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
+      if (filters.subscriptions.length && !filters.subscriptions.includes(filterStatus(u))) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (filters.goals.length && !filters.goals.includes(f.goal)) return false;
       if (filters.industries.length && !filters.industries.includes(f.industryPreference)) return false;
@@ -258,42 +305,25 @@ export function UsersPage({
   const suggested = useMemo(() => {
     const pills: LandingPill[] = [
       {
-        key: "b2c",
-        label: "B2C",
+        key: "recently-cancelled",
+        label: "Recently Cancelled",
         onPick: () => {
-          setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "B2C" as UserType])) }));
+          setFilters((prev) => ({ ...prev, subscriptions: Array.from(new Set([...prev.subscriptions, "Cancelled" as SubscriptionStatus])) }));
+          setSort({ key: "subscription", dir: "desc" });
           morph.showTable();
         },
       },
       {
-        key: "b2b",
-        label: "B2B",
+        key: "first-job",
+        label: FIRST_JOB_GOAL,
         onPick: () => {
-          setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "B2B" as UserType])) }));
-          morph.showTable();
-        },
-      },
-      {
-        key: "subscriber",
-        label: "Subscriber",
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, subscriptions: Array.from(new Set([...prev.subscriptions, "Subscriber" as SubscriptionStatus])) }));
+          setFilters((prev) => ({ ...prev, goals: Array.from(new Set([...prev.goals, FIRST_JOB_GOAL])) }));
           morph.showTable();
         },
       },
     ];
-    const company = topValues(list, (u) => u.companyName)[0];
-    if (company)
-      pills.push({
-        key: "company",
-        label: company,
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, companies: Array.from(new Set([...prev.companies, company])) }));
-          morph.showTable();
-        },
-      });
     return pills;
-  }, [list, morph.showTable]);
+  }, [morph.showTable]);
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map(({ u }) => ({
     key: u.id,
@@ -301,10 +331,10 @@ export function UsersPage({
     cells: {
       email: u.email,
       phone: u.phone,
-      userType: u.userType,
       company: u.userType === "B2B" && u.companyName ? u.companyName : "",
-      role: u.role,
-      subscription: u.subscriptionStatus,
+      // Same wording the real table carries, so the hand-off is seamless.
+      subscription: subscriptionLabel(u),
+      lastAccess: formatDaysAgo(u.lastAccess),
     },
   }));
 
@@ -324,34 +354,22 @@ export function UsersPage({
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Manage Users</h1>
-              <div className="tasks-subtitle">
-                <span>{list.length} users</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{counts.b2c} B2C</span>
-                <span className="tasks-subtitle-dot" />
-                <span>{counts.b2b} B2B</span>
-              </div>
+              {/* The landing banner's collapsed form (Figma 1268:1736): once the
+                  page morphs into the table, the pending count lives under the
+                  title as one accent line that opens the queue. */}
+              {nameChangeRequests.length > 0 && onOpenNameChanges && (
+                <button className="tasks-note" onClick={() => onOpenNameChanges()}>
+                  {nameChangeRequests.length} Name Changes Pending Review
+                  <NoteChevronIcon />
+                </button>
+              )}
             </div>
-            {/* Offer Codes and Scholarships used to live in the sidebar's Users
-                group; they are now reached from here, with O / S shortcuts.
-                Name Changes moved here off the Exam Reviews header — the
-                requests are about a user's profile, not about an exam — and
-                carries the open-request count rather than a shortcut. */}
+            {/* Name Changes used to be a labelled header button here; the
+                pending count is the banner / title note now (1268:1714 →
+                1268:1736), so the header keeps only the 3-dot menu. Offer Codes
+                is hidden for now; Scholarships sits in that menu beside Merge /
+                Transfer, keeping its S shortcut. */}
             <div className="tasks-header-actions">
-              <button className="cta-quiet" onClick={() => onOpenNameChanges?.()}>
-                Name Changes
-                <span className="co-status-pill co-status-pill--accent">
-                  {nameChangeRequests.length}
-                </span>
-              </button>
-              <button className="cta-quiet" onClick={() => onOpenOfferCodes?.()}>
-                Offer Codes
-                <span className="cta-kbd">O</span>
-              </button>
-              <button className="cta-quiet" onClick={() => onOpenScholarships?.()}>
-                Scholarships
-                <span className="cta-kbd">S</span>
-              </button>
               <button
                 className="cta-quiet cta-quiet--icon"
                 aria-label="More actions"
@@ -364,6 +382,42 @@ export function UsersPage({
 
           <div className="tasks-row">
             <div className="tasks-content">
+              {/* Pending name changes announce themselves above the hero
+                  search. The whole card opens the queue — the CTA is the
+                  affordance, not the only target. Figma 1268:1714. */}
+              {nameChangeRequests.length > 0 && onOpenNameChanges && (
+                <div
+                  className="note-card note-card--accent lm-banner"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenNameChanges()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onOpenNameChanges();
+                    }
+                  }}
+                >
+                  <div className="lm-banner-main">
+                    <div className="lm-banner-count">{nameChangeRequests.length}</div>
+                    <div className="note-card-text">
+                      <p className="note-card-title">Name Change Requests Pending</p>
+                      <p className="note-card-body">Check against their ID saved on SkillCat</p>
+                    </div>
+                  </div>
+                  <button
+                    className="cta-quiet"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenNameChanges();
+                    }}
+                  >
+                    Review Names
+                    <span className="cta-kbd">N</span>
+                  </button>
+                </div>
+              )}
+
               <div className="toolbar">
                 <UsersSearch
                   users={list}
@@ -422,6 +476,7 @@ export function UsersPage({
                         row={row}
                         cols={visibleCols}
                         onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
+                        onEdit={() => setEditing(row.u)}
                         menuOpen={menu?.user.id === row.u.id}
                       />
                     ))}
@@ -440,7 +495,6 @@ export function UsersPage({
               </div>
 
               <div className="pagination">
-                <BackToSearch onClick={morph.showLanding} />
                 <span>
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
@@ -460,6 +514,7 @@ export function UsersPage({
         <UserActionsMenu
           rect={menu.rect}
           onClose={() => setMenu(null)}
+          onLoginAs={() => loginAs(menu.user)}
           onOpenProfile={() => openProfile(menu.user)}
           onViewCompany={
             menu.user.userType === "B2B" && menu.user.companyName && onViewCompany
@@ -483,7 +538,8 @@ export function UsersPage({
               ? () => setCancelSub(menu.user)
               : undefined
           }
-          onViewIds={() => setIdRecord(idRecordForUser(menu.user))}
+          onRemove={() => setRemoving(menu.user)}
+          onEdit={() => setEditing(menu.user)}
         />
       )}
       {pageMenu && (
@@ -492,24 +548,7 @@ export function UsersPage({
           onClose={() => setPageMenu(null)}
           onMergeAccounts={onOpenMergeAccounts}
           onTransferSubscription={onOpenTransferSubscription}
-        />
-      )}
-      {idRecord && (
-        <IdModal
-          record={idRecord}
-          onClose={() => setIdRecord(null)}
-          /* Same two transitions the Manage IDs table applies: a replacement
-             re-takes the upload stamp and either takes or drops the approval;
-             an approval only records the decision. */
-          onReplace={(status: IdStatus) => {
-            const now = nowIdStamp();
-            setIdRecord((r) =>
-              r ? { ...r, status, uploadedAt: now, approvedAt: status === "approved" ? now : undefined } : r,
-            );
-          }}
-          onApprove={() =>
-            setIdRecord((r) => (r ? { ...r, status: "approved", approvedAt: nowIdStamp() } : r))
-          }
+          onOpenScholarships={onOpenScholarships}
         />
       )}
       {cancelSub && (
@@ -522,6 +561,37 @@ export function UsersPage({
           }}
         />
       )}
+      {editing && (
+        <EditUserDialog
+          user={editing}
+          onClose={() => setEditing(null)}
+          onSave={(v) => {
+            updateUserContact(editing.id, v);
+            // The roster object was updated in place; copy it so the row re-renders.
+            setList((prev) => prev.map((u) => (u.id === editing.id ? { ...u } : u)));
+            setEditing(null);
+          }}
+        />
+      )}
+      {removing && (
+        <RemoveUserConfirm
+          user={removing}
+          onClose={() => setRemoving(null)}
+          onConfirm={() => {
+            removeUser(removing.id);
+            setList((prev) => prev.filter((u) => u.id !== removing.id));
+            setRemoving(null);
+            setRemovedToast(Date.now());
+          }}
+        />
+      )}
+      {removedToast > 0 && (
+        <CopiedToast key={removedToast} label="User Removed" onDone={() => setRemovedToast(0)} />
+      )}
+
+      {/* What a finished merge or transfer comes back to — the shared toast,
+          the same one a copied payment link raises. */}
+      {flash && <CopiedToast label={flash} ms={4000} onDone={() => onFlashDone?.()} />}
     </div>
   );
 }
@@ -575,40 +645,38 @@ function TypePill({ type }: { type: UserType }) {
   return <span className={`u-pill u-type--${type.toLowerCase()}`}>{type}</span>;
 }
 
-function SubscriptionCell({ user }: { user: User }) {
-  const slug = user.subscriptionStatus.toLowerCase().replace(/\s+/g, "-");
-  return (
-    <span className="u-sub">
-      <span className={`u-sub-pill u-sub--${slug}`}>{user.subscriptionStatus}</span>
-      {user.subscriptionStatus === "Subscriber" && user.platform && (
-        <span className="u-platform">{user.platform}</span>
-      )}
-    </span>
-  );
-}
-
-function VerifiedCell({ text, verified }: { text: string; verified: boolean }) {
-  return (
-    <span className="u-vcell">
-      <span className="u-vcell-text">{text}</span>
-      {verified && (
-        <span className="u-verified" title="Verified">
-          <VerifiedIcon />
-        </span>
-      )}
-    </span>
-  );
+/* Subscription reads as plain text like every other column on this table (per
+   the user 2026-09-21 — the pills came off, the wording stayed). A paying
+   Subscriber is named by the platform that bills them ("Stripe"), and a
+   cancellation still inside the paid period adds the end date. A Starter-tier
+   user — no plan of any kind — reads as the app's em dash. */
+function subscriptionLabel(user: User): string {
+  switch (user.subscriptionStatus) {
+    case "Subscriber": {
+      const platform = user.platform ?? "Stripe";
+      return user.cancelsOn ? `${platform} · Cancels ${formatDate(user.cancelsOn)}` : platform;
+    }
+    case "Free Trial":
+    case "Scholarship":
+    case "Company Plan":
+    case "Cancelled":
+      return user.subscriptionStatus;
+    case "Starter":
+      return "—";
+  }
 }
 
 function UserRow({
   row,
   cols,
   onOpenMenu,
+  onEdit,
   menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
   onOpenMenu: (anchor: HTMLElement) => void;
+  onEdit: () => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
@@ -617,7 +685,7 @@ function UserRow({
     <tr className={menuOpen ? "menu-open" : ""}>
       <td className="col-name">{u.name}</td>
       {cols.map((c) => (
-        <td key={c.key} className={c.className}>
+        <td key={c.key} className={c.className} data-copyable={c.copyable ? "" : undefined}>
           {c.render(u, f)}
         </td>
       ))}
@@ -630,7 +698,7 @@ function UserRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit">
+          <button className="row-action-btn" aria-label="Edit User Details" onClick={onEdit}>
             <RowEditIcon />
           </button>
           <button
@@ -655,30 +723,35 @@ function UserRow({
 }
 
 /* ─── Three-dot actions menu — Figma 673:1437 "3-Dot Menu - B2C User", in that
-   node's order (View User IDs sits after the destructive Remove User). Fixed-
-   positioned so it escapes the table scroll. The name/ID header this used to
+   node's order. (View User IDs sat last, after the destructive Remove User;
+   dropped 2026-09-22 — IDs are reached from the Full Profile's View ID button
+   and the Manage IDs table.) Fixed-positioned so it escapes the table scroll. The name/ID header this used to
    carry isn't in the component — the row the menu opened from already names
    the user. Items that don't apply to the row drop out; the rest close up. ─── */
 
 function UserActionsMenu({
   rect,
   onClose,
+  onLoginAs,
   onOpenProfile,
   onViewCompany,
   onViewAllEmployees,
   onManageCompletions,
   onCancelSubscription,
-  onViewIds,
+  onRemove,
+  onEdit,
 }: {
   rect: DOMRect;
   onClose: () => void;
+  onRemove: () => void;
+  onEdit: () => void;
+  onLoginAs: () => void;
   onOpenProfile: () => void;
   onViewCompany?: () => void;
   onViewAllEmployees?: () => void;
   onManageCompletions: () => void;
   /** Omitted when the user can't be cancelled from here — the item is hidden. */
   onCancelSubscription?: () => void;
-  onViewIds: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -747,15 +820,14 @@ function UserActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {item(<RowEditIcon />, "Edit User Details", () => {})}
-      {item(<MenuEnterIcon />, "Login As", () => {})}
+      {item(<RowEditIcon />, "Edit User Details", onEdit)}
+      {item(<MenuEnterIcon />, "Login As", onLoginAs)}
       {item(<MenuProfileIcon />, "View Profile", onOpenProfile)}
       {item(<MenuProgressIcon />, "Manage Training Progress", onManageCompletions)}
       {onViewCompany && item(<MenuBankIcon />, "View User's Company", onViewCompany)}
       {onViewAllEmployees && item(<MenuUsersIcon />, "View All Company Employees", onViewAllEmployees)}
       {onCancelSubscription && item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription)}
-      {item(<RowDeleteIcon />, "Remove User", () => {}, true)}
-      {item(<MenuIdDocIcon />, "View User IDs", onViewIds)}
+      {item(<RowDeleteIcon />, "Remove User", onRemove, true)}
     </div>
   );
 }
@@ -769,11 +841,13 @@ function PageActionsMenu({
   onClose,
   onMergeAccounts,
   onTransferSubscription,
+  onOpenScholarships,
 }: {
   rect: DOMRect;
   onClose: () => void;
   onMergeAccounts?: () => void;
   onTransferSubscription?: () => void;
+  onOpenScholarships?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -832,6 +906,7 @@ function PageActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      {item(<MenuAwardIcon />, "Scholarships", onOpenScholarships)}
       {item(<MenuMergeIcon />, "Merge Accounts", onMergeAccounts)}
       {item(<MenuTransferIcon />, "Transfer Subscription", onTransferSubscription)}
     </div>
@@ -880,6 +955,75 @@ function CancelSubscriptionConfirm({
           issued for the current period.
         </p>
       )}
+    </PrmModal>
+  );
+}
+
+/* ─── Edit User — the Full Profile's EditUserModal as is. It leaves Escape to
+   its owner (the profile page closes it with useEscape), so this adds that. ─── */
+
+function EditUserDialog({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: User;
+  onClose: () => void;
+  onSave: (v: { name: string; email: string; phone: string }) => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <EditUserModal
+      initial={{ name: user.name, email: user.email, phone: user.phone }}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  );
+}
+
+/* ─── Remove User confirm — the danger PrmModal every Delete X? uses. ─── */
+
+function RemoveUserConfirm({
+  user,
+  onClose,
+  onConfirm,
+}: {
+  user: User;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <PrmModal
+      title="Remove User?"
+      confirmLabel="Remove User"
+      cancelLabel="Cancel"
+      danger
+      onCancel={onClose}
+      onConfirm={onConfirm}
+    >
+      <div className="prm-stack">
+        <p className="prm-content">
+          <strong>{user.name}</strong> ({user.email}) loses access to SkillCat and is removed
+          from Manage Users{user.userType === "B2B" && user.companyName ? <> and from the <strong>{user.companyName}</strong> roster</> : null}.
+        </p>
+        <p className="prm-content">This cannot be undone.</p>
+      </div>
     </PrmModal>
   );
 }

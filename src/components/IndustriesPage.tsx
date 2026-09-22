@@ -9,7 +9,6 @@ import {
 } from "../data/industries";
 import {
   SearchIcon,
-  SmallXIcon,
   DragHandleIcon,
   CheckIcon,
   TreeAddIcon,
@@ -20,12 +19,14 @@ import {
   RowEyeOffIcon,
   RowDeleteIcon,
   ChevronRightIcon,
+  ChevronLeftIcon,
+  SortIcon,
 } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
-import { SectionHeading } from "./SectionHeading";
+import { PrmModal } from "./PrmModal";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 /* Industries — Claude Design "Industries · Launcher + Hub" (2a / 4a).
@@ -66,6 +67,15 @@ type LaunchItem =
 const RowCloseIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
     <path d="M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6" />
+  </svg>
+);
+
+/* Row-end chevron — the node's 16px Icon Library glyph (1.333 square-cap,
+   6.33→10→6.33), not the app's 11px round-cap `ChevronRightIcon`, which the
+   breadcrumb keeps. */
+const RowChevronIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.333" strokeLinecap="square">
+    <path d="M6.33333 11.6667L10 8L6.33333 4.33333" />
   </svg>
 );
 
@@ -979,25 +989,21 @@ function Hub({
 
         {!sub && (
           <section className="ind-section">
-            <SectionHeading
-              label="Sub-Industries"
-              trailing={
-                <button className="qbl-index-add ind-sec-action" onClick={onNewSub}>
-                  <span className="tree-add-icon"><TreeAddIcon /></span>
-                  New Sub-Industry
-                </button>
-              }
+            <SecHead
+              title={`Sub-Industries in “${industry.name}”`}
+              addLabel="New Sub-Industry"
+              onAdd={onNewSub}
             />
             {orderedSubs.length === 0 ? (
               <div className="ind-sec-empty">
                 No sub-industries yet — every certification here is shown to every {industry.name} learner.
               </div>
             ) : (
-              <div className="ind-subcards">
+              <div className="ind-subrows">
                 {orderedSubs.map((s) => (
                   <button
                     key={s.key}
-                    className={`ind-subcard ${overKey === s.key ? "is-drop-over" : ""}`}
+                    className={`ind-subrow ${overKey === s.key ? "is-drop-over" : ""}`}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
@@ -1012,13 +1018,20 @@ function Hub({
                     onDrop={(e) => dropOn(e, s.key)}
                     onClick={() => onOpenSub(s.key)}
                   >
-                    <span className="ind-subcard-head">
-                      <span className="ind-subcard-name">{s.name}</span>
-                      <span className="ind-subcard-arrow"><ChevronRightIcon /></span>
+                    <span className="ind-subrow-drag" title="Drag to reorder" aria-hidden>
+                      <DragHandleIcon />
                     </span>
-                    <span className="ind-subcard-foot">
-                      <span className="ind-subcard-count">{plural(s.certIds.length, "certification")}</span>
-                      {s.hidden && <span className="ind-hidden-pill">Hidden</span>}
+                    <span className="ind-subrow-cell">
+                      <span className="ind-subrow-name">
+                        {s.name}
+                        {s.hidden && <span className="ind-hidden-pill">Hidden</span>}
+                      </span>
+                      <span className="ind-subrow-count">
+                        {s.certIds.length} Certification{s.certIds.length === 1 ? "" : "s"}
+                      </span>
+                    </span>
+                    <span className="ind-subrow-arrow" aria-hidden>
+                      <RowChevronIcon />
                     </span>
                   </button>
                 ))}
@@ -1028,23 +1041,39 @@ function Hub({
         )}
 
         <section className="ind-section">
-          <SectionHeading
-            label={sub ? "Certifications" : "Core Certifications"}
-            trailing={
-              <>
-                <span className="ind-sec-note">
-                  · shown to {sub ? `${industry.name} › ${sub.name}` : `every ${industry.name}`} learner{sub ? "s" : ""}
-                </span>
-                <button className="qbl-index-add ind-sec-action ind-sec-action--end" onClick={onAddCerts}>
-                  <span className="tree-add-icon"><TreeAddIcon /></span>
-                  Add
-                </button>
-              </>
-            }
+          <SecHead
+            title={`Certifications in “${name}”`}
+            addLabel="Add Certification"
+            onAdd={onAddCerts}
           />
           <CertList certIds={certIds} onReorder={onReorderCerts} onRemove={onRemoveCert} />
         </section>
       </div>
+    </div>
+  );
+}
+
+/* Section head — Figma 1240:1186 (663:909 / 663:907): a 24px row with the
+   scope-named title (20px Fira SemiBold white, curly quotes) and a bare 20px
+   white "+" at the far right. It replaced the shared uppercase `SectionHeading`
+   + its "New Sub-Industry" / "Add" text buttons on 2026-09-18; the glyph is the
+   shared TreeAddIcon scaled from 16 to 20 (its 1.333 stroke rides up to the
+   node's 1.667 with it). The label the button drops lives in its tooltip. */
+function SecHead({
+  title,
+  addLabel,
+  onAdd,
+}: {
+  title: string;
+  addLabel: string;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="ind-sechead">
+      <h2 className="ind-sechead-title">{title}</h2>
+      <button className="ind-sechead-add" onClick={onAdd} aria-label={addLabel} title={addLabel}>
+        <TreeAddIcon />
+      </button>
     </div>
   );
 }
@@ -1114,9 +1143,14 @@ function CertList({
             <span className="ind-ct-drag" title="Drag to reorder" aria-hidden>
               <DragHandleIcon />
             </span>
-            <span className="ind-ct-name">{cert.name}</span>
-            <span className="ind-ct-meta">
-              {cert.stage} · {cert.hours} {cert.hours === 1 ? "hr" : "hrs"}
+            {/* Position in the list — the order the drag handle sets, and the
+                order learners browse in. */}
+            <span className="ind-ct-index">{idx + 1}</span>
+            <span className="ind-ct-cell">
+              <span className="ind-ct-name">{cert.name}</span>
+              <span className="ind-ct-sub">
+                {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
+              </span>
             </span>
             <button
               className="ind-ct-x"
@@ -1135,6 +1169,12 @@ function CertList({
 
 /* ─── Name + translation + visibility modal ───────────────────────────────── */
 
+/* The shared confirm shell (PrmModal, Figma 483:588) with the shared field
+   atoms inside it — `.prm-field` label + the EN/ES `.lang-field` + a two-option
+   `.seg-control` for Visibility. It ran on a hand-rolled `.pm-*` card with a
+   `.tab-switch` until 2026-09-18, which made the page's pop-ups the only ones
+   in the app that weren't the design system's.
+   PrmModal has no key handling of its own, so the owner closes on Escape. */
 function NameModal({
   title,
   nameLabel,
@@ -1163,8 +1203,16 @@ function NameModal({
   const [hidden, setHidden] = useState(defaultHidden);
 
   const trimmed = name.trim();
-  const isDuplicate = trimmed && existingNames.includes(trimmed.toLowerCase());
+  const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
   const isValid = !!trimmed && !isDuplicate;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
 
   function submit() {
     if (!isValid) return;
@@ -1172,91 +1220,81 @@ function NameModal({
   }
 
   return (
-    <div className="pm-overlay" onClick={onCancel}>
-      <div
-        className="pm-modal ind-modal"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-      >
-        <div className="pm-head">
-          <h3 className="pm-title">{title}</h3>
-          <p className="pm-sub">{nameHelp}</p>
-        </div>
-        <div className="pm-body">
-          <div className="form-group">
-            <label className="form-label">
-              {nameLabel} <span className="req">*</span>
-            </label>
-            <div className="lang-field">
-              <div className="lang-field-row">
-                <span className="lang-tag">EN</span>
-                <input
-                  autoFocus
-                  className="lang-field-input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="Solar & Renewables"
-                />
-              </div>
-              <div className="lang-field-divider" />
-              <div className="lang-field-row">
-                <span className="lang-tag">ES</span>
-                <input
-                  className="lang-field-input"
-                  value={nameEs}
-                  onChange={(e) => setNameEs(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="Solar y Energías Renovables"
-                />
-              </div>
+    <PrmModal
+      title={title}
+      description={nameHelp}
+      confirmLabel={submitLabel}
+      confirmDisabled={!isValid}
+      onCancel={onCancel}
+      onConfirm={submit}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            {nameLabel}
+            <span className="prm-req">*</span>
+          </span>
+          <div className="lang-field">
+            <div className="lang-field-row">
+              <span className="lang-tag">EN</span>
+              <input
+                autoFocus
+                className="lang-field-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="Solar & Renewables"
+              />
             </div>
-            {isDuplicate ? (
-              <div className="pm-error">
-                A {nameLabel.toLowerCase()} with this name already exists.
-              </div>
-            ) : (
-              <div className="form-help">
-                Spanish is optional — it falls back to the English name.
-              </div>
-            )}
+            <div className="lang-field-divider" />
+            <div className="lang-field-row">
+              <span className="lang-tag">ES</span>
+              <input
+                className="lang-field-input"
+                value={nameEs}
+                onChange={(e) => setNameEs(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="Solar y Energías Renovables"
+              />
+            </div>
           </div>
+          {isDuplicate ? (
+            <p className="form-help oc-error">
+              A {nameLabel.toLowerCase()} with this name already exists.
+            </p>
+          ) : (
+            <p className="form-help">
+              Spanish is optional — it falls back to the English name.
+            </p>
+          )}
+        </div>
 
-          <div className="form-group">
-            <label className="form-label">Visibility</label>
-            <div className="tab-switch">
-              <button
-                className={`tab-switch-tab ${hidden ? "" : "active"}`}
-                onClick={() => setHidden(false)}
-              >
-                Visible
-              </button>
-              <button
-                className={`tab-switch-tab ${hidden ? "active" : ""}`}
-                onClick={() => setHidden(true)}
-              >
-                Hidden
-              </button>
-            </div>
-            <div className="form-help">
-              {hidden
-                ? "Won't appear to learners browsing the catalog."
-                : "Appears to learners browsing the catalog."}
-            </div>
+        <div className="prm-field">
+          <span className="prm-label">Visibility</span>
+          <div className="seg-control">
+            <button
+              type="button"
+              className={`seg-btn accent ${hidden ? "" : "active"}`}
+              onClick={() => setHidden(false)}
+            >
+              Visible
+            </button>
+            <button
+              type="button"
+              className={`seg-btn accent ${hidden ? "active" : ""}`}
+              onClick={() => setHidden(true)}
+            >
+              Hidden
+            </button>
           </div>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className="btn-publish" disabled={!isValid} onClick={submit}>
-            {submitLabel}
-          </button>
+          <p className="form-help">
+            {hidden
+              ? "Won't appear to learners browsing the catalog."
+              : "Appears to learners browsing the catalog."}
+          </p>
         </div>
       </div>
-    </div>
+    </PrmModal>
   );
 }
 
@@ -1279,44 +1317,62 @@ function DeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
   return (
-    <div className="pm-overlay" onClick={onCancel}>
-      <div className="pm-modal ind-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <h3 className="pm-title">{title}</h3>
-          <p className="pm-sub">
-            Delete <strong>{label}</strong>? This can't be undone.
-          </p>
-        </div>
-        <div className="pm-body">
-          <ul className="ind-modal-list">
-            {isIndustry && subCount > 0 && (
-              <li>
-                All <strong>{subCount}</strong> Sub-{subCount === 1 ? "Industry" : "Industries"} under it will also be deleted.
-              </li>
-            )}
-            {certCount > 0 ? (
-              <li>
-                <strong>{certCount}</strong> tagged Certification{certCount === 1 ? "" : "s"}{" "}
-                will lose this tag. The Certifications themselves stay published — they just won't appear under this {isIndustry ? "Industry" : "Sub-Industry"} anymore.
-              </li>
-            ) : (
-              <li>No Certifications are currently tagged here.</li>
-            )}
-          </ul>
-        </div>
-        <div className="pm-foot">
-          <button className="btn-save-draft" onClick={onCancel}>Cancel</button>
-          <button className="btn-publish btn-publish--danger" onClick={onConfirm}>
-            Delete {isIndustry ? "Industry" : "Sub-Industry"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <PrmModal
+      title={title}
+      description={
+        <>
+          Delete <strong>{label}</strong>? This can't be undone.
+        </>
+      }
+      confirmLabel={`Delete ${isIndustry ? "Industry" : "Sub-Industry"}`}
+      danger
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <ul className="ind-modal-list">
+        {isIndustry && subCount > 0 && (
+          <li>
+            All <strong>{subCount}</strong> Sub-{subCount === 1 ? "Industry" : "Industries"} under it will also be deleted.
+          </li>
+        )}
+        {certCount > 0 ? (
+          <li>
+            <strong>{certCount}</strong> tagged Certification{certCount === 1 ? "" : "s"}{" "}
+            will lose this tag. The Certifications themselves stay published — they just won't appear under this {isIndustry ? "Industry" : "Sub-Industry"} anymore.
+          </li>
+        ) : (
+          <li>No Certifications are currently tagged here.</li>
+        )}
+      </ul>
+    </PrmModal>
   );
 }
 
 /* ─── Add certifications modal ────────────────────────────────────────────── */
+
+/* The shared table picker (Figma 682:2321, `.stm-*`) that Select Tasks /
+   Select Users / Select Questions / Select Certifications already run on, here
+   over the Certification catalog with the Industries page's own columns.
+   It ran on a bespoke `.ind-addcerts` card of scrolling large-table rows until
+   2026-09-18 — same job, different chrome.
+   Certifications already tagged at this scope stay visible as ticked + locked
+   (the shared picker's rule) rather than disappearing, so the admin can see
+   what's taken. Selection is staged: the modal owns `picked` and only hands it
+   back on confirm, in the order it was picked. */
+
+const ADD_CERTS_PAGE_SIZE = 50;
+
+type CertSortKey = "name" | "stage" | "hours" | "tags";
+type SortDir = "asc" | "desc";
 
 function AddCertsModal({
   industryName,
@@ -1337,8 +1393,23 @@ function AddCertsModal({
   const [stageFilter, setStageFilter] = useState<CareerStage | "All">("All");
   const [tagFilter, setTagFilter] = useState<"All" | "Untagged" | "Tagged">("All");
   const [timeFilter, setTimeFilter] = useState<"Any" | "Short" | "Medium" | "Long">("Any");
-  // Map of certId -> selection order
-  const [selected, setSelected] = useState<Map<string, number>>(new Map());
+  /** Staged picks, in the order they were ticked — that's the order they land
+   *  in at the scope. */
+  const [picked, setPicked] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ key: CertSortKey; dir: SortDir }>({
+    key: "name",
+    dir: "asc",
+  });
+
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const scopeLabel = subName
     ? `${industryName} › ${subName}`
@@ -1366,67 +1437,91 @@ function AddCertsModal({
     });
   }, [universe, query, stageFilter, tagFilter, timeFilter, tagsForCert]);
 
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(id)) {
-        const removed = next.get(id)!;
-        next.delete(id);
-        // Re-number remaining selections after the removed slot
-        for (const [k, v] of next) {
-          if (v > removed) next.set(k, v - 1);
-        }
-      } else {
-        next.set(id, next.size + 1);
+  const sorted = useMemo(() => {
+    const arr = [...filtered].sort((a, b) => {
+      switch (sort.key) {
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "stage":
+          return CAREER_STAGES.indexOf(a.stage) - CAREER_STAGES.indexOf(b.stage);
+        case "hours":
+          return a.hours - b.hours;
+        case "tags":
+          return tagsForCert(a.id).length - tagsForCert(b.id).length;
       }
-      return next;
     });
+    return sort.dir === "desc" ? arr.reverse() : arr;
+  }, [filtered, sort, tagsForCert]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / ADD_CERTS_PAGE_SIZE));
+  const visiblePage = Math.min(page, totalPages);
+  const start = (visiblePage - 1) * ADD_CERTS_PAGE_SIZE;
+  const rows = sorted.slice(start, start + ADD_CERTS_PAGE_SIZE);
+
+  function toggleSelect(id: string) {
+    if (alreadyAtScope.has(id)) return;
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
-  const selectedCount = selected.size;
-  const selectedInOrder = useMemo(() => {
-    return [...selected.entries()]
-      .sort((a, b) => a[1] - b[1])
-      .map(([id]) => id);
-  }, [selected]);
+  function toggleSort(key: CertSortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  }
 
+  /** Any filter change can shrink the list under the current page. */
+  function resetPage<T>(set: (v: T) => void) {
+    return (v: T) => {
+      set(v);
+      setPage(1);
+    };
+  }
+
+  const selectedCount = picked.length;
   const hasFilters =
     stageFilter !== "All" || tagFilter !== "All" || timeFilter !== "Any";
 
   return (
-    <div className="pm-overlay" onClick={onClose}>
-      <div className="pm-modal ind-addcerts" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head ind-addcerts-head">
-          <div>
-            <h3 className="pm-title">Add Certifications</h3>
-            <p className="pm-sub">
-              Adding to <strong>{scopeLabel}</strong>
-            </p>
-          </div>
-          <button className="ind-icon-btn" aria-label="Close" onClick={onClose}>
-            <SmallXIcon />
-          </button>
-        </div>
-
-        <div className="ind-addcerts-controls">
-          <div className="search-wrap ind-addcerts-search">
+    <PrmModal
+      title="Add Certifications"
+      description={
+        <>
+          Adding to <strong>{scopeLabel}</strong>
+        </>
+      }
+      confirmLabel={`Add ${selectedCount > 0 ? selectedCount : ""} Certification${
+        selectedCount === 1 ? "" : "s"
+      }`}
+      confirmDisabled={selectedCount === 0}
+      pick
+      onCancel={onClose}
+      onConfirm={() => onAdd(picked)}
+    >
+      <div className="stm">
+        <div className="stm-toolbar">
+          <div className="search-wrap stm-search">
             <span className="search-icon"><SearchIcon /></span>
             <input
               autoFocus
-              className="search-input"
+              className="search-input stm-search-input"
               placeholder="Search Certifications..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
 
-          <div className="filters ind-addcerts-filters">
+          <div className="filters stm-filters">
             <SelectPill
               label="Career Stage"
               value={stageFilter}
               blank="All"
               options={["All", ...CAREER_STAGES]}
-              onChange={(v) => setStageFilter(v as CareerStage | "All")}
+              onChange={resetPage((v: string) => setStageFilter(v as CareerStage | "All"))}
               tip={FILTER_TIPS.industries.careerStage}
             />
             <SelectPill
@@ -1434,7 +1529,9 @@ function AddCertsModal({
               value={tagFilter}
               blank="All"
               options={["All", "Tagged", "Untagged"]}
-              onChange={(v) => setTagFilter(v as "All" | "Untagged" | "Tagged")}
+              onChange={resetPage((v: string) =>
+                setTagFilter(v as "All" | "Untagged" | "Tagged"),
+              )}
               tip={FILTER_TIPS.industries.industryTag}
             />
             <SelectPill
@@ -1442,7 +1539,9 @@ function AddCertsModal({
               value={timeFilter}
               blank="Any"
               options={["Any", "Short", "Medium", "Long"]}
-              onChange={(v) => setTimeFilter(v as "Any" | "Short" | "Medium" | "Long")}
+              onChange={resetPage((v: string) =>
+                setTimeFilter(v as "Any" | "Short" | "Medium" | "Long"),
+              )}
               tip={FILTER_TIPS.industries.time}
             />
             {hasFilters && (
@@ -1452,92 +1551,173 @@ function AddCertsModal({
                   setStageFilter("All");
                   setTagFilter("All");
                   setTimeFilter("Any");
+                  setPage(1);
                 }}
               >
                 Clear Filters
               </button>
             )}
-            <div className="filters-end ind-addcerts-count">
-              {filtered.length} Certifications
+          </div>
+        </div>
+
+        <div className="stm-table-wrap">
+          {/* Column-width floor, per the shared table convention — below it the
+              table scrolls sideways instead of crushing the cells. 44 check +
+              260 name + 150 stage + 90 hours + 260 tags. */}
+          <div
+            className="table-xscroll"
+            style={{ "--table-min": "804px" } as React.CSSProperties}
+          >
+            <table className="table table-head stm-table acm-table">
+              <ColGroup />
+              <thead>
+                <tr>
+                  {/* Spacer only — the node's header holds the column, it is
+                      not a select-all control. */}
+                  <th className="stm-col-check no-sort" />
+                  <Th col="name" label="Certification" cls="acm-col-name" sort={sort} toggle={toggleSort} />
+                  <Th col="stage" label="Career Stage" cls="acm-col-stage" sort={sort} toggle={toggleSort} />
+                  <Th col="hours" label="Hours" cls="acm-col-hours" sort={sort} toggle={toggleSort} />
+                  <Th col="tags" label="Industry Tags" cls="acm-col-tags" sort={sort} toggle={toggleSort} />
+                </tr>
+              </thead>
+            </table>
+
+            <div className="tasks-scroll">
+              <table className="table table-body stm-table acm-table">
+                <ColGroup />
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr className="stm-empty-row">
+                      <td colSpan={5}>
+                        No Certifications match your search and filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((cert) => {
+                      const isLocked = alreadyAtScope.has(cert.id);
+                      const on = isLocked || picked.includes(cert.id);
+                      const tags = tagsForCert(cert.id).map((t) =>
+                        t.subName ? `${t.industryName} › ${t.subName}` : t.industryName,
+                      );
+                      return (
+                        <tr
+                          key={cert.id}
+                          className={`${on ? "selected" : ""}${isLocked ? " is-locked" : ""}`}
+                          title={isLocked ? "Already added here" : undefined}
+                          onClick={() => toggleSelect(cert.id)}
+                        >
+                          <td className="stm-col-check">
+                            {/* A <button>, not a <span> — the shared table reset
+                                strips chrome from span/div in data cells, which
+                                would leave a bare tick with no box. */}
+                            <button
+                              className={`checkbox ${on ? "checked" : ""}`}
+                              aria-label={on ? "Deselect" : "Select"}
+                              aria-pressed={on}
+                              disabled={isLocked}
+                              tabIndex={-1}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelect(cert.id);
+                              }}
+                            >
+                              {on && <CheckIcon />}
+                            </button>
+                          </td>
+                          {/* `col-name` is the shared Name-column class — it
+                              carries the #FFFFFF emphasis and is excluded from
+                              the app-wide "mute every non-Name cell" rule. */}
+                          <td className="acm-col-name col-name">{cert.name}</td>
+                          <td className="acm-col-stage">{cert.stage}</td>
+                          <td className="acm-col-hours">{cert.hours}</td>
+                          <td className="acm-col-tags">
+                            <MultiCell values={tags} />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="pagination stm-pagination">
+            <span className="scm-picked">{selectedCount} selected</span>
+            <span>
+              Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
+              {Math.min(start + ADD_CERTS_PAGE_SIZE, sorted.length)} of {sorted.length}
+            </span>
+            <div className="pagination-controls">
+              <button
+                className="page-btn"
+                disabled={visiblePage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeftIcon />
+              </button>
+              <button
+                className="page-btn"
+                disabled={visiblePage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRightIcon />
+              </button>
             </div>
           </div>
         </div>
-
-        <div className="ind-addcerts-list">
-          {filtered.length === 0 ? (
-            <div className="u-empty">No certifications match the current filters.</div>
-          ) : (
-            filtered.map((cert) => {
-              const alreadyAdded = alreadyAtScope.has(cert.id);
-              const order = selected.get(cert.id);
-              const tags = tagsForCert(cert.id);
-              return (
-                <button
-                  key={cert.id}
-                  className={`ind-ct-row ind-addcerts-row ${order !== undefined ? "is-selected" : ""} ${alreadyAdded ? "is-disabled" : ""}`}
-                  disabled={alreadyAdded}
-                  onClick={() => !alreadyAdded && toggleSelect(cert.id)}
-                >
-                  <span
-                    className={`checkbox ind-addcerts-box ${order !== undefined || alreadyAdded ? "checked" : ""}`}
-                  >
-                    {alreadyAdded ? <CheckIcon /> : order !== undefined ? order : null}
-                  </span>
-                  <span className="ind-ct-cell">
-                    <span className="ind-ct-name">{cert.name}</span>
-                    <span className="ind-ct-sub">
-                      {cert.stage} · {cert.hours} {cert.hours === 1 ? "hour" : "hours"}
-                    </span>
-                  </span>
-                  <span className="ind-addcerts-tags">
-                    {tags.length > 0 ? (
-                      tags.map((t, i) => (
-                        <span
-                          key={`${cert.id}-tag-${i}`}
-                          className="co-status-pill co-status-pill--secondary"
-                        >
-                          {t.subName ? `${t.industryName} › ${t.subName}` : t.industryName}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="ind-ct-plain">No industry tags yet</span>
-                    )}
-                  </span>
-                  {alreadyAdded && (
-                    <span className="co-status-pill co-status-pill--green">Already added</span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <div className="pm-foot ind-addcerts-foot">
-          <div className="ind-addcerts-foot-text">
-            <strong>{selectedCount} selected</strong>
-            {selectedCount > 0 && (
-              <span className="ind-addcerts-foot-sub">
-                Added to{" "}
-                <strong>
-                  {subName ? `${industryName} › ${subName}` : `${industryName} (Industry-level)`}
-                </strong>{" "}
-                in the order shown. Click a row again to deselect.
-              </span>
-            )}
-          </div>
-          <div className="ind-addcerts-foot-actions">
-            <button className="btn-save-draft" onClick={onClose}>Cancel</button>
-            <button
-              className="btn-publish"
-              disabled={selectedCount === 0}
-              onClick={() => onAdd(selectedInOrder)}
-            >
-              Add {selectedCount > 0 ? selectedCount : ""} Certification{selectedCount === 1 ? "" : "s"}
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </PrmModal>
+  );
+}
+
+function ColGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: 44 }} />
+      <col />
+      <col style={{ width: 150 }} />
+      <col style={{ width: 90 }} />
+      <col style={{ width: 260 }} />
+    </colgroup>
+  );
+}
+
+function Th({
+  col,
+  label,
+  cls,
+  sort,
+  toggle,
+}: {
+  col: CertSortKey;
+  label: string;
+  cls: string;
+  sort: { key: CertSortKey; dir: SortDir };
+  toggle: (k: CertSortKey) => void;
+}) {
+  const active = sort.key === col;
+  return (
+    <th className={cls} onClick={() => toggle(col)}>
+      <span className="th-content">
+        {label}
+        <SortIcon active={active} dir={active ? sort.dir : undefined} />
+      </span>
+    </th>
+  );
+}
+
+/* The shared picker's multi-value cell: first value + "+N", full list on hover. */
+function MultiCell({ values }: { values: string[] }) {
+  if (values.length === 0) return <>—</>;
+  return (
+    <span className="stm-multi" title={values.join(", ")}>
+      <span className="stm-multi-first">{values[0]}</span>
+      {values.length > 1 && <span className="stm-multi-more">+{values.length - 1}</span>}
+    </span>
   );
 }
 

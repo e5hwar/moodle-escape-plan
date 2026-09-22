@@ -5,7 +5,7 @@ import {
   type FormQuestionLink,
 } from "../data/feedbackForms";
 import { type Question, type QuestionType } from "../data/questionBank";
-import { InfoTipIcon, MoveIcon, SmallXIcon } from "./icons";
+import { InfoTipIcon, MoveIcon, SmallXIcon, TreeAddIcon } from "./icons";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
@@ -211,8 +211,8 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
 
         {actives.length === 0 && (
           <div className="qz-empty">
-            No questions yet — Add Question below creates one or picks from the
-            Bank.
+            No questions yet — Add Questions below creates one or picks from
+            the Bank.
           </div>
         )}
 
@@ -267,30 +267,33 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
           );
         })}
 
-        <div className="qz-foot">
-          <div className="qz-add-wrap" ref={addWrapRef}>
-            <button
-              className="cta-primary qz-add"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-            >
-              Add Question
-              <span className="qz-kbd">Q</span>
-            </button>
-            {menuOpen && (
-              <div className="u-menu qz-menu" role="menu">
-                <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
-                  <span className="qz-menu-label">Create New Question</span>
-                  <span className="qz-kbd">C</span>
-                </button>
-                <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
-                  <span className="qz-menu-label">Add from Question Bank</span>
-                  <span className="qz-kbd">Q</span>
-                </button>
-              </div>
-            )}
-          </div>
+        {/* The Quiz wizard's add affordance (Figma 1206:1134), re-synced onto
+            this table by 810:1285: the table's LAST ROW, a plus + orange label
+            on the rows' own gutter, not a filled CTA below the card. The node
+            draws no keycap on it; the "Q" shortcut still opens the menu, and
+            the menu's own rows keep their C/Q caps. */}
+        <div className="qz-addrow qz-addrow--last" ref={addWrapRef}>
+          <button
+            className="qz-addrow-btn"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            <TreeAddIcon />
+            Add Questions
+          </button>
+          {menuOpen && (
+            <div className="u-menu qz-menu" role="menu">
+              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
+                <span className="qz-menu-label">Create New Question</span>
+                <span className="qz-kbd">C</span>
+              </button>
+              <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
+                <span className="qz-menu-label">Add from Question Bank</span>
+                <span className="qz-kbd">Q</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

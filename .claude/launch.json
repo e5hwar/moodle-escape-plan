@@ -80,6 +80,90 @@
       ],
       "port": 5187,
       "url": "http://localhost:5187"
+    },
+    {
+      "name": "dev-5191",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5191",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5191,
+      "url": "http://localhost:5191"
+    },
+    {
+      "name": "dev-5195",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5195",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5195,
+      "url": "http://localhost:5195"
+    },
+    {
+      "name": "dev-5199",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5199",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5199,
+      "url": "http://localhost:5199"
+    },
+    {
+      "name": "dev-5203",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5203",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5203,
+      "url": "http://localhost:5203"
+    },
+    {
+      "name": "dev-5207",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5207",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5207,
+      "url": "http://localhost:5207"
+    },
+    {
+      "name": "dev-5211",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5211",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5211,
+      "url": "http://localhost:5211"
     }
   ]
 }

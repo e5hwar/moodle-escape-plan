@@ -183,23 +183,26 @@ export function CertificationsPage({
     visibilities: [],
     tags: [],
   });
+  /* Default columns: Name, Industry, Career Stage, Date Modified — everything
+     else is opt-in from Edit Columns. */
   const [columns, setColumns] = useState<CertColumnState>({
-    id: true,
+    id: false,
     industry: true,
     careerStage: true,
     type: false,
-    payment: true,
-    tasks: true,
+    payment: false,
+    tasks: false,
     ceus: false,
-    createdBy: true,
+    createdBy: false,
     tradeTag: false,
     partnershipTag: false,
     audience: false,
     visibility: false,
     dateCreated: false,
-    dateModified: false,
+    dateModified: true,
   });
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "id", dir: "desc" });
+  // Most recently edited Certification first.
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "dateModified", dir: "desc" });
   const [page, setPage] = useState(1);
 
   // From Scratch goes straight to the wizard; the two upload paths stop at
@@ -320,7 +323,16 @@ export function CertificationsPage({
 
   const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => ({
     key: c.id,
-    name: c.name,
+    /* The visibility pill rides the morph with the row, so the name doesn't
+       gain a badge at the hand-off to the real table (as on Tasks). */
+    name: (c.visibility ?? "Visible") !== "Visible" ? (
+      <>
+        {c.name}
+        <span className="pr-name-flag pr-name-flag--grey">{c.visibility}</span>
+      </>
+    ) : (
+      c.name
+    ),
     dim: (c.visibility ?? "Visible") !== "Visible" || c.draft,
     cells: {
       id: c.id,
@@ -668,11 +680,14 @@ function CertRow({
   const hidden = vis === "Hidden";
   return (
     <tr
-      className={`${cert.draft ? "draft" : ""} ${hidden ? "task-hidden" : ""} ${menuOpen ? "menu-open" : ""}`}
+      className={`${cert.draft ? "draft" : ""} ${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
     >
       <td className="col-name" data-tip={cert.name}>
-        {cert.name}
-        {vis !== "Visible" && <span className="hidden-badge">{vis}</span>}
+        <span className="tsk-name">{cert.name}</span>
+        {/* Hidden (and Archived) read exactly as a hidden Task row does
+            (1126:1686): grey pill beside a muted name, every other cell
+            dimmed — see `.task-dim` in the CSS. */}
+        {vis !== "Visible" && <span className="pr-name-flag pr-name-flag--grey">{vis}</span>}
       </td>
       {columns.id && <td className="col-id">{cert.id}</td>}
       {columns.industry && <td className="col-used" data-tip={cert.industry}>{cert.industry}</td>}

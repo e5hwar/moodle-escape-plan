@@ -51,6 +51,10 @@ export function SelectCertificationsModal({
   description,
   confirmLabel = "Add Links",
   locked,
+  pool: poolProp,
+  preselected,
+  full = false,
+  allowEmpty = false,
   onCancel,
   onConfirm,
 }: {
@@ -60,13 +64,24 @@ export function SelectCertificationsModal({
   /** Already linked in this section (plus the focused Certification itself) —
    *  shown ticked and un-clickable. */
   locked: Set<string>;
+  /** Catalog to pick from. Defaults to the content graph's Certifications;
+   *  callers working off another Certification list pass their own. */
+  pool?: ContentNode[];
+  /** Rows ticked when the modal opens — unlike `locked` these stay clickable,
+   *  so reopening the picker doubles as "manage what's already picked". */
+  preselected?: string[];
+  /** Fills the viewport (the Select Questions shell) instead of the 884px card. */
+  full?: boolean;
+  /** Lets confirm go through with nothing ticked — for a picker that also
+   *  clears an existing selection. */
+  allowEmpty?: boolean;
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [industries, setIndustries] = useState<string[]>([]);
   const [levels, setLevels] = useState<string[]>([]);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(() => preselected ?? []);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "name",
@@ -85,8 +100,8 @@ export function SelectCertificationsModal({
   // The page links Certifications to Certifications, so Courses and Tasks in
   // the content graph are not offered here.
   const pool = useMemo(
-    () => contentNodes.filter((n) => n.kind === "Certification"),
-    [],
+    () => poolProp ?? contentNodes.filter((n) => n.kind === "Certification"),
+    [poolProp],
   );
 
   const allIndustries = useMemo(
@@ -148,8 +163,8 @@ export function SelectCertificationsModal({
       title={title}
       description={description}
       confirmLabel={confirmLabel}
-      confirmDisabled={picked.length === 0}
-      pick
+      confirmDisabled={!allowEmpty && picked.length === 0}
+      {...(full ? { pickFull: true } : { pick: true })}
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >

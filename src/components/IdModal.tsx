@@ -139,9 +139,8 @@ export function IdModal({
               onFullViewChange={setIdFullView}
               hideTools
               noMagnify
+              caption
             />
-            {/* Plain caption, not a control — the card itself is the target. */}
-            <div className="mid-body-cap">Click for the Full-Screen View</div>
           </div>
           <div className="mid-foot">
             <button className="btn-save-draft" onClick={() => setUploadOpen(true)}>

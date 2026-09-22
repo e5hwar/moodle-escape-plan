@@ -59,12 +59,21 @@ function compare(a: MergeUser, b: MergeUser, key: SortKey): number {
 
 export function SelectUsersModal({
   value,
+  description = "You can select both users here. The one which is kept and removed can be swapped later.",
+  ineligible,
   onCancel,
   onConfirm,
 }: {
   /** Account ids already on the fields, keep first — the modal opens pre-ticked
    *  and preserves that order. */
   value: string[];
+  /** The line under the title — each flow says what its two ticks mean. */
+  description?: string;
+  /** Returns why an account can't be picked in this flow (Transfer
+   *  Subscription refuses B2B accounts). Such a row stays listed but locked,
+   *  and the reason is its hover tip — hiding the row would leave a search for
+   *  it answering "no accounts match", which is a different claim. */
+  ineligible?: (u: MergeUser) => string | undefined;
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
@@ -131,11 +140,12 @@ export function SelectUsersModal({
 
   /** Order is meaning here: picked[0] is kept, picked[1] is deleted. Ticking a
    *  third account is refused rather than silently evicting one of the two. */
-  function toggle(id: string) {
+  function toggle(u: MergeUser) {
+    if (ineligible?.(u)) return;
     setPicked((p) => {
-      if (p.includes(id)) return p.filter((x) => x !== id);
+      if (p.includes(u.id)) return p.filter((x) => x !== u.id);
       if (p.length >= MAX_PICKED) return p;
-      return [...p, id];
+      return [...p, u.id];
     });
   }
 
@@ -158,7 +168,7 @@ export function SelectUsersModal({
   return (
     <PrmModal
       title="Select Users"
-      description="You can select both users here. The one which is kept and removed can be swapped later."
+      description={description}
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
       pick
@@ -319,12 +329,14 @@ export function SelectUsersModal({
                   ) : (
                     rows.map((u) => {
                       const on = picked.includes(u.id);
-                      const locked = full && !on;
+                      const reason = ineligible?.(u);
+                      const locked = !!reason || (full && !on);
                       return (
                         <tr
                           key={u.id}
                           className={`${on ? "selected" : ""}${locked ? " is-locked" : ""}`}
-                          onClick={() => toggle(u.id)}
+                          data-tip={reason}
+                          onClick={() => toggle(u)}
                         >
                           <td className="stm-col-check">
                             {/* A <button>, not a <span> — the shared table reset
@@ -338,7 +350,7 @@ export function SelectUsersModal({
                               tabIndex={-1}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggle(u.id);
+                                toggle(u);
                               }}
                             >
                               {on && <CheckIcon />}

@@ -22,6 +22,7 @@ import {
   ChevronRightIcon,
   CalendarIcon,
 } from "./icons";
+import { PrmModal } from "./PrmModal";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -63,6 +64,12 @@ function formatDate(iso: string): string {
   return `${MONTHS[Number(m[2]) - 1]} ${m[3]}, ${m[1]}`;
 }
 
+/* What the grey "Disabled" tag on a row means. The tag is the only place the
+   status is visible now that Status left the table, so it has to say what the
+   state actually does rather than just naming it. */
+const DISABLED_TIP =
+  "Disabled — this form is no longer shown to users on its triggers. Responses already collected are kept, and it can be activated again from the row menu.";
+
 /* The Responses column counts what landed inside the Date Range, so the pill
    answers "how many responses in this period?" rather than hiding forms. The
    mocked response sets are a sample of each form's real total, so the in-range
@@ -79,7 +86,6 @@ function responsesInRange(f: FeedbackForm, range: DateRangeState): number {
    the Edit Columns menu, so the table walks `orderedColumns(...)`. Status left
    the table — it lives on the Status filter pill instead. */
 type FbColumn =
-  | "id"
   | "questions"
   | "triggers"
   | "responses"
@@ -95,26 +101,24 @@ type FbColMeta = {
   sortable?: boolean;
   /* True when the cell value is derived from the Date Range filter. */
   dateScoped?: boolean;
+  /* Off until switched on in the Edit Columns menu. The four columns that
+     describe the form itself — Name (fixed), Questions, Triggers, Responses —
+     are the default table; the provenance columns are opt-in. */
+  optional?: boolean;
   render: (f: FeedbackForm, range: DateRangeState) => React.ReactNode;
 };
 
 const FB_COLS: FbColMeta[] = [
-  { key: "id", label: "ID", className: "col-id", width: 100, render: (f) => f.id },
   {
     key: "questions",
     label: "Questions",
     className: "col-type",
     width: 120,
-    render: (f) => {
-      const actives = activeLinks(f).length;
-      const inactive = f.questions.length - actives;
-      return (
-        <>
-          {actives}
-          {inactive > 0 && <span className="fb-faint"> · {inactive} inactive</span>}
-        </>
-      );
-    },
+    /* Active links only — the count answers "how long is this form?", and an
+       inactive link asks nothing, so it is not part of that answer (the
+       "· N inactive" clause was dropped 2026-09-18). The editor is where a
+       deactivated question is still visible. */
+    render: (f) => activeLinks(f).length,
   },
   {
     key: "triggers",
@@ -142,6 +146,7 @@ const FB_COLS: FbColMeta[] = [
   },
   {
     key: "createdOn",
+    optional: true,
     label: "Created On",
     className: "col-date",
     width: 140,
@@ -149,6 +154,7 @@ const FB_COLS: FbColMeta[] = [
   },
   {
     key: "lastModified",
+    optional: true,
     label: "Last Modified",
     className: "col-date",
     width: 144,
@@ -156,6 +162,7 @@ const FB_COLS: FbColMeta[] = [
   },
   {
     key: "createdBy",
+    optional: true,
     label: "Created By",
     className: "col-creator",
     width: 180,
@@ -176,7 +183,6 @@ function compare(
   range: DateRangeState,
 ): number {
   switch (key) {
-    case "id": return a.id.localeCompare(b.id);
     case "name": return (a.name || "").localeCompare(b.name || "");
     case "questions": return activeLinks(a).length - activeLinks(b).length;
     case "triggers": return a.triggers.length - b.triggers.length;
@@ -190,7 +196,7 @@ function compare(
 type Props = {
   forms: FeedbackForm[];
   onOpen: (id: string, creating?: boolean) => void;
-  onViewResponses: (id: string) => void;
+  onExportResponses: (id: string) => void;
   onCreate: (form: FeedbackForm) => void;
   onUpdate: (form: FeedbackForm) => void;
   onDelete: (id: string) => void;
@@ -200,7 +206,7 @@ type Props = {
 export function FeedbackFormsPage({
   forms,
   onOpen,
-  onViewResponses,
+  onExportResponses,
   onCreate,
   onUpdate,
   onDelete,
@@ -215,17 +221,26 @@ export function FeedbackFormsPage({
   // period (default Last 30 Days). Every form is always listed.
   const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
   const [menu, setMenu] = useState<{ form: FeedbackForm; rect: DOMRect } | null>(null);
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "id", dir: "desc" });
-  const [page, setPage] = useState(1);
-  const [columns, setColumns] = useState<Record<FbColumn, boolean>>({
-    id: true,
-    questions: true,
-    triggers: true,
-    responses: true,
-    createdOn: true,
-    lastModified: true,
-    createdBy: true,
+  /* Activating / deactivating a form changes what real users are shown at the
+     end of a Task, so it confirms first — the row menu fires straight into the
+     list otherwise, with nothing to undo it from except the same menu. */
+  const [toggling, setToggling] = useState<FeedbackForm | null>(null);
+  /* Newest work first. The sort key is Last Modified even though that column is
+     OFF by default (the user, 2026-09-18) — the useful opening order is the
+     recently-touched one, and the column itself is provenance the table does not
+     need to spend width on. Switch it on from Edit Columns to get the header
+     arrow, and to sort by it again after sorting by something else. */
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+    key: "lastModified",
+    dir: "desc",
   });
+  const [page, setPage] = useState(1);
+  /* Seeded from the registry's `optional` flag, so adding a column decides its
+     default in one place. */
+  const [columns, setColumns] = useState<Record<FbColumn, boolean>>(
+    () =>
+      Object.fromEntries(FB_COLS.map((c) => [c.key, !c.optional])) as Record<FbColumn, boolean>,
+  );
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(FB_COLS);
   const visibleCols = useMemo(() => orderedColumns(FB_COLS, order, columns), [columns, order]);
@@ -472,12 +487,21 @@ export function FeedbackFormsPage({
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onEdit={() => onOpen(menu.form.id)}
-          onViewResponses={() => onViewResponses(menu.form.id)}
+          onExportResponses={() => onExportResponses(menu.form.id)}
           onDuplicate={() => duplicateForm(menu.form)}
-          onToggleActive={() =>
-            setStatus(menu.form, menu.form.status === "active" ? "disabled" : "active")
-          }
+          onToggleActive={() => setToggling(menu.form)}
           onDelete={() => onDelete(menu.form.id)}
+        />
+      )}
+
+      {toggling && (
+        <FormStatusConfirm
+          form={toggling}
+          onCancel={() => setToggling(null)}
+          onConfirm={() => {
+            setStatus(toggling, toggling.status === "active" ? "disabled" : "active");
+            setToggling(null);
+          }}
         />
       )}
     </div>
@@ -559,9 +583,21 @@ function FormRow({
   menuOpen: boolean;
 }) {
   return (
-    <tr className={menuOpen ? "menu-open" : ""} onClick={onClick}>
+    <tr
+      className={`${form.status === "disabled" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
+      onClick={onClick}
+    >
       <td className={`col-name ${form.name ? "" : "fb-faint"}`} data-tip={form.name || undefined}>
-        {form.name || "Untitled form"}
+        {/* Same markup a hidden Task row uses (`.task-dim` + `.tsk-name` +
+            the grey name flag): the name truncates and the pill stays whole.
+            A deactivated form is the Feedback list's version of a hidden Task,
+            so it reads the same — muted name, grey tag, every other cell dim. */}
+        <span className="tsk-name">{form.name || "Untitled form"}</span>
+        {form.status === "disabled" && (
+          <span className="pr-name-flag pr-name-flag--grey" data-tip={DISABLED_TIP}>
+            Disabled
+          </span>
+        )}
       </td>
       {cols.map((c) => (
         <td
@@ -644,6 +680,45 @@ function SortableHeader({
   );
 }
 
+/* Activate / Deactivate Form — the shared confirm shell (`PrmModal`, Figma
+   483:588). **Not the `danger` variant**: both directions are reversible from
+   the same row menu, and the red CTA stays reserved for Delete Form, the one
+   action on this menu that cannot be undone. One sentence, no body — the row
+   is still on screen behind the card. */
+function FormStatusConfirm({
+  form,
+  onConfirm,
+  onCancel,
+}: {
+  form: FeedbackForm;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const deactivating = form.status === "active";
+  return (
+    <PrmModal
+      title={deactivating ? "Deactivate Form?" : "Activate Form?"}
+      description={
+        deactivating ? (
+          <>
+            Deactivate <strong>{form.name || form.id}</strong>? It stops being shown to
+            users on its triggers, and responses already collected are kept. You can
+            activate it again from the same menu at any time.
+          </>
+        ) : (
+          <>
+            Activate <strong>{form.name || form.id}</strong>? It starts being shown to
+            users again on its triggers.
+          </>
+        )
+      }
+      confirmLabel={deactivating ? "Deactivate Form" : "Activate Form"}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
 /* ─────────────── Three-dot row actions menu (Figma 807:1204) ─────────────── */
 /* Fixed-positioned so it escapes the table's scroll container. */
 
@@ -652,7 +727,7 @@ function FormActionsMenu({
   rect,
   onClose,
   onEdit,
-  onViewResponses,
+  onExportResponses,
   onDuplicate,
   onToggleActive,
   onDelete,
@@ -661,7 +736,7 @@ function FormActionsMenu({
   rect: DOMRect;
   onClose: () => void;
   onEdit: () => void;
-  onViewResponses: () => void;
+  onExportResponses: () => void;
   onDuplicate: () => void;
   onToggleActive: () => void;
   onDelete: () => void;
@@ -724,7 +799,7 @@ function FormActionsMenu({
   return (
     <div
       ref={ref}
-      className="u-menu"
+      className="u-menu fb-row-menu"
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -734,7 +809,7 @@ function FormActionsMenu({
     >
       {item(<RowEditIcon />, "Edit Questions & Triggers", onEdit)}
       {item(<CopyIcon />, "Duplicate Form", onDuplicate)}
-      {item(<MenuResponsesIcon />, "View Responses", onViewResponses)}
+      {item(<MenuResponsesIcon />, "Export Responses", onExportResponses)}
       {item(
         <MenuArchiveReplaceIcon />,
         form.status === "active" ? "Deactivate Form" : "Activate Form",

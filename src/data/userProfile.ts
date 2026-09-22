@@ -4,9 +4,9 @@ import type { Platform, SubscriptionStatus, User } from "./users";
 export type Language = "English" | "Spanish";
 // Goal selected during onboarding ("Which best describes you?").
 export type OnboardingGoal =
-  | "Looking for my first trades job"
-  | "Exploring careers in the skilled trades"
-  | "Focused on advancing my career"
+  | "Looking for First Trades Job"
+  | "Exploring Careers in the Skilled Trades"
+  | "Focussed on Advancing Career"
   | "Other";
 export type MeritTier = "Bronze" | "Silver" | "Gold" | "Platinum";
 
@@ -20,7 +20,12 @@ export type EpaStatus =
   | "Canceled"
   | "Refunded";
 
-export type SkillBadge = { name: string; mastery: boolean };
+export type SkillBadge = {
+  name: string;
+  mastery: boolean;
+  /** When the learner earned it — the Full Profile's Skills table sorts on this. */
+  dateAwarded: string;
+};
 
 export type AwardRecord = {
   id: string;
@@ -164,7 +169,7 @@ const GENERIC_CERTS = ["Workplace Safety 101"];
 
 const MERIT_TIERS: MeritTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
 const ATTRIBUTION = ["Google Ads", "Organic Search", "App Store Search", "TikTok Campaign", "Referral", "YouTube", "Partner: Snap-on", "Trade Show"];
-const GOALS: OnboardingGoal[] = ["Looking for my first trades job", "Exploring careers in the skilled trades", "Focused on advancing my career", "Other"];
+const GOALS: OnboardingGoal[] = ["Looking for First Trades Job", "Exploring Careers in the Skilled Trades", "Focussed on Advancing Career", "Other"];
 const ZIPS = ["94110", "10025", "77002", "60614", "30303", "85004", "98109", "33130", "19103", "80202", "78701", "97201"];
 
 // Pools for NATE form entries — a user may register under a slightly different
@@ -196,6 +201,12 @@ function industryOf(user: User): string {
   return pick(pool, hash(user.id + ":ind"));
 }
 
+/* A plain Skill is earned somewhere in the last 60–420 days, spread so no two
+   in a list share a date — the Skills table sorts on it. */
+function skillDate(h: number, i: number): string {
+  return daysAgo(60 + ((h + i * 37) % 360) + i);
+}
+
 function awardNumber(seed: number): string {
   return (
     "SC-" +
@@ -214,15 +225,21 @@ export function buildUserProfile(user: User): UserProfile {
   const skillCount = 4 + (h % 4); // 4–7
   const skills: SkillBadge[] = [];
   for (let i = 0; i < skillCount && i < skillPool.length; i++) {
-    skills.push({ name: skillPool[i], mastery: false });
+    skills.push({ name: skillPool[i], mastery: false, dateAwarded: skillDate(h, i) });
   }
   // One generic skill for variety — pick one not already in the list.
   const extraGeneric = GENERIC_SKILLS.find((g) => !skills.some((s) => s.name === g));
-  if (extraGeneric) skills.push({ name: extraGeneric, mastery: false });
-  // Mastery Skills (earned when all linked Skills are earned).
+  if (extraGeneric)
+    skills.push({ name: extraGeneric, mastery: false, dateAwarded: skillDate(h, skills.length) });
+  // Mastery Skills (earned when all linked Skills are earned) — so a Mastery
+  // Skill is always dated after the plain Skills, inside the last 60 days.
   const masteryCount = h % 3 === 0 ? Math.min(2, masteryPool.length) : Math.min(1, masteryPool.length);
   for (let i = 0; i < masteryCount; i++) {
-    skills.push({ name: masteryPool[i], mastery: true });
+    skills.push({
+      name: masteryPool[i],
+      mastery: true,
+      dateAwarded: daysAgo(5 + ((h + i * 17) % 55)),
+    });
   }
 
   // Awards — one per completed Certification.

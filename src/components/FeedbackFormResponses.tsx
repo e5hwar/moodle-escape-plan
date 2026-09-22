@@ -277,12 +277,6 @@ export function FormOverview({ form, bank, responses }: Props) {
             ))}
         </div>
       )}
-
-      <div className="fb-retention-note">
-        Responses are never deleted — disabling the form preserves them. When a
-        user deletes their account, their responses are kept for aggregate
-        integrity but de-identified.
-      </div>
     </div>
   );
 }

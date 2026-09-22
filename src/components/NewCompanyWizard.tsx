@@ -33,7 +33,8 @@ import {
   findPhoneCountry,
 } from "../data/countries";
 import { lookupZip } from "../data/zipcodes";
-import { CheckIcon, CheckBoldIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon, RowEditIcon } from "./icons";
+import { CheckIcon, CheckBoldIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
+import { ConfirmCard } from "./ConfirmCard";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
@@ -2395,55 +2396,6 @@ function StripeLinkBox({ stripeLink, onCopy }: {
         active for 24 hours.
       </p>
     </div>
-  );
-}
-
-/* One review card (Figma 945:1974): a 20px title with a pencil beside it, over
- * a tinted card of label/value rows. A row with no value is dropped rather than
- * printed empty — the address and phone are optional on the form. */
-/** One field on a confirm card: label over value. `wide` spans two of the
- *  card's four grid columns, for long values like an address or email. */
-type ConfirmField = [label: string, value: string | undefined, wide?: boolean];
-
-function ConfirmCard({
-  title, onEdit, rows, fillBlanks = false,
-}: {
-  title: string;
-  onEdit: () => void;
-  rows: ConfirmField[];
-  /** Keep every field, printing "—" where the form left a value blank. Without
-   *  it a valueless field is dropped, which is what the Subscription card wants
-   *  for fields that don't apply to the chosen plan. */
-  fillBlanks?: boolean;
-}) {
-  const shown: ConfirmField[] = fillBlanks
-    ? rows.map(([label, value, wide]) => [label, value || "—", wide])
-    : rows.filter(([, value]) => value);
-  return (
-    <section className="confirm-card">
-      <header className="confirm-card-head">
-        <h2 className="confirm-card-title">{title}</h2>
-        <button
-          type="button"
-          className="confirm-card-edit"
-          aria-label={`Edit ${title}`}
-          onClick={onEdit}
-        >
-          <RowEditIcon />
-        </button>
-      </header>
-      {/* Confirm Details 6B — fields sit in a four-column grid (the first column
-          a little wider for the card's lead field) with the label above the
-          value, rather than one label/value row per line. */}
-      <div className="confirm-card-body">
-        {shown.map(([label, value, wide]) => (
-          <div className={`confirm-card-field${wide ? " confirm-card-field--wide" : ""}`} key={label}>
-            <div className="confirm-card-label">{label}</div>
-            <div className="confirm-card-value">{value}</div>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

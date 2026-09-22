@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  AVAILABLE_TRIGGERS,
   type FeedbackForm,
   type FormTrigger,
-  type TriggerKind,
-  type TriggerOption,
 } from "../data/feedbackForms";
-import { SearchIcon, SmallXIcon, CheckIcon } from "./icons";
+import { tasks as taskLibrary } from "../data/tasks";
+import { SmallXIcon, TreeAddIcon } from "./icons";
+import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 
 type Props = {
   form: FeedbackForm;
@@ -14,20 +14,19 @@ type Props = {
   onSave: (triggers: FormTrigger[]) => void;
 };
 
-type KindFilter = "all" | TriggerKind;
-
-const KIND_LABEL: Record<KindFilter, string> = {
-  all: "All",
-  task: "Tasks",
-  certification: "Certifications",
-};
-
 const TODAY = "2026-07-09";
 
+/* The row's suffix names what the trigger IS (Figma 1236:1161: "· Quiz Task",
+ * "· Certification"). A Task's own type already ends in "Task" for Hands-On,
+ * so only the others take the noun. */
+function taskKindLabel(type: string) {
+  return type.endsWith("Task") ? type : `${type} Task`;
+}
+
 export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
-  const [picking, setPicking] = useState(false);
-  const [query, setQuery] = useState("");
-  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [picking, setPicking] = useState<"task" | "cert" | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const addWrapRef = useRef<HTMLDivElement>(null);
 
   const isDisabled = form.status === "disabled";
 
@@ -36,220 +35,195 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
     [form.triggers],
   );
 
-  // Live view of the at-most-one-form rule: refId → the OTHER form holding it.
-  // Disabled forms still occupy their mappings (preserved, just not firing).
-  const mappedElsewhere = useMemo(() => {
-    const m = new Map<string, FeedbackForm>();
+  // Live view of the at-most-one-form rule: refName → the OTHER form holding
+  // it. Disabled forms still occupy their mappings (preserved, just not
+  // firing). Names, not ids: the picker's rows are the real Task and
+  // Certification records, and it locks rows by name.
+  const takenNames = useMemo(() => {
+    const names = new Set<string>();
     for (const f of allForms) {
-      if (f.id === form.id) continue;
-      for (const t of f.triggers) m.set(t.refId, f);
+      for (const t of f.triggers) names.add(t.refName);
     }
-    return m;
-  }, [allForms, form.id]);
+    return [...names];
+  }, [allForms]);
 
-  const proctoredSet = useMemo(
-    () => new Set(AVAILABLE_TRIGGERS.filter((t) => t.proctored).map((t) => t.refId)),
+  /* Name → what to print after the "·". A trigger only stores its id and name,
+     so the kind label is derived from the live catalogs; an entry that no
+     longer resolves falls back to the trigger's own kind. */
+  const taskTypeByName = useMemo(
+    () => new Map(taskLibrary.map((t) => [t.name, t.type as string])),
     [],
   );
-
-  function addTrigger(opt: TriggerOption) {
-    // Spec: a single Task or Certification can be mapped to AT MOST one form.
-    if (mappedSet.has(opt.refId) || mappedElsewhere.has(opt.refId)) return;
-    const next: FormTrigger = {
-      id: `tr-${Math.random().toString(36).slice(2, 8)}`,
-      kind: opt.kind,
-      refId: opt.refId,
-      refName: opt.refName,
-      mappedAt: TODAY,
-    };
-    onSave([...form.triggers, next]);
+  function kindLabel(t: FormTrigger) {
+    if (t.kind === "certification") return "Certification";
+    const type = taskTypeByName.get(t.refName);
+    return type ? taskKindLabel(type) : "Task";
   }
 
+  function addPicks(picks: RequirementPick[]) {
+    const next = [...form.triggers];
+    for (const p of picks) {
+      const refId = p.kind === "task" ? p.task.id : p.cert.id;
+      const refName = p.kind === "task" ? p.task.name : p.cert.name;
+      // Spec: a single Task or Certification is mapped to AT MOST one form.
+      if (mappedSet.has(refId) || next.some((t) => t.refName === refName)) continue;
+      next.push({
+        id: `tr-${Math.random().toString(36).slice(2, 8)}`,
+        kind: p.kind === "task" ? "task" : "certification",
+        refId,
+        refName,
+        mappedAt: TODAY,
+      });
+    }
+    onSave(next);
+  }
+
+  /* One is the floor — a form with no trigger never fires, so it is not a form
+     ([[feedback-forms-architecture]]). The ✕ on a lone trigger says so rather
+     than sitting dim and silent (`aria-disabled`, not `disabled`: a disabled
+     button swallows the hover the tooltip listens for). */
+  const atFloor = form.triggers.length <= 1;
+  const floorTip =
+    "A form needs at least one trigger — map another one before removing this.";
+
   function removeTrigger(id: string) {
+    if (atFloor) return;
     onSave(form.triggers.filter((t) => t.id !== id));
   }
 
-  const q = query.trim().toLowerCase();
-  const candidates = AVAILABLE_TRIGGERS.filter((t) => {
-    if (kindFilter !== "all" && t.kind !== kindFilter) return false;
-    if (q && !(
-      t.refName.toLowerCase().includes(q) ||
-      t.refId.toLowerCase().includes(q) ||
-      (t.industry ?? "").toLowerCase().includes(q)
-    )) return false;
-    return true;
-  });
+  // Same dismissal rules as the Questions table's Add menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setMenuOpen(false);
+      }
+    }
+    function onDown(e: MouseEvent) {
+      if (!addWrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [menuOpen]);
+
+  function open(kind: "task" | "cert") {
+    setMenuOpen(false);
+    setPicking(kind);
+  }
 
   return (
-    <div className="fb-triggers">
-      <div className="fb-triggers-head">
-        <div>
-          <h3 className="fb-section-title">Mapped triggers</h3>
-          <p className="fb-section-sub">
-            This form is shown when a user completes any of these Tasks or
-            Certifications.
-          </p>
+    <>
+      {/* Figma 1236:1161 — the Questions table's twin: one `.qz` card whose
+          header names the column, one row per mapped item ("Name · Quiz Task")
+          and an in-table "+ Add Trigger" last row. The old kind chip, the
+          `refId · mapped <date>` subline and the separate picker panel are
+          gone; picking now happens in the shared table-picker modal. */}
+      <div className="qz">
+        <div className="qz-hd">
+          <span className="qz-hd-q">TASKS &amp; CERTIFICATIONS</span>
         </div>
+
+        {isDisabled && (
+          <div className="fb-archived-note">
+            This form is disabled — trigger mappings are preserved but{" "}
+            <strong>inactive</strong>. Enable the form to resume firing them.
+          </div>
+        )}
+
+        {form.triggers.length === 0 && (
+          <div className="qz-empty">
+            No triggers yet — Add Trigger below maps this form to a Task or
+            Certification.
+          </div>
+        )}
+
+        {form.triggers.map((t) => (
+          <div key={t.id} className={`qz-row${isDisabled ? " qz-row--inactive" : ""}`}>
+            <div className="qz-q fb-trigger-cell">
+              <span className="fb-trigger-name">{t.refName}</span>
+              <span className="fb-trigger-kindtext">· {kindLabel(t)}</span>
+            </div>
+            {isDisabled ? (
+              <span className="fb-link-chip">Inactive</span>
+            ) : (
+              <button
+                className="qz-x"
+                aria-label="Remove trigger"
+                aria-disabled={atFloor}
+                data-tip={atFloor ? floorTip : "Remove trigger"}
+                onClick={() => removeTrigger(t.id)}
+              >
+                <SmallXIcon />
+              </button>
+            )}
+          </div>
+        ))}
+
         {!isDisabled && (
-          <button
-            className="btn-publish"
-            onClick={() => setPicking((v) => !v)}
-          >
-            {picking ? "Close picker" : "+ Add trigger"}
-          </button>
+          <div className="qz-addrow qz-addrow--last" ref={addWrapRef}>
+            <button
+              className="qz-addrow-btn"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <TreeAddIcon />
+              Add Trigger
+            </button>
+            {menuOpen && (
+              <div className="u-menu qz-menu" role="menu">
+                <button
+                  className="u-menu-item qz-menu-item"
+                  role="menuitem"
+                  onClick={() => open("task")}
+                >
+                  <span className="qz-menu-label">Add Tasks</span>
+                </button>
+                <button
+                  className="u-menu-item qz-menu-item"
+                  role="menuitem"
+                  onClick={() => open("cert")}
+                >
+                  <span className="qz-menu-label">Add Certifications</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {isDisabled && (
-        <div className="fb-archived-note">
-          This form is disabled — trigger mappings are preserved but{" "}
-          <strong>inactive</strong>. Enable the form to resume firing them.
-        </div>
-      )}
-
-      {form.triggers.length === 0 ? (
-        <div className="fb-empty fb-empty--centered">
-          <div className="fb-empty-title">No triggers mapped yet</div>
-          <div className="fb-empty-sub">
-            Map this form to one or more Tasks or Certifications so that it
-            fires on completion.
-          </div>
-        </div>
-      ) : (
-        <div className="fb-trigger-list">
-          {form.triggers.map((t) => (
-            <div
-              key={t.id}
-              className={`fb-trigger-row ${isDisabled ? "is-paused" : ""}`}
-            >
-              <span className={`fb-trigger-kind fb-trigger-kind--${t.kind}`}>
-                {t.kind === "task" ? "Task" : "Certification"}
-              </span>
-              <div className="fb-trigger-meta">
-                <div className="fb-trigger-name">{t.refName}</div>
-                <div className="fb-trigger-sub">
-                  {t.refId} · mapped {t.mappedAt}
-                  {proctoredSet.has(t.refId) &&
-                    " · proctored — fires on pass, even while In-Review"}
-                </div>
-              </div>
-              {isDisabled ? (
-                <span className="fb-link-chip">Inactive</span>
-              ) : (
-                <button
-                  className="fb-q-mini-btn fb-q-mini-btn--danger"
-                  onClick={() => removeTrigger(t.id)}
-                  title="Remove trigger"
-                >
-                  <SmallXIcon />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {picking && !isDisabled && (
-        <div className="fb-trigger-picker">
-          <div className="fb-trigger-picker-head">
-            <div className="search-wrap">
-              <span className="search-icon">
-                <SearchIcon />
-              </span>
-              <input
-                className="search-input"
-                placeholder="Search Tasks or Certifications..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-            <div className="sp-tabs">
-              {(["all", "certification", "task"] as KindFilter[]).map((k) => (
-                <button
-                  key={k}
-                  className={`sp-tab ${kindFilter === k ? "is-active" : ""}`}
-                  onClick={() => setKindFilter(k)}
-                >
-                  {KIND_LABEL[k]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="fb-trigger-picker-list">
-            {candidates.length === 0 ? (
-              <div className="fb-empty">No matching items.</div>
-            ) : (
-              candidates.map((c) => {
-                const isMapped = mappedSet.has(c.refId);
-                const other = mappedElsewhere.get(c.refId);
-                const otherMapping = other
-                  ? `${other.id}${other.status === "disabled" ? " (disabled)" : ""}`
-                  : null;
-                return (
-                  <button
-                    key={c.id}
-                    className={`fb-trigger-pick ${
-                      isMapped ? "is-added" : ""
-                    } ${otherMapping ? "is-conflict" : ""}`}
-                    disabled={isMapped || !!otherMapping}
-                    onClick={() => addTrigger(c)}
-                  >
-                    <span className={`fb-trigger-kind fb-trigger-kind--${c.kind}`}>
-                      {c.kind === "task" ? "Task" : "Cert"}
-                    </span>
-                    <div className="fb-trigger-meta">
-                      <div className="fb-trigger-name">{c.refName}</div>
-                      <div className="fb-trigger-sub">
-                        {c.refId}
-                        {c.industry ? ` · ${c.industry}` : ""}
-                        {c.proctored ? " · proctored" : ""}
-                        {otherMapping
-                          ? ` · already mapped to ${otherMapping}`
-                          : ""}
-                      </div>
-                    </div>
-                    <span className="fb-trigger-pick-cta">
-                      {isMapped ? (
-                        <>
-                          <CheckIcon /> Added
-                        </>
-                      ) : otherMapping ? (
-                        "Unavailable"
-                      ) : (
-                        "+ Add"
-                      )}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="fb-rules-card">
-        <div className="fb-rules-title">How triggers behave</div>
-        <ul className="fb-rules-list">
-          <li>
-            A user can submit this form <strong>once</strong>. After submitting,
-            it never appears again — across all triggers.
-          </li>
-          <li>
-            Dismissing without submitting keeps the user eligible: the form is
-            shown again the next time any of its triggers fires.
-          </li>
-          <li>
-            Completing several mapped items in quick succession queues distinct
-            forms one at a time; the same form is only shown once.
-          </li>
-          <li>
-            For proctored Quiz Tasks (e.g. EPA), the form fires as soon as the
-            user <strong>passes</strong> the quiz — even while the attempt is
-            In-Review. If the attempt is later rejected, the response is kept.
-          </li>
-        </ul>
-      </div>
-    </div>
+      {/* Portalled to <body>, like the Questions picker: the wizard pane is
+          animated with a transform, which would otherwise turn the overlay's
+          position:fixed into a local box. */}
+      {picking &&
+        createPortal(
+          <SelectRequirementModal
+            only={picking}
+            /* Same size as Select Questions: these two catalogs are long, and
+               the form's other picker already fills the screen. */
+            full
+            title={picking === "task" ? "Add Tasks" : "Add Certifications"}
+            description={
+              picking === "task"
+                ? "Completing one of these Tasks shows this form."
+                : "Completing one of these Certifications shows this form."
+            }
+            confirmNoun={picking === "task" ? "Task" : "Certification"}
+            existingNames={takenNames}
+            lockedTip="Already mapped to a Feedback Form — a Task or Certification can only show one."
+            onCancel={() => setPicking(null)}
+            onConfirm={(picks) => {
+              addPicks(picks);
+              setPicking(null);
+            }}
+          />,
+          document.body,
+        )}
+    </>
   );
 }

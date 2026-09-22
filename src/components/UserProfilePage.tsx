@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   buildUserProfile,
   PROFILE_TODAY,
@@ -10,20 +10,29 @@ import {
   type NateDetail,
   type Purchase,
   type PurchaseKind,
+  type SkillBadge,
 } from "../data/userProfile";
 import type { User } from "../data/users";
 import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
-import { SectionHeading } from "./SectionHeading";
+import { loginAs } from "./loginAs";
+import { ConfirmCard } from "./ConfirmCard";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
+import type { SortDir } from "./AwardTableParts";
 import { PrmModal } from "./PrmModal";
 import { PrmCheck } from "./ProctoringConsole";
 import { IdModal } from "./IdModal";
 import {
-  ArrowUpRightIcon,
   ChevronRightIcon,
   DownloadIcon,
   IdCardIcon,
+  MenuCancelSubIcon,
   MenuEnterIcon,
-  PencilIcon,
+  MenuInvoiceIcon,
+  RowEditIcon,
+  RowKebabIcon,
+  SortIcon,
 } from "./icons";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
@@ -101,23 +110,6 @@ function awardCertSvg(userName: string, award: AwardRecord): string {
 </svg>`;
 }
 
-function loginAs(user: User) {
-  const win = window.open("", "_blank", "noopener");
-  if (!win) return;
-  win.document.title = `Session — ${user.name}`;
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
-<title>Logged in as ${escapeXml(user.name)}</title>
-<style>:root{color-scheme:dark}body{margin:0;background:#0b0b0c;color:#e7e7e8;font-family:"Fira Sans",-apple-system,system-ui,sans-serif}
-.bar{background:#7a3a18;color:#ffd9c2;padding:10px 20px;font-size:14px;font-weight:600;display:flex;gap:10px;align-items:center}
-.wrap{max-width:640px;margin:0 auto;padding:60px 24px;text-align:center}
-.av{width:80px;height:80px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;background:radial-gradient(70% 70% at 50% 40%,#e97237,#8a3114)}
-h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}</style></head>
-<body><div class="bar">⚠ Admin impersonation session — you are viewing SkillCat as this user. Your own session is unaffected.</div>
-<div class="wrap"><div class="av">${escapeXml(initialsOf(user.name))}</div>
-<h1>${escapeXml(user.name)}</h1><p>${escapeXml(user.email)}</p>
-<p style="margin-top:24px">This is a simulated learner session opened from the admin Full Profile.</p></div></body></html>`);
-  win.document.close();
-}
 
 type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | "cancel-epa" | null;
 
@@ -189,6 +181,8 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   /* This user's ID document, for the header's "View ID". Approve/Replace edit
      it in place the same way the Manage IDs table does. */
   const [idOpen, setIdOpen] = useState(false);
+  // Page-level 3-dot menu, anchored to the header kebab.
+  const [pageMenu, setPageMenu] = useState<DOMRect | null>(null);
   const [idRecord, setIdRecord] = useState<IdRecord>(() => idRecordForUser(seedUser));
 
   useEscape(modal !== null || downloadAllOpen, () => {
@@ -242,13 +236,10 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
     setIdRecord((r) => ({ ...r, status: "approved", approvedAt: nowIdStamp() }));
   }
 
-  function openPortfolio() {
-    window.open(
-      `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`,
-      "_blank",
-      "noopener",
-    );
-  }
+  /* The Public Portfolio Link field points at the standalone portfolio page, in
+     its own tab — the same place the Portfolio card's "Open in New Tab" button
+     went before that card became this field. */
+  const portfolioHref = `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`;
 
   /* The profile always opens in its own tab from Manage Users, so the crumb
      back is the same path with the ?profile= query dropped. */
@@ -277,7 +268,6 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 <div className="rvc-pagehead-id">
                   <h1 className="tasks-title">{user.name}</h1>
                   <div className="tasks-subtitle">
-                    <span className={`u-pill u-type--${user.userType.toLowerCase()}`}>{user.userType}</span>
                     <span className="prof-contact">
                       {user.email}
                       {user.emailVerified && <Verified />}
@@ -287,247 +277,209 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                       {user.phone}
                       {user.phoneVerified && <Verified />}
                     </span>
-                    <span className="tasks-subtitle-dot" />
-                    <span>{user.id}</span>
                   </div>
                 </div>
               </div>
             </div>
+            {/* View ID and Edit moved behind the 3-dot menu, the same page-level
+                kebab Manage Users carries (677:1956) — Login As is the only
+                action the header still spells out. */}
             <div className="tasks-header-actions">
-              {/* The Manage IDs popup, opened on this user's own document —
-                  same modal, same Replace / Approve flows. */}
-              <button className="cta-quiet" onClick={() => setIdOpen(true)}>
-                <IdCardIcon /> View ID
-              </button>
-              <button className="cta-quiet" onClick={() => setModal("edit-user")}>
-                <PencilIcon /> Edit
-              </button>
               <button className="cta-primary" onClick={() => loginAs(user)}>
                 <MenuEnterIcon /> Login As
+              </button>
+              <button
+                className="cta-quiet cta-quiet--icon"
+                aria-label="More actions"
+                onClick={(e) => setPageMenu(e.currentTarget.getBoundingClientRect())}
+              >
+                <RowKebabIcon />
               </button>
             </div>
           </header>
 
+          {/* Every section on this page is one Review Details card (Figma
+              1046:1147) — a titled hairline head over a tinted r12 card, the
+              head carrying that section's own action where it has one. */}
           <div className="prof-scroll">
-            {/* Profile fields */}
-            <SectionHeading label="Profile" />
-            <div className="co-detail-grid prof-grid">
-              <Field label="Language" value={p.fields.language} />
-              <Field label="Goal" value={p.fields.goal} />
-              <Field label="Industry Preference" value={p.fields.industryPreference} />
-              <Field label="Current Company" value={p.fields.currentCompany ?? ""} />
-              <Field
-                label="Zip Code"
-                value={
-                  ZIP_LOCATIONS[p.fields.zipCode]
-                    ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
-                    : p.fields.zipCode
-                }
+            <div className="confirm-cards prof-cards">
+              {/* Profile fields. No pencil of its own: editing this user is the
+                  header 3-dot menu's "Edit User Details". */}
+              <ConfirmCard
+                title="Profile"
+                fillBlanks
+                rows={[
+                  ["Language", p.fields.language],
+                  ["Goal", p.fields.goal, true],
+                  ["Industry Preference", p.fields.industryPreference],
+                  ["Current Company", p.fields.currentCompany],
+                  [
+                    "Zip Code",
+                    ZIP_LOCATIONS[p.fields.zipCode]
+                      ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
+                      : p.fields.zipCode,
+                    true,
+                  ],
+                  ["Attribution", p.fields.attribution],
+                  ["Notification Preference", p.fields.notificationPreference],
+                  ["Role", user.role],
+                  ["Joined SkillCat", formatDate(user.joinedOn)],
+                  ["Last Access", formatDate(user.lastAccess)],
+                  [
+                    "Public Portfolio Link",
+                    <a
+                      className="rvc-headlink"
+                      href={portfolioHref}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {p.portfolioUrl}
+                    </a>,
+                    true,
+                  ],
+                ]}
               />
-              <Field label="Attribution" value={p.fields.attribution} />
-              <Field label="Notification Preference" value={p.fields.notificationPreference} />
-              <Field label="Role" value={user.role} />
-              <Field label="Joined SkillCat" value={formatDate(user.joinedOn)} />
-              <Field label="Last Access" value={formatDate(user.lastAccess)} />
-              <Field label="Profile Photo" value="Initials avatar (no photo uploaded)" />
-            </div>
 
-            {/* Skills */}
-            <SectionHeading label={`Skills · ${p.skills.length}`} />
-            <div className="prof-badges">
-              {p.skills.map((s) =>
-                s.mastery ? (
-                  <span key={s.name} className="co-status-pill co-status-pill--yellow">
-                    {s.name} · Mastery
-                  </span>
-                ) : (
-                  <span key={s.name} className="co-pill-muted">{s.name}</span>
-                ),
-              )}
-            </div>
+              {/* Skills */}
+              <ConfirmCard title={`Skills · ${p.skills.length}`} tableBody>
+                <SkillsTable skills={p.skills} />
+              </ConfirmCard>
 
-            {/* Portfolio */}
-            <SectionHeading label="Portfolio" />
-            <div className="prof-portfolio">
-              <div className="co-dt-item">
-                <div className="co-dt-label">Public portfolio link</div>
-                <div className="co-dt-value">
-                  <a className="rvc-headlink" href={p.portfolioUrl} target="_blank" rel="noreferrer">
-                    {p.portfolioUrl}
-                  </a>
-                </div>
-              </div>
-              <button className="btn-save-draft" onClick={openPortfolio}>
-                <ArrowUpRightIcon /> Open in New Tab
-              </button>
-            </div>
-
-            {/* Awards */}
-            <SectionHeading
-              label={`Awards · ${p.awards.length}`}
-              trailing={
-                p.awards.length > 0 && (
-                  <button className="btn-save-draft mc-btn-sm" onClick={() => setDownloadAllOpen(true)}>
-                    <DownloadIcon /> Download All
-                  </button>
-                )
-              }
-            />
-            <table className="table sch-table" style={{ width: 1140 }}>
-              <colgroup>
-                <col />
-                <col style={{ width: 130 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 170 }} />
-                <col style={{ width: 250 }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Certification</th>
-                  <th>Merit Tier</th>
-                  <th>Award Number</th>
-                  <th>Date Awarded</th>
-                  <th>Appearances</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {p.awards.map((a) => (
-                  <tr key={a.id}>
-                    <td className="col-name">{a.certification}</td>
-                    <td>{a.meritTier}</td>
-                    <td>{a.awardNumber}</td>
-                    <td className="col-date">{formatDate(a.dateAwarded)}</td>
-                    <td>{a.hasCertificate ? "Card · Certificate" : "Card only"}</td>
-                    <td>
-                      <button
-                        className="btn-save-draft mc-btn-sm"
-                        onClick={() => downloadFile(`${a.awardNumber}-card.svg`, awardCardSvg(user.name, a), "image/svg+xml")}
-                      >
-                        <DownloadIcon /> Card
-                      </button>
-                      <button
-                        className="btn-save-draft mc-btn-sm"
-                        disabled={!a.hasCertificate}
-                        title={a.hasCertificate ? "Download Certificate" : "This Award has no Certificate"}
-                        onClick={() => downloadFile(`${a.awardNumber}-certificate.svg`, awardCertSvg(user.name, a), "image/svg+xml")}
-                      >
-                        <DownloadIcon /> Certificate
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {p.awards.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="sch-empty">No awards yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            {/* Subscription */}
-            <SectionHeading
-              label="Subscription"
-              trailing={
-                canCancelSub && (
-                  <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-sub")}>
-                    Cancel Subscription
-                  </button>
-                )
-              }
-            />
-            <div className="co-detail-grid prof-grid">
-              <Field
-                label="Status"
-                value={
-                  subCanceled ? (
-                    <span className="co-status-pill co-status-pill--grey">Canceled</span>
-                  ) : (
-                    p.subscription.status
+              {/* Awards */}
+              <ConfirmCard
+                title={`Awards · ${p.awards.length}`}
+                /* Figma 1278:1574 — the card head's own 24px "Button dialog",
+                   the same component Merge's Swap Roles uses. */
+                trailing={
+                  p.awards.length > 0 && (
+                    <button className="btn-dialog" onClick={() => setDownloadAllOpen(true)}>
+                      <DownloadIcon /> Download All
+                    </button>
                   )
                 }
+                tableBody
+              >
+                <AwardsTable userName={user.name} awards={p.awards} />
+              </ConfirmCard>
+
+              {/* Subscription */}
+              <ConfirmCard
+                title="Subscription"
+                trailing={
+                  canCancelSub && (
+                    <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-sub")}>
+                      Cancel Subscription
+                    </button>
+                  )
+                }
+                fillBlanks
+                rows={[
+                  [
+                    "Status",
+                    subCanceled ? (
+                      <span className="co-status-pill co-status-pill--grey">Canceled</span>
+                    ) : (
+                      p.subscription.status
+                    ),
+                  ],
+                  ["Platform", p.subscription.platform],
+                  ["Started", formatDate(p.subscription.startedOn)],
+                  [subCanceled ? "Access Until" : "Renews", formatDate(p.subscription.renewsOn)],
+                  ["Offer Code", p.subscription.offerCode ?? "None"],
+                ]}
               />
-              <Field label="Platform" value={p.subscription.platform ?? ""} />
-              <Field label="Started" value={formatDate(p.subscription.startedOn)} />
-              <Field
-                label={subCanceled ? "Access Until" : "Renews"}
-                value={formatDate(p.subscription.renewsOn)}
+
+              {/* Purchases / bills */}
+              <PurchasesSection
+                purchases={p.purchases}
+                epaCancelable={canCancelEpa}
+                epaCanceled={epaCanceled}
+                onCancelEpa={() => setModal("cancel-epa")}
               />
-              <Field label="Offer Code" value={p.subscription.offerCode ?? "None"} />
+
+              {/* EPA Card */}
+              <ConfirmCard
+                title="EPA Card Order"
+                trailing={
+                  canCancelEpa && (
+                    <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-epa")}>
+                      Cancel Order
+                    </button>
+                  )
+                }
+                rows={
+                  p.epaCard
+                    ? [
+                        ["Card", p.epaCard.certification],
+                        [
+                          "Status",
+                          <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
+                            {p.epaCard.status}
+                          </span>,
+                        ],
+                        ["Ordered", formatDate(p.epaCard.orderedOn)],
+                        ["Recipient", p.epaCard.recipient],
+                        ["Shipping Address", p.epaCard.shippingAddress, true],
+                        p.epaCard.tracking
+                          ? [
+                              "Tracking",
+                              <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
+                                {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
+                              </a>,
+                              true,
+                            ]
+                          : ["Tracking", undefined, true],
+                      ]
+                    : undefined
+                }
+              >
+                {!p.epaCard && <p className="form-help">No EPA card ordered.</p>}
+              </ConfirmCard>
+
+              {/* NATE details */}
+              <ConfirmCard
+                title="NATE Details"
+                /* The bare pencil, as on the Profile card — it opens the same
+                   modal whether there is a registration to edit or one to add. */
+                onEdit={() => setModal("edit-nate")}
+                rows={
+                  p.nate
+                    ? [
+                        ["First Name", p.nate.firstName],
+                        ["Last Name", p.nate.lastName],
+                        ["Email", p.nate.email],
+                        ["NATE Connect ID", p.nate.connectId],
+                      ]
+                    : undefined
+                }
+              >
+                {!p.nate && <p className="form-help">No NATE registration on record.</p>}
+                </ConfirmCard>
             </div>
-
-            {/* Purchases / bills */}
-            <PurchasesSection
-              purchases={p.purchases}
-              epaCancelable={canCancelEpa}
-              epaCanceled={epaCanceled}
-              onCancelEpa={() => setModal("cancel-epa")}
-            />
-
-            {/* EPA Card */}
-            <SectionHeading
-              label="EPA Card Order"
-              trailing={
-                canCancelEpa && (
-                  <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-epa")}>
-                    Cancel Order
-                  </button>
-                )
-              }
-            />
-            {p.epaCard ? (
-              <div className="co-detail-grid prof-grid">
-                <Field label="Card" value={p.epaCard.certification} />
-                <Field
-                  label="Status"
-                  value={
-                    <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
-                      {p.epaCard.status}
-                    </span>
-                  }
-                />
-                <Field label="Ordered" value={formatDate(p.epaCard.orderedOn)} />
-                <Field label="Recipient" value={p.epaCard.recipient} />
-                <Field label="Shipping Address" value={p.epaCard.shippingAddress} wide />
-                {p.epaCard.tracking && (
-                  <Field
-                    label="Tracking"
-                    wide
-                    value={
-                      <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
-                        {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
-                      </a>
-                    }
-                  />
-                )}
-              </div>
-            ) : (
-              <p className="form-help">No EPA card ordered.</p>
-            )}
-
-            {/* NATE details */}
-            <SectionHeading
-              label="NATE Details"
-              trailing={
-                <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("edit-nate")}>
-                  <PencilIcon /> {p.nate ? "Edit" : "Add"}
-                </button>
-              }
-            />
-            {p.nate ? (
-              <div className="co-detail-grid prof-grid">
-                <Field label="First Name" value={p.nate.firstName} />
-                <Field label="Last Name" value={p.nate.lastName} />
-                <Field label="Email" value={p.nate.email} />
-                <Field label="NATE Connect ID" value={p.nate.connectId} />
-              </div>
-            ) : (
-              <p className="form-help">No NATE registration on record.</p>
-            )}
           </div>
         </div>
       </div>
+
+      {pageMenu && (
+        <RowMenu
+          rect={pageMenu}
+          onClose={() => setPageMenu(null)}
+          items={[
+            {
+              /* The Manage IDs popup, opened on this user's own document —
+                 same modal, same Replace / Approve flows. */
+              label: "View ID",
+              icon: <IdCardIcon />,
+              onPick: () => setIdOpen(true),
+            },
+            {
+              label: "Edit User Details",
+              icon: <RowEditIcon />,
+              onPick: () => setModal("edit-user"),
+            },
+          ]}
+        />
+      )}
 
       {modal === "edit-user" && (
         <EditUserModal
@@ -603,14 +555,327 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   );
 }
 
-/* Label-over-value cell — the cert preview panel's detail item, laid out on
-   the page-wide .prof-grid. */
-function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
+
+
+/* ── Skills table — the same card table as Awards (Figma 1278:1571) ──
+ * Skill as the node's primary (white Medium) column, then its type, then when
+ * the learner earned it. Both of the latter sort; Date Awarded is the default,
+ * newest first, the way the node sorts its own date column.
+ */
+/* Definite widths on EVERY column, the name one included: a fixed-layout table
+   hands its slack to an unsized column alone, so leaving the first on `auto`
+   made it swallow the whole card and bunched the rest against the right edge.
+   Sized all through, the slack spreads in proportion and the columns stay
+   evenly spaced at any card width. Same arithmetic as the list pages
+   (Name Change Requests, Scholarships): the sum is the table's floor. */
+const SKILL_COLS = { skill: 360, type: 180, date: 180 };
+const SKILL_TABLE_MIN = SKILL_COLS.skill + SKILL_COLS.type + SKILL_COLS.date;
+
+function SkillsTable({ skills }: { skills: SkillBadge[] }) {
+  const [sort, setSort] = useState<{ key: "type" | "date"; dir: SortDir }>({
+    key: "date",
+    dir: "desc",
+  });
+
+  function toggle(key: "type" | "date") {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  const rows = useMemo(() => {
+    const out = [...skills];
+    out.sort((a, b) => {
+      // Mastery ranks after a plain Skill, so ascending reads Skill → Mastery.
+      const d =
+        sort.key === "type"
+          ? Number(a.mastery) - Number(b.mastery)
+          : a.dateAwarded.localeCompare(b.dateAwarded);
+      return sort.dir === "asc" ? d : -d;
+    });
+    return out;
+  }, [skills, sort]);
+
+  const th = (key: "type" | "date", label: string) => {
+    const active = sort.key === key;
+    return (
+      <th onClick={() => toggle(key)}>
+        <span className="th-content">
+          {label}
+          <SortIcon active={active} dir={active ? sort.dir : undefined} />
+        </span>
+      </th>
+    );
+  };
+
   return (
-    <div className="co-dt-item" style={wide ? { gridColumn: "1 / -1" } : undefined}>
-      <div className="co-dt-label">{label}</div>
-      <div className="co-dt-value">{value}</div>
+    <div
+      className="confirm-card-xscroll"
+      style={{ "--table-min": `${SKILL_TABLE_MIN}px` } as CSSProperties}
+    >
+      <table className="table sch-table sch-table--tight">
+        {/* Every column sized, the Skill one included — see SKILL_COLS. */}
+        <colgroup>
+          <col style={{ width: SKILL_COLS.skill }} />
+          <col style={{ width: SKILL_COLS.type }} />
+          <col style={{ width: SKILL_COLS.date }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="no-sort">Skill</th>
+            {th("type", "Type")}
+            {th("date", "Date Awarded")}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => (
+            <tr key={s.name}>
+              <td className="col-name">{s.name}</td>
+              <td>{s.mastery ? "Mastery Skill" : "Skill"}</td>
+              <td className="col-date">{formatDate(s.dateAwarded)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={3} className="sch-empty">No skills earned yet.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
+  );
+}
+
+/* ── Awards table — Figma 1278:1571 "Profile - Table" ──
+ * The node's table is the shared .table atom (40px rows, 12px insets, #404040
+ * header rule) with four columns and a row kebab: Certification fills, Merit
+ * Tier 90, Award Number 112, Date Awarded 120, then the 40px actions gutter.
+ * Merit Tier and Date Awarded carry sort affordances; Date Awarded is the
+ * node's sorted column, descending. The "Appearances" column the old table
+ * printed is gone with the node — what it told you (whether this Award has a
+ * Certificate as well as a Card) is now the state of the Download Certificate
+ * item in the row's menu.
+ */
+const TIER_RANK: Record<MeritTier, number> = { Bronze: 0, Silver: 1, Gold: 2, Platinum: 3 };
+
+/* The node spaces its columns with a 24px flex gap and gives each text box its
+   full width (Merit Tier 90, Award Number 112, Date Awarded 120); a table pays
+   that gap out of cell padding instead — 12px a side — so each column is the
+   node's text width PLUS 24, which puts every text box back on the node's own
+   x. The Certification column is sized too (402 = the node's own name width, so
+   the sum is exactly the node's 836px table); see SKILL_COLS for why none of
+   them may be left on `auto`. */
+const AWARD_COLS = { certification: 402, tier: 114, number: 136, date: 144, actions: 40 };
+const AWARD_TABLE_MIN = Object.values(AWARD_COLS).reduce((a, b) => a + b, 0);
+
+function AwardsTable({ userName, awards }: { userName: string; awards: AwardRecord[] }) {
+  const [sort, setSort] = useState<{ key: "tier" | "date"; dir: SortDir }>({
+    key: "date",
+    dir: "desc",
+  });
+  const [menu, setMenu] = useState<{ award: AwardRecord; rect: DOMRect } | null>(null);
+
+  function toggle(key: "tier" | "date") {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  const rows = useMemo(() => {
+    const out = [...awards];
+    out.sort((a, b) => {
+      const d =
+        sort.key === "tier"
+          ? TIER_RANK[a.meritTier] - TIER_RANK[b.meritTier]
+          : a.dateAwarded.localeCompare(b.dateAwarded);
+      return sort.dir === "asc" ? d : -d;
+    });
+    return out;
+  }, [awards, sort]);
+
+  const th = (key: "tier" | "date", label: string) => {
+    const active = sort.key === key;
+    return (
+      <th onClick={() => toggle(key)}>
+        <span className="th-content">
+          {label}
+          <SortIcon active={active} dir={active ? sort.dir : undefined} />
+        </span>
+      </th>
+    );
+  };
+
+  return (
+    <div
+      className="confirm-card-xscroll"
+      style={{ "--table-min": `${AWARD_TABLE_MIN}px` } as CSSProperties}
+    >
+      <table className="table sch-table sch-table--tight">
+        <colgroup>
+          <col style={{ width: AWARD_COLS.certification }} />
+          <col style={{ width: AWARD_COLS.tier }} />
+          <col style={{ width: AWARD_COLS.number }} />
+          <col style={{ width: AWARD_COLS.date }} />
+          <col style={{ width: AWARD_COLS.actions }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="no-sort">Certification</th>
+            {th("tier", "Merit Tier")}
+            <th className="no-sort">Award Number</th>
+            {th("date", "Date Awarded")}
+            <th className="col-actions no-sort" aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a) => (
+            <tr key={a.id} className={menu?.award.id === a.id ? "menu-open" : undefined}>
+              <td className="col-name">{a.certification}</td>
+              <td>{a.meritTier}</td>
+              <td>{a.awardNumber}</td>
+              <td className="col-date">{formatDate(a.dateAwarded)}</td>
+              <RowKebab onOpen={(rect) => setMenu({ award: a, rect })} />
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="sch-empty">No awards yet.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {menu && (
+        <RowMenu
+          rect={menu.rect}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: "Download Card",
+              icon: <DownloadIcon />,
+              onPick: () =>
+                downloadFile(
+                  `${menu.award.awardNumber}-card.svg`,
+                  awardCardSvg(userName, menu.award),
+                  "image/svg+xml",
+                ),
+            },
+            {
+              /* Disabled-with-a-reason rather than hidden: an Award that never
+                 had a Certificate should say so, which is what the dropped
+                 "Appearances" column used to carry. */
+              label: "Download Certificate",
+              icon: <DownloadIcon />,
+              disabled: !menu.award.hasCertificate,
+              title: menu.award.hasCertificate ? undefined : "This Award has no Certificate",
+              onPick: () =>
+                downloadFile(
+                  `${menu.award.awardNumber}-certificate.svg`,
+                  awardCertSvg(userName, menu.award),
+                  "image/svg+xml",
+                ),
+            },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+/* The row menu behind a card table's kebab — the shared `.u-menu` chrome,
+   fixed-positioned and right-anchored to the glyph, closing on outside click /
+   scroll / Escape like every other row menu. */
+type RowMenuItem = {
+  label: string;
+  icon?: ReactNode;
+  disabled?: boolean;
+  /** Why it is disabled — the shared tooltip adopts it. */
+  title?: string;
+  onPick: () => void;
+};
+
+function RowMenu({
+  rect, items, onClose,
+}: {
+  rect: DOMRect;
+  items: RowMenuItem[];
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const h = el.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    setPos({ top });
+  }, [rect]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    }
+    function onScroll() { onClose(); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="u-menu"
+      style={{
+        top: pos ? pos.top : rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((it) => (
+        <button
+          key={it.label}
+          className="u-menu-item"
+          disabled={it.disabled}
+          title={it.title}
+          onClick={() => {
+            it.onPick();
+            onClose();
+          }}
+        >
+          {it.icon && <span className="u-menu-item-icon">{it.icon}</span>}
+          {it.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* The kebab at the end of every row: the node's resting glyph, swapped on hover
+   for the shared `.row-action-bar` pill (Figma 386:269) exactly as every list
+   table does it — one cell here, since the menu holds the actions. Without the
+   bar the bare glyph kept the button's own hover wash, which read as a grey box
+   dropped on the row. */
+function RowKebab({ onOpen }: { onOpen: (rect: DOMRect) => void }) {
+  const open = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    onOpen(e.currentTarget.getBoundingClientRect());
+  };
+  return (
+    <td className="col-actions">
+      <button className="row-action-btn lone-dots" aria-label="More" onClick={open}>
+        <RowKebabIcon />
+      </button>
+      <div className="row-action-bar">
+        <button className="row-action-btn" aria-label="More" onClick={open}>
+          <RowKebabIcon />
+        </button>
+      </div>
+    </td>
   );
 }
 
@@ -666,7 +931,6 @@ function DownloadAllAwardsModal({
     <PrmModal
       title="Download All Awards"
       description={`Choose which Cards and Certificates to download for ${userName}.`}
-      wide
       confirmLabel={
         <>
           <DownloadIcon /> Download{count > 0 ? ` (${count})` : ""}
@@ -754,7 +1018,9 @@ function PrmField({
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
-function EditUserModal({
+/* Also opened by the Manage Users row's pencil and its "Edit User Details"
+   menu item, so both surfaces edit a user through this one modal. */
+export function EditUserModal({
   initial,
   onClose,
   onSave,
@@ -787,7 +1053,6 @@ function EditUserModal({
     <PrmModal
       title="Edit User"
       description="Changing the email or phone resets its verified status."
-      wide
       confirmLabel="Save Changes"
       onCancel={onClose}
       onConfirm={submit}
@@ -862,7 +1127,6 @@ function EditNateModal({
     <PrmModal
       title={initial ? "Edit NATE Details" : "Add NATE Details"}
       description="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
-      wide
       confirmLabel={initial ? "Save Changes" : "Add Details"}
       onCancel={onClose}
       onConfirm={submit}
@@ -938,13 +1202,22 @@ export function CancelSubscriptionModal({
   );
 }
 
-/* ── Purchases & Bills — tabbed by category, with refunds for certs & attempts ── */
-const PURCHASE_TABS: { label: string; kind: PurchaseKind }[] = [
+/* ── Purchases & Bills — one list of every purchase, narrowed by the Purchase
+ * Type filter pill (Figma 1288:2876). It was four tabs until 2026-09-22; a tab
+ * bar forces a choice and hides the rest, where the pill starts unapplied and
+ * shows everything. That means one column set for all four kinds: the kind
+ * itself is now a column, and Status — which only a Certification or a Quiz
+ * Attempt carries — prints an em-dash for the others. ── */
+const PURCHASE_TYPES: { label: string; kind: PurchaseKind }[] = [
   { label: "Subscription", kind: "Subscription" },
   { label: "Certifications", kind: "Certification" },
   { label: "Quiz Attempts", kind: "Quiz Attempt" },
   { label: "Physical Products", kind: "EPA Card" },
 ];
+const PURCHASE_TYPE_LABELS = PURCHASE_TYPES.map((t) => t.label);
+const KIND_LABEL: Record<PurchaseKind, string> = Object.fromEntries(
+  PURCHASE_TYPES.map((t) => [t.kind, t.label]),
+) as Record<PurchaseKind, string>;
 
 // Refunds are issued by us only for purchases we process directly (Stripe/Google);
 // Apple in-app purchases are refunded by Apple. Limited to certs & quiz attempts.
@@ -957,14 +1230,21 @@ function isRefundable(pu: Purchase): boolean {
   );
 }
 
-/* Definite table widths per tab — the shared .table is fixed-layout, and the
-   Item column absorbs whatever these totals leave over. */
-const TAB_WIDTH: Record<PurchaseKind, number> = {
-  Subscription: 940,
-  Certification: 1420,
-  "Quiz Attempt": 1230,
-  "EPA Card": 1090,
+/* Definite widths on EVERY column, the first one included: a fixed-layout table
+   hands its slack to the auto column alone, so an unsized first column swallowed
+   the whole card and left the rest bunched at the right. With all of them sized,
+   the slack spreads in proportion and the columns stay evenly spaced. */
+const PURCHASE_COLS = {
+  date: 130,
+  item: 280,
+  type: 160,
+  status: 210,
+  platform: 120,
+  receipt: 160,
+  amount: 100,
+  actions: 40,
 };
+const PURCHASE_TABLE_MIN = Object.values(PURCHASE_COLS).reduce((a, b) => a + b, 0);
 
 function PurchasesSection({
   purchases,
@@ -977,133 +1257,191 @@ function PurchasesSection({
   epaCanceled: boolean;
   onCancelEpa: () => void;
 }) {
-  const [active, setActive] = useState<PurchaseKind>("Subscription");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
   // Track refunds applied in this session. Keyed by the purchase's index in the
   // original array — receiptIds aren't unique across purchases, so they can't key this.
   const [refunded, setRefunded] = useState<Record<number, boolean>>({});
   const [refundTarget, setRefundTarget] = useState<(Purchase & { idx: number }) | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ idx: number; rect: DOMRect } | null>(null);
 
   useEscape(refundTarget !== null, () => setRefundTarget(null));
 
-  // Tag each purchase with its stable index, then filter to the active tab.
+  // Tag each purchase with its stable index, narrow to the picked types, and
+  // show the newest first — with every kind in one list, date is the only order
+  // that means anything.
   const rows = useMemo(
     () =>
       purchases
         .map((pu, idx) => ({ ...pu, idx, refunded: refunded[idx] || pu.refunded }))
-        .filter((pu) => pu.kind === active),
-    [purchases, active, refunded],
+        .filter((pu) => typeFilter.length === 0 || typeFilter.includes(KIND_LABEL[pu.kind]))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [purchases, typeFilter, refunded],
   );
 
-  const withActions = active !== "Subscription";
-  const withType = active === "Certification";
-  const withStatus = active === "Certification" || active === "Quiz Attempt";
+  /* Status carries what the old per-tab action cell used to say in words — a
+     refunded charge, a canceled order — now that the action itself is a menu
+     item behind the row kebab. */
+  function statusCell(pu: Purchase) {
+    if (pu.kind === "EPA Card") return epaCanceled ? "Canceled · Refunded" : "—";
+    if (pu.refunded) return "Refunded";
+    if (pu.kind === "Certification") return certStatusPill(pu);
+    if (pu.kind === "Quiz Attempt") return attemptStatusPill(pu);
+    return "—";
+  }
+
+  /* A Subscription charge has nothing to do to it, so its row has no kebab. */
+  function menuItems(pu: Purchase & { idx: number }): RowMenuItem[] {
+    if (pu.kind === "Certification" || pu.kind === "Quiz Attempt") {
+      if (pu.refunded) return [];
+      return [
+        {
+          label: "Refund",
+          icon: <MenuInvoiceIcon />,
+          disabled: !isRefundable(pu),
+          title: isRefundable(pu)
+            ? undefined
+            : `${pu.platform} purchases are not refundable here`,
+          onPick: () => setRefundTarget(pu),
+        },
+      ];
+    }
+    if (pu.kind === "EPA Card") {
+      if (epaCanceled) return [];
+      return [
+        {
+          label: "Cancel Order",
+          icon: <MenuCancelSubIcon />,
+          disabled: !epaCancelable,
+          title: epaCancelable
+            ? undefined
+            : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`,
+          onPick: onCancelEpa,
+        },
+      ];
+    }
+    return [];
+  }
+
+  /* The shared filter pill (Figma 1288:2876 "Filters - Unapplied"). It rides in
+     the card HEAD beside the title (1290:2991), which is the same slot the
+     Awards card gives its Download All button — not a row of its own above the
+     table. */
+  const typePill = (
+    /* No `.filters` wrapper: that is the list pages' filter ROW, and its own
+       padding and margin were inflating this head to 79px. The head is already
+       the flex row the pill needs. */
+    <div className="prof-filters">
+      {/* `overlay`: the card is `overflow: hidden` (it clips its own r12), so a
+          panel laid out inside it would be cut off — portal it to the body.
+          `align="right"`: the panel hangs from the pill's right edge, which is
+          the card's right edge — left-aligned it would run off the card. */}
+      <Dropdown
+        width={220}
+        overlay
+        align="right"
+        constrainHeight
+        trigger={({ open, toggle }) => (
+          <PillTrigger
+            label="Purchase Type"
+            tip={FILTER_TIPS.profile.purchaseType}
+            value={summarize(typeFilter, PURCHASE_TYPE_LABELS)}
+            open={open}
+            toggle={toggle}
+            onClear={() => setTypeFilter([])}
+          />
+        )}
+      >
+        {({ close }) => (
+          <SectionedMultiSelect
+            sections={[{ items: PURCHASE_TYPE_LABELS }]}
+            value={typeFilter}
+            onApply={(v) => {
+              setTypeFilter(v);
+              close();
+            }}
+          />
+        )}
+      </Dropdown>
+    </div>
+  );
 
   return (
-    <>
-      <SectionHeading label={`Purchases & Bills · ${purchases.length}`} />
-
-      <div className="tabbar prof-tabs" role="tablist">
-        {PURCHASE_TABS.map((t) => (
-          <button
-            key={t.kind}
-            role="tab"
-            aria-selected={active === t.kind}
-            className={`tab ${active === t.kind ? "is-active" : ""}`}
-            onClick={() => setActive(t.kind)}
-          >
-            {t.label}
-          </button>
-        ))}
+    /* `tableBody`: the node (1290:2943) has no rule under this head either —
+       the pill moved into the head, so the table is the whole body and its own
+       top border is the line between them. */
+    <ConfirmCard
+      title={`Purchases & Bills · ${purchases.length}`}
+      trailing={typePill}
+      tableBody
+    >
+      {/* Same as the Awards card: the table fills the card and only scrolls
+          sideways below its own column-width sum. */}
+      <div
+        className="confirm-card-xscroll"
+        style={{ "--table-min": `${PURCHASE_TABLE_MIN}px` } as CSSProperties}
+      >
+        {/* Same chrome as the Awards table (1278:1571): the card tables take the
+            base 12px cell inset, not the .sch-table shell's roomier 16px. */}
+        <table className="table sch-table sch-table--tight">
+          <colgroup>
+            <col style={{ width: PURCHASE_COLS.date }} />
+            <col style={{ width: PURCHASE_COLS.item }} />
+            <col style={{ width: PURCHASE_COLS.type }} />
+            <col style={{ width: PURCHASE_COLS.status }} />
+            <col style={{ width: PURCHASE_COLS.platform }} />
+            <col style={{ width: PURCHASE_COLS.receipt }} />
+            <col style={{ width: PURCHASE_COLS.amount }} />
+            <col style={{ width: PURCHASE_COLS.actions }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="no-sort">Date</th>
+              <th className="no-sort">Item</th>
+              <th className="no-sort">Purchase Type</th>
+              <th className="no-sort">Status</th>
+              <th className="no-sort">Platform</th>
+              <th className="no-sort">Receipt</th>
+              <th className="no-sort">Amount</th>
+              <th className="no-sort col-actions" aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((pu) => (
+              <tr key={pu.idx}>
+                <td className="col-date">{formatDate(pu.date)}</td>
+                <td className="col-name">{pu.item}</td>
+                <td>{KIND_LABEL[pu.kind]}</td>
+                <td className="col-status">{statusCell(pu)}</td>
+                <td>{pu.platform}</td>
+                <td>{pu.receiptId}</td>
+                <td>{money(pu.amount)}</td>
+                {menuItems(pu).length > 0 ? (
+                  <RowKebab onOpen={(rect) => setRowMenu({ idx: pu.idx, rect })} />
+                ) : (
+                  <td className="col-actions" />
+                )}
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="sch-empty">
+                  {typeFilter.length > 0
+                    ? "No purchases of this type on record."
+                    : "No purchases on record."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      <table className="table sch-table" style={{ width: TAB_WIDTH[active] }}>
-        <colgroup>
-          <col style={{ width: 150 }} />
-          <col />
-          {withType && <col style={{ width: 170 }} />}
-          {withStatus && <col style={{ width: 230 }} />}
-          <col style={{ width: 130 }} />
-          <col style={{ width: 170 }} />
-          <col style={{ width: 120 }} />
-          {withActions && <col style={{ width: 170 }} />}
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Item</th>
-            {withType && <th>Type</th>}
-            {withStatus && <th>Status</th>}
-            <th>Platform</th>
-            <th>Receipt</th>
-            <th>Amount</th>
-            {withActions && <th aria-label="Actions" />}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((pu) => (
-            <tr key={pu.idx}>
-              <td className="col-date">{formatDate(pu.date)}</td>
-              <td className="col-name">{pu.item}</td>
-              {withType && <td>{pu.consumable ? "Consumable" : "Non-Consumable"}</td>}
-              {active === "Certification" && <td className="col-status">{certStatusPill(pu)}</td>}
-              {active === "Quiz Attempt" && <td className="col-status">{attemptStatusPill(pu)}</td>}
-              <td>{pu.platform}</td>
-              <td>{pu.receiptId}</td>
-              <td>{money(pu.amount)}</td>
-              {(active === "Certification" || active === "Quiz Attempt") && (
-                <td>
-                  {pu.refunded ? (
-                    <span>Refunded</span>
-                  ) : (
-                    <button
-                      className="btn-save-draft mc-btn-sm"
-                      disabled={!isRefundable(pu)}
-                      title={
-                        isRefundable(pu)
-                          ? "Issue a refund"
-                          : `${pu.platform} purchases are not refundable here`
-                      }
-                      onClick={() => setRefundTarget(pu)}
-                    >
-                      Refund
-                    </button>
-                  )}
-                </td>
-              )}
-              {active === "EPA Card" && (
-                <td>
-                  {epaCanceled ? (
-                    <span>Canceled · Refunded</span>
-                  ) : (
-                    <button
-                      className="btn-save-draft mc-btn-sm"
-                      disabled={!epaCancelable}
-                      title={
-                        epaCancelable
-                          ? "Cancel this order and refund the charge"
-                          : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`
-                      }
-                      onClick={onCancelEpa}
-                    >
-                      Cancel Order
-                    </button>
-                  )}
-                </td>
-              )}
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td
-                colSpan={5 + (withType ? 1 : 0) + (withStatus ? 1 : 0) + (withActions ? 1 : 0)}
-                className="sch-empty"
-              >
-                No {active.toLowerCase()} purchases on record.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      {rowMenu &&
+        (() => {
+          const pu = rows.find((r) => r.idx === rowMenu.idx);
+          return pu ? (
+            <RowMenu rect={rowMenu.rect} items={menuItems(pu)} onClose={() => setRowMenu(null)} />
+          ) : null;
+        })()}
 
       {refundTarget && (
         <PrmModal
@@ -1126,7 +1464,7 @@ function PurchasesSection({
           </p>
         </PrmModal>
       )}
-    </>
+    </ConfirmCard>
   );
 }
 

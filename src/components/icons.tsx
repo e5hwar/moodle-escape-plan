@@ -237,6 +237,23 @@ export const ArrowRightUpIcon = () => (
   </svg>
 );
 
+/* The ✕ that clears a picked value out of a search bar (1284:2676) — a 16px
+   square-capped X, not the rounded 13px `SmallXIcon` the app's chips use. */
+export const ClearXIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.3 4.7L8 8M8 8L4.7 11.3M8 8L11.3 11.3M8 8L4.7 4.7" />
+  </svg>
+);
+
+/* The flow card's 24px left arrow (1289:2936) — square-capped 2px, pointing
+   INTO the account that survives. Traced, not reused: the app's other arrows
+   are rounded and drawn at 12-16px. */
+export const ArrowLeftLongIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+    <path d="M11 6.5L5.5 12L11 17.5M6.75 12H19.75" />
+  </svg>
+);
+
 export const HomeIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-4v-6h-6v6H5a2 2 0 0 1-2-2z" />
@@ -329,6 +346,15 @@ export const MoreFiltersIcon = () => (
   </svg>
 );
 
+/* 16px right chevron closing the page header's pending-count note (Figma
+   1268:1741 "Icon Library") — traced from the export: square caps, 1.33333
+   stroke on a 16 box. Takes currentColor so it follows the accent label. */
+export const NoteChevronIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.33333 11.6667L10 8L6.33333 4.33333" />
+  </svg>
+);
+
 /* edit-off — marks a read-only review rail (Figma 298:1886). */
 export const EditOffIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -345,16 +371,17 @@ export const CommandIcon = () => (
   </svg>
 );
 
+/* Icon Library "download" at 14px (1278:1575, the Download All button) — path
+   verbatim from the Figma export. Same glyph as `DownloadIcon12` below, drawn
+   on its own 14 box rather than scaled. */
 export const DownloadIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 4v12M7 11l5 5 5-5" />
-    <path d="M5 20h14" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M9.625 6.125L7 8.75L4.375 6.125M7 8.02083V2.33333M11.9583 8.75V11.6667H2.04167V8.75" />
   </svg>
 );
 
-/* Icon Library "download" at 12px (756:3157) — the glyph on the media stage's
-   Download chip. Square caps and a 1px stroke on a 12 box, path verbatim from
-   the Figma export; `DownloadIcon` above is the rounded 24-box generic. */
+/* The same Icon Library "download" at 12px (756:3157) — the glyph on the media
+   stage's Download chip, on its own 12 box with a 1px stroke. */
 export const DownloadIcon12 = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
     <path d="M8.25 5.25L6 7.5L3.75 5.25M6 6.875V2M10.25 7.5V10H1.75V7.5" />
@@ -411,6 +438,29 @@ export const AlertTriangleIcon = () => (
   </svg>
 );
 
+/* Traced from Figma's own exports for the Merge comparison tables
+   (1282:2333 / 1282:2418), not approximated: both are square-capped 1.33px
+   strokes, which is why neither reuses `ArrowUpIcon` or `AlertTriangleIcon`
+   (rounded joins, different geometry). Both take the cell's colour. */
+
+/** The green "+N ↑" delta's arrow (1282:2471). */
+export const TrendUpIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.6667 7L8 3.33333L4.33333 7M8 4.16667V12.8333" />
+  </svg>
+);
+
+/** The flag beside a blocking value (1282:2458). The node draws the triangle
+ *  twice — a 1.33px outline over a 0.67px one — and the export's box is
+ *  15.94 x 13.8, not square, so it is rendered at its own ratio. */
+export const WarnTriangleIcon = () => (
+  <svg width="16" height="14" viewBox="0 0 15.9362 13.7999" fill="none" stroke="currentColor">
+    <path d="M14.2036 12.8H1.73288L7.96725 1.99926L14.2036 12.8Z" strokeWidth="0.666667" />
+    <path d="M7.96809 1.33325L14.7814 13.1332H1.15475L7.96809 1.33325Z" strokeWidth="1.33333" strokeLinecap="square" />
+    <path d="M7.96808 6.33325V8.66658M7.96808 10.9999H7.97075V11.0026H7.96808V10.9999Z" strokeWidth="1.33333" strokeLinecap="square" />
+  </svg>
+);
+
 export const InfoCircleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9.3" />
@@ -443,6 +493,16 @@ export const SwapIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 8h13M14 5l3 3-3 3" />
     <path d="M20 16H7M10 13l-3 3 3 3" />
+  </svg>
+);
+
+/* The swap glyph as the card-head "Button dialog" draws it (1285:2773): 14px,
+   square-capped 1.167px, top arrow pointing left over a bottom one pointing
+   right. `SwapIcon` above is the rounded variant the note rows use — same
+   idea, different drawing, so they stay separate. */
+export const SwapRolesIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M12.25 8.45833H2.33333L5.25 11.375M1.75 5.54167H11.6667L8.75 2.625" />
   </svg>
 );
 
@@ -922,6 +982,10 @@ export const MenuGrantAttemptsIcon = () => (
     <path d="M11 8H5M8 5V11" strokeLinecap="square" />
   </svg>
 );
+
+/* The same 7:34 circle-plus under the name its other role gives it: "Create
+   New Task" in the Certification builder's Add Task menu (1259:1674). */
+export const AddCircleIcon = MenuGrantAttemptsIcon;
 
 /* Small arrow-right — the "subject → change" separator in the Changes Made
    hover card (node 1155:1166). Drawn at the node's own 10.286 box so the
