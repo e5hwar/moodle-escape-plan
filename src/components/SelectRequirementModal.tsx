@@ -9,6 +9,7 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  RowChevronIcon,
   SearchClearIcon,
   SearchIcon,
   SortIcon,
@@ -26,7 +27,11 @@ import {
  * Selection is staged: the modal owns `picked` and only hands it back on
  * confirm, so Cancel / Escape discards. Rows already in this Condition Set stay
  * visible as ticked + locked (the Select Questions rule), so it is obvious why
- * they can't be added twice. */
+ * they can't be added twice.
+ *
+ * Tasks only, it is also the Certification builder's "Add Existing Tasks" and
+ * Feedback Forms' "Add Tasks". The builder passes `onPreviewTask`, which gives
+ * every Task row Select Questions' row-end "Preview ›". */
 
 const PAGE_SIZE = 50;
 
@@ -80,6 +85,8 @@ export function SelectRequirementModal({
   confirmNoun = "Requirement",
   lockedTip = "Already in this Condition Set",
   full,
+  allCreators,
+  onPreviewTask,
   onCancel,
   onConfirm,
 }: {
@@ -96,6 +103,12 @@ export function SelectRequirementModal({
   /** Open at the Select Questions size — the picker fills the viewport
    *  (`pickFull`) instead of the default 80vh card. */
   full?: boolean;
+  /** List every library Task, company-created ones included, instead of only
+   *  SkillCat's (the Certification builder's Add Existing Tasks). */
+  allCreators?: boolean;
+  /** Adds a row-end "Preview ›" to every Task row — the Select Questions
+   *  affordance: a resting chevron that becomes a labelled bar on hover. */
+  onPreviewTask?: (task: Task) => void;
   onCancel: () => void;
   onConfirm: (picks: RequirementPick[]) => void;
 }) {
@@ -126,7 +139,10 @@ export function SelectRequirementModal({
 
   const taken = useMemo(() => new Set(existingNames), [existingNames]);
 
-  const taskPool = useMemo(() => taskLibrary.filter(eligible), []);
+  const taskPool = useMemo(
+    () => (allCreators ? taskLibrary : taskLibrary.filter(eligible)),
+    [allCreators],
+  );
   const allIndustries = useMemo(
     () => Array.from(new Set(certifications.map((c) => c.industry))).sort(),
     [],
@@ -162,6 +178,9 @@ export function SelectRequirementModal({
   const pagedCerts = certRows.slice(start, start + PAGE_SIZE);
 
   const pickedCount = pickedTasks.length + pickedCerts.length;
+
+  /** Task rows carry the Preview column only when there is a Preview to run. */
+  const preview = tab === "task" && !!onPreviewTask;
 
   /** Switching tab starts that tab's list at the top; the staged picks stay. */
   function switchTab(next: Tab) {
@@ -323,29 +342,31 @@ export function SelectRequirementModal({
               table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "760px" } as React.CSSProperties}
+            /* + the 104px Preview column when there is one. */
+            style={{ "--table-min": preview ? "864px" : "760px" } as React.CSSProperties}
           >
             {tab === "task" ? (
               <>
-                <table className="table table-head stm-table">
-                  <TaskColGroup />
+                <table className={`table table-head stm-table${preview ? " stm-table--preview" : ""}`}>
+                  <TaskColGroup preview={preview} />
                   <thead>
                     <tr>
                       <th className="stm-col-check no-sort" />
                       <Th label="Task Name" cls="stm-col-name" active={taskSort.key === "name"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "name")} />
                       <Th label="Task Type" cls="stm-col-type" active={taskSort.key === "type"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "type")} />
                       <Th label="Certifications" cls="stm-col-certs" active={taskSort.key === "certs"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "certs")} />
+                      {preview && <th className="col-actions no-sort" />}
                     </tr>
                   </thead>
                 </table>
 
                 <div className="tasks-scroll">
-                  <table className="table table-body stm-table">
-                    <TaskColGroup />
+                  <table className={`table table-body stm-table${preview ? " stm-table--preview" : ""}`}>
+                    <TaskColGroup preview={preview} />
                     <tbody>
                       {pagedTasks.length === 0 ? (
                         <tr className="stm-empty-row">
-                          <td colSpan={4}>No Tasks match your search and filters.</td>
+                          <td colSpan={preview ? 5 : 4}>No Tasks match your search and filters.</td>
                         </tr>
                       ) : (
                         pagedTasks.map((t) => {
@@ -381,6 +402,37 @@ export function SelectRequirementModal({
                               <td className="stm-col-certs">
                                 <MultiCell values={t.usedIn} />
                               </td>
+                              {/* Row-end Preview, the same two layers as
+                                  Select Questions': a resting chevron that
+                                  hides on hover and a labelled bar in its
+                                  place. Both stop the click — the row itself
+                                  ticks the checkbox. */}
+                              {onPreviewTask && (
+                                <td className="col-actions">
+                                  <button
+                                    className="row-action-btn lone-dots row-chevron"
+                                    aria-label={`Preview ${t.name}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPreviewTask(t);
+                                    }}
+                                  >
+                                    <RowChevronIcon />
+                                  </button>
+                                  <div className="row-action-bar">
+                                    <button
+                                      className="row-action-btn row-action-btn--label"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPreviewTask(t);
+                                      }}
+                                    >
+                                      Preview
+                                      <RowChevronIcon />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           );
                         })
@@ -491,13 +543,14 @@ function toggleSort<K extends string>(
   set((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 }
 
-function TaskColGroup() {
+function TaskColGroup({ preview }: { preview?: boolean }) {
   return (
     <colgroup>
       <col style={{ width: 44 }} />
       <col />
       <col style={{ width: 136 }} />
       <col style={{ width: 260 }} />
+      {preview && <col style={{ width: 104 }} />}
     </colgroup>
   );
 }

@@ -5,6 +5,7 @@ import {
   NO_TYPE,
   CERT_OPTIONAL_COLUMNS,
   CERT_FIXED_COLUMNS,
+  topIndustry,
   type Certification,
 } from "../data/certifications";
 import { type Award } from "../data/awards";
@@ -17,31 +18,26 @@ import { EditColumnsButton } from "./Filters";
 import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
+import { Drawer } from "./Drawer";
+import { CertificationSummary } from "./NewCertificationWizard";
 import { Dropdown } from "./Dropdown";
-import { CertImportModal, type CertImportMode } from "./CertImportModal";
-import { useLandingMorph } from "../hooks/useLandingMorph";
+import { CertImportModal } from "./CertImportModal";
+import { CertBulkUploadModal } from "./CertBulkUploadModal";
+import type { CertImportReport } from "../data/certImport";
+import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CertificationsSearch } from "./CertificationsSearch";
-import { LandingFilterRow, LandingOverlay, topValues, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
-
-/* Landing-morph columns — mirror the table’s default visible columns so the
-   p=1 hand-off to the real table lines up. The fixed Name column leads (see
-   `nameLabel`), so the optional ID follows it like every other column. */
-const LM_COLS: LandingCol[] = [
-  { key: "id", label: "ID", width: 100 },
-  { key: "industry", label: "Industry", width: 190, fixed: true },
-  { key: "careerStage", label: "Career Stage", width: 140 },
-  { key: "payment", label: "Payment", width: 150 },
-  { key: "tasks", label: "Tasks", width: 90 },
-  { key: "creator", label: "Created By", width: 180 },
-];
 
 const PAGE_SIZE = 50;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /* The Create Certification menu. Each row keeps the letter of its own
    distinctive word: S(cratch), B(ackup), C(SV). "C" doing double duty is safe
    — it only picks CSV Upload while the menu is already open, and opening it is
    all "C" does while it is closed. */
-const CREATE_OPTIONS: { key: "scratch" | CertImportMode; label: string; shortcut: string }[] = [
+type UploadPath = "backup" | "csv";
+
+const CREATE_OPTIONS: { key: "scratch" | UploadPath; label: string; shortcut: string }[] = [
   { key: "scratch", label: "From Scratch", shortcut: "S" },
   { key: "backup", label: "Upload Backup", shortcut: "B" },
   { key: "csv", label: "CSV Upload", shortcut: "C" },
@@ -132,6 +128,7 @@ function matchesIndustry(cert: Certification, selected: string[]): boolean {
 
 export function CertificationsPage({
   onNewCert,
+  onImportCert,
   onEditCert,
   onOpenCompanyDashboard,
   onViewPayers,
@@ -145,6 +142,8 @@ export function CertificationsPage({
   onOpenFeedback,
 }: {
   onNewCert: () => void;
+  /** A checked CSV Upload — the wizard opens with its structure built. */
+  onImportCert: (report: CertImportReport) => void;
   onEditCert: (cert: Certification) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
@@ -164,7 +163,7 @@ export function CertificationsPage({
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // The upload path picked from the Create menu, if any — each opens its own
   // modal, and confirming it continues into the wizard.
-  const [importMode, setImportMode] = useState<CertImportMode | null>(null);
+  const [importMode, setImportMode] = useState<UploadPath | null>(null);
   // Local working copy so visibility/archive/delete persist in-session.
   const [certList, setCertList] = useState<Certification[]>(allCerts);
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
@@ -174,6 +173,13 @@ export function CertificationsPage({
   const [blockedEdit, setBlockedEdit] = useState<Certification | null>(null);
   // The Certification awaiting the delete confirm, if any.
   const [deleting, setDeleting] = useState<Certification | null>(null);
+  // The Certification awaiting a Hide confirmation — the Tasks page's Hide
+  // modal (Figma 667:884). Unhiding is instant; only hiding routes through it.
+  const [hideTarget, setHideTarget] = useState<Certification | null>(null);
+  // The Certification whose row was clicked, shown in the side drawer. Held by
+  // id and read back from the working copy, so it always shows the live record.
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const drawerCert = drawerId ? certList.find((c) => c.id === drawerId) : undefined;
   // Created by SkillCat is applied on launch.
   const [filters, setFilters] = useState<CertFilterState>({
     industries: [],
@@ -207,18 +213,19 @@ export function CertificationsPage({
 
   // From Scratch goes straight to the wizard; the two upload paths stop at
   // their modal first.
-  const startCreate = (key: "scratch" | CertImportMode) => {
+  const startCreate = (key: "scratch" | UploadPath) => {
     if (key === "scratch") onNewCert();
     else setImportMode(key);
   };
 
   // Keyboard shortcuts, mirroring the Tasks page: "C" opens the Create menu;
   // once open, each method's letter starts it. Ignored while typing in a field,
-  // with a modifier held, or while an upload modal owns the screen.
+  // with a modifier held, or while an upload modal or the drawer owns the
+  // screen (the menu would open above the drawer's scrim).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (importMode) return;
+      if (importMode || drawerId) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -251,7 +258,7 @@ export function CertificationsPage({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createMenuOpen, importMode, onNewCert]);
+  }, [createMenuOpen, importMode, drawerId, onNewCert]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -296,53 +303,27 @@ export function CertificationsPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  // Landing morph — the page opens as the search-first landing and the wheel
-  // (or any search / pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph();
+  // The page's one scroller (Claude Design "Certifications Prototype"): the
+  // landing header collapses over its first stretch of scroll, with the table
+  // glued beneath it, and the rows scroll under the pinned header after that.
+  const head = useCollapsingHeader();
+  const { scrollToFirstRow } = head;
 
-  const suggested = useMemo(() => {
-    const pills: LandingPill[] = [];
-    const add = (key: string, label: string, patch: (prev: CertFilterState) => CertFilterState) =>
-      pills.push({
-        key,
-        label,
-        onPick: () => {
-          setFilters(patch(filters));
-          morph.showTable();
-        },
-      });
-    topValues(certList, (c) => c.industry, 2).forEach((ind) =>
-      add(`ind-${ind}`, ind, (prev) => ({ ...prev, industries: Array.from(new Set([...prev.industries, ind])) })),
-    );
-    const stage = topValues(certList, (c) => c.careerStage)[0];
-    if (stage) add("stage", stage, (prev) => ({ ...prev, careerStages: [stage] }));
-    const type = topValues(certList, (c) => c.type)[0];
-    if (type) add("type", type, (prev) => ({ ...prev, types: [type] }));
-    return pills;
-  }, [certList, filters, morph.showTable]);
+  // A new query, filter, sort or page starts the list at its first row. A
+  // collapsed header stays collapsed; one still open is left as it is.
+  useLayoutEffect(() => {
+    scrollToFirstRow();
+  }, [query, filters, sort, visiblePage, scrollToFirstRow]);
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => ({
-    key: c.id,
-    /* The visibility pill rides the morph with the row, so the name doesn't
-       gain a badge at the hand-off to the real table (as on Tasks). */
-    name: (c.visibility ?? "Visible") !== "Visible" ? (
-      <>
-        {c.name}
-        <span className="pr-name-flag pr-name-flag--grey">{c.visibility}</span>
-      </>
-    ) : (
-      c.name
-    ),
-    dim: (c.visibility ?? "Visible") !== "Visible" || c.draft,
-    cells: {
-      id: c.id,
-      industry: c.industry,
-      careerStage: c.careerStage ?? "",
-      payment: c.payment ?? "Free",
-      tasks: c.tasks,
-      creator: c.createdBy,
-    },
-  }));
+  // The landing's catalog summary: the whole catalog, not the filtered rows —
+  // the pagination footer already counts those.
+  const catalog = useMemo(
+    () => ({
+      certs: certList.length,
+      industries: new Set(certList.map((c) => topIndustry(c.industry))).size,
+    }),
+    [certList],
+  );
 
   // Natural table width so columns scroll horizontally instead of crushing.
   const tableMin =
@@ -376,7 +357,13 @@ export function CertificationsPage({
   }
 
   function toggleHidden(cert: Certification) {
-    setVisibility(cert, (cert.visibility ?? "Visible") === "Visible" ? "Hidden" : "Visible");
+    // Making a Certification visible again is instant — only hiding needs
+    // confirming, as it does for a Task.
+    if ((cert.visibility ?? "Visible") !== "Visible") {
+      setVisibility(cert, "Visible");
+      return;
+    }
+    setHideTarget(cert);
   }
 
   function editCert(cert: Certification) {
@@ -397,161 +384,164 @@ export function CertificationsPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm" ref={morph.rootRef}>
-          <header className="tasks-header">
-            <div>
-              <h1 className="tasks-title">Certifications</h1>
-            </div>
-            {/* Figma 633:1865 — same move as the Tasks header: Industries and
-                Feedback left the sidebar's Content group and are now reached
-                from here, left of the Create Certification CTA. Awards was a
-                third button until Awards stopped being a page: an Award belongs
-                to one Certification, so it is reached from that row's menu. */}
-            <div className="tasks-header-actions">
-              <button className="cta-quiet" onClick={() => onOpenIndustries?.()}>
-                Industries
-              </button>
-              <button className="cta-quiet" onClick={() => onOpenFeedback?.()}>
-                Feedback
-              </button>
-              {/* The three creation methods used to be cards on a full-page
-                  chooser between this button and the wizard. They are rows in
-                  the CTA's menu now, on the Tasks page's Create Task shell
-                  (Figma 724:1010): label + shortcut badge, no icons. */}
-              <Dropdown
-                align="right"
-                width="auto"
-                panelClass="ct-menu"
-                open={createMenuOpen}
-                onOpenChange={setCreateMenuOpen}
-                trigger={({ toggle }) => (
-                  <button className="new-task" onClick={toggle}>
-                    <AddIcon />
-                    Create Certification
-                    <span className="cta-kbd">C</span>
-                  </button>
-                )}
-              >
-                {({ close }) => (
-                  <>
-                    {CREATE_OPTIONS.map(({ key, label, shortcut }) => (
-                      <button
-                        key={key}
-                        className="ct-menu-item"
-                        onClick={() => {
-                          startCreate(key);
-                          close();
-                        }}
-                      >
-                        <span className="ct-menu-label">{label}</span>
-                        <span className="ct-menu-kbd">{shortcut}</span>
+        {/* Claude Design "Certifications Prototype" (Certifications only):
+            the page is ONE scroller — the table's own `.table-xscroll`. It
+            opens on the landing, where the large title, the catalog summary
+            and the Large search bar sit straight on top of the real table.
+            The first stretch of scroll collapses that header into the
+            standard table header with the rows glued beneath it; after that
+            the rows scroll under the pinned header. See useCollapsingHeader
+            and the `.tasks.clh` rules in index.css. */}
+        <div className="tasks clh">
+          <div className="co-table-col">
+            <div
+              ref={head.scrollRef}
+              className="table-xscroll clh-scroll"
+              style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
+            >
+              <div className="clh-canvas">
+                <div ref={head.headerRef} className="clh-head">
+                  <header className="tasks-header">
+                    <h1 className="tasks-title">Certifications</h1>
+                    {/* Figma 633:1865 — same move as the Tasks header: Industries and
+                        Feedback left the sidebar's Content group and are now reached
+                        from here, left of the Create Certification CTA. Awards was a
+                        third button until Awards stopped being a page: an Award belongs
+                        to one Certification, so it is reached from that row's menu. */}
+                    <div className="tasks-header-actions">
+                      <button className="cta-quiet" onClick={() => onOpenIndustries?.()}>
+                        Industries
                       </button>
-                    ))}
-                  </>
-                )}
-              </Dropdown>
-            </div>
-          </header>
+                      <button className="cta-quiet" onClick={() => onOpenFeedback?.()}>
+                        Feedback
+                      </button>
+                      {/* The three creation methods used to be cards on a full-page
+                          chooser between this button and the wizard. They are rows in
+                          the CTA's menu now, on the Tasks page's Create Task shell
+                          (Figma 724:1010): label + shortcut badge, no icons. */}
+                      <Dropdown
+                        align="right"
+                        width="auto"
+                        panelClass="ct-menu"
+                        open={createMenuOpen}
+                        onOpenChange={setCreateMenuOpen}
+                        trigger={({ toggle }) => (
+                          <button className="new-task" onClick={toggle}>
+                            <AddIcon />
+                            Create Certification
+                            <span className="cta-kbd">C</span>
+                          </button>
+                        )}
+                      >
+                        {({ close }) => (
+                          <>
+                            {CREATE_OPTIONS.map(({ key, label, shortcut }) => (
+                              <button
+                                key={key}
+                                className="ct-menu-item"
+                                onClick={() => {
+                                  startCreate(key);
+                                  close();
+                                }}
+                              >
+                                <span className="ct-menu-label">{label}</span>
+                                <span className="ct-menu-kbd">{shortcut}</span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </Dropdown>
+                    </div>
+                    {/* The landing's catalog summary (the prototype's copy). It
+                        folds away as the header collapses. */}
+                    <div className="clh-sub">
+                      <p className="tasks-subtitle">
+                        {`${plural(catalog.certs, "certification", "certifications")} across ${plural(
+                          catalog.industries,
+                          "industry",
+                          "industries",
+                        )}. Search by name, code or industry.`}
+                      </p>
+                    </div>
+                  </header>
 
-          <div className="tasks-row">
-            <div className="tasks-content">
-              <div className="toolbar">
-                <CertificationsSearch
-                  certifications={certList}
-                  industries={filters.industries}
-                  onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
-                  careerStages={filters.careerStages}
-                  onCareerStagesChange={(v) => setFilters((prev) => ({ ...prev, careerStages: v }))}
-                  types={filters.types}
-                  onTypesChange={(v) => setFilters((prev) => ({ ...prev, types: v }))}
-                  query={query}
-                  onCommit={(q) => {
-                    setQuery(q);
-                    morph.showTable();
-                  }}
-                />
-              </div>
+                  <div className="toolbar">
+                    <CertificationsSearch
+                      certifications={certList}
+                      industries={filters.industries}
+                      onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
+                      careerStages={filters.careerStages}
+                      onCareerStagesChange={(v) => setFilters((prev) => ({ ...prev, careerStages: v }))}
+                      types={filters.types}
+                      onTypesChange={(v) => setFilters((prev) => ({ ...prev, types: v }))}
+                      query={query}
+                      onCommit={setQuery}
+                    />
+                  </div>
 
-              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <CertFilters filters={filters} setFilters={setFilters} />
-                </LandingFilterRow>
-
-              <div className="lm-stage">
-              <LandingOverlay
-                caption="Recently created"
-                columns={LM_COLS}
-                rows={landingRows}
-                onShowAll={morph.showTable}
-                onRowClick={() => morph.showTable()}
-              />
-              <div className="lm-table">
-              <div className="co-table-row">
-                <div className="co-table-col">
-                  <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-                    <table className="table table-head">
-                      <CertColGroup columns={columns} />
-                      <thead>
-                        <tr>
-                          <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                          {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                          {columns.industry && <SortableHeader col="industry" label="Industry" className="col-used" sort={sort} toggle={toggleSort} />}
-                          {columns.careerStage && <SortableHeader col="careerStage" label="Career Stage" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.type && <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.payment && <SortableHeader col="payment" label="Payment" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.tasks && <SortableHeader col="tasks" label="Tasks" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.ceus && <SortableHeader col="ceus" label="CEUs" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
-                          {columns.tradeTag && <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                          {columns.partnershipTag && <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                          {columns.audience && <SortableHeader col="audience" label="Audience" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                          {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
-                          {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
-                          {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
-                          <th className="col-actions">
-                            <EditColumnsButton
-                              columns={columns}
-                              setColumns={setColumns}
-                              optional={CERT_OPTIONAL_COLUMNS}
-                              fixed={CERT_FIXED_COLUMNS}
-                            />
-                          </th>
-                        </tr>
-                      </thead>
-                    </table>
-
-                    <div className="tasks-scroll">
-                      <table className="table table-body">
-                        <CertColGroup columns={columns} />
-                        <tbody>
-                          {paged.map((cert) => (
-                            <CertRow
-                              key={cert.id}
-                              cert={cert}
-                              columns={columns}
-                              onEdit={() => editCert(cert)}
-                              onToggleVisibility={() => toggleHidden(cert)}
-                              onOpenMenu={(rect) => setMenu({ cert, rect })}
-                              menuOpen={menu?.cert.id === cert.id}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="pagination">
-                    <span>
-                      Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                    </span>
-                    <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
-                    </div>
-                  </div>
                 </div>
 
+                <table ref={head.theadRef} className="table table-head">
+                  <CertColGroup columns={columns} />
+                  <thead>
+                    <tr>
+                      <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
+                      {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
+                      {columns.industry && <SortableHeader col="industry" label="Industry" className="col-used" sort={sort} toggle={toggleSort} />}
+                      {columns.careerStage && <SortableHeader col="careerStage" label="Career Stage" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.type && <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.payment && <SortableHeader col="payment" label="Payment" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.tasks && <SortableHeader col="tasks" label="Tasks" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.ceus && <SortableHeader col="ceus" label="CEUs" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
+                      {columns.tradeTag && <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                      {columns.partnershipTag && <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                      {columns.audience && <SortableHeader col="audience" label="Audience" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
+                      {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
+                      {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
+                      {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
+                      <th className="col-actions">
+                        <EditColumnsButton
+                          columns={columns}
+                          setColumns={setColumns}
+                          optional={CERT_OPTIONAL_COLUMNS}
+                          fixed={CERT_FIXED_COLUMNS}
+                        />
+                      </th>
+                    </tr>
+                  </thead>
+                </table>
+
+                <div className="tasks-scroll">
+                  <table className="table table-body">
+                    <CertColGroup columns={columns} />
+                    <tbody>
+                      {paged.map((cert) => (
+                        <CertRow
+                          key={cert.id}
+                          cert={cert}
+                          columns={columns}
+                          onOpen={() => setDrawerId(cert.id)}
+                          onEdit={() => editCert(cert)}
+                          onToggleVisibility={() => toggleHidden(cert)}
+                          onOpenMenu={(rect) => setMenu({ cert, rect })}
+                          menuOpen={menu?.cert.id === cert.id}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              </div>
+            </div>
+
+            <div className="pagination">
+              <span>
+                Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+              </span>
+              <div className="pagination-controls">
+                <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
+                <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
               </div>
             </div>
           </div>
@@ -577,13 +567,25 @@ export function CertificationsPage({
         />
       )}
 
-      {importMode && (
+      {importMode === "backup" && (
         <CertImportModal
-          mode={importMode}
           onClose={() => setImportMode(null)}
           onConfirm={() => {
             setImportMode(null);
             onNewCert();
+          }}
+        />
+      )}
+
+      {/* CSV Upload runs the Question Bank's bulk-upload flow: every row is
+          checked before anything imports, and a clean file opens the wizard
+          with its Courses, Lessons, and Tasks already built. */}
+      {importMode === "csv" && (
+        <CertBulkUploadModal
+          onClose={() => setImportMode(null)}
+          onImport={(report) => {
+            setImportMode(null);
+            onImportCert(report);
           }}
         />
       )}
@@ -615,7 +617,75 @@ export function CertificationsPage({
           </p>
         </PrmModal>
       )}
+
+      {hideTarget && (
+        <HideCertModal
+          cert={hideTarget}
+          onCancel={() => setHideTarget(null)}
+          onConfirm={() => {
+            setVisibility(hideTarget, "Hidden");
+            setHideTarget(null);
+          }}
+        />
+      )}
+
+      {drawerCert && <CertDrawer cert={drawerCert} onClose={() => setDrawerId(null)} />}
     </div>
+  );
+}
+
+/** A Certification's side drawer (Figma 1316:1846): its name and description,
+ *  then every field its wizard holds, one review card per step. */
+function CertDrawer({ cert, onClose }: { cert: Certification; onClose: () => void }) {
+  return (
+    <Drawer title={cert.name} description={cert.description} onClose={onClose}>
+      <CertificationSummary cert={cert} />
+    </Drawer>
+  );
+}
+
+/** Hide confirmation — the Tasks page's Hide modal (Figma 667:884 "General
+ *  Modal") for a Certification. The heading names the Cert, the description
+ *  states what hiding does, and the content slot names the Industry it is
+ *  listed under — where the Task version lists its Certifications. */
+function HideCertModal({
+  cert,
+  onCancel,
+  onConfirm,
+}: {
+  cert: Certification;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title={`Hide “${cert.name}”`}
+      description="Hiding the Certification temporarily removes it for all users."
+      confirmLabel="Hide Certification"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      {cert.industry && (
+        <div className="prm-content">
+          <p>
+            This Certification is currently in the following Industry. Hiding it removes it
+            temporarily from here.
+          </p>
+          <ul>
+            <li>{cert.industry}</li>
+          </ul>
+        </div>
+      )}
+    </PrmModal>
   );
 }
 
@@ -663,6 +733,7 @@ function CertColGroup({ columns }: { columns: CertColumnState }) {
 function CertRow({
   cert,
   columns,
+  onOpen,
   onEdit,
   onToggleVisibility,
   onOpenMenu,
@@ -670,6 +741,8 @@ function CertRow({
 }: {
   cert: Certification;
   columns: CertColumnState;
+  /** A click anywhere on the row outside its action buttons. */
+  onOpen: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
@@ -681,6 +754,7 @@ function CertRow({
   return (
     <tr
       className={`${cert.draft ? "draft" : ""} ${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
+      onClick={onOpen}
     >
       <td className="col-name" data-tip={cert.name}>
         <span className="tsk-name">{cert.name}</span>

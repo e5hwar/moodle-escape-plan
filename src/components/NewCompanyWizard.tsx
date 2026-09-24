@@ -2754,7 +2754,7 @@ function CreatePriceModal({
    for the rest. */
 
 export function MultiSelect({
-  options, value, onChange, placeholder, searchPlaceholder, popupMenu = false,
+  options, value, onChange, placeholder, searchPlaceholder, popupMenu = false, defaultOpen = false,
 }: {
   options: string[]; value: string[]; onChange: (v: string[]) => void;
   placeholder: string;
@@ -2765,9 +2765,13 @@ export function MultiSelect({
   /** Set when the field sits on a modal/popup — the panel takes the
    *  popup-context surface (Figma 668:972), same as SelectField's. */
   popupMenu?: boolean;
+  /** Opens the menu as the field mounts — a modal whose first job is this pick
+   *  (Access Restriction's Tasks). */
+  defaultOpen?: boolean;
 }) {
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(defaultOpen);
   // The panel is portalled, so it can't inherit the field's width — it is
   // measured and passed through instead.
   const [fieldWidth, setFieldWidth] = useState(0);
@@ -2798,7 +2802,8 @@ export function MultiSelect({
         constrainHeight
         width={fieldWidth || 300}
         panelClass={`ms-menu${popupMenu ? " ms-menu--popup" : ""}`}
-        onOpenChange={(o) => { if (!o) setQuery(""); }}
+        open={open}
+        onOpenChange={(o) => { setOpen(o); if (!o) setQuery(""); }}
         trigger={({ open, toggle: toggleOpen }) => (
           <div
             ref={fieldRef}

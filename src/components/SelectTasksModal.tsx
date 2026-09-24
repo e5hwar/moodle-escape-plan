@@ -18,9 +18,8 @@ import {
  * inside the shared PrmModal shell: search bar, two filter pills, a 5-column
  * table and pagination, with Cancel / Continue in the modal's own footer.
  *
- * Distinct from AddExistingTasksModal (the Certification wizard's Task Library),
- * which is a much larger surface with a preview panel, Industries and cert
- * types. This one is deliberately the smaller sibling.
+ * The Certification builder's Add Existing Tasks is a different picker —
+ * SelectRequirementModal, Tasks only — not this one.
  *
  * Selection is staged: the modal owns `picked` and only hands it back on
  * Continue, so Cancel discards. */

@@ -21,26 +21,6 @@ import { FullTableIcon, MoreFiltersIcon, PlusCircleIcon, RowChevronIcon } from "
 
 export type LandingPill = { key: string; label: string; onPick: () => void };
 
-/** Most frequent values of a field across the page's rows — used to pick the
- * data-driven quick-filter pills (e.g. the most-used certification). */
-export function topValues<T>(
-  items: T[],
-  pick: (item: T) => string | string[] | undefined,
-  n = 1,
-): string[] {
-  const counts = new Map<string, number>();
-  items.forEach((item) => {
-    const v = pick(item);
-    (Array.isArray(v) ? v : v ? [v] : []).forEach((s) =>
-      counts.set(s, (counts.get(s) ?? 0) + 1),
-    );
-  });
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map((e) => e[0]);
-}
-
 /** One data column of the morphing list (Name is built in). `fixed` columns are
  * visible in the landing state (the design's "Type" slot); the rest grow in
  * from zero width as the list becomes the table. `width` is the matching real

@@ -140,9 +140,6 @@ export function NewDesignTemplateWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <span className="wizard-saved">
-            {isEditing ? "Last saved 2 minutes ago" : "Draft — not saved yet"}
-          </span>
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">

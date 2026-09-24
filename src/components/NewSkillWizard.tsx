@@ -227,9 +227,6 @@ export function NewSkillWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          {isEditing && (
-            <span className="wizard-saved">Last saved 2 minutes ago</span>
-          )}
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">

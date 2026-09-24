@@ -1869,8 +1869,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    edge in every scroll state) — NOT here on the tr, where a second copy at the
    row's true right edge would stack with it whenever the table fits the
    viewport and read ~3× as strong as the atom. Tables without a col-actions
-   cell (Proctoring, Manage IDs, Award Recipients, Name Change Requests, the
-   Add Existing Tasks modal) deliberately carry no wash: the ramp belongs to
+   cell (Proctoring, Manage IDs, Award Recipients, Name Change Requests)
+   deliberately carry no wash: the ramp belongs to
    the kebab-gutter atoms, and the minimal row atom (600:1461) has none. */
 
 /* The last row has no separator — the table edge / scrollbar reserve sits below it. */
@@ -3504,13 +3504,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   gap: 18px;
 }
 
-.wizard-saved {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
 .wizard-cancel {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -4575,6 +4568,19 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .lang-field-divider {
   height: 1px;
   background: #404040;
+}
+
+/* "Tab" keycap on a row with a suggestion to take — the search bar's ⌘K
+   badge, laid into the row's flex line instead of pinned over the input, and
+   widened past its 20px square to fit a three-letter key. */
+.lang-field-row .lang-field-kbd {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+}
+.lang-field-row .lang-field-kbd .kbd-letter {
+  width: auto;
+  padding: 0 5px;
 }
 
 /* Multiline rows: pin the language tag to the first text line instead of
@@ -6155,23 +6161,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: #fff;
 }
 
-/* "Imported" pill on a Course copied in from a Learning Plan Certification */
-.cert-source-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: rgba(233, 114, 55, 0.12);
-  border: 1px solid rgba(233, 114, 55, 0.3);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--accent-strong);
-}
-.cert-source-pill svg { width: 11px; height: 11px; }
 
 /* Force order banner */
 /* Drag handle — inline on a Course header, gutter-parked on Lesson/Task rows */
@@ -6334,6 +6323,78 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   width: 13px;
   height: 13px;
 }
+/* ── Zero Courses: one combined pane ──
+   With no Course there is nothing for the Courses panel to list or the right
+   pane to show, so the two merge into one centred column: the wizard's own
+   eyebrow / title / description, then the two ways in as a row of shared
+   `.note-card` callouts (the accent tone marks Create a Course). Everything
+   below only lays those parts out; the cards keep the callout's own washes. */
+.ctb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 32px;
+}
+.ctb-start {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.ctb-start .wizard-brand-eyebrow {
+  margin-bottom: 4px;
+}
+.ctb-start-cards {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+/* The callout as a button: top-aligned, a roomier inset, and its 16px glyph
+   set on a 36px tile of the card's own wash (orange on the accent card).
+   Doubled with `.note-card` — the callout's rules come later in this file. */
+.note-card.ctb-start-card {
+  align-items: flex-start;
+  padding: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+.ctb-start-card.note-card--accent {
+  border-color: rgba(240, 85, 35, 0.5);
+}
+.ctb-start-card:hover {
+  border-color: rgba(240, 85, 35, 0.4);
+}
+.ctb-start-card.note-card--accent:hover {
+  border-color: rgba(240, 85, 35, 0.75);
+}
+.ctb-start-card:focus-visible {
+  outline: 1px solid #404040;
+  outline-offset: 2px;
+}
+.ctb-start-card .note-card-icon {
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.2);
+}
+.ctb-start-card.note-card--accent .note-card-icon {
+  background: rgba(240, 85, 35, 0.2);
+  color: #f05523;
+}
+.ctb-start-card .note-card-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.ctb-start-card .note-card-text {
+  gap: 4px;
+}
+
 /* The Courses panel's Add Actions pair, pinned under the scrolling list. */
 .ctb-side-foot {
   flex: none;
@@ -6432,31 +6493,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   flex-direction: column;
   gap: 16px;
 }
-/* Zero-Course state for the right pane — the builder tolerates it, creating
-   does not. */
-.ctb-empty--courses {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-.ctb-empty-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: normal;
-  color: #f05523;
-  cursor: pointer;
-}
-.ctb-empty-add svg {
-  width: 16px;
-  height: 16px;
-}
-
 .ctb-empty {
   padding: 20px;
   border: 1px dashed #404040;
@@ -6467,31 +6503,83 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   text-align: center;
 }
 
-/* ── Cards (Figma 894:3448): a Lesson and its Tasks, or a run of loose Tasks.
-   A 12px-radius frame of hairline-separated rows; the Lesson header row wears
-   a grey tint. Rows are 12/16 padded with a 16px gap. ── */
-.ctb-card {
+/* ── Drag to reorder: the drop line ──
+   While a sibling is dragged over a block, `data-drop` (set by the builder's
+   dnd helper) names the edge it will land on, and a 2px orange rule marks
+   that edge. Between spaced blocks the rule sits in the middle of the gap
+   (16px between a Course's children, 8px between Courses); between a
+   Lesson's Task rows, on the shared hairline. */
+.ctb [data-drop] {
+  position: relative;
+}
+.ctb [data-drop]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: #f05523;
+  pointer-events: none;
+  z-index: 2;
+}
+.ctb [data-drop="before"]::after { top: -1px; }
+.ctb [data-drop="after"]::after { bottom: -1px; }
+.ctb-groups > [data-drop="before"]::after { top: -9px; }
+.ctb-groups > [data-drop="after"]::after { bottom: -9px; }
+.ctb-list > [data-drop="before"]::after { top: -5px; }
+.ctb-list > [data-drop="after"]::after { bottom: -5px; }
+
+/* ── Task in Course (Figma 1259:1622) ──
+   A Task pinned straight to the Course, not to a Lesson, is a block of its
+   OWN — one per Task, never a stacked run — drawn like a Lesson header: the
+   Lesson's .10 grey wash, r12, 12px top/bottom, a TASK eyebrow over the name,
+   then the meta and the 32px More tile at a 24px right inset (8px gaps).
+   Hovering lifts the wash to .15, as a Lesson header does, instead of the
+   in-table row wash. Also the drawer's read-only tree (`.cdr-task` inside). */
+.ctb-course-task {
+  padding: 12px 0;
+  border-radius: 12px;
+  background: rgba(122, 122, 122, 0.1);
+  transition: background 0.12s ease;
+}
+.ctb-course-task:has(> .ctb-task:hover) {
+  background: rgba(122, 122, 122, 0.15);
+}
+.ctb-course-task > .ctb-task {
+  gap: 8px;
+  padding: 0 24px 0 5px;
+}
+.ctb-course-task > .ctb-task:hover {
+  background: transparent;
+}
+.ctb-task-titles {
+  flex: 1;
+  min-width: 0;
+  margin-left: -3px; /* 8px row gap − the node's 5px grip gap */
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(64, 64, 64, 0.5);
-  border-radius: 12px;
-  /* visible so a row menu can escape the card */
-  overflow: visible;
 }
-.ctb-card > .dropdown-wrap {
-  display: block;
+/* The name and its state marks (1334:2144): the name hugs its text and the
+   marks follow 4px after it; the row takes the leftover width. */
+.ctb-task-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
-/* Every row but the last draws the hairline beneath it. */
-.ctb-card > * {
-  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+.ctb-task > .ctb-task-name-row {
+  flex: 1;
+  margin-left: -11px; /* 16px row gap − the node's 5px grip gap */
 }
-.ctb-card > :last-child {
-  border-bottom: 0;
+.ctb-task-name-row .cert-restricted-pill {
+  margin-left: 0;
 }
-/* A row's hover wash would otherwise square the card's corners (the card can't
-   clip — a row menu has to escape it). */
-.ctb-card > :first-child .ctb-task {
-  border-radius: 11px 11px 0 0;
+.ctb-course-task .ctb-task-gate {
+  margin: 8px 24px 0;
+}
+.ctb-course-task > .cdr-task {
+  padding: 0 16px;
 }
 
 /* ── Lesson block (Figma 1244:2344 "Lesson - Default") ──
@@ -6524,7 +6612,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   align-items: flex-start;
   gap: 5px;
   padding: 0 24px 0 5px;
-  cursor: pointer;
 }
 .ctb-lesson-head > .ctb-grip {
   align-self: center;
@@ -6565,7 +6652,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 .ctb-lesson-eyebrow {
   font-family: var(--font-sans);
-  font-size: 14px; /* 1244:2347 — 12 → 14px */
+  font-size: 12px; /* 1244:2347 / 1259:1625 — back to 12px (was 14) */
   font-weight: 500;
   line-height: normal;
   text-transform: uppercase;
@@ -6617,9 +6704,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   background: rgba(122, 122, 122, 0.05);
 }
 .ctb-task-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  margin-left: -11px; /* 16px row gap − the node's 5px grip gap */
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
@@ -6767,9 +6853,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .ctb-task-gate-text strong {
   font-weight: 500;
 }
-.ctb-task-restrict {
-  padding: 0 24px 13px 24px;
-}
 /* 1245:2508 / 1245:2583 — the grip on a Lesson header or Task row is the 14px
    size (a Course header still carries the 16px one), which is what makes the
    5 + 14 + 5 gutter come out at the node's 24px. */
@@ -6792,7 +6875,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    children (its Lessons and its loose Tasks) share one sibling list, so they
    share one `is-single`; a Lesson's own Tasks carry their own. */
 .ctb-groups.is-single > .ctb-lesson > .ctb-lesson-head:hover > .ctb-grip,
-.ctb-groups.is-single > .ctb-card .ctb-task:hover > .ctb-grip,
+.ctb-groups.is-single > .ctb-course-task > .ctb-task:hover > .ctb-grip,
 .ctb-tasktable.is-single .ctb-task:hover > .ctb-grip {
   visibility: hidden;
 }
@@ -6895,28 +6978,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   height: 14px;
 }
 
-/* Square type badge — used by the Access Restriction prerequisite picker */
-.task-kind-badge {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
-.task-kind-badge.xapi { background: #2f5d9c; color: #cfe1ff; }
-.task-kind-badge.quiz { background: #7a3a18; color: #ffd2b3; }
-.task-kind-badge.handson { background: #5b2a6e; color: #e6c8ff; }
-.task-kind-badge.idup { background: #2a3a5e; color: #c8d4ff; font-size: 9pt; }
-.task-kind-badge.file { background: #3a3a3e; color: #e7e7e8; }
-.task-kind-badge.url { background: #1f4e4a; color: #c5f0e6; }
-.task-kind-badge.cert { background: #3d3066; color: #c8b8ff; }
 
 /* ===== Task Access Restrictions ===== */
 /* State chips on a Task card — sized for the 33px row, so they read as
@@ -6925,6 +6986,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   flex-shrink: 0;
   margin-left: 4px;
   padding: 1px 8px;
+  /* 15 + 2×1 padding + 2×1 border = the name's 19px line, so the chip never
+     grows the row past the node's 44px (Lesson) / 33px (Task in Course). */
+  line-height: 15px;
   border-radius: 999px;
   background: rgba(233, 114, 55, 0.12);
   border: 1px solid rgba(233, 114, 55, 0.4);
@@ -6935,142 +6999,41 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: var(--accent-strong);
 }
 
-.cert-final-pill {
-  flex-shrink: 0;
-  margin-left: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 9px 1px 7px;
-  border-radius: 999px;
-  background: rgba(70, 201, 139, 0.12);
-  border: 1px solid rgba(70, 201, 139, 0.4);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #46c98b;
-}
-.cert-final-pill svg {
-  width: 11px;
-  height: 11px;
-}
-
-.cert-restrict-edit {
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-pill);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-/* Toggle leads the row, per the toggle component (Figma 361:2434). */
-.cert-restrict-head {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.cert-restrict-head-text {
-  flex: 1;
-  min-width: 0;
-}
-.cert-restrict-title {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.cert-restrict-desc {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-.cert-restrict-empty {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-  padding: 8px 0;
-}
-.cert-restrict-mode {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.cert-restrict-mode-label {
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  color: var(--text-muted);
-}
-.cert-restrict-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cert-restrict-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  cursor: pointer;
-}
-.cert-restrict-option:hover {
-  border-color: var(--border-strong);
-}
-.cert-restrict-option.checked {
-  border-color: var(--accent);
-  background: rgba(233, 114, 55, 0.06);
-}
-.cert-restrict-check {
+/* Requires Subscription mark (Figma 1334:2145 / 1334:2157): the Task can't be
+   taken on the Free Trial (`requiresSubscription`). 4px after the Task name,
+   an 18px disc of 10% amber holding the node's 12px amber wallet glyph (the
+   exported SVG, placed at the node's own insets). Hover or focus deepens the
+   wash and the shared tooltip explains it. */
+.cert-sub-mark {
+  flex: none;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
-  border: 1px solid var(--border-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  color: #fff;
+  border-radius: 20px;
+  background: rgba(255, 197, 36, 0.1);
+  cursor: default;
+  transition: background 0.12s ease;
 }
-.cert-restrict-option.checked .cert-restrict-check {
-  background: var(--accent);
-  border-color: var(--accent);
+.cert-sub-mark:hover,
+.cert-sub-mark:focus-visible {
+  background: rgba(255, 197, 36, 0.2);
+  outline: none;
 }
-.cert-restrict-option-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text);
+.cert-sub-mark-glyph {
+  position: relative;
+  width: 12px;
+  height: 12px;
 }
-.cert-restrict-status {
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-faint);
+.cert-sub-mark-glyph img {
+  position: absolute;
+  left: 0.75px;
+  top: 0.33px;
+  display: block;
+  max-width: none;
 }
-.cert-restrict-warn {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: #ff6b6b;
-}
-.cert-restrict-note {
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  color: var(--text-faint);
-  line-height: 1.45;
-}
+
 
 /* Course footer (Figma 513:3038) — two equal dashed cards: "Add Lesson" and
    "Add Task". "Add Task" opens the same library-vs-create menu the Lesson add
@@ -7138,136 +7101,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
-}
-
-/* Back link at the top of a multi-step dropdown menu */
-.menu-back {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 10px 8px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.menu-back:hover {
-  color: var(--text);
-}
-
-/* Inline bilingual name + description editor (pencil / new node) */
-.cert-editor {
-  margin: 0;
-  border: 1px solid rgba(233, 114, 55, 0.45);
-  background: #15120f;
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-.cert-editor-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.cert-editor-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 9pt;
-  letter-spacing: 0.1em;
-  color: var(--accent-strong);
-  text-transform: uppercase;
-}
-.cert-editor-hint {
-  font-family: var(--font-mono);
-  font-size: 9pt;
-  color: var(--text-faint);
-}
-.cert-editor-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 12px;
-}
-.cert-editor-col {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.cert-editor-lang {
-  font-family: var(--font-mono);
-  font-size: 8.5pt;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-}
-.cert-editor-input,
-.cert-editor-text {
-  background: var(--bg-pill);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 9px 11px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  color: var(--text);
-  outline: none;
-}
-.cert-editor-text {
-  font-size: 11.5pt;
-  line-height: 1.5;
-  resize: none;
-  border-color: var(--border);
-}
-.cert-editor-input:focus,
-.cert-editor-text:focus {
-  border-color: rgba(233, 114, 55, 0.6);
-}
-.cert-editor-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-.cert-editor-kbd {
-  font-family: var(--font-mono);
-  font-size: 9pt;
-  color: var(--text-faint);
-}
-.cert-editor-spacer {
-  flex: 1;
-}
-.cert-editor-cancel {
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 11.5pt;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 7px 10px;
-  border-radius: 7px;
-}
-.cert-editor-cancel:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-.cert-editor-save {
-  border: none;
-  cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 7px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 11.5pt;
-  color: #fff;
-  background: var(--accent);
-}
-.cert-editor-save:hover {
-  background: var(--accent-strong);
-}
-.cert-editor-save:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.cert-editor-save:disabled:hover {
-  background: var(--accent);
 }
 
 /* Destructive + disabled menu items */
@@ -7350,6 +7183,42 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .ctb-menu .menu-item.danger .menu-item-icon {
   color: #ff1f31;
 }
+/* Add Task menu: "Create New Task" cascades — its Task types open in a second
+   panel BESIDE this one, level with the row (More Filters' pattern), wearing
+   the same hairline, wash and 8px padding as the panel it hangs off. The row
+   keeps its hover wash while its panel is open, and a chevron says it opens
+   one. */
+.ctb-menu .menu-item.is-open {
+  background: var(--panel-row-hover);
+}
+.ctb-menu-chevron {
+  display: inline-flex;
+  margin-left: auto;
+  padding-left: 12px;
+  color: #a8a8a8;
+}
+.ctb-menu-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+.ctb-menu-sub {
+  position: absolute;
+  left: 100%;
+  margin-left: 6px;
+  padding: 8px;
+  border: 0.5px solid #404040;
+  border-radius: 8px;
+  background: var(--search-bg);
+  z-index: 1;
+}
+/* Too close to the window's right edge — open on the left instead. */
+.ctb-menu-sub.is-left {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 6px;
+}
+
 /* Blocked item: label, reason and glyph all at #7a7a7a (1246:2668). */
 .ctb-menu .menu-item:has(.menu-item-sub),
 .ctb-menu .menu-item:has(.menu-item-sub) .menu-item-icon {
@@ -7681,115 +7550,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   min-height: 0;
   background: var(--bg);
 }
-/* The 32px page gutter, same box as the shared `.rail` (which also keeps a
-   shorter 16px bottom so the last row doesn't float off the edge). */
-.cert-split-tree {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg-sidebar);
-  padding: 32px 32px 16px;
-  overflow-y: auto;
-}
-.cert-split-back {
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 400;
-  color: var(--text-muted);
-  padding: 4px 6px;
-  margin: 0 0 14px -6px;
-}
-.cert-split-back:hover { color: var(--text); }
-.cert-split-tree-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.cert-split-course {
-  display: flex;
-  flex-direction: column;
-}
-.cert-split-course-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.cert-split-course-caret { color: var(--text-muted); }
-.cert-split-course-num {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  width: 16px;
-  text-align: center;
-}
-.cert-split-course-name { flex: 1; min-width: 0; }
-.cert-split-course-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-left: 6px;
-}
-.cert-split-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.cert-split-row:hover { background: rgba(255,255,255,0.03); }
-.cert-split-row.in-lesson { padding-left: 18px; }
-.cert-split-row.active {
-  background: rgba(233,114,55,0.16);
-  border-left: 2px solid var(--accent);
-  padding-left: 8px;
-}
-.cert-split-row-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  font-size: 12pt;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cert-split-row-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.cert-split-row .task-kind-badge {
-  width: 20px;
-  height: 20px;
-  font-size: 9pt;
-  border-radius: 4px;
-}
-.cert-split-lesson {
-  display: flex;
-  flex-direction: column;
-}
-.cert-split-lesson-name {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  padding: 8px 8px 4px;
-}
-.cert-split-add {
-  margin: 8px 0 0 -8px;
-  padding: 6px 8px;
-  text-align: left;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-}
-.cert-split-add:hover { color: var(--text); }
 
 /* Tweak: cert page footer New Certification button reuses .new-task styles */
 
@@ -8270,7 +8030,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 /* Figma 667:884 "General Modal" — the picker shell now wears the same card as
    PrmModal: 8px radius, a 15% grey wash over #0d0d0d, and no outer border.
-   The per-picker overrides (.aet-*, .lp-*, .ncr-*) still own their internals. */
+   The per-picker overrides (.lp-*, .ncr-*) still own their internals. */
 .cl-modal {
   width: 100%;
   max-width: 520px;
@@ -11883,6 +11643,166 @@ a.prm-cta {
   background: rgba(122, 122, 122, 0.3);
 }
 
+/* ===== Side drawer (Figma 1316:1846 "Dialog") =====
+   A full-height panel over the dimmed page, flush with the right edge — what a
+   Certifications row opens. The scrim is the modals' own 65% black; the panel
+   is the 15% grey wash over #0d0d0d the node draws (the confirm shell runs at
+   20%) behind a 1px hairline on its open edge. 545px with 40px sides leaves a
+   464px column: exactly a two-up row of 200px review fields (2 × 200 + 32)
+   inside a card's 16px insets. The head reuses the dialog's `.prm-head*`, and
+   everything under it stacks 28px apart. */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.65);
+  /* Enter: the scrim fades up as the panel slides in from the edge. Exit runs
+     both backwards over a shorter beat (`CLOSE_MS` in Drawer.tsx waits exactly
+     this long before unmounting). */
+  animation: drawer-scrim-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.drawer {
+  width: 545px;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 40px 40px;
+  border-left: 1px solid rgba(64, 64, 64, 0.5);
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
+    #0d0d0d;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: drawer-panel-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* A tall drawer scrolls rather than squeezing its sections: a review card is
+   `overflow: hidden`, which would otherwise let it shrink and clip its rows. */
+.drawer > * {
+  flex-shrink: 0;
+}
+/* Focus is moved here on open so the keyboard lands inside the drawer; the
+   panel isn't a control, so it draws no ring. */
+.drawer:focus {
+  outline: none;
+}
+/* The node draws its review card unfilled. The drawer's wash is already the
+   surface, and the card's own 10% grey would stack a second, lighter panel on
+   top of it. */
+.drawer .confirm-card {
+  background: transparent;
+}
+.drawer-overlay--closing {
+  animation: drawer-scrim-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+.drawer-overlay--closing > .drawer {
+  animation: drawer-panel-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+}
+@keyframes drawer-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawer-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes drawer-panel-in {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes drawer-panel-out {
+  from { transform: none; }
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-overlay,
+  .drawer {
+    animation: none;
+  }
+}
+
+/* The Certifications drawer's Tasks card: the Add Tasks tree read back without
+   its controls. It borrows the builder's containers — the tinted Lesson block,
+   the inset Task table, the bordered card for loose Tasks — plus its eyebrows
+   and pills; the rows are its own, since the builder's carry a drag gutter and
+   hover washes. Every inset is the drawer card's 16px, not the builder's 24. */
+.cdr-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.cdr-course {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cdr-course-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cdr-course.hidden .cdr-course-head {
+  opacity: 0.55;
+}
+.cdr-course-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cdr-course-name {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+.cdr-course-desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.cdr-lesson-head,
+.cdr-lesson-body {
+  padding: 0 16px;
+}
+/* Name over meta, not beside it: the drawer's column is too narrow to seat a
+   long Task name and "Hands-On Task · 30 mins" on one line. */
+.cdr-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+}
+.cdr-task-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.cdr-task-name {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+/* The pills' own 4px lead is for the builder's row; the name row's gap spaces
+   them here. */
+.cdr-task .cert-restricted-pill {
+  margin-left: 0;
+}
+.cdr-task .ctb-task-gate {
+  margin: 8px 0 0;
+}
+
 /* =============================================================
  * Scholarships
  * =============================================================
@@ -15006,113 +14926,59 @@ a.rh-crumb-link:hover {
 }
 
 /* ─── Launcher (2a) ─────────────────────────────────────────────────────────
-   The Question Bank landing's shape: the app's page header (crumbs, title, the
-   create CTA) full-bleed at the top, then a centred stack — the totals eyebrow,
-   the hero search bar, the industry list and the "+ New Industry" row — over a
-   fixed keyboard-hint line. The list is the only scroller. */
+   The app's page header (title + the primary "Add Industry [I]" CTA), the
+   search bar, then the industry list, all full page width. The list is the
+   only scroller. There is no list head any more: "7 INDUSTRIES · 16
+   SUB-INDUSTRIES" + "+ New Industry [I]" gave way to Figma 1331:2113's
+   "Industries · 7" + a bare "+" on 2026-09-24, and the user had that removed
+   the same day ("Remove that Industries header thing with the count"), moving
+   the add action up to the header CTA. */
 .ind-launch {
   overflow: hidden;
 }
 
-/* Bar, list header and list share one measure: 70% of the page (the Question
-   Bank hero's width), capped so the row's name→count span stays readable on a
-   wide monitor. */
-.ind-launch-search,
-.ind-launch-head,
-.ind-launch-list {
-  width: min(70%, 900px);
-  min-width: 0;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* List header — Figma 867:2473, the Question Bank landing's index head: a
-   4px/8px row over a 1px #404040 rule, "7 INDUSTRIES · 16 SUB-INDUSTRIES"
-   (Medium 14 uppercase) at one end and the ＋ add row at the other, both
-   #a8a8a8. Written out rather than reusing `.qbl-index-head`, whose padding
-   rides the landing-morph `--lm` this page doesn't run. */
-.ind-launch-head {
-  flex-shrink: 0;
-  padding-top: 24px;
-}
-.ind-launch-head-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 4px 8px;
-  border-bottom: 1px solid #404040;
-}
-.ind-launch-head-label {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: #a8a8a8;
-}
-/* The keycap atom has no global style — each consumer re-scopes it. */
-.ind-launch-head .cta-kbd {
-  width: 20px;
-  height: 20px;
-  min-width: 0;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #a8a8a8;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 12px;
-}
-
-/* Figma 772:1192 "Search Bar - Large": the shared .search-input at its 56px
-   landing size (20px icon / 20px type / 24px ⌘K caps), with the hero's soft
-   drop shadow — the same numbers `.tasks.lm .toolbar` resolves to at --lm 0. */
+/* Search — the Tasks bar in its SCROLLED (table) state, not the landing hero
+   (the user, 2026-09-24, pointing at Tasks scrolled: "not the huge search
+   bar"): the shared `.usearch` shell at its default size — 43px, 16px icon and
+   type, 20px ⌘K caps, no drop shadow — straight under the header's 22px with
+   no extra drop, full page width. Until then it was Figma 772:1192 "Search Bar
+   - Large" as Tasks' landing draws it: 56px tall, 20px icon and type, 24px caps,
+   the hero's shadow, 56px below the header. */
 .ind-launch-search {
   flex-shrink: 0;
-  margin-bottom: 0;
+  width: 100%;
+  min-width: 0;
 }
-.ind-launch-search .search-input {
-  height: var(--search-h-lg);
-  padding: 0 66px 0 47px;
-  font-size: 20px;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+/* Tasks' bar opens its panel on focus, which lights the border; this one only
+   opens on a pending edit, so focus alone borrows the same light. */
+.ind-launch-search .usearch-bar:focus-within {
+  border-color: var(--text-faint);
 }
-.ind-launch-search .search-input::placeholder {
-  font-size: 20px;
-}
-.ind-launch-search > .search-icon svg {
-  width: 20px;
-  height: 20px;
-}
-.ind-launch-search .search-kbd {
-  height: 24px;
-}
-.ind-launch-search .search-kbd .kbd-cmd,
-.ind-launch-search .search-kbd .kbd-letter {
-  width: 24px;
-  height: 24px;
-}
-.ind-launch-search .search-kbd .kbd-cmd svg {
-  width: 18px;
-  height: 18px;
-}
-.ind-launch-search .search-kbd .kbd-letter {
-  font-size: 16px;
+/* No suggested-filters block sits above them here, so the panel's lone row
+   drops the 8px gap (and the footer its hairline) it normally hangs off. */
+.ind-launch-search .usearch-panel > :first-child {
+  margin-top: 0;
+  border-top: none;
 }
 
+/* Full page width (the user, 2026-09-24: "Stretch everything to full page
+   width") — gutter to gutter under the bar, not the Tasks landing's 56%.
+   It sits 14px under the bar — `.toolbar`'s margin-bottom, the gap Tasks
+   leaves under its scrolled-state bar (the user, 2026-09-24: "tighten it");
+   the removed list head used to hold that 14px, with 8px more below it. */
 .ind-launch-list {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  margin-top: 8px;
+  margin-top: 14px;
   padding-bottom: 24px;
   display: flex;
   flex-direction: column;
 }
 
-/* "Nothing matches “x”" — sits above the surviving "+ New Industry" row. */
+/* "Nothing matches “x”" — alone in the list when a query finds nothing. */
 .ind-launch-empty {
   padding: 14px 12px 6px;
   font-family: var(--font-sans);
@@ -15120,117 +14986,232 @@ a.rh-crumb-link:hover {
   color: #7a7a7a;
 }
 
-/* Launcher row — the design's 12/16px row on a 9px radius: name left, count
-   right. `is-active` is the design's selected treatment (tint behind a 3px
-   accent bar) and is applied ONLY while the row is actually being driven —
-   hovered, arrow-walked, or the top hit of a live query — so an idle list
-   carries no highlight at all. The drag handle and the kebab appear on hover,
-   like the tree's. */
-.ind-launch-row {
+/* ─── Large Table row — Figma "Atomic - Complete Row - Large Table" ─────────
+   (section 1306:1208, 2026-09-24). The ONE row all three of this page's lists
+   are built from, rendered by `LargeRow`: the launcher's industries
+   (1306:1545), a hub's sub-industries (1306:1393) and its certifications
+   (1306:1232). `[16 handle] 4 [18 index] 24 [name / second line] 4 [16
+   action]` — the index→name 24px is the 4px gap + a 20px margin on the cell
+   (the node nests the index and cell in their own 24px-gap row). Index 16px
+   Regular #a8a8a8, right-aligned. Two cuts:
+     · hub (default) — 60px: 12px padding around a 36px cell (16px Medium
+       #e7e7e8 name on 19px over a 14px #a8a8a8 line on 17px), 4px sides;
+     · launcher (`--lg`) — 75px: 16px padding around a 43px cell (20px on
+       24px over 16px on 19px), 8px sides.
+   The rule between rows is an INSET SHADOW, not a border: Figma strokes sit
+   inside the frame, and a shadow holds every row at exactly 60 / 75px whatever
+   the rule's width — the certification table draws 0.5px, the other two 1px.
+   No rule under the last row. Handle and action keep their 16px slots in every
+   state (the node's resting rows carry empty instances there) and draw only on
+   the hovered row — the driven row, on the launcher — over the node's hover
+   fill. This replaced the launcher's 44px name/count row, the hub's 65px
+   sub-industry cards (663:965 — rounded, filled, 8px apart, with a chevron)
+   and the certifications' own `.ind-ct-row` grid. */
+.ind-rowlist {
+  display: flex;
+  flex-direction: column;
+}
+
+.ind-row {
+  --ind-row-rule: inset 0 -1px 0 rgba(64, 64, 64, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 4px;
+  box-shadow: var(--ind-row-rule);
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background 0.1s ease;
+}
+.ind-row--lg {
+  padding: 16px 8px;
+}
+.ind-certtable .ind-row {
+  --ind-row-rule: inset 0 -0.5px 0 rgba(64, 64, 64, 0.5);
+}
+/* After the certification override, so the last row there loses its rule too. */
+.ind-row:last-child {
+  --ind-row-rule: 0 0 transparent;
+}
+.ind-row[role="button"] {
+  cursor: pointer;
+}
+
+.ind-row:hover,
+.ind-row.is-active {
+  background: linear-gradient(
+    to right,
+    rgba(217, 217, 217, 0.03),
+    rgba(115, 115, 115, 0.05)
+  );
+}
+/* On the launcher the fill marks the ↵ target — the row being driven, which
+   hovering also sets — so a row the pointer merely rests on during an
+   arrow-walk stays unlit and only one row ever reads as selected. */
+.ind-launch-list .ind-row:hover:not(.is-active) {
+  background: none;
+}
+.ind-row.is-drop-over {
+  box-shadow: inset 0 2px 0 var(--accent), var(--ind-row-rule);
+}
+.ind-row.is-dragging {
+  opacity: 0.35;
+}
+
+/* Handle = the shared 2×4 DragHandleIcon at 16px, which is exactly the node's
+   "move" glyph; action = the node's ⋯ (RowKebabIcon) or ✕ (RowCloseIcon). */
+.ind-row-drag,
+.ind-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #a8a8a8;
+  opacity: 0;
+  transition: opacity 0.1s ease, color 0.1s ease;
+}
+.ind-row-drag {
+  cursor: grab;
+}
+.ind-row-drag svg {
+  width: 16px;
+  height: 16px;
+}
+.ind-row-drag:active {
+  cursor: grabbing;
+}
+.ind-row:hover .ind-row-drag,
+.ind-row.is-active .ind-row-drag,
+.ind-row:hover .ind-row-action,
+.ind-row.is-active .ind-row-action,
+.ind-row:focus-visible .ind-row-action,
+.ind-row-action:focus-visible {
+  opacity: 1;
+}
+/* A row that can't move — a query hit on the launcher — keeps the slot empty. */
+.ind-row-drag.is-disabled {
+  cursor: default;
+  opacity: 0 !important;
+}
+.ind-row-action:hover {
+  color: #fff;
+}
+
+.ind-row-index {
+  flex-shrink: 0;
+  width: 18px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 19px;
+  color: #a8a8a8;
+  text-align: right;
+}
+
+.ind-row-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* 4px track gap + 20px = the node's 24px between the index and the name. */
+  margin-left: 20px;
+}
+
+/* Name line: the name ellipsises; a Hidden pill rides beside it. */
+.ind-row-name {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
-  width: 100%;
-  min-height: 44px;
-  padding: 0 16px 0 12px;
-  border-radius: 9px;
-  color: #d8d5cd;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 400;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease, box-shadow 0.1s ease, color 0.1s ease;
-}
-.ind-launch-row:hover {
-  background:
-    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
-    rgba(13, 13, 13, 0.75);
-}
-.ind-launch-row.is-active {
-  color: #fff;
+  min-width: 0;
+  font-size: 16px;
   font-weight: 500;
-  background:
-    linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)),
-    rgba(13, 13, 13, 0.75);
-  box-shadow: inset 3px 0 0 #f05523;
+  line-height: 19px;
+  color: #e7e7e8;
 }
-.ind-launch-row.is-drop-over {
-  box-shadow: inset 0 2px 0 var(--accent);
+.ind-row--lg .ind-row-name {
+  font-size: 20px;
+  line-height: 24px;
 }
-.ind-launch-row .tree-drag {
-  width: 12px;
-  margin-right: -4px;
-}
-.ind-launch-row:hover .tree-drag {
-  opacity: 0.8;
-}
-.ind-launch-row:hover .tree-menu-btn {
-  display: inline-flex;
-}
-.ind-launch-row.is-active .tree-menu-btn {
-  color: #f05523;
-}
-
-.ind-launch-name {
-  flex: 1;
+.ind-row-name-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* "HVAC › " before a sub-industry hit. */
-.ind-launch-parent {
+/* The shared pill sets no line-height, so it inherited the name's and stood
+   taller than its line — a hidden row grew past 60 / 75px. Tags 320:1437 is
+   18px: 2px padding around a 14px line. */
+.ind-row-name .ind-hidden-pill {
+  line-height: 14px;
+}
+/* "HVAC › " before a sub-industry hit on the launcher. */
+.ind-row-parent {
   color: #a8a8a8;
   font-weight: 400;
 }
-.ind-launch-count {
-  flex-shrink: 0;
-  font-size: 13px;
-  color: #a8a8a8;
+
+/* "Residential · Commercial · Service & Repair... +1", "Apprentice · 8 hours",
+   or — on a launcher hit — where it lives. */
+.ind-row-meta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: #a8a8a8;
 }
-.ind-launch-row.is-active .ind-launch-count {
-  color: #c9c5bc;
+.ind-row--lg .ind-row-meta {
+  font-size: 16px;
+  line-height: 19px;
 }
-/* Hidden industries read as the tree's hidden rows: dropped to #404040. */
-.ind-launch-row.is-hidden-item .ind-launch-name,
-.ind-launch-row.is-hidden-item .ind-launch-count {
+
+/* Hidden industries / sub-industries read as the tree's hidden rows: the
+   text drops to #404040 (the pill keeps its own tone). */
+.ind-row.is-hidden-item .ind-row-index,
+.ind-row.is-hidden-item .ind-row-name,
+.ind-row.is-hidden-item .ind-row-parent,
+.ind-row.is-hidden-item .ind-row-meta {
   color: #404040;
 }
 
 /* ─── Hub (4a) ──────────────────────────────────────────────────────────────
-   An 840px column: the page header (crumb trail, title + counts, the Add
-   Certification CTA and the options kebab), then the sub-industry doors and
-   the core certifications. Scrolls as a whole. */
+   Full page width (2026-09-24 — it was a centred 840px column): the page
+   header (crumb trail, title + counts, the Add Certification CTA and the
+   options kebab), then the sub-industry doors and the core certifications.
+   Scrolls as a whole. */
 .ind-hub {
-  align-items: center;
   overflow-y: auto;
 }
 
 .ind-hub-col {
-  width: min(100%, 840px);
+  width: 100%;
   flex-shrink: 0;
   padding-bottom: 32px;
 }
 
-.ind-hub-head {
-  align-items: flex-end;
-  margin-bottom: 34px;
-}
-
+/* The header is the stock `.tasks-header` (the user, 2026-09-24: "This doesn't
+   seem to be using UI components"). It had carried its own tweaks — actions
+   bottom-aligned, a 34px drop to the content, the subtext at 14px 4px under
+   the title with a typed " · " — where every other breadcrumbed page runs
+   top-aligned actions, a 22px drop, and the 16px subtext 2px under the title
+   split by `.tasks-subtitle-dot`. All that stays local is the row that sets
+   the Hidden tag beside the title; it takes over the title's 2px bottom
+   margin so the tag centres on the title's own line box. */
 .ind-hub-toprow {
   display: flex;
   align-items: center;
   gap: 14px;
+  margin-bottom: 2px;
 }
 .ind-hub-toprow .tasks-title {
   margin: 0;
-}
-.ind-hub-head .tasks-subtitle {
-  margin-top: 4px;
-  font-size: 14px;
 }
 
 /* Detail sections — each headed by the shared SectionHeading. */
@@ -15255,6 +15236,8 @@ a.rh-crumb-link:hover {
   margin-bottom: 8px;
 }
 
+/* 24px line = the node's head frame (1306:1394 / 1306:1233). Left to inherit,
+   the page's line-height stood the head at 29px. */
 .ind-sechead-title {
   margin: 0;
   min-width: 0;
@@ -15264,6 +15247,7 @@ a.rh-crumb-link:hover {
   font-family: var(--font-sans);
   font-size: 20px;
   font-weight: 600;
+  line-height: 24px;
   color: #fff;
 }
 
@@ -15292,216 +15276,6 @@ a.rh-crumb-link:hover {
   font-size: 14px;
   color: #7a7a7a;
   padding: 4px 0;
-}
-
-/* ─── Sub-industry rows — Figma 1240:1186 "Card - Unselected" (663:965) ─────
-   Full-width stacked rows, 8px apart, NOT the three-across 317:1176 cards this
-   section carried until 2026-09-18 (the newer node supersedes that block).
-   65px = 16px padding + a 33px two-line cell + 16px; radius 8, no border, the
-   flat `rgba(115,115,115,.1)` wash over #0d0d0d. Columns: 16px drag handle /
-   name + "N Certifications" / 16px chevron, 8px gaps and an 8px side padding
-   (which is what puts the handle at x=8 and the chevron 8px off the right
-   edge). Rows drag to reorder and click through to the sub-industry. */
-.ind-subrows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ind-subrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 292px;
-  padding: 16px 8px;
-  border-radius: 8px;
-  background:
-    linear-gradient(90deg, rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1)),
-    #0d0d0d;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.ind-subrow:hover {
-  background:
-    linear-gradient(90deg, rgba(115, 115, 115, 0.18), rgba(115, 115, 115, 0.18)),
-    #0d0d0d;
-}
-.ind-subrow.is-drop-over {
-  box-shadow: inset 0 2px 0 var(--accent);
-}
-
-/* Handle and chevron are the node's #a8a8a8 glyphs; unlike the certification
-   rows below, the node draws BOTH of them in the resting state. */
-.ind-subrow-drag,
-.ind-subrow-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  color: #a8a8a8;
-}
-.ind-subrow-drag svg {
-  width: 16px;
-  height: 16px;
-}
-.ind-subrow-drag {
-  cursor: grab;
-}
-.ind-subrow-drag:active {
-  cursor: grabbing;
-}
-
-.ind-subrow-cell {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ind-subrow-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  color: #fff;
-  line-height: 19px;
-}
-
-.ind-subrow-count {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  color: #a8a8a8;
-  line-height: 14px;
-}
-
-/* ─── Certification rows — Figma 1240:1186 "Industry Certification" (340:1232)
-   Re-synced 2026-09-18 from the compact 44px name+meta row this section had
-   drifted to, back to the node's LARGE row: 60px (12px padding + a 36px
-   two-line cell), columns `16px drag / 18px index / name+meta / 16px ✕` at a
-   4px side padding, 4px gaps and a 24px index→name gap (a grid margin doesn't
-   push sibling tracks, so that 24 is 4 + a 20px margin on the cell). Index is
-   16px Regular #a8a8a8 right-aligned, name 16px Medium #e7e7e8 / 19px, meta
-   14px #a8a8a8 / 17px ("Apprentice · 8 hours", spelled out). Hairlines between
-   rows only — no outer edge — and the handle and ✕ stay hover-only, which is
-   how the node draws rows 2-5. ─── */
-.ind-certtable .ind-ct-row:last-child {
-  border-bottom: none;
-}
-
-.ind-ct-row {
-  display: grid;
-  grid-template-columns: 16px 18px 1fr 16px;
-  align-items: center;
-  gap: 4px;
-  height: 60px;
-  padding: 0 4px;
-  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
-  transition: background 0.1s ease;
-}
-
-.ind-ct-index {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
-  color: #a8a8a8;
-  text-align: right;
-  line-height: 19px;
-}
-
-.ind-ct-row:hover {
-  background: linear-gradient(
-    to right,
-    rgba(217, 217, 217, 0.03),
-    rgba(115, 115, 115, 0.05)
-  );
-}
-
-.ind-ct-row.is-dragging {
-  opacity: 0.35;
-}
-
-.ind-ct-row.is-over {
-  background: rgba(233, 114, 55, 0.06);
-  box-shadow: inset 0 2px 0 var(--accent);
-}
-
-.ind-ct-drag {
-  width: 16px;
-  height: 16px;
-  color: #a8a8a8;
-  cursor: grab;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.1s ease;
-}
-
-.ind-ct-drag svg {
-  width: 16px;
-  height: 16px;
-}
-
-.ind-ct-row:hover .ind-ct-drag,
-.ind-ct-row:hover .ind-ct-x {
-  opacity: 1;
-}
-
-.ind-ct-drag:active {
-  cursor: grabbing;
-}
-
-.ind-ct-cell {
-  min-width: 0;
-  /* 4px track gap + 20px = the node's 24px between the index and the name. */
-  margin-left: 20px;
-}
-
-.ind-ct-name {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  color: #e7e7e8;
-  line-height: 19px;
-}
-
-.ind-ct-sub {
-  display: block;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: #a8a8a8;
-  line-height: 17px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ind-ct-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: end;
-  width: 16px;
-  height: 16px;
-  color: #a8a8a8;
-  opacity: 0;
-  transition: opacity 0.1s ease, color 0.1s ease;
-}
-
-.ind-ct-x:hover {
-  color: #fff;
 }
 
 .ind-cert-empty {
@@ -20181,6 +19955,9 @@ a.rh-crumb-link:hover {
    so the toast clears the footer's buttons. */
 .pl-body { position: relative; }
 .pl-body .pl-copied-toast { position: absolute; }
+/* The Certification wizard's "N Tasks Imported" (a CSV Upload landing) — the
+   same rule against `.wizard-main`, whose bottom edge is the footer's top. */
+.wizard-main > .pl-copied-toast { position: absolute; }
 .pl-copied-toast {
   position: fixed;
   right: 40px;
@@ -20286,44 +20063,28 @@ a.rh-crumb-link:hover {
 
 /* ============================================================
    Product Config Page
-   ============================================================ */
+   ============================================================
+   Assembled from shared parts: the `.tasks` shell + page header, the
+   underline tabs (659:896), the wizards' flat 32px field stack, the Quiz
+   wizard's boxed `.qsec` table (1097:1205) for every list, `Stepper`
+   (618:1264), the paywall matrix (752:2816), `PrmModal` (483:588) and the
+   Content Links save footer (561:2236). What is left here is layout: the
+   full-bleed tab row and scroll body, the column widths of the page's
+   tables, and the small icon upload tile those tables need. */
 .pc-page {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
+  /* The body below scrolls itself; the shell must not. Seven tabs outrun a
+     narrow window, and focusing a far tab would otherwise scroll this box
+     (overflow:hidden is still scriptable — the row scrolls instead, below). */
   overflow: hidden;
 }
 
-.pc-header {
-  padding: 28px 32px 0;
-  flex: none;
-}
-
-.pc-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.pc-page-title {
-  font-family: var(--font-sans);
-  font-size: 18pt;
-  font-weight: 700;
-  color: var(--text);
-  margin: 0;
-}
-
-/* Tabs — shared .tabbar; stretch across the header padding so the
-   hairline stays full-bleed (the header's own border moved here) */
+/* Tabs — shared .tabbar, stretched across the shell's 32px gutters so its
+   hairline runs edge to edge. The ROW scrolls sideways when the window is too
+   narrow for all seven, never the page. */
 .pc-tabs {
+  flex: none;
   margin: 0 -32px;
   padding: 0 32px;
-  /* Seven tabs outrun a narrow window. The ROW scrolls sideways — without
-     this, focusing a tab at the far end scrolls the page itself (it is
-     overflow:hidden, which is still scriptable) and slides the title away. */
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -20331,533 +20092,186 @@ a.rh-crumb-link:hover {
   display: none;
 }
 
-/* Body */
+/* A settings tab's form. Full-bleed so its scrollbar rides the pane's edge,
+   then padded back to the 32px gutter every wizard's `.wizard-content` uses.
+   No width cap: the fields fill the page. */
 .pc-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 36px 32px 60px;
-  max-width: 820px;
+  margin: 0 -32px;
+  padding: 32px;
 }
 
-/* Award Templates' body: a record table, not a settings form, so it drops the
-   820px reading column and takes the Tasks-page shell instead — search on top,
-   the table scrolling between it and a pinned pagination row. */
+/* Permissions has nothing to configure yet — its empty state fills the tab. */
+.pc-body > .pc-empty {
+  height: 100%;
+  min-height: 320px;
+}
+
+/* Award Templates' body: a record table, not a settings form, so it takes the
+   Tasks-page shell instead — search on top, the table scrolling between it
+   and a pinned pagination row. The `.tasks` shell already pads the sides. */
 .pc-table-body {
   flex: 1;
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 24px 32px 0;
+  padding-top: 24px;
 }
 
-/* Section */
-.pc-section {
-  margin-bottom: 0;
-}
-
-.pc-section-divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 36px 0;
-}
-
-.pc-section-head {
-  margin-bottom: 20px;
-}
-
-.pc-section-title {
-  font-family: var(--font-sans);
-  font-size: 13pt;
-  font-weight: 700;
-  color: var(--text);
-  margin: 0 0 6px;
-}
-
-.pc-section-desc {
-  font-size: 10.5pt;
-  color: var(--text-muted);
-  margin: 0;
-  line-height: 1.55;
-}
-
-/* EPA Card — single Stripe Product ID input */
-.pc-epa-input {
-  max-width: 460px;
-  font-family: var(--font-mono, monospace);
-  margin-bottom: 0 !important;
-}
-
-.pc-section-note {
-  margin: 10px 0 0;
-  font-size: 9.75pt;
-  line-height: 1.5;
-  color: var(--text-faint);
-}
-
-/* Force App Update */
-.pc-fu-current {
-  margin: 14px 0 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(228, 69, 21, 0.10);
-  border: 1px solid rgba(228, 69, 21, 0.28);
-  font-size: 10.5pt;
-  color: var(--text);
-}
-.pc-fu-log-title {
-  margin: 22px 0 10px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 700;
-  color: var(--text);
-}
-.pc-fu-row {
-  min-height: 46px;
-}
-.pc-fu-row-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* Columns of the page's `.qsec` tables. The same class sits on a header cell
+   and on the row cells under it, so both share one width; the header keeps
+   `.qsec-hd`'s 14px type, and rows take theirs from .pc-strong / .pc-muted. */
+.pc-col-grow {
   flex: 1;
-}
-.pc-fu-version {
-  font-family: var(--font-mono, monospace);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.pc-fu-active-tag {
-  font-family: var(--font-sans);
-  font-size: 8.5pt;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: rgba(16, 185, 129, 0.14);
-  color: #34d399;
-}
-.pc-fu-date {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-faint);
-}
-/* Inline delete confirmation */
-.pc-fu-confirm {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex: 1;
-}
-.pc-fu-confirm-text {
-  font-size: 10pt;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-.pc-fu-confirm-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.pc-fu-confirm-cancel,
-.pc-fu-confirm-remove {
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-}
-.pc-fu-confirm-cancel:hover { background: var(--bg-hover); color: var(--text); }
-.pc-fu-confirm-remove {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
-}
-.pc-fu-confirm-remove:hover { background: rgba(239, 68, 68, 0.2); }
-
-/* Display Settings — App / Dashboard tab cards */
-.pc-ds-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pc-ds-card {
-  display: flex;
-  gap: 18px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-raised, rgba(255, 255, 255, 0.015));
-}
-.pc-ds-fields {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   min-width: 0;
 }
-.pc-ds-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+.pc-col-name {
+  width: 240px;
+  flex: none;
 }
-.pc-ds-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+.pc-col-date {
+  width: 160px;
+  flex: none;
 }
-.pc-ds-label {
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 600;
-  color: var(--text-muted);
+.pc-col-login {
+  width: 160px;
+  flex: none;
+  white-space: nowrap;
 }
-.pc-ds-field .form-input { margin-bottom: 0 !important; }
-.pc-ds-vis {
-  display: flex;
+/* Holds a status pill, or a dash on the rows that have none — the pill's own
+   29px is the cell's height either way, so every row stands the same. */
+.pc-col-status {
+  width: 120px;
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 38px;
+  min-height: 29px;
 }
-.pc-ds-vis-text {
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  color: var(--text);
+.qsec-hd .pc-col-status {
+  min-height: 0;
+}
+.pc-col-icon {
+  width: 45px;
+  flex: none;
+}
+/* The switch column — wider than the 41px switch it centres, like the
+   Post-Submission Review table's SHOWN? (`.qsec-shown`), to fit its label. */
+.pc-col-toggle {
+  width: 64px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.qsec-hd .pc-col-toggle {
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+/* An option row's edit + remove — two of the table's 16px glyph buttons
+   (`.qsec-x`), 16px apart, so the header reserves the same 48px. */
+.pc-col-actions {
+  width: 48px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
 }
 
-/* Icon uploader */
-.pc-ds-icon {
-  display: flex;
-  flex-direction: column;
+/* Read-only cell text: the Sections table's own pair — a 16px Medium white
+   name (`.qsec-secname`) and 16px Regular #a8a8a8 values, on its 19px line. */
+.pc-strong,
+.pc-muted {
+  font-size: 16px;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+}
+.pc-strong {
+  font-weight: 500;
+  color: #fff;
+}
+.pc-muted {
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* The trailing "open" link on a read-only row — the ✕ column's 16px glyph
+   cell (`.qsec-x`), for a link out instead of a remove. */
+.pc-open {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  color: #a8a8a8;
+}
+.pc-open:hover,
+.pc-open:focus-visible {
+  color: #fff;
+}
+
+/* Tab icon — a 45px square upload tile, the height of every control on the
+   form. Dashed #404040 while empty (the paywall's Add tile), the picked image
+   filling it once set, and a ✕ on its corner to clear it. */
+.pc-icon {
   position: relative;
-  flex-shrink: 0;
+  height: 45px;
 }
-.pc-ds-icon-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  border: 1px dashed var(--border-strong);
-  background: var(--bg-pill-strong, rgba(255, 255, 255, 0.03));
-  color: var(--text-faint);
-  cursor: pointer;
+.pc-icon-btn {
+  width: 45px;
+  height: 45px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  border: 1px dashed #404040;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8a8a8;
+  cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.12s, color 0.12s;
+  transition: border-color 0.12s ease, color 0.12s ease;
 }
-.pc-ds-icon-btn:hover { border-color: var(--accent); color: var(--text); }
-.pc-ds-icon-btn.has-icon { border-style: solid; padding: 0; }
-.pc-ds-icon-btn.has-icon img { width: 100%; height: 100%; object-fit: cover; }
-.pc-ds-icon-remove {
+.pc-icon-btn:hover {
+  border-color: var(--text-faint);
+  color: #fff;
+}
+.pc-icon-btn.has-icon {
+  border-style: solid;
+}
+.pc-icon-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pc-icon-x {
   position: absolute;
   top: -6px;
   right: -6px;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #404040;
   border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  background: var(--bg);
-  color: var(--text-muted);
+  background: #0d0d0d;
+  color: #a8a8a8;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-.pc-ds-icon-remove:hover { background: rgba(239, 68, 68, 0.15); color: #f87171; }
-.pc-ds-icon-label {
-  font-family: var(--font-sans);
-  font-size: 8.5pt;
-  color: var(--text-faint);
+.pc-icon-x:hover {
+  color: #fff;
+}
+.pc-icon-x svg {
+  width: 10px;
+  height: 10px;
 }
 
-/* Support pages */
-.pc-ds-support-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.pc-ds-support-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-}
-.pc-ds-support-row + .pc-ds-support-row { border-top: 1px solid var(--border); }
-.pc-ds-support-label {
-  width: 170px;
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text);
-}
-.pc-ds-support-row .form-input { margin-bottom: 0 !important; flex: 1; }
-
-/* Placeholder */
-.pc-placeholder {
-  padding: 20px 24px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  color: var(--text-faint);
-  font-size: 10.5pt;
-}
-
-/* App Deep Links (read-only) */
-.pc-dl-row {
-  gap: 14px;
-}
-.pc-dl-url {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 10pt;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pc-dl-access {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 9.5pt;
-  font-weight: 600;
-  border: 1px solid var(--border);
-}
-.pc-dl-access svg { width: 13px; height: 13px; }
-.pc-dl-access.public {
-  color: #2f8f5b;
-  background: rgba(47, 143, 91, 0.1);
-  border-color: rgba(47, 143, 91, 0.28);
-}
-.pc-dl-access.needs-login {
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.03);
-}
-.pc-dl-redirect {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-.pc-dl-redirect:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border-strong);
-}
-
-/* Paywall Pricing grid */
-.pc-price-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.pc-price-row {
-  display: grid;
-  grid-template-columns: 160px 1fr 1fr;
-  align-items: center;
-}
-
-.pc-price-row + .pc-price-row {
-  border-top: 1px solid var(--border);
-}
-
-.pc-price-header {
-  background: var(--bg-pill);
-}
-
-.pc-price-tier-cell {
-  padding: 12px 16px;
-}
-
-.pc-price-cycle-label {
-  padding: 10px 16px;
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  border-left: 1px solid var(--border);
-}
-
-.pc-price-input-cell {
-  padding: 10px 12px;
-  border-left: 1px solid var(--border);
-}
-
-.pc-price-input {
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  margin-bottom: 0 !important;
-}
-
-.pc-tier-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 5px;
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  font-weight: 700;
-}
-.pc-tier-badge[data-tier="essentials"] { background: rgba(99,102,241,0.12); color: #818cf8; }
-.pc-tier-badge[data-tier="growth"]     { background: rgba(16,185,129,0.12); color: #34d399; }
-.pc-tier-badge[data-tier="pro"]        { background: rgba(245,158,11,0.12); color: #fbbf24; }
-.pc-tier-badge[data-tier="google"]     { background: rgba(66,133,244,0.14); color: #6cb0ff; }
-.pc-tier-badge[data-tier="apple"]      { background: rgba(255,255,255,0.10); color: #e7e7e8; }
-.pc-tier-badge[data-tier="stripe"]     { background: rgba(99,91,255,0.14);  color: #a99cff; }
-
-/* Cancellation reasons */
-.pc-reason-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.pc-reason-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 16px;
-  gap: 12px;
-}
-.pc-reason-row + .pc-reason-row {
-  border-top: 1px solid var(--border);
-}
-.pc-reason-row:hover { background: var(--bg-hover); }
-
-.pc-reason-text {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text);
-  flex: 1;
-}
-
-.pc-reason-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.1s, background 0.1s, color 0.1s;
-}
-.pc-reason-row:hover .pc-reason-remove { opacity: 1; }
-.pc-reason-remove:hover { background: rgba(239,68,68,0.12); color: #f87171; }
-
-/* Edit / remove action cluster (Partnerships, Trade) */
-.pc-reason-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.pc-reason-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, background 0.1s, color 0.1s;
-}
-.pc-reason-row:hover .pc-reason-action { opacity: 1; }
-.pc-reason-action:hover { background: var(--bg-hover); color: var(--text); }
-.pc-reason-remove-action:hover { background: rgba(239,68,68,0.12); color: #f87171; }
-.pc-reason-save:hover { background: rgba(34,197,94,0.14); color: #4ade80; }
-/* keep edit-mode actions always visible */
-.pc-reason-edit-input ~ .pc-reason-actions .pc-reason-action { opacity: 1; }
-.pc-reason-edit-input {
-  margin-bottom: 0 !important;
-}
-
-.pc-reason-empty {
-  padding: 20px 16px;
-  color: var(--text-faint);
-  font-size: 10.5pt;
-}
-
-.pc-reason-add-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.pc-reason-input {
-  flex: 1;
-  margin-bottom: 0 !important;
-}
-
-.pc-reason-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  flex: 0 0 auto;
-  width: auto;
-}
-.pc-reason-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* Free trial duration input */
-.pc-trial-row {
-  display: flex;
-  align-items: center;
-}
-.pc-trial-input-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.pc-trial-input {
-  width: 120px;
-  margin-bottom: 0 !important;
-}
-.pc-trial-unit {
-  color: var(--text-muted);
-  font-size: 11pt;
-}
 /* ═══════════ Merge Accounts / Transfer Subscription ═══════════
    Both admin flows are assembled entirely from shared design-system parts —
    the wizard shell (.wizard / .wizard-nav / .wizard-content / .wizard-footer,
@@ -25302,288 +24716,6 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
 }
 
-/* =============================================================
- * Add Existing Tasks — the Certification wizard's Task-library picker
- * A ~3/4-screen modal built on the .cl-modal shell, holding the same search
- * bar, filter pills and table vocabulary as the standalone Tasks page, plus
- * multi-select checkboxes and a per-row Preview panel.
- * ============================================================= */
-
-.aet-modal {
-  width: 75vw;
-  height: 75vh;
-  max-width: calc(100vw - 40px);
-  max-height: calc(100vh - 80px);
-  padding: 0 24px 0;
-}
-
-.aet-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 24px 0 12px;
-}
-.aet-head-text { min-width: 0; }
-.aet-head .cl-modal-sub { max-width: 780px; }
-
-.aet-toolbar {
-  padding: 14px 0 10px;
-  flex: none;
-}
-/* The search bar is page-width on Tasks; inside the modal it fills the shell. */
-.aet-toolbar .usearch { width: 100%; }
-
-/* The picker owns the filter row's spacing — no page-level bottom padding. */
-.aet-modal > .filters {
-  padding-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.aet-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  min-width: 0;
-  gap: 20px;
-  border-top: 1px solid var(--border);
-}
-
-.aet-table-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.aet-count {
-  flex: none;
-  padding: 10px 2px 0;
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  color: var(--text-muted);
-}
-
-/* ── Columns ── */
-.aet-col-check { padding-right: 0 !important; padding-left: 14px !important; }
-.aet-col-name { color: #ffffff !important; font-weight: 500; }
-
-/* Preview pins to the right edge so the CTA stays reachable when the table is
-   wider than the modal — same trick as the pages' .col-actions column. */
-.aet-col-preview {
-  --aet-cell-bg: var(--bg-panel);
-  position: sticky;
-  right: 0;
-  z-index: 3;
-  text-align: right;
-  background: var(--aet-cell-bg);
-}
-.table thead .aet-col-preview { z-index: 6; }
-.table tbody tr:hover .aet-col-preview { --aet-cell-bg: #191919; }
-.table tbody tr.aet-row.picked .aet-col-preview { --aet-cell-bg: #241611; }
-
-.aet-col-name,
-.aet-col-used,
-.aet-col-certtype {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.aet-name-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Row state: picked rows keep a persistent accent tint; rows already in the
-   Certification are inert. */
-.table tbody tr.aet-row.picked {
-  background: rgba(240, 85, 35, 0.09);
-}
-.table tbody tr.aet-row.picked:hover {
-  background: rgba(240, 85, 35, 0.14);
-}
-.table tbody tr.aet-row.added {
-  cursor: default;
-  opacity: 0.55;
-}
-.table tbody tr.aet-row.added:hover {
-  background: transparent;
-}
-
-.aet-row .checkbox.is-disabled {
-  background: var(--bg-pill);
-  border-color: var(--border-strong);
-  color: var(--text-faint);
-}
-
-.aet-added,
-.aet-flag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 9pt;
-  font-weight: 600;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.aet-added {
-  background: var(--bg-pill);
-  color: var(--text-muted);
-}
-.aet-flag {
-  background: rgba(240, 85, 35, 0.14);
-  color: #f0854f;
-}
-
-/* ── Industries cell ── */
-.aet-inds {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.aet-ind {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 10pt;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-/* Matches an Industry the Certification being built belongs to. */
-.aet-ind.match {
-  border-color: rgba(240, 85, 35, 0.55);
-  background: rgba(240, 85, 35, 0.12);
-  color: #f0854f;
-}
-.aet-ind-check {
-  display: inline-flex;
-  align-items: center;
-  color: #f0854f;
-}
-
-/* Data cells are stripped to plain text by the shared table reset, so the chip
-   chrome drops away inside the table — but the match accent is the whole point
-   of the column, so it is re-enabled with the documented higher-specificity
-   override (extra :not() + !important). */
-.table tbody td.aet-col-inds:not(.col-actions):not(.col-checkbox) span.aet-ind.match {
-  color: #f0854f !important;
-}
-
-.aet-preview-btn {
-  padding: 4px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 10.5pt;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.aet-preview-btn:hover {
-  color: var(--text);
-  border-color: var(--text-faint);
-  background: var(--bg-pill);
-}
-.aet-preview-btn.on {
-  color: #f0854f;
-  border-color: rgba(240, 85, 35, 0.6);
-  background: rgba(240, 85, 35, 0.12);
-}
-
-.aet-empty-row td {
-  height: 120px;
-  text-align: center;
-  color: var(--text-muted);
-}
-.table tbody tr.aet-empty-row {
-  cursor: default;
-  border-bottom: none;
-}
-.table tbody tr.aet-empty-row:hover { background: transparent; }
-
-/* ── Preview panel ── */
-.aet-panel {
-  width: 360px;
-  border-left: 1px solid var(--border-strong);
-  background: transparent;
-}
-.aet-panel .co-panel-head { padding-top: 16px; }
-.aet-panel .co-drawer-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.aet-panel-foot {
-  flex: none;
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 20px;
-  border-top: 1px solid var(--border);
-}
-.aet-panel-foot > button { width: 100%; justify-content: center; }
-.aet-panel-added {
-  width: 100%;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  color: var(--text-muted);
-}
-.aet-chip-meta {
-  margin-left: 6px;
-  color: var(--text-faint);
-  font-size: 9.5pt;
-}
-
-/* ── Footer ── */
-.aet-foot {
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  flex: none;
-}
-.aet-selected {
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.aet-foot-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.aet-clear {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11pt;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 6px;
-}
-.aet-clear:hover { color: var(--text); }
-.aet-foot .btn-publish:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-@media (max-width: 1100px) {
-  .aet-modal { width: calc(100vw - 40px); height: calc(100vh - 80px); }
-  .aet-panel { width: 300px; }
-}
 
 /* ==================================================================
    Manage Completions (ContentOverridesPage) — `.mc-*`
@@ -26802,6 +25934,169 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
 }
 
+/* ===== Certifications landing — collapsing header =====
+   Claude Design "Certifications Prototype" (2026-09-24). Certifications only:
+   the other list pages keep the landing morph below.
+
+   The page is ONE scroller — the table's own `.table-xscroll`
+   (`.clh-scroll`) — and the page header lives inside it (`.clh-head`). At
+   scrollTop 0 that header is the landing: a 44px title dropped below the
+   header actions, a one-line catalog summary, the Large search bar (772:1192)
+   and extra air above the table header. The first --clh-d px of scroll
+   collapse it into the standard table-page header, the exact geometry the
+   other list pages show in their table state. useCollapsingHeader writes the
+   progress as --clh (0 landing … 1 collapsed) on `.clh-head` and on the
+   table's header row — nowhere else, so a scroll frame restyles two elements,
+   not every row.
+
+   Every shrinking part is linear in --clh and --clh-d is their SUM, so the
+   header loses exactly as much height as the page has scrolled. `.clh-head`
+   hands that height back as margin-bottom, which keeps its flow footprint
+   constant: the table header's natural spot is always the header's bottom
+   edge, and the rows ride up glued to it. Resize a part here and the distance
+   follows; a NEW shrinking part has to join the sum. */
+@property --clh-d {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.tasks.clh {
+  --clh: 0;
+  /* The shrinking parts, each measured landing minus collapsed. */
+  --clh-title-drop: 56px; /* the title's drop below the header actions */
+  --clh-title-grow: 13.8px; /* its 46px landing line box over the base 32.2px (28 × 1.15) */
+  --clh-sub-h: 46px; /* the catalog summary's row */
+  --clh-bar-grow: calc(var(--search-h-lg) - var(--search-h)); /* Large 56 → Default 43 */
+  --clh-gap-grow: 28px; /* extra air above the table header, 42 → 14 */
+  --clh-d: calc(
+    var(--clh-title-drop) + var(--clh-title-grow) + var(--clh-sub-h) + var(--clh-bar-grow) +
+      var(--clh-gap-grow)
+  );
+}
+/* Nothing here should ever re-anchor the scroll: the header changes size
+   above the rows on every collapse frame, and the rows already hold still
+   relative to it by construction. */
+.tasks.clh .clh-scroll {
+  overflow-anchor: none;
+}
+/* Everything the scroller moves. At least the table's width, so the pinned
+   header has room to hold still (sticky left) while a wide table scrolls
+   sideways; at least one collapse taller than the scrollport, so a short list
+   can still scroll far enough to collapse the header (the body takes the
+   slack). */
+.tasks.clh .clh-canvas {
+  display: flex;
+  flex-direction: column;
+  min-width: var(--table-min, auto);
+  min-height: calc(100% + var(--clh-d));
+}
+/* The header: pinned on both axes, as wide as the scrollport (measured —
+   the canvas can be wider), and opaque so rows pass beneath it unseen. */
+.tasks.clh .clh-head {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  flex: none;
+  align-self: flex-start;
+  width: var(--clh-vw, 100%);
+  background: #0d0d0d;
+  padding-bottom: calc(var(--clh-gap-grow) * (1 - var(--clh)));
+  margin-bottom: calc(var(--clh-d) * var(--clh));
+}
+/* Title and actions share the first row, the summary spans the second. At
+   the landing the title drops below the actions; collapsed it shares their
+   top edge exactly as the base `.tasks-header` lays it out. */
+.tasks.clh .tasks-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 24px;
+}
+.tasks.clh .tasks-title {
+  margin-top: calc(var(--clh-title-drop) * (1 - var(--clh)));
+  font-size: calc(28px + 16px * (1 - var(--clh)));
+  line-height: calc(32.2px + var(--clh-title-grow) * (1 - var(--clh)));
+  white-space: nowrap;
+}
+/* The summary folds away faster than the header collapses (gone by 62%) and
+   drifts up as it goes. */
+.tasks.clh .clh-sub {
+  grid-column: 1 / -1;
+  height: calc(var(--clh-sub-h) * (1 - var(--clh)));
+  overflow: hidden;
+  opacity: calc(1 - 1.6 * var(--clh));
+}
+.tasks.clh .clh-sub .tasks-subtitle {
+  display: block;
+  /* 14px under the title's line box, counting the title's own 2px. */
+  margin-top: 12px;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateY(calc(-16px * var(--clh)));
+}
+/* The Large → Default bar the landing morph runs (`.tasks.lm .toolbar`), but
+   full width in both states — this header never narrows. */
+.tasks.clh .toolbar .usearch-bar {
+  height: calc(var(--search-h) + var(--clh-bar-grow) * (1 - var(--clh)));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--clh)));
+  font-size: calc(16px + 4px * (1 - var(--clh)));
+}
+.tasks.clh .toolbar .usearch-input,
+.tasks.clh .toolbar .usearch-input::placeholder {
+  font-size: calc(16px + 4px * (1 - var(--clh)));
+}
+.tasks.clh .toolbar .usearch-icon svg {
+  width: calc(16px + 4px * (1 - var(--clh)));
+  height: calc(16px + 4px * (1 - var(--clh)));
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+.tasks.clh .toolbar .usearch-kbd .kbd-letter {
+  width: calc(20px + 4px * (1 - var(--clh)));
+  height: calc(20px + 4px * (1 - var(--clh)));
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+  width: calc(14px + 4px * (1 - var(--clh)));
+  height: calc(14px + 4px * (1 - var(--clh)));
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-letter {
+  font-size: calc(12px + 4px * (1 - var(--clh)));
+}
+/* The header clips at the scroller's edge, so a filter row too long for it
+   wraps instead of running off the side — whole pills and a whole "Clear
+   Filters" onto a second line (the header measures its own height, so the
+   table header still pins right under it). At ordinary widths it's one row. */
+.tasks.clh .filters {
+  flex-wrap: wrap;
+}
+.tasks.clh .filter-clear-link {
+  white-space: nowrap;
+}
+/* The table header pins where the header's bottom edge is — the collapsed
+   header's height (measured) plus whatever of the distance is still to
+   scroll. That is also its natural spot mid-collapse, so it only actually
+   sticks in a frame where a native scroll lands before the header's restyle
+   does: the header row then holds with the header and the rows slide under
+   it, as in the prototype. Its shadow deepens as the header collapses, which
+   reads as the header lifting off the rows. */
+.tasks.clh .clh-canvas > .table-head {
+  position: sticky;
+  top: calc(var(--clh-stick, 0px) + var(--clh-d) * (1 - var(--clh)));
+  z-index: 5;
+  flex: none;
+  background: #0d0d0d;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, calc(0.55 * var(--clh)));
+}
+/* The body is in-flow content of the one scroller, never a scroller itself. */
+.tasks.clh .clh-canvas > .tasks-scroll {
+  flex: 1 0 auto;
+  overflow: visible;
+  min-width: var(--table-min, auto);
+}
+
 /* ===== Landing morph — Claude Design "Tasks Landing 6B" =====
    The list pages (Tasks / Certifications / Companies / Users) open as a
    search-first landing: oversized centered search, "Suggested" quick-filter
@@ -27630,7 +26925,10 @@ span.rvc-crumb--current { cursor: default; }
   padding-right: 12px;
 }
 
-/* Row-end "Preview ›" (the Hands-On "Review Task ›" affordance). Three fixes
+/* Row-end "Preview ›" (the Hands-On "Review Task ›" affordance), on any picker
+   table that opts in with `.stm-table--preview` — Select Questions, and the
+   Certification builder's Add Existing Tasks (SelectRequirementModal
+   `onPreviewTask`). Three fixes
    the shared machinery needs inside this card — all the same root cause as the
    row washes above: the page-level rules paint FLAT DARKS tuned for a #0d0d0d
    page, and inside a 20%-washed card every one of them reads as a dark hole.
@@ -27647,44 +26945,44 @@ span.rvc-crumb--current { cursor: default; }
    3. `.selected` here means TICKED, not "the row the menu belongs to", so the
       shared rule that pins the bar open on a selected row would leave every
       ticked row showing "Preview ›". Hover is the only trigger in this table. */
-.sqm-table .col-actions {
+.stm-table--preview .col-actions {
   --actions-bg: var(--prm-surface);
-  /* Seats the whole bar instead of letting it float over the date beside it. */
+  /* Seats the whole bar instead of letting it float over the column beside it. */
   width: 104px;
 }
 
-.sqm-table tbody tr:hover .col-actions {
+.stm-table--preview tbody tr:hover .col-actions {
   --actions-bg:
     linear-gradient(rgba(122, 122, 122, 0.05), rgba(122, 122, 122, 0.05)),
     var(--prm-surface);
 }
 
-.sqm-table tbody tr.selected .col-actions,
-.sqm-table tbody tr.selected:hover .col-actions {
+.stm-table--preview tbody tr.selected .col-actions,
+.stm-table--preview tbody tr.selected:hover .col-actions {
   --actions-bg:
     linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
     var(--prm-surface);
 }
 
-.sqm-table .row-action-bar {
+.stm-table--preview .row-action-bar {
   background:
     linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)),
     var(--prm-surface);
 }
 
-.sqm-table tbody tr.selected .row-action-bar {
+.stm-table--preview tbody tr.selected .row-action-bar {
   display: none;
 }
 
-.sqm-table tbody tr.selected:hover .row-action-bar {
+.stm-table--preview tbody tr.selected:hover .row-action-bar {
   display: inline-flex;
 }
 
-.sqm-table tbody tr.selected .lone-dots {
+.stm-table--preview tbody tr.selected .lone-dots {
   visibility: visible;
 }
 
-.sqm-table tbody tr.selected:hover .lone-dots {
+.stm-table--preview tbody tr.selected:hover .lone-dots {
   visibility: hidden;
 }
 

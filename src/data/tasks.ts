@@ -271,6 +271,18 @@ for (const t of tasks) {
   if (t.accessRestricted === undefined) t.accessRestricted = ACCESS_RESTRICTED.has(t.id);
 }
 
+/** A Time to Complete ("~45 minutes", "2 hours") as a Task row's short length
+ *  — "45 mins", "2 hrs", "1 day". Empty when there is none, or it can't be read,
+ *  so the caller can leave the length off entirely. */
+export function formatTaskDuration(timeToComplete: string | undefined): string {
+  const m = timeToComplete?.match(/(\d+)\s*(minute|hour|day|week)/i);
+  if (!m) return "";
+  const n = Number(m[1]);
+  const unit = m[2].toLowerCase();
+  const short = unit === "minute" ? "min" : unit === "hour" ? "hr" : unit;
+  return `${n} ${short}${n === 1 ? "" : "s"}`;
+}
+
 /** Label used by the Discoverable filter. */
 export function discoverableLabel(task: Task): string {
   return task.discoverable ? "Discoverable" : "Not discoverable";

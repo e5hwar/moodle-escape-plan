@@ -1,13 +1,13 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckBoldIcon, InfoTipIcon, SmallXIcon } from "./icons";
+import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
+import { InfoTipIcon, SmallXIcon } from "./icons";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
-import { AddExistingTasksModal } from "./AddExistingTasksModal";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
-import { SearchIcon, AddCircleIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { SearchIcon, AddCircleIcon, ChevronRightIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -17,12 +17,21 @@ import { PrmModal } from "./PrmModal";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { MultiSelect } from "./NewCompanyWizard";
-import { type Certification, certifications } from "../data/certifications";
+import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
+import { CopiedToast } from "./CopiedToast";
+import {
+  type Certification,
+  certifications,
+  CERT_BY_USEDIN,
+  formatTimeToComplete,
+} from "../data/certifications";
+import type { CertImportReport, ImportedCertCourse, ImportedCertTask } from "../data/certImport";
 import { nodes as contentNodes, type ContentNode } from "../data/contentLinks";
 import { industries } from "../data/industries";
-import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
+import { tasks as taskLibrary, formatTaskDuration, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import { PriceIdFields, newPriceIds, type PriceIds } from "./PriceIdFields";
+import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
+import { PriceIdFields, PRICE_CHANNELS, newPriceIds, type PriceIds } from "./PriceIdFields";
 
 type CareerStage = "pre-apprentice" | "apprentice" | "journeyman" | "master";
 type CertType = "unit" | "credential" | "program" | "bundle";
@@ -63,8 +72,7 @@ const USER_TYPE_VALUES = ["B2B Only"];
 
 // Access Restriction (spec V1) — a Task can be gated behind other Tasks within
 // the same Certification. The user must complete `all` or `any` one of the
-// selected prerequisite Tasks. Satisfying status is derived per Task type (see
-// satisfyingStatus): Completed for every Task type.
+// selected prerequisite Tasks; a prerequisite counts once it is Completed.
 type AccessRestriction = {
   enabled: boolean;
   mode: "all" | "any";
@@ -75,24 +83,20 @@ type CertTask = {
   id: string;
   name: string;
   kind: TaskKind;
-  duration: string;
-  // Question count, for Quizzes pulled from the library (drives the row meta).
-  questions?: number;
+  /** The Task's length as its row shows it ("12 mins"). Absent when the Task
+   *  has none, and then the row names only its type. */
+  duration?: string;
   restriction?: AccessRestriction;
-  // Marks this Task as a Final Exam within the Certification. Surfaced as a flag
-  // on the Add Tasks tree; a Cert can have more than one flagged Task.
-  finalExam?: boolean;
+  /** True when the Task needs a paid subscription — it can't be taken on the
+   *  Free Trial. Surfaced as the row's "Requires Subscription" tag. Copied from
+   *  the library Task, or answered in the Task wizard for one created here. */
+  requiresSubscription?: boolean;
   /** The Certifications the underlying library Task already belongs to. A Task
    *  reused from the library can't be deleted outright (1246:2666) — only
    *  removed from this Course. Absent on a Task created here, which nothing
    *  else owns yet. */
   usedIn?: string[];
 };
-
-// The status a prerequisite Task must reach to satisfy a restriction (V1).
-function satisfyingStatus(_kind: TaskKind): string {
-  return "Completed";
-}
 
 // Every Task in the Certification, flattened (direct Course tasks + Lesson
 // tasks). Used to populate the prerequisite picker — only same-Cert Tasks are
@@ -127,16 +131,20 @@ function reorderList<T>(list: T[], fromId: string, toId: string, idOf: (t: T) =>
 const childKey = (ch: CourseChild): string =>
   ch.kind === "task" ? ch.task.id : ch.lesson.id;
 
-// Drag context: which sibling list ("scope") the in-flight item belongs to, and
-// its id. Drops are only honoured within the same scope.
-type DragCtx = { scope: string; id: string };
+// Drag context: which sibling list ("scope") the in-flight item belongs to, its
+// id, and where its grip sat when the drag began — a target below that lands
+// the item AFTER itself, one above lands it before (see reorderList). Drops are
+// only honoured within the same scope.
+type DragCtx = { scope: string; id: string; top: number };
 
 // Props for a draggable handle + its droppable row, wired to a shared drag state.
 // `handle` goes on the DragDots grip; `target` goes on the row that can receive a
 // drop. Only same-scope drags are accepted.
 type DndProps = {
   handle: React.HTMLAttributes<HTMLElement> & { draggable: boolean };
-  target: React.HTMLAttributes<HTMLElement>;
+  /** `data-drop` marks the block being dragged over — the side the item will
+      land on — so CSS can draw the orange drop line there. */
+  target: React.HTMLAttributes<HTMLElement> & { "data-drop"?: "before" | "after" };
 };
 
 const EyeOffIcon = () => (
@@ -144,16 +152,6 @@ const EyeOffIcon = () => (
     <path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13.2 13.2 0 0 1-2.16 2.92M6.6 6.6A13.3 13.3 0 0 0 2 12s3.5 7 10 7a9.3 9.3 0 0 0 5.4-1.6" />
     <path d="M9.9 9.9a2.6 2.6 0 0 0 3.7 3.7" />
     <path d="M2 2l20 20" />
-  </svg>
-);
-
-// Stacked layers — marks the "Create as Learning Plan" flow, which merges
-// several Certifications into one.
-const LayersIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2 2 7l10 5 10-5-10-5z" />
-    <path d="M2 17l10 5 10-5" />
-    <path d="M2 12l10 5 10-5" />
   </svg>
 );
 
@@ -165,14 +163,14 @@ type CertLesson = {
   nameEs: string;
   descEn: string;
   descEs: string;
-  expanded: boolean;
   hidden: boolean;
   tasks: CertTask[];
 };
 
-/** The four bilingual fields the Lesson modal edits — everything else about a
-    Lesson (its Tasks, expanded/hidden) is set from the tree, not the modal. */
-type LessonDraft = Pick<CertLesson, "nameEn" | "nameEs" | "descEn" | "descEs">;
+/** The four bilingual fields the Course/Lesson modal edits — everything else
+    about a node (its children, hidden) is set from the tree, not the
+    modal. Courses and Lessons carry the same four. */
+type NodeDraft = Pick<CertLesson, "nameEn" | "nameEs" | "descEn" | "descEs">;
 
 type CourseChild =
   | { kind: "task"; task: CertTask }
@@ -258,13 +256,6 @@ const RestrictionLockIcon = () => (
     </g>
   </svg>
 );
-// Flag — toggles a Task's Final Exam marker on the Add Tasks tree.
-const FlagIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-    <line x1="4" y1="22" x2="4" y2="15" />
-  </svg>
-);
 // Draggable dot-grid handle (Figma "move" 340:1502 — the shared 2×4 glyph at
 // 14px). Grab it to reorder siblings within the same list (Courses among
 // Courses, a Course's Tasks/Lessons among themselves, a Lesson's Tasks among
@@ -296,14 +287,17 @@ function newConditionSet(): ConditionSet {
 }
 
 function newLesson(): CertLesson {
-  return { id: nodeId("le"), nameEn: "", nameEs: "", descEn: "", descEs: "", expanded: true, hidden: false, tasks: [] };
+  return { id: nodeId("le"), nameEn: "", nameEs: "", descEn: "", descEs: "", hidden: false, tasks: [] };
 }
 
 // Convert a Task from the library into the lightweight CertTask the tree stores.
 function libraryTaskToCertTask(t: Task): CertTask {
   const kind = TASK_TYPE_TO_KIND[t.type];
-  const questions = t.quizSections?.reduce((n, s) => n + s.questionCount, 0) || undefined;
-  return { id: nodeId("t"), name: t.name, kind, duration: DURATION_BY_KIND[kind], questions, finalExam: t.finalExam, usedIn: t.usedIn };
+  // Only a couple of seeded library Tasks carry a Time to Complete, so the
+  // rest fall back to their type's sample length — the same fallback the
+  // Certifications drawer (data/certPreview) uses.
+  const duration = formatTaskDuration(t.timeToComplete) || DURATION_BY_KIND[kind];
+  return { id: nodeId("t"), name: t.name, kind, duration, requiresSubscription: t.requiresSubscription, usedIn: t.usedIn };
 }
 
 // Maps a stored Task's display type onto the wizard's TaskKind (used for badges).
@@ -321,16 +315,29 @@ const DURATION_BY_KIND: Record<TaskKind, string> = {
   file: "5 mins",
 };
 
+// The library Tasks a Certification is built from. `usedIn` names a
+// Certification by its full name or by a short alias ("NATE RTW"), so match
+// through the shared resolver, not on the name alone. One with none falls back
+// to the first few library Tasks, so a sample structure is never empty. A final
+// exam goes last — after the Lesson, where a learner would meet it — rather
+// than wherever the library happens to list it.
+function associatedTasks(cert: Certification): Task[] {
+  const matched = taskLibrary.filter((t) =>
+    t.usedIn.some((u) => CERT_BY_USEDIN.get(u)?.id === cert.id),
+  );
+  const list = matched.length > 0 ? matched : taskLibrary.slice(0, 4);
+  return [...list.filter((t) => !t.finalExam), ...list.filter((t) => t.finalExam)];
+}
+
 // Existing Certifications don't persist their structure, so when editing we
 // populate plausible sample data: Tasks already associated with the Cert (by
-// name) become a Course with a Lesson, and the final-exam-like Task seeds one
-// Completion Condition Set.
+// name or alias) become a Course with a Lesson, and the final-exam-like Task
+// seeds one Completion Condition Set.
 function buildSampleStructure(editing: Certification): {
   courses: CertCourse[];
   conditionSets: ConditionSet[];
 } {
-  let associated = taskLibrary.filter((t) => t.usedIn.includes(editing.name));
-  if (associated.length === 0) associated = taskLibrary.slice(0, 4);
+  const associated = associatedTasks(editing);
 
   const certTasks = associated.map(libraryTaskToCertTask);
   const lessonTasks = certTasks.slice(0, Math.min(3, certTasks.length));
@@ -353,7 +360,6 @@ function buildSampleStructure(editing: Certification): {
           nameEs: "",
           descEn: "",
           descEs: "",
-          expanded: true,
           hidden: false,
           tasks: lessonTasks,
         },
@@ -382,20 +388,13 @@ function buildSampleStructure(editing: Certification): {
   return { courses: [course], conditionSets };
 }
 
-// A Course is "empty" when it has no name in either language and holds nothing.
-// Used to drop the seeded placeholder Course when a Learning Plan is imported.
-function isEmptyCourse(c: CertCourse): boolean {
-  return !c.nameEn.trim() && !c.nameEs.trim() && c.children.length === 0;
-}
-
 // Build the Course(s) a single imported Certification contributes to a Learning
 // Plan. Source Certs don't persist their real Course breakdown, so we synthesize
-// one Course carrying the Cert's name (the same sample approach buildSampleStructure
-// uses), tagged with its origin. Tasks are pulled from the library and REUSED —
-// no new Tasks are created (spec 2.3.2 Reusability).
+// one Course carrying the Cert's name and description (the same sample approach
+// buildSampleStructure uses), tagged with its origin. Tasks are pulled from the
+// library and REUSED — no new Tasks are created (spec 2.3.2 Reusability).
 function buildImportedCourses(cert: Certification): CertCourse[] {
-  let associated = taskLibrary.filter((t) => t.usedIn.includes(cert.name));
-  if (associated.length === 0) associated = taskLibrary.slice(0, 4);
+  const associated = associatedTasks(cert);
 
   const certTasks = associated.map(libraryTaskToCertTask);
   const lessonTasks = certTasks.slice(0, Math.min(3, certTasks.length));
@@ -405,7 +404,7 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
     id: nodeId("co"),
     nameEn: cert.name,
     nameEs: "",
-    descEn: `Imported from ${cert.name} (${cert.id}).`,
+    descEn: cert.description ?? "",
     descEs: "",
     expanded: true,
     hidden: false,
@@ -420,7 +419,6 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
           nameEs: "",
           descEn: "",
           descEs: "",
-          expanded: true,
           hidden: false,
           tasks: lessonTasks,
         },
@@ -430,6 +428,40 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
   };
 
   return [course];
+}
+
+// A checked CSV Upload (data/certImport.ts) as the tree's own nodes. A row whose
+// name is already in the Task library reuses that Task, exactly as "Add
+// Existing Task" would; any other row is a new Task of its type, as "Create
+// New" makes one — no length until one is set, nothing else owns it yet.
+function coursesFromImport(imported: ImportedCertCourse[]): CertCourse[] {
+  const toTask = (t: ImportedCertTask): CertTask => {
+    if (t.libraryTask) return libraryTaskToCertTask(t.libraryTask);
+    const kind = TASK_TYPE_TO_KIND[t.type];
+    return { id: nodeId("t"), name: t.name, kind };
+  };
+  return imported.map((co) => ({
+    ...newCourse(),
+    nameEn: co.nameEn,
+    nameEs: co.nameEs,
+    descEn: co.descEn,
+    descEs: co.descEs,
+    children: co.children.map((ch): CourseChild =>
+      ch.kind === "task"
+        ? { kind: "task", task: toTask(ch.task) }
+        : {
+            kind: "lesson",
+            lesson: {
+              ...newLesson(),
+              nameEn: ch.lesson.nameEn,
+              nameEs: ch.lesson.nameEs,
+              descEn: ch.lesson.descEn,
+              descEs: ch.lesson.descEs,
+              tasks: ch.lesson.tasks.map(toTask),
+            },
+          },
+    ),
+  }));
 }
 
 // Completion model — spec 7.3.7.1. A Certification completes when ANY one
@@ -589,14 +621,62 @@ const BLANK_DATA: WizardData = {
   contentTags: [],
 };
 
+const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+// A Stripe-shaped Price ID ("price_" + 24 characters), stable for its seed:
+// FNV-1a seeds an xorshift stream, so each Certification keeps its own ID.
+function samplePriceId(seed: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  let id = "price_1";
+  while (id.length < 30) {
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    id += BASE62[(h >>> 0) % 62];
+  }
+  return id;
+}
+
+// The list record doesn't store a paid Certification's store Product IDs
+// either, so like its structure they're plausible sample values: bundle-style
+// IDs for the two stores, Stripe-shaped ones for the two Stripe prices.
+function samplePriceIds(cert: Certification): PriceIds {
+  const slug = slugify(cert.name).toLowerCase();
+  return {
+    appleB2c: `com.skillcat.cert.${slug}`,
+    googleB2c: `cert_${slug}`,
+    stripeB2c: samplePriceId(`${cert.id}-b2c`),
+    stripeB2b: samplePriceId(`${cert.id}-b2b`),
+  };
+}
+
+// The record's tags as the Audience step's three fields: its "B2B Companies
+// Only" tag is the User Type value, and the rest split into Trades and
+// Partnerships.
+function recordContentTags(tags: string[] | undefined): ContentTag[] {
+  const out: ContentTag[] = [];
+  if (tags?.includes(AUDIENCE_B2B_ONLY)) {
+    out.push({ id: "ct-userType-0", type: "userType", value: USER_TYPE_VALUES[0] });
+  }
+  pickTags(tags, TRADE_TAGS).forEach((value, i) =>
+    out.push({ id: `ct-trade-${i}`, type: "trade", value }),
+  );
+  pickTags(tags, PARTNERSHIP_TAGS).forEach((value, i) =>
+    out.push({ id: `ct-partnership-${i}`, type: "partnership", value }),
+  );
+  return out;
+}
+
 // When editing, prefill the fields the Certification record actually carries.
 // Structural data (courses, completion) isn't stored on the list record, so for
 // existing Certifications we populate plausible sample data instead.
 function buildInitialData(editing?: Certification): WizardData {
-  // Every Certification must contain at least one Course and one Condition Set,
-  // so seed one of each by default. The Condition Set opens empty — the Admin
-  // fills it from "+ Add Requirement".
-  if (!editing) return { ...BLANK_DATA, courses: [newCourse()], conditionSets: [newConditionSet()] };
+  // A new Certification opens on zero Courses — the Add Tasks step greets it
+  // with "Create your first Course" rather than a pre-made "Untitled Course".
+  // The Condition Set is still seeded, empty: the Admin fills it from
+  // "+ Add Requirement".
+  if (!editing) return { ...BLANK_DATA, conditionSets: [newConditionSet()] };
   const vis = editing.visibility ?? "Visible";
   const sample = buildSampleStructure(editing);
   return {
@@ -604,6 +684,9 @@ function buildInitialData(editing?: Certification): WizardData {
     courses: sample.courses,
     conditionSets: sample.conditionSets,
     nameEn: editing.name,
+    descEn: editing.description ?? "",
+    timeValue: editing.timeToComplete ? String(editing.timeToComplete.value) : "",
+    timeUnit: editing.timeToComplete?.unit ?? BLANK_DATA.timeUnit,
     industries: editing.industry ? [editing.industry] : [],
     ceus: editing.ceus ?? "",
     careerStage: editing.careerStage
@@ -618,6 +701,17 @@ function buildInitialData(editing?: Certification): WizardData {
     // Visibility step. Retiring one is its own full-page flow off the row menu
     // (ArchiveCertificationPage), not a step in here.
     visibility: vis === "Visible" ? "visible" : "hidden",
+    // The paywall and the audience tags the record carries — without these a
+    // paid or B2B-only Certification opened as free and open to everyone.
+    accessType:
+      editing.payment === "Consumable"
+        ? "consumable"
+        : editing.payment === "Non-consumable"
+          ? "non-consumable"
+          : "open",
+    consumableProgress: editing.resetsProgress ? "reset" : "preserve",
+    priceIds: editing.payment ? samplePriceIds(editing) : newPriceIds(),
+    contentTags: recordContentTags(editing.tags),
   };
 }
 
@@ -644,13 +738,31 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   completion: "Completion Criteria",
 };
 
-type Props = { onClose: () => void; editingCert?: Certification };
+type Props = {
+  onClose: () => void;
+  editingCert?: Certification;
+  /** A checked CSV Upload — the new Certification opens with its Courses,
+   *  Lessons, and Tasks already built. */
+  imported?: CertImportReport;
+};
 
-export function NewCertificationWizard({ onClose, editingCert }: Props) {
+export function NewCertificationWizard({ onClose, editingCert, imported }: Props) {
   const isEditing = !!editingCert;
   const steps = STEPS;
   const [step, setStep] = useState(0);
-  const [data, setData] = useState<WizardData>(() => buildInitialData(editingCert));
+  const [data, setData] = useState<WizardData>(() => {
+    const initial = buildInitialData(editingCert);
+    return imported ? { ...initial, courses: coursesFromImport(imported.courses) } : initial;
+  });
+  // The CSV Upload's acknowledgment — the Question Bank raises the same toast
+  // when its bulk upload lands. Stable `onDone`, so typing into the Details
+  // step (a re-render per keystroke) doesn't keep restarting its timer.
+  const [toast, setToast] = useState<string | null>(() =>
+    imported
+      ? `${imported.rows.length} ${imported.rows.length === 1 ? "Task" : "Tasks"} Imported`
+      : null,
+  );
+  const clearToast = useCallback(() => setToast(null), []);
   const [splitTask, setSplitTask] = useState<{ courseId: string; lessonId?: string; taskType: TaskTypeKey } | null>(null);
   // Where the "Add Existing Task" library picker will drop its Tasks, or null
   // while the picker is closed.
@@ -670,8 +782,10 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
 
   /* The wizard as it opened. Anything the admin touches makes `dirty` true,
      which is what decides whether Cancel stops to ask: an untouched wizard
-     closes straight away rather than nagging about nothing. */
-  const pristine = useRef(data);
+     closes straight away rather than nagging about nothing. An imported
+     structure is work already done, so it counts against the empty wizard —
+     Cancel asks before throwing a CSV's Courses away. */
+  const pristine = useRef(imported ? { ...data, courses: [] } : data);
   const dirty = JSON.stringify(data) !== JSON.stringify(pristine.current);
   function requestClose() {
     if (dirty) setConfirmCancel(true);
@@ -801,10 +915,7 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
   if (splitTask) {
     return (
       <CertSplitTaskWizard
-        cert={data}
         taskType={splitTask.taskType}
-        targetCourseId={splitTask.courseId}
-        targetLessonId={splitTask.lessonId}
         onClose={() => setSplitTask(null)}
         onAdd={(task) => {
           appendTask(splitTask.courseId, splitTask.lessonId, task);
@@ -913,12 +1024,14 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
               </div>
             </div>
           </div>
+          {/* Inside `.wizard-main`, so it lands above the footer, not on the
+              Create button. */}
+          {toast && <CopiedToast label={toast} onDone={clearToast} />}
         </div>
       </div>
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          {isEditing && <span className="wizard-saved">Last saved 2 minutes ago</span>}
           <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
@@ -967,20 +1080,37 @@ export function NewCertificationWizard({ onClose, editingCert }: Props) {
         />
       )}
 
-      {existingPicker && (
-        <AddExistingTasksModal
-          certIndustries={data.industries}
-          destination={destinationLabel(data.courses, existingPicker)}
-          existingNames={flattenTasks(data.courses).map((t) => t.name)}
-          onCancel={() => setExistingPicker(null)}
-          onConfirm={(picked) => {
-            picked.forEach((t) =>
-              appendTask(existingPicker.courseId, existingPicker.lessonId, libraryTaskToCertTask(t)),
-            );
-            setExistingPicker(null);
-          }}
-        />
-      )}
+      {/* "Add Existing Task" runs on the shared table picker, Tasks only — the
+          modal Completion Criteria's Add Requirement and Feedback Forms' Add
+          Tasks already use — at full screen, like Import Courses, this step's
+          other picker. It lists every library Task, company-created ones
+          included (`allCreators`). Tasks already in the Certification open
+          ticked and locked: a library Task is reused, never added twice. Portalled like
+          the step's other modals. */}
+      {existingPicker &&
+        createPortal(
+          <SelectRequirementModal
+            only="task"
+            full
+            allCreators
+            title="Add Existing Tasks"
+            description={`Adding to ${destinationLabel(data.courses, existingPicker)}. Library Tasks are reused, not duplicated.`}
+            confirmNoun="Task"
+            existingNames={flattenTasks(data.courses).map((t) => t.name)}
+            lockedTip="Already in this Certification"
+            onPreviewTask={previewTaskInNewTab}
+            onCancel={() => setExistingPicker(null)}
+            onConfirm={(picks) => {
+              picks.forEach((p) => {
+                if (p.kind === "task") {
+                  appendTask(existingPicker.courseId, existingPicker.lessonId, libraryTaskToCertTask(p.task));
+                }
+              });
+              setExistingPicker(null);
+            }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
@@ -1045,6 +1175,16 @@ function CertIndustriesModal({
 }
 
 /** Human-readable "Course › Lesson" label for the Task-library picker header. */
+/** The picker's row-end Preview: its own tab, so the builder behind the picker
+ *  keeps its place — for now the `?taskPreview=` placeholder page (App.tsx). */
+function previewTaskInNewTab(task: Task) {
+  window.open(
+    `${window.location.origin}${window.location.pathname}?taskPreview=${encodeURIComponent(task.id)}`,
+    "_blank",
+    "noopener",
+  );
+}
+
 function destinationLabel(
   courses: CertCourse[],
   target: { courseId: string; lessonId?: string },
@@ -1384,18 +1524,6 @@ function DeepLinkField({
 
 /* ─────────────────  Step 3: Tasks tree  ───────────────── */
 
-const KIND_LABEL: Record<TaskKind, { letter: string; cls: string; label: string }> = {
-  xapi: { letter: "X", cls: "xapi", label: "xAPI" },
-  quiz: { letter: "Q", cls: "quiz", label: "Quiz" },
-  "hands-on": { letter: "H", cls: "handson", label: "Hands-On Task" },
-  file: { letter: "R", cls: "file", label: "Resource" },
-};
-
-function TaskKindBadge({ kind }: { kind: TaskKind }) {
-  const k = KIND_LABEL[kind];
-  return <span className={`task-kind-badge ${k.cls}`}>{k.letter}</span>;
-}
-
 // The mono suffix that trails a Task's name on the tree ("·xAPI"), and the
 // glyph that leads it. Replaced the old type-coloured gutter column — the row
 // names its type twice, once as an icon and once as this label.
@@ -1406,7 +1534,6 @@ const KIND_MONO: Record<TaskKind, string> = {
   file: "Resource",
 };
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /* The Import Courses picker is the shared Certification selector (`.stm-*`
  * table chrome), so its catalog has to arrive in the content graph's shape.
@@ -1440,12 +1567,10 @@ const EMPTY_LOCKED = new Set<string>();
 // The trailing meta on a Task row (Figma 1244:2356 — "xAPI · 12 mins"): the
 // Task's type, then its length. The type used to ride a leading glyph; the
 // 1244:1778 component set drops the glyph and names the type here instead.
-// Quizzes pulled from the library count questions rather than minutes, and a
-// Resource has no length at all, so it reads as its type alone.
+// The length is only ever a DURATION — a Quiz shows its minutes like any other
+// Task, never a question count. A Task with no length reads as its type alone.
 function taskMeta(t: CertTask): string {
   const kind = KIND_MONO[t.kind];
-  if (t.kind === "file") return kind;
-  if (t.kind === "quiz" && t.questions) return `${kind} · ${plural(t.questions, "question")}`;
   return t.duration ? `${kind} · ${t.duration}` : kind;
 }
 
@@ -1522,11 +1647,9 @@ function TasksStep({
   onAddExisting: (courseId: string, lessonId: string | undefined) => void;
 }) {
   const [importing, setImporting] = useState(false);
-  // Which Course has its inline name/description editor open. Adding a Course
-  // opens its editor immediately; only one is open at a time, matching the
-  // prototype's focused inline-editing model. Lessons no longer use it — their
-  // name/description is edited in a modal instead (see `lessonModal`).
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // The open Course modal, or null. `course: null` = adding a new Course; a
+  // Course = editing that one. Same model as the Lesson modal below.
+  const [courseModal, setCourseModal] = useState<{ course: CertCourse | null } | null>(null);
   // The open Lesson modal, or null. `lesson: null` = adding a new one to that
   // Course; a Lesson = editing that one.
   const [lessonModal, setLessonModal] = useState<{
@@ -1542,6 +1665,8 @@ function TasksStep({
   // drop handler reads the live value regardless of when its closure was created
   // (dragstart's state update wouldn't reach a same-tick drop otherwise).
   const dragRef = useRef<DragCtx | null>(null);
+  // The block under an in-flight drag, and which of its edges the item lands on.
+  const [dropAt, setDropAt] = useState<{ id: string; pos: "before" | "after" } | null>(null);
 
   // Move an item within its sibling list. `scope` identifies the list:
   //   "courses"           — the top-level Course order
@@ -1586,21 +1711,33 @@ function TasksStep({
       draggable: true,
       onDragStart: (e) => {
         e.stopPropagation();
-        dragRef.current = { scope, id };
+        dragRef.current = { scope, id, top: e.currentTarget.getBoundingClientRect().top };
         e.dataTransfer.effectAllowed = "move";
         // Firefox requires data to be set for a drag to begin.
         e.dataTransfer.setData("text/plain", id);
       },
       onDragEnd: () => {
         dragRef.current = null;
+        setDropAt(null);
       },
     },
     target: {
+      "data-drop": dropAt?.id === id ? dropAt.pos : undefined,
       onDragOver: (e) => {
         const d = dragRef.current;
         if (d && d.scope === scope && d.id !== id) {
           e.preventDefault();
+          // Claimed here, so an enclosing block of another list (a Lesson
+          // around its own Tasks) doesn't also light up.
+          e.stopPropagation();
           e.dataTransfer.dropEffect = "move";
+          const pos = e.currentTarget.getBoundingClientRect().top > d.top ? "after" : "before";
+          if (dropAt?.id !== id || dropAt.pos !== pos) setDropAt({ id, pos });
+        }
+      },
+      onDragLeave: (e) => {
+        if (dropAt?.id === id && !e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setDropAt(null);
         }
       },
       onDrop: (e) => {
@@ -1611,6 +1748,7 @@ function TasksStep({
           handleReorder(scope, d.id, id);
         }
         dragRef.current = null;
+        setDropAt(null);
       },
     },
   });
@@ -1640,8 +1778,8 @@ function TasksStep({
 
     const importedCourses = selected.flatMap(buildImportedCourses);
     update({
-      // Keep hand-added Courses, but discard a lone empty placeholder.
-      courses: [...importedCourses, ...manual.filter((c) => !isEmptyCourse(c))],
+      // Hand-added Courses stay, after the imported ones.
+      courses: [...importedCourses, ...manual],
       importedCerts: selected.map((c) => ({ id: c.id, name: c.name })),
       conditionSets: [
         {
@@ -1664,7 +1802,6 @@ function TasksStep({
   }
 
   function removeCourse(id: string) {
-    if (editingId === id) setEditingId(null);
     const idx = data.courses.findIndex((c) => c.id === id);
     const rest = data.courses.filter((c) => c.id !== id);
     update({ courses: rest });
@@ -1673,13 +1810,6 @@ function TasksStep({
     if (id === course?.id) {
       setSelectedId(rest.length > 0 ? rest[Math.min(idx, rest.length - 1)].id : null);
     }
-  }
-
-  // Closing a Course editor. A freshly-added Course left completely empty is
-  // dropped on cancel (unless it's the only Course); otherwise the editor closes.
-  function cancelCourseEditor(c: CertCourse) {
-    setEditingId(null);
-    if (isEmptyCourse(c)) removeCourse(c.id);
   }
 
   // Apply a transform to one Lesson nested inside a Course.
@@ -1704,9 +1834,6 @@ function TasksStep({
     mapLesson(courseId, lessonId, (l) => ({ ...l, ...patch }));
   }
 
-  function toggleLesson(courseId: string, lessonId: string) {
-    mapLesson(courseId, lessonId, (l) => ({ ...l, expanded: !l.expanded }));
-  }
 
   function removeLesson(courseId: string, lessonId: string) {
     update({
@@ -1727,7 +1854,7 @@ function TasksStep({
   // "Add Lesson", otherwise patches the one being edited. Nothing reaches the
   // tree until Save, so a cancelled add leaves no half-made card behind (the
   // reason the inline editor needed a cancel-cleanup pass).
-  function saveLesson(vals: LessonDraft) {
+  function saveLesson(vals: NodeDraft) {
     if (!lessonModal) return;
     const { courseId, lesson } = lessonModal;
     if (lesson) {
@@ -1750,12 +1877,23 @@ function TasksStep({
     setLessonModal(null);
   }
 
-  function addCourse() {
-    const c = newCourse();
-    update({ courses: [...data.courses, c] });
-    setSelectedId(c.id);
-    setEditingId(c.id);
+  // Save from the Course modal — like `saveLesson`, a new Course only reaches
+  // the tree on Save (and becomes the selected one); otherwise the Course being
+  // edited is patched.
+  function saveCourse(vals: NodeDraft) {
+    if (!courseModal) return;
+    const { course: editing } = courseModal;
+    if (editing) {
+      updateCourse(editing.id, vals);
+    } else {
+      const c = { ...newCourse(), ...vals };
+      update({ courses: [...data.courses, c] });
+      setSelectedId(c.id);
+    }
+    setCourseModal(null);
   }
+
+  const addCourse = () => setCourseModal({ course: null });
 
   // Remove a Task wherever it lives — directly under a Course or inside a Lesson.
   function removeTaskById(taskId: string) {
@@ -1805,6 +1943,49 @@ function TasksStep({
 
   return (
     <>
+      {/* Zero Courses — where every new Certification starts. The two panels
+          merge into one centred pane with the two ways in: make a Course, or
+          copy Courses over from another Certification. Built from existing
+          parts only: the wizard's eyebrow/title/description, and the shared
+          `.note-card` callout (accent tone for the primary) as the two cards. */}
+      {data.courses.length === 0 ? (
+        <div className="ctb ctb--empty">
+          <div className="ctb-start">
+            <span className="wizard-brand-eyebrow">Add Tasks</span>
+            <h1 className="wizard-title">Build the Certification</h1>
+            <p className="wizard-desc">
+              A Certification is made of Courses. Each Course holds Lessons and Tasks. Start with
+              one Course, or bring Courses over from a Certification you have already built.
+            </p>
+            <div className="ctb-start-cards">
+              <button
+                type="button"
+                className="note-card note-card--accent ctb-start-card"
+                onClick={addCourse}
+              >
+                <span className="note-card-icon"><PlusThinIcon /></span>
+                <span className="note-card-text">
+                  <span className="note-card-title">Create a Course</span>
+                  <span className="note-card-body">Name it now; add Lessons and Tasks next.</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="note-card ctb-start-card"
+                onClick={() => setImporting(true)}
+              >
+                <span className="note-card-icon"><ImportCoursesIcon /></span>
+                <span className="note-card-text">
+                  <span className="note-card-title">Import Courses</span>
+                  <span className="note-card-body">
+                    Copy Courses from another Certification. Tasks are reused, not copied.
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="ctb">
         {/* ── Courses panel (Figma 886:999) ── */}
         <aside className="ctb-side">
@@ -1827,11 +2008,6 @@ function TasksStep({
                 >
                   <DragDots className="ctb-item-grip" {...d.handle} />
                   <span className="ctb-item-name">{c.nameEn || "Untitled Course"}</span>
-                  {c.sourceCertName && (
-                    <span className="ctb-item-flag" title={`Imported from ${c.sourceCertName}`}>
-                      <LayersIcon />
-                    </span>
-                  )}
                   {c.hidden && (
                     <span className="ctb-item-flag" title="Hidden from learners"><EyeOffIcon /></span>
                   )}
@@ -1859,39 +2035,23 @@ function TasksStep({
 
         {/* ── Selected Course ── */}
         <section className="ctb-main">
-          {/* A Certification is allowed to sit at zero Courses while it's being
-              built — it just can't be created that way (see collectMissing). */}
-          {!course && (
-            <div className="ctb-empty ctb-empty--courses">
-              No Courses yet — every Certification needs at least one to be created.
-              <button className="ctb-empty-add" onClick={addCourse}>
-                <PlusThinIcon />
-                Add Course
-              </button>
-            </div>
-          )}
           {course && (
             <CoursePane
               key={course.id}
               course={course}
               index={courseIdx + 1}
-              editing={editingId === course.id}
               allTasks={allTasks}
               dnd={dnd}
               onUpdateTask={updateTaskById}
               onRemoveTask={removeTaskById}
-              onUpdate={(patch) => updateCourse(course.id, patch)}
               onToggleHidden={() => updateCourse(course.id, { hidden: !course.hidden })}
-              onOpenEditor={() => setEditingId(course.id)}
-              onCancelEditor={() => cancelCourseEditor(course)}
-              onSaveEditor={() => setEditingId(null)}
+              onOpenEditor={() => setCourseModal({ course })}
               onRemove={() => removeCourse(course.id)}
               onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
               onAddExistingTask={() => onAddExisting(course.id, undefined)}
               onAddLesson={() => setLessonModal({ courseId: course.id, lesson: null })}
               onCreateTaskInLesson={(lessonId, taskType) => onCreateTask(course.id, lessonId, taskType)}
               onAddExistingTaskInLesson={(lessonId) => onAddExisting(course.id, lessonId)}
-              onToggleLesson={(lessonId) => toggleLesson(course.id, lessonId)}
               onToggleLessonHidden={(lessonId) =>
                 mapLesson(course.id, lessonId, (l) => ({ ...l, hidden: !l.hidden }))
               }
@@ -1901,6 +2061,7 @@ function TasksStep({
           )}
         </section>
       </div>
+      )}
 
       {/* Portalled to <body>, like the Completion step's picker: `.wizard-pane`
           carries a transform, which would otherwise turn these overlays'
@@ -1923,10 +2084,29 @@ function TasksStep({
         document.body,
       )}
 
+      {courseModal &&
+        createPortal(
+        <NodeModal
+          kind="Course"
+          node={courseModal.course}
+          // The first Course usually shares the Certification's name, so it's
+          // offered as the placeholder and Tab takes it.
+          suggestion={
+            !courseModal.course && data.courses.length === 0 && data.nameEn.trim()
+              ? { en: data.nameEn, es: data.nameEs }
+              : undefined
+          }
+          onCancel={() => setCourseModal(null)}
+          onSave={saveCourse}
+        />,
+        document.body,
+      )}
+
       {lessonModal &&
         createPortal(
-        <LessonModal
-          lesson={lessonModal.lesson}
+        <NodeModal
+          kind="Lesson"
+          node={lessonModal.lesson}
           onCancel={() => setLessonModal(null)}
           onSave={saveLesson}
         />,
@@ -1936,123 +2116,44 @@ function TasksStep({
   );
 }
 
-// Shared inline name + description editor for a Course or Lesson. Opened by the
-// pencil (or on creating a node); bilingual EN/ES, name required to save.
-function NodeEditor({
-  title,
-  hint,
-  nameEn,
-  nameEs,
-  descEn,
-  descEs,
-  namePlaceholder,
-  onChange,
-  onCancel,
-  onSave,
-}: {
-  title: string;
-  hint: string;
-  nameEn: string;
-  nameEs: string;
-  descEn: string;
-  descEs: string;
-  namePlaceholder: string;
-  onChange: (patch: { nameEn?: string; nameEs?: string; descEn?: string; descEs?: string }) => void;
-  onCancel: () => void;
-  onSave: () => void;
-}) {
-  const canSave = nameEn.trim().length > 0;
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
-      e.preventDefault();
-      if (canSave) onSave();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onCancel();
-    }
-  };
-  return (
-    <div className="cert-editor" onClick={(e) => e.stopPropagation()}>
-      <div className="cert-editor-head">
-        <span className="cert-editor-eyebrow">{title}</span>
-        <span className="cert-editor-hint">{hint}</span>
-      </div>
-      <div className="cert-editor-grid">
-        <div className="cert-editor-col">
-          <span className="cert-editor-lang">ENGLISH</span>
-          <input
-            className="cert-editor-input"
-            autoFocus
-            value={nameEn}
-            placeholder={namePlaceholder}
-            onChange={(e) => onChange({ nameEn: e.target.value })}
-            onKeyDown={onKey}
-          />
-          <textarea
-            className="cert-editor-text"
-            rows={3}
-            value={descEn}
-            placeholder="Description — rich text"
-            onChange={(e) => onChange({ descEn: e.target.value })}
-            onKeyDown={onKey}
-          />
-        </div>
-        <div className="cert-editor-col">
-          <span className="cert-editor-lang">ESPAÑOL</span>
-          <input
-            className="cert-editor-input"
-            value={nameEs}
-            placeholder="Nombre"
-            onChange={(e) => onChange({ nameEs: e.target.value })}
-            onKeyDown={onKey}
-          />
-          <textarea
-            className="cert-editor-text"
-            rows={3}
-            value={descEs}
-            placeholder="Descripción"
-            onChange={(e) => onChange({ descEs: e.target.value })}
-            onKeyDown={onKey}
-          />
-        </div>
-      </div>
-      <div className="cert-editor-foot">
-        <span className="cert-editor-kbd">↵ saves · esc cancels</span>
-        <span className="cert-editor-spacer" />
-        <button className="cert-editor-cancel" onClick={onCancel}>Cancel</button>
-        <button className="cert-editor-save" disabled={!canSave} onClick={onSave}>Save</button>
-      </div>
-    </div>
-  );
-}
-
-/* Lesson name + description — a standard modal on the shared `PrmModal` shell
-   (Figma 483:588), not the inline editor a Course still uses. Opened by
-   "Add Lesson" in the Course footer and by "Edit Lesson" in a Lesson's kebab.
+/* Course or Lesson name + description — one standard modal on the shared
+   `PrmModal` shell (Figma 483:588). A Course opens it from "Create Course" /
+   "Add Course" in the Courses panel and "Edit" in its More menu; a Lesson from
+   "Add Lesson" in the Course footer and "Edit" in its kebab.
 
    Both fields are the app's bilingual controls — the `LangField` EN/ES pair for
    the name, the shared `RichTextField` for the description, which is rich text.
 
-   The draft lives here and only reaches the tree on Save, so cancelling an
-   "Add Lesson" leaves nothing behind. The English name is required: it's what
-   the Lesson row prints. */
-function LessonModal({
-  lesson,
+   The draft lives here and only reaches the tree on Save, so cancelling an add
+   leaves nothing behind. The English name is required: it's what the Courses
+   panel and the Lesson row print. */
+const NODE_MODAL_COPY = {
+  Course: "Courses are the sections of a Certification. Each holds Lessons and Tasks.",
+  Lesson: "Lessons group the Tasks that follow them inside a Course.",
+} as const;
+
+function NodeModal({
+  kind,
+  node,
+  suggestion,
   onCancel,
   onSave,
 }: {
-  /** The Lesson being edited, or null when adding one. */
-  lesson: CertLesson | null;
+  kind: "Course" | "Lesson";
+  /** The Course/Lesson being edited, or null when adding one. */
+  node: NodeDraft | null;
+  /** A name to offer in the Name field (see `LangField`'s `suggestion`). */
+  suggestion?: { en: string; es: string };
   onCancel: () => void;
-  onSave: (vals: LessonDraft) => void;
+  onSave: (vals: NodeDraft) => void;
 }) {
-  const [draft, setDraft] = useState<LessonDraft>({
-    nameEn: lesson?.nameEn ?? "",
-    nameEs: lesson?.nameEs ?? "",
-    descEn: lesson?.descEn ?? "",
-    descEs: lesson?.descEs ?? "",
+  const [draft, setDraft] = useState<NodeDraft>({
+    nameEn: node?.nameEn ?? "",
+    nameEs: node?.nameEs ?? "",
+    descEn: node?.descEn ?? "",
+    descEs: node?.descEs ?? "",
   });
-  const patch = (p: Partial<LessonDraft>) => setDraft((d) => ({ ...d, ...p }));
+  const patch = (p: Partial<NodeDraft>) => setDraft((d) => ({ ...d, ...p }));
   const canSave = draft.nameEn.trim().length > 0;
 
   function submit() {
@@ -2076,9 +2177,9 @@ function LessonModal({
 
   return (
     <PrmModal
-      title={lesson ? "Edit Lesson" : "New Lesson"}
-      description="Lessons group the Tasks that follow them inside a Course."
-      confirmLabel={lesson ? "Save Lesson" : "Add Lesson"}
+      title={node ? `Edit ${kind}` : `New ${kind}`}
+      description={NODE_MODAL_COPY[kind]}
+      confirmLabel={node ? `Save ${kind}` : `Add ${kind}`}
       confirmDisabled={!canSave}
       onCancel={onCancel}
       onConfirm={submit}
@@ -2094,8 +2195,9 @@ function LessonModal({
             es={draft.nameEs}
             onChangeEn={(v) => patch({ nameEn: v })}
             onChangeEs={(v) => patch({ nameEs: v })}
-            placeholderEn="Lesson name"
+            placeholderEn={`${kind} name`}
             placeholderEs="Nombre"
+            suggestion={suggestion}
             onEnter={submit}
           />
         </div>
@@ -2117,76 +2219,61 @@ function LessonModal({
   );
 }
 
-// A Course's children in render order, with runs of consecutive loose Tasks
-// (Tasks pinned straight to the Course rather than to a Lesson) collected into
-// one 6px-gap list so they don't inherit the 20px gap between Lesson blocks.
+// A Course's children in render order, one block each: a Lesson (numbered
+// among the Lessons), or a loose Task — one pinned straight to the Course
+// rather than to a Lesson — which is a block of its own (Figma 1259:1622).
+// Consecutive loose Tasks never share one.
 type CourseGroup =
-  | { kind: "tasks"; key: string; tasks: CertTask[] }
+  | { kind: "task"; key: string; task: CertTask }
   | { kind: "lesson"; key: string; lesson: CertLesson; num: number };
 
 function groupChildren(children: CourseChild[]): CourseGroup[] {
-  const out: CourseGroup[] = [];
   let lessonNum = 0;
-  for (const ch of children) {
-    if (ch.kind === "task") {
-      const last = out[out.length - 1];
-      if (last && last.kind === "tasks") last.tasks.push(ch.task);
-      else out.push({ kind: "tasks", key: `t-${ch.task.id}`, tasks: [ch.task] });
-    } else {
-      lessonNum += 1;
-      out.push({ kind: "lesson", key: ch.lesson.id, lesson: ch.lesson, num: lessonNum });
-    }
-  }
-  return out;
+  return children.map((ch): CourseGroup =>
+    ch.kind === "task"
+      ? { kind: "task", key: ch.task.id, task: ch.task }
+      : { kind: "lesson", key: ch.lesson.id, lesson: ch.lesson, num: ++lessonNum },
+  );
 }
 
 // The right pane: the selected Course's header (eyebrow · name · description ·
-// counts · kebab), its inline editor when open, then one card per group — a
-// Lesson with its Tasks, or a run of loose Tasks — each closed by a "+ Task"
-// row, and the "+ Task / + Lesson" footer.
+// kebab), then one block per child — a Lesson with its Tasks, closed by an
+// "Add Tasks" row, or a loose Task as a block of its own — and the Add Lesson /
+// Add Task footer.
 function CoursePane({
   course,
   index,
-  editing,
   allTasks,
   dnd,
   onUpdateTask,
   onRemoveTask,
-  onUpdate,
   onToggleHidden,
   onOpenEditor,
-  onCancelEditor,
-  onSaveEditor,
   onRemove,
   onCreateTask,
   onAddExistingTask,
   onAddLesson,
   onCreateTaskInLesson,
   onAddExistingTaskInLesson,
-  onToggleLesson,
   onToggleLessonHidden,
   onOpenLessonEditor,
   onRemoveLesson,
 }: {
   course: CertCourse;
   index: number;
-  editing: boolean;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
-  onUpdate: (patch: Partial<CertCourse>) => void;
   onToggleHidden: () => void;
+  /** Opens the Course modal on this Course ("Edit" in its More menu). */
   onOpenEditor: () => void;
-  onCancelEditor: () => void;
-  onSaveEditor: () => void;
   onRemove: () => void;
   onCreateTask: (taskType: TaskTypeKey) => void;
   onAddExistingTask: () => void;
   onAddLesson: () => void;
   onCreateTaskInLesson: (lessonId: string, taskType: TaskTypeKey) => void;
   onAddExistingTaskInLesson: (lessonId: string) => void;
-  onToggleLesson: (lessonId: string) => void;
   onToggleLessonHidden: (lessonId: string) => void;
   /** Opens the Lesson modal on that Lesson (the pencil in its kebab). */
   onOpenLessonEditor: (lesson: CertLesson) => void;
@@ -2203,9 +2290,6 @@ function CoursePane({
           <div className="ctb-eyebrow">Course {index}</div>
           <div className="ctb-course-name-row">
             <h2 className="ctb-course-name">{course.nameEn || "Untitled Course"}</h2>
-            {course.sourceCertName && (
-              <span className="cert-source-pill"><LayersIcon />Imported</span>
-            )}
             {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
           </div>
           {course.descEn && <p className="ctb-course-desc">{course.descEn}</p>}
@@ -2230,42 +2314,25 @@ function CoursePane({
         </Dropdown>
       </div>
 
-      {editing && (
-        <NodeEditor
-          title={course.nameEn.trim() ? "Edit course" : "New course"}
-          hint="every certification needs at least one course · name + description, EN/ES"
-          nameEn={course.nameEn}
-          nameEs={course.nameEs}
-          descEn={course.descEn}
-          descEs={course.descEs}
-          namePlaceholder="Course name (required)"
-          onChange={onUpdate}
-          onCancel={onCancelEditor}
-          onSave={onSaveEditor}
-        />
-      )}
-
       {/* `is-single`: one child means nothing to drag against — see .ctb-list. */}
       <div className={`ctb-groups${course.children.length === 1 ? " is-single" : ""}`}>
-        {course.children.length === 0 && !editing && (
+        {course.children.length === 0 && (
           <div className="ctb-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
         )}
 
         {groups.map((g) =>
-          g.kind === "tasks" ? (
-            <div className="ctb-card" key={g.key}>
-              {g.tasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  allTasks={allTasks}
-                  dndRow={dnd(childScope, t.id)}
-                  onUpdate={(patch) => onUpdateTask(t.id, patch)}
-                  onRemove={() => onRemoveTask(t.id)}
-                />
-              ))}
-              <AddTaskRow onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
-            </div>
+          g.kind === "task" ? (
+            // A loose Task is a block of its own (Figma 1259:1622). More are
+            // added from the footer's "Add Task Directly to Lesson".
+            <TaskRow
+              key={g.key}
+              inCourse
+              task={g.task}
+              allTasks={allTasks}
+              dndRow={dnd(childScope, g.task.id)}
+              onUpdate={(patch) => onUpdateTask(g.task.id, patch)}
+              onRemove={() => onRemoveTask(g.task.id)}
+            />
           ) : (
             <LessonCard
               key={g.key}
@@ -2276,7 +2343,6 @@ function CoursePane({
               dndRow={dnd(childScope, g.lesson.id)}
               onUpdateTask={onUpdateTask}
               onRemoveTask={onRemoveTask}
-              onToggle={() => onToggleLesson(g.lesson.id)}
               onToggleHidden={() => onToggleLessonHidden(g.lesson.id)}
               onOpenEditor={() => onOpenLessonEditor(g.lesson)}
               onRemove={() => onRemoveLesson(g.lesson.id)}
@@ -2308,7 +2374,7 @@ function CoursePane({
 // A Lesson block (Figma 1244:2344 "Lesson - Default"): a tinted 12px-radius
 // block holding a header row — grip · LESSON n eyebrow, name, description ·
 // kebab — above an inset card of its Task rows, closed by an "Add Tasks" row
-// that adds into this Lesson. Collapsing hides everything under the header.
+// that adds into this Lesson. A Lesson is always expanded — it doesn't fold.
 function LessonCard({
   lesson,
   num,
@@ -2317,7 +2383,6 @@ function LessonCard({
   dndRow,
   onUpdateTask,
   onRemoveTask,
-  onToggle,
   onToggleHidden,
   onOpenEditor,
   onRemove,
@@ -2331,7 +2396,6 @@ function LessonCard({
   dndRow: DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
   onRemoveTask: (taskId: string) => void;
-  onToggle: () => void;
   onToggleHidden: () => void;
   onOpenEditor: () => void;
   onRemove: () => void;
@@ -2340,8 +2404,13 @@ function LessonCard({
 }) {
   const taskScope = `lesson:${lesson.id}`;
   return (
-    <div className={`ctb-lesson ${lesson.expanded ? "expanded" : ""} ${lesson.hidden ? "hidden" : ""}`}>
-      <div className="ctb-lesson-head" onClick={onToggle} {...dndRow.target}>
+    // The whole block takes a drop (not just its header), so a Lesson with a
+    // long Task list is an easy target for a sibling being dragged.
+    <div
+      className={`ctb-lesson${lesson.hidden ? " hidden" : ""}`}
+      {...dndRow.target}
+    >
+      <div className="ctb-lesson-head">
         <DragDots className="ctb-grip" {...dndRow.handle} />
         <div className="ctb-lesson-titles">
           <div className="ctb-lesson-eyebrow">Lesson {num}</div>
@@ -2353,7 +2422,7 @@ function LessonCard({
         </div>
         {/* 1244:1779 — on hover the lone kebab becomes a two-tile pill:
             Edit, then the kebab. */}
-        <span className="ctb-lesson-acts" onClick={(e) => e.stopPropagation()}>
+        <span className="ctb-lesson-acts">
           <button
             className="ctb-lesson-edit"
             aria-label="Edit Lesson"
@@ -2376,25 +2445,23 @@ function LessonCard({
         </span>
       </div>
 
-      {lesson.expanded && (
-        // 1245:2473 — the Tasks sit in their OWN card, inset 24px inside the
-        // Lesson block rather than sharing its frame.
-        <div className="ctb-lesson-body">
-          <div className={`ctb-tasktable${lesson.tasks.length === 1 ? " is-single" : ""}`}>
-            {lesson.tasks.map((t) => (
-              <TaskRow
-                key={t.id}
-                task={t}
-                allTasks={allTasks}
-                dndRow={dnd(taskScope, t.id)}
-                onUpdate={(patch) => onUpdateTask(t.id, patch)}
-                onRemove={() => onRemoveTask(t.id)}
-              />
-            ))}
-            <AddTaskRow onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
-          </div>
+      {/* 1245:2473 — the Tasks sit in their OWN card, inset 24px inside the
+          Lesson block rather than sharing its frame. */}
+      <div className="ctb-lesson-body">
+        <div className={`ctb-tasktable${lesson.tasks.length === 1 ? " is-single" : ""}`}>
+          {lesson.tasks.map((t) => (
+            <TaskRow
+              key={t.id}
+              task={t}
+              allTasks={allTasks}
+              dndRow={dnd(taskScope, t.id)}
+              onUpdate={(patch) => onUpdateTask(t.id, patch)}
+              onRemove={() => onRemoveTask(t.id)}
+            />
+          ))}
+          <AddTaskRow onCreateNew={onCreateTask} onAddExisting={onAddExistingTask} />
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -2403,9 +2470,13 @@ function LessonCard({
 // Horizontal"), wrapping the shared Dropdown.
 function RowMenu({
   label,
+  tile,
   children,
 }: {
   label: string;
+  /** Trigger on the 32px "More Button" tile (the Course header's) instead of
+   *  the bare 16px kebab — a Task directly in a Course (1259:1629). */
+  tile?: boolean;
   children: (args: { close: () => void }) => React.ReactNode;
 }) {
   return (
@@ -2415,9 +2486,13 @@ function RowMenu({
       width="auto"
       align="right"
       panelClass="ctb-menu"
-      trigger={({ open, toggle }) => (
-        <RowKebab label={label} open={open} toggle={toggle} />
-      )}
+      trigger={({ open, toggle }) =>
+        tile ? (
+          <CourseMoreButton label={label} open={open} toggle={toggle} />
+        ) : (
+          <RowKebab label={label} open={open} toggle={toggle} />
+        )
+      }
     >
       {children}
     </Dropdown>
@@ -2426,12 +2501,20 @@ function RowMenu({
 
 /* The Course header's 32px "More" tile and the Courses-panel row kebab. Like
    RowKebab below, each is a component so `useTipWhileClosed` can run. */
-function CourseMoreButton({ open, toggle }: { open: boolean; toggle: () => void }) {
-  const hint = useTipWhileClosed("Course actions", open);
+function CourseMoreButton({
+  label = "Course actions",
+  open,
+  toggle,
+}: {
+  label?: string;
+  open: boolean;
+  toggle: () => void;
+}) {
+  const hint = useTipWhileClosed(label, open);
   return (
     <button
       className="ctb-more"
-      aria-label="Course actions"
+      aria-label={label}
       data-tip={hint}
       onClick={(e) => { e.stopPropagation(); toggle(); }}
     >
@@ -2464,8 +2547,9 @@ function RowKebab({
   );
 }
 
-// The "Add Task" row that closes every card (Figma 894:3500). Opens the shared
-// picker: pull from the library, or create a new Task of a chosen type.
+// The "Add Tasks" row that closes a Lesson's Task card (Figma 894:3500). Opens
+// the shared picker: pull from the library, or create a new Task of a chosen
+// type.
 function AddTaskRow({
   onCreateNew,
   onAddExisting,
@@ -2494,58 +2578,131 @@ function AddTaskRow({
   );
 }
 
+// The prerequisites a Task's Access Restriction names, resolved to live Task
+// names — a prerequisite that was since deleted simply drops out.
+function gatePrereqs(task: CertTask, allTasks: CertTask[]): string[] {
+  if (!task.restriction?.enabled) return [];
+  return task.restriction.taskIds
+    .map((id) => allTasks.find((t) => t.id === id)?.name)
+    .filter((n): n is string => !!n);
+}
+
+// The restriction banner under a gated Task (Figma 1246:2615), naming its
+// prerequisites. Nothing at all while there are none to name.
+function TaskGate({ names, mode }: { names: string[]; mode: AccessRestriction["mode"] }) {
+  if (names.length === 0) return null;
+  // "A and B are completed" vs. the single-prerequisite / any-of "is completed".
+  const verb = mode === "all" && names.length > 1 ? "are completed" : "is completed";
+  return (
+    <div className="ctb-task-gate">
+      <span className="ctb-task-gate-icon"><RestrictionLockIcon /></span>
+      <p className="ctb-task-gate-text">
+        Not Available Unless:{" "}
+        {names.map((name, i) => (
+          <Fragment key={i}>
+            {i > 0 && (mode === "all" ? ", " : " or ")}
+            <strong>{name}</strong>
+          </Fragment>
+        ))}{" "}
+        {verb}
+      </p>
+    </div>
+  );
+}
+
+/* Figma 1334:2145 / 1334:2157 — a Task that needs a paid subscription carries
+   this mark right after its name: the node's amber wallet glyph (12px, exported
+   verbatim to src/assets) on an 18px amber-wash disc. It replaced the
+   "Requires Subscription" text pill. Hover or focus explains it through the
+   shared tooltip. */
+const SUBSCRIPTION_TIP = "Requires a Subscription — not available on the Free Trial";
+
+function SubscriptionMark() {
+  return (
+    <span
+      className="cert-sub-mark"
+      role="img"
+      tabIndex={0}
+      aria-label={SUBSCRIPTION_TIP}
+      data-tip={SUBSCRIPTION_TIP}
+    >
+      <span className="cert-sub-mark-glyph">
+        <img src={requiresSubscriptionIcon} alt="" />
+      </span>
+    </span>
+  );
+}
+
 // A Task row (Figma 1244:2354): grip · name · state pills · meta · kebab. The
-// type is named by the meta, not by a leading glyph. The Final Exam flag and the Access Restriction editor live in the
-// kebab. A Task whose restriction is configured carries the gate pill under
-// the row (Figma 894:3496 "Secondary Button"), naming its prerequisites.
+// type is named by the meta, not by a leading glyph. The Access Restriction
+// editor lives in the kebab. A Task whose restriction is configured carries the
+// gate pill under the row (Figma 894:3496 "Secondary Button"), naming its
+// prerequisites.
 function TaskRow({
   task,
+  inCourse,
   allTasks,
   dndRow,
   onUpdate,
   onRemove,
 }: {
   task: CertTask;
+  /** Pinned straight to the Course, not to a Lesson (Figma 1259:1622 "Task in
+   *  Course"): the row is a tinted block of its own, drawn like a Lesson header
+   *  — a TASK eyebrow over the name, and the 32px More tile. */
+  inCourse?: boolean;
   allTasks: CertTask[];
   dndRow: DndProps;
   onUpdate: (patch: Partial<CertTask>) => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  // The Access Restriction modal.
+  const [restricting, setRestricting] = useState(false);
   // The "Edit" placeholder and the Delete confirm.
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const restricted = !!task.restriction?.enabled;
-  const finalExam = !!task.finalExam;
   // A Task pulled from the library is owned by the Certifications it already
   // belongs to (this one is still unsaved, so it never appears in the list).
   const sharedWith = task.usedIn ?? [];
-
-  // The prerequisites the gate names, resolved to live Task names — a
-  // prerequisite that was since deleted simply drops out of the sentence.
-  const prereqs = restricted
-    ? (task.restriction?.taskIds ?? [])
-        .map((id) => allTasks.find((t) => t.id === id)?.name)
-        .filter((n): n is string => !!n)
-    : [];
-  const mode = task.restriction?.mode ?? "all";
-  // "A and B are completed" vs. the single-prerequisite / any-of "is completed".
-  const verb = mode === "all" && prereqs.length > 1 ? "are completed" : "is completed";
+  const prereqs = gatePrereqs(task, allTasks);
+  const pills = (
+    <>
+      {task.requiresSubscription && <SubscriptionMark />}
+      {/* Restriction switched on but no prerequisite picked yet — the gate has
+          nothing to name, so flag the half-configured state instead. */}
+      {restricted && prereqs.length === 0 && (
+        <span className="cert-restricted-pill">Restricted</span>
+      )}
+    </>
+  );
 
   return (
-    <div className={`ctb-task-wrap ${prereqs.length > 0 ? "has-gate" : ""}`}>
-      <div className="ctb-task" {...dndRow.target}>
+    <div
+      className={`ctb-task-wrap${prereqs.length > 0 ? " has-gate" : ""}${
+        inCourse ? " ctb-course-task" : ""
+      }`}
+      {...dndRow.target}
+    >
+      <div className="ctb-task">
         <DragDots className="ctb-grip" {...dndRow.handle} />
-        <span className="ctb-task-name">{task.name}</span>
-        {finalExam && <span className="cert-final-pill"><FlagIcon />Final Exam</span>}
-        {/* Restriction switched on but no prerequisite picked yet — the gate has
-            nothing to name, so flag the half-configured state instead. */}
-        {restricted && prereqs.length === 0 && (
-          <span className="cert-restricted-pill">Restricted</span>
+        {inCourse ? (
+          <div className="ctb-task-titles">
+            <div className="ctb-lesson-eyebrow">Task</div>
+            <div className="ctb-task-name-row">
+              <span className="ctb-task-name">{task.name}</span>
+              {pills}
+            </div>
+          </div>
+        ) : (
+          <div className="ctb-task-name-row">
+            <span className="ctb-task-name">{task.name}</span>
+            {pills}
+          </div>
         )}
         <span className="ctb-row-meta">{taskMeta(task)}</span>
         <span className="ctb-row-acts">
-          <RowMenu label="Task actions">
+          <RowMenu label="Task actions" tile={inCourse}>
             {({ close }) => (
               // 1246:2642 — Edit · Add Access Restriction · Remove Task ·
               // Delete Task. Delete is disabled, with its reason on a second
@@ -2555,9 +2712,9 @@ function TaskRow({
                   <span className="menu-item-icon"><MenuEditIcon /></span>
                   Edit
                 </button>
-                <button className="menu-item" onClick={() => { setOpen((o) => !o); close(); }}>
+                <button className="menu-item" onClick={() => { setRestricting(true); close(); }}>
                   <span className={`menu-item-icon ${restricted ? "is-on" : ""}`}><AccessRestrictionIcon /></span>
-                  {restricted || open ? "Edit Access Restriction" : "Add Access Restriction"}
+                  {restricted ? "Edit Access Restriction" : "Add Access Restriction"}
                 </button>
                 <button className="menu-item" onClick={() => { onRemove(); close(); }}>
                   <span className="menu-item-icon"><RemoveCircleIcon /></span>
@@ -2582,26 +2739,20 @@ function TaskRow({
           </RowMenu>
         </span>
       </div>
-      {prereqs.length > 0 && (
-        <div className="ctb-task-gate">
-          <span className="ctb-task-gate-icon"><RestrictionLockIcon /></span>
-          <p className="ctb-task-gate-text">
-            Not Available Unless:{" "}
-            {prereqs.map((name, i) => (
-              <Fragment key={i}>
-                {i > 0 && (mode === "all" ? ", " : " or ")}
-                <strong>{name}</strong>
-              </Fragment>
-            ))}{" "}
-            {verb}
-          </p>
-        </div>
-      )}
-      {open && (
-        <div className="ctb-task-restrict">
-          <AccessRestrictionEditor task={task} allTasks={allTasks} onUpdate={onUpdate} />
-        </div>
-      )}
+      <TaskGate names={prereqs} mode={task.restriction?.mode ?? "all"} />
+      {restricting &&
+        createPortal(
+          <AccessRestrictionModal
+            task={task}
+            allTasks={allTasks}
+            onCancel={() => setRestricting(false)}
+            onSave={(restriction) => {
+              onUpdate({ restriction });
+              setRestricting(false);
+            }}
+          />,
+          document.body,
+        )}
 
       {/* Placeholder — the Task editor itself is a separate flow, and this
           wizard only knows how to CREATE Tasks (CertSplitTaskWizard). */}
@@ -2634,100 +2785,105 @@ function TaskRow({
   );
 }
 
-function AccessRestrictionEditor({
+/* Add / Edit Access Restriction — a modal off the Task's 3-dot menu. Two
+   fields: the prerequisite Tasks (a searchable multi-select of every OTHER Task
+   in the Certification, in tree order across all Courses, open as the modal
+   opens), then whether ALL of them or ANY ONE must be completed. Saving with a
+   restriction in place offers "Remove Restriction" beside the CTA. */
+function AccessRestrictionModal({
   task,
   allTasks,
-  onUpdate,
+  onCancel,
+  onSave,
 }: {
   task: CertTask;
   allTasks: CertTask[];
-  onUpdate: (patch: Partial<CertTask>) => void;
+  onCancel: () => void;
+  /** `undefined` removes the restriction. */
+  onSave: (restriction: AccessRestriction | undefined) => void;
 }) {
-  const r = task.restriction ?? { enabled: false, mode: "all" as const, taskIds: [] };
-  // Eligible prerequisites: every other Task in the same Certification.
+  const existing = task.restriction?.enabled ? task.restriction : undefined;
   const options = allTasks.filter((t) => t.id !== task.id);
-  const selectedCount = r.taskIds.filter((id) => options.some((o) => o.id === id)).length;
+  const [ids, setIds] = useState<string[]>(
+    (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id)),
+  );
+  const [mode, setMode] = useState<AccessRestriction["mode"]>(existing?.mode ?? "all");
 
-  const setR = (patch: Partial<AccessRestriction>) => onUpdate({ restriction: { ...r, ...patch } });
-  const togglePrereq = (id: string) =>
-    setR({ taskIds: r.taskIds.includes(id) ? r.taskIds.filter((x) => x !== id) : [...r.taskIds, id] });
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  // The shared MultiSelect speaks labels, so Tasks travel by name and are
+  // mapped back to ids (the first Task of that name, in tree order).
+  const names = options.map((o) => o.name);
+  const picked = ids.map((id) => options.find((o) => o.id === id)?.name).filter((n): n is string => !!n);
+  const setPicked = (next: string[]) =>
+    setIds(
+      next
+        .map((name) => options.find((o) => o.name === name)?.id)
+        .filter((id): id is string => !!id),
+    );
 
   return (
-    <div className="cert-restrict-edit">
-      <div className="cert-restrict-head">
-        <button
-          className={`toggle ${r.enabled ? "on" : ""}`}
-          onClick={() => setR({ enabled: !r.enabled })}
-          aria-pressed={r.enabled}
-        >
-          <span className="toggle-knob" />
-        </button>
-        <div className="cert-restrict-head-text">
-          <div className="cert-restrict-title">Access restriction</div>
-          <div className="cert-restrict-desc">
-            Block learners from starting this Task until they satisfy other Tasks in this Certification.
+    <PrmModal
+      title={existing ? "Edit Access Restriction" : "Add Access Restriction"}
+      description={`Learners can't start "${task.name}" until the Tasks below are completed.`}
+      confirmLabel={existing ? "Save Restriction" : "Add Restriction"}
+      confirmDisabled={ids.length === 0}
+      footerExtra={
+        existing ? (
+          <button className="prm-quiet" onClick={() => onSave(undefined)}>
+            Remove Restriction
+          </button>
+        ) : undefined
+      }
+      onCancel={onCancel}
+      onConfirm={() => onSave({ enabled: true, mode, taskIds: ids })}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <label className="prm-label">Tasks</label>
+          <MultiSelect
+            options={names}
+            value={picked}
+            onChange={setPicked}
+            placeholder="Select Tasks"
+            searchPlaceholder="Search Tasks..."
+            popupMenu
+            defaultOpen
+          />
+        </div>
+        {/* Both answers are real choices, so the chosen one takes the
+            Single-Select's accent state (639:895) — the neutral fill is the
+            modal card's own 20% wash and would vanish into it. */}
+        <div className="prm-field">
+          <label className="prm-label">Unlocks When</label>
+          <div className="seg-control">
+            <button
+              type="button"
+              className={`seg-btn${mode === "all" ? " active accent" : ""}`}
+              aria-pressed={mode === "all"}
+              onClick={() => setMode("all")}
+            >
+              All Tasks are Completed
+            </button>
+            <button
+              type="button"
+              className={`seg-btn${mode === "any" ? " active accent" : ""}`}
+              aria-pressed={mode === "any"}
+              onClick={() => setMode("any")}
+            >
+              Any One Task is Completed
+            </button>
           </div>
         </div>
       </div>
-
-      {r.enabled &&
-        (options.length === 0 ? (
-          <div className="cert-restrict-empty">
-            No other Tasks in this Certification yet. Add more Tasks to set prerequisites.
-          </div>
-        ) : (
-          <>
-            <div className="cert-restrict-mode">
-              <span className="cert-restrict-mode-label">Learner must complete</span>
-              <div className="seg-control">
-                <button
-                  type="button"
-                  className={`seg-btn ${r.mode === "all" ? "active" : ""}`}
-                  onClick={() => setR({ mode: "all" })}
-                >
-                  All of
-                </button>
-                <button
-                  type="button"
-                  className={`seg-btn ${r.mode === "any" ? "active" : ""}`}
-                  onClick={() => setR({ mode: "any" })}
-                >
-                  Any one of
-                </button>
-              </div>
-              <span className="cert-restrict-mode-label">the selected Tasks</span>
-            </div>
-
-            <div className="cert-restrict-pick">
-              {options.map((o) => {
-                const checked = r.taskIds.includes(o.id);
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className={`cert-restrict-option ${checked ? "checked" : ""}`}
-                    onClick={() => togglePrereq(o.id)}
-                  >
-                    <span className="cert-restrict-check">{checked && <CheckBoldIcon />}</span>
-                    <TaskKindBadge kind={o.kind} />
-                    <span className="cert-restrict-option-name">{o.name}</span>
-                    <span className="cert-restrict-status">{satisfyingStatus(o.kind)}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedCount === 0 && (
-              <div className="cert-restrict-warn">Select at least one prerequisite Task.</div>
-            )}
-
-            <p className="cert-restrict-note">
-              A prerequisite is satisfied when it reaches the status shown beside it —{" "}
-              <strong>Completed</strong> for every Task type.
-            </p>
-          </>
-        ))}
-    </div>
+    </PrmModal>
   );
 }
 
@@ -2768,8 +2924,11 @@ function AddTaskMenu({
 
 /* The Add Task menu (Figma 1259:1673 "3-Dot Menu - Add Task to Certification"):
    Create New Task first — with the circle-plus, not a bare one — then the
-   singular Add Existing Task. Picking "create" swaps the panel for the Task
-   type list. */
+   singular Add Existing Task. It cascades the way More Filters does: hovering
+   (or clicking) Create New Task opens the Task types in a second panel BESIDE
+   this one, level with the row, instead of swapping this list out for a
+   "Choose a Task type" view. The panel opens to the right, or to the left when
+   the right side would run off the window. */
 function AddTaskMenuContent({
   onCreateNew,
   onAddExisting,
@@ -2777,33 +2936,73 @@ function AddTaskMenuContent({
   onCreateNew: (t: TaskTypeKey) => void;
   onAddExisting: () => void;
 }) {
-  const [mode, setMode] = useState<"root" | "create">("root");
+  // Offset of the Create New Task row inside the panel, while the types are open.
+  const [typesTop, setTypesTop] = useState<number | null>(null);
+  const [flip, setFlip] = useState(false);
+  const subRef = useRef<HTMLDivElement | null>(null);
 
-  if (mode === "root") {
-    return (
+  function openTypes(e: React.SyntheticEvent<HTMLButtonElement>) {
+    // The row's offsetParent is the dropdown panel itself (it is positioned),
+    // which is also what the types panel is placed against.
+    setTypesTop(e.currentTarget.offsetTop);
+  }
+
+  // Measured before paint, so the types never flash on the wrong side.
+  useLayoutEffect(() => {
+    const sub = subRef.current;
+    const panel = sub?.parentElement?.closest(".dropdown");
+    if (!sub || !panel) return;
+    const { left, right } = panel.getBoundingClientRect();
+    const needed = sub.offsetWidth + 6 + 8;
+    setFlip(right + needed > window.innerWidth && left - needed >= 0);
+  }, [typesTop]);
+
+  return (
+    <>
       <div className="menu">
-        <button className="menu-item" onClick={() => setMode("create")}>
+        <button
+          className={`menu-item${typesTop !== null ? " is-open" : ""}`}
+          aria-haspopup="menu"
+          aria-expanded={typesTop !== null}
+          onMouseEnter={openTypes}
+          onFocus={openTypes}
+          onClick={openTypes}
+        >
           <span className="menu-item-icon"><AddCircleIcon /></span>
           Create New Task
+          <span className="ctb-menu-chevron"><ChevronRightIcon /></span>
         </button>
-        <button className="menu-item" onClick={onAddExisting}>
+        <button
+          className="menu-item"
+          onMouseEnter={() => setTypesTop(null)}
+          onFocus={() => setTypesTop(null)}
+          onClick={onAddExisting}
+        >
           <span className="menu-item-icon"><SearchIcon /></span>
           Add Existing Task
         </button>
       </div>
-    );
-  }
 
-  return (
-    <div className="menu">
-      <button className="menu-back" onClick={() => setMode("root")}>‹ Choose a Task type</button>
-      {TASK_TYPE_OPTIONS.map(({ key, label: optLabel, icon: Icon }) => (
-        <button key={key} className="menu-item" onClick={() => onCreateNew(key)}>
-          <span className="menu-item-icon"><Icon /></span>
-          {optLabel}
-        </button>
-      ))}
-    </div>
+      {typesTop !== null && (
+        <div
+          ref={subRef}
+          className={`ctb-menu-sub${flip ? " is-left" : ""}`}
+          role="menu"
+          /* −8.5: the panel's own 8px padding + its 0.5px hairline, so the
+             first type sits level with the row that opened it. */
+          style={{ top: typesTop - 8.5 }}
+        >
+          <div className="menu">
+            {TASK_TYPE_OPTIONS.map(({ key, label: optLabel, icon: Icon }) => (
+              <button key={key} className="menu-item" role="menuitem" onClick={() => onCreateNew(key)}>
+                <span className="menu-item-icon"><Icon /></span>
+                {optLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -3014,6 +3213,8 @@ function itemMeta(item: CompletionItem): string {
 // body lists the requirements, and the last row is the "+ Add Requirement"
 // action — every one of them a row of the same clipped surface. The header's
 // 12px minus drops the whole set; the 16px ✕ on a row drops that requirement.
+// Each control appears only when its handler is passed, so the Certifications
+// drawer reads a set back through this same card with none of them.
 function ConditionSetCard({
   set,
   index,
@@ -3023,9 +3224,9 @@ function ConditionSetCard({
 }: {
   set: ConditionSet;
   index: number;
-  onRemove: () => void;
-  onAddItems: (items: CompletionItem[]) => void;
-  onRemoveItem: (itemId: string) => void;
+  onRemove?: () => void;
+  onAddItems?: (items: CompletionItem[]) => void;
+  onRemoveItem?: (itemId: string) => void;
 }) {
   // "+ Add Requirement" opens the shared table picker (Select Tasks / Select
   // Questions chrome) rather than the 340px dropdown it used to open.
@@ -3043,14 +3244,16 @@ function ConditionSetCard({
             </span>
           )}
         </div>
-        <button
-          className="cc-head-x"
-          onClick={onRemove}
-          title="Remove Condition Set"
-          aria-label={`Remove Condition Set ${index}`}
-        >
-          <MinusThinIcon />
-        </button>
+        {onRemove && (
+          <button
+            className="cc-head-x"
+            onClick={onRemove}
+            title="Remove Condition Set"
+            aria-label={`Remove Condition Set ${index}`}
+          >
+            <MinusThinIcon />
+          </button>
+        )}
       </div>
 
       {set.items.map((item) => (
@@ -3059,31 +3262,35 @@ function ConditionSetCard({
             <span className="cc-row-name">{item.name}</span>
             <span className="cc-row-meta">· {itemMeta(item)}</span>
           </div>
-          <button
-            className="cc-row-x"
-            onClick={() => onRemoveItem(item.id)}
-            aria-label={`Remove ${item.name}`}
-          >
-            <SmallXIcon />
-          </button>
+          {onRemoveItem && (
+            <button
+              className="cc-row-x"
+              onClick={() => onRemoveItem(item.id)}
+              aria-label={`Remove ${item.name}`}
+            >
+              <SmallXIcon />
+            </button>
+          )}
         </div>
       ))}
 
-      <div className="cc-row cc-row-foot">
-        <button className="cc-add-req" onClick={() => setPicking(true)}>
-          <span className="cc-add-icon">
-            <PlusThinIcon />
-          </span>
-          Add Requirement
-        </button>
-      </div>
+      {onAddItems && (
+        <div className="cc-row cc-row-foot">
+          <button className="cc-add-req" onClick={() => setPicking(true)}>
+            <span className="cc-add-icon">
+              <PlusThinIcon />
+            </span>
+            Add Requirement
+          </button>
+        </div>
+      )}
     </div>
 
     {/* Portalled to <body>: the panel clips to its 12px radius, and the
         wizard's step container is transformed, which would otherwise turn the
         overlay's position:fixed into a local box (the same gotcha the Task
         wizard's Select Questions hits). */}
-    {picking &&
+    {picking && onAddItems &&
       createPortal(
         <SelectRequirementModal
           existingNames={set.items.map((i) => i.name)}
@@ -3113,6 +3320,17 @@ function pickToItem(pick: RequirementPick): CompletionItem {
 
 /* ─────────────────  Step 5: Paywall  ───────────────── */
 
+// The step's radio titles, also what the Certifications drawer prints.
+const ACCESS_TYPE_LABEL: Record<AccessType, string> = {
+  open: "Open-To-All (free)",
+  "non-consumable": "Non-Consumable",
+  consumable: "Consumable",
+};
+const PROGRESS_LABEL: Record<ConsumableProgress, string> = {
+  reset: "Reset Progress",
+  preserve: "Preserve Progress",
+};
+
 function PaywallStep({
   data,
   update,
@@ -3128,19 +3346,19 @@ function PaywallStep({
           <RadioCard
             selected={data.accessType === "open"}
             onSelect={() => update({ accessType: "open" })}
-            title="Open-To-All (free)"
+            title={ACCESS_TYPE_LABEL.open}
             desc="Free for any user who can see the Certification. Access depends on B2C tier."
           />
           <RadioCard
             selected={data.accessType === "non-consumable"}
             onSelect={() => update({ accessType: "non-consumable" })}
-            title="Non-Consumable"
+            title={ACCESS_TYPE_LABEL["non-consumable"]}
             desc="One-time purchase. Access persists as long as the user is a Subscriber."
           />
           <RadioCard
             selected={data.accessType === "consumable"}
             onSelect={() => update({ accessType: "consumable" })}
-            title="Consumable"
+            title={ACCESS_TYPE_LABEL.consumable}
             desc="Time-bounded access window. Used for finite-duration enrollments."
           />
         </div>
@@ -3165,13 +3383,13 @@ function PaywallStep({
             <RadioCard
               selected={data.consumableProgress === "reset"}
               onSelect={() => update({ consumableProgress: "reset" })}
-              title="Reset Progress"
+              title={PROGRESS_LABEL.reset}
               desc="All Task completions, Quiz attempts, and Quiz-Section completions for Tasks within the Certification are cleared for that user. On repurchase, the user starts fresh."
             />
             <RadioCard
               selected={data.consumableProgress === "preserve"}
               onSelect={() => update({ consumableProgress: "preserve" })}
-              title="Preserve Progress"
+              title={PROGRESS_LABEL.preserve}
               desc="Completions and attempts are preserved. On repurchase, the user picks up where they left off."
             />
           </div>
@@ -3277,6 +3495,207 @@ function AudienceStep({
   );
 }
 
+/* ─────────────────  Read-only summary (Certifications drawer)  ───────────────── */
+
+/* Every field this wizard edits, read back as review cards (Figma 1046:1147) in
+   the Certifications row drawer (1316:1846): one card per step, in step order.
+   It reads `buildInitialData` — the same data the wizard opens this
+   Certification with — so the drawer and the editor can't disagree. The first
+   card keeps the drawer node's "Overview" title; the rest take their step's
+   name. The bilingual fields show their English half only. */
+export function CertificationSummary({ cert }: { cert: Certification }) {
+  // Once per Certification: the sample structure mints fresh node ids.
+  const data = useMemo(() => buildInitialData(cert), [cert]);
+  const allTasks = flattenTasks(data.courses);
+  const slug = data.slugCustom ? data.slug : slugify(data.nameEn);
+  const deepLink = slug ? `${DEEP_LINK_BASE}${slug}` : "";
+  const tagsOf = (type: ContentTagType) =>
+    data.contentTags
+      .filter((t) => t.type === type)
+      .map((t) => t.value)
+      .join(", ");
+  const paid = data.accessType !== "open";
+
+  return (
+    <div className="confirm-cards">
+      <ConfirmCard
+        title="Overview"
+        fillBlanks
+        rows={[
+          [
+            "Time to Complete",
+            data.timeValue &&
+              formatTimeToComplete({ value: Number(data.timeValue), unit: data.timeUnit }),
+          ],
+          // The record's own state — the wizard folds Archived into Hidden.
+          ["Visibility", cert.visibility ?? "Visible"],
+          ["Industry", data.industries.join(", ")],
+          ["Career Stage", CAREER_STAGES.find((s) => s.value === data.careerStage)?.label],
+          ["Type", CERT_TYPES.find((t) => t.value === data.type)?.label],
+          ["Thumbnail", data.thumbnail?.name],
+        ]}
+      />
+
+      <ConfirmCard
+        title="Additional Info"
+        fillBlanks
+        rows={[
+          ["Announcement", data.announceEn, true],
+          ["CEUs Awarded", data.ceus],
+          ["Keywords", data.keywordsEn, true],
+          [
+            "Deep Link",
+            deepLink && (
+              <a
+                className="rvc-headlink"
+                href={`https://${deepLink}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {deepLink}
+              </a>
+            ),
+            true,
+          ],
+        ]}
+      />
+
+      <ConfirmCard title={`Tasks · ${allTasks.length}`}>
+        <CourseTreeSummary courses={data.courses} allTasks={allTasks} />
+      </ConfirmCard>
+
+      <ConfirmCard title="Completion Criteria">
+        <div className="cc-sets">
+          {data.conditionSets.map((set, idx) => (
+            <Fragment key={set.id}>
+              {idx > 0 && (
+                <div className="cc-or">
+                  <div className="cc-or-lead">
+                    <span>OR</span>
+                  </div>
+                </div>
+              )}
+              <ConditionSetCard set={set} index={idx + 1} />
+            </Fragment>
+          ))}
+        </div>
+      </ConfirmCard>
+
+      {/* Product IDs and repurchase behaviour only exist for the paywalls
+          they apply to, as on the step, so no blanks are filled here. */}
+      <ConfirmCard
+        title="Paywall"
+        rows={[
+          ["Access Type", ACCESS_TYPE_LABEL[data.accessType]],
+          [
+            "Progress on Repurchase",
+            data.accessType === "consumable" ? PROGRESS_LABEL[data.consumableProgress] : undefined,
+          ],
+          ...PRICE_CHANNELS.map(
+            (ch): ConfirmField => [ch.name, paid ? data.priceIds[ch.key] || "—" : undefined, true],
+          ),
+        ]}
+      />
+
+      <ConfirmCard
+        title="Audience"
+        fillBlanks
+        rows={[
+          ["Audience", tagsOf("userType") ? AUDIENCE_B2B : AUDIENCE_ALL],
+          ["Trade", tagsOf("trade"), true],
+          ["Partnership", tagsOf("partnership"), true],
+        ]}
+      />
+    </div>
+  );
+}
+
+/* The Add Tasks tree, read back without its controls: each Course's eyebrow,
+   name and description, then its Lessons (the builder's tinted block around an
+   inset Task table) and loose Tasks (each a tinted block of its own, as in the
+   builder), in tree order. */
+function CourseTreeSummary({
+  courses,
+  allTasks,
+}: {
+  courses: CertCourse[];
+  allTasks: CertTask[];
+}) {
+  return (
+    <div className="cdr-courses">
+      {courses.map((course, i) => (
+        <section key={course.id} className={`cdr-course${course.hidden ? " hidden" : ""}`}>
+          <div className="cdr-course-head">
+            <span className="ctb-eyebrow">Course {i + 1}</span>
+            <div className="cdr-course-name-row">
+              <span className="cdr-course-name">{course.nameEn || "Untitled Course"}</span>
+              {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
+            </div>
+            {course.descEn && <p className="cdr-course-desc">{course.descEn}</p>}
+          </div>
+
+          {groupChildren(course.children).map((g) =>
+            g.kind === "task" ? (
+              <div key={g.key} className="ctb-course-task">
+                <TaskSummaryRow task={g.task} allTasks={allTasks} inCourse />
+              </div>
+            ) : (
+              <div key={g.key} className={`ctb-lesson${g.lesson.hidden ? " hidden" : ""}`}>
+                <div className="ctb-lesson-titles cdr-lesson-head">
+                  <div className="ctb-lesson-eyebrow">Lesson {g.num}</div>
+                  <div className="ctb-lesson-name-row">
+                    <span className="ctb-lesson-name">{g.lesson.nameEn || "Untitled Lesson"}</span>
+                    {g.lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+                  </div>
+                  {g.lesson.descEn && <div className="ctb-lesson-desc">{g.lesson.descEn}</div>}
+                </div>
+                <div className="cdr-lesson-body">
+                  <div className="ctb-tasktable">
+                    {g.lesson.tasks.map((t) => (
+                      <TaskSummaryRow key={t.id} task={t} allTasks={allTasks} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ),
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/* A Task in the read-only tree: its name and state pills over the builder's
+   meta ("Quiz · 15 mins"), then the restriction banner if it has one.
+   Stacked rather than side by side, so a long name isn't cut short in the
+   drawer's narrow column. */
+function TaskSummaryRow({
+  task,
+  allTasks,
+  inCourse,
+}: {
+  task: CertTask;
+  allTasks: CertTask[];
+  /** A Task directly in a Course carries the builder's TASK eyebrow. */
+  inCourse?: boolean;
+}) {
+  const prereqs = gatePrereqs(task, allTasks);
+  return (
+    <div className="cdr-task">
+      {inCourse && <span className="ctb-lesson-eyebrow">Task</span>}
+      <div className="cdr-task-name-row">
+        <span className="cdr-task-name">{task.name}</span>
+        {task.requiresSubscription && <SubscriptionMark />}
+        {task.restriction?.enabled && prereqs.length === 0 && (
+          <span className="cert-restricted-pill">Restricted</span>
+        )}
+      </div>
+      <span className="ctb-row-meta">{taskMeta(task)}</span>
+      <TaskGate names={prereqs} mode={task.restriction?.mode ?? "all"} />
+    </div>
+  );
+}
+
 /* ─────────────────  Archive & Replace (full page)  ───────────────── */
 
 const WarnIcon = () => (
@@ -3285,6 +3704,11 @@ const WarnIcon = () => (
     <path d="M12 9v4M12 17h.01" />
   </svg>
 );
+
+/* The Archive & Replace page's long explanation — the ⓘ on its description. */
+const ARCHIVE_CERT_TIP =
+  "Archiving removes this Certification from the catalog, so no one new can enroll in it. It can't be un-archived.\n\n" +
+  "Learners already enrolled keep their completion record. The Replacement Certifications you pick appear in their Path, and the Replacement Alert tells them why.";
 
 /* Archiving used to be the Cert wizard's 7th step, shown only while editing.
    It's now reached from the Certifications row menu's "Archive & Replace"
@@ -3312,9 +3736,16 @@ export function ArchiveCertificationPage({
   );
   const [alertEn, setAlertEn] = useState("");
   const [alertEs, setAlertEs] = useState("");
-  // Archiving is permanent, so the destructive CTA stays disabled until the
-  // admin has explicitly acknowledged it — the same gate the step's toggle was.
-  const [confirmed, setConfirmed] = useState(false);
+  // Landing here already means "archive this Cert", so the CTA is live from the
+  // start; the permanence is acknowledged in a confirm modal instead of an
+  // on-page "Archive this Certification" toggle (removed 2026-09-24).
+  const [confirming, setConfirming] = useState(false);
+  const replacementLine =
+    replacementCerts.length === 0
+      ? "No replacement is selected, so enrolled learners won't be pointed to another Certification."
+      : replacementCerts.length === 1
+        ? `Enrolled learners will be pointed to “${replacementCerts[0]}”.`
+        : `Enrolled learners will be pointed to the ${replacementCerts.length} replacement Certifications you picked.`;
 
   return (
     <div className="wizard">
@@ -3326,6 +3757,15 @@ export function ArchiveCertificationPage({
               <p className="wizard-desc">
                 Retire “{cert.name}” ({cert.id}) and point enrolled learners to a
                 replacement. Archiving is permanent.
+                <span
+                  className="form-help-info wizard-desc-info"
+                  tabIndex={0}
+                  role="note"
+                  aria-label={ARCHIVE_CERT_TIP}
+                  data-tip={ARCHIVE_CERT_TIP}
+                >
+                  <InfoTipIcon />
+                </span>
               </p>
 
               <div className="form-group">
@@ -3336,26 +3776,6 @@ export function ArchiveCertificationPage({
                     retired from the catalog and can't be un-archived. Enrolled learners keep their
                     completion record and are pointed to the replacement Certification(s) below.
                   </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <div className="toggle-field">
-                  <span className="form-label">Archive this Certification</span>
-                  <div className="toggle-switch-row">
-                    <button
-                      className={`toggle ${confirmed ? "on" : ""}`}
-                      onClick={() => setConfirmed((v) => !v)}
-                      aria-pressed={confirmed}
-                    >
-                      <span className="toggle-knob" />
-                    </button>
-                    <span className="toggle-state">{confirmed ? "Yes" : "No"}</span>
-                  </div>
-                  <p className="toggle-sub">
-                    Retires the Certification and removes it from the catalog. This action is
-                    permanent and cannot be undone.
-                  </p>
                 </div>
               </div>
 
@@ -3393,11 +3813,29 @@ export function ArchiveCertificationPage({
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
-          <button className="btn-publish" disabled={!confirmed} onClick={onArchive}>
+          <button className="btn-publish" onClick={() => setConfirming(true)}>
             Archive Certification
           </button>
         </div>
       </footer>
+
+      {confirming &&
+        createPortal(
+          <PrmModal
+            title="Archive this Certification?"
+            description={
+              <>
+                Archive <strong>{cert.name}</strong> ({cert.id})? It leaves the catalog and
+                can't be un-archived. {replacementLine}
+              </>
+            }
+            confirmLabel="Archive Certification"
+            danger
+            onCancel={() => setConfirming(false)}
+            onConfirm={() => { setConfirming(false); onArchive(); }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
@@ -3441,6 +3879,7 @@ function LangField({
   errorMessage,
   autoFocus,
   onEnter,
+  suggestion,
 }: {
   en: string;
   es: string;
@@ -3456,29 +3895,59 @@ function LangField({
   /** Enter from either language row submits (modal forms only; on a wizard
    *  step Enter belongs to the footer's own shortcut). */
   onEnter?: () => void;
+  /** A value worth offering (the first Course takes the Certification's
+   *  name): it replaces the placeholders, and Tab in an empty row fills every
+   *  empty row with it — the Spanish row with `es`, falling back to `en`. */
+  suggestion?: { en: string; es: string };
 }) {
-  const onKeyDown = onEnter
-    ? (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          onEnter();
-        }
-      }
-    : undefined;
+  // Focus AND select, so the field is ready to type into — an edit replaces
+  // the current name rather than appending to it. Mount only.
+  const enRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    enRef.current?.focus();
+    enRef.current?.select();
+  }, [autoFocus]);
+
+  const suggestEn = suggestion?.en.trim() ?? "";
+  const suggestEs = suggestion?.es.trim() || suggestEn;
+  const keyDown = (rowValue: string) => (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && onEnter) {
+      e.preventDefault();
+      onEnter();
+    } else if (
+      e.key === "Tab" &&
+      suggestEn &&
+      !rowValue &&
+      !(e.shiftKey || e.metaKey || e.ctrlKey || e.altKey)
+    ) {
+      // Accept the suggestion; the caret stays put, so a second Tab moves on.
+      e.preventDefault();
+      if (!en) onChangeEn(suggestEn);
+      if (!es) onChangeEs(suggestEs);
+    }
+  };
   return (
     <>
       <div className={`lang-field ${error ? "has-error" : ""}`}>
         <div className="lang-field-row">
           <span className="lang-tag">EN</span>
           <input
+            ref={enRef}
             className="lang-field-input"
-            autoFocus={autoFocus}
             value={en}
-            placeholder={placeholderEn}
+            placeholder={suggestEn || placeholderEn}
             aria-invalid={error || undefined}
             onChange={(e) => onChangeEn(e.target.value)}
-            onKeyDown={onKeyDown}
+            onKeyDown={keyDown(en)}
           />
+          {/* The search bar's keycap (⌘K badge), naming the key that takes
+              the suggestion. Gone once the row has a value. */}
+          {suggestEn && !en && (
+            <span className="search-kbd lang-field-kbd" aria-hidden="true">
+              <span className="kbd-letter">Tab</span>
+            </span>
+          )}
         </div>
         <div className="lang-field-divider" />
         <div className="lang-field-row">
@@ -3486,9 +3955,9 @@ function LangField({
           <input
             className="lang-field-input"
             value={es}
-            placeholder={placeholderEs}
+            placeholder={suggestion ? suggestEs : placeholderEs}
             onChange={(e) => onChangeEs(e.target.value)}
-            onKeyDown={onKeyDown}
+            onKeyDown={keyDown(es)}
           />
         </div>
       </div>

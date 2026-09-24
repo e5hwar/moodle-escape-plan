@@ -75,13 +75,26 @@ function nodeById(id: string): ContentNode | undefined {
   return allNodes.find((n) => n.id === id);
 }
 
+function edgeKey(e: Link): string {
+  return `${e.from}-${e.to}-${e.kind}`;
+}
+
 /**
  * For focus F, compute three lists.
  *  - prerequisites: edges where to=F and kind=prerequisite (source is the prereq)
  *  - recommended:   edges where from=F and kind=recommended (target is the next)
  *  - related:       edges where (from=F or to=F) and kind=related
+ *
+ * Each list is ordered by the SAVED strength, not the one being edited, so a
+ * row never jumps while its number is typed — the lists re-sort on Save. A
+ * link added since the last save has no saved strength and sits at the bottom,
+ * in the order it was added.
  */
-function partition(focusId: string, links: Link[]) {
+function partition(
+  focusId: string,
+  links: Link[],
+  savedStrength: Map<string, number>,
+) {
   const prereqs: { other: string; strength: number; edge: Link }[] = [];
   const recommended: { other: string; strength: number; edge: Link }[] = [];
   const related: { other: string; strength: number; edge: Link }[] = [];
@@ -96,9 +109,12 @@ function partition(focusId: string, links: Link[]) {
       related.push({ other, strength: e.strength, edge: e });
     }
   }
-  prereqs.sort((a, b) => b.strength - a.strength);
-  recommended.sort((a, b) => b.strength - a.strength);
-  related.sort((a, b) => b.strength - a.strength);
+  // Strengths are 0–100, so -1 ranks unsaved links last; the sort is stable.
+  const rank = (x: { edge: Link }) => savedStrength.get(edgeKey(x.edge)) ?? -1;
+  const bySaved = (a: { edge: Link }, b: { edge: Link }) => rank(b) - rank(a);
+  prereqs.sort(bySaved);
+  recommended.sort(bySaved);
+  related.sort(bySaved);
   return { prereqs, recommended, related };
 }
 
@@ -130,9 +146,14 @@ export function ContentLinksPage({
       (initialFocus && initialFocus.id === focusId ? initialFocus : null)
     : null;
 
+  const savedStrength = useMemo(
+    () => new Map(baseline.map((e) => [edgeKey(e), e.strength])),
+    [baseline]
+  );
+
   const groups = useMemo(
-    () => (focusId ? partition(focusId, links) : null),
-    [focusId, links]
+    () => (focusId ? partition(focusId, links, savedStrength) : null),
+    [focusId, links, savedStrength]
   );
 
   // "Referenced by" = relationships authored on *other* certifications that point
@@ -566,7 +587,7 @@ function LinkSection({
           if (!n) return null;
           return (
             <LinkRow
-              key={`${edge.from}-${edge.to}-${edge.kind}`}
+              key={edgeKey(edge)}
               node={n}
               strength={strength}
               related={kind === "related"}

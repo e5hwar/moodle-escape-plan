@@ -445,11 +445,12 @@ type Props = {
   editingTask?: Task;
   /** Embedding hooks — used when the Task creation UI is shown inside the
    * Certification split-screen editor. When `onPrimary` is provided, the footer's
-   * create action calls it (with the Task's current name) instead of `onClose`,
-   * and shows `primaryLabel`. `savedLabel` adds the "Last saved…" note on the left. */
+   * create action calls it (with the Task's current name, its Requires
+   * Subscription answer — the Certification tree marks the row with it — and
+   * its Time to Complete, "~45 minutes" or undefined when blank) instead of
+   * `onClose`, and shows `primaryLabel`. */
   primaryLabel?: string;
-  onPrimary?: (taskName: string) => void;
-  savedLabel?: string;
+  onPrimary?: (taskName: string, requiresSubscription: boolean, timeToComplete: string | undefined) => void;
   /** Publishing hook for a brand-new Task. Called with the finished Task (the
    * caller assigns the id, the way `addCompany` does) once every mandatory
    * field on every step is filled. Without it, publishing just closes — the
@@ -526,7 +527,7 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   };
 }
 
-export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, savedLabel, onCreate }: Props) {
+export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, onCreate }: Props) {
   const isEditing = !!editingTask;
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(taskType, editingTask));
@@ -719,7 +720,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       return;
     }
     if (onPrimary) {
-      onPrimary(data.nameEn);
+      onPrimary(
+        data.nameEn,
+        data.requiresSubscription,
+        data.timeValue.trim() ? `~${data.timeValue} ${data.timeUnit}` : undefined,
+      );
       return;
     }
     if (onCreate && !isEditing) {
@@ -846,7 +851,6 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          {savedLabel && <span className="wizard-saved">{savedLabel}</span>}
           <button className="wizard-cancel" onClick={onClose}>
             Cancel
           </button>
@@ -3828,8 +3832,9 @@ function MaxAttemptsField({
 
 /* Paywall flag (Figma 367:6411). Note this is NOT `finalExam` — the field used
    to write to the Certification's Final Exam flag, which drives the Tasks-list
-   filter and the cert tree's pill. It has its own field now. A segmented
-   control like Visibility: No = neutral active, Yes = the accent pill. */
+   filter. It has its own field now, and it is what the Certification tree's
+   "Requires Subscription" tag reads. A segmented control like Visibility:
+   No = neutral active, Yes = the accent pill. */
 function SubscriptionAccessField({ data, update }: StepProps) {
   const requires = data.requiresSubscription;
   return (

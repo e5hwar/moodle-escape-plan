@@ -17,6 +17,7 @@ import { SkillsPage } from "./components/SkillsPage";
 import { NewAwardWizard } from "./components/NewAwardWizard";
 import { AwardRecipientsPage } from "./components/AwardRecipientsPage";
 import { type Certification } from "./data/certifications";
+import { type CertImportReport } from "./data/certImport";
 import {
   awards as seedAwards,
   designTemplates,
@@ -101,7 +102,9 @@ type View =
     }
   | { name: "attempt-viewer"; attempt: Attempt; quizName: string }
   | { name: "quiz-purchasers"; task: Task }
-  | { name: "new-cert" }
+  /* `imported` is a checked CSV Upload: the wizard opens with the file's
+     Courses, Lessons, and Tasks already built. */
+  | { name: "new-cert"; imported?: CertImportReport }
   | { name: "edit-cert"; cert: Certification }
   | { name: "archive-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
@@ -270,6 +273,13 @@ export default function App() {
      editor): its own tab, holding a placeholder until the real read-only brief
      exists. */
   const taskBriefId = params.get("taskBrief");
+  /* The Certification builder's Add Existing Tasks "Preview ›": its own tab,
+     holding a placeholder until a learner-facing Task preview exists. */
+  const taskPreviewId = params.get("taskPreview");
+  if (taskPreviewId) {
+    const t = tasks.find((x) => x.id === taskPreviewId);
+    return <TaskPreviewPlaceholder name={t?.name ?? taskPreviewId} />;
+  }
   if (taskBriefId) {
     const t = tasks.find((x) => x.id === taskBriefId);
     return <TaskBriefPlaceholder name={t?.name ?? taskBriefId} />;
@@ -521,6 +531,19 @@ function TaskBriefPlaceholder({ name }: { name: string }) {
       <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, color: "#fff" }}>{name}</h1>
       <p style={{ marginTop: 12, fontSize: 16, color: "#a8a8a8" }}>
         Instructions, Materials Required and Reference Files for this Task will appear here.
+      </p>
+    </div>
+  );
+}
+
+/* Placeholder for a Task preview opened from the Certification builder's
+   Add Existing Tasks picker. */
+function TaskPreviewPlaceholder({ name }: { name: string }) {
+  return (
+    <div style={{ padding: 48, fontFamily: "var(--font-sans)" }}>
+      <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, color: "#fff" }}>{name}</h1>
+      <p style={{ marginTop: 12, fontSize: 16, color: "#a8a8a8" }}>
+        A preview of this Task, as a learner will see it, will appear here.
       </p>
     </div>
   );
@@ -791,6 +814,7 @@ function AdminApp() {
       ) : view.name === "certs" ? (
         <CertificationsPage
           onNewCert={() => setView({ name: "new-cert" })}
+          onImportCert={(imported) => setView({ name: "new-cert", imported })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
@@ -1103,7 +1127,10 @@ function AdminApp() {
           onArchive={() => setView({ name: "certs" })}
         />
       ) : (
-        <NewCertificationWizard onClose={() => setView({ name: "certs" })} />
+        <NewCertificationWizard
+          imported={view.name === "new-cert" ? view.imported : undefined}
+          onClose={() => setView({ name: "certs" })}
+        />
       )}
     </div>
   );

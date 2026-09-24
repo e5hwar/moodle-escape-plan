@@ -5,6 +5,8 @@ export type CertVisibility = "Visible" | "Hidden" | "Archived";
 // non-consumable (one-time purchase, reusable). A cert with no payment model is
 // free.
 export type CertPayment = "Consumable" | "Non-consumable";
+// Time to Complete is a whole number of one of the wizard's four units.
+export type CertTimeUnit = "minutes" | "hours" | "days" | "weeks";
 
 export type Certification = {
   id: string;
@@ -13,6 +15,10 @@ export type Certification = {
   ceus: string;
   tasks: number;
   createdBy: string;
+  // The Details step's description and Time to Complete estimate. Both are
+  // optional, so a draft can be saved without them.
+  description?: string;
+  timeToComplete?: { value: number; unit: CertTimeUnit };
   draft?: boolean;
   dateCreated?: string;
   dateModified?: string;
@@ -32,6 +38,107 @@ export type Certification = {
   // See TRADE_TAGS / PARTNERSHIP_TAGS / AUDIENCE_TAGS in data/filters.
   tags?: string[];
 };
+
+/* The Details step's long-form fields, kept apart from the seed rows below so
+   each row stays one scannable line. The draft (Heat Pump Specialist) has
+   neither yet, so the empty case is covered too. */
+const CERT_DETAILS: Record<string, Pick<Certification, "description" | "timeToComplete">> = {
+  "C-0421": {
+    description: "Covers all four sections of the EPA Section 608 exam (Core, Type I, Type II and Type III), so technicians can certify to handle refrigerant in any system.",
+    timeToComplete: { value: 12, unit: "hours" },
+  },
+  "C-0420": {
+    description: "Core plus Type I: recovering refrigerant safely from small appliances holding five pounds or less, such as window units, refrigerators and dehumidifiers.",
+    timeToComplete: { value: 3, unit: "hours" },
+  },
+  "C-0419": {
+    description: "Core plus Type II: leak detection, recovery and repair requirements for high-pressure systems, from residential splits to commercial refrigeration.",
+    timeToComplete: { value: 3, unit: "hours" },
+  },
+  "C-0418": {
+    description: "Core plus Type III: recovery, leak testing and recharging procedures for low-pressure appliances such as centrifugal chillers.",
+    timeToComplete: { value: 3, unit: "hours" },
+  },
+  "C-0417": {
+    description: "Section 609 certification for servicing motor vehicle air conditioning: refrigerant recovery, recycling, and the rules for buying refrigerant.",
+    timeToComplete: { value: 2, unit: "hours" },
+  },
+  "C-0410": {
+    description: "An entry-level track built around the NATE Ready-to-Work exam: HVAC fundamentals, safety, tools and basic electrical for technicians starting out.",
+    timeToComplete: { value: 4, unit: "weeks" },
+  },
+  "C-0406": {
+    description: "How heat, air and moisture move through a building, and what that means for load calculations, duct design and diagnosing comfort complaints.",
+    timeToComplete: { value: 5, unit: "hours" },
+  },
+  "C-0405": {
+    description: "The safety essentials for working with refrigerants, from pressure and PPE to cylinder handling and leak response, packaged for residential crews.",
+    timeToComplete: { value: 6, unit: "hours" },
+  },
+  "C-0398": {
+    description: "A multi-week program that takes new technicians from fundamentals to field-ready skills across installation, maintenance and troubleshooting.",
+    timeToComplete: { value: 8, unit: "weeks" },
+  },
+  "C-0376": {
+    description: "Brazing copper line sets with oxy-acetylene and air-acetylene: joint prep, nitrogen purging, heat control and inspecting the finished joint.",
+    timeToComplete: { value: 90, unit: "minutes" },
+  },
+  "C-0341": {
+    description: "The 10-hour OSHA Outreach course for general industry: hazard recognition, walking-working surfaces, electrical safety and workers' rights.",
+    timeToComplete: { value: 10, unit: "hours" },
+  },
+  "C-0322": {
+    description: "The first year of the plumbing apprenticeship: tools and materials, drainage and venting, water supply basics, and reading the plumbing code.",
+    timeToComplete: { value: 16, unit: "weeks" },
+  },
+  "C-0298": {
+    description: "A refresher on the National Electrical Code for working electricians, focused on the articles that come up most in the field and on inspections.",
+    timeToComplete: { value: 4, unit: "hours" },
+  },
+  "C-0265": {
+    description: "Powered industrial truck training: pre-shift inspection, load handling, stability and safe operation in warehouse environments.",
+    timeToComplete: { value: 3, unit: "hours" },
+  },
+  "C-0242": {
+    description: "An introduction to installing solar photovoltaic systems: site assessment, racking, module wiring, inverters and working safely on roofs.",
+    timeToComplete: { value: 6, unit: "weeks" },
+  },
+  "C-0221": {
+    description: "Preparation for the Certified Welding Inspector exam: welding processes, codes and standards, discontinuities and visual inspection.",
+    timeToComplete: { value: 20, unit: "hours" },
+  },
+  "C-0588": {
+    description: "ARS's onboarding path for new hires: company standards, customer communication, and the core HVAC skills every ARS technician needs.",
+    timeToComplete: { value: 2, unit: "weeks" },
+  },
+  "C-0571": {
+    description: "NexTech's readiness track for commercial technicians heading into the field: site safety, equipment basics and service documentation.",
+    timeToComplete: { value: 3, unit: "weeks" },
+  },
+  "C-0559": {
+    description: "Premium HVAC Services' standards for residential installs: equipment placement, line set practices, commissioning and the customer walkthrough.",
+    timeToComplete: { value: 2, unit: "hours" },
+  },
+  "C-0540": {
+    description: "A short job-site safety refresher for HVACR technicians: lockout/tagout, ladders, electrical hazards and handling refrigerant cylinders.",
+    timeToComplete: { value: 45, unit: "minutes" },
+  },
+};
+
+const TIME_UNIT_NAMES: Record<CertTimeUnit, [one: string, many: string]> = {
+  minutes: ["Minute", "Minutes"],
+  hours: ["Hour", "Hours"],
+  days: ["Day", "Days"],
+  weeks: ["Week", "Weeks"],
+};
+
+/** "20 Minutes", "1 Hour": a Time to Complete in the words of the wizard's
+ *  unit picker. Empty when the Certification doesn't have one. */
+export function formatTimeToComplete(time: Certification["timeToComplete"]): string {
+  if (!time) return "";
+  const [one, many] = TIME_UNIT_NAMES[time.unit];
+  return `${time.value} ${time.value === 1 ? one : many}`;
+}
 
 const C = (
   id: string,
@@ -53,6 +160,7 @@ const C = (
   dateCreated,
   dateModified,
   visibility: "Visible",
+  ...CERT_DETAILS[id],
   ...extra,
 });
 

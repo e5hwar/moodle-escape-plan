@@ -213,7 +213,6 @@ export function NewAwardWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          {isEditing && <span className="wizard-saved">Last saved 2 minutes ago</span>}
           <button className="wizard-cancel" onClick={onClose}>Cancel</button>
           {/* Deleting the Award is the only way to give the Certification its
               "Add Award" entry back, and the Awards table that used to carry

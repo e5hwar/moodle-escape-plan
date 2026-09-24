@@ -151,7 +151,7 @@ export const FILTER_TIPS = {
     company: "Narrow the list to users at the chosen companies.",
   },
 
-  /** Select Tasks, and the Certification wizard's Add Existing Tasks. */
+  /** Select Tasks, and SelectRequirementModal's Task list (Add Requirement, Add Existing Tasks, Feedback Forms' Add Tasks). */
   taskPicker: {
     type: "Narrow the list to the chosen Task types.",
     visibility: "Narrow the list to Tasks learners can see, or to hidden ones.",

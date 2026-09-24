@@ -178,7 +178,9 @@ export function useLandingMorph(startAtTable = false, wheelGesture = true) {
         return;
       }
       // Same overlay guard as the wheel — arrows inside an open panel are its.
-      if (t?.closest?.(".dropdown, .usearch-panel")) return;
+      // So are arrows inside a modal dialog (a drawer or modal that takes
+      // focus); the wheel needs no such guard, as dialogs render outside `el`.
+      if (t?.closest?.('.dropdown, .usearch-panel, [aria-modal="true"]')) return;
       // Same "committed to the table" notion as the wheel lock.
       if (!(target.current === 1 && current.current >= 0.85)) return;
       const sc = scroller();

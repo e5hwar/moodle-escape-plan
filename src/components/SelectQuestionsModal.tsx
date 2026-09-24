@@ -367,7 +367,7 @@ export function SelectQuestionsModal({
             className="table-xscroll"
             style={{ "--table-min": "874px" } as React.CSSProperties}
           >
-            <table className="table table-head stm-table sqm-table">
+            <table className="table table-head stm-table stm-table--preview sqm-table">
               <ColGroup />
               <thead>
                 <tr>
@@ -392,7 +392,7 @@ export function SelectQuestionsModal({
             </table>
 
             <div className="tasks-scroll">
-              <table className="table table-body stm-table sqm-table">
+              <table className="table table-body stm-table stm-table--preview sqm-table">
                 <ColGroup />
                 <tbody>
                   {rows.length === 0 ? (
