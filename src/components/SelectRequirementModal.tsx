@@ -7,13 +7,13 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   RowChevronIcon,
-  SearchClearIcon,
   SearchIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 /* Add Requirement — the Certification wizard's Completion Criteria picker.
  *
@@ -256,7 +256,7 @@ export function SelectRequirementModal({
               <SearchIcon />
             </span>
             <input
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder={tab === "task" ? "Search Tasks..." : "Search Certifications..."}
               autoFocus
               value={query}
@@ -265,21 +265,13 @@ export function SelectRequirementModal({
                 setPage(1);
               }}
             />
-            {query && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Clear search"
-                title="Clear search"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setQuery("");
-                  setPage(1);
-                }}
-              >
-                <SearchClearIcon />
-              </button>
-            )}
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
+                setPage(1);
+              }}
+            />
           </div>
 
           <div className="filters stm-filters">
@@ -516,7 +508,7 @@ export function SelectRequirementModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -524,7 +516,7 @@ export function SelectRequirementModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

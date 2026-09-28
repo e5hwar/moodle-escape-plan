@@ -25,9 +25,18 @@ export const SettingsIcon = () => (
   </svg>
 );
 
+/* tdesign:search — Figma "Icon Set" (8:11248), the glyph every search bar
+   leads with. The exported stroke (1.6, square caps) placed where the node puts
+   it inside its 16px frame, so the glyph is 14.04 × 13.97 at 16px and scales
+   1:1 to the Large bar's 20px (1362:1947 — stroke 2). It used to be the
+   outlined stroke on a 15 × 14 box, which every bar stretched to 16 and drew
+   ~7% oversize and 1px left of the node. */
 export const SearchIcon = () => (
-  <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M5.83114 8.23679e-05C7.35854 0.008312 8.82139 0.618266 9.90145 1.69832C10.9815 2.77838 11.5915 4.24123 11.5997 5.76864C11.6064 7.02957 11.2015 8.25094 10.4591 9.25301L14.0391 12.8331L12.9083 13.9649L9.337 10.3946C8.94597 10.6955 8.51866 10.9475 8.06258 11.1407C7.35657 11.4398 6.59787 11.5956 5.83114 11.5997C5.06433 11.6038 4.30404 11.4557 3.59481 11.1641C2.88554 10.8726 2.24058 10.4437 1.69832 9.90145C1.15607 9.35919 0.727208 8.71424 0.435629 8.00496C0.144086 7.29573 -0.00400175 6.53545 8.22256e-05 5.76864C0.0042134 5.0019 0.159996 4.24321 0.459067 3.53719C0.758139 2.83127 1.19444 2.19169 1.74227 1.65536C2.83386 0.586779 4.3036 -0.00805325 5.83114 8.23679e-05ZM5.82235 1.59969C4.7162 1.5938 3.65187 2.02511 2.86141 2.79891C2.46488 3.18719 2.14923 3.65022 1.9327 4.16122C1.71611 4.67252 1.60266 5.22215 1.59969 5.77743C1.59673 6.33263 1.70406 6.88304 1.91512 7.39657C2.12626 7.91018 2.43749 8.37695 2.83016 8.76961C3.22283 9.16228 3.6896 9.47351 4.20321 9.68465C4.71673 9.89572 5.26714 10.003 5.82235 10.0001C6.37762 9.99711 6.92725 9.88367 7.43856 9.66707C7.95012 9.45031 8.41284 9.13473 8.80086 8.73836C9.57458 7.94798 10.006 6.88368 10.0001 5.77743C9.99417 4.67132 9.55177 3.61231 8.76961 2.83016C7.98746 2.04801 6.92846 1.60561 5.82235 1.59969Z" fill="currentColor" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square">
+    <path
+      transform="translate(1.1631 1.2383)"
+      d="M9.37299 9.29834L12.9083 12.8337M9.37299 9.29834C8.91054 9.77075 8.35899 10.1461 7.75026 10.404C7.14153 10.6618 6.48771 10.7964 5.82663 10.7999C5.16555 10.8034 4.51033 10.6758 3.89889 10.4245C3.28745 10.1731 2.73193 9.803 2.26447 9.33553C1.797 8.86807 1.42688 8.31255 1.17552 7.70111C0.924162 7.08967 0.79655 6.43445 0.800071 5.77337C0.803592 5.11229 0.938176 4.45847 1.19604 3.84974C1.4539 3.24101 1.82991 2.68946 2.30233 2.22701C3.24335 1.30582 4.50979 0.793058 5.82663 0.800071C7.14347 0.807084 8.40438 1.33331 9.33553 2.26447C10.2667 3.19562 10.7929 4.45653 10.7999 5.77337C10.8069 7.09021 10.2942 8.35732 9.37299 9.29834Z"
+    />
   </svg>
 );
 
@@ -190,6 +199,29 @@ export const ChevronLeftIcon = () => (
 export const ChevronRightIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+
+/* Breadcrumb separator (Figma 1356:1831, "Icon Library") — the page header's
+   14px chevron, export verbatim: 1.16667 stroke, square caps. */
+export const CrumbChevronIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M5.54167 10.2083L8.75 7L5.54167 3.79167" />
+  </svg>
+);
+
+/* Pagination prev/next (Figma 77:288 / 77:289, "Icon Library") — paths are the
+   export verbatim: 16px box, 1.33333 stroke, square caps. currentColor so the
+   button's #a8a8a8 → white hover and disabled fade still apply. */
+export const PagePrevIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M9.66667 11.6667L6 8L9.66667 4.33333" />
+  </svg>
+);
+
+export const PageNextIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.33333 11.6667L10 8L6.33333 4.33333" />
   </svg>
 );
 
@@ -427,6 +459,17 @@ export const LockIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <rect x="4" y="11" width="16" height="9" rx="2" />
     <path d="M8 11V8a4 4 0 018 0v3" />
+  </svg>
+);
+
+/* Filled padlock (Figma 1360:1926) — the Locked Field banner's glyph. Paints in
+   currentColor; the banner sets the node's #a8a8a8. */
+export const FieldLockIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M4 6.66667H2.33333V14.6667H13.6667V6.66667H12V4.66667C12 3.6058 11.5786 2.58839 10.8284 1.83824C10.0783 1.08809 9.06087 0.666667 8 0.666667C6.93913 0.666667 5.92172 1.08809 5.17157 1.83824C4.42143 2.58839 4 3.6058 4 4.66667V6.66667ZM5.33333 4.66667C5.33333 3.95942 5.61429 3.28115 6.11438 2.78105C6.61448 2.28095 7.29276 2 8 2C8.70724 2 9.38552 2.28095 9.88562 2.78105C10.3857 3.28115 10.6667 3.95942 10.6667 4.66667V6.66667H5.33333V4.66667ZM6 11.3333V10H10V11.3333H6Z"
+      fill="currentColor"
+    />
   </svg>
 );
 
@@ -1265,6 +1308,23 @@ export const KeyCommandIcon = () => (
 export const KeyEnterIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
     <path d="M3.35417 9.33333H9.33333C10.2998 9.33333 11.0833 8.54983 11.0833 7.58333L11.0833 2.91667M4.66667 7.29167L2.625 9.33333L4.66667 11.375" />
+  </svg>
+);
+
+/* ↑ / ↓ keycap glyphs — the search panel footer's "To Navigate" pair (Figma
+   21:15992 / 21:15994), 12px Icon Library exports verbatim. Not mirror images
+   of each other in the file (the heads sit 2.5 / 9.55 from the top), so both
+   are transcribed rather than one being flipped; ↓ is the same glyph as
+   {@link FullTableIcon}. */
+export const KeyArrowUpIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M8.75 5.25L6 2.5L3.25 5.25M6 3.125V9.625" />
+  </svg>
+);
+
+export const KeyArrowDownIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M8.75 6.8L6 9.55L3.25 6.8M6 8.925V2.425" />
   </svg>
 );
 

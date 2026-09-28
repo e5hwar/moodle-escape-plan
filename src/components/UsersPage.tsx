@@ -18,7 +18,6 @@ import { EditUserModal } from "./UserProfilePage";
 import {
   UsersFilters,
   UsersEditColumns,
-  GOALS,
   type UserColumnKey,
   type UserColumnState,
   type UserFilterState,
@@ -26,24 +25,13 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { UsersSearch } from "./UsersSearch";
 import { loginAs } from "./loginAs";
-import { useLandingMorph } from "../hooks/useLandingMorph";
+import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
-
-/* Landing-morph columns — mirror the table's default visible columns (key,
-   label, width) so the p=1 hand-off to the real table lines up. */
-const LM_COLS: LandingCol[] = [
-  { key: "email", label: "Email", width: 190 },
-  { key: "phone", label: "Phone", width: 165 },
-  { key: "company", label: "Company", width: 175 },
-  // Hidden on the landing, grows in with the morph — the table's default
-  // columns must all be here, in table order, or one pops in at the hand-off.
-  { key: "subscription", label: "Subscription", width: 240 },
-  { key: "lastAccess", label: "App Last Access", width: 160, fixed: true },
-];
-import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 const DEFAULT_COLUMNS: UserColumnState = {
   email: true,
@@ -118,7 +106,6 @@ const SUB_ORDER: Record<SubscriptionStatus, number> = {
   Cancelled: 4,
   Starter: 5,
 };
-const FIRST_JOB_GOAL = GOALS[0];
 const GOAL_ORDER: Record<string, number> = { "Looking for First Trades Job": 0, "Exploring Careers in the Skilled Trades": 1, "Focussed on Advancing Career": 2, Other: 3 };
 
 /* A Subscriber with an upcoming cancellation ("Stripe · Cancels Jul 9, 2026")
@@ -297,46 +284,33 @@ export function UsersPage({
   // scrolls horizontally rather than crushing columns on a narrow page.
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
-  // Landing morph — the page opens as the search-first landing and the wheel
-  // (or any search / pill / row interaction) morphs it into the table view.
-  // A company deep-link (View Employees) skips straight to the table.
-  const morph = useLandingMorph(Boolean(initialCompanyFilter));
+  // The page's one scroller — the Tasks / Certifications collapsing header:
+  // the landing header folds away over the first stretch of scroll with the
+  // table glued beneath it, and the rows scroll under the pinned header after
+  // that. A company deep link (View Employees) opens collapsed, on the table.
+  const head = useCollapsingHeader(Boolean(initialCompanyFilter));
+  const { scrollToFirstRow } = head;
 
-  const suggested = useMemo(() => {
-    const pills: LandingPill[] = [
-      {
-        key: "recently-cancelled",
-        label: "Recently Cancelled",
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, subscriptions: Array.from(new Set([...prev.subscriptions, "Cancelled" as SubscriptionStatus])) }));
-          setSort({ key: "subscription", dir: "desc" });
-          morph.showTable();
-        },
-      },
-      {
-        key: "first-job",
-        label: FIRST_JOB_GOAL,
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, goals: Array.from(new Set([...prev.goals, FIRST_JOB_GOAL])) }));
-          morph.showTable();
-        },
-      },
-    ];
-    return pills;
-  }, [morph.showTable]);
+  // A new query, filter, sort or page starts the list at its first row. A
+  // collapsed header stays collapsed; one still open is left as it is.
+  useLayoutEffect(() => {
+    scrollToFirstRow();
+  }, [committedQuery, filters, sort, visiblePage, scrollToFirstRow]);
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map(({ u }) => ({
-    key: u.id,
-    name: u.name,
-    cells: {
-      email: u.email,
-      phone: u.phone,
-      company: u.userType === "B2B" && u.companyName ? u.companyName : "",
-      // Same wording the real table carries, so the hand-off is seamless.
-      subscription: subscriptionLabel(u),
-      lastAccess: formatDaysAgo(u.lastAccess),
-    },
-  }));
+  // The landing's summary line — every user on the roster, not the filtered
+  // rows (the pagination footer counts those), and the Companies their B2B
+  // seats belong to.
+  const catalog = useMemo(
+    () => ({
+      users: list.length,
+      companies: new Set(list.flatMap((u) => (u.companyName ? [u.companyName] : []))).size,
+    }),
+    [list],
+  );
+
+  // Pending name changes: the banner at the landing, the note under the title
+  // once collapsed — the same statement at two sizes, exactly one showing.
+  const hasNameChanges = nameChangeRequests.length > 0 && !!onOpenNameChanges;
 
   function toggleSort(key: SortKey) {
     // Sort is locked to role (Admin, Manager, Employee) while a company
@@ -350,160 +324,169 @@ export function UsersPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm" ref={morph.rootRef}>
-          <header className="tasks-header">
-            <div>
-              <h1 className="tasks-title">Manage Users</h1>
-              {/* The landing banner's collapsed form (Figma 1268:1736): once the
-                  page morphs into the table, the pending count lives under the
-                  title as one accent line that opens the queue. */}
-              {nameChangeRequests.length > 0 && onOpenNameChanges && (
-                <button className="tasks-note" onClick={() => onOpenNameChanges()}>
-                  {nameChangeRequests.length} Name Changes Pending Review
-                  <NoteChevronIcon />
-                </button>
-              )}
-            </div>
-            {/* Name Changes used to be a labelled header button here; the
-                pending count is the banner / title note now (1268:1714 →
-                1268:1736), so the header keeps only the 3-dot menu. Offer Codes
-                is hidden for now; Scholarships sits in that menu beside Merge /
-                Transfer, keeping its S shortcut. */}
-            <div className="tasks-header-actions">
-              <button
-                className="cta-quiet cta-quiet--icon"
-                aria-label="More actions"
-                onClick={(e) => setPageMenu(e.currentTarget.getBoundingClientRect())}
-              >
-                <RowKebabIcon />
-              </button>
-            </div>
-          </header>
-
-          <div className="tasks-row">
-            <div className="tasks-content">
-              {/* Pending name changes announce themselves above the hero
-                  search. The whole card opens the queue — the CTA is the
-                  affordance, not the only target. Figma 1268:1714. */}
-              {nameChangeRequests.length > 0 && onOpenNameChanges && (
-                <div
-                  className="note-card note-card--accent lm-banner"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onOpenNameChanges()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onOpenNameChanges();
-                    }
-                  }}
-                >
-                  <div className="lm-banner-main">
-                    <div className="lm-banner-count">{nameChangeRequests.length}</div>
-                    <div className="note-card-text">
-                      <p className="note-card-title">Name Change Requests Pending</p>
-                      <p className="note-card-body">Check against their ID saved on SkillCat</p>
+        {/* The Tasks / Certifications collapsing header: the page is ONE
+            scroller — the table's own `.table-xscroll` — opening on the
+            landing (the Enlarged Header, the name-change banner, the Large
+            search bar) sitting straight on top of the real table. See
+            useCollapsingHeader and the `.tasks.clh` rules in index.css; the
+            banner's parts join the collapse only when it shows. */}
+        <div className={`tasks clh${hasNameChanges ? " clh--banner" : ""}`}>
+          <div className="co-table-col">
+            <div
+              ref={head.scrollRef}
+              className="table-xscroll clh-scroll"
+              style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
+            >
+              <div className="clh-canvas">
+                <div ref={head.headerRef} className="clh-head">
+                  {/* The header's pieces are its direct children, so each can pin
+                      inside it (see the `.tasks.clh` rules). The action button
+                      keeps a `.tasks-header` of its own for its button style. */}
+                  {/* Name Changes used to be a labelled header button here; the
+                      pending count is the banner / title note now (1268:1714 →
+                      1268:1736), so the header keeps only the 3-dot menu. Offer Codes
+                      is hidden for now; Scholarships sits in that menu beside Merge /
+                      Transfer, keeping its S shortcut. */}
+                  <header className="tasks-header clh-actions">
+                    <div className="tasks-header-actions">
+                      <button
+                        className="cta-quiet cta-quiet--icon"
+                        aria-label="More actions"
+                        onClick={(e) => setPageMenu(e.currentTarget.getBoundingClientRect())}
+                      >
+                        <RowKebabIcon />
+                      </button>
                     </div>
+                  </header>
+                  <h1 className="tasks-title">Manage Users</h1>
+                  {/* The landing banner's collapsed form (Figma 1268:1736): as
+                      the header collapses, the pending count fades in under the
+                      title as one accent line that opens the queue. */}
+                  {hasNameChanges && (
+                    <button className="tasks-note" onClick={() => onOpenNameChanges?.()}>
+                      {nameChangeRequests.length} Name Changes Pending Review
+                      <NoteChevronIcon />
+                    </button>
+                  )}
+                  {/* The landing's summary line, in the shape of Figma
+                      1356:1864 ("3210 Tasks · Across 230 Certifications"). It
+                      fades as the header collapses. */}
+                  <p className="tasks-subtitle clh-sub">
+                    {`${plural(catalog.users, "User", "Users")} · Across ${plural(
+                      catalog.companies,
+                      "Company",
+                      "Companies",
+                    )}`}
+                  </p>
+
+                  {/* Pending name changes announce themselves above the hero
+                      search, and fade as the header collapses. The whole card
+                      opens the queue — the CTA is the affordance, not the only
+                      target. Figma 1268:1714. */}
+                  {hasNameChanges && (
+                    <div className="clh-banner">
+                      <div
+                        className="note-card note-card--accent lm-banner"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onOpenNameChanges?.()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onOpenNameChanges?.();
+                          }
+                        }}
+                      >
+                        <div className="lm-banner-main">
+                          <div className="lm-banner-count">{nameChangeRequests.length}</div>
+                          <div className="note-card-text">
+                            <p className="note-card-title">Name Change Requests Pending</p>
+                            <p className="note-card-body">Check against their ID saved on SkillCat</p>
+                          </div>
+                        </div>
+                        <button
+                          className="cta-quiet"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenNameChanges?.();
+                          }}
+                        >
+                          Review Names
+                          <span className="cta-kbd">N</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="toolbar">
+                    <UsersSearch
+                      users={list}
+                      companies={filters.companies}
+                      onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
+                      query={committedQuery}
+                      onCommit={setCommittedQuery}
+                    />
                   </div>
-                  <button
-                    className="cta-quiet"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenNameChanges();
-                    }}
-                  >
-                    Review Names
-                    <span className="cta-kbd">N</span>
-                  </button>
-                </div>
-              )}
 
-              <div className="toolbar">
-                <UsersSearch
-                  users={list}
-                  companies={filters.companies}
-                  onCompaniesChange={(c) => setFilters((prev) => ({ ...prev, companies: c }))}
-                  query={committedQuery}
-                  onCommit={(q) => {
-                    setCommittedQuery(q);
-                    morph.showTable();
-                  }}
-                />
-              </div>
-
-              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <UsersFilters filters={filters} setFilters={setFilters} />
-                </LandingFilterRow>
+                </div>
 
-              <div className="lm-stage">
-              <LandingOverlay
-                caption="Recently Active Users"
-                columns={LM_COLS}
-                nameWidth={200}
-                rows={landingRows}
-                onShowAll={morph.showTable}
-                onRowClick={() => morph.showTable()}
-              />
-              <div className="lm-table">
-              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-              <table className="table table-head">
-                <ColGroup cols={visibleCols} />
-                <thead>
-                  <tr>
-                    <SortableHeader col="name" label="Name" className="col-name" sort={effectiveSort} toggle={toggleSort} />
-                    {visibleCols.map((c) => (
-                      <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={effectiveSort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
-                    ))}
-                    <th className="col-actions">
-                      <UsersEditColumns
-                        columns={columns}
-                        setColumns={setColumns}
-                        order={order}
-                        onOrderChange={(o) => setOrder(o as typeof order)}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-              </table>
-
-              <div className="tasks-scroll">
-                <table className="table table-body">
+                <table ref={head.theadRef} className="table table-head">
                   <ColGroup cols={visibleCols} />
-                  <tbody>
-                    {paged.map((row) => (
-                      <UserRow
-                        key={row.u.id}
-                        row={row}
-                        cols={visibleCols}
-                        onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
-                        onEdit={() => setEditing(row.u)}
-                        menuOpen={menu?.user.id === row.u.id}
-                      />
-                    ))}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={colSpan} className="u-empty">
-                          {committedQuery.trim()
-                            ? `No users match "${committedQuery.trim()}".`
-                            : "No users match these filters."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
+                  <thead>
+                    <tr>
+                      <SortableHeader col="name" label="Name" className="col-name" sort={effectiveSort} toggle={toggleSort} />
+                      {visibleCols.map((c) => (
+                        <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={effectiveSort} toggle={toggleSort} sortable={!NON_SORTABLE_COLS.has(c.key)} />
+                      ))}
+                      <th className="col-actions">
+                        <UsersEditColumns
+                          columns={columns}
+                          setColumns={setColumns}
+                          order={order}
+                          onOrderChange={(o) => setOrder(o as typeof order)}
+                        />
+                      </th>
+                    </tr>
+                  </thead>
                 </table>
-              </div>
-              </div>
 
-              <div className="pagination">
-                <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                </span>
-                <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                <div className="tasks-scroll">
+                  <table className="table table-body">
+                    <ColGroup cols={visibleCols} />
+                    <tbody>
+                      {paged.map((row) => (
+                        <UserRow
+                          key={row.u.id}
+                          row={row}
+                          cols={visibleCols}
+                          onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
+                          onEdit={() => setEditing(row.u)}
+                          menuOpen={menu?.user.id === row.u.id}
+                        />
+                      ))}
+                      {paged.length === 0 && (
+                        <tr>
+                          <td colSpan={colSpan} className="u-empty">
+                            {committedQuery.trim()
+                              ? `No users match "${committedQuery.trim()}".`
+                              : "No users match these filters."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              </div>
+            </div>
+
+            <div className="pagination">
+              <span>
+                Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+              </span>
+              <div className="pagination-controls">
+                <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
               </div>
             </div>
           </div>

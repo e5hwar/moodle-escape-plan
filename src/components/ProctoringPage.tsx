@@ -24,11 +24,11 @@ import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
 import {
   SortIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   RunMoveUpIcon,
   RunMoveDownIcon,
   RowChevronIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
 
 const PAGE_SIZE = 50;
@@ -813,8 +813,8 @@ export function ProctoringPage({
                       Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                     </div>
                   </div>
                 </div>

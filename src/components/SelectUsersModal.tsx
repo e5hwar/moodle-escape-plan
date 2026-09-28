@@ -6,11 +6,12 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   SearchIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 /* Select Users — the Merge Accounts twin of SelectTasksModal (Figma 682:2321).
  * Clicking either account field on step 1 opens this table picker: search bar,
@@ -182,11 +183,18 @@ export function SelectUsersModal({
               <SearchIcon />
             </span>
             <input
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder="Search Users..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
                 setPage(1);
               }}
             />
@@ -389,7 +397,7 @@ export function SelectUsersModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -397,7 +405,7 @@ export function SelectUsersModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

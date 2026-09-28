@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Submission } from "../data/proctoring";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 /** Per scope kind in "Suggested filters" (Quiz is the only one). */
@@ -204,19 +204,12 @@ export function ProctoringSearch({
         </span>
         <div className="usearch-scopes">
           {scopeChips.map((chip) => (
-            <span className="usearch-scope" key={`${chip.kind}-${chip.name}`}>
-              <span className="usearch-scope-label">{chip.kind}:</span>
-              <span className="usearch-scope-name">{chip.name}</span>
-              <button
-                type="button"
-                className="usearch-scope-x"
-                aria-label={`Remove ${chip.kind} filter ${chip.name}`}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={chip.remove}
-              >
-                <SearchClearIcon />
-              </button>
-            </span>
+            <SearchScopeChip
+              key={`${chip.kind}-${chip.name}`}
+              label={`${chip.kind}:`}
+              name={chip.name}
+              onRemove={chip.remove}
+            />
           ))}
         </div>
         <input

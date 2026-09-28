@@ -6,7 +6,7 @@ import {
   type IdRecord,
   type IdStatus,
 } from "../data/manageIds";
-import { ChevronRightIcon, SortIcon, ChevronLeftIcon } from "./icons";
+import { SortIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
 import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
 import { IdModal } from "./IdModal";
 
@@ -123,9 +123,9 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Home</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb">Operations</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <button
                   className="rvc-crumb"
                   onClick={onBack}
@@ -133,7 +133,7 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                 >
                   Exam Reviews
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">View All IDs</span>
               </nav>
               <h1 className="tasks-title">Manage IDs</h1>
@@ -210,8 +210,8 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>

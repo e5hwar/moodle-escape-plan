@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
-import { ChevronRightIcon, InfoTipIcon } from "./icons";
+import { InfoTipIcon, CrumbChevronIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { PrmModal } from "./PrmModal";
 import { UserDetailsHover } from "./UserDetailsHover";
@@ -234,9 +234,9 @@ export function ProctoringConsole({
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Home</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb">Operations</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 {/* Opened from the review queue, Exam Reviews IS the page to go
                     back to. Opened from a page that hangs off it, that page is
                     the trailing crumb instead and Exam Reviews reads as the
@@ -250,7 +250,7 @@ export function ProctoringConsole({
                     >
                       Exam Reviews
                     </button>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <button
                       className="rvc-crumb rvc-crumb--current"
                       onClick={onExit}

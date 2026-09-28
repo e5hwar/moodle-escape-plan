@@ -16,12 +16,13 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   RowChevronIcon,
   SearchIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 /* Select Questions — the Quiz wizard's Question Bank twin of SelectTasksModal
  * (Figma 682:2321): search bar, two filter pills, a sortable table and
@@ -287,11 +288,18 @@ export function SelectQuestionsModal({
               <SearchIcon />
             </span>
             <input
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder="Search Questions..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
                 setPage(1);
               }}
             />
@@ -504,7 +512,7 @@ export function SelectQuestionsModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -512,7 +520,7 @@ export function SelectQuestionsModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

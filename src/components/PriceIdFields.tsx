@@ -23,6 +23,23 @@ export const EMPTY_PRICE_IDS: PriceIds = {
 // per-field, so they must not share the EMPTY_PRICE_IDS reference.
 export const newPriceIds = (): PriceIds => ({ ...EMPTY_PRICE_IDS });
 
+const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+// A Stripe-shaped Price ID ("price_" + 24 characters), stable for its seed:
+// FNV-1a seeds an xorshift stream, so each record keeps its own ID.
+export function samplePriceId(seed: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  let id = "price_1";
+  while (id.length < 30) {
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    id += BASE62[(h >>> 0) % 62];
+  }
+  return id;
+}
+
 /* Row order and copy are Figma 748:1593 / 752:2816 — Apple leads, and the two
    Stripe rows wrap their audience onto a second line. The stores issue Product
    IDs while Stripe issues Price IDs, so the two halves are named differently. */

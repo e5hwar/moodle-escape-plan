@@ -18,9 +18,10 @@ import {
   MenuResponsesIcon,
   MenuArchiveReplaceIcon,
   CopyIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CalendarIcon,
+  PagePrevIcon,
+  PageNextIcon,
+  CrumbChevronIcon,
 } from "./icons";
 import { PrmModal } from "./PrmModal";
 import { SearchTrailing } from "./SearchPanelParts";
@@ -332,11 +333,11 @@ export function FeedbackFormsPage({
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Content</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
                   Certifications
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Feedback</span>
               </nav>
               <h1 className="tasks-title">Feedback Forms</h1>
@@ -470,8 +471,8 @@ export function FeedbackFormsPage({
                       Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                     </div>
                   </div>
                 </div>

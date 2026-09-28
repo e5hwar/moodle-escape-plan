@@ -7,12 +7,12 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  SearchClearIcon,
   SearchIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 /* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
  * inside the shared PrmModal shell: search bar, two filter pills, a 5-column
@@ -194,7 +194,7 @@ export function SelectTasksModal({
             {/* The picker opens ready to type — searching is the first thing
                 anyone does here, and nothing else on the card wants focus. */}
             <input
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder="Search Tasks..."
               autoFocus
               value={query}
@@ -203,23 +203,13 @@ export function SelectTasksModal({
                 setPage(1);
               }}
             />
-            {/* Shared clear ✕ (Figma 902:3585): appears only once there is
-                something to clear, and keeps focus in the field. */}
-            {query && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Clear search"
-                title="Clear search"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setQuery("");
-                  setPage(1);
-                }}
-              >
-                <SearchClearIcon />
-              </button>
-            )}
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
+                setPage(1);
+              }}
+            />
           </div>
 
           <div className="filters stm-filters">
@@ -419,7 +409,7 @@ export function SelectTasksModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -427,7 +417,7 @@ export function SelectTasksModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

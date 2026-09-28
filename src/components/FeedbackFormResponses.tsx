@@ -7,6 +7,7 @@ import {
 } from "../data/feedbackForms";
 import { type Question, type QuestionType } from "../data/questionBank";
 import { InfoTipIcon, SearchIcon } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -677,6 +678,7 @@ export function FormResponsesSplit({ form, bank, responses }: Props) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+            <SearchTrailing active={!!query} onClear={() => setQuery("")} />
           </div>
           <div className="fb-split-counts">
             <span>

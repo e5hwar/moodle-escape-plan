@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { formResponses, type FeedbackForm } from "../data/feedbackForms";
 import { type Question } from "../data/questionBank";
-import { ChevronRightIcon } from "./icons";
+import { CrumbChevronIcon } from "./icons";
 import {
   buildRows,
   exportFormCsv,
@@ -41,7 +41,7 @@ export function FeedbackFormResponsesPage({ form, bank, onBack }: Props) {
                 <button className="rvc-crumb" onClick={onBack} title="Back to Feedback Forms">
                   Feedback Forms
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">
                   {form.name || "Untitled form"}
                 </span>

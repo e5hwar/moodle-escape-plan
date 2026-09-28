@@ -13,23 +13,17 @@ import {
 } from "./Filters";
 import type { OptionalColumn } from "../data/filters";
 import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPaidIcon, MenuAttemptsIcon, MenuProgressIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuPaidIcon, MenuAttemptsIcon, MenuProgressIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
-import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
+import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
+import { CERT_BY_USEDIN } from "../data/certifications";
+import { Drawer } from "./Drawer";
+import { TaskSummary } from "./NewTaskWizard";
 
-/* Landing-morph columns — mirror the table's default visible columns (key,
-   label, width) so the p=1 hand-off to the real table lines up. */
-const LM_COLS: LandingCol[] = [
-  { key: "type", label: "Type", width: 160, fixed: true },
-  { key: "used", label: "Used in", width: 180 },
-  /* No Created By — it left the table's defaults, and a column the landing
-     shows but the table doesn't would flicker in and out across the morph. */
-  { key: "modified", label: "Date Modified", width: 130 },
-];
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; shortcut: string }[] = [
   { key: "xapi", label: "xAPI Module", shortcut: "X" },
@@ -202,6 +196,11 @@ export function TasksPage({
   // The Task awaiting a Delete confirmation — the same 667:884 shell as Hide,
   // in its destructive variant.
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  // The Task whose row was clicked — read back in the side drawer, the way a
+  // Certification row opens its own. Held by id so the drawer follows the
+  // working copy (a hide or delete from elsewhere updates or closes it).
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const drawerTask = drawerId ? taskList.find((t) => t.id === drawerId) : undefined;
   // Search bar: committedQuery only changes on Enter. The certification filter is
   // shared with the Filters row (filters.certifications) and applies on Enter.
   const [committedQuery, setCommittedQuery] = useState("");
@@ -273,6 +272,8 @@ export function TasksPage({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // The Create menu (z 500) would open above the drawer's scrim.
+      if (drawerId) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -304,73 +305,38 @@ export function TasksPage({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [createMenuOpen, onNewTask]);
+  }, [createMenuOpen, drawerId, onNewTask]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  // Landing morph — the page opens as the search-first landing and the wheel
-  // (or any search / pill / row interaction) morphs it into the table view.
+  // The page's one scroller — the Certifications page's collapsing header: the
+  // landing header folds away over the first stretch of scroll with the table
+  // glued beneath it, and the rows scroll under the pinned header after that.
   // Arriving from a Certification's "View All Tasks" is a deep link — the
-  // filter is already set, so the landing has nothing left to ask for.
-  const morph = useLandingMorph(Boolean(initialCertificationFilter));
+  // filter is already set, so the page opens collapsed, on the table.
+  const head = useCollapsingHeader(Boolean(initialCertificationFilter));
+  const { scrollToFirstRow } = head;
 
-  // The two quick filters this page offers (user-specified): the dominant task
-  // type, and the HVAC job-readiness certification. The pill's label used to be
-  // an alias for a differently-named certification; the certification itself is
-  // now called HVAC JobReady, so the two finally agree.
-  const quickFilterPills: LandingPill[] = [
-    {
-      key: "hands-on",
-      label: "Hands-On Task",
-      onPick: () => {
-        setFilters((prev) => ({ ...prev, types: Array.from(new Set([...prev.types, "Hands-On Task"])) }));
-        morph.showTable();
-      },
-    },
-    {
-      key: "hvac-jobready",
-      label: "HVAC JobReady",
-      onPick: () => {
-        setFilters((prev) => ({
-          ...prev,
-          certifications: Array.from(new Set([...prev.certifications, "HVAC JobReady"])),
-        }));
-        morph.showTable();
-      },
-    },
-  ];
+  // A new query, filter, sort or page starts the list at its first row. A
+  // collapsed header stays collapsed; one still open is left as it is.
+  useLayoutEffect(() => {
+    scrollToFirstRow();
+  }, [committedQuery, filters, sort, visiblePage, scrollToFirstRow]);
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((t) => ({
-    key: t.id,
-    /* The "Hidden" pill rides the morph with the row (it fades in on `--lmt`
-       like the rest of the table chrome), so the name doesn't gain a badge at
-       the hand-off to the real table. */
-    name: t.hidden ? (
-      <>
-        {t.name}
-        <span className="pr-name-flag pr-name-flag--grey">Hidden</span>
-      </>
-    ) : (
-      t.name
-    ),
-    /* Dim = hidden, and nothing else. It used to also dim a Task that sits in
-       no Certification, which read as a second kind of "inactive" the full
-       table never shows — there an unused Task is an ordinary row with an
-       em-dash in Used in. */
-    dim: t.hidden,
-    cells: {
-      type: t.type,
-      used:
-        t.usedIn.length === 0
-          ? ""
-          : t.usedIn.length === 1
-            ? t.usedIn[0]
-            : `${t.usedIn[0]} +${t.usedIn.length - 1}`,
-      modified: t.dateModified ?? "",
-    },
-  }));
+  // The landing's summary line: the whole library, not the filtered rows (the
+  // pagination footer counts those), and the Certifications it spans — a short
+  // `usedIn` alias ("NATE RTW") counts as the Certification it stands for.
+  const catalog = useMemo(
+    () => ({
+      tasks: taskList.length,
+      certifications: new Set(
+        taskList.flatMap((t) => t.usedIn.map((name) => CERT_BY_USEDIN.get(name)?.id ?? name)),
+      ).size,
+    }),
+    [taskList],
+  );
 
   // Column display order — reordered by dragging in the Edit Columns menu.
   const visibleCols = useMemo(
@@ -436,160 +402,165 @@ export function TasksPage({
   }
 
   return (
-    <div className="tasks lm" ref={morph.rootRef}>
-      <header className="tasks-header">
-        <div>
-          <h1 className="tasks-title">Tasks</h1>
-        </div>
-        {/* Figma 633:1865 — Skills and Question Bank used to live in the
-            sidebar's Content group; they are now reached from here, left of the
-            Create Task CTA. */}
-        <div className="tasks-header-actions">
-          <button className="cta-quiet" onClick={() => onOpenSkills?.()}>
-            Skills
-          </button>
-          <button className="cta-quiet" onClick={() => onOpenQuestionBank?.()}>
-            Question Bank
-          </button>
-          {/* Figma 724:1010 "Create Task Options": label + shortcut badge, no
-              icons, on the panel's own 174px shell. */}
-          <Dropdown
-            align="right"
-            width="auto"
-            panelClass="ct-menu"
-            open={createMenuOpen}
-            onOpenChange={setCreateMenuOpen}
-            trigger={({ toggle }) => (
-              <button className="new-task" onClick={toggle}>
-                <AddIcon />
-                Create Task
-                <span className="cta-kbd">C</span>
-              </button>
-            )}
-          >
-            {({ close }) => (
-              <>
-                {TASK_TYPE_OPTIONS.map(({ key, label, shortcut }) => (
-                  <button
-                    key={key}
-                    className="ct-menu-item"
-                    onClick={() => {
-                      onNewTask(key);
-                      close();
-                    }}
-                  >
-                    <span className="ct-menu-label">{label}</span>
-                    <span className="ct-menu-kbd">{shortcut}</span>
+    /* The Certifications page's collapsing header (Claude Design
+       "Certifications Prototype"): the page is ONE scroller — the table's own
+       `.table-xscroll` — opening on the landing, where the large title, the
+       library summary and the Large search bar sit straight on top of the real
+       table. The first stretch of scroll collapses that header into the
+       standard table header with the rows glued beneath it; after that the
+       rows scroll under the pinned header. See useCollapsingHeader and the
+       `.tasks.clh` rules in index.css. */
+    <div className="tasks clh">
+      <div className="co-table-col">
+        <div
+          ref={head.scrollRef}
+          className="table-xscroll clh-scroll"
+          style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
+        >
+          <div className="clh-canvas">
+            <div ref={head.headerRef} className="clh-head">
+              {/* The header's pieces are its direct children, so each can pin
+                  inside it (see the `.tasks.clh` rules). The action buttons
+                  keep a `.tasks-header` of their own for their button styles. */}
+              <header className="tasks-header clh-actions">
+                {/* Figma 633:1865 — Skills and Question Bank used to live in the
+                    sidebar's Content group; they are now reached from here, left of the
+                    Create Task CTA. */}
+                <div className="tasks-header-actions">
+                  <button className="cta-quiet" onClick={() => onOpenSkills?.()}>
+                    Skills
                   </button>
-                ))}
-              </>
-            )}
-          </Dropdown>
-        </div>
-      </header>
-
-      <div className="tasks-row">
-        <div className="tasks-content">
-          <div className="toolbar">
-            <TasksSearch
-              tasks={taskList}
-              certifications={filters.certifications}
-              onCertificationsChange={(c) => setFilters((prev) => ({ ...prev, certifications: c }))}
-              types={filters.types}
-              onTypesChange={(t) => setFilters((prev) => ({ ...prev, types: t }))}
-              query={committedQuery}
-              onCommit={(q) => {
-                setCommittedQuery(q);
-                morph.showTable();
-              }}
-            />
-          </div>
-
-          <LandingFilterRow pills={quickFilterPills} onShowAll={morph.showTable}>
-              <Filters filters={filters} setFilters={setFilters} />
-            </LandingFilterRow>
-
-          <div className="lm-stage">
-          <LandingOverlay
-            caption="Recently modified"
-            columns={LM_COLS}
-            rows={landingRows}
-            onShowAll={morph.showTable}
-            onRowClick={() => morph.showTable()}
-          />
-          <div className="lm-table">
-          <div className="co-table-row">
-            <div className="co-table-col">
-              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-              <table className="table table-head">
-                <ColGroup cols={visibleCols} />
-                <thead>
-                  <tr>
-                    <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                    {visibleCols.map((c) => (
-                      <SortableHeader
-                        key={c.key}
-                        col={c.key as SortKey}
-                        label={c.label}
-                        className={c.className}
-                        sort={sort}
-                        toggle={toggleSort}
-                        sortable={c.sortable !== false}
-                      />
-                    ))}
-                    <th className="col-actions">
-                      <EditColumnsButton
-                        columns={columns}
-                        setColumns={setColumns}
-                        order={order}
-                        onOrderChange={setOrder}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-              </table>
-
-              <div className="tasks-scroll">
-                <table className="table table-body">
-                  <ColGroup cols={visibleCols} />
-                  <tbody>
-                    {paged.map((task) => (
-                      <TableRow
-                        key={task.id}
-                        task={task}
-                        cols={visibleCols}
-                        onEdit={() => editTask(task)}
-                        onToggleVisibility={() => toggleVisibility(task)}
-                        onOpenMenu={(rect) => setMenu({ task, rect })}
-                        menuOpen={menu?.task.id === task.id}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              </div>
-
-              <div className="pagination">
-                <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                </span>
-                <div className="pagination-controls">
-                  <button
-                    className="page-btn"
-                    disabled={visiblePage === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  ><ChevronLeftIcon /></button>
-                  <button
-                    className="page-btn"
-                    disabled={visiblePage === totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  ><ChevronRightIcon /></button>
+                  <button className="cta-quiet" onClick={() => onOpenQuestionBank?.()}>
+                    Question Bank
+                  </button>
+                  {/* Figma 724:1010 "Create Task Options": label + shortcut badge, no
+                      icons, on the panel's own 174px shell. */}
+                  <Dropdown
+                    align="right"
+                    width="auto"
+                    panelClass="ct-menu"
+                    open={createMenuOpen}
+                    onOpenChange={setCreateMenuOpen}
+                    trigger={({ toggle }) => (
+                      <button className="new-task" onClick={toggle}>
+                        <AddIcon />
+                        Create Task
+                        <span className="cta-kbd">C</span>
+                      </button>
+                    )}
+                  >
+                    {({ close }) => (
+                      <>
+                        {TASK_TYPE_OPTIONS.map(({ key, label, shortcut }) => (
+                          <button
+                            key={key}
+                            className="ct-menu-item"
+                            onClick={() => {
+                              onNewTask(key);
+                              close();
+                            }}
+                          >
+                            <span className="ct-menu-label">{label}</span>
+                            <span className="ct-menu-kbd">{shortcut}</span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </Dropdown>
                 </div>
+              </header>
+              <h1 className="tasks-title">Tasks</h1>
+              {/* The landing's summary line — Figma 1356:1864's copy
+                  ("3210 Tasks · Across 230 Certifications"). It fades as the
+                  header collapses. */}
+              <p className="tasks-subtitle clh-sub">
+                {`${plural(catalog.tasks, "Task", "Tasks")} · Across ${plural(
+                  catalog.certifications,
+                  "Certification",
+                  "Certifications",
+                )}`}
+              </p>
+
+              <div className="toolbar">
+                <TasksSearch
+                  tasks={taskList}
+                  certifications={filters.certifications}
+                  onCertificationsChange={(c) => setFilters((prev) => ({ ...prev, certifications: c }))}
+                  types={filters.types}
+                  onTypesChange={(t) => setFilters((prev) => ({ ...prev, types: t }))}
+                  query={committedQuery}
+                  onCommit={setCommittedQuery}
+                />
               </div>
+
+              <Filters filters={filters} setFilters={setFilters} />
             </div>
 
+            <table ref={head.theadRef} className="table table-head">
+              <ColGroup cols={visibleCols} />
+              <thead>
+                <tr>
+                  <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
+                  {visibleCols.map((c) => (
+                    <SortableHeader
+                      key={c.key}
+                      col={c.key as SortKey}
+                      label={c.label}
+                      className={c.className}
+                      sort={sort}
+                      toggle={toggleSort}
+                      sortable={c.sortable !== false}
+                    />
+                  ))}
+                  <th className="col-actions">
+                    <EditColumnsButton
+                      columns={columns}
+                      setColumns={setColumns}
+                      order={order}
+                      onOrderChange={setOrder}
+                    />
+                  </th>
+                </tr>
+              </thead>
+            </table>
+
+            <div className="tasks-scroll">
+              <table className="table table-body">
+                <ColGroup cols={visibleCols} />
+                <tbody>
+                  {paged.map((task) => (
+                    <TableRow
+                      key={task.id}
+                      task={task}
+                      cols={visibleCols}
+                      onOpen={() => setDrawerId(task.id)}
+                      onEdit={() => editTask(task)}
+                      onToggleVisibility={() => toggleVisibility(task)}
+                      onOpenMenu={(rect) => setMenu({ task, rect })}
+                      menuOpen={menu?.task.id === task.id}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-          </div>
+        </div>
+
+        <div className="pagination">
+          <span>
+            Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+          </span>
+          <div className="pagination-controls">
+            <button
+              className="page-btn"
+              disabled={visiblePage === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            ><PagePrevIcon /></button>
+            <button
+              className="page-btn"
+              disabled={visiblePage === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            ><PageNextIcon /></button>
           </div>
         </div>
       </div>
@@ -640,6 +611,31 @@ export function TasksPage({
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => confirmDelete(deleteTarget)}
         />
+      )}
+
+      {drawerTask && (
+        <Drawer
+          title={drawerTask.name}
+          description={drawerTask.description}
+          actions={
+            /* Closes the drawer first: editing opens the wizard, or — for a
+               company-owned Task — the blocked-edit modal, which would
+               otherwise sit under the drawer's scrim. */
+            <button
+              className="cta-quiet"
+              onClick={() => {
+                setDrawerId(null);
+                editTask(drawerTask);
+              }}
+            >
+              <RowEditIcon />
+              Edit
+            </button>
+          }
+          onClose={() => setDrawerId(null)}
+        >
+          <TaskSummary task={drawerTask} />
+        </Drawer>
       )}
     </div>
   );
@@ -845,6 +841,7 @@ function SortableHeader({
 function TableRow({
   task,
   cols,
+  onOpen,
   onEdit,
   onToggleVisibility,
   onOpenMenu,
@@ -853,6 +850,8 @@ function TableRow({
   task: Task;
   /** Visible optional columns, already in the user's order. */
   cols: TaskColMeta[];
+  /** Row click — opens the Task's drawer. The row's buttons stop propagation. */
+  onOpen: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
   onOpenMenu: (rect: DOMRect) => void;
@@ -860,7 +859,10 @@ function TableRow({
   menuOpen: boolean;
 }) {
   return (
-    <tr className={`${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
+    <tr
+      className={`${task.hidden ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
+      onClick={onOpen}
+    >
       <td className="col-name" data-tip={task.name}>
         <span className="tsk-name">{task.name}</span>
         {/* Hidden reads exactly as an archived Skill row (1126:1686): grey pill

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "../data/users";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 
@@ -195,12 +195,12 @@ export function EntitySearch({
           <SearchIcon />
         </span>
         {drafted.map(({ scope, values }) => (
-          <span className="usearch-scope" key={scope.token}>
-            <span className="usearch-scope-label">{scope.token}:</span>
-            <span className="usearch-scope-name">
-              {values.length === 1 ? values[0] : `${values.length} ${scope.optionsLabel.toLowerCase()}`}
-            </span>
-          </span>
+          <SearchScopeChip
+            key={scope.token}
+            label={`${scope.token}:`}
+            name={values.length === 1 ? values[0] : `${values.length} ${scope.optionsLabel.toLowerCase()}`}
+            onRemove={() => setDraft((d) => ({ ...d, [scope.token]: [] }))}
+          />
         ))}
         <input
           ref={inputRef}

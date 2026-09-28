@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "../data/tasks";
 import { CERTIFICATIONS, TASK_TYPES } from "../data/filters";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 const CERT_PREFIX = "Certification:";
@@ -223,10 +223,7 @@ export function TasksSearch({
           <SearchIcon />
         </span>
         {scoped && (
-          <span className="usearch-scope">
-            <span className="usearch-scope-label">{scopeLabel}</span>
-            <span className="usearch-scope-name">{scopeName}</span>
-          </span>
+          <SearchScopeChip label={scopeLabel} name={scopeName} onRemove={() => setDraft([])} />
         )}
         <input
           ref={inputRef}

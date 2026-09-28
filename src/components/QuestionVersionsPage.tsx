@@ -5,11 +5,12 @@ import {
   type QuestionVersion,
 } from "../data/questionBank";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
   MenuPreviewIcon,
   RowKebabIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
+  CrumbChevronIcon,
 } from "./icons";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ export function QuestionVersionsPage({
                 <button className="rvc-crumb" onClick={onBack} title="Back to the Question Bank">
                   Question Bank
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Version History</span>
               </nav>
               <h1 className="tasks-title">Version History</h1>
@@ -217,8 +218,8 @@ export function QuestionVersionsPage({
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>

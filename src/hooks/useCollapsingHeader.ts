@@ -1,40 +1,56 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 /* Collapsing page header — Claude Design "Certifications Prototype"
- * (2026-09-24). Certifications only; every other list page keeps
- * useLandingMorph.
+ * (2026-09-24). Certifications, then (2026-09-28) Tasks, Companies and Manage
+ * Users — every search-first landing. The cards / rail landings (Exam Reviews,
+ * Hands-On, Question Bank) keep useLandingMorph.
  *
  * The page opens on its landing: a large title, a one-line catalog summary and
  * the Large search bar, sitting straight on top of the real table (there is no
  * separate landing list). ONE native scroller runs the whole page — the
- * table's `.table-xscroll`, which now holds the header too — and its first
+ * table's `.table-xscroll`, which holds the header too — and its first
  * `--clh-d` px of scroll collapse that header into the standard table-page
- * header. The distance is exactly the height the header loses, and the header
- * keeps a constant flow footprint (it hands the lost height back as a bottom
- * margin), so the table rides up glued to the header's bottom edge: a row
- * never slides under the header, or away from it, mid-collapse. Past the
- * distance the header is fully collapsed and pinned, and rows scroll under it.
- * Scrolling back to the top re-opens it. Nothing snaps or animates on its
- * own — the scroll position IS the state.
+ * header. Past that the header is pinned and rows scroll under it; scrolling
+ * back to the top re-opens it. The scroll position IS the state.
  *
- * Progress is written as `--clh` (0 = landing … 1 = collapsed) on the header
- * block and the table's header row only — setting it on the scroller would
- * restyle every row on every scroll frame. The `.tasks.clh` rules in
- * index.css do the rest. Two lengths CSS can't know are measured here:
- *   --clh-stick  the COLLAPSED header's height, where the table header pins
- *   --clh-vw     the scrollport's width — the header's own width, so it can
- *                hold still (sticky left) while a wide table scrolls sideways
+ * All of the motion is CSS and runs on the compositor (see the `.tasks.clh`
+ * rules in index.css): the header block keeps its landing layout, pinned, and
+ * every piece of it moves by one linear scroll-driven transform — rise,
+ * resize, fade — on the scroller's `--clh` timeline, all in step. Nothing is
+ * restyled or re-laid-out per scroll frame — an earlier version wrote the
+ * progress into CSS on every scroll event, and that main-thread work (plus
+ * landing a frame behind the native scroll) made the collapse judder.
+ *
+ * What this hook still does:
+ *   --clh-stick  measures the collapsed header's height (the header's static
+ *                height minus the distance) — where the table header pins,
+ *                and the height of the header's opaque band
+ *   --clh-vw     measures the scrollport's width — the header's own width, so
+ *                it can hold still (sticky left) while a wide table scrolls
+ *   data-clh     "landing" | "moving" | "collapsed" on the header — the coarse
+ *                state CSS can't derive (what may take focus at either end);
+ *                written only when it changes
+ * and, in a browser without scroll timelines, feeds the fallback rules the
+ * scroll offset (`--clh-s`, and the distance as a number, `--clh-dn`).
  */
 
 // Fallback only: the real distance is CSS's `--clh-d` (a registered <length>,
-// the sum of the header's shrinking parts), read back resolved on mount.
-const DEFAULT_DISTANCE = 156.8;
+// the sum of the header's collapsing parts), read back resolved on mount.
+const DEFAULT_DISTANCE = 167.8;
 
-export function useCollapsingHeader() {
+// The last scripted offset that still changes anything: the table header's
+// shadow finishes fading in 40px past the distance.
+const SHADOW_RUN = 40;
+
+/** `startCollapsed` opens the page already scrolled past the landing — for a
+ *  deep link that arrives with its filter set (the prototype's own
+ *  `startCollapsed`). Read once, on mount; scrolling up still re-opens it. */
+export function useCollapsingHeader(startCollapsed = false) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableElement | null>(null);
   const distance = useRef(DEFAULT_DISTANCE);
+  const startCollapsedRef = useRef(startCollapsed);
 
   useLayoutEffect(() => {
     const sc = scrollRef.current;
@@ -44,32 +60,54 @@ export function useCollapsingHeader() {
 
     distance.current =
       parseFloat(getComputedStyle(sc).getPropertyValue("--clh-d")) || DEFAULT_DISTANCE;
+    // Before the first paint, so a deep link never flashes the landing. The
+    // canvas is always at least one distance taller than the scrollport, so
+    // this lands fully collapsed however short the list is.
+    if (startCollapsedRef.current) sc.scrollTop = Math.ceil(distance.current);
 
-    let progress = -1;
+    // Browsers that can't run animations on a scroll timeline get the same
+    // transforms from the `@supports not` rules, driven from here.
+    const scripted = !(typeof CSS !== "undefined" && CSS.supports?.("animation-timeline: --clh"));
+    if (scripted) {
+      const dn = String(distance.current);
+      header.style.setProperty("--clh-dn", dn);
+      thead.style.setProperty("--clh-dn", dn);
+    }
+
+    let state = "";
+    let offset = -1;
     let stick = -1;
     let width = -1;
 
-    // Paint the progress the scroll position says, before the browser does.
     function apply() {
-      const p = Math.min(1, Math.max(0, sc!.scrollTop / distance.current));
-      if (p === progress) return;
-      progress = p;
-      const v = p.toFixed(4);
-      header!.style.setProperty("--clh", v);
-      thead!.style.setProperty("--clh", v);
+      const s = Math.max(0, sc!.scrollTop);
+      const next = s <= 0 ? "landing" : s >= distance.current ? "collapsed" : "moving";
+      if (next !== state) {
+        state = next;
+        header!.dataset.clh = next;
+      }
+      if (scripted) {
+        const v = Math.min(s, distance.current + SHADOW_RUN);
+        if (v !== offset) {
+          offset = v;
+          header!.style.setProperty("--clh-s", String(v));
+          thead!.style.setProperty("--clh-s", String(v));
+        }
+      }
     }
 
-    // The header's height at ANY progress is its collapsed height plus the
-    // part of the distance not yet scrolled, so the collapsed height reads back
-    // exactly from wherever the page is. Writes are skipped unless something
-    // really moved: this runs on every collapse frame (the header's own size
-    // is what changes) and must not restyle anything then.
+    // The header's layout never changes while scrolling now — only on a
+    // resize or a content change (a filter row that wraps) — so this runs
+    // rarely, and writes only when something really moved.
     function measure() {
-      const p = Math.max(0, progress);
-      const h = header!.getBoundingClientRect().height - distance.current * (1 - p);
+      const h = header!.getBoundingClientRect().height - distance.current;
       if (Math.abs(h - stick) > 0.5) {
         stick = h;
-        thead!.style.setProperty("--clh-stick", `${h.toFixed(2)}px`);
+        // Where the table header pins, and the height of the header's opaque
+        // band — the collapsed header, exactly.
+        const v = `${h.toFixed(2)}px`;
+        thead!.style.setProperty("--clh-stick", v);
+        header!.style.setProperty("--clh-stick", v);
       }
       const w = sc!.clientWidth;
       if (w !== width) {
@@ -94,7 +132,10 @@ export function useCollapsingHeader() {
    *  or page — without re-opening a header the reader already collapsed. */
   const scrollToFirstRow = useCallback(() => {
     const sc = scrollRef.current;
-    if (sc && sc.scrollTop > distance.current) sc.scrollTop = distance.current;
+    // A whole pixel, rounded up: a fractional target can snap just short of
+    // the distance on a high-DPI screen and leave the header a hair open.
+    const collapsed = Math.ceil(distance.current);
+    if (sc && sc.scrollTop > collapsed) sc.scrollTop = collapsed;
   }, []);
 
   return { scrollRef, headerRef, theadRef, scrollToFirstRow };

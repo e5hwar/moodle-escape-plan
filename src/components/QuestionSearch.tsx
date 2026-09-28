@@ -6,7 +6,7 @@ import {
 } from "../data/questionBank";
 
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
 
 const MAX_RESULTS = 8;
 const CATEGORY_PREFIX = "Category:";
@@ -346,10 +346,12 @@ export function QuestionSearch({
         {scoped && (
           <span className="usearch-scopes">
             {draft.map((t) => (
-              <span className="usearch-scope" key={t.kind}>
-                <span className="usearch-scope-label">{TOKEN_LABELS[t.kind]}</span>
-                <span className="usearch-scope-name">{t.name}</span>
-              </span>
+              <SearchScopeChip
+                key={t.kind}
+                label={TOKEN_LABELS[t.kind]}
+                name={t.name}
+                onRemove={() => setDraft((prev) => prev.filter((x) => x.kind !== t.kind))}
+              />
             ))}
           </span>
         )}

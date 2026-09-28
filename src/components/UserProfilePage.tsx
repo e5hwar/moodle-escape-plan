@@ -24,7 +24,6 @@ import { PrmModal } from "./PrmModal";
 import { PrmCheck } from "./ProctoringConsole";
 import { IdModal } from "./IdModal";
 import {
-  ChevronRightIcon,
   DownloadIcon,
   IdCardIcon,
   MenuCancelSubIcon,
@@ -33,6 +32,7 @@ import {
   RowEditIcon,
   RowKebabIcon,
   SortIcon,
+  CrumbChevronIcon,
 } from "./icons";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
@@ -256,11 +256,11 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Home</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <button className="rvc-crumb" onClick={backToUsers} title="Back to Manage Users">
                   Manage Users
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Full Profile</span>
               </nav>
               <div className="prof-headrow">

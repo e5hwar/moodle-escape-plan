@@ -13,7 +13,7 @@ import {
   MoveIcon,
   InfoIcon12,
   PlusThinIcon,
-  ChevronRightIcon,
+  CrumbChevronIcon,
 } from "./icons";
 import { RichTextField } from "./RichTextField";
 import { SelectField } from "./SelectField";
@@ -575,7 +575,7 @@ export function NewQuestionWizard({
                 >
                   {backLabel}
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">{title}</span>
               </nav>
               <h1 className="wizard-title qed-title-solo">{title}</h1>

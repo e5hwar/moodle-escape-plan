@@ -26,7 +26,7 @@ import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { MultiPill } from "./UsersFilters";
 import { NewSkillWizard } from "./NewSkillWizard";
 import { PrmModal } from "./PrmModal";
-import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, ChevronLeftIcon, ChevronRightIcon, TreeCaretIcon, ExpandVerticalIcon, ShrinkVerticalIcon, InfoIcon14, AlertCircleFilledIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, TreeCaretIcon, ExpandVerticalIcon, ShrinkVerticalIcon, InfoIcon14, AlertCircleFilledIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 const PAGE_SIZE = 50;
@@ -211,7 +211,7 @@ function countBy(skills: Skill[], values: (s: Skill) => string[]): Map<string, n
   return m;
 }
 
-export function SkillsPage() {
+export function SkillsPage({ onBackToTasks }: { onBackToTasks?: () => void } = {}) {
   const [skills, setSkills] = useState<Skill[]>(seedSkills);
   const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
@@ -526,7 +526,16 @@ export function SkillsPage() {
       <div className="workspace">
         <div className="tasks">
           <header className="tasks-header">
-            <div>
+            {/* Skills has no sidebar entry — it is reached from the Tasks
+                header — so the crumb's "Tasks" is the way back. */}
+            <div className="rvc-pagehead">
+              <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+                  Tasks
+                </button>
+                <CrumbChevronIcon />
+                <span className="rvc-crumb rvc-crumb--current">Skills</span>
+              </nav>
               <h1 className="tasks-title">Skills</h1>
               {/* Page subtext (Figma 742:1061): the counts, then the 14px
                   info glyph 4px after, carrying the page's explainer as the
@@ -706,8 +715,8 @@ export function SkillsPage() {
                       Showing {total === 0 ? 0 : skillsBefore + 1} - {skillsBefore + skillsOnPage} of {total}
                     </span>
                     <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                     </div>
                   </div>
                 </div>

@@ -7,13 +7,14 @@ import { RichTextField } from "./RichTextField";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
-import { SearchIcon, AddCircleIcon, ChevronRightIcon, LockIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { SearchIcon, AddCircleIcon, ChevronRightIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { PrmModal } from "./PrmModal";
+import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -31,7 +32,7 @@ import { industries } from "../data/industries";
 import { tasks as taskLibrary, formatTaskDuration, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
-import { PriceIdFields, PRICE_CHANNELS, newPriceIds, type PriceIds } from "./PriceIdFields";
+import { PriceIdFields, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
 
 type CareerStage = "pre-apprentice" | "apprentice" | "journeyman" | "master";
 type CertType = "unit" | "credential" | "program" | "bundle";
@@ -621,23 +622,6 @@ const BLANK_DATA: WizardData = {
   contentTags: [],
 };
 
-const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-// A Stripe-shaped Price ID ("price_" + 24 characters), stable for its seed:
-// FNV-1a seeds an xorshift stream, so each Certification keeps its own ID.
-function samplePriceId(seed: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  let id = "price_1";
-  while (id.length < 30) {
-    h ^= h << 13;
-    h ^= h >>> 17;
-    h ^= h << 5;
-    id += BASE62[(h >>> 0) % 62];
-  }
-  return id;
-}
-
 // The list record doesn't store a paid Certification's store Product IDs
 // either, so like its structure they're plausible sample values: bundle-style
 // IDs for the two stores, Stripe-shaped ones for the two Stripe prices.
@@ -1016,6 +1000,10 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
                   update={update}
                   criteriaLocked={isEditing && !completionUnlocked}
                   onUnlockCriteria={() => setCompletionUnlocked(true)}
+                  // A draft has never been published, so nobody has completed it.
+                  completions={
+                    editingCert && !editingCert.draft ? sampleCompletionCount(editingCert.id) : 0
+                  }
                   missing={missing.has("completion")}
                 />
               )}
@@ -3022,12 +3010,15 @@ function CompletionStep({
   update,
   criteriaLocked = false,
   onUnlockCriteria,
+  completions = 0,
   missing = false,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
   criteriaLocked?: boolean;
   onUnlockCriteria?: () => void;
+  /** Learners who have completed the Certification — the lock banner's count. */
+  completions?: number;
   /** Flagged by a publish attempt with no completable Condition Set. */
   missing?: boolean;
 }) {
@@ -3073,7 +3064,12 @@ function CompletionStep({
         <label className="form-label cc-label">
           Completion Criteria <span className="req">*</span>
         </label>
-        <CompletionCriteriaGate locked={criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+        <CompletionCriteriaGate
+          locked={criteriaLocked}
+          onUnlock={() => onUnlockCriteria?.()}
+          subject="Certification"
+          completions={completions}
+        >
           <div className="cc-stack">
             {sets.length > 0 && (
               <div className="cc-sets">
@@ -3124,71 +3120,6 @@ function CompletionStep({
         </p>
       </div>
     </>
-  );
-}
-
-// Completion criteria gate — mirrors the Task wizard's behaviour and design.
-// When editing an existing Certification the criteria start locked; unlocking
-// requires acknowledging that completion data is reset for enrolled learners.
-function CompletionCriteriaGate({
-  locked,
-  onUnlock,
-  children,
-}: {
-  locked: boolean;
-  onUnlock: () => void;
-  children: React.ReactNode;
-}) {
-  const [showWarning, setShowWarning] = useState(false);
-  return (
-    <div className={`step-lockable ${locked ? "locked" : ""}`}>
-      {locked && (
-        <div className="step-lock-overlay interactive" role="note">
-          <div className="step-lock-card">
-            {!showWarning ? (
-              <>
-                <div className="step-lock-icon">
-                  <LockIcon />
-                </div>
-                <div className="step-lock-title">Completion criteria are locked</div>
-                <p className="step-lock-text">
-                  Completion settings are locked to protect enrolled learners' progress. Editing
-                  them resets completion for this Certification.
-                </p>
-                <div className="step-lock-actions">
-                  <button className="step-lock-btn primary" onClick={() => setShowWarning(true)}>
-                    Edit completion criteria
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="step-lock-icon warning">
-                  <LockIcon />
-                </div>
-                <div className="step-lock-title">This will reset completion for enrolled learners</div>
-                <p className="step-lock-text">
-                  Editing the completion criteria <strong>resets completion data for every learner</strong>{" "}
-                  enrolled in this Certification, then recomputes it under the new criteria. Awards
-                  already issued are not revoked. This can't be undone.
-                </p>
-                <div className="step-lock-actions">
-                  <button className="step-lock-btn" onClick={() => setShowWarning(false)}>
-                    Cancel
-                  </button>
-                  <button className="step-lock-btn danger" onClick={onUnlock}>
-                    Reset completions &amp; edit
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      <fieldset className="step-lock-content" disabled={locked}>
-        {children}
-      </fieldset>
-    </div>
   );
 }
 

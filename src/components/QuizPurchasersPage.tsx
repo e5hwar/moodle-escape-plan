@@ -22,7 +22,7 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, RowKebabIcon, MenuLockIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
 import { PrmModal } from "./PrmModal";
 
@@ -362,7 +362,7 @@ export function QuizPurchasersPage({
                 <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
                   Tasks
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
               </nav>
               <h1 className="tasks-title">Who Paid</h1>
@@ -481,8 +481,8 @@ export function QuizPurchasersPage({
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>

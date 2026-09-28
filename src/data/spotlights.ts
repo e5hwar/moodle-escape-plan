@@ -2,6 +2,11 @@
    its end date is stamped with the current date, so it reads as Ended. */
 export type SpotlightStatus = "pending" | "approved" | "rejected";
 
+/* Copy limits, per language. The list table's Title & Description column is
+   sized to them: a full title on one line, a full description in two. */
+export const SPOTLIGHT_TITLE_MAX = 20;
+export const SPOTLIGHT_DESCRIPTION_MAX = 60;
+
 export type Spotlight = {
   id: string;
   headingEn: string;
@@ -23,12 +28,10 @@ export type Spotlight = {
 export const spotlights: Spotlight[] = [
   {
     id: "SP-0014",
-    headingEn: "New! Plumbing Certifications on SkillCat",
-    headingEs: "¡Nuevo! Certificaciones de plomería en SkillCat",
-    descriptionEn:
-      "Three new plumbing certifications just launched. Get journeyman-ready faster with hands-on tasks and field exercises.",
-    descriptionEs:
-      "Tres nuevas certificaciones de plomería disponibles. Avanza más rápido con tareas prácticas.",
+    headingEn: "Plumbing Certs Live!",
+    headingEs: "Nuevos certificados",
+    descriptionEn: "Three new plumbing certifications. Get journeyman-ready.",
+    descriptionEs: "Tres certificaciones nuevas de plomería. Avanza más rápido.",
     ctaTextEn: "Explore Plumbing",
     ctaTextEs: "Explorar Plomería",
     ctaUrl: "skillcat://industry/plumbing",
@@ -41,10 +44,9 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0013",
-    headingEn: "Take our 2-minute Career Goals survey",
-    headingEs: "Encuesta de objetivos profesionales (2 min)",
-    descriptionEn:
-      "Help us tailor your learning path. The results shape what content we build next.",
+    headingEn: "Career Goals Survey",
+    headingEs: "Encuesta de metas",
+    descriptionEn: "Help us tailor your learning path. It takes two minutes.",
     ctaTextEn: "Start Survey",
     ctaTextEs: "Empezar Encuesta",
     ctaUrl: "https://surveys.skillcat.com/career-goals-2026",
@@ -56,9 +58,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0012",
-    headingEn: "EPA 608 Universal — proctored slots open this weekend",
-    descriptionEn:
-      "Schedule your final exam proctoring session before Friday. Slots are limited and refill weekly.",
+    headingEn: "EPA 608 Exam Slots",
+    descriptionEn: "Book your proctored exam by Friday. Slots refill weekly.",
     ctaTextEn: "Book a Slot",
     ctaUrl: "https://calendly.com/skillcat-proctoring",
     endDate: "2026-05-22",
@@ -69,9 +70,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0011",
-    headingEn: "Listen: The Trade Talk Podcast — Episode 14",
-    descriptionEn:
-      "A master electrician on what apprentices wish they'd been told earlier.",
+    headingEn: "Trade Talk Podcast",
+    descriptionEn: "Episode 14: a master electrician on starting out.",
     ctaTextEn: "Listen Now",
     ctaUrl: "https://open.spotify.com/show/trade-talk",
     endDate: "2026-07-01",
@@ -82,9 +82,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0010",
-    headingEn: "HVAC Field Day — Austin, June 4",
-    descriptionEn:
-      "Free hands-on event with the SkillCat instructor team. Tools and refreshments provided.",
+    headingEn: "HVAC Field Day",
+    descriptionEn: "Free hands-on event in Austin on June 4. Tools provided.",
     ctaTextEn: "RSVP",
     ctaUrl: "https://events.skillcat.com/austin-field-day",
     endDate: "2026-06-04",
@@ -94,9 +93,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0009",
-    headingEn: "Refer a friend, get a free month of Pro",
-    descriptionEn:
-      "Limited-time referral bonus. Both you and your friend get one month of SkillCat Pro free.",
+    headingEn: "Refer a Friend",
+    descriptionEn: "You and a friend each get one month of SkillCat Pro free.",
     ctaTextEn: "Get My Link",
     ctaUrl: "skillcat://settings/refer",
     endDate: "2026-06-15",
@@ -106,9 +104,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0008",
-    headingEn: "Solar Installer pilot — apply by Sunday",
-    descriptionEn:
-      "We're piloting a Solar Installer certification with 30 testers. Tell us why you're a fit.",
+    headingEn: "Solar Pilot Program",
+    descriptionEn: "We're testing a Solar Installer cert. Apply by Sunday.",
     ctaTextEn: "Apply",
     ctaUrl: "https://forms.skillcat.com/solar-pilot",
     endDate: "2026-05-18",
@@ -118,10 +115,9 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0007",
-    headingEn: "Spring Skills Challenge — win a tool kit",
-    headingEs: "Desafío de Habilidades de Primavera — gana un kit",
-    descriptionEn:
-      "Complete 5 hands-on tasks in April for a chance to win a pro-grade tool kit. Winners announced May 1.",
+    headingEn: "Spring Challenge",
+    headingEs: "Desafío de Primavera",
+    descriptionEn: "Finish 5 hands-on tasks in April to win a pro-grade tool kit",
     ctaTextEn: "See Winners",
     ctaUrl: "https://events.skillcat.com/spring-challenge",
     imageHint: "spring-toolkit.jpg",
@@ -133,9 +129,8 @@ export const spotlights: Spotlight[] = [
   },
   {
     id: "SP-0006",
-    headingEn: "Beta: In-app Study Groups",
-    descriptionEn:
-      "We tested peer study groups with a small cohort. Pulled from the queue while we rework the feature.",
+    headingEn: "Study Groups Beta",
+    descriptionEn: "Paused while we rework peer study groups for everyone.",
     ctaTextEn: "Learn More",
     ctaUrl: "skillcat://feature/study-groups",
     /* Deactivated before its original 20th July end date, so it carries the

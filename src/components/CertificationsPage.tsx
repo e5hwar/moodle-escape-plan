@@ -15,7 +15,7 @@ import {
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
 import { Drawer } from "./Drawer";
@@ -401,8 +401,10 @@ export function CertificationsPage({
             >
               <div className="clh-canvas">
                 <div ref={head.headerRef} className="clh-head">
-                  <header className="tasks-header">
-                    <h1 className="tasks-title">Certifications</h1>
+                  {/* The header's pieces are its direct children, so each can pin
+                      inside it (see the `.tasks.clh` rules). The action buttons
+                      keep a `.tasks-header` of their own for their button styles. */}
+                  <header className="tasks-header clh-actions">
                     {/* Figma 633:1865 — same move as the Tasks header: Industries and
                         Feedback left the sidebar's Content group and are now reached
                         from here, left of the Create Certification CTA. Awards was a
@@ -452,18 +454,18 @@ export function CertificationsPage({
                         )}
                       </Dropdown>
                     </div>
-                    {/* The landing's catalog summary (the prototype's copy). It
-                        folds away as the header collapses. */}
-                    <div className="clh-sub">
-                      <p className="tasks-subtitle">
-                        {`${plural(catalog.certs, "certification", "certifications")} across ${plural(
-                          catalog.industries,
-                          "industry",
-                          "industries",
-                        )}. Search by name, code or industry.`}
-                      </p>
-                    </div>
                   </header>
+                  <h1 className="tasks-title">Certifications</h1>
+                  {/* The landing's catalog summary, in the shape of the Tasks
+                      line in Figma 1356:1864 ("3210 Tasks · Across 230
+                      Certifications"). It fades as the header collapses. */}
+                  <p className="tasks-subtitle clh-sub">
+                    {`${plural(catalog.certs, "Certification", "Certifications")} · Across ${plural(
+                      catalog.industries,
+                      "Industry",
+                      "Industries",
+                    )}`}
+                  </p>
 
                   <div className="toolbar">
                     <CertificationsSearch
@@ -540,8 +542,8 @@ export function CertificationsPage({
                 Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
               </span>
               <div className="pagination-controls">
-                <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
               </div>
             </div>
           </div>
@@ -804,14 +806,17 @@ function CertRow({
           >
             <RowEditIcon />
           </button>
-          <button
-            className="row-action-btn"
-            aria-label={hidden ? "Make visible" : "Hide certification"}
-            title={hidden ? "Make visible" : "Hide certification"}
-            onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
-          >
-            {hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
-          </button>
+          {/* Archived is permanent — no visibility to toggle (the menu drops it too). */}
+          {vis !== "Archived" && (
+            <button
+              className="row-action-btn"
+              aria-label={hidden ? "Make visible" : "Hide certification"}
+              title={hidden ? "Make visible" : "Hide certification"}
+              onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+            >
+              {hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
+            </button>
+          )}
           <button
             className="row-action-btn"
             aria-label="More"

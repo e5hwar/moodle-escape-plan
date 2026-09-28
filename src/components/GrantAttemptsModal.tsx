@@ -10,9 +10,9 @@ import { EntitySearch, type SearchScope } from "./UsersSearch";
 import {
   CheckIcon,
   DropdownCaretIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
 
 /* Grant Free Attempts — the Who Paid page's comp flow.
@@ -578,7 +578,7 @@ function SelectGrantUsersModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -586,7 +586,7 @@ function SelectGrantUsersModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

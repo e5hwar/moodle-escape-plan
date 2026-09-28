@@ -25,7 +25,7 @@ import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
-import { SortIcon, ChevronLeftIcon, ChevronRightIcon, RowChevronIcon } from "./icons";
+import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -768,8 +768,8 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
               </div>

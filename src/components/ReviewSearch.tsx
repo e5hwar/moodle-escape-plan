@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type TaskSubmission } from "../data/reviewSubmissions";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 /** Per scope kind (Task / Certification / Company) in "Suggested filters". */
@@ -288,9 +288,21 @@ export function ReviewSearch({
   }
 
   const scopeChips = [
-    ...draftCompanies.map((c) => ({ kind: "Company", name: c })),
-    ...draftTasks.map((t) => ({ kind: "Task", name: t })),
-    ...draftCerts.map((c) => ({ kind: "Certification", name: c })),
+    ...draftCompanies.map((c) => ({
+      kind: "Company",
+      name: c,
+      remove: () => setDraftCompanies(draftCompanies.filter((x) => x !== c)),
+    })),
+    ...draftTasks.map((t) => ({
+      kind: "Task",
+      name: t,
+      remove: () => setDraftTasks(draftTasks.filter((x) => x !== t)),
+    })),
+    ...draftCerts.map((c) => ({
+      kind: "Certification",
+      name: c,
+      remove: () => setDraftCerts(draftCerts.filter((x) => x !== c)),
+    })),
   ];
 
   const placeholder = scopeChips.length
@@ -304,10 +316,12 @@ export function ReviewSearch({
           <SearchIcon />
         </span>
         {scopeChips.map((chip, i) => (
-          <span className="usearch-scope" key={`${chip.kind}-${chip.name}-${i}`}>
-            <span className="usearch-scope-label">{chip.kind}:</span>
-            <span className="usearch-scope-name">{chip.name}</span>
-          </span>
+          <SearchScopeChip
+            key={`${chip.kind}-${chip.name}-${i}`}
+            label={`${chip.kind}:`}
+            name={chip.name}
+            onRemove={chip.remove}
+          />
         ))}
         <input
           ref={inputRef}

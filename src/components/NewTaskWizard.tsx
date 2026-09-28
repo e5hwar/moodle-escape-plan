@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import { PriceIdFields, PriceIdMatrix, newPriceIds, type PriceIds } from "./PriceIdFields";
+import { PriceIdFields, PriceIdMatrix, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
+import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
+import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, LockIcon, InfoTipIcon, InfoIcon12, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -17,6 +19,7 @@ import { questions as QUESTION_BANK, type Question } from "../data/questionBank"
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { PrmModal } from "./PrmModal";
 import { CheckRow } from "./Filters";
+import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -467,6 +470,33 @@ function parseTimeToComplete(value: string | undefined): { timeValue: string; ti
   return { timeValue: m[1], timeUnit: unit };
 }
 
+/** Bundle-style store IDs and Stripe-shaped prices, stable per Task. */
+function samplePriceIds(task: Task): PriceIds {
+  const slug = task.name.split(/[^A-Za-z0-9]+/).filter(Boolean).join("").toLowerCase();
+  return {
+    appleB2c: `com.skillcat.quiz.${slug}`,
+    googleB2c: `quiz_${slug}`,
+    stripeB2c: samplePriceId(`${task.id}-b2c`),
+    stripeB2b: samplePriceId(`${task.id}-b2b`),
+  };
+}
+
+/** The record's tags as the Audience fields: "B2B Companies Only" is the User
+ *  Type value, and the rest split into Trades and Partnerships. */
+function recordContentTags(tags: string[] | undefined): ContentTag[] {
+  return [
+    ...(tags?.includes(AUDIENCE_B2B_ONLY)
+      ? [{ id: "ct-userType-0", type: "userType" as const, value: USER_TYPE_VALUES[0] }]
+      : []),
+    ...pickTags(tags, TRADE_TAGS).map((value, i) => ({ id: `ct-trade-${i}`, type: "trade" as const, value })),
+    ...pickTags(tags, PARTNERSHIP_TAGS).map((value, i) => ({
+      id: `ct-partnership-${i}`,
+      type: "partnership" as const,
+      value,
+    })),
+  ];
+}
+
 /** Build the wizard's starting state, prefilling from an existing Task in edit mode. */
 function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData {
   let base: WizardData;
@@ -497,7 +527,14 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
     visibility: editingTask.hidden ? "hidden" : "visible",
     requiresSubscription: editingTask.requiresSubscription ?? base.requiresSubscription,
     discoverable: editingTask.discoverable ?? base.discoverable,
+    contentTags: recordContentTags(editingTask.tags),
     ...(time ? { timeValue: time.timeValue, timeUnit: time.timeUnit } : {}),
+    // The list record only flags that a paywall exists; its store IDs aren't
+    // stored, so a paid Quiz opens on plausible sample IDs — one price for
+    // every attempt — the way a paid Certification does.
+    ...(taskType === "quiz" && editingTask.paywall
+      ? { paywallOn: true, commonPriceIds: samplePriceIds(editingTask) }
+      : {}),
     // A Quiz Task carrying section config opens in the sectioned structure with
     // section-level grading; each Section draws its questions from a Bank pool.
     ...(editingTask.quizSections
@@ -814,7 +851,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           {(() => {
             const criteriaLocked = isEditing && !criteriaUnlocked;
             const onUnlockCriteria = () => setCriteriaUnlocked(true);
-            const gateProps = { criteriaLocked, onUnlockCriteria };
+            const gateProps = {
+              criteriaLocked,
+              onUnlockCriteria,
+              completions: editingTask ? sampleCompletionCount(editingTask.id) : 0,
+            };
             return (
           isXapi ? (
             step === 0 ? <XapiDetailsStep data={data} update={update} nameError={showNameError} missing={missing} /> :
@@ -822,7 +863,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             <XapiCompletionStep data={data} update={update} missing={missing} {...gateProps} />
           ) : isQuiz ? (
             step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} /> :
-            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} {...gateProps} /> :
+            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} /> :
             step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
             step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} {...gateProps} /> :
             step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} /> :
@@ -932,6 +973,8 @@ type StepProps = {
   criteriaLocked?: boolean;
   /** Acknowledge the warning and unlock completion criteria for editing. */
   onUnlockCriteria?: () => void;
+  /** Learners who have completed the Task being edited — the lock banner's count. */
+  completions?: number;
   /** True after a publish attempt with an empty required Name — surfaces the
    * missing-field state on the name input. */
   nameError?: boolean;
@@ -941,6 +984,16 @@ type StepProps = {
 };
 
 /** Mandatory-field keys, shared by the collector and the steps that flag them. */
+/** The completion-criteria gate's props, from a step's own. */
+function gateOf({ criteriaLocked, onUnlockCriteria, completions }: StepProps) {
+  return {
+    locked: !!criteriaLocked,
+    onUnlock: () => onUnlockCriteria?.(),
+    subject: "Task" as const,
+    completions: completions ?? 0,
+  };
+}
+
 const REQUIRED_FIELD_KEYS = {
   name: "name",
   package: "package",
@@ -1077,7 +1130,8 @@ function XapiLaunchStep({ data, update }: StepProps) {
   );
 }
 
-function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, missing }: StepProps) {
+function XapiCompletionStep(props: StepProps) {
+  const { data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Task is reference content only — never marked complete." },
     { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the package." },
@@ -1087,11 +1141,11 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mi
 
   return (
     <>
-      <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-        <div className="form-group">
-          <label className="form-label">
-            Completion Criteria <span className="req">*</span>
-          </label>
+      <div className="form-group">
+        <label className="form-label">
+          Completion Criteria <span className="req">*</span>
+        </label>
+        <CompletionCriteriaGate {...gateOf(props)}>
           <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
             {options.map((o) => (
               <RadioCard
@@ -1103,11 +1157,11 @@ function XapiCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mi
               />
             ))}
           </div>
-          {missing?.has("completion") && (
-            <p className="form-error-text">Choose how this Task is completed to publish.</p>
-          )}
-        </div>
-      </CompletionCriteriaGate>
+        </CompletionCriteriaGate>
+        {missing?.has("completion") && (
+          <p className="form-error-text">Choose how this Task is completed to publish.</p>
+        )}
+      </div>
 
       <ScoreCaptureField data={data} update={update} />
     </>
@@ -1189,7 +1243,8 @@ function OrientationField({
   );
 }
 
-function UrlCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, missing }: StepProps) {
+function UrlCompletionStep(props: StepProps) {
+  const { data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Reference content only — the Task is never marked complete." },
     { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the Resource. When it opens outside the app (External Browser or External Application) the Task completes on launch, since the app can't observe it once it opens elsewhere." },
@@ -1197,11 +1252,11 @@ function UrlCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mis
   ];
 
   return (
-    <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
-      <div className="form-group">
-        <label className="form-label">
-          Completion Criteria <span className="req">*</span>
-        </label>
+    <div className="form-group">
+      <label className="form-label">
+        Completion Criteria <span className="req">*</span>
+      </label>
+      <CompletionCriteriaGate {...gateOf(props)}>
         <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
           {options.map((o) => (
             <RadioCard
@@ -1213,11 +1268,11 @@ function UrlCompletionStep({ data, update, criteriaLocked, onUnlockCriteria, mis
             />
           ))}
         </div>
-        {missing?.has("completion") && (
-          <p className="form-error-text">Choose how this Task is completed to publish.</p>
-        )}
-      </div>
-    </CompletionCriteriaGate>
+      </CompletionCriteriaGate>
+      {missing?.has("completion") && (
+        <p className="form-error-text">Choose how this Task is completed to publish.</p>
+      )}
+    </div>
   );
 }
 
@@ -1277,9 +1332,6 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
           {missing?.has("file") && (
             <p className="form-error-text">Upload the English file to publish.</p>
           )}
-          <p className="form-help">
-            Optional: Configure how the file appears in Step 2: Launch Behaviour
-          </p>
         </div>
       ) : (
         <div className="form-group">
@@ -1405,6 +1457,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           es={data.hoToolsEs}
           onChangeEn={(v) => update({ hoToolsEn: v })}
           onChangeEs={(v) => update({ hoToolsEs: v })}
+          placeholderEn="List of tools or materials to use or involved in performing this activity"
           minRows={4}
         />
       </div>
@@ -1416,6 +1469,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           es={data.hoInstrEs}
           onChangeEn={(v) => update({ hoInstrEn: v })}
           onChangeEs={(v) => update({ hoInstrEs: v })}
+          placeholderEn="Step by step instructions on how to perform the task"
           minRows={4}
         />
       </div>
@@ -1443,6 +1497,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           es={data.hoReviewerChecklistEs}
           onChangeEn={(v) => update({ hoReviewerChecklistEn: v })}
           onChangeEs={(v) => update({ hoReviewerChecklistEs: v })}
+          placeholderEn="A list of Criteria to be used to review this activity"
           minRows={4}
         />
         <p className="form-help">
@@ -1534,11 +1589,14 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
   );
 }
 
-function HandsOnCompletionStep({ data, update, criteriaLocked, onUnlockCriteria }: StepProps) {
+function HandsOnCompletionStep(props: StepProps) {
+  const { data, update } = props;
   const reviewerGrade = data.hoCompletion === "reviewer_grade";
 
+  /* Maximum Attempts sits outside the lock: it doesn't decide what completes
+     the Task, and a Quiz's own Maximum Attempts was never gated either. */
   return (
-    <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+    <>
       <MaxAttemptsField
         data={data}
         update={update}
@@ -1552,39 +1610,43 @@ function HandsOnCompletionStep({ data, update, criteriaLocked, onUnlockCriteria 
         <label className="form-label">
           Completion Criteria <span className="req">*</span>
         </label>
-        <div className="radio-card-group">
-          <RadioCard
-            selected={reviewerGrade}
-            onSelect={() => update({ hoCompletion: "reviewer_grade" })}
-            title="Passing Grade from Reviewer"
-            desc="Completes when the learner receives a score equal to or greater than the passing grade from the reviewer."
-          />
-          <RadioCard
-            selected={!reviewerGrade}
-            onSelect={() => update({ hoCompletion: "submission_made" })}
-            title="Submission Made"
-            desc="The Task is completed as soon as the learner makes a submission. No review or scoring is required."
-          />
-        </div>
+        <CompletionCriteriaGate {...gateOf(props)}>
+          <div className="radio-card-group">
+            <RadioCard
+              selected={reviewerGrade}
+              onSelect={() => update({ hoCompletion: "reviewer_grade" })}
+              title="Passing Grade from Reviewer"
+              desc="Completes when the learner receives a score equal to or greater than the passing grade from the reviewer."
+            />
+            <RadioCard
+              selected={!reviewerGrade}
+              onSelect={() => update({ hoCompletion: "submission_made" })}
+              title="Submission Made"
+              desc="The Task is completed as soon as the learner makes a submission. No review or scoring is required."
+            />
+          </div>
+        </CompletionCriteriaGate>
       </div>
 
       {reviewerGrade && (
-        <div className="form-group">
-          <label className="form-label">Passing Grade</label>
-          <input
-            className="form-input no-spinner small"
-            inputMode="numeric"
-            value={data.hoPassingGrade}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
-                update({ hoPassingGrade: v });
-            }}
-          />
-          <p className="form-help">Maximum Grade: 10</p>
-        </div>
+        <CompletionCriteriaGate {...gateOf(props)} banner={false}>
+          <div className="form-group">
+            <label className="form-label">Passing Grade</label>
+            <input
+              className="form-input no-spinner small"
+              inputMode="numeric"
+              value={data.hoPassingGrade}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
+                  update({ hoPassingGrade: v });
+              }}
+            />
+            <p className="form-help">Maximum Grade: 10</p>
+          </div>
+        </CompletionCriteriaGate>
       )}
-    </CompletionCriteriaGate>
+    </>
   );
 }
 
@@ -1755,8 +1817,6 @@ function QuizStructureStep({
   update,
   locked,
   missing,
-  criteriaLocked,
-  onUnlockCriteria,
 }: StepProps) {
   const sectioned = data.structure === "sectioned";
 
@@ -1795,8 +1855,8 @@ function QuizStructureStep({
                 the new structure, so it can't be changed in place.
               </p>
               <p className="step-lock-text">
-                You can still adjust recomputable settings like the passing percentages below. To
-                change the structure itself, create a new Quiz Task instead.
+                {sectioned && "You can still rename Sections below. "}To change the structure
+                itself, create a new Quiz Task instead.
               </p>
             </div>
           </div>
@@ -1836,10 +1896,9 @@ function QuizStructureStep({
         </fieldset>
       </div>
 
-      {/* The pass marks — the Sections table carries the per-Section ones, so
-          both sit behind the completion gate when an existing Quiz is edited.
-          The structural controls inside the table stay disabled either way. */}
-      <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+      {/* No completion gate here: pass marks live on Grading & Completion, so
+          this table is names and order only. Its structural controls (add /
+          remove) stay disabled on an existing Quiz via `locked`. */}
         {sectioned && (
           <div className="form-group">
             <label className="form-label">
@@ -1918,8 +1977,6 @@ function QuizStructureStep({
             </p>
           </div>
         )}
-
-      </CompletionCriteriaGate>
     </>
   );
 }
@@ -2465,81 +2522,8 @@ function QuestionGroupEditor({
   );
 }
 
-/** Two-stage gate that protects completion-criteria fields while editing an
- * existing Task: a lock notice, then a delete-and-recompute warning the admin
- * must accept. Children render normally; when `locked` they sit inside a
- * disabled <fieldset> covered by the gate overlay. */
-function CompletionCriteriaGate({
-  locked,
-  onUnlock,
-  children,
-}: {
-  locked: boolean;
-  onUnlock: () => void;
-  children: React.ReactNode;
-}) {
-  const [showWarning, setShowWarning] = useState(false);
-  return (
-    <div className={`step-lockable ${locked ? "locked" : ""}`}>
-      {locked && (
-        <div className="step-lock-overlay interactive" role="note">
-          <div className="step-lock-card">
-            {!showWarning ? (
-              <>
-                <div className="step-lock-icon">
-                  <LockIcon />
-                </div>
-                <div className="step-lock-title">Completion criteria are locked</div>
-                <p className="step-lock-text">
-                  Completion settings are locked to protect learners' existing completions. Editing
-                  them recomputes completion for every learner.
-                </p>
-                <div className="step-lock-actions">
-                  <button className="step-lock-btn primary" onClick={() => setShowWarning(true)}>
-                    Edit completion criteria
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="step-lock-icon warning">
-                  <LockIcon />
-                </div>
-                <div className="step-lock-title">This will delete and recompute completions</div>
-                <p className="step-lock-text">
-                  Editing the completion criteria <strong>deletes every existing completion</strong>{" "}
-                  for this Task, then recomputes it from learners' existing attempts under the new
-                  criteria. Underlying attempts, scores, and time data are never deleted. This can't
-                  be undone.
-                </p>
-                <div className="step-lock-actions">
-                  <button className="step-lock-btn" onClick={() => setShowWarning(false)}>
-                    Cancel
-                  </button>
-                  <button className="step-lock-btn danger" onClick={onUnlock}>
-                    Delete completions &amp; edit
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      <fieldset className="step-lock-content" disabled={locked}>
-        {children}
-      </fieldset>
-    </div>
-  );
-}
-
-function QuizCompletionStep({
-  data,
-  update,
-  locked,
-  missing,
-  criteriaLocked,
-  onUnlockCriteria,
-}: StepProps) {
+function QuizCompletionStep(props: StepProps) {
+  const { data, update, locked, missing } = props;
   const sectioned = data.structure === "sectioned";
   const sectionLevel = data.gradingModel === "section_level";
 
@@ -2547,8 +2531,11 @@ function QuizCompletionStep({
     if (v === "" || (/^\d{0,3}$/.test(v) && +v <= 100)) apply(v);
   };
 
+  /* The lock banner sits under Completion Criteria; the pass marks below take
+     the same lock without a banner of their own. Grading Model stays outside
+     it — it has its own, permanent lock while editing. */
   return (
-    <CompletionCriteriaGate locked={!!criteriaLocked} onUnlock={() => onUnlockCriteria?.()}>
+    <>
       {/* Named and marked like every other Task type's completion field. No
           subtext: the cards already say what each one means, and the pass mark
           they refer to is now the field two below. */}
@@ -2556,27 +2543,29 @@ function QuizCompletionStep({
         <label className="form-label">
           Completion Criteria <span className="req">*</span>
         </label>
-        {/* No Completion Tracking leads, the way it does on every other Task
-            type's Completion Criteria (and the way spec 4.3.4.3 tables it) —
-            the Quiz was the only one starting with its graded option. */}
-        <div className="radio-card-group">
-          <RadioCard
-            selected={data.quizCompletion === "none"}
-            onSelect={() => update({ quizCompletion: "none" })}
-            title="No Completion Tracking"
-            desc="The Quiz is never marked complete — useful for practice or ungraded checks."
-          />
-          <RadioCard
-            selected={data.quizCompletion === "passing_grade"}
-            onSelect={() => update({ quizCompletion: "passing_grade" })}
-            title="Passing Grade"
-            desc={
-              sectionLevel
-                ? "Completes when the learner has Section completion for every Section in the Quiz."
-                : "Completes when the learner reaches the Quiz passing grade in a single attempt."
-            }
-          />
-        </div>
+        <CompletionCriteriaGate {...gateOf(props)}>
+          {/* No Completion Tracking leads, the way it does on every other Task
+              type's Completion Criteria (and the way spec 4.3.4.3 tables it) —
+              the Quiz was the only one starting with its graded option. */}
+          <div className="radio-card-group">
+            <RadioCard
+              selected={data.quizCompletion === "none"}
+              onSelect={() => update({ quizCompletion: "none" })}
+              title="No Completion Tracking"
+              desc="The Quiz is never marked complete — useful for practice or ungraded checks."
+            />
+            <RadioCard
+              selected={data.quizCompletion === "passing_grade"}
+              onSelect={() => update({ quizCompletion: "passing_grade" })}
+              title="Passing Grade"
+              desc={
+                sectionLevel
+                  ? "Completes when the learner has Section completion for every Section in the Quiz."
+                  : "Completes when the learner reaches the Quiz passing grade in a single attempt."
+              }
+            />
+          </div>
+        </CompletionCriteriaGate>
       </div>
 
       {/* Moved here from the Structure step 2026-09-17. It stays frozen while
@@ -2620,7 +2609,9 @@ function QuizCompletionStep({
           Structure step's table (1097:1205, now names and order only) so that
           everything about grading sits on this one step. Same `.qsec` card;
           the node widens the column gap to 40px and the name is read-only text
-          rather than the editable LangField. */}
+          rather than the editable LangField. Both pass-mark fields take the
+          criteria lock, with the banner already up under Completion Criteria. */}
+      <CompletionCriteriaGate {...gateOf(props)} banner={false}>
       {sectionLevel && (
         <div className="form-group">
           <label className="form-label">
@@ -2724,7 +2715,8 @@ function QuizCompletionStep({
           <p className="form-help">Enter a percentage from 0-100.</p>
         </div>
       )}
-    </CompletionCriteriaGate>
+      </CompletionCriteriaGate>
+    </>
   );
 }
 
@@ -3859,7 +3851,7 @@ function SubscriptionAccessField({ data, update }: StepProps) {
         </button>
       </div>
       <p className="form-help">
-        Recommendation: Tasks that complete a Certification should have this
+        Tasks that complete a Certification should have this
         setting enabled. This is to prevent users from completing Certifications
         without subscribing.
       </p>
@@ -4298,6 +4290,386 @@ function LangField({
   );
 }
 
+
+/* ─────────────────  Read-only summary (Tasks drawer)  ───────────────── */
+
+/* Every field this wizard edits for the Task's type, read back as review cards
+   in the Tasks row drawer: one card per step, in step order, the way the
+   Certifications drawer reads back its wizard. It renders from
+   `buildInitialData` — the data the edit wizard opens this Task with — so the
+   drawer and the editor can't disagree. Name and Description are the drawer's
+   own head, so the first card ("Overview") carries the rest of Task Details.
+   Bilingual fields show their English half only. Choices read back as the
+   option's own title, exactly as the wizard words it. */
+
+const COMPLETION_TITLE: Record<CompletionMode, string> = {
+  none: "No Completion Tracking",
+  "on-view": "Completes Upon Viewing",
+  manual: "User Manually Marks Completion",
+  xapi: "xAPI Completion Statement",
+};
+
+const COOLDOWN_TITLE: Record<CooldownMode, string> = {
+  none: "No cooldown",
+  uniform: "Same cooldown between all attempts",
+  variable: "Different cooldown between specific attempts",
+};
+
+/** A value that always applies — "—" when the form left it blank. */
+const orDash = (v: string | undefined | null) => (v && v.trim() ? v : "—");
+
+/** Multi-line text keeps its line breaks. */
+const multiline = (v: string) => (v.trim() ? <span className="tdr-pre">{v}</span> : "—");
+
+const fileNames = (files: UploadedFile[]) => orDash(files.map((f) => f.name).join(", "));
+
+function orientationTitle(d: WizardData): string {
+  if (d.allowRotation) return "Allow Rotation";
+  return d.lockedOrientation === "portrait" ? "Lock to Portrait" : "Locked to Landscape";
+}
+
+function questionOrderTitle(d: WizardData): string {
+  if (d.questionOrder === "fixed") return "Fixed Order";
+  if (d.structure !== "sectioned") return "Shuffled";
+  return d.shuffleScope === "all" ? "Shuffle All" : "Shuffle within Section";
+}
+
+/** One question list as a line: its statics, then each random set's draw. */
+function questionGroupLine(statics: StaticQuestion[], pools: RandomPool[]): string {
+  const parts = [
+    ...(statics.length
+      ? [`${statics.length} static question${statics.length === 1 ? "" : "s"}`]
+      : []),
+    ...pools.map(
+      (p) => `${p.draw || 0} drawn from a random set of ${p.questionIds.length.toLocaleString()}`,
+    ),
+  ];
+  return parts.length ? parts.join(" · ") : "No questions yet";
+}
+
+/** Four store IDs stacked, one per line, each named. */
+function priceIdLines(ids: PriceIds) {
+  return (
+    <span className="tdr-pre">
+      {PRICE_CHANNELS.map((ch) => `${ch.name}: ${ids[ch.key] || "—"}`).join("\n")}
+    </span>
+  );
+}
+
+export function TaskSummary({ task }: { task: Task }) {
+  const type = taskTypeKey(task.type);
+  const data = useMemo(() => buildInitialData(type, task), [type, task]);
+  const steps = stepsForType(type);
+  const title = (id: string) => steps.find((s) => s.id === id)?.label ?? id;
+  const tagsOf = (t: ContentTagType) =>
+    data.contentTags
+      .filter((c) => c.type === t)
+      .map((c) => c.value)
+      .join(", ");
+
+  const overview: ConfirmField[] = [
+    ["Type", TYPE_LABEL[type]],
+    [
+      "Time to Complete",
+      data.timeValue ? `${data.timeValue} ${TIME_UNIT_LABEL[data.timeUnit]}` : "—",
+    ],
+    // The record's own state, as the table shows it.
+    ["Visibility", task.hidden ? "Hidden" : "Visible"],
+    [
+      "Requires a Subscription",
+      data.requiresSubscription ? "Yes: Requires Subscription" : "No: Can Access on Free Trial",
+    ],
+  ];
+
+  return (
+    <div className="confirm-cards">
+      {type === "xapi" && (
+        <>
+          <ConfirmCard
+            title="Overview"
+            rows={[...overview, ["xAPI Package", fileNames(data.packageEn), true]]}
+          />
+          <ConfirmCard title={title("launch")} rows={[["Orientation", orientationTitle(data)]]} />
+          <ConfirmCard
+            title={title("completion")}
+            rows={[
+              ["Completion Criteria", data.completion ? COMPLETION_TITLE[data.completion] : "—"],
+              [
+                "Score Capture",
+                !data.scoreCapture
+                  ? "No Score Capture"
+                  : data.scoreDisplayMode === "recent"
+                    ? "Capture Most Recent Score"
+                    : "Capture Highest Score",
+              ],
+            ]}
+          />
+        </>
+      )}
+
+      {type === "file" && (
+        <>
+          <ConfirmCard
+            title="Overview"
+            rows={[
+              ...overview,
+              ["Resource Type", data.resourceType === "file" ? "File" : "Link"],
+              data.resourceType === "file"
+                ? ["File", fileNames(data.fileEn), true]
+                : ["Link", orDash(data.url), true],
+            ]}
+          />
+          <ConfirmCard
+            title={title("launch")}
+            rows={
+              data.resourceType === "file"
+                ? [["Open In", data.fileOpenIn === "in-app-viewer" ? "In-App Viewer" : "External Application"]]
+                : [
+                    ["Open In", data.openIn === "in-app" ? "In-App Browser" : "External Browser"],
+                    // Orientation only exists for the in-app browser.
+                    ["Orientation", data.openIn === "in-app" ? orientationTitle(data) : undefined],
+                  ]
+            }
+          />
+          <ConfirmCard
+            title={title("completion")}
+            rows={[
+              ["Completion Criteria", data.completion ? COMPLETION_TITLE[data.completion] : "—"],
+            ]}
+          />
+        </>
+      )}
+
+      {type === "hands-on" && (
+        <>
+          <ConfirmCard title="Overview" rows={overview} />
+          <ConfirmCard
+            title={title("reference")}
+            rows={[
+              ["Tools/Materials Required", multiline(data.hoToolsEn), true],
+              ["Instructions", multiline(data.hoInstrEn), true],
+              ["Reference Files", fileNames(data.hoFilesEn), true],
+              ["Reviewer's Checklist", multiline(data.hoReviewerChecklistEn), true],
+            ]}
+          />
+          <ConfirmCard
+            title={title("submission")}
+            rows={[
+              ["Project Description", `${orDash(data.hoProjectDescLimit)} character limit`],
+              ["Media Files", `${orDash(data.hoMediaMax)} files maximum`],
+              [
+                "Media File Types Allowed",
+                orDash(
+                  (["images", "videos", "audio"] as const)
+                    .filter((k) => data.hoMediaTypes[k])
+                    .map((k) => k[0].toUpperCase() + k.slice(1))
+                    .join(", "),
+                ),
+                true,
+              ],
+            ]}
+          />
+          <ConfirmCard
+            title={title("completion")}
+            rows={[
+              [
+                "Maximum Attempts",
+                data.maxAttemptsMode === "unlimited" ? MAX_ATTEMPTS_UNLIMITED : data.maxAttempts,
+              ],
+              [
+                "Completion Criteria",
+                data.hoCompletion === "reviewer_grade" ? "Passing Grade from Reviewer" : "Submission Made",
+              ],
+              [
+                "Passing Grade",
+                data.hoCompletion === "reviewer_grade" ? `${orDash(data.hoPassingGrade)} / 10` : undefined,
+              ],
+            ]}
+          />
+          <ConfirmCard
+            title={title("discovery")}
+            rows={[
+              ["Discoverable", data.discoverable ? "Yes" : "No"],
+              ["Audience", tagsOf("userType") ? AUDIENCE_B2B : AUDIENCE_ALL],
+              ["Trade", orDash(tagsOf("trade")), true],
+              ["Partnership", orDash(tagsOf("partnership")), true],
+            ]}
+          />
+        </>
+      )}
+
+      {type === "quiz" && <QuizSummaryCards data={data} overview={overview} title={title} />}
+    </div>
+  );
+}
+
+function QuizSummaryCards({
+  data,
+  overview,
+  title,
+}: {
+  data: WizardData;
+  overview: ConfirmField[];
+  title: (stepId: string) => string;
+}) {
+  const sectioned = data.structure === "sectioned";
+  const sectionLevel = data.gradingModel === "section_level";
+  const sectionName = (s: QuizSection, i: number) => s.name.trim() || `Section ${i + 1}`;
+  const limited = data.maxAttemptsMode === "limited";
+  const autoOn = data.autoAttempts && limited;
+  const r = data.review;
+  const shown = (on: boolean) => (on ? "Shown" : "Not shown");
+
+  return (
+    <>
+      <ConfirmCard title="Overview" rows={overview} />
+
+      <ConfirmCard
+        title={title("structure")}
+        rows={[
+          ["Structure", sectioned ? "Two or More Sections" : "Single Block of Questions", true],
+          [
+            "Sections",
+            sectioned ? (
+              <span className="tdr-pre">
+                {data.sections.map((s, i) => `${i + 1}. ${sectionName(s, i)}`).join("\n")}
+              </span>
+            ) : undefined,
+            true,
+          ],
+        ]}
+      />
+
+      <ConfirmCard
+        title={title("questions")}
+        rows={[
+          ...(sectioned
+            ? data.sections.map(
+                (s, i): ConfirmField => [
+                  `Section ${i + 1}: ${sectionName(s, i)}`,
+                  questionGroupLine(s.staticQuestions, s.randomPools),
+                  true,
+                ],
+              )
+            : [["Questions", questionGroupLine(data.blockStatic, data.blockPools), true] as ConfirmField]),
+          ["Question Order", questionOrderTitle(data), true],
+        ]}
+      />
+
+      <ConfirmCard
+        title={title("completion")}
+        rows={[
+          [
+            "Completion Criteria",
+            data.quizCompletion === "none" ? "No Completion Tracking" : "Passing Grade",
+          ],
+          ["Grading Model", sectionLevel ? "Section-level" : "Quiz-level"],
+          ["Quiz Passing Percentage", sectionLevel ? undefined : `${orDash(data.quizPassingPct)}%`],
+          ...(sectionLevel
+            ? data.sections.map(
+                (s, i): ConfirmField => [
+                  sectionName(s, i),
+                  `${orDash(s.passingPct)}% to pass${s.requiredToPass ? " · Must Pass" : ""}`,
+                ],
+              )
+            : []),
+        ]}
+      />
+
+      <ConfirmCard
+        title={title("attempts")}
+        rows={[
+          ["Maximum Attempts", limited ? data.maxAttempts : MAX_ATTEMPTS_UNLIMITED],
+          ["Cooldown Between Attempts", COOLDOWN_TITLE[data.cooldownMode], true],
+          [
+            "Cooldown in Minutes",
+            data.cooldownMode === "uniform" ? orDash(data.cooldownMinutes) : undefined,
+          ],
+          [
+            "Cooldown Before Specific Attempts",
+            data.cooldownMode === "variable" ? (
+              data.variableCooldowns.length ? (
+                <span className="tdr-pre">
+                  {data.variableCooldowns
+                    .map((c) => `Between ${c.fromAttempt} and ${c.fromAttempt + 1}: ${orDash(c.minutes)} min`)
+                    .join("\n")}
+                </span>
+              ) : (
+                "—"
+              )
+            ) : undefined,
+            true,
+          ],
+          [
+            "Auto-Unlock Additional Attempts",
+            autoOn ? "Yes: Unlock on Task Completion" : "No: Don't Unlock Extra Attempts",
+            true,
+          ],
+          ["Attempts to Unlock", autoOn ? orDash(data.autoAttemptsCount) : undefined],
+          [
+            "Unlock After Completing All Of",
+            autoOn ? orDash(data.autoAttemptTriggers.map((t) => t.name).join(", ")) : undefined,
+            true,
+          ],
+        ]}
+      />
+
+      <ConfirmCard
+        title={title("integrity")}
+        rows={[
+          ["Time Limit", data.timeLimitOn ? "Yes: Timed Attempts" : "No: Untimed"],
+          ["Time in Minutes", data.timeLimitOn ? orDash(data.timeLimitMinutes) : undefined],
+          ["Proctoring", data.proctoring ? "Yes: Proctoring Required" : "No: Proctoring Not Required"],
+          ["In-Quiz Resources", orDash(data.inQuizResources.map((x) => x.name).join(", ")), true],
+        ]}
+      />
+
+      {/* The step's dependency rules apply: a row whose prerequisite is off
+          reads "Not shown", as its switch does. */}
+      <ConfirmCard
+        title={title("review")}
+        rows={[
+          ["Attempt", shown(r.attempt)],
+          ["Result", shown(r.attempt && !sectionLevel && r.quizResult)],
+          ["Per-Section Results", shown(r.attempt && sectioned && r.perSectionResults)],
+          ["Score", shown(r.attempt && r.quizScore)],
+          ["Whether Correct", shown(r.attempt && r.whetherCorrect)],
+          ["Per-Question Feedback", shown(r.attempt && r.whetherCorrect && r.perQuestionFeedback)],
+        ]}
+      />
+
+      <ConfirmCard
+        title={title("payments")}
+        rows={[
+          ["Quiz Attempts Paywall", data.paywallOn ? "Yes: Attempts Are Charged" : "No: Attempts Are Free", true],
+          [
+            "Paywall Structure",
+            data.paywallOn
+              ? data.paywallMode === "per_attempt"
+                ? "Different price per attempt"
+                : "Same price for all attempts"
+              : undefined,
+            true,
+          ],
+          ...(!data.paywallOn
+            ? []
+            : data.paywallMode === "common"
+              ? PRICE_CHANNELS.map(
+                  (ch): ConfirmField => [ch.name, data.commonPriceIds[ch.key] || "—", true],
+                )
+              : [
+                  ...data.attemptPrices.map(
+                    (a): ConfirmField => [`Attempt ${a.attempt}`, priceIdLines(a.priceIds), true],
+                  ),
+                  ["All Subsequent Attempts", priceIdLines(data.subsequentPriceIds), true] as ConfirmField,
+                ]),
+          ["Requires NATE Integration", data.nateExam ? "Yes: This is a NATE Exam" : "No: Not a NATE Exam", true],
+          ["External ID (English)", data.nateExam ? orDash(data.nateIdEn) : undefined],
+        ]}
+      />
+    </>
+  );
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

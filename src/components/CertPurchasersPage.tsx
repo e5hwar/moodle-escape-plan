@@ -24,8 +24,9 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
+import { SearchTrailing } from "./SearchPanelParts";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, ChevronLeftIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -356,7 +357,7 @@ export function CertPurchasersPage({
                 <button className="rvc-crumb" onClick={onBack} title="Back to Certifications">
                   Certifications
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
               </nav>
               <h1 className="tasks-title">Who Paid</h1>
@@ -482,8 +483,8 @@ export function CertPurchasersPage({
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>
@@ -788,7 +789,12 @@ function GrantAccessModal({
 
   return (
     <div className="cl-modal-overlay" onMouseDown={onClose}>
-      <div className="cl-modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="cl-modal"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {!picked ? (
           <>
             <div className="cl-modal-head">
@@ -799,14 +805,17 @@ function GrantAccessModal({
               </p>
             </div>
             <div className="cl-modal-search">
-              <span className="search-icon"><SearchIcon /></span>
-              <input
-                ref={inputRef}
-                className="cl-modal-input"
-                placeholder="Search Users by Name, Email, Phone, or Company..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+              <div className="search-wrap">
+                <span className="search-icon"><SearchIcon /></span>
+                <input
+                  ref={inputRef}
+                  className="search-input"
+                  placeholder="Search Users by Name, Email, Phone, or Company..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <SearchTrailing active={!!query} onClear={() => setQuery("")} />
+              </div>
             </div>
             <div className="cl-modal-list">
               {results.length === 0 ? (

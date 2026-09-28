@@ -6,11 +6,12 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   SearchIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 
 /* Select Certifications — the shared table-picker chrome (Figma 682:2321,
  * `.stm-*`) that Select Tasks / Select Users / Select Questions already run on,
@@ -176,11 +177,18 @@ export function SelectCertificationsModal({
             </span>
             <input
               autoFocus
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder="Search Certifications..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
                 setPage(1);
               }}
             />
@@ -338,7 +346,7 @@ export function SelectCertificationsModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -346,7 +354,7 @@ export function SelectCertificationsModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

@@ -6,7 +6,7 @@ import {
 import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
-import { ChevronRightIcon, InfoIcon14 } from "./icons";
+import { InfoIcon14, CrumbChevronIcon } from "./icons";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 
 type Props = {
@@ -125,7 +125,7 @@ export function FeedbackFormWizard({
                 <div className="rvc-pagehead">
                   <nav className="rvc-crumbs" aria-label="Breadcrumb">
                     <span className="rvc-crumb">Content</span>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <button
                       className="rvc-crumb"
                       onClick={leave}
@@ -133,7 +133,7 @@ export function FeedbackFormWizard({
                     >
                       Feedback Forms
                     </button>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <span className="rvc-crumb rvc-crumb--current">
                       {form.name || title}
                     </span>

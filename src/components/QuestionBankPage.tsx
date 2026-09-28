@@ -21,7 +21,7 @@ import {
   type QuestionType,
   type Subcategory,
 } from "../data/questionBank";
-import { ChevronLeftIcon, MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, TreeCaretIcon, RowDeleteIcon, ChevronRightIcon } from "./icons";
+import { MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SearchIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, TreeCaretIcon, RowDeleteIcon, CrumbChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
@@ -30,6 +30,7 @@ import { PrmModal } from "./PrmModal";
 import { BulkUploadModal } from "./BulkUploadModal";
 import { CopiedToast } from "./CopiedToast";
 import { questionsFromImport, type ImportReport } from "../data/questionImport";
+import { SearchTrailing } from "./SearchPanelParts";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionVersionsPage } from "./QuestionVersionsPage";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -1140,6 +1141,11 @@ export function QuestionBankPage({
                 value={categorySearch}
                 onChange={(e) => setCategorySearch(e.target.value)}
               />
+              <SearchTrailing
+                shortcut={false}
+                active={!!categorySearch}
+                onClear={() => setCategorySearch("")}
+              />
             </div>
             {/* The count heading carries the Add Category plus (Figma
                 1188:1188) — same move as Add Sub-Category's, and the same
@@ -1166,25 +1172,28 @@ export function QuestionBankPage({
 
           <section className="qb-content">
             <header className="tasks-header">
-              {/* Table-state crumb only — the landing IS the Question Bank, so
-                  it keeps its bare title and the trail unfolds with the table
-                  chrome. Question Bank has no
+              {/* "Tasks › Question Bank" in both states. Question Bank has no
                   sidebar entry — it is reached from the Tasks header — so
-                  "Tasks" is the way back, and "Question Bank" returns to the
-                  category index in place of the footer's old "Back to search". */}
+                  "Tasks" is the way back. On the landing "Question Bank" is the
+                  current page; on the table it returns to the category index
+                  in place of the footer's old "Back to search". */}
               <div className="rvc-pagehead">
-                <nav className="rvc-crumbs qb-crumbs" aria-label="Breadcrumb">
+                <nav className="rvc-crumbs" aria-label="Breadcrumb">
                   <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
                     Tasks
                   </button>
-                  <ChevronRightIcon />
-                  <button
-                    className="rvc-crumb"
-                    onClick={morph.showLanding}
-                    title="Back to the category index"
-                  >
-                    Question Bank
-                  </button>
+                  <CrumbChevronIcon />
+                  {atTable ? (
+                    <button
+                      className="rvc-crumb"
+                      onClick={morph.showLanding}
+                      title="Back to the category index"
+                    >
+                      Question Bank
+                    </button>
+                  ) : (
+                    <span className="rvc-crumb rvc-crumb--current">Question Bank</span>
+                  )}
                 </nav>
                 <h1 className="tasks-title">{pageTitle}</h1>
               </div>
@@ -1452,12 +1461,12 @@ export function QuestionBankPage({
                     className="page-btn"
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  ><ChevronLeftIcon /></button>
+                  ><PagePrevIcon /></button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  ><ChevronRightIcon /></button>
+                  ><PageNextIcon /></button>
                 </div>
               </div>
               </div>

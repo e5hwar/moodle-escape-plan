@@ -17,10 +17,12 @@ import {
   RowEyeIcon,
   RowEyeOffIcon,
   RowDeleteIcon,
-  ChevronRightIcon,
-  ChevronLeftIcon,
   SortIcon,
+  PagePrevIcon,
+  PageNextIcon,
+  CrumbChevronIcon,
 } from "./icons";
+import { SearchTrailing } from "./SearchPanelParts";
 import { IndustriesSearch } from "./IndustriesSearch";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
@@ -1037,7 +1039,7 @@ function Hub({
               >
                 Industries
               </button>
-              <ChevronRightIcon />
+              <CrumbChevronIcon />
               {sub ? (
                 <>
                   <button
@@ -1047,7 +1049,7 @@ function Hub({
                   >
                     {industry.name}
                   </button>
-                  <ChevronRightIcon />
+                  <CrumbChevronIcon />
                   <span className="rvc-crumb rvc-crumb--current">{sub.name}</span>
                 </>
               ) : (
@@ -1658,11 +1660,18 @@ function AddCertsModal({
             <span className="search-icon"><SearchIcon /></span>
             <input
               autoFocus
-              className="search-input stm-search-input"
+              className="search-input"
               placeholder="Search Certifications..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            <SearchTrailing
+              active={!!query}
+              onClear={() => {
+                setQuery("");
                 setPage(1);
               }}
             />
@@ -1809,7 +1818,7 @@ function AddCertsModal({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
-                <ChevronLeftIcon />
+                <PagePrevIcon />
               </button>
               <button
                 className="page-btn"
@@ -1817,7 +1826,7 @@ function AddCertsModal({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Next page"
               >
-                <ChevronRightIcon />
+                <PageNextIcon />
               </button>
             </div>
           </div>

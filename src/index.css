@@ -51,20 +51,26 @@
   --tip-text: #fff;
   --tip-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
 
-  /* Floating panels — Figma 772:1109 "Search" + 772:1108 "Filters" (re-synced
-     2026-08-28). Search bars, their dropdown panels, and every .dropdown
-     (filters, Edit Columns, More Filters, the row menus) now share ONE
-     surface: a 15% #7a7a7a wash over #0d0d0d inside a half-strength #404040
-     hairline. It replaces the flat #1e1e20 bar fill on a transparent border
-     and the flat --bg-panel #0f0f10 on a solid #404040 one. Rows hovered or
-     pressed on that surface double the wash to 30% (#2e2e2e over the same
-     ground) — --bg-pill is DARKER than the panel and reads as a hole.
+  /* Floating panels — Figma 772:1108 "Filters" (2026-08-28): every .dropdown
+     (filters, Edit Columns, More Filters, the row menus) wears a 15% #7a7a7a
+     wash over #0d0d0d inside a half-strength #404040 hairline. Rows hovered or
+     pressed on it double the wash to 30% (#2e2e2e over the same ground) —
+     --bg-pill is DARKER than the panel and reads as a hole.
+
+     Search — Figma 772:1109, re-issued 2026-09-28 — moved OFF that shared
+     surface: every bar (Default 399:216, Large 1362:1945) and its expanded
+     panel (21:15952 / 772:1125) is a 20% #737373 wash over #0d0d0d inside a
+     10% #737373 hairline — lighter, with a fainter edge. The Filters section
+     was not re-issued, so the dropdowns keep the panel pair; the hover wash is
+     still the one --panel-row-hover (772:1164 is the same 30% #7a7a7a).
        --search-h  43px = 12px padding either side of a 19px line, so the CSS
                    padding is 11/15 — the padding-minus-border rule.
-       --search-h-lg 56px "Search Bar - Large" (772:1192), the landing hero:
+       --search-h-lg 56px "Search Bar - Large" (1362:1945), the landing hero:
                    16px padding around a 24px line, 20px icon and 20px type. */
-  --search-bg: linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)), #0d0d0d;
-  --search-border: rgba(64, 64, 64, 0.5);
+  --panel-bg: linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)), #0d0d0d;
+  --panel-border: rgba(64, 64, 64, 0.5);
+  --search-bg: linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)), #0d0d0d;
+  --search-border: rgba(115, 115, 115, 0.1);
   --panel-row-hover: #2e2e2e;
   --search-h: 43px;
   --search-h-lg: 56px;
@@ -627,6 +633,7 @@ a {
 .tasks-header .cta-quiet,
 .tasks.lc-page .cta-quiet,
 .lm-banner .cta-quiet,
+.drawer .cta-quiet,
 /* A callout's action is the same button the Manage Users landing banner puts
    on its own callout ("Review Names" + its keycap). */
 .note-card-action .cta-quiet {
@@ -652,6 +659,7 @@ a {
 .tasks-header .cta-quiet:hover,
 .tasks.lc-page .cta-quiet:hover,
 .lm-banner .cta-quiet:hover,
+.drawer .cta-quiet:hover,
 .note-card-action .cta-quiet:hover {
   background:
     linear-gradient(90deg, rgba(122, 122, 122, 0.3) 0%, rgba(122, 122, 122, 0.3) 100%),
@@ -666,32 +674,42 @@ a {
   padding: 0;
 }
 
+/* Page header (Figma 1356:1827): 32px Fira Sans SemiBold white on its 38px
+   leading-normal line (Fira's normal is 1.2). The subtext sits flush under
+   it — 1356:1828 has no gap between the two. */
 .tasks-title {
   font-family: var(--font-sans);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 600;
   color: #fff;
-  margin: 0 0 2px 0;
-  line-height: 1.15;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .tasks-title::first-letter {
   text-transform: uppercase;
 }
 
-/* Page subtext (Figma node 46:320): 14px Fira Sans Medium, #a8a8a8. Sits 8px
-   below the page header on every .tasks-title page. */
+/* Page subtext (Figma 1359:1870): 16px Fira Sans Regular, #a8a8a8, flush
+   under the page header on every .tasks-title page. */
 .tasks-subtitle {
-  display: inline-flex;
+  /* Block-level but content-wide. As an inline-flex inside a plain block
+     wrapper it sat on a line box sized by the inherited ~1.45 leading, which
+     re-opened a 2px gap under the flush title (Skills). */
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
   gap: 6px;
   /* Most call sites are a <div>, but a <p> would otherwise pick up the UA's
-     1em block margin and blow the 2px title gap out to ~18px. */
+     1em block margin and open a ~16px gap under the flush title. */
   margin: 0;
   color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
+  /* The node's 19px row; the inherited ~1.45 made it 23px. */
+  line-height: normal;
 }
 
 /* Subtext + tooltip glyph (Figma 742:1061): a 14px info glyph 4px after the
@@ -719,89 +737,12 @@ a {
   outline: none;
 }
 
-/* "* Required Fields" hint (Figma node 46:322): 12px Fira Sans Medium, accent
-   orange. Sits below the header block (12px gap) on forms with required fields. */
 .tasks-subtitle-dot {
   width: 3px;
   height: 3px;
   border-radius: 50%;
   background: var(--text-faint);
   display: inline-block;
-}
-
-/* Breadcrumb (Figma 275:2108): 4px gaps, 16px Fira Sans Regular #a8a8a8 trail,
-   a 14px chevron between crumbs, and the current page in Medium white. */
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
-  color: #a8a8a8;
-}
-
-.breadcrumb-home {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  color: var(--text-muted);
-  border-radius: 4px;
-  transition: color 0.12s ease, background 0.12s ease;
-}
-
-.breadcrumb-home:hover {
-  color: var(--text);
-  background: var(--bg-pill);
-}
-
-.breadcrumb-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 500;
-}
-.breadcrumb-back:hover { color: var(--text); }
-
-.breadcrumb-item {
-  color: #a8a8a8;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
-  white-space: nowrap;
-  padding: 0;
-  transition: color 0.12s ease;
-}
-
-/* Same hover as every other crumb: brighten + underline (see button.rvc-crumb). */
-button.breadcrumb-item:hover {
-  color: #fff;
-  text-decoration: underline;
-}
-
-.breadcrumb-current {
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.breadcrumb-sep {
-  display: inline-flex;
-  align-items: center;
-  color: #a8a8a8;
-}
-
-.breadcrumb-sep svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
 }
 
 .resources-btn {
@@ -848,20 +789,24 @@ button.breadcrumb-item:hover {
 .search-input {
   width: 100%;
   height: var(--search-h);
-  /* 43 + the 1px border = the 44px text inset of Figma 399:216; on the right,
-     16px of edge plus the 43px ⌘K badge, again less the border. */
+  /* 43 + the 1px border = the 44px text inset of Figma 902:3585 / 772:1110;
+     on the right, 16px of edge plus the 43px ⌘K badge, again less the border. */
   padding: 0 58px 0 43px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
 }
 
+/* The 2026-09-28 re-issue draws the placeholder WHITE, like typed text
+   (399:221 / 772:1113 / 1362:1948 are all text-white) — it used to be #a8a8a8.
+   What tells the two states apart is the trailing slot: ⌘K while empty, ✕ once
+   there is something to clear. */
 .search-input::placeholder {
-  color: #a8a8a8;
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
@@ -892,10 +837,11 @@ button.breadcrumb-item:hover {
   height: 16px;
 }
 
-/* ⌘K badge — Figma 773:1229. Two 20px caps 3px apart: the command glyph is a
-   14px stroke ICON (it used to be a text ⌘, which sat a shade heavier than the
-   K beside it), the letter is IBM Plex Mono Medium 12. The Large bar reuses the
-   same badge one step up (773:1236) — see the landing-morph block. */
+/* ⌘K badge — Figma 773:1229. Two 20px caps 3px apart on a 6% white wash (4%
+   until the 2026-09-28 re-issue): the command glyph is a 14px stroke ICON (it
+   used to be a text ⌘, which sat a shade heavier than the K beside it), the
+   letter is IBM Plex Mono Medium 12. The Large bar draws it at 26px caps
+   (1362:1949) — see the collapsing-header and landing-morph blocks. */
 .search-kbd {
   position: absolute;
   right: 16px;
@@ -944,7 +890,7 @@ button.breadcrumb-item:hover {
   height: 20px;
   border: none;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
   color: #a8a8a8;
 }
 
@@ -1290,8 +1236,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   top: calc(100% + 8px);
   /* Figma 24:16115 / 28:16530 / 28:16625 panel shell: the shared floating-panel
      wash, a HALF-strength #404040 hairline, r10 and a 20px-blur shadow. */
-  background: var(--search-bg);
-  border: 1px solid var(--search-border);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: 10px;
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
   z-index: 100;
@@ -2619,6 +2565,20 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   border-radius: 8px;
 }
 
+/* Menu open → the bar collapses to its kebab. Every quick action is repeated
+   in the row's menu, so showing both would list the same action twice. The
+   bar is right-anchored, so the kebab stays on the same pixel. Keep this rule
+   true: a quick action must ALSO be a menu item, or it vanishes here. */
+.table tbody tr.menu-open .row-action-bar > .row-action-btn:not(:last-child),
+.mct-row.is-menu .row-action-bar > .row-action-btn:not(:last-child) {
+  display: none;
+}
+.table tbody tr.menu-open .row-action-bar > .row-action-btn:last-child,
+.mct-row.is-menu .row-action-bar > .row-action-btn:last-child {
+  margin-left: 0;
+  border-radius: 8px;
+}
+
 /* Hovered cell: the hairline turns orange. Nothing else moves — no fill change,
    no icon-colour change — and z-index keeps the orange edge above its
    neighbour's grey one. */
@@ -2706,18 +2666,18 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 /* ===== Pagination ===== */
-/* Pagination (Figma 77:264): right-aligned, 2px #3d3d43 top border, "Showing X
-   of Y" (14px Regular #a8a8a8) + two chevron buttons, 20px gap / 16px between. */
-/* Footer — Figma 77:264 "Atomic Component - Pagination" (652:925): 40px tall,
-   12px insets, 1px #404040 rule above, Fira Sans Regular 16 #a8a8a8, 20px gap
-   to the 16px-gap chevron pair. */
+/* Footer — Figma 77:264 "Atomic Component - Pagination" (re-cut 2026-09-28):
+   30px tall, the row hanging 11px under its 1px #404040 rule with nothing
+   below it (1px border + 10px padding = the node's y=11), 12px side insets,
+   Fira Sans Regular 16 #a8a8a8, 20px gap to the 16px-gap chevron pair
+   (PagePrevIcon / PageNextIcon). */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 20px;
-  height: 40px;
-  padding: 0 12px;
+  height: 30px;
+  padding: 10px 12px 0;
   color: #a8a8a8;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -3131,42 +3091,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: var(--text-faint);
 }
 
-.wizard-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-
-.wizard-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.wizard-back-btn:hover {
-  color: var(--text);
-}
-
-.wizard-breadcrumb .sep {
-  color: var(--text-faint);
-}
-
-.wizard-current {
-  color: var(--text);
-}
-
 .wizard-type-badge {
   display: inline-block;
   padding: 4px 12px;
@@ -3452,19 +3376,19 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   margin-bottom: 0;
 }
 
-/* Wizard content header — mirrors the shared page header (.tasks-title): 28px
+/* Wizard content header — mirrors the shared page header (.tasks-title): 32px
    Fira Sans SemiBold white. */
 .wizard-title {
   font-family: var(--font-sans);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 600;
   color: #fff;
-  margin: 0 0 2px;
-  line-height: 1.15;
+  margin: 0;
+  line-height: 1.2;
 }
 
 /* Wizard content subtext — mirrors the shared page subtext (.tasks-subtitle):
-   16px Fira Sans Regular, #a8a8a8. `.tasks-subtitle` is a one-line inline-flex
+   16px Fira Sans Regular, #a8a8a8. `.tasks-subtitle` is a one-line content-wide flex row
    and never had to set leading; this one wraps, and 1.5 read loose beside the
    14/17 of every field subtext under it, so it takes the same ratio. */
 .wizard-desc {
@@ -5219,6 +5143,79 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   max-width: none;
 }
 
+/* Locked completion criteria (Figma 1360:1883 "Atomic Component - Locked
+   Field"): a banner between the field's label and its controls. The card is the
+   Secondary Button's 20% grey wash over #0d0d0d at 75%, with the same 0.5px
+   hairline; the lead (padlock + text) and the button sit 40px apart. */
+.crit-lock-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.crit-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  width: 100%;
+  padding: 12px;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+.crit-lock-lead {
+  display: flex;
+  flex: 1 0 0;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.crit-lock-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: #a8a8a8;
+}
+.crit-lock-text {
+  display: flex;
+  flex: 1 0 0;
+  flex-direction: column;
+  min-width: 0;
+  font-family: var(--font-sans);
+  line-height: normal;
+  word-break: break-word;
+}
+.crit-lock-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.crit-lock-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+.crit-lock-banner .prm-quiet {
+  flex-shrink: 0;
+}
+/* The gated controls. A bare <fieldset> so `disabled` reaches every control in
+   it; the node draws them as they are, so a locked radio card keeps its full
+   colour instead of the usual disabled 40% — the banner says why they're
+   still. */
+.crit-lock {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.crit-lock:disabled .radio-card:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
 /* Locked wizard step: a grey overlay + explanation card sits over the greyed-out
    (and interaction-disabled) step content. Used for the Quiz Structure step,
    which can't be altered once a Quiz has attempts. */
@@ -5295,65 +5292,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 .step-lock-text:last-child {
   margin-bottom: 0;
-}
-
-/* Interactive gate (Completion criteria): the card must receive clicks even
-   though the scrim stays click-through. */
-.step-lock-overlay.interactive {
-  pointer-events: none;
-}
-
-.step-lock-overlay.interactive .step-lock-card {
-  pointer-events: auto;
-}
-
-.step-lock-icon.warning {
-  color: var(--warning, #e0a23b);
-  border-color: var(--warning, #e0a23b);
-  background: rgba(224, 162, 59, 0.12);
-}
-
-.step-lock-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.step-lock-btn {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-pill-strong);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.step-lock-btn:hover {
-  background: var(--bg-row-hover);
-}
-
-.step-lock-btn.primary {
-  background: var(--accent, #d4541e);
-  border-color: var(--accent, #d4541e);
-  color: #fff;
-}
-
-.step-lock-btn.primary:hover {
-  filter: brightness(1.08);
-}
-
-.step-lock-btn.danger {
-  background: #b3331b;
-  border-color: #b3331b;
-  color: #fff;
-}
-
-.step-lock-btn.danger:hover {
-  filter: brightness(1.1);
 }
 
 .radio-card {
@@ -7208,7 +7146,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   padding: 8px;
   border: 0.5px solid #404040;
   border-radius: 8px;
-  background: var(--search-bg);
+  background: var(--panel-bg);
   z-index: 1;
 }
 /* Too close to the window's right edge — open on the left instead. */
@@ -7576,8 +7514,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   /* Width/gap are mirrored by SUBMENU_WIDTH / SUBMENU_GAP in Filters.tsx,
      which measures them to decide the side — keep the three in step. */
   max-height: 440px;
-  background: var(--search-bg);
-  border: 1px solid var(--search-border);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: 10px;
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
   display: flex;
@@ -8091,28 +8029,16 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   margin: 2px 0 0;
 }
 
+/* The picker's search is the app-wide "Search Bar - Default" (399:216) — it
+   used to be a bare icon + input on the band's hairline. The band keeps its
+   insets and rule; the `.cl-modal` card is `aria-modal`, so ⌘K lands here. */
 .cl-modal-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 12px 24px;
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
-.cl-modal-search .search-icon {
-  position: static;
-  transform: none;
+.cl-modal-search .search-wrap {
+  margin-bottom: 0;
 }
-.cl-modal-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 12pt;
-  outline: none;
-}
-.cl-modal-input::placeholder { color: var(--text-faint); }
 
 .cl-modal-list {
   flex: 1;
@@ -8626,16 +8552,19 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   border-bottom: none !important;
 }
 
-/* Question Bank pagination — same as the standard table pagination. */
-.qb-pagination {
-  padding: 14px 0 12px;
-}
-
 /* =============================================================
  * Spotlight
  * ============================================================= */
 .sp-page {
-  /* slightly tighter padding-top so the position banner fits */
+  /* The page itself never scrolls (the table scrolls inside .table-xscroll),
+     so it gets a 20px band top and bottom; the table box stops 20px above the
+     window edge instead of running flush to it. Sides keep .tasks' 32px. */
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+/* The Save/Discard bar stays flush with the window bottom: cancel the gap. */
+.sp-page > .sp-save-footer {
+  margin-bottom: -20px;
 }
 
 /* Page subtext + its info affordance (Figma 566:2265): 4px between the line and
@@ -10043,27 +9972,22 @@ a.spc-hero-pill--link:hover {
   display: block;
 }
 
-/* Actions cell — the 88px decide block and the 16px kebab sit side by side,
-   12px apart, both right-aligned against the row's 12px end padding. The column
-   scrolls with the rest of the table; it is deliberately NOT pinned. */
-.sp-td-actions {
-  position: relative;
-}
-
-.sp-actions {
+/* Actions — the 103px Approve / Reject block, left-aligned under the "Actions"
+   label like every other column's content; rows with nothing to decide leave
+   it empty. The 16px kebab is in its own unlabelled column after it, 24px away
+   at the table's floor width (898:3575), right-aligned against the row's 12px
+   end padding. Neither column is pinned — both scroll with the table. */
+.sp-menu {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
 }
 
 .sp-kebab {
   /* 16px glyph (558:2072) in a 30px hit target. The negative margins pull the
-     hit area back to the glyph's own 16px footprint for layout, so the actions
-     column keeps the design's width and the glyph lands in the same place
-     whether or not the row also carries Approve / Reject. Without this the
-     button is the flex item that shrinks when the pair is present, and its
-     glyph re-centres 7px off from the rows that have no buttons. */
+     hit area back to the glyph's own 16px footprint for layout, so the menu
+     column is just the glyph plus cell padding (40px) and the glyph's right
+     edge sits 12px from the cell edge. */
   width: 30px;
   height: 30px;
   flex-shrink: 0;
@@ -10081,11 +10005,13 @@ a.spc-hero-pill--link:hover {
   color: var(--text);
 }
 
-/* In-Review rows show a stacked Approve / Reject pair (Figma 558:2055). */
+/* In-Review rows show a stacked Approve / Reject pair (Figma 558:2055), 8px
+   apart (898:3575). Block-level, so the cell's vertical-align centres it
+   exactly rather than seating it on a line box. */
 .sp-decide {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   /* 103px (558:2055) — the re-issued buttons went back to 16px of side
      padding, which widens the block past the 88px the 8px-padded pair took. */
   width: 103px;
@@ -10097,16 +10023,17 @@ a.spc-hero-pill--link:hover {
   justify-content: center;
   gap: 4px;
   width: 100%;
-  /* 558:2056/2059 — padded rather than fixed-height (8 + 17 + 8 = the design's
-     33px), 14px label, 16px of side padding. */
-  padding: 8px 16px;
+  /* 558:2056/2059 (re-issued in 898:3575) — padded rather than fixed-height
+     (6 + 17 + 6 = the design's 29px, the same box as a .co-status-pill), 14px
+     label, 16px of side padding. */
+  padding: 6px 16px;
   border-radius: 8px;
   color: #fff;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
-  /* The design's 33px is 8 + 17 + 8; the inherited line-height renders the
-     label 19px tall and the button 35. */
+  /* Pinned: the inherited line-height renders the label 19px tall and the
+     button 2px over the design's 29. */
   line-height: 17px;
   white-space: nowrap;
 }
@@ -11684,6 +11611,15 @@ a.prm-cta {
 .drawer > * {
   flex-shrink: 0;
 }
+/* The head's trailing group: any actions, then the close glyph. Centred on the
+   28px title's first line (34px box), which the 32px button nearly fills. */
+.drawer-head-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  min-height: 34px;
+}
 /* Focus is moved here on open so the keyboard lands inside the drawer; the
    panel isn't a control, so it draws no ring. */
 .drawer:focus {
@@ -11801,6 +11737,12 @@ a.prm-cta {
 }
 .cdr-task .ctb-task-gate {
   margin: 8px 0 0;
+}
+
+/* The Tasks drawer's review cards: multi-line values (instructions, a
+   checklist, one Section or store ID per line) keep their line breaks. */
+.tdr-pre {
+  white-space: pre-line;
 }
 
 /* =============================================================
@@ -11924,50 +11866,6 @@ a.prm-cta {
   display: block;
   overflow-y: auto;
   padding-bottom: 40px;
-}
-
-/* Breadcrumb */
-.rh-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-family: var(--font-sans);
-  font-size: 11pt;
-}
-.rh-crumb-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  margin-right: 4px;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.rh-crumb-back:hover {
-  background: var(--bg-pill);
-  color: var(--text);
-}
-.rh-crumb-link {
-  color: var(--text-muted);
-  font-weight: 600;
-}
-/* Only the crumbs that navigate get the hover — a plain <span> crumb is a
-   label, not a link. Brighten + underline, same as button.rvc-crumb. */
-button.rh-crumb-link:hover,
-a.rh-crumb-link:hover {
-  color: #fff;
-  text-decoration: underline;
-}
-.rh-crumb-sep {
-  color: var(--text-faint);
-}
-.rh-crumb-current {
-  color: var(--text);
-  font-weight: 600;
 }
 
 /* Title row */
@@ -14211,10 +14109,10 @@ a.rh-crumb-link:hover {
   margin-bottom: 24px;
 }
 
-/* Breadcrumb over the rail title — same 12px crumb→title gap as .rvc-pagehead.
+/* Breadcrumb over the rail title — same 4px crumb→title gap as .rvc-pagehead.
    The way back to Certifications now that Industries left the sidebar. */
 .ind-crumbs {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 /* Inline flow (not flex) so the glyph follows the last word when the copy
@@ -14270,22 +14168,30 @@ a.rh-crumb-link:hover {
   transform: translateY(0);
 }
 
-/* Rail search (314:834) — its own box, not the app-wide .search-input chrome:
-   #0f0f10 fill, #3d3d43 hairline, 10px radius, no ⌘K keycap. The input is
-   matched structurally (`> input`) so a page can choose whether to also give it
-   `.search-input`: that class is what App.tsx's ⌘K handler looks for, and on a
-   page whose main search lives in the right pane (Question Bank) the rail must
-   NOT claim it — the handler focuses the first visible match in DOM order. */
+/* Rail search — the app-wide "Search Bar - Default" (399:216 / Text Entered
+   902:3585) since the 2026-09-28 re-issue: 43px, the search surface, 16px
+   glyph, 12px to white 16px Medium type, a ✕ once something is typed. (It was
+   its own box — 314:834 / 859:1867, both gone from the file.) What it can't
+   carry is the ⌘K badge: the input is matched structurally (`> input`) so a
+   page can choose whether to also give it `.search-input`, the class App.tsx's
+   ⌘K handler looks for, and on a page whose main search lives in the right
+   pane (Question Bank) the rail must NOT claim it — the handler focuses the
+   first visible match in DOM order. Its empty state is the Default bar minus
+   the badge (`SearchTrailing shortcut={false}`). */
 .rail-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 9px 13px;
+  gap: 12px;
+  height: var(--search-h);
+  padding: 0 15px;
   margin-bottom: 24px;
-  background: #0f0f10;
-  border: 1px solid #3d3d43;
-  border-radius: 10px;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
+  border-radius: 8px;
+}
+
+.rail-search:focus-within {
+  border-color: var(--border-strong);
 }
 
 .rail-search .search-icon {
@@ -14293,14 +14199,12 @@ a.rh-crumb-link:hover {
   transform: none;
   display: inline-flex;
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
   color: #a8a8a8;
 }
 
 .rail-search .search-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .rail-search > input {
@@ -14311,16 +14215,24 @@ a.rh-crumb-link:hover {
   background: none;
   border: none;
   border-radius: 0;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
 }
 
 .rail-search > input::placeholder {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  color: #a8a8a8;
+  color: #fff;
+}
+
+/* The ✕ sits in the row rather than over the input, so long text stops short
+   of it on the row's own 12px gap. */
+.rail-search > .search-clear {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
 }
 
 /* Count heading above the tree (323:1760) — the shared SectionHeading, one
@@ -15208,7 +15120,6 @@ a.rh-crumb-link:hover {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 2px;
 }
 .ind-hub-toprow .tasks-title {
   margin: 0;
@@ -16025,10 +15936,13 @@ a.rh-crumb-link:hover {
   align-items: center;
   gap: 12px;
   height: var(--search-h);
-  /* Figma 399:216 pads 16px from the OUTER edge and this shell has a 1px
-     border, so the CSS padding is 15 — see the padding-minus-border rule. The
-     placeholder then starts at 44px (15 + 1 + 16px icon + 12px gap), matching
-     .search-input's 44px. */
+  /* Figma pads 16px from the OUTER edge and this shell has a 1px border, so
+     the CSS padding is 15 — see the padding-minus-border rule. The text then
+     starts at 44px (15 + 1 + 16px icon + 12px gap), matching .search-input's
+     44px. The 12px is Text Entered 902:3585 / Filter Applied 772:1110 / Large
+     1362:1945; the re-issued Default 399:216 alone shows 8px (text at 40), and
+     one input can't put its placeholder 4px left of its own typed text without
+     a jump on the first keystroke — so every state holds 12. */
   padding: 0 15px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
@@ -16052,12 +15966,13 @@ a.rh-crumb-link:hover {
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
 }
-.usearch-input::placeholder { color: #a8a8a8; }
+/* White, like the typed text — see .search-input::placeholder. */
+.usearch-input::placeholder { color: #fff; }
 .usearch-kbd {
   display: inline-flex;
   align-items: center;
@@ -16066,8 +15981,9 @@ a.rh-crumb-link:hover {
   color: #a8a8a8;
 }
 
-/* Clear ✕ — Figma "Search Bar - Applied" (399:216). Takes the ⌘K badge's slot
-   the moment there is a search to clear, so the bar's width never jumps. */
+/* Clear ✕ — Figma 902:3592 / 772:1114 ("Text Entered" / "Filter Applied"),
+   16px #a8a8a8. Takes the ⌘K badge's slot the moment there is a search to
+   clear, so the bar's width never jumps. */
 .usearch-clear {
   display: inline-flex;
   align-items: center;
@@ -16094,7 +16010,7 @@ a.rh-crumb-link:hover {
   height: 20px;
   border: none;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* The glyph and letter are the same in both bar flavours (773:1231/1233). */
@@ -16110,15 +16026,16 @@ a.rh-crumb-link:hover {
   font-size: 12px;
 }
 
-/* Applied company scope pill inside the bar — minimal/subtle, name in bold */
+/* Pending filter token inside the bar — `SearchScopeChip`, Figma 772:1120
+   "Search Bar - Default - Filter Applied": "Label: value" in WHITE Fira Sans
+   Medium 14 (it was #a8a8a8 until the 2026-09-28 re-issue), 4px to its 12px ✕. */
 .usearch-scope {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  /* Figma 772:1120 "Search Bar - Default - Filter Applied" pads 5px / 9px left
-     / 5px right around a 1px border — minus the border, per the bordered-shell
-     rule. The ✕ side is the tight one. */
+  /* The node pads 5px / 9px left / 5px right around a 1px border — minus the
+     border, per the bordered-shell rule. The ✕ side is the tight one. */
   padding: 4px 4px 4px 8px;
   border-radius: 6px;
   background: transparent;
@@ -16128,7 +16045,7 @@ a.rh-crumb-link:hover {
   line-height: normal;
   font-size: 14px;
   font-weight: 500;
-  color: #a8a8a8;
+  color: #fff;
 }
 /* Question Bank can hold several pending tokens at once (Category / Type /
    Quizzes / Feedback Form), so they share one tighter-gapped group and shrink
@@ -16153,18 +16070,19 @@ a.rh-crumb-link:hover {
 }
 
 .usearch-scope-label {
-  color: #a8a8a8;
+  color: #fff;
   flex-shrink: 0;
 }
 .usearch-scope-name {
-  color: #a8a8a8;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ✕ on a token. Only pages whose applied filters live in the bar rather than in
-   a pill row (Proctoring) render it — elsewhere the pill is what you clear. */
+/* ✕ on a token (772:1122) — every bar's tokens carry one since the 2026-09-28
+   re-issue; it drops that token only. `SearchClearIcon` drawn at 12px is the
+   node's 12px export exactly (the 1.333 stroke scales to 1). */
 .usearch-scope-x {
   display: inline-flex;
   align-items: center;
@@ -16335,11 +16253,12 @@ a.rh-crumb-link:hover {
 .usearch-searchfor-text .q { color: #f05523; }
 
 /* Keyboard hints footer — shown when the box is empty. Figma 21:15979: it sits
-   on the panel's 8px column gap behind a 0.5px #404040 hairline, and the panel
-   no longer pads, so it spans the full width on its own. The bar is a fixed
-   43px with its 20px hint row centred on it (the node's 11.75px top offset is
-   that centring plus the hairline) — reading its padding as 8.5/8 instead left
-   the bar 37px and the whole panel six short. */
+   on the panel's 8px column gap behind a 0.5px hairline (20% #737373 since the
+   2026-09-28 re-issue — it was #404040), and the panel no longer pads, so it
+   spans the full width on its own. The bar is a fixed 43px with its 20px hint
+   row centred on it (the node's 11.75px top offset is that centring plus the
+   hairline) — reading its padding as 8.5/8 instead left the bar 37px and the
+   whole panel six short. */
 .usearch-foot {
   display: flex;
   align-items: center;
@@ -16347,7 +16266,7 @@ a.rh-crumb-link:hover {
   margin: 8px 0 0;
   height: 43px;
   padding: 0 18px;
-  border-top: 0.5px solid #404040;
+  border-top: 0.5px solid rgba(115, 115, 115, 0.2);
   line-height: normal;
 }
 .usearch-hint {
@@ -16375,7 +16294,13 @@ a.rh-crumb-link:hover {
   background: rgba(255, 255, 255, 0.04);
   color: #a8a8a8;
 }
-.usearch-keycap svg { display: block; }
+/* 12px glyphs (21:15982 / 21:15992 / 21:15994); the ↵ is the 14px
+   KeyEnterIcon, which at 12px is the node's own export. */
+.usearch-keycap svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
 .usearch-keycap--text {
   width: auto;
   min-width: 20px;
@@ -18612,12 +18537,12 @@ a.rh-crumb-link:hover {
    card the panel takes a lighter wash (and a softer row hover) so it still
    separates from the popup behind it. Only for menus on a popup surface.
    Re-synced 2026-09-10: the wash is now rgba(122,122,122,0.15) over #0d0d0d —
-   i.e. exactly `--search-bg`, the shared floating-panel surface — where it used
+   i.e. exactly `--panel-bg`, the shared floating-panel surface — where it used
    to be a bespoke rgba(115,115,115,0.2). The row hover stays the node's own
    rgba(115,115,115,0.1); only the panel joined the token. */
 .ss-menu--popup,
 .ms-menu--popup {
-  background: var(--search-bg);
+  background: var(--panel-bg);
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
 }
 .ss-menu--popup .dropdown-list .dropdown-item:hover,
@@ -20328,14 +20253,15 @@ a.rh-crumb-link:hover {
   font: inherit;
 }
 
-/* Reads as the input's placeholder, because that is what it stands in for. */
+/* Reads as the input's placeholder, because that is what it stands in for —
+   white, like every search placeholder since the 2026-09-28 re-issue. */
 .mgf-usearch-placeholder {
   flex: 1;
   min-width: 0;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
-  color: #a8a8a8;
+  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21426,7 +21352,7 @@ a.rh-crumb-link:hover {
   padding: 24px 24px 0;
 }
 .mid-head-left { min-width: 0; }
-/* .tasks-title carries the 28px/600; the pill sits beside the name on its
+/* .tasks-title carries the 32px/600; the pill sits beside the name on its
    baseline row, 4px away (Figma 460:2448). */
 .mid-title {
   display: flex;
@@ -21590,7 +21516,7 @@ a.rh-crumb-link:hover {
 /* ─── Editor page shell ───
    The create/edit-question screen is assembled from the shared design system
    (Figma "Components" page 11:15114) rather than styled here:
-     · breadcrumb             → .breadcrumb (275:2108)
+     · breadcrumb             → .rvc-crumbs (1356:1829)
      · page header + subtext  → .tasks-title / .tasks-subtitle (46:314)
      · section dividers       → <PageBreak /> (104:376)
      · label + field subtext  → .form-label / .form-help (49:367, 49:370)
@@ -23564,24 +23490,26 @@ a.rh-crumb-link:hover {
    land between the title and its subtext and override the DS 2px, leaving these
    crumbed pages looser than every plain .tasks-title page. */
 .rvc-pagehead { display: flex; flex-direction: column; min-width: 0; }
-.rvc-pagehead > .rvc-crumbs { margin-bottom: 8px; }
+.rvc-pagehead > .rvc-crumbs { margin-bottom: 4px; } /* Figma 1356:1828: crumbs → title 4px */
 .rvc-crumbs { display: flex; align-items: center; gap: 4px; }
+/* Page-header breadcrumb (Figma 1356:1829): 16px Regular #a8a8a8 crumbs, the
+   current page in Medium white, 14px CrumbChevronIcon between, 4px apart. */
 .rvc-crumb {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
+  line-height: normal;
   font-weight: 400;
   color: #a8a8a8;
   white-space: nowrap;
   padding: 0;
 }
-.rvc-crumb--current { color: #fff; }
+.rvc-crumb--current { color: #fff; font-weight: 500; }
 /* A crumb that navigates is a <button>; a plain span is just a label. On the
    consoles the current crumb IS the way back out, so it stays clickable there. */
 button.rvc-crumb { cursor: pointer; }
 button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 span.rvc-crumb--current { cursor: default; }
-.rvc-crumbs svg { width: 12px; height: 12px; color: #a8a8a8; flex: none; }
-/* .tasks-title already carries the 2px gap down to .tasks-subtitle. */
+.rvc-crumbs svg { width: 14px; height: 14px; color: #a8a8a8; flex: none; }
 /* A flex column, not a block: the subtitle is an inline-flex, and as an INLINE
    box it would sit on a line box sized by the container's 1.45 line-height —
    4px taller than the subtitle itself, which pushed the header past the
@@ -24762,10 +24690,10 @@ span.rvc-crumb--current { cursor: default; }
   padding: 32px 32px 0;
 }
 /* The page is only ever opened from another page's row menu, so it carries the
-   shared crumb row above the title — same 8px crumb→title gap .rvc-pagehead
+   shared crumb row above the title — same 4px crumb→title gap .rvc-pagehead
    uses (the header itself is a plain block, not a flex column). */
 .mc-header .rvc-crumbs {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 /* ── scope pickers ── */
@@ -24824,7 +24752,9 @@ span.rvc-crumb--current { cursor: default; }
    enough room to type a replacement beside it. */
 /* A committed pick is the field's own value (Figma 1160:1286) — white, in the
    input's Medium 16px, sitting where the placeholder does. The input already
-   takes the free space, which is what pins the ✕ to the half's right edge. */
+   takes the free space, which is what pins the ✕ to the half's right edge.
+   (Every search placeholder is white since the 2026-09-28 re-issue, so this
+   now only pins the pick white should that ever change again.) */
 .mc-scopebar .usearch-bar.is-picked .usearch-input::placeholder {
   color: #fff;
 }
@@ -25934,15 +25864,17 @@ span.rvc-crumb--current { cursor: default; }
   color: #fff;
 }
 
-/* ===== Certifications landing — collapsing header =====
-   Claude Design "Certifications Prototype" (2026-09-24). Certifications only:
-   the other list pages keep the landing morph below.
+/* ===== Collapsing landing header — Certifications, Tasks, Companies, Users =====
+   Claude Design "Certifications Prototype" (2026-09-24; Tasks, Companies and
+   Manage Users took it on 2026-09-28 — every search-first landing). The cards
+   and rail landings (Exam Reviews, Hands-On, Question Bank) keep the landing
+   morph below.
 
    The page is ONE scroller — the table's own `.table-xscroll`
    (`.clh-scroll`) — and the page header lives inside it (`.clh-head`). At
-   scrollTop 0 that header is the landing: a 44px title dropped below the
-   header actions, a one-line catalog summary, the Large search bar (772:1192)
-   and extra air above the table header. The first --clh-d px of scroll
+   scrollTop 0 that header is the landing: the Enlarged Header (1356:1865 —
+   56px title, 20px summary) dropped below the header actions, the Large
+   search bar (1362:1945) and extra air above the table header. The first --clh-d px of scroll
    collapse it into the standard table-page header, the exact geometry the
    other list pages show in their table state. useCollapsingHeader writes the
    progress as --clh (0 landing … 1 collapsed) on `.clh-head` and on the
@@ -25961,24 +25893,61 @@ span.rvc-crumb--current { cursor: default; }
   initial-value: 0px;
 }
 
+/* The collapse runs on the compositor (2026-09-28 — the user: "make the
+   transition a little smoother"), and uniformly (same day: "it first all goes
+   vertically up for a bit and then transitions. It should be a uniform
+   pattern throughout"). It used to restyle and re-lay-out the header on every
+   scroll event (font sizes, heights, margins) — 3–5ms of main-thread work a
+   frame, a frame behind the natively scrolled rows, so it juddered. A first
+   compositor version pinned each piece with its own `sticky` top, which made
+   them rise with the page and then stop one after another. Now:
+   - the header block is pinned from the start (sticky `top: 0`) and keeps its
+     landing layout — nothing in it re-lays-out while scrolling;
+   - every piece moves by ONE linear scroll-driven transform across the whole
+     collapse, from its landing spot to its collapsed spot (the --clh-rise-*
+     distances below) — the proportional pattern of the original design, every
+     piece in step — plus its own scale / fade (title 56 → 32, the Large bar →
+     Default, the summary / banner / note fades, the table header's shadow);
+   - the table follows in normal flow, so it rides up at scroll speed, exactly
+     as fast as the header's bottom edge closes in: glued by construction.
+   All of it is transform and opacity on the scroller's `--clh` timeline,
+   which the compositor runs in lockstep with the scroll. Browsers without
+   scroll timelines get the same transforms from JS instead (the
+   `@supports not` block; useCollapsingHeader feeds it). */
 .tasks.clh {
-  --clh: 0;
-  /* The shrinking parts, each measured landing minus collapsed. */
-  --clh-title-drop: 56px; /* the title's drop below the header actions */
-  --clh-title-grow: 13.8px; /* its 46px landing line box over the base 32.2px (28 × 1.15) */
-  --clh-sub-h: 46px; /* the catalog summary's row */
+  /* The collapse distance D: the header's landing height minus its collapsed
+     height, as the sum of the parts that differ. The landing's title +
+     summary pair is Figma 1356:1865 "Atomic Component - Enlarged Header": a
+     56px title on its 67.2px leading-normal line, the 20px summary flush
+     beneath it on a 24px line. */
+  --clh-title-drop: 56px; /* the title's drop below the header actions (32px buttons + 24) */
+  --clh-title-grow: 28.8px; /* its 67.2px landing line over the base 38.4px (32 × 1.2) */
+  --clh-sub-h: 42px; /* the 24px summary line + 18px — with the header's 22px, 40px above the search */
   --clh-bar-grow: calc(var(--search-h-lg) - var(--search-h)); /* Large 56 → Default 43 */
   --clh-gap-grow: 28px; /* extra air above the table header, 42 → 14 */
+  /* A landing banner and the header note it turns into — zero unless the page
+     shows them (`.clh--banner`, Manage Users). The note only exists in the
+     collapsed header, so it enters the sum negatively. */
+  --clh-banner-h: 0px;
+  --clh-note-h: 0px;
   --clh-d: calc(
-    var(--clh-title-drop) + var(--clh-title-grow) + var(--clh-sub-h) + var(--clh-bar-grow) +
-      var(--clh-gap-grow)
+    var(--clh-title-drop) + var(--clh-title-grow) + var(--clh-sub-h) +
+      var(--clh-bar-grow) + var(--clh-gap-grow) + var(--clh-banner-h) - var(--clh-note-h)
   );
+  /* How far each piece rises over the collapse — its landing top minus its
+     collapsed top. The header block never moves, so this IS each piece's
+     motion; the filters' rise plus the gap they close is the distance. */
+  --clh-rise-under: calc(var(--clh-title-drop) + var(--clh-title-grow)); /* the title's bottom edge */
+  --clh-rise-bar: calc(
+    var(--clh-rise-under) + var(--clh-sub-h) + var(--clh-banner-h) - var(--clh-note-h)
+  );
+  --clh-rise-filters: calc(var(--clh-rise-bar) + var(--clh-bar-grow));
 }
-/* Nothing here should ever re-anchor the scroll: the header changes size
-   above the rows on every collapse frame, and the rows already hold still
-   relative to it by construction. */
+/* The timeline every collapse animation runs on. Nothing here should ever
+   re-anchor the scroll. */
 .tasks.clh .clh-scroll {
   overflow-anchor: none;
+  scroll-timeline: --clh block;
 }
 /* Everything the scroller moves. At least the table's width, so the pinned
    header has room to hold still (sticky left) while a wide table scrolls
@@ -25991,8 +25960,12 @@ span.rvc-crumb--current { cursor: default; }
   min-width: var(--table-min, auto);
   min-height: calc(100% + var(--clh-d));
 }
-/* The header: pinned on both axes, as wide as the scrollport (measured —
-   the canvas can be wider), and opaque so rows pass beneath it unseen. */
+/* The header block, in its landing layout, pinned from the start on both
+   axes (as wide as the scrollport — measured, the canvas can be wider). Its
+   box keeps the landing height while its pieces close up, so it lets the
+   pointer through (the table rides up under its empty lower part) and paints
+   only the collapsed band — opaque, so rows pass beneath it once pinned but
+   never before. */
 .tasks.clh .clh-head {
   position: sticky;
   top: 0;
@@ -26001,94 +25974,227 @@ span.rvc-crumb--current { cursor: default; }
   flex: none;
   align-self: flex-start;
   width: var(--clh-vw, 100%);
+  pointer-events: none;
+}
+.tasks.clh .clh-head > * {
+  pointer-events: auto;
+}
+.tasks.clh .clh-head::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: var(--clh-stick, 0px);
   background: #0d0d0d;
-  padding-bottom: calc(var(--clh-gap-grow) * (1 - var(--clh)));
-  margin-bottom: calc(var(--clh-d) * var(--clh));
 }
-/* Title and actions share the first row, the summary spans the second. At
-   the landing the title drops below the actions; collapsed it shares their
-   top edge exactly as the base `.tasks-header` lays it out. */
-.tasks.clh .tasks-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: 24px;
-}
-.tasks.clh .tasks-title {
-  margin-top: calc(var(--clh-title-drop) * (1 - var(--clh)));
-  font-size: calc(28px + 16px * (1 - var(--clh)));
-  line-height: calc(32.2px + var(--clh-title-grow) * (1 - var(--clh)));
-  white-space: nowrap;
-}
-/* The summary folds away faster than the header collapses (gone by 62%) and
-   drifts up as it goes. */
-.tasks.clh .clh-sub {
-  grid-column: 1 / -1;
-  height: calc(var(--clh-sub-h) * (1 - var(--clh)));
-  overflow: hidden;
-  opacity: calc(1 - 1.6 * var(--clh));
-}
-.tasks.clh .clh-sub .tasks-subtitle {
+/* The landing's extra air above the table header. */
+.tasks.clh .clh-head::after {
+  content: "";
   display: block;
-  /* 14px under the title's line box, counting the title's own 2px. */
-  margin-top: 12px;
+  height: var(--clh-gap-grow);
+}
+/* The action buttons never move — top-right from the start. The title sits
+   one drop below them. Pieces stack: actions over everything (their menu),
+   the title and note over what passes under them, the search bar over the
+   filters (its suggestions), the summary and banner lowest. */
+.tasks.clh .clh-head > .clh-actions {
+  position: relative;
+  z-index: 5;
+  width: max-content;
+  margin: 0 0 calc(var(--clh-title-drop) - 32px) auto;
+}
+/* 1356:1862 "Page Header Enlarged" — Fira Sans SemiBold 56 at the landing,
+   the base 32px title once collapsed: it rises its drop into the actions' row
+   while shrinking (a scale — no re-layout), both across the whole collapse. */
+.tasks.clh .clh-head > .tasks-title {
+  position: relative;
+  z-index: 4;
+  width: max-content;
+  max-width: 100%;
+  font-size: 56px;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform-origin: 0 0;
+}
+/* Manage Users: the banner's collapsed form, one accent line under the
+   collapsed title (Figma 1268:1736). It takes no room at the landing
+   (negative margin), rides the title's bottom edge, and fades in over the
+   last stretch of the collapse. */
+.tasks.clh.clh--banner {
+  --clh-banner-h: 88px; /* the 72px card + 16px above the search */
+  --clh-note-h: 19px; /* the note's line */
+}
+.tasks.clh .clh-head > .tasks-note {
+  --clh-rise: var(--clh-rise-under);
+  position: relative;
+  z-index: 4;
+  width: max-content;
+  height: var(--clh-note-h);
+  margin-bottom: calc(-1 * var(--clh-note-h));
+  overflow: hidden;
+}
+.tasks.clh .clh-head[data-clh="landing"] > .tasks-note {
+  visibility: hidden;
+}
+/* 1356:1863 "Page Subtext Enlarged": Fira Sans Regular 20 #a8a8a8, flush
+   under the title — it rides the title's bottom edge (under the note, when
+   there is one) and fades out by 62.5%. */
+.tasks.clh .clh-head > .clh-sub {
+  --clh-rise: calc(var(--clh-rise-under) - var(--clh-note-h));
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 0 0 calc(var(--clh-sub-h) - 24px + 22px);
+  font-size: 20px;
   line-height: 24px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transform: translateY(calc(-16px * var(--clh)));
 }
-/* The Large → Default bar the landing morph runs (`.tasks.lm .toolbar`), but
-   full width in both states — this header never narrows. */
+/* Manage Users: the pending-queue callout between the summary and the search
+   (Figma 1268:1714), at the size the landing morph gave it; it rises and
+   fades by 80%, sliding under the search bar as that closes in. */
+.tasks.clh .clh-head > .clh-banner {
+  --clh-rise: calc(var(--clh-rise-under) + var(--clh-sub-h) - var(--clh-note-h));
+  position: relative;
+  z-index: 1;
+  margin-bottom: 16px;
+}
+.tasks.clh .clh-head[data-clh="collapsed"] > .clh-banner {
+  visibility: hidden;
+}
+.tasks.clh .clh-banner > .lm-banner {
+  box-sizing: border-box;
+  height: 72px;
+  gap: 40px;
+}
+/* The search bar rises to its spot under the collapsed title row. */
+.tasks.clh .clh-head > .toolbar {
+  --clh-rise: var(--clh-rise-bar);
+  position: relative;
+  z-index: 3;
+}
+/* The Large bar's lift shadow, fading as the bar settles. */
+.tasks.clh .clh-head > .toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--search-h-lg);
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+/* The bar keeps the Large layout (Figma 1362:1945 — 56px, 20px icon and type,
+   26px caps) and SHOWS the Default one (43px, 16px, 20px caps) by the end of
+   the collapse, entirely through transforms:
+   - its box is painted as two halves, each the Default height — the top half
+     still, the bottom half sliding up the 13px the Large bar has over the
+     Default one — so it shortens without its border or corners ever being
+     scaled;
+   - its content scales to the Default sizes and lifts by half the lost
+     height, to stay centred. The badge scales 20/26: its caps land exactly on
+     the Default's, the ⌘ glyph (drawn at the node's 18px) takes a 1.011
+     counter-scale to land on 14, and the left cap slides 0.9px out so the 3px
+     gap stays 3 instead of shrinking to 2.3. The K can't be scaled apart from
+     its cap, so it is drawn at 15.6px (the node says 16) to land on exactly 12
+     — the collapsed bar has to match every other page's Default bar. */
 .tasks.clh .toolbar .usearch-bar {
-  height: calc(var(--search-h) + var(--clh-bar-grow) * (1 - var(--clh)));
-  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--clh)));
-  font-size: calc(16px + 4px * (1 - var(--clh)));
+  position: relative;
+  z-index: 0;
+  height: var(--search-h-lg);
+  background: none;
+  border-color: transparent;
+}
+.tasks.clh .toolbar .usearch-bar::before,
+.tasks.clh .toolbar .usearch-bar::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  z-index: -1;
+  box-sizing: border-box;
+  height: var(--search-h);
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
+  pointer-events: none;
+}
+.tasks.clh .toolbar .usearch-bar::before {
+  top: -1px;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+.tasks.clh .toolbar .usearch-bar::after {
+  bottom: -1px;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+.tasks.clh .toolbar .usearch-bar.open::before,
+.tasks.clh .toolbar .usearch-bar.open::after {
+  border-color: var(--text-faint);
+}
+.tasks.clh .toolbar .usearch-icon {
+  transform-origin: left center;
+}
+.tasks.clh .toolbar .usearch-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.tasks.clh .toolbar .usearch-input {
+  transform-origin: left center;
 }
 .tasks.clh .toolbar .usearch-input,
 .tasks.clh .toolbar .usearch-input::placeholder {
-  font-size: calc(16px + 4px * (1 - var(--clh)));
+  font-size: 20px;
 }
-.tasks.clh .toolbar .usearch-icon svg {
-  width: calc(16px + 4px * (1 - var(--clh)));
-  height: calc(16px + 4px * (1 - var(--clh)));
+.tasks.clh .toolbar .usearch-kbd {
+  transform-origin: right center;
 }
 .tasks.clh .toolbar .usearch-kbd .kbd-cmd,
 .tasks.clh .toolbar .usearch-kbd .kbd-letter {
-  width: calc(20px + 4px * (1 - var(--clh)));
-  height: calc(20px + 4px * (1 - var(--clh)));
+  width: 26px;
+  height: 26px;
 }
 .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
-  width: calc(14px + 4px * (1 - var(--clh)));
-  height: calc(14px + 4px * (1 - var(--clh)));
+  width: 18px;
+  height: 18px;
 }
 .tasks.clh .toolbar .usearch-kbd .kbd-letter {
-  font-size: calc(12px + 4px * (1 - var(--clh)));
+  font-size: 15.6px;
 }
-/* The header clips at the scroller's edge, so a filter row too long for it
-   wraps instead of running off the side — whole pills and a whole "Clear
-   Filters" onto a second line (the header measures its own height, so the
-   table header still pins right under it). At ordinary widths it's one row. */
-.tasks.clh .filters {
+/* The filter row rises to its spot under the bar. It wraps when too long for
+   the header (which clips at the scroller's edge) — whole pills and a whole
+   "Clear Filters" onto a second line; the table header's pin is measured, so
+   it follows. At ordinary widths it's one row. */
+.tasks.clh .clh-head > .filters {
+  --clh-rise: var(--clh-rise-filters);
+  position: relative;
+  z-index: 2;
   flex-wrap: wrap;
 }
 .tasks.clh .filter-clear-link {
   white-space: nowrap;
 }
-/* The table header pins where the header's bottom edge is — the collapsed
-   header's height (measured) plus whatever of the distance is still to
-   scroll. That is also its natural spot mid-collapse, so it only actually
-   sticks in a frame where a native scroll lands before the header's restyle
-   does: the header row then holds with the header and the rows slide under
-   it, as in the prototype. Its shadow deepens as the header collapses, which
-   reads as the header lifting off the rows. */
+/* The table header rides the page up under the header and pins right
+   beneath the collapsed one (its height is measured: the header's static
+   height less the distance). A soft shadow fades in once rows scroll under
+   it. */
 .tasks.clh .clh-canvas > .table-head {
   position: sticky;
-  top: calc(var(--clh-stick, 0px) + var(--clh-d) * (1 - var(--clh)));
+  top: var(--clh-stick, 0px);
   z-index: 5;
   flex: none;
   background: #0d0d0d;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, calc(0.55 * var(--clh)));
+}
+.tasks.clh .clh-canvas > .table-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 40px;
+  background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  opacity: 0;
 }
 /* The body is in-flow content of the one scroller, never a scroller itself. */
 .tasks.clh .clh-canvas > .tasks-scroll {
@@ -26097,8 +26203,204 @@ span.rvc-crumb--current { cursor: default; }
   min-width: var(--table-min, auto);
 }
 
+/* ── The motion: scroll-driven, compositor-only ── */
+@keyframes clh-title {
+  to { transform: translateY(calc(-1 * var(--clh-title-drop))) scale(0.5714); } /* 56 → 32px */
+}
+/* Each piece sets its own --clh-rise. */
+@keyframes clh-rise {
+  to { transform: translateY(calc(-1 * var(--clh-rise))); }
+}
+@keyframes clh-fade-out {
+  to { opacity: 0; }
+}
+@keyframes clh-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes clh-bar-foot {
+  to { transform: translateY(-13px); } /* --search-h-lg − --search-h */
+}
+@keyframes clh-bar-icon {
+  to { transform: translateY(-6.5px) scale(0.8); }
+}
+@keyframes clh-bar-shift {
+  to { transform: translate(-4px, -6.5px); } /* the 4px the icon gives up */
+}
+@keyframes clh-bar-text {
+  to { transform: translate(-4px, -6.5px) scale(0.8); }
+}
+@keyframes clh-bar-lift {
+  to { transform: translateY(-6.5px); }
+}
+@keyframes clh-bar-caps {
+  to { transform: translateY(-6.5px) scale(0.7692); } /* 20 / 26 */
+}
+@keyframes clh-bar-cmd {
+  to { transform: translateX(-0.9px); } /* 3px gap × 0.7692 would be 2.3 */
+}
+@keyframes clh-bar-cmd-glyph {
+  to { transform: scale(1.0111); } /* 18 × 0.7692 = 13.85 → 14 */
+}
+@supports (animation-timeline: --clh) {
+  .tasks.clh .clh-head > .tasks-title {
+    animation: clh-title linear both;
+  }
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters {
+    animation: clh-rise linear both;
+  }
+  .tasks.clh .clh-head > .clh-sub,
+  .tasks.clh .clh-head > .clh-banner {
+    animation: clh-rise linear both, clh-fade-out linear both;
+  }
+  .tasks.clh .clh-head > .tasks-note {
+    animation: clh-rise linear both, clh-fade-in linear both;
+  }
+  .tasks.clh .clh-head > .toolbar::before {
+    animation: clh-fade-out linear both;
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    animation: clh-fade-in linear both;
+  }
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel {
+    animation: clh-bar-foot linear both;
+  }
+  .tasks.clh .toolbar .usearch-icon {
+    animation: clh-bar-icon linear both;
+  }
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope {
+    animation: clh-bar-shift linear both;
+  }
+  .tasks.clh .toolbar .usearch-input {
+    animation: clh-bar-text linear both;
+  }
+  .tasks.clh .toolbar .usearch-clear {
+    animation: clh-bar-lift linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd {
+    animation: clh-bar-caps linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd {
+    animation: clh-bar-cmd linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    animation: clh-bar-cmd-glyph linear both;
+  }
+  /* The timeline and ranges come after every shorthand above (which resets
+     them). Every rise and resize runs across the whole collapse; the summary
+     fades by 62.5% and the banner by 80%, the note fades in over the last 40%,
+     the shadow over the first 40px of rows sliding under. */
+  .tasks.clh .clh-head > .tasks-title,
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters,
+  .tasks.clh .clh-head > .toolbar::before,
+  .tasks.clh .clh-head > .clh-sub,
+  .tasks.clh .clh-head > .clh-banner,
+  .tasks.clh .clh-head > .tasks-note,
+  .tasks.clh .clh-canvas > .table-head::after,
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel,
+  .tasks.clh .toolbar .usearch-icon,
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope,
+  .tasks.clh .toolbar .usearch-input,
+  .tasks.clh .toolbar .usearch-clear,
+  .tasks.clh .toolbar .usearch-kbd,
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    animation-timeline: --clh;
+    animation-range: 0 var(--clh-d);
+  }
+  .tasks.clh .clh-head > .clh-sub {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.625);
+  }
+  .tasks.clh .clh-head > .clh-banner {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.8);
+  }
+  .tasks.clh .clh-head > .tasks-note {
+    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.6) var(--clh-d);
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    animation-range: var(--clh-d) calc(var(--clh-d) + 40px);
+  }
+}
+/* No scroll timelines: the same curves from the scroll offset useCollapsingHeader
+   writes (--clh-s, with the distance as a number, --clh-dn). Main-thread, but
+   transforms and opacity only — still no re-layout. */
+@supports not (animation-timeline: --clh) {
+  .tasks.clh .clh-head,
+  .tasks.clh .clh-canvas > .table-head {
+    --clh-p: clamp(0, var(--clh-s, 0) / var(--clh-dn, 1), 1);
+  }
+  .tasks.clh .clh-head > .tasks-title {
+    transform: translateY(calc(-1 * var(--clh-title-drop) * var(--clh-p)))
+      scale(calc(1 - 0.4286 * var(--clh-p)));
+  }
+  .tasks.clh .clh-head > .tasks-note,
+  .tasks.clh .clh-head > .clh-sub,
+  .tasks.clh .clh-head > .clh-banner,
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters {
+    transform: translateY(calc(-1 * var(--clh-rise) * var(--clh-p)));
+  }
+  .tasks.clh .clh-head > .toolbar::before {
+    opacity: calc(1 - var(--clh-p));
+  }
+  .tasks.clh .clh-head > .clh-sub {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.625, 1);
+  }
+  .tasks.clh .clh-head > .clh-banner {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.8, 1);
+  }
+  .tasks.clh .clh-head > .tasks-note {
+    opacity: clamp(0, (var(--clh-p) - 0.6) / 0.4, 1);
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    opacity: clamp(0, (var(--clh-s, 0) - var(--clh-dn, 0)) / 40, 1);
+  }
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel {
+    transform: translateY(calc(-13px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-icon {
+    transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope {
+    transform: translate(calc(-4px * var(--clh-p)), calc(-6.5px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-input {
+    transform: translate(calc(-4px * var(--clh-p)), calc(-6.5px * var(--clh-p)))
+      scale(calc(1 - 0.2 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-clear {
+    transform: translateY(calc(-6.5px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd {
+    transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2308 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd {
+    transform: translateX(calc(-0.9px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    transform: scale(calc(1 + 0.0111 * var(--clh-p)));
+  }
+}
+
+/* Tasks, Certifications, Companies and Manage Users (.clh — Users and
+   Companies used to carry a `.fixed-page` tag for this): the page itself
+   never scrolls (the table scrolls inside), so it gets a 20px band top and
+   bottom — the pagination bar stops 20px above the window edge — as on
+   Spotlight's .sp-page. Sides keep .tasks' 32px. */
+.tasks.clh {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
 /* ===== Landing morph — Claude Design "Tasks Landing 6B" =====
-   The list pages (Tasks / Certifications / Companies / Users) open as a
+   The list pages (historically Tasks / Certifications / Companies / Users —
+   all four moved to the collapsing header above on 2026-09-24/28; the cards
+   and rail landings still run on this) open as a
    search-first landing: oversized centered search, "Suggested" quick-filter
    pills, and a short name-only list. The wheel drives a 0→1 progress that
    morphs the hero into the page's normal small-table view.
@@ -26134,14 +26436,14 @@ span.rvc-crumb--current { cursor: default; }
 }
 
 /* The page header does NOT change between the landing and the table: Figma
-   29:16832 is one size in both states (Fira Sans SemiBold 28 / #fff, the base
+   29:16832 is one size in both states (Fira Sans SemiBold 32 / #fff, the base
    `.tasks-title`). An earlier version grew it 4px at the landing, which read as
    the header shrinking as the page morphed. */
 
 /* The banner's collapsed form (Figma 1268:1736): one accent line under the
    page title, 16px Medium with the 16px chevron hard against it. The two are
    the same statement at two sizes, so exactly one shows — this line fades in
-   (and takes its 2px + height) only as the page reaches the table. */
+   (and takes its height) only as the page reaches the table. */
 .tasks-note {
   display: flex;
   align-items: center;
@@ -26251,7 +26553,7 @@ span.rvc-crumb--current { cursor: default; }
   margin-right: auto;
   margin-top: calc(56px * (1 - var(--lm)));
 }
-/* At the landing the bar IS Figma 772:1192 "Search Bar - Large": 56px tall
+/* At the landing the bar IS Figma 1362:1945 "Search Bar - Large": 56px tall
    (16px padding around a 24px line) with a 20px icon and 20px type, morphing
    down to the 43px "Search Bar - Default". The radius is 8 in both nodes now —
    it used to grow to 10 at the landing. */
@@ -26264,21 +26566,22 @@ span.rvc-crumb--current { cursor: default; }
 }
 /* The 12px icon→text gap and 16px edge padding hold at both sizes, so the
    text inset grows with the icon: 44px → 48px, and the right inset with the
-   badge: 59px → 67px. */
+   badge: 59px → 71px (16 + 26 + 3 + 26). */
 .tasks.lm .toolbar .search-input {
   padding-left: calc(43px + 4px * (1 - var(--lm)));
-  padding-right: calc(58px + 8px * (1 - var(--lm)));
+  padding-right: calc(58px + 12px * (1 - var(--lm)));
 }
-/* ⌘K badge, Figma 773:1236: 24px caps holding an 18px glyph and a 16px K. */
+/* ⌘K badge, Figma 1362:1949: 26px caps (24 until the 2026-09-28 re-issue)
+   holding an 18px glyph and a 16px K, 3px apart. */
 .tasks.lm .toolbar .search-kbd {
-  height: calc(20px + 4px * (1 - var(--lm)));
+  height: calc(20px + 6px * (1 - var(--lm)));
 }
 .tasks.lm .toolbar .search-kbd .kbd-cmd,
 .tasks.lm .toolbar .search-kbd .kbd-letter,
 .tasks.lm .toolbar .usearch-kbd .kbd-cmd,
 .tasks.lm .toolbar .usearch-kbd .kbd-letter {
-  width: calc(20px + 4px * (1 - var(--lm)));
-  height: calc(20px + 4px * (1 - var(--lm)));
+  width: calc(20px + 6px * (1 - var(--lm)));
+  height: calc(20px + 6px * (1 - var(--lm)));
 }
 .tasks.lm .toolbar .search-kbd .kbd-cmd svg,
 .tasks.lm .toolbar .usearch-kbd .kbd-cmd svg {
@@ -26789,25 +27092,14 @@ span.rvc-crumb--current { cursor: default; }
   gap: 12px; /* Figma 682:2496 — search bar → pill row */
 }
 
-/* Figma 682:2497 "Search Bar - Text Entered + Filter": a 40px bar filled with
-   a 10% grey wash that sits LIGHTER than the card, not the app-wide 43px bar
-   whose 15%-over-#0d0d0d fill reads as a dark well inside this card. The
-   1px border + 16 / 16-icon / 12 insets = the node's 44px text inset, which is
-   `.search-input`'s own padding, so only the height and fill are re-said. */
+/* The picker's bar is the app-wide "Search Bar - Default" (399:216) with its
+   ⌘K / ✕ trailing slot — ⌘K reaches it because App.tsx scopes the shortcut to
+   the topmost modal. It used to be 682:2497, a 40px bar on a 10% wash that
+   sat lighter than the card; the 2026-09-28 surface (20% #737373 over
+   #0d0d0d) is itself lighter than the card's 15% wash, so it no longer reads
+   as a dark well and the override went. */
 .stm-search {
   margin-bottom: 0;
-}
-
-.stm-search-input {
-  height: 40px;
-  /* 16 edge + 16 glyph + 12 gap — room for the clear ✕, reserved always so the
-     text never reflows when it appears. */
-  padding-right: 44px;
-  background: rgba(122, 122, 122, 0.1);
-}
-
-.stm-search-input:focus {
-  border-color: var(--border-strong);
 }
 
 /* Figma 682:2501 "Filters" (2026-09-12 re-sync): the pills went BACK to the
@@ -26865,9 +27157,9 @@ span.rvc-crumb--current { cursor: default; }
 /* The row area is FIXED, not a cap: filtering down to three results must not
    make the card jump shorter. Short lists leave the rest of the space empty;
    long ones scroll inside it.
-   Its height is whatever puts the whole card at ~80% of the viewport. 323px is
+   Its height is whatever puts the whole card at ~80% of the viewport. 313px is
    the card's chrome — footer 57 + body padding 48 + heading 55 + gap 24 +
-   search block 80 + gap 20 + pagination 40 — so the table gets the rest. The
+   search block 80 + gap 20 + pagination 30 — so the table gets the rest. The
    floor keeps four rows visible on a very short viewport, where `.prm`'s own
    max-height takes over. */
 .stm-table-wrap > .table-xscroll {
@@ -26875,7 +27167,7 @@ span.rvc-crumb--current { cursor: default; }
      `flex-basis: 0` + grow beats a plain `height` in this column flex parent,
      so the area would stretch to fit every row instead of holding. */
   flex: none;
-  height: max(200px, calc(80vh - 323px));
+  height: max(200px, calc(80vh - 313px));
 }
 
 /* Add Requirement (the Certification wizard's Completion Criteria picker) puts
@@ -27670,26 +27962,6 @@ span.rvc-crumb--current { cursor: default; }
    `.tasks.lm.qb-lm .toolbar { margin-top: 0 }` override any more: that zero
    existed only because the eyebrow supplied the spacing. Don't re-add it. */
 
-/* "Tasks › Question Bank" — the working screens' crumb trail. The landing is
-   the Question Bank itself, so the trail belongs to the table only: HEIGHT
-   rides --lm and VISIBILITY rides --lmt (the `.lm-cards` split), so the title
-   sits flush at the top of the landing and the crumb unfolds above it as the
-   table forms rather than snapping in. */
-.tasks.lm.qb-lm .qb-crumbs {
-  max-height: calc(22px * var(--lm));
-  overflow: hidden;
-  opacity: var(--lmt);
-}
-.tasks.lm.qb-lm .rvc-pagehead > .qb-crumbs {
-  margin-bottom: calc(8px * var(--lm));
-}
-.tasks.lm.qb-lm:not([data-lm="table"]) .qb-crumbs {
-  pointer-events: none;
-}
-.tasks.lm.qb-lm[data-lm="landing"] .qb-crumbs {
-  visibility: hidden;
-}
-
 /* Landing-only header action — Import CSV fades with the landing chrome and
    keeps its slot (hidden, not removed) so the Create CTA never shifts. */
 .tasks.lm.qb-lm .qb-import {
@@ -27976,8 +28248,7 @@ span.rvc-crumb--current { cursor: default; }
    355px at 32px padding (the shared .rail is 380 with a 16px foot), the
    content pane's rgba(122,122,122,.5) hairline as its right edge, 28px from
    the search box to the CATEGORIES heading and 8px from that to the tree.
-   The search box is the shared .rail-search geometry with the node's
-   unfilled, rgba(64,64,64,.5)-stroked shell. */
+   The search box is the shared .rail-search — the Default search bar. */
 .qb-rail {
   width: 355px;
   padding: 32px;
@@ -27985,18 +28256,6 @@ span.rvc-crumb--current { cursor: default; }
 }
 .qb-rail .rail-search {
   margin-bottom: 28px;
-  background: transparent;
-  border-color: rgba(64, 64, 64, 0.5);
-}
-/* 859:2090 / 859:2091: a 16px glyph and 16px Medium text (the shared box is 14/14). */
-.qb-rail .rail-search .search-icon,
-.qb-rail .rail-search .search-icon svg {
-  width: 16px;
-  height: 16px;
-}
-.qb-rail .rail-search > input,
-.qb-rail .rail-search > input::placeholder {
-  font-size: 16px;
 }
 .qb-rail .section-heading {
   margin: 0 0 8px;

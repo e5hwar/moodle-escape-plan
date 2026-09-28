@@ -60,26 +60,36 @@ const CrossIcon = () => (
 );
 
 /* Column widths — shared by the sticky head table and the scrolling body table,
-   so both resolve their columns identically. `Text` is the flexible column.
-   Each width is the Figma cell content + the 24px the 12px cell padding adds
-   (the 24px gap between two cells in 558:2082 = 12px of padding on each side).
-   Position keeps 76px so its header label fits; the design's own is narrower. */
+   so both resolve their columns identically. Each width is the cell content +
+   the 24px the 12px cell padding adds (the 24px gap between two cells in
+   558:2082 = 12px of padding on each side). Order keeps 72px so its header
+   label fits; the design's own is narrower.
+
+   Title & Description is sized to the copy limits (SPOTLIGHT_TITLE_MAX /
+   SPOTLIGHT_DESCRIPTION_MAX), not to the page: 300px holds a 20-character title
+   on one line (~170px even in capitals) and a 60-character description in two
+   (the worst word-wrap measured ~290px).
+
+   Actions holds only the 103px Approve / Reject block — that pair is what its
+   header names. The 16px 3-dot menu is on every row, so it gets its own
+   unlabelled column after it; at the floor width the two sit the design's 24px
+   apart (898:3575), one cell's padding each side of the column line.
+
+   Every column carries a width, like the other list tables: their sum is the
+   table's floor (below it the table scrolls sideways), and on a wider page the
+   fixed layout spreads the slack across all of them in proportion to these
+   widths. A bare <col /> would make one column swallow all of it. */
+const SP_TEXT_W = 300 + 24;
+const SP_COL_WIDTHS = [72, 144 + 24, SP_TEXT_W, 84 + 24, 103 + 24, 96 + 24, 103 + 24, 16 + 24];
 const SpColGroup = () => (
   <colgroup>
-    <col style={{ width: 72 }} />
-    <col style={{ width: 144 + 24 }} />
-    <col />
-    <col style={{ width: 72 + 24 }} />
-    <col style={{ width: 103 + 24 }} />
-    <col style={{ width: 96 + 24 }} />
-    <col style={{ width: 103 + 12 + 16 + 24 }} />
+    {SP_COL_WIDTHS.map((w, i) => (
+      <col key={i} style={{ width: w }} />
+    ))}
   </colgroup>
 );
 
-/* Fixed columns + a floor for the flexible Title & Description column, which is
-   the one that absorbs the page's width. Its floor is below the design's 435px —
-   keeping 435 would push the actions column off-screen at normal widths. */
-const SP_TABLE_MIN = 72 + 168 + 300 + 96 + 127 + 120 + 155;
+const SP_TABLE_MIN = SP_COL_WIDTHS.reduce((a, b) => a + b, 0);
 
 
 /* The prototype's "today". Deactivating stamps this as the end date, so it has
@@ -500,7 +510,9 @@ export function SpotlightsPage() {
                   <th>Status</th>
                   <th>Created By</th>
                   <th>End Date</th>
-                  <th className="sp-th-actions">Actions</th>
+                  <th>Actions</th>
+                  {/* The 3-dot menu's column — deliberately unlabelled. */}
+                  <th />
                 </tr>
               </thead>
             </table>
@@ -511,7 +523,7 @@ export function SpotlightsPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr className="sp-empty-row">
-                    <td colSpan={7}>
+                    <td colSpan={SP_COL_WIDTHS.length}>
                       No Spotlights match. Try a different filter or search term.
                     </td>
                   </tr>
@@ -528,7 +540,7 @@ export function SpotlightsPage() {
                     as soon as the placement is submitted or dropped. */}
                 {!placing && archived.length > 0 && (
                   <tr className="sp-archive-row">
-                    <td colSpan={7}>
+                    <td colSpan={SP_COL_WIDTHS.length}>
                       <button
                         className={`sp-archive-toggle${showArchived ? " is-open" : ""}`}
                         onClick={() => setShowArchived((v) => !v)}
@@ -804,14 +816,13 @@ function SpotlightRow({
       </td>
       <td className="sp-td-by">{s.submittedBy}</td>
       <td className="sp-td-muted">{formatShortDate(s.endDate)}</td>
-      {/* The kebab sits beside the decide buttons, not instead of them
-          (558:2046) — except while this row is the Spotlight being placed. That
-          one has not been submitted yet, so there is nothing to approve, edit
-          or delete; the page's footer owns it until "Submit for Review". */}
+      {/* Actions is only the Approve / Reject pair; the kebab is in its own
+          unlabelled column after it (558:2046 shows them side by side). Both
+          stay empty while this row is the Spotlight being placed. That one has
+          not been submitted yet, so there is nothing to approve, edit or
+          delete; the page's footer owns it until "Submit for Review". */}
       <td className="sp-td-actions">
-        {isNew ? null : (
-        <div className="sp-actions">
-        {isPending && (
+        {isPending && !isNew && (
           <div className="sp-decide">
             <button
               className="sp-decide-btn sp-decide-btn--approve"
@@ -835,17 +846,21 @@ function SpotlightRow({
             </button>
           </div>
         )}
-        <button
-          className="sp-kebab"
-          aria-label="More actions"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenMenu(e.currentTarget.getBoundingClientRect());
-          }}
-        >
-          <RowKebabIcon />
-        </button>
-        </div>
+      </td>
+      <td className="sp-td-menu">
+        {!isNew && (
+          <div className="sp-menu">
+            <button
+              className="sp-kebab"
+              aria-label="More actions"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMenu(e.currentTarget.getBoundingClientRect());
+              }}
+            >
+              <RowKebabIcon />
+            </button>
+          </div>
         )}
       </td>
     </tr>

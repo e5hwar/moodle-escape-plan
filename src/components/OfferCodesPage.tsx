@@ -15,8 +15,9 @@ import {
   CopyIcon,
   RowDeleteIcon,
   RowKebabIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  PagePrevIcon,
+  PageNextIcon,
+  CrumbChevronIcon,
 } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
@@ -202,11 +203,11 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Users</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
                   Manage Users
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Offer Codes</span>
               </nav>
               <h1 className="tasks-title">Offer Codes</h1>
@@ -414,12 +415,12 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                     className="page-btn"
                     disabled={visiblePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  ><ChevronLeftIcon /></button>
+                  ><PagePrevIcon /></button>
                   <button
                     className="page-btn"
                     disabled={visiblePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  ><ChevronRightIcon /></button>
+                  ><PageNextIcon /></button>
                 </div>
               </div>
             </div>

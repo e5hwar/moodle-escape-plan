@@ -12,7 +12,7 @@ import {
 import { buildAwardRecipients, type AwardRecipient } from "../data/awardRecipients";
 import { UsersFilters, type UserFilterState } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
-import { ChevronLeftIcon, SortIcon, AddIcon, ChevronRightIcon, DownloadIcon } from "./icons";
+import { ChevronLeftIcon, SortIcon, AddIcon, DownloadIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -396,8 +396,8 @@ export function AwardRecipientsPage({
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>

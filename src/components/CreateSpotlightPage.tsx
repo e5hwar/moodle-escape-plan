@@ -3,7 +3,7 @@ import { FileNameLink } from "./FileNameLink";
 import { CloseXIcon, SmallXIcon, UploadTrayIcon } from "./icons";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import { formatShortDate } from "../formatDate";
-import type { Spotlight } from "../data/spotlights";
+import { SPOTLIGHT_TITLE_MAX, SPOTLIGHT_DESCRIPTION_MAX, type Spotlight } from "../data/spotlights";
 import { DateField, type DateShortcut } from "./DateField";
 
 export type SpotlightDraft = {
@@ -152,6 +152,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, resu
               onEs={setHeadingEs}
               placeholderEn="Title"
               placeholderEs="Título"
+              maxLength={SPOTLIGHT_TITLE_MAX}
             />
             <p className="form-help">
               English is required. If Spanish is empty, Spanish-language users
@@ -169,6 +170,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, resu
               onEs={setDescriptionEs}
               placeholderEn="Description"
               placeholderEs="Descripción"
+              maxLength={SPOTLIGHT_DESCRIPTION_MAX}
             />
           </div>
 
@@ -409,6 +411,7 @@ function LangField({
   placeholderEn,
   placeholderEs,
   multiline,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -417,6 +420,8 @@ function LangField({
   placeholderEn: string;
   placeholderEs: string;
   multiline?: boolean;
+  /* Applied to both languages. */
+  maxLength?: number;
 }) {
   return (
     <div className="lang-field">
@@ -429,6 +434,7 @@ function LangField({
             value={en}
             onChange={(e) => onEn(e.target.value)}
             rows={2}
+            maxLength={maxLength}
           />
         ) : (
           <input
@@ -436,6 +442,7 @@ function LangField({
             placeholder={placeholderEn}
             value={en}
             onChange={(e) => onEn(e.target.value)}
+            maxLength={maxLength}
           />
         )}
       </div>
@@ -449,6 +456,7 @@ function LangField({
             value={es}
             onChange={(e) => onEs(e.target.value)}
             rows={2}
+            maxLength={maxLength}
           />
         ) : (
           <input
@@ -456,6 +464,7 @@ function LangField({
             placeholder={placeholderEs}
             value={es}
             onChange={(e) => onEs(e.target.value)}
+            maxLength={maxLength}
           />
         )}
       </div>

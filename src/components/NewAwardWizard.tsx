@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import {
   ArrowUpRightIcon,
-  ChevronRightIcon,
   DropdownCaretIcon,
   InfoIcon14,
+  CrumbChevronIcon,
 } from "./icons";
 import { SelectField } from "./SelectField";
 import { SectionHeading } from "./SectionHeading";
@@ -138,9 +138,9 @@ export function NewAwardWizard(props: Props) {
                     <button className="rvc-crumb" onClick={onClose} title="Back to Certifications">
                       Certifications
                     </button>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <span className="rvc-crumb">{cert.name}</span>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <span className="rvc-crumb rvc-crumb--current">{title}</span>
                   </nav>
                   <h1 className="wizard-title">{title}</h1>

@@ -18,11 +18,14 @@ const prefersReducedMotion = () =>
 export function Drawer({
   title,
   description,
+  actions,
   onClose,
   children,
 }: {
   title: string;
   description?: ReactNode;
+  /** Buttons that sit in the head, just before the close glyph — e.g. Edit. */
+  actions?: ReactNode;
   onClose: () => void;
   children?: ReactNode;
 }) {
@@ -77,9 +80,12 @@ export function Drawer({
         <div className="prm-headgroup">
           <div className="prm-head">
             <h2 className="prm-title">{title}</h2>
-            <button className="prm-close" onClick={requestClose} aria-label="Close">
-              <ModalCloseIcon />
-            </button>
+            <div className="drawer-head-actions">
+              {actions}
+              <button className="prm-close" onClick={requestClose} aria-label="Close">
+                <ModalCloseIcon />
+              </button>
+            </div>
           </div>
           {description && <p className="prm-text">{description}</p>}
         </div>

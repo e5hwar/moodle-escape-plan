@@ -40,7 +40,6 @@ import { Stepper } from "./Stepper";
 import {
   ChangeArrowIcon,
   CommandIcon,
-  ChevronRightIcon,
   EnterKeyIcon,
   ErrorTriangleIcon,
   FlagIcon,
@@ -54,6 +53,7 @@ import {
   SearchClearIcon,
   SearchIcon,
   SmallCloseIcon,
+  CrumbChevronIcon,
 } from "./icons";
 
 /**
@@ -699,7 +699,7 @@ export function ContentOverridesPage({
                 <button className="rvc-crumb" onClick={onBack} title={`Back to ${backLabel}`}>
                   {backLabel}
                 </button>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Manage Completions</span>
               </nav>
             )}

@@ -11,13 +11,13 @@ import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { SearchHints } from "./SearchPanelParts";
 import {
   KeyCommandIcon,
-  ChevronRightIcon,
   InfoIcon,
   InfoTipIcon,
   PlusThinIcon,
   SearchIcon,
   SearchClearIcon,
   SmallXIcon,
+  CrumbChevronIcon,
 } from "./icons";
 
 /* Content Links — rebuilt 2026-08-26 on the shared design-system components:
@@ -238,7 +238,7 @@ export function ContentLinksPage({
             <div className="rvc-pagehead">
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
                 <span className="rvc-crumb">Content</span>
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 {onBack ? (
                   <button
                     className="rvc-crumb"
@@ -250,7 +250,7 @@ export function ContentLinksPage({
                 ) : (
                   <span className="rvc-crumb">Certifications</span>
                 )}
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Content Links</span>
               </nav>
               <h1 className="tasks-title">Content Links</h1>

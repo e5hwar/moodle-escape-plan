@@ -838,7 +838,7 @@ function AdminApp() {
           backLabel="Certifications"
         />
       ) : view.name === "skills" ? (
-        <SkillsPage />
+        <SkillsPage onBackToTasks={() => navigate("tasks")} />
       ) : view.name === "cert-award" ? (
         (() => {
           const existing = awards.find((a) => a.certificationId === view.cert.id);

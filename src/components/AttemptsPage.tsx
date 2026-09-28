@@ -17,7 +17,7 @@ import { dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -342,7 +342,7 @@ export function AttemptsPage({
                 ) : (
                   <span className="rvc-crumb">Tasks</span>
                 )}
-                <ChevronRightIcon />
+                <CrumbChevronIcon />
                 <span className="rvc-crumb rvc-crumb--current">Quiz Attempts</span>
               </nav>
               <h1 className="tasks-title">Quiz Attempts</h1>
@@ -461,8 +461,8 @@ export function AttemptsPage({
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
                 <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { DropdownCaretIcon, ChevronRightIcon, AlertCircleFilledIcon } from "./icons";
+import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon } from "./icons";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -205,7 +205,7 @@ export function NewSkillWizard(props: Props) {
                     <button className="rvc-crumb" onClick={onClose} title="Back to Skills">
                       Skills
                     </button>
-                    <ChevronRightIcon />
+                    <CrumbChevronIcon />
                     <span className="rvc-crumb rvc-crumb--current">{title}</span>
                   </nav>
                   <h1 className="wizard-title">{title}</h1>

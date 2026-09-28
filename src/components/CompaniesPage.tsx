@@ -31,11 +31,26 @@ import {
   type SignUpChannel,
 } from "../data/companies";
 import {
-  CalendarIcon, SortIcon, AddIcon, RowEditIcon, RowCardIcon, RowKebabIcon, RowDeleteIcon, CopyIcon, ChevronLeftIcon, ChevronRightIcon,
-  MenuUserVipIcon, MenuMailIcon, MenuUsersIcon, MenuInvoiceIcon, MenuEnterIcon, MenuCancelSubIcon,
-  RunMoveUpIcon, RunMoveDownIcon,
+  CalendarIcon,
+  SortIcon,
+  AddIcon,
+  RowEditIcon,
+  RowCardIcon,
+  RowKebabIcon,
+  RowDeleteIcon,
+  CopyIcon,
+  MenuUserVipIcon,
+  MenuMailIcon,
+  MenuUsersIcon,
+  MenuInvoiceIcon,
+  MenuEnterIcon,
+  MenuCancelSubIcon,
+  RunMoveUpIcon,
+  RunMoveDownIcon,
   AlertCircleFilledIcon,
   ArrowUpRightIcon,
+  PagePrevIcon,
+  PageNextIcon,
 } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import {
@@ -48,23 +63,7 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { CompaniesSearch } from "./CompaniesSearch";
 import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
-import { useLandingMorph } from "../hooks/useLandingMorph";
-import { LandingFilterRow, LandingOverlay, type LandingCol, type LandingPill, type LandingRow } from "./LandingMorph";
-
-/* Landing-morph columns — mirror the table's DEFAULT visible columns (key,
-   label, width) so the p=1 hand-off to the real table lines up. Edit Columns
-   changes are a table-state concern; the landing always shows the default set,
-   which is why this list is static rather than derived from `visibleCols`.
-   Last Access is the `fixed` column — the one the minimal (landing) table
-   shows beside Name; Tier and the rest grow in as the list becomes the table. */
-const LM_COLS: LandingCol[] = [
-  { key: "status", label: "Status", width: 232 },
-  { key: "accountHolder", label: "Account Holder", width: 195 },
-  { key: "tier", label: "Tier", width: 130 },
-  { key: "seats", label: "Seats", width: 86 },
-  { key: "seatChanges", label: "Seat Changes", width: 160 },
-  { key: "lastAccess", label: "Last Access", width: 150, fixed: true },
-];
+import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
 import { MultiSelect, RadioCard } from "./NewCompanyWizard";
@@ -72,6 +71,8 @@ import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
 
 const PAGE_SIZE = 50;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 type SortKey = "name" | "email" | "tier" | "status" | "signUp" | "billingCycle" | "payment" | "seats" | "industry" | "partnership" | "seatChanges" | "createdOn" | "canceledOn" | "trialEndDate" | "dashboardLastAccess" | "price" | "salesRep" | "csm";
 type SortDir = "asc" | "desc";
@@ -365,58 +366,31 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  // Landing morph — the page opens as the search-first landing and the wheel
-  // (or any search / pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph(Boolean(initialQuery));
+  // The page's one scroller — the Tasks / Certifications collapsing header:
+  // the landing header folds away over the first stretch of scroll with the
+  // table glued beneath it, and the rows scroll under the pinned header after
+  // that. A deep link that arrives with a search (`initialQuery`) opens
+  // collapsed, on the table, as it used to skip the landing morph.
+  const head = useCollapsingHeader(Boolean(initialQuery));
+  const { scrollToFirstRow } = head;
 
-  /* Two fixed quick filters (Figma 956:1009) — the questions this page is
-     usually opened to answer, rather than a sample of whichever tiers and
-     industries happen to be most common. Each SETS the whole filter state it
-     stands for instead of adding to what is already applied, so the result is
-     exactly the named slice however the page was left. */
-  const suggested = useMemo<LandingPill[]>(
-    () => [
-      {
-        key: "past-due",
-        label: "Past Due Invoices",
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, statuses: ["Past Due"], tiers: [] }));
-          morph.showTable();
-        },
-      },
-      {
-        key: "professional",
-        label: "Professional Tier",
-        onPick: () => {
-          setFilters((prev) => ({ ...prev, statuses: ["Active"], tiers: ["Professional"] }));
-          morph.showTable();
-        },
-      },
-    ],
-    [morph.showTable],
+  // A new query, filter, sort, date range or page starts the list at its first
+  // row (the same set that resets the page to 1). A collapsed header stays
+  // collapsed; one still open is left as it is.
+  useLayoutEffect(() => {
+    scrollToFirstRow();
+  }, [query, filters, sort, dateRange, visiblePage, scrollToFirstRow]);
+
+  // The landing's summary line — the whole book of companies, not the filtered
+  // rows (the pagination footer counts those), and the Industries they span (a
+  // company can sit in several; each Industry counts once).
+  const catalog = useMemo(
+    () => ({
+      companies: companies.length,
+      industries: new Set(companies.flatMap((c) => c.industry)).size,
+    }),
+    [companies],
   );
-
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((c) => {
-    const billing = getCompanyBilling(c);
-    const status = getStatusPill(billing);
-    return {
-      key: c.id,
-      name: c.name,
-      dim: billing.status === "Canceled",
-      cells: {
-        status: <span className={`co-status-pill co-status-pill--${status.tone}`}>{status.label}</span>,
-        accountHolder: c.email,
-        tier: c.tier ?? "—",
-        seats: hasSeats(billing) ? c.seats.toLocaleString() : "—",
-        seatChanges: hasSeats(billing) ? (
-          <SeatChangesCell change={seatChangeIn(c, dateRange)} />
-        ) : (
-          "—"
-        ),
-        lastAccess: getDashboardLastAccess(c),
-      },
-    };
-  });
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -435,125 +409,129 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm" ref={morph.rootRef}>
-          <header className="tasks-header">
-            <div>
-              <h1 className="tasks-title">Companies</h1>
-            </div>
-            <div className="tasks-header-actions">
-              <button className="new-task" onClick={onNewCompany}>
-                <AddIcon />
-                Create Company
-                <span className="cta-kbd">C</span>
-              </button>
-            </div>
-          </header>
+        {/* The Tasks / Certifications collapsing header: the page is ONE
+            scroller — the table's own `.table-xscroll` — opening on the
+            landing (the Enlarged Header, the Large search bar) sitting straight
+            on top of the real table. See useCollapsingHeader and the
+            `.tasks.clh` rules in index.css. */}
+        <div className="tasks clh">
+          <div className="co-table-col">
+            <div
+              ref={head.scrollRef}
+              className="table-xscroll clh-scroll"
+              style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
+            >
+              <div className="clh-canvas">
+                <div ref={head.headerRef} className="clh-head">
+                  {/* The header's pieces are its direct children, so each can pin
+                      inside it (see the `.tasks.clh` rules). The action button
+                      keeps a `.tasks-header` of its own for its button style. */}
+                  <header className="tasks-header clh-actions">
+                    <div className="tasks-header-actions">
+                      <button className="new-task" onClick={onNewCompany}>
+                        <AddIcon />
+                        Create Company
+                        <span className="cta-kbd">C</span>
+                      </button>
+                    </div>
+                  </header>
+                  <h1 className="tasks-title">Companies</h1>
+                  {/* The landing's summary line, in the shape of Figma
+                      1356:1864 ("3210 Tasks · Across 230 Certifications"). It
+                      fades as the header collapses. */}
+                  <p className="tasks-subtitle clh-sub">
+                    {`${plural(catalog.companies, "Company", "Companies")} · Across ${plural(
+                      catalog.industries,
+                      "Industry",
+                      "Industries",
+                    )}`}
+                  </p>
 
-          <div className="tasks-row">
-            <div className="tasks-content">
-              <div className="toolbar">
-                <CompaniesSearch
-                  companies={companies}
-                  tiers={filters.tiers}
-                  onTiersChange={(v) => setFilters((prev) => ({ ...prev, tiers: v }))}
-                  statuses={filters.statuses}
-                  onStatusesChange={(v) => setFilters((prev) => ({ ...prev, statuses: v }))}
-                  industries={filters.industries}
-                  onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
-                  partnerships={filters.partnerships}
-                  onPartnershipsChange={(v) => setFilters((prev) => ({ ...prev, partnerships: v }))}
-                  query={query}
-                  onCommit={(q) => {
-                    setQuery(q);
-                    morph.showTable();
-                  }}
-                />
-              </div>
+                  <div className="toolbar">
+                    <CompaniesSearch
+                      companies={companies}
+                      tiers={filters.tiers}
+                      onTiersChange={(v) => setFilters((prev) => ({ ...prev, tiers: v }))}
+                      statuses={filters.statuses}
+                      onStatusesChange={(v) => setFilters((prev) => ({ ...prev, statuses: v }))}
+                      industries={filters.industries}
+                      onIndustriesChange={(v) => setFilters((prev) => ({ ...prev, industries: v }))}
+                      partnerships={filters.partnerships}
+                      onPartnershipsChange={(v) => setFilters((prev) => ({ ...prev, partnerships: v }))}
+                      query={query}
+                      onCommit={setQuery}
+                    />
+                  </div>
 
-              <LandingFilterRow pills={suggested} onShowAll={morph.showTable}>
                   <CompanyFilters
                     filters={filters}
                     setFilters={setFilters}
                     dateRange={dateRange}
                     setDateRange={setDateRange}
                   />
-                </LandingFilterRow>
+                </div>
 
-              <div className="lm-stage">
-              <LandingOverlay
-                caption="Recently Active Companies"
-                columns={LM_COLS}
-                nameLabel="Company"
-                nameWidth={220}
-                rows={landingRows}
-                onShowAll={morph.showTable}
-                onRowClick={() => morph.showTable()}
-              />
-              <div className="lm-table">
-              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
-              <table className="table table-head">
-                <ColGroup cols={visibleCols} />
-                <thead>
-                  <tr>
-                    {/* The fixed columns lead the table: Company, then Status. */}
-                    <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
-                    <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
-                    {visibleCols.map((c) => (
-                      <SortableHeader
-                        key={c.key}
-                        col={c.sortKey}
-                        label={c.label}
-                        className={c.className}
-                        sort={sort}
-                        toggle={toggleSort}
-                        sortable={c.sortable !== false}
-                        tip={c.tip}
-                        dateScoped={c.dateScoped}
-                      />
-                    ))}
-                    <th className="col-actions">
-                      <CompanyEditColumnsButton
-                        columns={columns}
-                        setColumns={applyColumns}
-                        order={order}
-                        onOrderChange={setOrder}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-              </table>
-
-              <div className="tasks-scroll">
-                <table className="table table-body">
+                <table ref={head.theadRef} className="table table-head">
                   <ColGroup cols={visibleCols} />
-                  <tbody>
-                    {paged.map((c) => (
-                      <CompanyRow
-                        key={c.id}
-                        company={c}
-                        cols={visibleCols}
-                        ctx={colContext}
-                        onEdit={() => onEditCompany(c)}
-                        onManageSubscription={() => onManageSubscription(c)}
-                        onOpenMenu={(rect) => setMenu({ company: c, rect })}
-                        menuOpen={menu?.company.id === c.id}
-                      />
-                    ))}
-                  </tbody>
+                  <thead>
+                    <tr>
+                      {/* The fixed columns lead the table: Company, then Status. */}
+                      <SortableHeader col="name" label="Company" className="col-name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
+                      {visibleCols.map((c) => (
+                        <SortableHeader
+                          key={c.key}
+                          col={c.sortKey}
+                          label={c.label}
+                          className={c.className}
+                          sort={sort}
+                          toggle={toggleSort}
+                          sortable={c.sortable !== false}
+                          tip={c.tip}
+                          dateScoped={c.dateScoped}
+                        />
+                      ))}
+                      <th className="col-actions">
+                        <CompanyEditColumnsButton
+                          columns={columns}
+                          setColumns={applyColumns}
+                          order={order}
+                          onOrderChange={setOrder}
+                        />
+                      </th>
+                    </tr>
+                  </thead>
                 </table>
-              </div>
-              </div>
 
-              <div className="pagination">
-                <span>
-                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                </span>
-                <div className="pagination-controls">
-                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeftIcon /></button>
-                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><ChevronRightIcon /></button>
+                <div className="tasks-scroll">
+                  <table className="table table-body">
+                    <ColGroup cols={visibleCols} />
+                    <tbody>
+                      {paged.map((c) => (
+                        <CompanyRow
+                          key={c.id}
+                          company={c}
+                          cols={visibleCols}
+                          ctx={colContext}
+                          onEdit={() => onEditCompany(c)}
+                          onManageSubscription={() => onManageSubscription(c)}
+                          onOpenMenu={(rect) => setMenu({ company: c, rect })}
+                          menuOpen={menu?.company.id === c.id}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              </div>
+            </div>
+
+            <div className="pagination">
+              <span>
+                Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+              </span>
+              <div className="pagination-controls">
+                <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
               </div>
             </div>
           </div>
