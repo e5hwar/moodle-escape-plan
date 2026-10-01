@@ -4,6 +4,9 @@ import { RowExternalLinkIcon, CopyIcon, PencilIcon } from "./icons";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { useHoverCard, type HoverPos } from "../hooks/useHoverCard";
 import { PrmModal } from "./PrmModal";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 
 /* ── User details hover card (Figma 436:572) ──────────────────────────────────
    Hovering the learner's name in the review console peeks at who they are —
@@ -255,10 +258,11 @@ function EditNameModal({
 }) {
   const [value, setValue] = useState(initial);
   const trimmed = value.trim();
-  const isValid = !!trimmed;
+  // Unchanged (whitespace aside) means nothing to save — Save Changes stays off.
+  const isValid = !!trimmed && !isOver(NAME_MAX, value) && trimmed !== initial.trim();
   // Says so once the field has been clicked into and out of empty (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
-  const nameMissing = !isValid && touched.has("name");
+  const nameMissing = !trimmed && touched.has("name");
 
   // Esc closes the modal and stops there. Captured, because everything this
   // card sits in already handles Esc on document/window — the review console
@@ -286,8 +290,10 @@ function EditNameModal({
         <label className="form-label" htmlFor="udh-edit-name">
           Name<span className="req">*</span>
           {nameMissing && <span className="form-label-error">Name cannot be left empty</span>}
+          <LimitError max={NAME_MAX} values={[value]} />
         </label>
-        <input
+        <LimitedInput
+          max={NAME_MAX}
           id="udh-edit-name"
           autoFocus
           className={`form-input${nameMissing ? " has-error" : ""}`}

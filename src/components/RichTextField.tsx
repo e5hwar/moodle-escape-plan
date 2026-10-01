@@ -1,5 +1,6 @@
 import { AutoTextarea } from "./AutoTextarea";
 import { CharCount } from "./CharCount";
+import { isOver } from "../data/fieldLimits";
 import { RteToolbar } from "./RteToolbar";
 
 /* Rich Text Input — Figma 327:137 "Dual Language - Focus State" (single
@@ -47,16 +48,14 @@ export function RichTextField({
   /** A SOFT character limit per language (Figma 1376:1599): each row shows
    *  the characters left at its bottom-right corner, and running past the
    *  limit flags the shell like `error` does — the caller names the limit in
-   *  the label row. */
+   *  the label row (`LimitError warn={false}`). Never the amber warning
+   *  (1430:1474): rich text has no suggested length. */
   maxLength?: number;
 }) {
-  const over = maxLength !== undefined && Math.max(en.length, es.length) > maxLength;
+  // Red past the limit only — rich text has no amber warning tier.
+  const flag = error || (maxLength !== undefined && isOver(maxLength, en, es)) ? "has-error" : "";
   return (
-    <div
-      className={`rte-field${disabled ? " is-disabled" : ""}${
-        error || over ? " has-error" : ""
-      }`}
-    >
+    <div className={`rte-field${disabled ? " is-disabled" : ""}${flag ? ` ${flag}` : ""}`}>
       <div className="rte-lang-row">
         <span className="lang-tag">EN</span>
         <AutoTextarea
@@ -68,7 +67,7 @@ export function RichTextField({
           minRows={minRows}
           maxRows={maxRows}
         />
-        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} warn={false} />}
       </div>
       <div className="rte-field-divider" />
       <div className="rte-lang-row">
@@ -82,7 +81,7 @@ export function RichTextField({
           minRows={minRows}
           maxRows={maxRows}
         />
-        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} warn={false} />}
       </div>
       <RteToolbar />
     </div>

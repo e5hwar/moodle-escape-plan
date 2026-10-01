@@ -25,6 +25,7 @@ import { SelectField } from "./SelectField";
 import { DateField } from "./DateField";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
@@ -141,6 +142,9 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Scholarship | null>(null);
   const [menu, setMenu] = useState<{ scholarship: Scholarship; rect: DOMRect } | null>(null);
+  /* Revoke used to fire straight from the menu; it now runs the two-step
+     danger confirm every Revoke Access uses. */
+  const [revoking, setRevoking] = useState<Scholarship | null>(null);
   useCreateShortcut(() => setAdding(true), !adding);
 
   const filtered = useMemo(() => {
@@ -350,16 +354,18 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
               >
               <div className="tasks-scroll">
                 <table className="table sch-table">
-                  <colgroup>
-                    <col style={{ width: COL_WIDTHS.name }} />
-                    <col style={{ width: COL_WIDTHS.email }} />
-                    <col style={{ width: COL_WIDTHS.phone }} />
-                    <col style={{ width: COL_WIDTHS.status }} />
-                    <col style={{ width: COL_WIDTHS.date }} />
-                    <col style={{ width: COL_WIDTHS.date }} />
-                    <col style={{ width: COL_WIDTHS.assignedBy }} />
-                    <col style={{ width: ACTIONS_WIDTH }} />
-                  </colgroup>
+                  <TableCols
+                    data={[
+                      COL_WIDTHS.name,
+                      COL_WIDTHS.email,
+                      COL_WIDTHS.phone,
+                      COL_WIDTHS.status,
+                      COL_WIDTHS.date,
+                      COL_WIDTHS.date,
+                      COL_WIDTHS.assignedBy,
+                    ]}
+                    trail={[ACTIONS_WIDTH]}
+                  />
                   <thead>
                     <tr>
                       <SortableHeader col="user" label="Name" sort={sort} toggle={toggleSort} />
@@ -466,7 +472,18 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onEdit={() => setEditing(menu.scholarship)}
-          onRevoke={() => handleRevoke(menu.scholarship.id)}
+          onRevoke={() => setRevoking(menu.scholarship)}
+        />
+      )}
+
+      {revoking && (
+        <ScholarshipRevokeConfirm
+          scholarship={revoking}
+          onCancel={() => setRevoking(null)}
+          onConfirm={() => {
+            handleRevoke(revoking.id);
+            setRevoking(null);
+          }}
         />
       )}
     </div>
@@ -597,6 +614,48 @@ function ScholarshipRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/* Revoke Scholarship — the shared danger confirm, asked twice like Revoke
+   Access on the Who Paid pages (PrmModal `doubleConfirm`). */
+function ScholarshipRevokeConfirm({
+  scholarship,
+  onConfirm,
+  onCancel,
+}: {
+  scholarship: Scholarship;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const name = scholarship.user.name;
+  return (
+    <PrmModal
+      title="Revoke Scholarship?"
+      confirmLabel="Revoke Scholarship"
+      danger
+      doubleConfirm={
+        <>
+          <strong>{name}</strong>'s scholarship will end today. This can't be undone.
+        </>
+      }
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-content">
+        Revoke <strong>{name}</strong>'s scholarship? It expires as of today and stays in
+        the list as Expired. To give it back, create a new scholarship.
+      </p>
+    </PrmModal>
   );
 }
 

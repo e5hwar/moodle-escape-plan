@@ -33,6 +33,10 @@
      flagged control's border, the message in its label row, and a character
      counter gone negative. Distinct from the rail/icon danger red #ff1f31. */
   --field-error: #ff1f17;
+  /* Field warning amber (Figma 1430:1474 "Character Limit Warning"): a field
+     past its SUGGESTED length — the shell, its counter and the label-row
+     warning. Advisory only; nothing blocks on it. */
+  --field-warning: #ffc524;
   --skill-yellow: #f5d36b;
 
   /* Charts — ONE bar look everywhere, taken from the Feedback "Submissions
@@ -460,12 +464,27 @@ a {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  /* 32px on every side of every page: whatever sits last (the pagination
-     bar, a scrolling body, a card grid) stops 32px above the window edge. An
-     in-page save bar cancels the bottom to stay flush
-     (`.tasks > .sp-save-footer`). */
+  /* 32px on every side of every page: whatever sits last and is pinned (the
+     pagination bar, a card grid) stops 32px above the window edge. An in-page
+     save bar cancels the bottom to stay flush (`.tasks > .sp-save-footer`); a
+     last part that SCROLLS runs to the edge instead, the 32px ending its
+     scroll (`[data-page-end]` below). */
   padding: 32px;
   position: relative;
+}
+
+/* A page that ends in a scroll (user 2026-10-02 — PageEnd.tsx finds it on
+   every page and marks it): the scroll runs to the window edge and the
+   shell's 32px bottom becomes the END of that scroll, the way the top 32px
+   scrolls away. The path's top reaches through the shell's bottom padding
+   (the path below it fills it), and the scroller ends its content in the
+   32px. `!important`: this owns the page's bottom over each scroller's own
+   padding. */
+[data-page-end] {
+  margin-bottom: -32px !important;
+}
+[data-page-scroll] {
+  padding-bottom: 32px !important;
 }
 
 .tasks-row {
@@ -576,20 +595,28 @@ a {
   border-bottom: 10px solid transparent;
 }
 
+/* List-page rhythm (2026-10-01): header block → 24 → search → 12 → filter
+   pills → 24 → table. A page with no pills keeps the 24 above its table. */
 .tasks-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 /* Right-aligned action cluster sitting alongside the page title.
-   12px between buttons (Figma 633:1865). */
+   12px between buttons (Figma 633:1865). The buttons centre on the page
+   HEADING (Figma 1429:1446: a 38px row, the 32px buttons 3px in) — the
+   title's own line, not title + subtext: the header row is top-aligned and
+   this box is one title line tall (`.tasks-title`'s 32px × 1.2). The
+   collapsing headers' title rises to this box's top, so it centres there too
+   (`.clh-actions`). */
 .tasks-header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  min-height: calc(32px * 1.2);
 }
 
 /* In-header Primary CTA (Create Task / Certification / Company …) — Figma spec.
@@ -618,6 +645,8 @@ a {
 .prm-foot .cta-kbd,
 /* The Skeleton State Overlay's ⌘K (Figma 1418:1402). */
 .skel-overlay .cta-kbd,
+/* The row preview panel's buttons (the Setup card's 1–4 steps). */
+.pp .cta-kbd,
 /* A callout's action carries the same keycap (Figma 1286:2799). */
 .note-card-action .cta-kbd {
   width: 20px;
@@ -780,7 +809,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .toolbar .search-wrap {
@@ -792,7 +821,7 @@ a {
 
 .search-wrap {
   position: relative;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .search-input {
@@ -908,7 +937,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 14px;
+  padding-bottom: 24px;
   margin-bottom: 0;
   flex-shrink: 0;
 }
@@ -3230,6 +3259,18 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   border-color: var(--field-error);
 }
 
+/* Past the SUGGESTED length (1430:1474 "Character Limit Warning"): the same
+   shells take the warning amber instead — the caret sits inside an amber
+   shell in the frame, so it outranks focus too. Declared before nothing that
+   could clash: a field over its hard limit carries `has-error` and never
+   `has-warning`. */
+.lang-field.has-warning,
+.rte-field.has-warning,
+.form-input.has-warning,
+.form-input.has-warning:focus {
+  border-color: var(--field-warning);
+}
+
 /* The rich-text field carries the same flag — dual-language 1376:1599 and
    single-language 1389:1552 both draw the red edge around the whole shell,
    toolbar included. The question text itself is required, and a limit can be
@@ -3328,6 +3369,70 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 .lang-field-count.is-over {
   color: var(--field-error);
+}
+
+/* Past the suggested length the count turns amber (1430:1474: the EN row's
+   "10" while ES, still short, stays grey). */
+.lang-field-count.is-warn {
+  color: var(--field-warning);
+}
+
+/* The label-row warning (1430:1479): `.form-label-error`'s metrics in the
+   warning amber, 8px after the asterisk. */
+.form-label-warning {
+  margin-left: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: var(--field-warning);
+}
+
+/* A single-language `.form-input` with a limit (`LimitedInput`): the count
+   sits inside the shell's right edge, 12px in like a language row's, and the
+   input reserves room for it so text never runs under the number. */
+.limit-input {
+  position: relative;
+  width: 100%;
+}
+
+.limit-input > input {
+  padding-right: 56px;
+}
+
+.limit-input > .lang-field-count {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* The flag on whatever input the wrapper hosts — `.form-input` has its own
+   rule above, but the modal inputs (`.prm-other`, `.prm-text-input`) don't,
+   and their `:focus` edge would otherwise win. */
+.limit-input > .has-warning,
+.limit-input > .has-warning:focus {
+  border-color: var(--field-warning);
+}
+
+.limit-input > .has-error,
+.limit-input > .has-error:focus {
+  border-color: var(--field-error);
+}
+
+/* A multi-line plain textarea (`.limit-input.is-multiline`): the count drops
+   to the bottom-right corner, as in a rich-text row (1376:1839), and the
+   textarea reserves a line under its text for it instead of a right gutter. */
+.limit-input.is-multiline > textarea {
+  padding-bottom: 33px;
+}
+
+.limit-input.is-multiline > .lang-field-count {
+  top: auto;
+  bottom: 12px;
+  transform: none;
+  line-height: 14px;
 }
 
 /* In a rich-text row the count sits on the row's BOTTOM edge (1376:1839:
@@ -8213,7 +8318,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
 }
 
 .qb-filters {
@@ -8709,7 +8814,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
 }
 
 .sp-search {
@@ -9978,7 +10083,7 @@ a.spc-hero-pill--link:hover {
   -webkit-box-orient: vertical;
 }
 
-/* Archived-Spotlights disclosure row (Figma 564:2244) — a centred pill at the
+/* Past-Spotlights disclosure row (Figma 564:2244) — a centred pill at the
    foot of the table hiding the ended and rejected rows. Overrides the 111px
    data-row height: it carries a control, not a Spotlight. */
 .sp-table tbody tr.sp-archive-row,
@@ -10017,6 +10122,48 @@ a.spc-hero-pill--link:hover {
 
 .sp-archive-toggle.is-open > svg {
   transform: rotate(180deg);
+}
+
+/* Past Spotlights group — a second body table under the toggle row. The grid
+   track runs 0fr → 1fr so the group grows to its real height (no max-height
+   guess), while the rows fade and settle in a beat behind the grow; closing
+   runs the same curve back, the fade leading so rows never clip mid-opacity. */
+.sp-past {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.sp-past.is-open {
+  grid-template-rows: 1fr;
+}
+
+.sp-past-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.16s ease, transform 0.24s ease;
+}
+
+.sp-past.is-open .sp-past-inner {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.24s ease 0.08s, transform 0.32s cubic-bezier(0.2, 0, 0, 1) 0.04s;
+}
+
+/* The toggle row ends the first table, so the rule between it and the first
+   past row moves onto that row. */
+.sp-past .sp-table tbody tr:first-child {
+  border-top: 1px solid rgba(122, 122, 122, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-past,
+  .sp-past-inner,
+  .sp-past.is-open .sp-past-inner {
+    transition: none;
+  }
 }
 
 /* Preview artwork tile (558:2070) — a plain 144×76 image, object-cover. */
@@ -11134,6 +11281,13 @@ a.spc-hero-pill--link:hover {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
+/* The stacked "Are you sure?" second step (PrmModal `doubleConfirm`, and Edit
+   Criteria's) — narrower than the 640px confirm so it reads as a smaller card
+   on top of the first rather than a copy of it. */
+.prm--sure {
+  max-width: 480px;
+}
+
 /* The reject modal carries a form and a wrapped image grid, so it runs to 80%
    of the window instead of the confirm shell's 640px — the frames are the point
    of the screen and 720px only fitted five per row. Its height is FIXED, not
@@ -11144,30 +11298,18 @@ a.spc-hero-pill--link:hover {
   height: min(860px, calc(100vh - 48px));
 }
 
-/* Table-picker shell — Figma 682:2321 "Select Tasks Modal": a fixed 884px card
-   (836px of content inside .prm-body's 24px gutters). Unlike .prm--wide it has
-   no fixed height — the table is paginated, so the card sizes to its rows. */
-.prm--pick {
-  max-width: 884px;
-}
-
-/* Select Tasks only: its node (682:2321) went 884 → 1050 on 2026-09-12 to seat
-   the new Industry column. 1050 − 2×24 gutters = the 1002px content row the
-   header's six columns add up to. Every other picker still draws 884 in Figma,
-   so this is a modifier rather than a change to `.prm--pick`. */
-.prm--pick-wide {
-  max-width: 1050px;
-}
-
-/* Select Questions runs on the whole screen. Its source list is the Question
-   Bank — thousands of rows — so a fixed 884px card spends most of the viewport
-   on nothing while the reader pages through 50 at a time. The card fills the
-   scrim's 24px gutter in both axes (`.prm`'s own max-height already caps the
-   height there), and the row area below grows with it — see the override on
-   `.stm-table-wrap > .table-xscroll`, whose default is pinned to 80vh. */
+/* Table-picker shell (Figma 682:2321's `.stm-*` chrome). Every picker runs on
+   the whole screen since 2026-10-01 — it was 884px (1050 for Select Tasks and
+   Deep Link) with Select Questions alone full-screen, and the mix read as
+   inconsistent. The card sits 48px off every viewport edge — double the
+   scrim's own 24px padding, so it's sized here rather than by `width: 100%`
+   (and the shared `max-height` still wins on a very short screen) — and the
+   row area below grows into whatever the chrome leaves — see
+   `.prm--pick-full .stm*`. */
 .prm--pick-full {
+  width: calc(100vw - 96px);
   max-width: none;
-  height: calc(100vh - 48px);
+  height: calc(100vh - 96px);
 }
 
 .prm-body {
@@ -11863,9 +12005,6 @@ body:has(.pp-overlay) .pl-copied-toast {
   gap: 10px;
   padding: 12px 14px;
   cursor: default;
-}
-.rr-card.pp-stat:hover {
-  border-color: #404040;
 }
 .pp-stat .rr-count {
   padding-right: 10px;
@@ -12798,6 +12937,10 @@ body:has(.pp-overlay) .pl-copied-toast {
  * ============================================================= */
 /* Rows open the review modal — the trailing chevron just signals it, and on
    hover gives way to the shared labelled action bar ("Review ›"). */
+/* No filter pills, so the search keeps the list rhythm's 24 above the table. */
+.ncr-search {
+  margin-bottom: 24px;
+}
 .ncr-table tbody tr {
   cursor: pointer;
 }
@@ -23826,28 +23969,24 @@ body:has(.pp-overlay) .pl-copied-toast {
 /* The switcher sits at the TOP of the header row in the frame (756:3783: the
    32px button at y=0 of a 55px row), not centred on the two-line title. */
 .rvc-hor .rvc-header { padding: 0 0 28px; align-items: flex-start; }
-/* The Exam Reviews console pads its header, not its root, so the breadcrumb
-   strip (Figma 1417:1395) takes the header's 32px top band and gutter itself. */
-.rvc-root > .rvc-crumbs { margin-top: 0; padding-left: 32px; padding-right: 32px; }
+/* The Exam Reviews console pads its header, not its root, so the crumb row
+   takes the header's 32px top and gutter itself. */
+.rvc-root > .rvc-crumbs { padding: 32px 32px 0; }
 .rvc-root > .rvc-crumbs + .rvc-header { padding-top: 0; }
 /* The page header (Figma 1356:1828) is the title + subtext only — no gap, so
    the DS 2px between them holds. */
 .rvc-pagehead { display: flex; flex-direction: column; min-width: 0; }
-/* Header With Breadcrumb (Figma 1417:1395, 2026-10-01): the trail left the page
-   header and is its own 32px strip, the page's first child, sitting IN the
-   shell's 32px top padding — so the title lands 32px down on every page, with
-   or without a trail. The 17px crumb row rides the strip's BOTTOM (justify-end,
-   4px under it: 11px top, 4px bottom), 4px over the title. Every page shell pads
-   32px on top (`.tasks`, `.qb-content`, `.wizard-content`, `.rvc-main`,
-   `.mc-header`); one that doesn't must cancel this margin (`.rvc-root > …`). */
+/* Page header (Figma 1429:1446 "Atomic Component - Page Header", 2026-10-01):
+   the 17px crumb row is the header's top line, 4px over the title row — in the
+   page's flow, under the shell's 32px top padding (it no longer sits up in the
+   padding, the 1417:1395 strip). It is the page's first child, a sibling just
+   before `.tasks-header` (or `.rvc-pagehead` in the wizards), so it spans the
+   title AND the action buttons' row. */
 .rvc-crumbs {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding-top: 11px;
-  padding-bottom: 4px;
-  margin-top: -32px;
+  margin-bottom: 4px;
   flex: none;
 }
 /* Breadcrumb atom (Figma 1415:1354): only the pages ABOVE this one — the
@@ -26272,11 +26411,11 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
      summary pair is Figma 1356:1865 "Atomic Component - Enlarged Header": a
      56px title on its 67.2px leading-normal line, the 20px summary flush
      beneath it on a 24px line. */
-  --clh-title-drop: 56px; /* the title's drop below the header actions (32px buttons + 24) */
+  --clh-title-drop: 56px; /* the title's drop below the header actions' top */
   --clh-title-grow: 28.8px; /* its 67.2px landing line over the base 38.4px (32 × 1.2) */
-  --clh-sub-h: 42px; /* the 24px summary line + 18px — with the header's 22px, 40px above the search */
+  --clh-sub-h: 40px; /* the 24px summary line + 16px — with the header's 24px, 40px above the search */
   --clh-bar-grow: calc(var(--search-h-lg) - var(--search-h)); /* Large 56 → Default 43 */
-  --clh-gap-grow: 28px; /* extra air above the table header, 42 → 14 */
+  --clh-gap-grow: 18px; /* extra air above the table header, 42 → 24 */
   /* A landing banner and the header note it turns into — zero unless the page
      shows them (`.clh--banner`, Manage Users). The note only exists in the
      collapsed header, so it enters the sum negatively. */
@@ -26350,14 +26489,17 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   height: var(--clh-gap-grow);
 }
 /* The action buttons never move — top-right from the start. The title sits
-   one drop below them. Pieces stack: actions over everything (their menu),
-   the title and note over what passes under them, the search bar over the
-   filters (its suggestions), the summary and banner lowest. */
+   one drop below their row's top, and collapsed it rises to that top: the row
+   is one 32px-title line tall (38.4px, `.tasks-header-actions`), so the
+   buttons centre on the collapsed heading (Figma 1429:1446). Pieces stack:
+   actions over everything (their menu), the title and note over what passes
+   under them, the search bar over the filters (its suggestions), the summary
+   and banner lowest. */
 .tasks.clh .clh-head > .clh-actions {
   position: relative;
   z-index: 5;
   width: max-content;
-  margin: 0 0 calc(var(--clh-title-drop) - 32px) auto;
+  margin: 0 0 calc(var(--clh-title-drop) - 32px * 1.2) auto;
 }
 /* 1356:1862 "Page Header Enlarged" — Fira Sans SemiBold 56 at the landing,
    the base 32px title once collapsed: it rises its drop into the actions' row
@@ -26378,7 +26520,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    the card, which condenses into it (the `.clh--banner` morph below). Its
    overflow shows, so those pieces can start inside the card. */
 .tasks.clh.clh--banner {
-  --clh-banner-h: 88px; /* the 72px card + 16px above the search */
+  --clh-banner-h: 86px; /* the 70px card + 16px above the search */
   --clh-note-h: 19px; /* the note's line */
 }
 .tasks.clh .clh-head > .tasks-note {
@@ -26400,7 +26542,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   position: relative;
   z-index: 1;
   display: block;
-  margin: 0 0 calc(var(--clh-sub-h) - 24px + 22px);
+  margin: 0 0 calc(var(--clh-sub-h) - 24px + 24px);
   font-size: 20px;
   line-height: 24px;
   white-space: nowrap;
@@ -26425,8 +26567,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 .tasks.clh .clh-banner > .lm-banner {
   box-sizing: border-box;
-  height: 72px;
+  height: 70px;
   gap: 40px;
+  padding: 16px 20px;
 }
 /* The search bar rises to its spot under the collapsed title row. */
 .tasks.clh .clh-head > .toolbar {
@@ -26758,7 +26901,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
      of the card sits a fixed distance Δ from its twin in the note;
    - every card piece travels its Δ across the whole collapse — linear, in
      step with the rest of the header — shrinking to its twin's size: the
-     card's box onto the note's line, the 40px count onto the 16px count, the
+     card's box onto the note's line, the 32px count onto the 16px count, the
      title onto the label, the Review Names CTA onto the chevron (they share
      a right edge and a centre line);
    - every note piece runs that same path from the card's side (the inverse
@@ -26768,23 +26911,24 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    - what has no twin (the count's divider, the grey body line) fades first.
    Transform and opacity only, like the rest of the collapse. The box is the
    card's paint moved onto ::before and scaled — non-uniformly (note width /
-   card width across, 19/72 down), so its corners flatten a little as it
+   card width across, 19/70 down), so its corners flatten a little as it
    shrinks, by when they're a few px and the wash is draining. CSS owns every
    offset; the hook measures only the sizes text decides (--clh-nc-*; the
-   fallbacks are their values at 1440 with 10 pending). Card geometry: 12.5px
-   in, the 48px count row centred in 72px (count at 12, the text column
-   centred on 36); note: a 19.2px line centred in 19px (−0.1). */
+   fallbacks are their values at 1440 with 10 pending). Card geometry: 16.5px
+   in top/bottom, 20px left/right (1268:1714's px-20), the 38px count row centred in 70px (count at 16, the text
+   column centred on 35 — Figma 1424:1416, 2026-10-02: 32px count, 70px card, 16px
+   top/bottom); note: a 19.2px line centred in 19px (−0.1). */
 .tasks.clh.clh--banner {
-  --clh-nc-drop: calc(var(--clh-sub-h) + 22px); /* card top − note top: the summary's line + its gap (64) */
+  --clh-nc-drop: calc(var(--clh-sub-h) + 24px); /* card top − note top: the summary's line + its gap (64) */
 }
 /* The card's paint, on a layer of its own that can shrink under its content.
    The layer draws the hairline too, so the card trades its 0.5px border for
-   padding — its content sits exactly 12.5px in at any pixel density (a real
+   padding — its content sits exactly 16.5px down / 20px in at any pixel density (a real
    0.5px border rounds to 1px on a 1x screen, which would part the twins). */
 .tasks.clh.clh--banner .clh-banner > .lm-banner {
   position: relative;
   isolation: isolate;
-  padding: 12.5px;
+  padding: 16.5px 20px;
   border: 0;
   background: none;
 }
@@ -26804,7 +26948,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   --nc-dx: 0px;
   --nc-dy: calc(-1 * var(--clh-nc-drop));
   --nc-kx: var(--clh-nc-sx, 0.2053); /* note width / card width */
-  --nc-ky: 0.26389; /* 19 / 72 */
+  --nc-ky: 0.27143; /* 19 / 70 */
 }
 .tasks.clh.clh--banner .clh-banner > .lm-banner:hover::before {
   background:
@@ -26838,26 +26982,26 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 .tasks.clh.clh--banner .lm-banner-count,
 .tasks.clh.clh--banner .tasks-note-count {
   transform-origin: 0 0;
-  --nc-dx: -12.5px;
-  --nc-dy: calc(-12.1px - var(--clh-nc-drop));
-  --nc-kx: 0.4; /* 40 → 16px */
-  --nc-ky: 0.4;
+  --nc-dx: -20px;
+  --nc-dy: calc(-16.1px - var(--clh-nc-drop));
+  --nc-kx: 0.5; /* 32 → 16px */
+  --nc-ky: 0.5;
 }
 .tasks.clh.clh--banner .lm-banner .note-card-text,
 .tasks.clh.clh--banner .tasks-note-text {
   transform-origin: 0 0;
-  --nc-dx: calc(var(--clh-nc-note-count-w, 20.4px) - var(--clh-nc-card-count-w, 53.9px) - 24.5px);
-  /* The column is centred on the card's midline (36): its top is 36 − h/2 —
-     18 for the title + body pair, higher when a narrow card wraps them. */
-  --nc-dy: calc(var(--clh-nc-card-text-h, 36px) / 2 - 36.1px - var(--clh-nc-drop));
+  --nc-dx: calc(var(--clh-nc-note-count-w, 20.4px) - var(--clh-nc-card-count-w, 45.6px) - 32px);
+  /* The column is centred on the card's midline (35): its top is 35 − h/2 —
+     17 for the title + body pair, higher when a narrow card wraps them. */
+  --nc-dy: calc(var(--clh-nc-card-text-h, 36px) / 2 - 35.1px - var(--clh-nc-drop));
   --nc-kx: 1;
   --nc-ky: 1;
 }
 .tasks.clh.clh--banner .lm-banner > .cta-quiet,
 .tasks.clh.clh--banner .tasks-note > svg {
   transform-origin: 100% 50%;
-  --nc-dx: calc(var(--clh-nc-note-w, 262px) - var(--clh-nc-card-w, 1276px) + 12.5px);
-  --nc-dy: calc(-26.5px - var(--clh-nc-drop));
+  --nc-dx: calc(var(--clh-nc-note-w, 262px) - var(--clh-nc-card-w, 1276px) + 20px);
+  --nc-dy: calc(-25.5px - var(--clh-nc-drop));
   --nc-kx: 0.5; /* the 32px button closes onto the 16px chevron */
   --nc-ky: 0.5;
 }
@@ -27107,7 +27251,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 
 /* ── Landing banner (Figma 1268:1714 "Name Change Requests") ──
    A callout that sits ABOVE the hero search on the landing: the shared
-   `.note-card` in its accent tone, carrying a 40px count behind a hairline
+   `.note-card` in its accent tone, carrying a 32px count behind a hairline
    divider, the callout's title/body pair and a `.cta-quiet` CTA with an N
    keycap. It belongs to the landing only — it tracks the hero's 70% measure
    and collapses (height + padding + opacity) as the page morphs into the
@@ -27117,9 +27261,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   width: calc(70% * (1 - var(--lm)) + 100% * var(--lm));
   margin: calc(56px * (1 - var(--lm))) auto 0;
   gap: 40px;
-  height: calc(72px * (1 - var(--lm)));
-  padding-top: calc(12px * (1 - var(--lm)));
-  padding-bottom: calc(12px * (1 - var(--lm)));
+  height: calc(70px * (1 - var(--lm)));
+  padding-top: calc(16px * (1 - var(--lm)));
+  padding-bottom: calc(16px * (1 - var(--lm)));
   overflow: hidden;
   opacity: calc(1 - var(--lm));
 }
@@ -27175,7 +27319,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   padding-right: 12px;
   border-right: 0.5px solid rgba(64, 64, 64, 0.5);
   font-family: var(--font-sans);
-  font-size: 40px;
+  font-size: 32px;
   font-weight: 600;
   line-height: normal;
   color: #fff;
@@ -27790,36 +27934,22 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   min-width: 0;
 }
 
-/* The row area is FIXED, not a cap: filtering down to three results must not
-   make the card jump shorter. Short lists leave the rest of the space empty;
-   long ones scroll inside it.
-   Its height is whatever puts the whole card at ~80% of the viewport. 313px is
-   the card's chrome — footer 57 + body padding 48 + heading 55 + gap 24 +
-   search block 80 + gap 20 + pagination 30 — so the table gets the rest. The
-   floor keeps four rows visible on a very short viewport, where `.prm`'s own
-   max-height takes over. */
-.stm-table-wrap > .table-xscroll {
-  /* `flex: none` is load-bearing: the shared rule sets `flex: 1`, whose
-     `flex-basis: 0` + grow beats a plain `height` in this column flex parent,
-     so the area would stretch to fit every row instead of holding. */
-  flex: none;
-  height: max(200px, calc(80vh - 313px));
+/* The row area FILLS the fixed-height card rather than sizing to its rows:
+   filtering down to three results must not make anything jump. Short lists
+   leave the rest empty; long ones scroll inside it. It's a flex fill, not a
+   computed height, so pickers with extra chrome (the Add Requirement / Deep
+   Link tab row, a longer description) need no per-modal arithmetic. The 200px
+   floor keeps four rows on a very short viewport — `.prm-body` scrolls then. */
+.prm--pick-full .stm,
+.prm--pick-full .stm-table-wrap {
+  flex: 1;
+  min-height: 0;
+}
+.prm--pick-full .stm-table-wrap > .table-xscroll {
+  flex: 1 1 200px;
+  min-height: 200px;
 }
 
-/* Add Requirement (the Certification wizard's Completion Criteria picker) puts
-   a 40px tab row above the search block, which the body's 20px rhythm turns
-   into 60px of extra chrome. The table gives that back — otherwise the card
-   grows past the 80vh the shared picker is sized to and its title scrolls off
-   the top of the screen. */
-.prm.srq .stm-table-wrap > .table-xscroll {
-  height: max(200px, calc(80vh - 383px));
-}
-
-/* Full-screen picker: same 323px of chrome, but taken off the whole viewport
-   (less the scrim's 24px top and bottom) rather than 80% of it. The `.srq`
-   variant is repeated because that card's own rule above carries one class
-   more and would otherwise win — a full-screen Add Requirement picker opens
-   single-kind (no tab row), so it is back to the plain 323px of chrome. */
 /* Find a Deep Link (Create Spotlight) — the resting chevron's column is 56px,
    not the picker Preview column's 104: the modal's link and industry columns
    need the room, and the "Select Deep Link" bar overlays the row end on hover
@@ -27833,11 +27963,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.prm--pick-full .stm-table-wrap > .table-xscroll,
-.prm--pick-full.srq .stm-table-wrap > .table-xscroll {
-  height: max(200px, calc(100vh - 48px - 323px));
 }
 
 /* The shared sticky header paints itself #0d0d0d so body rows can't bleed under
@@ -28023,6 +28148,11 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   border-width: 0.8px;
   border-color: #737373;
   border-radius: 3.2px;
+  /* An inline-flex box sits on the text baseline, and an EMPTY one takes its
+     baseline from its bottom edge while one holding a tick or dash takes it
+     from the glyph — so ticking moved the box (5.6px in the header, 1.4px in
+     a row). Middle alignment doesn't depend on the contents. */
+  vertical-align: middle;
 }
 
 .stm-table .checkbox.checked {
@@ -28224,32 +28354,26 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   color: var(--text-muted);
 }
 
-/* ═══════════ Review Runs — Figma 1398:2031 (row) / 1393:1794 (cards) ═══════════
+/* ═══════════ Review Runs — Figma 1392:1793 ═══════════
    The strip on both review pages — Hands-On Submissions and Exam Reviews
-   (2026-09-30 — it replaced the landing-morph run cards; both pages are one
-   screen now; markup in `ReviewRuns.tsx`). A 98px row between the page header
-   and the search bar: the Recent Review Runs and Suggested groups — a 12px
-   uppercase label 4px over a row of 320×80 cards (1392:1793 re-synced again
-   2026-09-30: 70 → 80px tall), 20px between cards and between groups. (The same-day re-sync dropped the row's two-line "REVIEW
-   RUNS" eyebrow and grew the cards from 268×62 / 12px insets to 320×70 /
-   20+16px insets; the row frame in the file still shows the old card size —
-   the card variants are the spec.) Up to 7 cards can show, and 7 × 320 never
-   fits a 1440–1920px page: a card NEVER shrinks below the node's 320px (user,
-   2026-09-30) — the row scrolls sideways instead (`.rr-groups`). */
+   (markup in `ReviewRuns.tsx`), borrowed by the Question Bank's sub-category
+   cards. Re-synced 2026-10-02: ONE row of 320×70 cards — recents first, then
+   suggestions — with no "RECENT REVIEW RUNS" / "SUGGESTED" headings (a recent
+   card says "· Recent" in its subtext), 20px apart. A card NEVER shrinks below
+   the node's 320px (user, 2026-09-30) — the row scrolls sideways instead. */
 .rr {
   display: flex;
   align-items: center;
-  gap: 20px;
   flex: none;
-  height: 98px;
-  margin-bottom: 20px;
+  height: 70px;
+  margin-bottom: 24px; /* the list-page rhythm: 24 between blocks */
 }
 /* The scroller. Its scrollbar is hidden — a classic (non-overlay) bar would
-   eat into the 98px row, which the label + cards fill exactly — so the strip
-   scrolls by trackpad, shift-wheel, a plain wheel (`ReviewRunsStrip` turns
-   vertical wheel into horizontal while there's room to go), or Tab. The 3px
-   pad / −3px margin keeps the cards' focus outline inside the clip box. */
-.rr-groups {
+   eat into the 70px row, which the cards fill exactly — so the strip scrolls
+   by trackpad, shift-wheel, a plain wheel (`ReviewRunsStrip` turns vertical
+   wheel into horizontal while there's room to go), or Tab. The 3px pad / −3px
+   margin keeps the cards' focus outline inside the clip box. */
+.rr-row {
   display: flex;
   align-items: center;
   gap: 20px;
@@ -28262,61 +28386,44 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   padding: 3px;
   margin: -3px;
 }
-.rr-groups::-webkit-scrollbar {
+.rr-row::-webkit-scrollbar {
   display: none;
 }
-.rr-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  flex: none;
-}
-.rr-label {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: normal;
-  color: #7a7a7a;
-  text-transform: uppercase;
-}
-.rr-cards {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-/* 1393:1794 "Card - Unselected" (320×80, re-synced 2026-09-30): a solid 1px
-   #404040 edge and 21/17px insets measured from the OUTER edge — Figma's
-   stroke sits inside the frame, so CSS padding is 20/16 + the 1px border —
-   leaving a 46px content box. Fill: the page's own #0d0d0d with a faint white
-   wash over its bottom half (the export drops it; sampled from the render,
-   ~1.5% at the floor). The design has no hover state; the accent edge is the
-   app's clickable-card convention (`.ctb-start-card`). Fixed at the node's
-   320px — never shrinks (the strip scrolls instead). */
+/* 1393:1794 — the Setup / Name Change banner's card (1424:1416) in grey: a
+   #404040 wash at 20% over 75% #0d0d0d, a 0.5px #404040 edge at 10%, r8, the
+   "Glass Effect" style (carried as a backdrop blur, as `.prc-inote` does — a
+   no-op over the opaque page). Insets 16/20 from the outer edge: the node has
+   "strokes included in layout" on, which makes it 71px — the banner has it
+   off and is 70, and the cards follow the banner. The 0.5px edge is an inset
+   shadow, not a border: Chrome rounds a 0.5px border up to 1px on a 1x
+   screen, which would eat the 38px content box. Hover deepens the wash, the
+   banner's own hover. */
 .rr-card {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: none;
+  box-sizing: border-box;
   width: 320px;
-  height: 80px;
+  height: 70px;
   padding: 16px 20px;
-  border: 1px solid #404040;
+  border: 0;
   border-radius: 8px;
-  background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0) 50%,
-      rgba(255, 255, 255, 0.016) 100%
-    ),
-    #0d0d0d;
+  box-shadow: inset 0 0 0 0.5px rgba(64, 64, 64, 0.1);
+  background:
+    linear-gradient(rgba(64, 64, 64, 0.2), rgba(64, 64, 64, 0.2)),
+    rgba(13, 13, 13, 0.75);
+  backdrop-filter: blur(100px);
   color: #fff;
   font-family: var(--font-sans);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.12s ease;
+  transition: background 0.12s ease;
 }
-.rr-card:hover {
-  border-color: rgba(240, 85, 35, 0.4);
+button.rr-card:hover {
+  background:
+    linear-gradient(rgba(64, 64, 64, 0.3), rgba(64, 64, 64, 0.3)),
+    rgba(13, 13, 13, 0.75);
 }
 .rr-card:focus-visible {
   outline: 1px solid #404040;
@@ -28324,17 +28431,16 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 /* Selected — only where a card is a TOGGLE (the Question Bank's sub-category
    cards; the review pages' cards open the console and never are). The file
-   has no selected variant (1392:1793 draws only "Card - Unselected"), so this
-   is the app's selected convention: the tree rows' rgba(240,85,35,.1) wash
-   inside their .75 orange edge. */
+   has no selected variant, so this is the same surface in the accent tone —
+   the banner's own orange wash and edge. */
 .rr-card.is-selected,
 .rr-card.is-selected:hover {
-  border-color: rgba(240, 85, 35, 0.75);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.1);
   background:
-    linear-gradient(rgba(240, 85, 35, 0.1), rgba(240, 85, 35, 0.1)),
-    #0d0d0d;
+    linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)),
+    rgba(13, 13, 13, 0.75);
 }
-/* The count fills the card's 46px content height in its own cell, closed by
+/* The count fills the card's 38px content height in its own cell, closed by
    a 0.5px hairline drawn as an inset shadow (Chrome rounds a 0.5px border up
    to a full pixel — the `.run-item` lesson). 32px SemiBold, centred, 12px to
    the rule. */
@@ -28368,7 +28474,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 .rr-title {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   color: #fff;
 }
 .rr-sub {
@@ -28463,16 +28569,20 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 
 /* The landing layer stretches (the shared .lm-land centres its children) so
-   the index can run the pane's width and the drop line can pin to its foot. */
+   the index can run the pane's width. */
 .tasks.lm.qb-lm .lm-land {
   align-items: stretch;
 }
 
 /* Edge to edge (2026-09-29): the Tasks layout — the bar runs the content
    pane's full width in BOTH states, straight under the header, rather than
-   the shared centred 70% hero card with its 56px lead. Only the bar's SIZE
-   still morphs (Large at the landing → Default at the table). */
+   the shared centred 70% hero card with its 56px lead. Since 2026-10-01 the
+   SIZE no longer morphs either: it is the standard 43px "Search Bar -
+   Default" (399:216) at the landing too, like every other list page. Pinning
+   `--lm` to 1 on the toolbar resolves every shared `.tasks.lm .toolbar` calc
+   (height, type, icon, ⌘K caps, shadow) to its table-state value. */
 .tasks.lm.qb-lm .toolbar {
+  --lm: 1;
   width: 100%;
   margin-top: 0;
 }
@@ -28492,11 +28602,12 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 .qbl-index-head {
   flex: none;
   width: 100%;
-  /* 32px of lead from the Recent Searches row above (24px until 2026-09-09),
-     collapsing on --lm with the rest of the landing. No side gutter: since
-     the 2026-09-29 edge-to-edge pass the rule runs the content pane's full
-     width, like the Tasks table under its bar. */
-  padding: calc(32px * (1 - var(--lm))) 0 0;
+  /* 24px of lead from the Recent Searches row above — the list-page rhythm's
+     pills → table gap (back from 32px on 2026-10-01) — collapsing on --lm
+     with the rest of the landing. No side gutter: since the 2026-09-29
+     edge-to-edge pass the rule runs the content pane's full width, like the
+     Tasks table under its bar. */
+  padding: calc(24px * (1 - var(--lm))) 0 0;
 }
 .qbl-index-head-row {
   display: flex;
@@ -28504,7 +28615,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   justify-content: space-between;
   gap: 16px;
   padding: 8px;
-  border-bottom: 1px solid #404040;
+  /* Half-strength since the 2026-10-01 re-sync of 867:2473 (was solid #404040),
+     the same rgba the letter rules below use. */
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 /* Title case, as the node draws it — the uppercase transform this label used
    to carry was dropped when 867:2473 went to "All Categories · 216"; the "All"
@@ -28556,10 +28669,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 .qbl-index-add.is-open {
   color: #fff;
 }
-/* Icon-only: the node's WHITE plus at its native 16px (1068:1246 — it was
-   24, then 20 on 2026-09-09, and settled at the Icon Library's own size on
-   2026-09-30). TreeAddIcon IS that 16px glyph (1.333 stroke, square caps), so
-   the box no longer scales it. White idle leaves no room for a colour hover,
+/* Icon-only: the node's WHITE plus at 20px (1068:1246 — 24, then 20 on
+   2026-09-09, 16 on 2026-09-30, back to 20 on 2026-10-01). The node's export
+   is TreeAddIcon exactly ×1.25 (1.667 stroke, square caps), so scaling the
+   shared 16px glyph lands on it. White idle leaves no room for a colour hover,
    so the hover is the index rows' soft fill instead. */
 .qbl-index-add-btn {
   display: flex;
@@ -28573,8 +28686,8 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   transition: background 0.1s ease;
 }
 .qbl-index-add-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 .qbl-index-add-btn:hover,
 .qbl-index-add-btn.is-open {
@@ -28588,28 +28701,23 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   min-height: 0;
   overflow-y: auto;
   width: 100%;
-  /* Four REAL columns, filled by `balanceIndex` — not `column-count`, which
+  /* N REAL columns, filled by `balanceIndex` — not `column-count`, which
      balances by measured height and so both leaves trailing columns empty and
-     breaks a group across a boundary once the list is long. */
+     breaks a group across a boundary once the list is long. N, the column
+     width and the gap all come from `indexLayout` (2–5 columns, 260–320px
+     wide, a 32–48px gap that scales with them; 2026-10-01), set inline. The
+     minmax(0, …) lets a sub-pixel rounding overshoot shrink instead of
+     scrolling sideways; past 5 × 320 the slack sits on the right. */
   display: grid;
-  /* Like the tables (2026-09-29): each column grows with the page up to
-     340px and then holds; past that the slack goes into the gaps between
-     columns (`space-between` over the 36px minimum), not into the columns. */
-  grid-template-columns: repeat(4, minmax(0, 340px));
-  justify-content: space-between;
+  grid-template-columns: repeat(var(--qbl-cols, 4), minmax(0, var(--qbl-col-w, 1fr)));
+  justify-content: start;
   align-items: start;
-  /* The same soft bottom edge `.lm-list` ends on — the shared `--lm-fade-*`
-     ramp, not a fork of it: the two boxes are nearly the same height (index
-     548px vs list 499px at 1440×900, both `flex: 1` under a hero bar), so one
-     ramp reads the same on both. Over this scroller it doubles as the "there
-     is more below" cue a 67-category index needs. */
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    #000 var(--lm-fade-start),
-    transparent var(--lm-fade-end)
-  );
-  mask-image: linear-gradient(180deg, #000 var(--lm-fade-start), transparent var(--lm-fade-end));
-  gap: 0 36px;
+  /* A classic (non-overlay) scrollbar must not take width, or the column
+     count could flip back and forth at a threshold. */
+  scrollbar-gutter: stable;
+  /* No bottom fade (removed 2026-10-01 with the Bulk Upload footer): the
+     index scrolls under a hard edge, its rows at full strength to the end. */
+  gap: 0 var(--qbl-gap, 32px);
   /* A 12px nesting inset, so the letter groups sit INSIDE the "All
      Categories" rule rather than flush under it — the rule itself runs edge
      to edge (the 32px measure gutter went with the 1180px cap, 2026-09-29). */
@@ -28623,17 +28731,16 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   margin-bottom: 24px;
 }
 /* Letter group — Figma 867:2472 (re-synced 2026-09-30): the "E · F · G" head
-   (SemiBold 12 #7a7a7a — it was bumped to 16 #a8a8a8 on 2026-09-09 and the
-   node took it back down, one step quieter than the counts, so the 20px
+   (Medium 12 #7a7a7a — SemiBold until 2026-10-01; it was bumped to 16 #a8a8a8
+   on 2026-09-09 and the node took it back down, one step quieter than the
+   counts, so the 20px
    "Categories" head is the only heading-weight type on the landing) on a
    4px/8px row over a 0.5px rule, then 4px down to its rows. The rule is
-   rgba(64,64,64,0.5), NOT solid #404040 — the node's line UI went
-   half-strength so the letter heads sit under the head's own 1px #404040 rule
-   rather than competing with it. */
+   rgba(64,64,64,0.5), the head's own 1px rule's colour at half its weight. */
 .qbl-index-letter {
   font-family: var(--font-sans);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: #7a7a7a;
   /* The node's leading is `normal` (a 22.5px head: 4 + 14 + 4 + the 0.5px
      rule). A div inherits the page's 1.45 instead, which at 12px is 17.4 and
@@ -28680,31 +28787,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   color: #a8a8a8;
 }
 
-/* "Bulk upload: drop a CSV anywhere on this page, or use Import CSV" — pinned
-   under the index; lights up while a file is dragged over the page. Same atom
-   as the Tasks landing's closing bar (Figma 716:1648 "Atomic Component -
-   Minimal State - Keep Scrolling", `.lm-hint`): a 40px row, its label centred
-   in 12px Medium uppercase #a8a8a8. No trailing icon — this one states a fact,
-   it is not the jump `.lm-hint` offers — and it stays a div, not a button. */
-.qbl-drop-hint {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  padding: 0 12px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: #a8a8a8;
-  white-space: nowrap;
-  opacity: calc(1 - 2.4 * var(--lm));
-}
-.qb-page.is-drop-active .qbl-drop-hint {
-  color: var(--accent);
-}
-
 /* The New Category popover's `.qb-catpop*` surface was deleted 2026-09-10 —
    Create Category is the shared `PrmModal` (Figma 483:588) now. */
 
@@ -28713,7 +28795,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    `.tree`) was REMOVED 2026-09-30 — the user: "Remove the left panel. Use cards
    to display sub-categories, like the ones on Hands-On". The table now runs the
    page's full width, and the open category's sub-categories are the shared
-   `.rr` strip between the header and the search bar: the same 98px row the
+   `.rr` strip between the header and the search bar: the same 70px row the
    review pages centre their unlabelled cards in, so it reads exactly like
    Hands-On with no Recent group. Its category's own menu moved to the header
    (`.cta-quiet--icon`), each sub-category's to a kebab on its card.
@@ -28721,8 +28803,8 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    HEIGHT rides --lm, VISIBILITY rides --lmt — so the search bar under it
    slides down in step with the morph rather than jumping at the end. */
 .tasks.lm.qb-lm:not([data-lm="table"]) .qb-subcards {
-  height: calc(98px * var(--lm));
-  margin-bottom: calc(20px * var(--lm));
+  height: calc(70px * var(--lm));
+  margin-bottom: calc(24px * var(--lm));
   opacity: var(--lmt);
   overflow: hidden;
   pointer-events: none;
@@ -28733,7 +28815,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 
 /* A sub-category card never has the review cards' second line (the "kind"
    would read "Sub-Category" on every card), so its name may take BOTH lines of
-   the card's 46px content box before it truncates — 2 × 19px, the same
+   the card's 38px content box before it truncates — 2 × 19px, the same
    two-line clamp the tree rows had. */
 .qb-subcards .rr-title {
   display: -webkit-box;
@@ -28813,7 +28895,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   overflow: hidden;
   pointer-events: none;
   max-height: calc(96px * var(--lm));
-  margin-bottom: calc(14px * var(--lm));
+  margin-bottom: calc(24px * var(--lm));
 }
 
 
@@ -29616,4 +29698,250 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   font-size: 16px;
   line-height: 19px;
   color: #a8a8a8;
+}
+
+/* ===== Certification post-creation setup (Claude Design "Certification
+   Post-Creation Setup", 2026-10-01) =====
+   The Certifications landing's setup banner, its title-note twin, the
+   "Setup n/4" row pill and the Setup card at the top of the row panel's
+   Details. Everything here is a modifier on an existing piece: the Manage
+   Users banner + note morph (`.lm-banner`, `.tasks-note`, the
+   `.tasks.clh.clh--banner` rules), the yellow name flag, a ConfirmCard. */
+
+/* One line, ellipsis — the banner's title and its names line. */
+.lm-banner .cs-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A bare text action: "Mark as Done" / "Dismiss" in the Setup card's head.
+   14px Medium muted, white on hover. */
+.cs-text-btn {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #a8a8a8;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cs-text-btn:hover {
+  color: #fff;
+}
+
+/* Figma 1424:1416 "Certification Setup Pending": the Manage Users card at
+   20px a side (16 top and bottom), with a 16px ✕ 12px after Continue Setup.
+   The two buttons sit straight in the card's 40px-gap row (the morph moves
+   the card's direct children), so the ✕ takes back 28px of that gap. */
+.cs-banner {
+  padding: 16px 20px;
+}
+.cs-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: -28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #7a7a7a;
+  cursor: pointer;
+}
+.cs-close:hover {
+  color: #fff;
+}
+/* In the morph the card trades its 0.5px border for padding, so the content
+   sits 20.5px in across (16.5 down), and the twins' offsets move with it:
+   the count and text 8px further left than Manage Users', Continue Setup
+   28.5 + 8px further right of the card's edge (the ✕ and its gap). */
+.tasks.clh.clh--banner .clh-banner > .cs-banner {
+  padding: 16.5px 20.5px;
+}
+.tasks.clh.clh--banner .cs-banner .lm-banner-count {
+  --nc-dx: -20.5px;
+}
+.tasks.clh.clh--banner .cs-banner .note-card-text {
+  --nc-dx: calc(var(--clh-nc-note-count-w, 20.4px) - var(--clh-nc-card-count-w, 45.6px) - 32.5px);
+}
+.tasks.clh.clh--banner .cs-banner > .cta-quiet {
+  --nc-dx: calc(var(--clh-nc-note-w, 262px) - var(--clh-nc-card-w, 1276px) + 48.5px);
+}
+/* The ✕ only fades as the card condenses — Continue Setup is the one that
+   closes onto the note's chevron, as Manage Users' lone CTA does. */
+.tasks.clh.clh--banner .lm-banner > .lm-banner-aside {
+  pointer-events: auto;
+}
+@supports (animation-timeline: --clh) {
+  .tasks.clh.clh--banner .lm-banner > .lm-banner-aside {
+    animation: clh-fade-out linear both;
+    animation-timeline: --clh;
+    animation-range: 0 calc(var(--clh-d) * 0.35);
+  }
+}
+@supports not (animation-timeline: --clh) {
+  .tasks.clh.clh--banner .lm-banner > .lm-banner-aside {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.35, 1);
+  }
+}
+
+/* The done banner: the green tone, with no orange on hover (the card is not a
+   button any more — only Dismiss acts). The morph paints the card on
+   `::before`, so the tone is restated there. */
+.lm-banner--ok {
+  cursor: default;
+}
+.lm-banner--ok:hover {
+  background:
+    linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+.tasks.clh.clh--banner .clh-banner > .lm-banner--ok::before,
+.tasks.clh.clh--banner .clh-banner > .lm-banner--ok:hover::before {
+  border-color: rgba(41, 182, 115, 0.1);
+  background:
+    linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)),
+    rgba(13, 13, 13, 0.75);
+}
+/* In the count's spot: a 32px disc holding the 14px check. It closes onto the
+   note's 16px check exactly as a count closes onto its twin (32 → 16). */
+.lm-banner-count--ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-right: 0;
+  border-radius: 50%;
+  background: rgba(41, 182, 115, 0.18);
+  color: #fff;
+}
+.lm-banner-count--ok svg {
+  width: 14px;
+  height: 14px;
+}
+.tasks.clh.clh--banner .lm-banner-count--ok {
+  padding-right: 0;
+}
+.tasks.clh.clh--banner .lm-banner-count--ok::after {
+  display: none;
+}
+.tasks-note-count--ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+}
+
+/* ── The Setup card (ConfirmCard, first in the panel's Details) ── */
+.cs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Four flat segments, one per step. */
+.cs-progress {
+  display: flex;
+  gap: 4px;
+}
+.cs-seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(122, 122, 122, 0.3);
+}
+.cs-seg--done {
+  background: #29b673;
+}
+.cs-help {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.cs-rows {
+  display: flex;
+  flex-direction: column;
+}
+.cs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
+}
+.cs-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+}
+.cs-row-icon--done {
+  color: #29b673;
+}
+.cs-row-icon--done svg {
+  width: 14px;
+  height: 14px;
+}
+.cs-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cs-row-title {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+.cs-row-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: normal;
+  color: #a8a8a8;
+}
+
+/* SelectRequirementModal's locked-row flag ("Mapped to <form>") — a form name
+   can run long, so the flag caps and ellipsizes its own text instead of
+   squeezing the row's name to nothing. A locked row isn't clickable. */
+.stm-table tbody td.col-name .pr-name-flag.stm-lock-flag {
+  max-width: 220px;
+  overflow: hidden !important;
+}
+/* Here the NAME wins the squeeze, not the flag (the Hidden-Task cell does the
+   opposite): the name keeps its width up to all-but-a-stub, and the flag's
+   text is what ellipsizes. The tip on the row carries the full sentence. */
+.stm-table tbody tr.is-locked td.col-name > .tsk-name {
+  flex: none;
+  max-width: calc(100% - 64px);
+}
+.stm-table tbody tr.is-locked td.col-name > .stm-lock-flag {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.stm-lock-flag > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stm-table tbody tr.is-locked {
+  cursor: default;
 }

@@ -121,7 +121,7 @@ export const FILTER_TIPS = {
 
   /** Feedback Forms and one form's responses. */
   feedbackForms: {
-    status: "Show only Active or only Disabled forms.",
+    status: "Show only Active or only Inactive forms.",
     dateRange: "Count each form’s responses over the chosen dates only.",
     responsesDateRange: "Show only responses submitted inside the chosen dates.",
     createdBy: "Show only forms the chosen creators made.",
@@ -160,6 +160,14 @@ export const FILTER_TIPS = {
     visibility: "Narrow the list to Tasks learners can see, or to hidden ones.",
     certifications: "Narrow the list to Tasks used in the chosen Certifications.",
     industry: "Narrow the list to Tasks whose Certifications sit in the chosen Industries.",
+  },
+
+  /** Select Skills (the Mastery Skill wizard's Linked Skills picker). */
+  skillPicker: {
+    status: "Narrow the list to Active or Archived Skills.",
+    task: "Narrow the list to Skills awarded by the chosen Tasks.",
+    certifications: "Narrow the list to Skills whose Tasks are used in the chosen Certifications.",
+    industry: "Narrow the list to Skills whose Certifications sit in the chosen Industries.",
   },
 
   /** Select Certifications. */

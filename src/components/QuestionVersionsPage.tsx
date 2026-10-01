@@ -12,6 +12,7 @@ import {
   PageNextIcon,
   CrumbChevronIcon,
   } from "./icons";
+import { TableCols } from "./TableCols";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Version History — a full page, opened from the Question Bank row menu.
@@ -367,13 +368,7 @@ function VersionActionsMenu({
 
 function ColGroup() {
   return (
-    <colgroup>
-      <col style={{ width: 120 }} />
-      {COLS.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[120, ...COLS.map((c) => c.width)]} trail={[40]} />
   );
 }
 

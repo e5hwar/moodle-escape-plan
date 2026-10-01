@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Submission, WebcamFrame } from "../data/proctoring";
 import { ChevronLeftIcon, SmallXIcon } from "./icons";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 
 const ChevronRightIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -721,7 +723,8 @@ function NameMismatchBanner({
 
         {editing ? (
           <div className="pr-mismatch-edit">
-            <input
+            <LimitedInput
+              max={NAME_MAX}
               className="pr-mismatch-input"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -733,7 +736,7 @@ function NameMismatchBanner({
               </button>
               <button
                 className="pr-mismatch-btn pr-mismatch-btn--primary"
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || isOver(NAME_MAX, draft)}
                 onClick={() => {
                   onUpdate?.(draft.trim());
                   setEditing(false);

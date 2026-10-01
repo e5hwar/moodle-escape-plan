@@ -20,8 +20,18 @@ function adopt(el: HTMLElement) {
   }
 }
 
+// `data-tip-overflow` makes a tip conditional: it shows only while the anchor
+// (or text inside it) is ellipsized — a name that fits says everything the tip
+// would. Measured on hover, so it follows the column width as the page resizes.
+function truncated(el: HTMLElement): boolean {
+  return [el, ...el.querySelectorAll<HTMLElement>("*")].some(
+    (n) => n.scrollWidth > n.clientWidth + 1,
+  );
+}
+
 // Nearest ancestor (self included) that actually has tooltip text. Elements
-// carrying an empty tip are skipped rather than swallowing an outer one.
+// carrying an empty tip are skipped rather than swallowing an outer one, and so
+// is an overflow-only tip whose text currently fits.
 function resolve(target: EventTarget | null): HTMLElement | null {
   // A trigger that already opens a hover card doesn't also get a tooltip: the
   // card says more than the tip could, and the tip lands on top of it. Titles
@@ -37,7 +47,9 @@ function resolve(target: EventTarget | null): HTMLElement | null {
   let el = (target as HTMLElement)?.closest?.("[data-tip],[title]") as HTMLElement | null;
   while (el) {
     adopt(el);
-    if (el.getAttribute("data-tip")) return el;
+    if (el.getAttribute("data-tip") && (!el.hasAttribute("data-tip-overflow") || truncated(el))) {
+      return el;
+    }
     el = (el.parentElement?.closest("[data-tip],[title]") as HTMLElement | null) ?? null;
   }
   return null;

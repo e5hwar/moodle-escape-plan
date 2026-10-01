@@ -7,8 +7,12 @@ import { users } from "../data/users";
 import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { PrmModal } from "./PrmModal";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 25;
 
@@ -150,7 +154,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
 
           <div className="tasks-row">
             <div className="tasks-content">
-              <div className="search-wrap">
+              <div className="search-wrap ncr-search">
                 <span className="search-icon">
                   <SearchIcon />
                 </span>
@@ -169,14 +173,10 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
               >
               <div className="tasks-scroll">
                 <table className="table sch-table sch-table--tight ncr-table">
-                  <colgroup>
-                    <col style={{ width: COL_WIDTHS.name }} />
-                    <col style={{ width: COL_WIDTHS.name }} />
-                    <col style={{ width: COL_WIDTHS.email }} />
-                    <col style={{ width: COL_WIDTHS.phone }} />
-                    <col style={{ width: COL_WIDTHS.date }} />
-                    <col style={{ width: ACTIONS_WIDTH }} />
-                  </colgroup>
+                  <TableCols
+                    data={[COL_WIDTHS.name, COL_WIDTHS.name, COL_WIDTHS.email, COL_WIDTHS.phone, COL_WIDTHS.date]}
+                    trail={[ACTIONS_WIDTH]}
+                  />
                   <thead>
                     <tr>
                       <SortableHeader col="currentName" label="Current Name" sort={sort} toggle={toggleSort} />
@@ -314,7 +314,7 @@ function ReviewModal({
 }) {
   const [mode, setMode] = useState<ReviewMode>("main");
   const [requestedName, setRequestedName] = useState(request.requestedName);
-  const valid = requestedName.trim().length > 1;
+  const valid = requestedName.trim().length > 1 && !isOver(NAME_MAX, requestedName);
   // Says so once the field has been clicked into and out of empty (fieldFlags.tsx).
   const { touched, touch, reset: resetTouched } = useTouchedKeys();
   const nameMissing = requestedName.trim().length === 0 && touched.has("name");
@@ -421,8 +421,10 @@ function ReviewModal({
               <label className="form-label">
                 Requested name<span className="req">*</span>
                 {nameMissing && <span className="form-label-error">Requested name cannot be left empty</span>}
+                <LimitError max={NAME_MAX} values={[requestedName]} />
               </label>
-              <input
+              <LimitedInput
+                max={NAME_MAX}
                 autoFocus
                 className={`form-input${nameMissing ? " has-error" : ""}`}
                 aria-invalid={nameMissing || undefined}

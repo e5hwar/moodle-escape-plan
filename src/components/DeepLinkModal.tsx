@@ -56,6 +56,7 @@ const DEFAULT_CERT_FILTERS: CertFilterState = {
   creators: ["SkillCat"],
   visibilities: [],
   tags: [],
+  setup: [],
 };
 
 export function DeepLinkModal({
@@ -138,8 +139,7 @@ export function DeepLinkModal({
     <PrmModal
       title="Find a Deep Link"
       description="Pick where the Spotlight's button takes the user in the app."
-      pick
-      pickWide
+      pickFull
       hideFooter
       className="srq dlm"
       onCancel={onCancel}

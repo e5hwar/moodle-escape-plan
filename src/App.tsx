@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
 import { CopyCells } from "./components/CopyCells";
+import { PageEnd } from "./components/PageEnd";
 import { TasksPage } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
@@ -15,8 +16,10 @@ import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard, ArchiveCertificationPage } from "./components/NewCertificationWizard";
 import { SkillsPage } from "./components/SkillsPage";
 import { NewAwardWizard } from "./components/NewAwardWizard";
+import { nextFormId } from "./data/feedbackForms";
+import type { SetupBannerState, SetupSteps } from "./components/CertificationsPage";
 import { AwardRecipientsPage } from "./components/AwardRecipientsPage";
-import { type Certification } from "./data/certifications";
+import { certifications as seedCerts, type Certification } from "./data/certifications";
 import { type CertImportReport } from "./data/certImport";
 import {
   awards as seedAwards,
@@ -25,7 +28,13 @@ import {
   type Award,
 } from "./data/awards";
 import { ContentLinksPage } from "./components/ContentLinksPage";
-import { nodes as contentNodes, type ContentNode, type Level } from "./data/contentLinks";
+import {
+  nodes as contentNodes,
+  links as seedLinks,
+  type ContentNode,
+  type Level,
+  type Link,
+} from "./data/contentLinks";
 import { QuestionBankPage } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
 import { questions as seedQuestions, versionText, type Question, type QuestionType } from "./data/questionBank";
@@ -61,6 +70,7 @@ import {
   type FeedbackForm,
 } from "./data/feedbackForms";
 import { buildRows, exportFormCsv } from "./components/FeedbackFormResponses";
+import { LeaveGuardHost, confirmLeave, hasUnsavedChanges } from "./components/LeaveGuard";
 import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
 
 // Map a certification onto a content-graph focus node. If the certification
@@ -85,6 +95,12 @@ function certToFocusNode(cert: Certification): ContentNode {
     tasksCount: cert.tasks,
     industry: cert.industry,
   };
+}
+
+/** The next "C-nnnn" after the highest one in the list. */
+function nextCertId(certs: Certification[]): string {
+  const max = certs.reduce((m, c) => Math.max(m, Number(c.id.replace(/\D/g, "")) || 0), 0);
+  return `C-${String(max + 1).padStart(4, "0")}`;
 }
 
 type View =
@@ -130,7 +146,10 @@ type View =
   | { name: "manage-ids" }
   | { name: "scholarship" }
   | { name: "feedback" }
-  | { name: "feedback-detail"; formId: string; creating?: boolean }
+  /* `forCertId`: the form was started from a Certification's Setup card
+     ("Add Feedback Form"), with that Certification already its trigger — so
+     Back returns to the Certifications table, not the Feedback Forms list. */
+  | { name: "feedback-detail"; formId: string; creating?: boolean; forCertId?: string }
   | { name: "industries" }
   | { name: "companies"; query?: string }
   | { name: "new-company" }
@@ -341,11 +360,13 @@ function StandaloneShell({
     <div className="app">
       <HoverTooltip />
       <CopyCells />
+      <PageEnd />
+      <LeaveGuardHost />
       <Sidebar
         active={active}
         onNavigate={(key) => {
           const view = NAV_KEY_TO_VIEW[key];
-          if (view) window.location.href = urlForView(view);
+          if (view) confirmLeave(() => (window.location.href = urlForView(view)));
         }}
       />
       {children}
@@ -564,6 +585,23 @@ function AdminApp() {
     () => deepLinkView(new URLSearchParams(window.location.search)) ?? viewFromUrl(),
   );
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
+  /* The Certifications list. It lived on the Certifications page until the
+     post-creation setup landed (2026-10-01): the wizard's Create now appends
+     to it, and the Content Links / Award / Feedback Form flows each read it to
+     say which Certifications still have setup left. */
+  const [certs, setCerts] = useState<Certification[]>(seedCerts);
+  /* The Content Links graph as last saved — the Content Links page edits a
+     working copy and hands it back on Save, so a Certification's "Content
+     Links" setup step can flip to done. */
+  const [contentLinks, setContentLinks] = useState<Link[]>(seedLinks);
+  // Set while the Content Links page is open from a Certification, once a save
+  // there gave that Certification its first link(s) — the return toast's cue.
+  const linksAddedRef = useRef(false);
+  /* The setup banner's session state: "Set up later" hides it until the next
+     create; `tracked` is every Certification seen pending this session, so
+     the banner can say they are all done. Held here because the page unmounts
+     on every trip through a flow. */
+  const [setupBanner, setSetupBanner] = useState<SetupBannerState>({ dismissed: false, tracked: [] });
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
   /* Awards used to live on the Awards page's own state. That page is gone, so
@@ -602,6 +640,13 @@ function AdminApp() {
     );
   }, [forms]);
 
+  /* The address the open page sits at — wizards don't own a URL of their own,
+     so this, not urlForView, is what a guarded Back has to put back. */
+  const urlRef = useRef(window.location.pathname + window.location.search);
+  useEffect(() => {
+    urlRef.current = window.location.pathname + window.location.search;
+  });
+
   // Keep the address bar in sync with the initial view, and follow the
   // browser's back/forward buttons by re-reading the URL into view state.
   useEffect(() => {
@@ -610,6 +655,18 @@ function AdminApp() {
       window.history.replaceState({}, "", canonical);
     }
     function onPopState() {
+      /* Back/Forward off a page with unsaved changes: the URL has already
+         moved, so put the page's own URL back while the discard confirm asks,
+         and only follow the button once it's confirmed. */
+      if (hasUnsavedChanges()) {
+        const target = window.location.pathname + window.location.search;
+        window.history.pushState({}, "", urlRef.current);
+        confirmLeave(() => {
+          window.history.pushState({}, "", target);
+          setView(viewFromUrl());
+        });
+        return;
+      }
       setView(viewFromUrl());
     }
     window.addEventListener("popstate", onPopState);
@@ -737,6 +794,82 @@ function AdminApp() {
     });
   }
 
+  /* The four post-creation setup steps (Claude Design "Certification
+     Post-Creation Setup"), each derived from the data that flow writes rather
+     than tracked on its own: an Industry path on the record, an edge touching
+     the Certification's node in the Content Links graph, an Award for it, a
+     Feedback Form triggered by it. The Certifications page turns this into
+     the banner count, the row pills and the Setup card. */
+  function setupStepsFor(cert: Certification): SetupSteps {
+    const nodeId = certToFocusNode(cert).id;
+    const byKind = { prerequisite: 0, recommended: 0, related: 0 };
+    for (const l of contentLinks) {
+      if (l.from === nodeId || l.to === nodeId) byKind[l.kind] += 1;
+    }
+    const linkDetail = (Object.keys(byKind) as (keyof typeof byKind)[])
+      .filter((k) => byKind[k] > 0)
+      .map((k) => `${byKind[k]} ${k}`)
+      .join(" · ");
+    const award = awards.find((a) => a.certificationId === cert.id);
+    const form = forms.find(
+      (f) =>
+        f.status !== "deleted" &&
+        f.triggers.some(
+          (t) => t.kind === "certification" && (t.refId === cert.id || t.refName === cert.name),
+        ),
+    );
+    return {
+      industries: { done: cert.industry.trim().length > 0, detail: cert.industry },
+      links: { done: linkDetail.length > 0, detail: linkDetail },
+      award: award
+        ? {
+            done: true,
+            detail: `${award.certificateTemplateId ? "Card + Certificate" : "Card"} · ${award.meritTier}`,
+          }
+        : { done: false },
+      feedback: form
+        ? {
+            done: true,
+            detail: `${form.name.trim() || "Untitled form"} · ${form.questions.length} ${
+              form.questions.length === 1 ? "question" : "questions"
+            }`,
+          }
+        : { done: false },
+    };
+  }
+
+  function linkCount(nodeId: string, links: Link[]): number {
+    return links.filter((l) => l.from === nodeId || l.to === nodeId).length;
+  }
+
+  /* "Add Feedback Form" from a Certification's Setup card: a new form that
+     already fires on that Certification, opened in the one-page editor. The
+     editor's own gate still wants a name before Done. */
+  function addFeedbackFormFor(cert: Certification) {
+    const today = new Date().toISOString().slice(0, 10);
+    const form: FeedbackForm = {
+      id: nextFormId(forms),
+      name: "",
+      status: "active",
+      questions: [],
+      triggers: [
+        {
+          id: `tr-${Math.random().toString(36).slice(2, 8)}`,
+          kind: "certification",
+          refId: cert.id,
+          refName: cert.name,
+          mappedAt: today,
+        },
+      ],
+      createdBy: "You",
+      createdAt: today,
+      updatedAt: today,
+      responseCount: 0,
+    };
+    upsertForm(form);
+    setView({ name: "feedback-detail", formId: form.id, creating: true, forCertId: cert.id });
+  }
+
   // "New questions can be created in the Question Bank as part of this flow,
   // then linked" — the wizard hands back the question; we add it to the bank
   // and link it to the form that launched the flow.
@@ -769,7 +902,11 @@ function AdminApp() {
     <div className="app">
       <HoverTooltip />
       <CopyCells />
-      <Sidebar active={sidebarActive} onNavigate={navigate} />
+      <PageEnd />
+      <LeaveGuardHost />
+      {/* The sidebar is a way out of every wizard — it asks first when the open
+          page has unsaved changes, like the page's own Cancel does. */}
+      <Sidebar active={sidebarActive} onNavigate={(key) => confirmLeave(() => navigate(key))} />
       {view.name === "tasks" ? (
         <div className="main">
           <div className="workspace">
@@ -813,6 +950,14 @@ function AdminApp() {
         <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks" })} />
       ) : view.name === "certs" ? (
         <CertificationsPage
+          certs={certs}
+          setCerts={setCerts}
+          setupStepsFor={setupStepsFor}
+          setupBanner={setupBanner}
+          setSetupBanner={setSetupBanner}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
+          onAddFeedbackForm={addFeedbackFormFor}
           onNewCert={() => setView({ name: "new-cert" })}
           onImportCert={(imported) => setView({ name: "new-cert", imported })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
@@ -834,7 +979,28 @@ function AdminApp() {
       ) : view.name === "content-links" ? (
         <ContentLinksPage
           initialFocus={view.cert ? certToFocusNode(view.cert) : undefined}
-          onBack={view.cert ? () => setView({ name: "certs" }) : undefined}
+          links={contentLinks}
+          onSaveLinks={(next) => {
+            // The return toast says "Content Links Added" only when this
+            // Certification went from no links to some — a re-ordered strength
+            // is a save, not a setup step done.
+            if (view.cert) {
+              const nodeId = certToFocusNode(view.cert).id;
+              if (linkCount(nodeId, contentLinks) === 0 && linkCount(nodeId, next) > 0) {
+                linksAddedRef.current = true;
+              }
+            }
+            setContentLinks(next);
+          }}
+          onBack={
+            view.cert
+              ? () => {
+                  if (linksAddedRef.current) setFlash("Content Links Added");
+                  linksAddedRef.current = false;
+                  setView({ name: "certs" });
+                }
+              : undefined
+          }
           backLabel="Certifications"
         />
       ) : view.name === "skills" ? (
@@ -850,15 +1016,18 @@ function AdminApp() {
               allAwards={awards}
               templates={designTemplates}
               onClose={() => navigate("certs")}
-              onSave={(a) =>
+              onSave={(a) => {
+                // A first Award is a setup step done — the Certifications
+                // table says so on return.
+                if (!existing) setFlash("Award Added");
                 setAwards((prev) => {
                   const i = prev.findIndex((x) => x.id === a.id);
                   if (i < 0) return [a, ...prev];
                   const next = [...prev];
                   next[i] = a;
                   return next;
-                })
-              }
+                });
+              }}
               onDelete={
                 existing
                   ? () => {
@@ -1110,7 +1279,19 @@ function AdminApp() {
           creating={view.creating}
           allForms={forms}
           bank={bank}
-          onBack={() => setView({ name: "feedback" })}
+          onBack={() => {
+            // Started from a Certification's Setup card: Back is the table it
+            // came from, with the toast when the form really exists (named,
+            // triggered — the editor discards an unfinished one before this).
+            if (view.forCertId) {
+              if (activeForm.name.trim() && activeForm.triggers.length > 0) {
+                setFlash("Feedback Form Added");
+              }
+              navigate("certs");
+              return;
+            }
+            setView({ name: "feedback" });
+          }}
           onBackToCerts={() => navigate("certs")}
           /* A never-finished new form is purged outright, not tombstoned: it
              has no responses to keep resolving. */
@@ -1157,6 +1338,12 @@ function AdminApp() {
       ) : (
         <NewCertificationWizard
           imported={view.name === "new-cert" ? view.imported : undefined}
+          onCreate={(record) => {
+            setCerts((prev) => [{ id: nextCertId(prev), ...record }, ...prev]);
+            setFlash("Certification Created");
+            // A fresh Certification re-opens a banner put off with "Set up later".
+            setSetupBanner((prev) => ({ ...prev, dismissed: false }));
+          }}
           onClose={() => setView({ name: "certs" })}
         />
       )}

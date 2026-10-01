@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { UploadIcon } from "./icons";
 import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import type { AwardDesignTemplate } from "../data/awards";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 
 type Props = {
   editingTemplate?: AwardDesignTemplate;
@@ -45,6 +49,13 @@ export function NewDesignTemplateWizard(props: Props) {
   const [data, setData] = useState<Data>(() => initialData(props));
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
 
+  /* The template as it opened (an edit prefills it, so untouched is clean).
+     Changed, Cancel stops to ask first (the shared LeaveGuard); Save leaves
+     directly. */
+  const pristine = useRef(data);
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(dirty, { noun: "Design Template", creating: !isEditing });
+
   const STEPS = [
     {
       label: "Details",
@@ -60,6 +71,10 @@ export function NewDesignTemplateWizard(props: Props) {
 
   const nameValid = data.name.trim().length > 0;
   const bgValid = data.background.trim().length > 0;
+  /* Soft limit (data/fieldLimits.ts): typing runs on, but a name past it holds
+     the step's buttons the way an empty one does. */
+  const nameOver = isOver(NAME_MAX, data.name);
+  const detailsReady = nameValid && !nameOver && bgValid;
   const nameMissing = !nameValid && (maxVisited > 0 || touched.has("name"));
   const bgMissing = !bgValid && (maxVisited > 0 || touched.has("bg"));
   // Wheel-past-the-edge step navigation, shared with every other wizard.
@@ -73,7 +88,7 @@ export function NewDesignTemplateWizard(props: Props) {
   const stepStatuses = useWizardStepStatuses({
     step,
     count: STEPS.length,
-    incomplete: (i) => i === 0 && !(nameValid && bgValid),
+    incomplete: (i) => i === 0 && !detailsReady,
   });
 
   function handleSave() {
@@ -146,7 +161,7 @@ export function NewDesignTemplateWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
@@ -156,12 +171,18 @@ export function NewDesignTemplateWizard(props: Props) {
             </button>
           )}
           {step === 0 ? (
-            <button className="btn-publish wizard-gate-btn" disabled={!nameValid || !bgValid} onClick={() => gate.goStep(1)}>
+            <button className="btn-publish wizard-gate-btn" disabled={!detailsReady} onClick={() => gate.goStep(1)}>
               <span className="wizard-gate-fill" ref={gate.nextFillRef} />
               <span className="wizard-gate-btn-inner">Next: {STEPS[1].label}</span>
             </button>
           ) : (
-            <button className="btn-publish" disabled={!nameValid || !bgValid} onClick={handleSave}>
+            /* Editing with nothing changed: nothing to save, so it stays off. */
+            <button
+              className="btn-publish"
+              disabled={!detailsReady || (isEditing && !dirty)}
+              data-tip={detailsReady && isEditing && !dirty ? "No changes to save" : undefined}
+              onClick={handleSave}
+            >
               {isEditing ? "Save Changes" : "Create Template"}
             </button>
           )}
@@ -192,8 +213,11 @@ function DetailsStep({
         <label className="form-label">
           Template name<span className="req">*</span>
           {nameMissing && <span className="form-label-error">Template name cannot be left empty</span>}
+          <LimitError max={NAME_MAX} values={[data.name]} warn={false} />
         </label>
-        <input
+        <LimitedInput
+          max={NAME_MAX}
+          warn={false}
           className={`form-input${nameMissing ? " has-error" : ""}`}
           aria-invalid={nameMissing || undefined}
           placeholder="e.g. EPA Card — 2026 Brand"

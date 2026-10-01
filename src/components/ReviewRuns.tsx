@@ -1,13 +1,15 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { RowChevronIcon } from "./icons";
 
-/* The Review Runs strip (Figma 1398:2031 row / 1392:1793 cards) — shared by
+/* The Review Runs strip (Figma 1392:1793) — shared by
    Hands-On Submissions and Exam Reviews, and borrowed by the Question Bank for
    a category's sub-category cards. Each page owns its own model (what a card
    filters, its recents, its suggestions); these are only the markup. Styles:
    `.rr*` in index.css. */
 
-/** The strip itself: Recent and Suggested groups side by side in a 98px row. */
+/** The strip itself: ONE row of cards, recents first then suggestions, with
+ *  no group headings (Figma 1392:1793, 2026-10-02) — a recent card says so in
+ *  its own subtext. */
 export function ReviewRunsStrip({
   children,
   label = "Review Runs",
@@ -22,7 +24,7 @@ export function ReviewRunsStrip({
   const groupsRef = useRef<HTMLDivElement>(null);
 
   /* Cards never shrink below 320px, so the row scrolls sideways once they
-     don't fit, with its scrollbar hidden (see `.rr-groups`). A plain mouse
+     don't fit, with its scrollbar hidden (see `.rr-row`). A plain mouse
      wheel only moves vertically, so turn it sideways while the row can still
      move that way — at either end the wheel falls through to the page.
      Non-passive, or preventDefault is ignored. */
@@ -44,34 +46,23 @@ export function ReviewRunsStrip({
 
   return (
     <section className={className ? `rr ${className}` : "rr"} aria-label={label}>
-      <div className="rr-groups" ref={groupsRef}>
+      <div className="rr-row" ref={groupsRef}>
         {children}
       </div>
     </section>
   );
 }
 
-/** One group — an optional "RECENT REVIEW RUNS" / "SUGGESTED" label over its
- *  cards. Without a label the cards centre in the strip's 98px row, which
- *  stays 98px so nothing below moves when the first recent (and with it the
- *  labels) appears. */
-export function ReviewRunGroup({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <div className="rr-group">
-      {label && <span className="rr-label">{label}</span>}
-      <div className="rr-cards">{children}</div>
-    </div>
-  );
-}
-
-/* Figma 1393:1794 "Card - Unselected" (320×70): the pending count in its own
-   hairlined cell — capped at "99+" (1393:1875) — the run's name over its
-   kind, a chevron at the end. A run over several values titles itself after
-   the first with the table's "+N" chip and lists them all on hover. */
+/* Figma 1393:1794 (320×70) — the Setup / Name Change banner's card in grey:
+   the pending count in its own hairlined cell — capped at "99+" (1393:1875) —
+   the run's name over its kind, a chevron at the end. A recent run adds
+   "· Recent" to the kind (1437:1513). A run over several values titles itself
+   after the first with the table's "+N" chip and lists them all on hover. */
 export function ReviewRunCard({
   count,
   values,
   sub,
+  recent,
   selected,
   onClick,
 }: {
@@ -80,6 +71,8 @@ export function ReviewRunCard({
   values: string[];
   /** The second line — what kind of filter this is. Omitted for "All". */
   sub?: string | null;
+  /** A recent run — "· Recent" after the kind (just "Recent" when it has none). */
+  recent?: boolean;
   /** Set only where a card is a TOGGLE that filters in place (the Question
    *  Bank's sub-category cards) rather than a preset that opens the console —
    *  it draws the selected state and announces `aria-pressed`. Omitted, the
@@ -88,6 +81,7 @@ export function ReviewRunCard({
   onClick: () => void;
 }) {
   const extra = values.length - 1;
+  const subLine = recent ? (sub ? `${sub} · Recent` : "Recent") : sub;
   return (
     <button
       type="button"
@@ -102,7 +96,7 @@ export function ReviewRunCard({
           {values[0]}
           {extra > 0 && <span className="used-extra">+{extra}</span>}
         </span>
-        {sub && <span className="rr-sub">{sub}</span>}
+        {subLine && <span className="rr-sub">{subLine}</span>}
       </span>
       <span className="rr-chevron">
         <RowChevronIcon />

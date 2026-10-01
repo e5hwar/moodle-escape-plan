@@ -24,6 +24,7 @@ import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCard } from "./TableCard";
 import { SelectUsersModal } from "./SelectUsersModal";
 import { SkeletonOverlay } from "./SkeletonOverlay";
+import { useLeaveGuard } from "./LeaveGuard";
 
 /**
  * Transfer Subscription — a two-step wizard for moving an active subscription
@@ -111,6 +112,9 @@ export function TransferSubscriptionPage({
   const [showPicker, setShowPicker] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
+  // Any account picked asks before Cancel throws the setup away. Once the
+  // transfer is confirmed it is running, not unsaved, so the guard stands down.
+  const guard = useLeaveGuard(phase === "idle" && !!(srcId || dstId));
 
   /* The run itself: being in "processing" is what arms the hand-off.
      Deliberately an effect keyed on the phase, NOT a timeout stashed in a ref
@@ -527,7 +531,7 @@ export function TransferSubscriptionPage({
       {/* ── footer (Figma 73:515, keycap 756:3772) ── */}
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => onClose && guard(onClose)}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (

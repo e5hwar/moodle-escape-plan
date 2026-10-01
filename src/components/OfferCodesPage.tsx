@@ -26,6 +26,7 @@ import { PrmModal } from "./PrmModal";
 import { MultiSelect } from "./NewCompanyWizard";
 import { DateField } from "./DateField";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-06-18");
@@ -97,6 +98,9 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [menu, setMenu] = useState<{ code: OfferCode; rect: DOMRect } | null>(null);
+  /* Delete used to fire straight from the row; it now runs the two-step
+     danger confirm every deletion uses. */
+  const [deleting, setDeleting] = useState<OfferCode | null>(null);
   useCreateShortcut(() => setCreating(true), !creating);
 
   const counts = useMemo(() => {
@@ -328,16 +332,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
 
               <div className="tasks-scroll">
                 <table className="table sch-table" style={{ width: 1190 }}>
-                  <colgroup>
-                    <col style={{ width: 200 }} />
-                    <col style={{ width: 110 }} />
-                    <col style={{ width: 240 }} />
-                    <col style={{ width: 190 }} />
-                    <col style={{ width: 140 }} />
-                    <col style={{ width: 160 }} />
-                    <col style={{ width: 110 }} />
-                    <col style={{ width: 40 }} />
-                  </colgroup>
+                  <TableCols data={[200, 110, 240, 190, 140, 160, 110]} trail={[40]} />
                   <thead>
                     <tr>
                       <SortableHeader col="code" label="Offer Code" sort={sort} toggle={toggleSort} />
@@ -379,7 +374,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                         code={c}
                         menuOpen={menu?.code.id === c.id}
                         onOpenMenu={(rect) => setMenu({ code: c, rect })}
-                        onDelete={() => handleDelete(c.id)}
+                        onDelete={() => setDeleting(c)}
                       />
                     ))}
                     {paged.length === 0 && (
@@ -437,10 +432,62 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onExtend={() => handleExtend(menu.code.id)}
-          onDelete={() => handleDelete(menu.code.id)}
+          onDelete={() => setDeleting(menu.code)}
+        />
+      )}
+
+      {deleting && (
+        <OfferCodeDeleteConfirm
+          code={deleting}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            handleDelete(deleting.id);
+            setDeleting(null);
+          }}
         />
       )}
     </div>
+  );
+}
+
+/* Delete Offer Code — the shared danger confirm, asked twice like every
+   deletion (PrmModal `doubleConfirm`). */
+function OfferCodeDeleteConfirm({
+  code,
+  onConfirm,
+  onCancel,
+}: {
+  code: OfferCode;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title="Delete Offer Code?"
+      confirmLabel="Delete Offer Code"
+      danger
+      doubleConfirm={
+        <>
+          <strong>{code.code}</strong> will be permanently deleted. This can't be undone.
+        </>
+      }
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-content">
+        Delete <strong>{code.code}</strong>? It can no longer be redeemed and leaves the
+        Offer Codes list. This can't be undone.
+      </p>
+    </PrmModal>
   );
 }
 

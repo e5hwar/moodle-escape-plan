@@ -13,8 +13,9 @@ import { PrmModal } from "./PrmModal";
    stay drawn as they are (the node doesn't grey them) but can't be changed.
 
    Edit Criteria opens a two-step confirm on the default modal (PrmModal): the
-   first says what editing does, and confirming it stacks "Are you sure?" on top
-   of it. Dismissing the top one returns to the first; confirming it unlocks. */
+   first says what editing does, and confirming it stacks a narrower "Are you
+   sure?" on top of it. Dismissing the top one closes both; confirming it
+   unlocks. Same contract as PrmModal's `doubleConfirm`. */
 
 export type CriteriaSubject = "Task" | "Certification";
 
@@ -102,14 +103,14 @@ export function CompletionCriteriaGate({
   /** 0 = no modal, 1 = the explanation, 2 = "Are you sure?" stacked on it. */
   const [step, setStep] = useState<0 | 1 | 2>(0);
 
-  // Escape backs out one modal at a time, top first. Capture phase, so the
+  // Escape closes the whole confirm, from either step. Capture phase, so the
   // wizard's own Escape handling doesn't also fire underneath.
   useEffect(() => {
     if (step === 0) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       e.stopPropagation();
-      setStep((s) => (s === 2 ? 1 : 0));
+      setStep(0);
     }
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
@@ -177,7 +178,8 @@ export function CompletionCriteriaGate({
             confirmLabel="Yes, Edit Criteria"
             cancelLabel="Go Back"
             danger
-            onCancel={() => setStep(1)}
+            className="prm--sure"
+            onCancel={() => setStep(0)}
             onConfirm={() => {
               setStep(0);
               onUnlock();

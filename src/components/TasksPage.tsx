@@ -24,6 +24,7 @@ import { TaskSummary, useTaskPreview } from "./NewTaskWizard";
 import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
 import { SubscriptionMark } from "./NewCertificationWizard";
 import { ConfirmCard } from "./ConfirmCard";
+import { TableCols } from "./TableCols";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -109,7 +110,7 @@ const TASK_COLS: TaskColMeta[] = [
       ),
   },
   {
-    key: "usedIn", label: "Used in", className: "col-used", width: 180, sortable: false,
+    key: "usedIn", label: "Certifications", className: "col-used", width: 180, sortable: false,
     tip: (t) => (t.usedIn.length ? t.usedIn.join("\n") : undefined),
     render: (t) =>
       t.usedIn.length === 0 ? (
@@ -819,6 +820,15 @@ function DeleteTaskModal({
       title={`Delete “${task.name}”`}
       confirmLabel="Delete Task"
       danger
+      doubleConfirm={
+        <>
+          <strong>{task.name}</strong> will be permanently deleted
+          {task.usedIn.length > 0
+            ? ` and removed from ${task.usedIn.length} Certification${task.usedIn.length === 1 ? "" : "s"}`
+            : ""}
+          . This can't be undone.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -899,13 +909,7 @@ function CompanyEditBlockedModal({
 
 function ColGroup({ cols }: { cols: TaskColMeta[] }) {
   return (
-    <colgroup>
-      <col style={{ width: 240 }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[240, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 

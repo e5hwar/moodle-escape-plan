@@ -10,6 +10,8 @@ import { tasks } from "../data/tasks";
 import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { ShortcutHint } from "./ShortcutHint";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, isOver, limitClass, limitMessage } from "../data/fieldLimits";
 
 /* ── Review console ─────────────────────────────────────────────────────────
    Queue-driven, keyboard-first review screen for Hands-On submissions, per the
@@ -286,6 +288,11 @@ export function ReviewConsole({
       showToast("Pick a score first — keys 1–0");
       return;
     }
+    // Soft limit — the field flags red past it and the submit waits here.
+    if (isOver(DESCRIPTION_MAX, draft.feedback)) {
+      showToast(`Feedback is too long — ${limitMessage(DESCRIPTION_MAX).toLowerCase()}`);
+      return;
+    }
     const next = { ...submitted, [sub.id]: { score: draft.score, feedback: draft.feedback } };
     setSubmitted(next);
     const verdict = draft.score >= PASS_MIN ? "PASS" : "BELOW PASS";
@@ -404,7 +411,8 @@ export function ReviewConsole({
   /* ── derived display bits ── */
   const submittedCount = Object.keys(submitted).length;
   const pendingCount = queue.length - submittedCount;
-  const hasScore = draft.score != null;
+  // The CTA dims until a score is picked and the feedback fits its limit.
+  const canSubmit = draft.score != null && !isOver(DESCRIPTION_MAX, draft.feedback);
 
   return (
     <div className="main">
@@ -724,19 +732,27 @@ export function ReviewConsole({
 
                   {/* Feedback — Figma 263:865; read-only 298:1092 */}
                   <div className="rvc-field">
-                    <label className="form-label" htmlFor="rvc-feedback">Feedback</label>
-                    <textarea
-                      id="rvc-feedback"
-                      className="form-input rvc-feedback"
-                      placeholder={
-                        railReadOnly
-                          ? undefined
-                          : "Provide clear feedback on the submission, including what was done well, what needs improvement, and any safety or technical corrections."
-                      }
-                      readOnly={railReadOnly}
-                      value={shownFeedback}
-                      onChange={(e) => setDraft({ feedback: e.target.value })}
-                    />
+                    <label className="form-label" htmlFor="rvc-feedback">
+                      Feedback
+                      {!railReadOnly && <LimitError max={DESCRIPTION_MAX} values={[shownFeedback]} />}
+                    </label>
+                    <div className="limit-input is-multiline">
+                      <textarea
+                        id="rvc-feedback"
+                        className={`form-input rvc-feedback${
+                          railReadOnly ? "" : ` ${limitClass(DESCRIPTION_MAX, shownFeedback)}`
+                        }`.trimEnd()}
+                        placeholder={
+                          railReadOnly
+                            ? undefined
+                            : "Provide clear feedback on the submission, including what was done well, what needs improvement, and any safety or technical corrections."
+                        }
+                        readOnly={railReadOnly}
+                        value={shownFeedback}
+                        onChange={(e) => setDraft({ feedback: e.target.value })}
+                      />
+                      {!railReadOnly && <CharCount value={shownFeedback} max={DESCRIPTION_MAX} />}
+                    </div>
                     <p className="form-help">
                       Optional. Shown to the user along with their score.
                     </p>
@@ -864,7 +880,7 @@ export function ReviewConsole({
                   <span className="kbd-letter">Esc</span>
                 </button>
               ) : reviewable ? (
-                <button className={`btn-publish ${hasScore ? "" : "rvc-dim"}`} onClick={doSubmit}>
+                <button className={`btn-publish ${canSubmit ? "" : "rvc-dim"}`} onClick={doSubmit}>
                   Submit &amp; Next
                   <span className="rvc-submit-keys">
                     <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>

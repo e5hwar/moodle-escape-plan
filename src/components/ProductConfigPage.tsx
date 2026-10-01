@@ -25,6 +25,10 @@ import { PermissionsSection } from "./PermissionsPage";
 import { AwardTemplatesSection } from "./AwardTemplatesSection";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { useLeaveGuard } from "./LeaveGuard";
+import { CharCount, LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 
 /* Product Config — platform-wide settings, one tab per area.
 
@@ -203,6 +207,7 @@ function LangField({
   placeholderEn,
   placeholderEs,
   ariaLabel,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -212,9 +217,16 @@ function LangField({
   placeholderEs?: string;
   /** Names both inputs when the field's label isn't adjacent (a table cell). */
   ariaLabel?: string;
+  /** A SOFT limit per language: each row shows the characters left and the
+   *  shell flags amber past the suggested length, red past the limit — the
+   *  caller's label row names the tier (`LimitError`) and Save Changes
+   *  blocks on the red one. */
+  maxLength?: number;
 }) {
+  const flag = maxLength !== undefined ? limitClass(maxLength, en, es) : "";
+  const over = flag === "has-error";
   return (
-    <div className="lang-field">
+    <div className={`lang-field ${flag}`}>
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
         <input
@@ -223,7 +235,9 @@ function LangField({
           onChange={(e) => onChangeEn(e.target.value)}
           placeholder={placeholderEn}
           aria-label={ariaLabel ? `${ariaLabel} (English)` : undefined}
+          aria-invalid={over || undefined}
         />
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
       </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
@@ -235,6 +249,7 @@ function LangField({
           placeholder={placeholderEs}
           aria-label={ariaLabel ? `${ariaLabel} (Spanish)` : undefined}
         />
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
       </div>
     </div>
   );
@@ -633,7 +648,11 @@ function TabsField({
 
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label">
+        {label}
+        {/* One label row for the whole table: it names the worst tab name. */}
+        <LimitError max={NAME_MAX} values={rows.flatMap((r) => [r.nameEn, r.nameEs])} />
+      </label>
       <div className="qsec">
         <div className="qsec-hd">
           <span className="pc-col-icon">ICON</span>
@@ -655,6 +674,7 @@ function TabsField({
                   placeholderEn="Tab Name..."
                   placeholderEs="Nombre de la Pestaña..."
                   ariaLabel="Tab name"
+                  maxLength={NAME_MAX}
                 />
               </div>
               <div className="pc-col-grow">
@@ -893,7 +913,7 @@ function OptionNameModal({
   const trimmed = value.trim();
   const isDuplicate =
     !!trimmed && others.some((o) => o.toLowerCase() === trimmed.toLowerCase());
-  const isValid = !!trimmed && !isDuplicate;
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value);
 
   useEscape(onCancel);
 
@@ -917,8 +937,10 @@ function OptionNameModal({
             {isDuplicate && (
               <span className="form-label-error">“{trimmed}” is already in the list.</span>
             )}
+            <LimitError max={NAME_MAX} values={[value]} />
           </span>
-          <input
+          <LimitedInput
+            max={NAME_MAX}
             autoFocus
             className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={value}
@@ -985,6 +1007,20 @@ export function ProductConfigPage({
     () => SETTING_KEYS.some((k) => !sameValue(settings[k], saved[k])),
     [settings, saved],
   );
+  // Unsaved settings ask before any way off the page throws them away. Tabs
+  // and the template wizard don't: the settings live up here and survive both.
+  const guard = useLeaveGuard(dirty);
+  // Tab names carry a SOFT limit: typing past it is allowed, saving isn't.
+  // (Option names are gated in their own modal, so they never land here long.)
+  const tabsOver = (rows: TabRow[]) => rows.some((r) => isOver(NAME_MAX, r.nameEn, r.nameEs));
+  const overLimit = [
+    tabsOver(settings.appTabs) && limitLabel("App Tabs", NAME_MAX),
+    tabsOver(settings.dashboardTabs) && limitLabel("Dashboard Tabs", NAME_MAX),
+  ].filter((x): x is string => !!x);
+  const canSave = overLimit.length === 0;
+  const blockedTip = canSave
+    ? undefined
+    : ["Shorten these to save:", ...overLimit.map((l) => `• ${l}`)].join("\n");
 
   const set =
     <K extends keyof Settings>(key: K) =>
@@ -1063,7 +1099,7 @@ export function ProductConfigPage({
               templates={templates}
               onEdit={(template) => setTemplateWizard({ kind: "edit", template })}
               onDelete={(id) => setTemplates((prev) => prev.filter((t) => t.id !== id))}
-              onEditLinkedAward={onEditAward}
+              onEditLinkedAward={onEditAward && ((award) => guard(() => onEditAward(award)))}
             />
           ) : (
             <div className="pc-body" key={tab}>
@@ -1240,7 +1276,14 @@ export function ProductConfigPage({
                 <button className="btn-save-draft" onClick={() => setSettings(saved)}>
                   Discard
                 </button>
-                <button className="btn-publish" onClick={() => setSaved(settings)}>
+                {/* `aria-disabled` rather than `disabled`, so the tooltip naming
+                    what is over its limit still shows on hover. */}
+                <button
+                  className={`btn-publish${canSave ? "" : " is-disabled"}`}
+                  aria-disabled={!canSave}
+                  data-tip={blockedTip}
+                  onClick={() => { if (canSave) setSaved(settings); }}
+                >
                   Save Changes
                 </button>
               </div>

@@ -36,23 +36,24 @@ import {
 } from "./Filters";
 import {
   DateRangePill,
-  defaultDateRange,
+  allTimeDateRange,
   dateRangeIncludes,
   type DateRangeState,
 } from "./DateRangeFilter";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
 const STATUS_LABEL: Record<FormStatus, string> = {
   active: "Active",
-  disabled: "Disabled",
+  disabled: "Inactive",
   deleted: "Deleted",
 };
 
 /* Deleted forms never reach the list, so the pill offers the two live
    states. */
-const STATUS_OPTIONS = ["Active", "Disabled"];
+const STATUS_OPTIONS = ["Active", "Inactive"];
 
 /* Dates read the way every other table writes them — short month, zero-padded
    day ("Apr 03, 2026"), so the column stays flush down its left edge. */
@@ -64,11 +65,11 @@ function formatDate(iso: string): string {
   return `${MONTHS[Number(m[2]) - 1]} ${m[3]}, ${m[1]}`;
 }
 
-/* What the grey "Disabled" tag on a row means. The tag is the only place the
+/* What the grey "Inactive" tag on a row means. The tag is the only place the
    status is visible now that Status left the table, so it has to say what the
    state actually does rather than just naming it. */
 const DISABLED_TIP =
-  "Disabled — this form is no longer shown to users on its triggers. Responses already collected are kept, and it can be activated again from the row menu.";
+  "Inactive — this form is no longer shown to users on its triggers. Responses already collected are kept, and it can be activated again from the row menu.";
 
 /* The Responses column counts what landed inside the Date Range, so the pill
    answers "how many responses in this period?" rather than hiding forms. The
@@ -218,13 +219,17 @@ export function FeedbackFormsPage({
     creators: [],
   });
   // The Date Range never hides a form — it scopes the Responses column to a
-  // period (default Last 30 Days). Every form is always listed.
-  const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
+  // period (default All Time, the user 2026-10-02 — so the column opens on
+  // each form's whole total). Every form is always listed.
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
   const [menu, setMenu] = useState<{ form: FeedbackForm; rect: DOMRect } | null>(null);
   /* Activating / deactivating a form changes what real users are shown at the
      end of a Task, so it confirms first — the row menu fires straight into the
      list otherwise, with nothing to undo it from except the same menu. */
   const [toggling, setToggling] = useState<FeedbackForm | null>(null);
+  /* Delete Form used to fire straight from the menu; it now runs the two-step
+     danger confirm every deletion uses. */
+  const [deleting, setDeleting] = useState<FeedbackForm | null>(null);
   /* Newest work first. The sort key is Last Modified even though that column is
      OFF by default (the user, 2026-09-18) — the useful opening order is the
      recently-touched one, and the column itself is provenance the table does not
@@ -343,7 +348,7 @@ export function FeedbackFormsPage({
             <div className="tasks-header-actions">
               <button className="new-task" onClick={createBlank}>
                 <AddIcon />
-                Create Form
+                Create Feedback Form
                 <span className="cta-kbd">C</span>
               </button>
             </div>
@@ -358,7 +363,7 @@ export function FeedbackFormsPage({
                   </span>
                   <input
                     className="search-input"
-                    placeholder="Search Forms..."
+                    placeholder="Search Feedback Forms..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -489,7 +494,7 @@ export function FeedbackFormsPage({
           onExportResponses={() => onExportResponses(menu.form.id)}
           onDuplicate={() => duplicateForm(menu.form)}
           onToggleActive={() => setToggling(menu.form)}
-          onDelete={() => onDelete(menu.form.id)}
+          onDelete={() => setDeleting(menu.form)}
         />
       )}
 
@@ -500,6 +505,17 @@ export function FeedbackFormsPage({
           onConfirm={() => {
             setStatus(toggling, toggling.status === "active" ? "disabled" : "active");
             setToggling(null);
+          }}
+        />
+      )}
+
+      {deleting && (
+        <FormDeleteConfirm
+          form={deleting}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            onDelete(deleting.id);
+            setDeleting(null);
           }}
         />
       )}
@@ -553,13 +569,7 @@ function MultiPill({
 
 function FbColGroup({ cols }: { cols: FbColMeta[] }) {
   return (
-    <colgroup>
-      <col style={{ width: 260 }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[260, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 
@@ -594,7 +604,7 @@ function FormRow({
         <span className="tsk-name">{form.name || "Untitled form"}</span>
         {form.status === "disabled" && (
           <span className="pr-name-flag pr-name-flag--grey" data-tip={DISABLED_TIP}>
-            Disabled
+            Inactive
           </span>
         )}
       </td>
@@ -714,6 +724,49 @@ function FormStatusConfirm({
             users again on its triggers.
           </>
         )}
+      </p>
+    </PrmModal>
+  );
+}
+
+/* Delete Form — the shared danger confirm, asked twice like every deletion
+   (PrmModal `doubleConfirm`). Only a form with no responses offers Delete. */
+function FormDeleteConfirm({
+  form,
+  onConfirm,
+  onCancel,
+}: {
+  form: FeedbackForm;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <PrmModal
+      title="Delete Form?"
+      confirmLabel="Delete Form"
+      danger
+      doubleConfirm={
+        <>
+          <strong>{form.name || form.id}</strong> will be permanently deleted. This can't be
+          undone.
+        </>
+      }
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-content">
+        Delete <strong>{form.name || form.id}</strong>? It has no responses, so nothing
+        collected is lost. It stops being shown to users and leaves the list. This can't
+        be undone.
       </p>
     </PrmModal>
   );

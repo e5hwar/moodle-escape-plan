@@ -28,6 +28,8 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
+import { CharCount, LimitError } from "./CharCount";
+import { NAME_MAX, isOver, limitClass } from "../data/fieldLimits";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
@@ -1352,7 +1354,16 @@ function NameModal({
 
   const trimmed = name.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
-  const isValid = !!trimmed && !isDuplicate;
+  // The name's limit is SOFT: typing past it is allowed, confirming isn't.
+  /* Editing with nothing changed has nothing to save, so Save stays off. (A
+     create opens with an empty name, which already keeps it off.) */
+  const unchanged =
+    trimmed === defaultName.trim() &&
+    nameEs.trim() === defaultNameEs.trim() &&
+    hidden === defaultHidden &&
+    icon === defaultIcon;
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, name, nameEs) && !unchanged;
+  const limitFlag = limitClass(NAME_MAX, name, nameEs);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1386,8 +1397,9 @@ function NameModal({
                 A {nameLabel.toLowerCase()} with this name already exists.
               </span>
             )}
+            <LimitError max={NAME_MAX} values={[name, nameEs]} />
           </span>
-          <div className={`lang-field${isDuplicate ? " has-error" : ""}`}>
+          <div className={`lang-field${isDuplicate ? " has-error" : limitFlag ? ` ${limitFlag}` : ""}`}>
             <div className="lang-field-row">
               <span className="lang-tag">EN</span>
               <input
@@ -1397,7 +1409,9 @@ function NameModal({
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
                 placeholder="Solar & Renewables"
+                aria-invalid={isDuplicate || limitFlag === "has-error" || undefined}
               />
+              <CharCount value={name} max={NAME_MAX} />
             </div>
             <div className="lang-field-divider" />
             <div className="lang-field-row">
@@ -1409,6 +1423,7 @@ function NameModal({
                 onKeyDown={(e) => e.key === "Enter" && submit()}
                 placeholder="Solar y Energías Renovables"
               />
+              <CharCount value={nameEs} max={NAME_MAX} />
             </div>
           </div>
           <p className="form-help">
@@ -1489,6 +1504,15 @@ function DeleteConfirm({
       title={title}
       confirmLabel={`Delete ${isIndustry ? "Industry" : "Sub-Industry"}`}
       danger
+      doubleConfirm={
+        <>
+          <strong>{label}</strong>
+          {isIndustry && subCount > 0
+            ? ` and its ${subCount} Sub-${subCount === 1 ? "Industry" : "Industries"}`
+            : ""}{" "}
+          will be permanently deleted. This can't be undone.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -1764,7 +1788,7 @@ function AddCertsModal({
         selectedCount === 1 ? "" : "s"
       }`}
       confirmDisabled={selectedCount === 0}
-      pick
+      pickFull
       onCancel={onClose}
       onConfirm={() => onAdd(picked)}
     >

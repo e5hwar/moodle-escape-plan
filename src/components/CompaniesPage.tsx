@@ -71,6 +71,7 @@ import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -631,6 +632,12 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           confirmLabel="Delete Company"
           cancelLabel="Cancel"
           danger
+          doubleConfirm={
+            <>
+              <strong>{deleteModal.name}</strong> and its account holder invitation will be
+              permanently deleted. This can't be undone.
+            </>
+          }
           onCancel={() => setDeleteModal(null)}
           onConfirm={() => {
             onDeleteCompany(deleteModal);
@@ -680,15 +687,10 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
 function ColGroup({ cols }: { cols: CompanyCol[] }) {
   return (
-    <colgroup>
-      {/* The fixed columns lead the table: Company, then Status. */}
-      <col style={{ width: NAME_WIDTH }} />
-      <col style={{ width: STATUS_WIDTH }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: ACTIONS_WIDTH }} />
-    </colgroup>
+    <TableCols
+      data={[NAME_WIDTH, STATUS_WIDTH, ...cols.map((c) => c.width)]}
+      trail={[ACTIONS_WIDTH]}
+    />
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   type FeedbackForm,
   type FormQuestionLink,
@@ -9,12 +9,16 @@ import { FeedbackFormEditor } from "./FeedbackFormEditor";
 // `leave` is aliased: this file's own `leave()` is leaving the PAGE.
 import { leave as leaveField, useTouchedKeys } from "./fieldFlags";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { InfoIcon14, CrumbChevronIcon } from "./icons";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 
 type Props = {
   form: FeedbackForm;
-  /** Opened straight from Create Form — only changes the head's wording. */
+  /** Opened straight from Create Feedback Form — only changes the head's wording. */
   creating?: boolean;
   allForms: FeedbackForm[];
   bank: Question[];
@@ -82,15 +86,20 @@ export function FeedbackFormWizard({
   const isCreating = creating ?? false;
   const title = isCreating ? "New Feedback Form" : "Edit Feedback Form";
 
-  /* Two required fields: a name, and at least one trigger — **a form with no
-     trigger can never be shown to anyone** (the user, 2026-09-18), so it is not
-     a form yet. The rail used to report a missing field with a red alert
+  /* Three required fields: a name, at least one question (the user,
+     2026-10-02), and at least one trigger — **a form with no trigger can never
+     be shown to anyone** (the user, 2026-09-18), so it is not a form yet. The rail used to report a missing field with a red alert
      circle; on one page the footer button carries it, listing whatever is still
      missing ([[task-publish-flow]]'s gate pattern). */
   const named = form.name.trim().length > 0;
+  const asks = form.questions.length > 0;
   const mapped = form.triggers.length > 0;
+  // Soft limit (data/fieldLimits.ts): a name past it blocks like an empty one.
+  const nameOver = isOver(NAME_MAX, form.name);
   const missing = [
     named ? null : "give the form a name",
+    nameOver ? `shorten the name to ${NAME_MAX} characters or fewer` : null,
+    asks ? null : "add at least one question",
     mapped ? null : "map at least one trigger",
   ].filter(Boolean) as string[];
   const ready = missing.length === 0;
@@ -99,15 +108,40 @@ export function FeedbackFormWizard({
   const { touched, touch } = useTouchedKeys();
   const [attempted, setAttempted] = useState(false);
   const nameMissing = !named && (attempted || touched.has("name"));
+  const questionsMissing = !asks && (attempted || touched.has("questions"));
   const triggersMissing = !mapped && (attempted || touched.has("triggers"));
-  const blockedTip = ready
+  /* The form as it opened (also the LeaveGuard's snapshot below). Editing an
+     existing form with nothing changed leaves Save Changes dimmed. */
+  const pristine = useRef(
+    draftKey({ name: form.name, questions: form.questions, triggers: form.triggers }),
+  );
+  const currentKey = draftKey({ name: form.name, questions: form.questions, triggers: form.triggers });
+  const unchanged = !isCreating && currentKey === pristine.current;
+  const canFinish = ready && !unchanged;
+  const blockedTip = canFinish
     ? undefined
-    : `To finish, ${missing.join(" and ")}. A form with no trigger is never shown to anyone.`;
+    : ready
+    ? "No changes to save"
+    : `To finish, ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]}.${mapped ? "" : " A form with no trigger is never shown to anyone."}`;
 
   function done() {
-    if (ready) onBack();
-    else setAttempted(true);
+    if (canFinish) onBack();
+    else if (!ready) setAttempted(true);
   }
+
+  /* The only exit that loses anything is that discard, so it is the only one
+     that asks (the shared LeaveGuard): a new form, still not valid, that the
+     admin has put something into since it opened — a name, a question, a
+     trigger. The snapshot is the form as it opened, so a form started from a
+     Certification (its trigger pre-mapped) is not dirty for that alone, and
+     an untouched new form still leaves without asking. Edits save live, so an
+     existing or already-valid form has nothing to lose. */
+  const dirty =
+    isCreating &&
+    !ready &&
+    currentKey !== pristine.current;
+  // The sidebar and browser Back purge it too, once the discard is confirmed.
+  const guard = useLeaveGuard(dirty, { noun: "Feedback Form", creating: true, onDiscard });
 
   /* Leaving without finishing. Everything here saves live, so a brand-new form
      abandoned half-made would otherwise sit in the list as an untitled row with
@@ -118,8 +152,10 @@ export function FeedbackFormWizard({
      `go` is where the exit lands: Feedback Forms, or a step further up the
      trail (a discard lands on Feedback Forms first; `go` then overrides it). */
   function leave(go: () => void = onBack) {
-    if (isCreating && !ready) onDiscard();
-    go();
+    guard(() => {
+      if (isCreating && !ready) onDiscard();
+      go();
+    });
   }
 
   /* The create button's shortcut is ⌘/Ctrl+Shift+Enter, as on the Task
@@ -169,8 +205,11 @@ export function FeedbackFormWizard({
                     {nameMissing && (
                       <span className="form-label-error">Feedback Form Name cannot be left empty</span>
                     )}
+                    <LimitError max={NAME_MAX} values={[form.name]} warn={false} />
                   </label>
-                  <input
+                  <LimitedInput
+                    max={NAME_MAX}
+                    warn={false}
                     className={`form-input${nameMissing ? " has-error" : ""}`}
                     aria-invalid={nameMissing || undefined}
                     value={form.name}
@@ -188,8 +227,13 @@ export function FeedbackFormWizard({
                 {/* Questions and Triggers are both tables with their own
                     chrome, but they stay plain labelled fields — one form
                     type, 32px apart ([[form-spacing-rhythm]]). */}
-                <div className="form-group">
-                  <label className="form-label">Questions</label>
+                <div className="form-group" onBlur={leaveField(() => touch("questions"))}>
+                  <label className="form-label">
+                    Questions<span className="req">*</span>
+                    {questionsMissing && (
+                      <span className="form-label-error">Questions cannot be left empty</span>
+                    )}
+                  </label>
                   <FeedbackFormEditor
                     form={form}
                     bank={bank}
@@ -261,8 +305,8 @@ export function FeedbackFormWizard({
               form left this page: status is the list row's menu's job, and a
               form being edited is not the place to switch it off. */}
           <button
-            className={`btn-publish${ready ? "" : " is-disabled"}`}
-            aria-disabled={!ready}
+            className={`btn-publish${canFinish ? "" : " is-disabled"}`}
+            aria-disabled={!canFinish}
             data-tip={blockedTip}
             onClick={done}
           >

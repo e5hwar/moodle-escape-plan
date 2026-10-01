@@ -9,6 +9,7 @@ import {
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import { leave, useTouchedKeys } from "./fieldFlags";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import {
   SmallXIcon,
   MoveIcon,
@@ -17,6 +18,8 @@ import {
   CrumbChevronIcon,
   } from "./icons";
 import { RichTextField } from "./RichTextField";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 import { SelectField } from "./SelectField";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 
@@ -306,6 +309,12 @@ const REQUIRED_FIELD_KEYS = {
   answer: "answer",
   pairs: "pairs",
   scaleLabels: "scaleLabels",
+  textLimit: "textLimit",
+  optionsLimit: "optionsLimit",
+  pairsLimit: "pairsLimit",
+  scaleMinLimit: "scaleMinLimit",
+  scaleMaxLimit: "scaleMaxLimit",
+  feedbackLimit: "feedbackLimit",
 } as const;
 
 /** Reader-facing name of each gap, for the tooltip that says why Create
@@ -317,7 +326,24 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   answer: "Correct Answer — grade one option above 0%",
   pairs: "Questions & Answers — at least two questions and three answers",
   scaleLabels: "Scale labels — label both ends or neither",
+  textLimit: limitLabel("Question", DESCRIPTION_MAX),
+  optionsLimit: limitLabel("Options", NAME_MAX),
+  pairsLimit: limitLabel("Questions & Answers", NAME_MAX),
+  scaleMinLimit: limitLabel("Low-end label", NAME_MAX),
+  scaleMaxLimit: limitLabel("High-end label", NAME_MAX),
+  feedbackLimit: limitLabel("Combined Feedback", DESCRIPTION_MAX),
 };
+
+/* The Combined Feedback values the author can actually see — the partial row
+   drops out on True/False and reads empty on a single-answer MCQ, so a long
+   value left behind there neither warns nor blocks. Shared by the section's
+   label row and the save gate. */
+function feedbackValues(d: QuestionDraft): string[] {
+  const noPartial = d.type === "true-false" || (d.type === "mcq" && !multiAnswer(d.choices));
+  return noPartial
+    ? [d.fbCorrect, d.fbCorrectEs, d.fbIncorrect, d.fbIncorrectEs]
+    : [d.fbCorrect, d.fbCorrectEs, d.fbPartial, d.fbPartialEs, d.fbIncorrect, d.fbIncorrectEs];
+}
 
 /** Stable empty set, so the "nothing missing" memo doesn't churn its consumers. */
 const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();
@@ -335,7 +361,12 @@ function collectMissing(d: QuestionDraft): string[] {
   const gaps: string[] = [];
   if (d.catKey === "") gaps.push(K.category);
   if (!d.text.trim()) gaps.push(K.text);
+  /* Soft character limits (data/fieldLimits.ts): a field past its limit blocks
+     the save like an empty mandatory one. Option labels and match pairs are
+     short labels (NAME_MAX); the stem and feedback are long-form. */
+  if (isOver(DESCRIPTION_MAX, d.text, d.textEs)) gaps.push(K.textLimit);
   if (d.type === "mcq") {
+    if (d.choices.some((c) => isOver(NAME_MAX, c.text, c.textEs))) gaps.push(K.optionsLimit);
     const filled = d.choices.filter((c) => c.text.trim() !== "");
     // One gap at a time: an option list too short to answer is the thing to
     // fix, not the answer it can't have yet.
@@ -351,6 +382,9 @@ function collectMissing(d: QuestionDraft): string[] {
     );
     const answers = d.pairs.filter((p) => p.right.trim() !== "");
     if (complete.length < 2 || answers.length < 3) gaps.push(K.pairs);
+    if (d.pairs.some((p) => isOver(NAME_MAX, p.left, p.leftEs, p.right, p.rightEs))) {
+      gaps.push(K.pairsLimit);
+    }
   }
   if (d.type === "scale") {
     // Both labels are optional together; one alone leaves the other end of the
@@ -358,7 +392,10 @@ function collectMissing(d: QuestionDraft): string[] {
     if ((d.scaleMinLabel.trim() !== "") !== (d.scaleMaxLabel.trim() !== "")) {
       gaps.push(K.scaleLabels);
     }
+    if (isOver(NAME_MAX, d.scaleMinLabel, d.scaleMinLabelEs)) gaps.push(K.scaleMinLimit);
+    if (isOver(NAME_MAX, d.scaleMaxLabel, d.scaleMaxLabelEs)) gaps.push(K.scaleMaxLimit);
   }
+  if (grading && isOver(DESCRIPTION_MAX, ...feedbackValues(d))) gaps.push(K.feedbackLimit);
   return gaps;
 }
 
@@ -480,6 +517,14 @@ export function NewQuestionWizard({
   const [showHistory, setShowHistory] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const update = (patch: Partial<QuestionDraft>) => setData((d) => ({ ...d, ...patch }));
+  /* The editor as it opened — an edit's prefilled question included. Anything
+     the author changes makes `dirty` true, which is what decides whether
+     Cancel, the crumbs and the app's own exits stop to ask (the shared
+     LeaveGuard); an untouched editor closes straight away. A past version is
+     locked, so it never gets dirty. */
+  const pristine = useRef(data);
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(dirty, { noun: "Question", creating: !isEditing });
 
   /* A-Z by category, then by sub-category inside it. Sorting on the flattened
      "Parent > Sub" label does both at once and keeps a parent immediately
@@ -574,7 +619,7 @@ export function NewQuestionWizard({
               {crumbs.map((c, i) => (
                 <Fragment key={c.label}>
                   {i > 0 && <CrumbChevronIcon />}
-                  <button className="rvc-crumb" onClick={c.onClick} title={`Back to ${c.label}`}>
+                  <button className="rvc-crumb" onClick={() => guard(c.onClick)} title={`Back to ${c.label}`}>
                     {c.label}
                   </button>
                 </Fragment>
@@ -635,7 +680,7 @@ export function NewQuestionWizard({
       {/* Footer (Figma 73:515) */}
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>
             Cancel
           </button>
         </div>
@@ -819,6 +864,7 @@ function QuestionTextSection({
           {flagged && (
             <span className="form-label-error">Write the question to create it.</span>
           )}
+          <LimitError max={DESCRIPTION_MAX} values={[data.text, data.textEs]} />
         </label>
         {/* Spanish is optional throughout — only the English row is required,
             and an untranslated question still saves. */}
@@ -830,6 +876,7 @@ function QuestionTextSection({
           placeholderEn="Question Text…"
           placeholderEs="Texto de la pregunta…"
           error={flagged}
+          maxLength={DESCRIPTION_MAX}
         />
       </div>
     </div>
@@ -964,6 +1011,7 @@ function McqSection({
               Grade one option above 0% so the question has a correct answer.
             </span>
           ) : null}
+          <LimitError max={NAME_MAX} values={choices.flatMap((c) => [c.text, c.textEs])} warn={false} />
         </label>
 
         <div
@@ -1010,6 +1058,7 @@ function McqSection({
                   onChangeEs={(v) => setChoice(c.id, { textEs: v })}
                   placeholderEn={`Option ${OPTION_LETTERS[i] ?? i + 1}…`}
                   placeholderEs={`Opción ${OPTION_LETTERS[i] ?? i + 1}…`}
+                  maxLength={NAME_MAX}
                 />
               </div>
               {grading && (
@@ -1160,6 +1209,11 @@ function MatchSection({
               Add at least two questions and three answers to create this question.
             </span>
           )}
+          <LimitError
+            max={NAME_MAX}
+            values={pairs.flatMap((p) => [p.right, p.rightEs])}
+            quietValues={pairs.flatMap((p) => [p.left, p.leftEs])}
+          />
         </label>
 
         <div className={`qed-tbl qed-tbl--pairs${flagged ? " has-error" : ""}`}>
@@ -1194,6 +1248,7 @@ function MatchSection({
                     onChangeEs={(v) => setPair(p.id, { leftEs: v })}
                     placeholderEn={`Question ${i + 1}…`}
                     placeholderEs={`Pregunta ${i + 1}…`}
+                    maxLength={NAME_MAX}
                   />
                 </div>
                 <div className="qed-tbl-field">
@@ -1204,6 +1259,7 @@ function MatchSection({
                     onEs={(v) => setPair(p.id, { rightEs: v })}
                     placeholder={`Answer ${i + 1}…`}
                     esPlaceholder={`Respuesta ${i + 1}…`}
+                    maxLength={NAME_MAX}
                   />
                 </div>
                 <button
@@ -1390,6 +1446,7 @@ function ScaleLabelsSection({
         <label className="form-label">
           Label for {data.scaleMin}
           {minBlank && <span className="form-label-error">{pairTip}</span>}
+          <LimitError max={NAME_MAX} values={[data.scaleMinLabel, data.scaleMinLabelEs]} />
         </label>
         <LangField
           en={data.scaleMinLabel}
@@ -1399,6 +1456,7 @@ function ScaleLabelsSection({
           placeholder="e.g. Extremely disappointed"
           esPlaceholder="p. ej. Muy decepcionado"
           error={minBlank}
+          maxLength={NAME_MAX}
         />
         <p className="form-help">Optional — shown at the low end of the scale.</p>
       </div>
@@ -1407,6 +1465,7 @@ function ScaleLabelsSection({
         <label className="form-label">
           Label for {data.scaleMax}
           {maxBlank && <span className="form-label-error">{pairTip}</span>}
+          <LimitError max={NAME_MAX} values={[data.scaleMaxLabel, data.scaleMaxLabelEs]} />
         </label>
         <LangField
           en={data.scaleMaxLabel}
@@ -1416,6 +1475,7 @@ function ScaleLabelsSection({
           placeholder="e.g. Extremely satisfied"
           esPlaceholder="p. ej. Muy satisfecho"
           error={maxBlank}
+          maxLength={NAME_MAX}
         />
         <p className="form-help">Optional — shown at the high end of the scale.</p>
       </div>
@@ -1525,7 +1585,10 @@ function FeedbackSection({
   return (
     <div className="wizard-fields">
       <div className="form-group">
-        <label className="form-label">Combined Feedback</label>
+        <label className="form-label">
+          Combined Feedback
+          <LimitError max={DESCRIPTION_MAX} values={feedbackValues(data)} />
+        </label>
         <div className="qed-tbl">
           <FeedbackRow
             label="For Correct Response"
@@ -1603,6 +1666,7 @@ function FeedbackRow({
           placeholderEn={placeholder}
           placeholderEs={esPlaceholder}
           disabled={disabled}
+          maxLength={DESCRIPTION_MAX}
         />
       </div>
     </div>
@@ -1739,6 +1803,7 @@ function LangField({
   esPlaceholder,
   disabled,
   error,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -1749,12 +1814,17 @@ function LangField({
   disabled?: boolean;
   /** Mandatory and still empty after a blocked save — reddens the shell. */
   error?: boolean;
+  /** A SOFT limit per language: each row shows the characters left and the
+   *  shell flags amber past the suggested length, red past the limit — the
+   *  caller's label row names the tier (`LimitError`) and the save gate
+   *  blocks on the red one. */
+  maxLength?: number;
 }) {
+  const flag = error ? "has-error" : maxLength !== undefined ? limitClass(maxLength, en, es) : "";
+  const over = flag === "has-error";
   return (
     <div
-      className={`lang-field ${disabled ? "is-disabled" : ""}${
-        error ? " has-error" : ""
-      }`}
+      className={`lang-field ${disabled ? "is-disabled" : ""}${flag ? ` ${flag}` : ""}`}
     >
       <label className="lang-field-row">
         <span className="lang-tag">EN</span>
@@ -1764,7 +1834,9 @@ function LangField({
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => onEn(e.target.value)}
+          aria-invalid={error || over || undefined}
         />
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
       </label>
       <div className="lang-field-divider" />
       <label className="lang-field-row">
@@ -1776,6 +1848,7 @@ function LangField({
           placeholder={esPlaceholder ?? "Traducción en español…"}
           onChange={(e) => onEs(e.target.value)}
         />
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
       </label>
     </div>
   );

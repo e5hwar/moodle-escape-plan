@@ -1,13 +1,16 @@
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon } from "./icons";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
-import { MultiSelect } from "./NewCompanyWizard";
 import { ImagePicker } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
+import { SelectSkillsModal } from "./SelectSkillsModal";
 import { RichTextField } from "./RichTextField";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { tasks, type Task } from "../data/tasks";
 import {
   type AwardRule,
@@ -128,10 +131,25 @@ export function NewSkillWizard(props: Props) {
   const noun = isMastery ? "Mastery Skill" : "Skill";
   const [data, setData] = useState<Data>(() => initialData(props));
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
+  /* The form as it opened — blank, or the record being edited. Leaving asks
+     (the shared LeaveGuard) only once the form differs from that, so an
+     untouched page closes straight away. Save leaves directly: nothing is
+     being thrown away. */
+  const pristine = useRef(data);
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(dirty, { noun, creating: !isEditing });
+  const requestClose = () => guard(onClose);
 
   const nameValid = data.nameEn.trim().length > 0;
   const criteriaValid = isMastery ? data.skillIds.length > 0 : data.taskIds.length > 0;
-  const canSave = nameValid && criteriaValid;
+  // Soft character limits (data/fieldLimits.ts) block the save while over.
+  const nameOver = isOver(NAME_MAX, data.nameEn, data.nameEs);
+  const descOver = isOver(DESCRIPTION_MAX, data.descEn, data.descEs);
+  const fieldsValid = nameValid && criteriaValid && !nameOver && !descOver;
+  /* Editing with nothing changed: there is nothing to save, so Save Changes
+     stays dimmed (and ⌘↵ does nothing) until a field actually differs. */
+  const unchanged = isEditing && !dirty;
+  const canSave = fieldsValid && !unchanged;
   /* Set by a blocked Create / Save (click or ⌘↵). From then on each empty
      mandatory field carries the label-row error until it is filled — never
      while the form is first being filled in. */
@@ -144,7 +162,7 @@ export function NewSkillWizard(props: Props) {
   /* ⌘/Ctrl+Enter is the footer's only button, and waits on the same fields. */
   useWizardEnterShortcut(() => {
     if (canSave) handleSave();
-    else setAttempted(true);
+    else if (!fieldsValid) setAttempted(true);
   });
 
   function handleSave() {
@@ -194,11 +212,15 @@ export function NewSkillWizard(props: Props) {
   const title = isEditing ? `Edit ${noun}` : `New ${noun}`;
   const blockedTip = canSave
     ? undefined
+    : fieldsValid
+    ? "No changes to save"
     : [
         "Fill in every required field to save:",
         ...[
           !nameValid && "• Name",
           !criteriaValid && (isMastery ? "• Linked Skills" : "• Awarding Tasks"),
+          nameOver && `• ${limitLabel("Name", NAME_MAX)}`,
+          descOver && `• ${limitLabel("Description", DESCRIPTION_MAX)}`,
         ].filter(Boolean),
       ].join("\n");
 
@@ -213,11 +235,11 @@ export function NewSkillWizard(props: Props) {
                     full trail above this page — Skills hangs off Tasks — and
                     every step navigates. It never names the page itself. */}
                 <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                  <button className="rvc-crumb" onClick={props.onBackToTasks} title="Back to Tasks">
+                  <button className="rvc-crumb" onClick={() => guard(props.onBackToTasks)} title="Back to Tasks">
                     Tasks
                   </button>
                   <CrumbChevronIcon />
-                  <button className="rvc-crumb" onClick={onClose} title="Back to Skills">
+                  <button className="rvc-crumb" onClick={requestClose} title="Back to Skills">
                     Skills
                   </button>
                 </nav>
@@ -241,7 +263,7 @@ export function NewSkillWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {/* `aria-disabled` rather than `disabled`, the same way the Task
@@ -252,7 +274,7 @@ export function NewSkillWizard(props: Props) {
             className={`btn-publish${canSave ? "" : " is-disabled"}`}
             aria-disabled={!canSave}
             data-tip={blockedTip}
-            onClick={() => { if (canSave) handleSave(); else setAttempted(true); }}
+            onClick={() => { if (canSave) handleSave(); else if (!fieldsValid) setAttempted(true); }}
           >
             {isEditing ? "Save Changes" : `Create ${noun}`}
             <WizardKeyHint />
@@ -288,6 +310,7 @@ function DetailsStep({
         <label className="form-label">
           Name<span className="req">*</span>
           {nameMissing && <span className="form-label-error">Name cannot be left empty</span>}
+          <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
         </label>
         <LangField
           en={data.nameEn}
@@ -297,12 +320,16 @@ function DetailsStep({
           placeholderEn="Name..."
           placeholderEs="Nombre..."
           error={nameMissing}
+          maxLength={NAME_MAX}
         />
         <p className="form-help">{copy.name}</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Description</label>
+        <label className="form-label">
+          Description
+          <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
+        </label>
         <RichTextField
           en={data.descEn}
           es={data.descEs}
@@ -310,6 +337,7 @@ function DetailsStep({
           onChangeEs={(v) => update({ descEs: v })}
           placeholderEn="Description..."
           placeholderEs="Descripción..."
+          maxLength={DESCRIPTION_MAX}
         />
         <p className="form-help">{copy.desc}</p>
       </div>
@@ -450,8 +478,10 @@ function TaskPicker({
 
 /* ─────────────── Mastery linked Skills ─────────────── */
 
-/* Linked Skills uses the plain dropdown field (Figma 101:272 + 591:1322) — a
-   Skill has no table's worth of metadata to weigh up, so the menu is enough. */
+/* Linked Skills opens the Select Skills table modal from the same dropdown
+   field (Figma 101:272) the Awarding Tasks picker uses — choosing the Skills
+   that make up a job wants each Skill's Tasks, Certifications and Industries
+   in view, which a one-line menu row can't carry. */
 function LinkedSkillsStep({
   touch,
   data,
@@ -468,10 +498,7 @@ function LinkedSkillsStep({
 }) {
   const selected = data.skillIds;
 
-  const byName = useMemo(
-    () => new Map(allSkills.map((s) => [s.name, s.id])),
-    [allSkills],
-  );
+  const [open, setOpen] = useState(false);
 
   const chosen = selected
     .map((id) => allSkills.find((s) => s.id === id))
@@ -485,21 +512,37 @@ function LinkedSkillsStep({
           Linked Skills<span className="req">*</span>
           {missing && <span className="form-label-error">Linked Skills cannot be left empty</span>}
         </label>
-        <MultiSelect
-          hasError={missing}
-          onLeave={() => touch("criteria")}
-          options={allSkills.map((s) => s.name)}
-          value={chosen.map((s) => s.name)}
-          onChange={(names) =>
-            update({
-              skillIds: names
-                .map((n) => byName.get(n))
-                .filter((id): id is string => !!id),
-            })
-          }
-          placeholder="Select Skills"
-          searchPlaceholder="Search Skills..."
-        />
+        <div className="multiselect">
+          <div className={`multiselect-field${missing ? " has-error" : ""}`} onClick={() => setOpen(true)}>
+            {chosen.length === 0 ? (
+              <span className="multiselect-placeholder">Select Skills</span>
+            ) : (
+              <MultiSelectTags
+                tags={chosen.map((s) => ({
+                  key: s.id,
+                  label: s.name,
+                  onRemove: () => update({ skillIds: selected.filter((x) => x !== s.id) }),
+                }))}
+              />
+            )}
+            <span className="field-chevron"><DropdownCaretIcon /></span>
+          </div>
+        </div>
+        {/* Portalled for the same reason as Select Tasks: the wizard container
+            is transformed, which would trap the fixed overlay. */}
+        {open && createPortal(
+          <SelectSkillsModal
+            skills={allSkills}
+            value={selected}
+            onCancel={() => { setOpen(false); touch("criteria"); }}
+            onConfirm={(ids) => {
+              update({ skillIds: ids });
+              setOpen(false);
+              touch("criteria");
+            }}
+          />,
+          document.body,
+        )}
         <p className="form-help">
           Choose the Skills that make up this job. Holding all of them should mean the user can do
           it. Awarded automatically once a user holds every one.
@@ -554,6 +597,7 @@ function LangField({
   placeholderEn,
   placeholderEs,
   error = false,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -564,17 +608,26 @@ function LangField({
   /** Mandatory and empty after a blocked save — reddens the shell; the
    *  message lives in the caller's label row. */
   error?: boolean;
+  /** A SOFT limit per language: each row shows the characters left and the
+   *  shell flags amber past the suggested length, red past the limit — the
+   *  caller's label row names the tier (`LimitError`) and the save gate
+   *  blocks on the red one. */
+  maxLength?: number;
 }) {
+  const flag = error ? "has-error" : maxLength !== undefined ? limitClass(maxLength, en, es) : "";
+  const over = flag === "has-error";
   return (
-    <div className={`lang-field${error ? " has-error" : ""}`}>
+    <div className={`lang-field ${flag}`}>
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
-        <input className="lang-field-input" value={en} placeholder={placeholderEn} aria-invalid={error || undefined} onChange={(e) => onChangeEn(e.target.value)} />
+        <input className="lang-field-input" value={en} placeholder={placeholderEn} aria-invalid={error || over || undefined} onChange={(e) => onChangeEn(e.target.value)} />
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
       </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
         <span className="lang-tag">ES</span>
         <input className="lang-field-input" value={es} placeholder={placeholderEs} onChange={(e) => onChangeEs(e.target.value)} />
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
       </div>
     </div>
   );

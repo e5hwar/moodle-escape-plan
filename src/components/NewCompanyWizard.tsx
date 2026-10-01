@@ -38,6 +38,9 @@ import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
@@ -45,6 +48,7 @@ import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 import { PrmModal } from "./PrmModal";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CopiedToast } from "./CopiedToast";
 import { CURRENCY_INFO, currencyOptionFor, codeFromCurrencyOption } from "../data/currencies";
 
@@ -315,7 +319,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // still holding from a subscription the admin looked at and moved away from
   // is not a change to a Free Access grant, and counting it would leave the
   // form dirty after the admin had put everything back.
-  const planStateKey = JSON.stringify(
+  const planStateKey = draftKey(
     plan === "subscription"
       ? { plan, tier, billingCycle, currency, rate: effectiveRate, seats: seatCount, payment }
       : plan === "complimentary"
@@ -324,7 +328,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   );
   /* The Company-details equivalent of planStateKey — every field
      handleSaveDetails writes, so putting a value back un-dirties the form. */
-  const detailsStateKey = JSON.stringify({
+  const detailsStateKey = draftKey({
     name: name.trim(),
     taxStatus,
     assignedCsm,
@@ -345,6 +349,37 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const initialPlanStateRef = useRef<string | null>(null);
   if (initialPlanStateRef.current === null) initialPlanStateRef.current = planStateKey;
   const planDirty = planStateKey !== initialPlanStateRef.current;
+
+  /* A create also writes the Admin Account step, which neither key covers. */
+  const adminStateKey = draftKey({
+    contactName: contactName.trim(),
+    email: email.trim(),
+    phone: phone.trim(),
+  });
+  const initialAdminRef = useRef<string | null>(null);
+  if (initialAdminRef.current === null) initialAdminRef.current = adminStateKey;
+  const adminDirty = adminStateKey !== initialAdminRef.current;
+
+  /* What leaving would throw away (the shared LeaveGuard) — only what THIS
+     mode saves: Edit Company saves details, Manage Subscription the plan, a
+     create all three steps. An untouched form closes straight away, and once
+     the save has gone through (success screen) there is nothing left to lose. */
+  const leaveDirty =
+    !createdCompany &&
+    (detailsOnly
+      ? detailsDirty
+      : subscriptionOnly
+      ? planDirty
+      : detailsDirty || adminDirty || planDirty);
+  const guard = useLeaveGuard(
+    leaveDirty,
+    subscriptionOnly ? { noun: "Subscription" } : { noun: "Company", creating: !isEdit },
+  );
+  const requestClose = () => guard(onClose);
+  // Product Config leaves the page too.
+  const goToProductConfig =
+    onNavigateToProductConfig && (() => guard(onNavigateToProductConfig));
+
   const currentPlan = editCompany && editBilling ? currentPlanRows(editCompany, editBilling) : null;
   // Seats are fixed for an account that is already on a paid subscription —
   // they move through the seat-management flow, not this form. An account
@@ -384,6 +419,8 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // surfaces the first thing the admin needs to fix as they scan down the page.
   const step0Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: name.trim().length > 0, message: "Add a company name to continue." },
+    // Soft limit: typing past it is allowed, saving isn't.
+    { valid: !isOver(NAME_MAX, name), message: `Shorten the company name to ${NAME_MAX} characters to continue.` },
     { valid: addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
     // Only when this step IS the save — in the full wizard it is a way-point,
     // and an untouched details step is a perfectly good one to walk past.
@@ -393,6 +430,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   ];
   const step1Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
     { valid: contactName.trim().length > 0, message: "Add an account holder name to continue." },
+    { valid: !isOver(NAME_MAX, contactName), message: `Shorten the account holder name to ${NAME_MAX} characters to continue.` },
     { valid: email.trim().length > 0, message: "Add an account email to continue." },
   ];
   // A per-seat rate that isn't a saved Stripe price can't be used to create a
@@ -412,7 +450,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   const step2Checks: { valid: boolean; message: string }[] = [
     // Editing saves a CHANGE. With the form still exactly as it was loaded
     // there is nothing to write, so the CTA stays disabled and says why.
-    ...(isEdit ? [{ valid: planDirty, message: "Change something to save." }] : []),
+    ...(isEdit ? [{ valid: planDirty, message: "No changes to save" }] : []),
     ...(isSubscription
       ? [
           { valid: priceValid, message: "Save the custom price before creating the subscription." },
@@ -433,8 +471,11 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
 
   // First unmet requirement on the step currently in view, shown as a tooltip
   // on the disabled CTA (hover, not static text).
+  /* Edit Company (details only) saves a CHANGE too: untouched, its Save
+     Changes stays off the same way Manage Subscription's does. */
+  const detailsUnchanged = detailsOnly && !detailsDirty;
   const ctaTooltip = step === 0
-    ? step0Checks.find((c) => !c.valid)?.message ?? ""
+    ? step0Checks.find((c) => !c.valid)?.message ?? (detailsUnchanged ? "No changes to save" : "")
     : step === 1
     ? step1Checks.find((c) => !c.valid)?.message ?? ""
     : step2Checks.find((c) => !c.valid)?.message ?? "";
@@ -735,7 +776,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   addrState={addrState} setAddrState={setAddrState}
                   industries={industries} setIndustries={setIndustries}
                   partnerships={partnerships} setPartnerships={setPartnerships}
-                  onNavigateToProductConfig={onNavigateToProductConfig}
+                  onNavigateToProductConfig={goToProductConfig}
                 />
               ) : step === 1 ? (
                 <StepAdminAccount
@@ -778,7 +819,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && !subscriptionOnly && (
@@ -790,7 +831,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           {step === 0 ? (
             <button
               className={`btn-publish${detailsOnly ? "" : " wizard-gate-btn"}${ctaTooltip ? " has-cta-tooltip" : ""}`}
-              disabled={!companyValid}
+              disabled={!companyValid || detailsUnchanged}
               data-tooltip={ctaTooltip}
               onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
             >
@@ -1653,8 +1694,10 @@ function Step1Details({
         <label className="form-label">
           Company Name<span className="req">*</span>
           {nameMissing && <span className="form-label-error">Company Name cannot be left empty</span>}
+          <LimitError max={NAME_MAX} values={[name]} />
         </label>
-        <input
+        <LimitedInput
+          max={NAME_MAX}
           autoFocus
           className={`form-input${nameMissing ? " has-error" : ""}`}
           aria-invalid={nameMissing || undefined}
@@ -1930,8 +1973,10 @@ function StepAdminAccount({
         <label className="form-label">
           Account Holder<span className="req">*</span>
           {holderMissing && <span className="form-label-error">Account Holder cannot be left empty</span>}
+          <LimitError max={NAME_MAX} values={[contactName]} />
         </label>
-        <input
+        <LimitedInput
+          max={NAME_MAX}
           autoFocus
           className={`form-input${holderMissing ? " has-error" : ""}`}
           aria-invalid={holderMissing || undefined}
@@ -2723,7 +2768,7 @@ function CreatePriceModal({
   // price is valid once ANY row carries a rate — not just the first. A price
   // that omits the wizard's own currency simply leaves its price field empty,
   // which the wizard already handles.
-  const valid = rows.some((r) => parseFloat(r.amount) > 0);
+  const valid = rows.some((r) => parseFloat(r.amount) > 0) && !isOver(NAME_MAX, label);
 
   function setAmount(i: number, v: string) {
     if (v !== "" && !/^\d*\.?\d{0,2}$/.test(v)) return;
@@ -2763,8 +2808,12 @@ function CreatePriceModal({
       onConfirm={submit}
     >
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Name</label>
-        <input
+        <label className="form-label">
+          Name
+          <LimitError max={NAME_MAX} values={[label]} />
+        </label>
+        <LimitedInput
+          max={NAME_MAX}
           autoFocus
           className="form-input"
           placeholder="Name..."

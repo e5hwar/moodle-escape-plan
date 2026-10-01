@@ -5,6 +5,8 @@ import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
 import { InfoTipIcon, SmallXIcon } from "./icons";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
@@ -20,18 +22,22 @@ import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { MultiSelect } from "./NewCompanyWizard";
+import { CertIndustriesModal } from "./CertIndustriesModal";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { CopiedToast } from "./CopiedToast";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import type { PreviewScreenModel } from "./PreviewPanel";
 import {
   type Certification,
+  type CareerStage as RecordCareerStage,
+  type CertType as RecordCertType,
   certifications,
   CERT_BY_USEDIN,
   formatTimeToComplete,
 } from "../data/certifications";
+import { MONTHS_3 } from "../formatDate";
 import type { CertImportReport, ImportedCertCourse, ImportedCertTask } from "../data/certImport";
 import { nodes as contentNodes, type ContentNode } from "../data/contentLinks";
-import { industries } from "../data/industries";
 import { tasks as taskLibrary, formatTaskDuration, type Task, type TaskType } from "../data/tasks";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
@@ -641,6 +647,58 @@ function recordContentTags(tags: string[] | undefined): ContentTag[] {
   return out;
 }
 
+/* The inverse of buildInitialData, for a create: the list record the wizard's
+   data describes. The record keeps one Industry path (its `industry` is a
+   string); the first tagged one is it. Dates are today in the seed's own
+   "Oct 01, 2026" form, so the new row sorts and reads like the rest. */
+const STAGE_LABELS: Record<CareerStage, RecordCareerStage> = {
+  "pre-apprentice": "Pre-Apprentice",
+  apprentice: "Apprentice",
+  journeyman: "Journeyman",
+  master: "Master",
+};
+const TYPE_LABELS: Record<CertType, RecordCertType> = {
+  unit: "Unit",
+  credential: "Credential",
+  program: "Program",
+  bundle: "Bundle",
+};
+function todayLabel(): string {
+  const d = new Date();
+  return `${MONTHS_3[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()}`;
+}
+function toCertRecord(d: WizardData): Omit<Certification, "id"> {
+  const today = todayLabel();
+  const tags = d.contentTags.map((t) => (t.type === "userType" ? AUDIENCE_B2B_ONLY : t.value));
+  const keywords = d.keywordsEn
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  return {
+    name: d.nameEn.trim(),
+    industry: d.industries[0] ?? "",
+    ceus: d.ceus.trim(),
+    tasks: flattenTasks(d.courses).length,
+    createdBy: "SkillCat",
+    description: d.descEn || undefined,
+    timeToComplete: d.timeValue ? { value: Number(d.timeValue), unit: d.timeUnit } : undefined,
+    dateCreated: today,
+    dateModified: today,
+    visibility: d.visibility === "visible" ? "Visible" : "Hidden",
+    careerStage: d.careerStage ? STAGE_LABELS[d.careerStage] : undefined,
+    type: d.type ? TYPE_LABELS[d.type] : undefined,
+    payment:
+      d.accessType === "consumable"
+        ? "Consumable"
+        : d.accessType === "non-consumable"
+          ? "Non-consumable"
+          : undefined,
+    resetsProgress: d.accessType === "consumable" && d.consumableProgress === "reset",
+    keywords: keywords.length ? keywords : undefined,
+    tags: tags.length ? tags : undefined,
+  };
+}
+
 // When editing, prefill the fields the Certification record actually carries.
 // Structural data (courses, completion) isn't stored on the list record, so for
 // existing Certifications we populate plausible sample data instead.
@@ -709,17 +767,26 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   name: "Name",
   courses: "Courses",
   completion: "Completion Criteria",
+  nameLimit: limitLabel("Name", NAME_MAX),
+  descLimit: limitLabel("Description", DESCRIPTION_MAX),
+  announceLimit: limitLabel("Announcement", DESCRIPTION_MAX),
+  keywordsLimit: limitLabel("Keywords", NAME_MAX),
 };
 
 type Props = {
   onClose: () => void;
+  /** A finished create: the new record, minus the id the list assigns. Fired
+   *  from the Industries modal that ends the flow, so the tagged Industries
+   *  ride along — then `onClose` lands on the Certifications table, where the
+   *  Setup banner, pill and card take over the rest of the setup. */
+  onCreate?: (cert: Omit<Certification, "id">) => void;
   editingCert?: Certification;
   /** A checked CSV Upload — the new Certification opens with its Courses,
    *  Lessons, and Tasks already built. */
   imported?: CertImportReport;
 };
 
-export function NewCertificationWizard({ onClose, editingCert, imported }: Props) {
+export function NewCertificationWizard({ onClose, onCreate, editingCert, imported }: Props) {
   const isEditing = !!editingCert;
   const steps = STEPS;
   const [step, setStep] = useState(0);
@@ -753,21 +820,16 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
   // Open once the Certification exists — Industries are tagged after creation,
   // not as a Details field.
   const [showIndustries, setShowIndustries] = useState(false);
-  // Cancel's confirm. There is no draft to fall back on — leaving throws the
-  // work away — so an edited wizard asks first.
-  const [confirmCancel, setConfirmCancel] = useState(false);
-
   /* The wizard as it opened. Anything the admin touches makes `dirty` true,
-     which is what decides whether Cancel stops to ask: an untouched wizard
-     closes straight away rather than nagging about nothing. An imported
-     structure is work already done, so it counts against the empty wizard —
-     Cancel asks before throwing a CSV's Courses away. */
+     which is what decides whether leaving stops to ask (the shared
+     LeaveGuard): an untouched wizard closes straight away rather than nagging
+     about nothing. An imported structure is work already done, so it counts
+     against the empty wizard — leaving asks before throwing a CSV's Courses
+     away. There is no draft to fall back on. */
   const pristine = useRef(imported ? { ...data, courses: [] } : data);
-  const dirty = JSON.stringify(data) !== JSON.stringify(pristine.current);
-  function requestClose() {
-    if (dirty) setConfirmCancel(true);
-    else onClose();
-  }
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(dirty, { noun: "Certification", creating: !isEditing });
+  const requestClose = () => guard(onClose);
 
   const update = (patch: Partial<WizardData>) => setData((d) => ({ ...d, ...patch }));
 
@@ -794,6 +856,18 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
     (d: WizardData) => {
       const gaps: { step: number; key: string }[] = [];
       if (!d.nameEn.trim()) gaps.push({ step: stepIndex("details"), key: "name" });
+      /* Soft character limits (data/fieldLimits.ts): a field past its limit
+         blocks creating like an empty mandatory one, on the step that owns it. */
+      if (isOver(NAME_MAX, d.nameEn, d.nameEs)) gaps.push({ step: stepIndex("details"), key: "nameLimit" });
+      if (isOver(DESCRIPTION_MAX, d.descEn, d.descEs)) {
+        gaps.push({ step: stepIndex("details"), key: "descLimit" });
+      }
+      if (isOver(DESCRIPTION_MAX, d.announceEn, d.announceEs)) {
+        gaps.push({ step: stepIndex("additional"), key: "announceLimit" });
+      }
+      if (isOver(NAME_MAX, d.keywordsEn, d.keywordsEs)) {
+        gaps.push({ step: stepIndex("additional"), key: "keywordsLimit" });
+      }
       // A Condition Set with no items completes nothing, so an empty-handed
       // Completion step counts as missing either way.
       // The builder tolerates an empty Certification — you can delete your way
@@ -812,6 +886,10 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
      button on the keystroke rather than on the next attempt. */
   const gaps = useMemo(() => collectMissing(data), [collectMissing, data]);
   const canPublish = gaps.length === 0;
+  /* Editing with nothing changed: Save Changes has nothing to save, so it
+     stays dimmed until something differs from the opening snapshot. */
+  const unchanged = isEditing && !dirty;
+  const canSave = canPublish && !unchanged;
 
   /* The gaps that SHOW (fieldFlags.tsx): clicked into and out of, on a step
      already moved past, or every one after a blocked publish. Live — a field
@@ -827,8 +905,10 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
   /* What the unavailable Create Certification button says on hover: the fields
      holding it back, each with the step that owns it. Without this the button
      is just dim — the admin has no way to tell what is left. */
-  const blockedTip = canPublish
+  const blockedTip = canSave
     ? undefined
+    : canPublish
+    ? "No changes to save"
     : [
         "Fill in every required field to create this Certification:",
         ...gaps.map(
@@ -854,6 +934,7 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
      create hands off to the Industries modal, which is what actually closes the
      wizard. */
   function handlePublish() {
+    if (canPublish && unchanged) return;
     setAttemptedSubmit(true);
     if (!canPublish) {
       goStep(gaps[0].step);
@@ -877,7 +958,7 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
   useWizardEnterShortcut(
     () => {
       if (!isLast) goStep(step + 1);
-      else if (canPublish) handlePublish();
+      else if (canSave) handlePublish();
     },
     handlePublish,
     !splitTask,
@@ -1044,8 +1125,8 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
               it IS the primary. */}
           {!isLast && (
             <button
-              className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
-              aria-disabled={!canPublish}
+              className={`btn-save-draft${canSave ? "" : " is-disabled"}`}
+              aria-disabled={!canSave}
               data-tip={blockedTip}
               onClick={handlePublish}
             >
@@ -1057,9 +1138,9 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
               action itself, carrying the same gate. */}
           <button
             className={`btn-publish${isLast ? "" : " wizard-gate-btn"}${
-              isLast && !canPublish ? " is-disabled" : ""
+              isLast && !canSave ? " is-disabled" : ""
             }`}
-            aria-disabled={isLast && !canPublish}
+            aria-disabled={isLast && !canSave}
             data-tip={isLast ? blockedTip : undefined}
             onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
@@ -1072,33 +1153,15 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
         </div>
       </footer>
 
-      {/* Cancel's confirm. Portalled past `.wizard-pane`, whose transform would
-          otherwise trap a fixed-position overlay inside the pane. */}
-      {confirmCancel &&
-        createPortal(
-          <PrmModal
-            title={isEditing ? "Discard changes?" : "Discard this Certification?"}
-            confirmLabel="Discard"
-            cancelLabel="Keep editing"
-            danger
-            onCancel={() => setConfirmCancel(false)}
-            onConfirm={() => { setConfirmCancel(false); onClose(); }}
-          >
-            <p className="prm-content">
-              {isEditing
-                ? "Your changes to this Certification will be lost. This can't be undone."
-                : "This Certification hasn't been created yet — everything you've filled in will be lost."}
-            </p>
-          </PrmModal>,
-          document.body,
-        )}
-
       {showIndustries && (
         <CertIndustriesModal
           certName={data.nameEn.trim() || "this Certification"}
           value={data.industries}
           onChange={(v) => update({ industries: v })}
-          onDone={onClose}
+          onDone={() => {
+            onCreate?.(toCertRecord(data));
+            onClose();
+          }}
         />
       )}
 
@@ -1113,13 +1176,21 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
         createPortal(
           <SelectRequirementModal
             only="task"
-            full
             allCreators
             title="Add Existing Tasks"
             description={`Adding to ${destinationLabel(data.courses, existingPicker)}. Library Tasks are reused, not duplicated.`}
             confirmNoun="Task"
             existingNames={flattenTasks(data.courses).map((t) => t.name)}
-            lockedTip="Already in this Certification"
+            lockedFlag={(name) => {
+              const at = taskLocations(data.courses).get(name);
+              return at ? `In ${at}` : "Already added";
+            }}
+            lockedTip={(name) => {
+              const at = taskLocations(data.courses).get(name);
+              return at
+                ? `Already in this Certification, under ${at} — a Task can appear only once.`
+                : "Already in this Certification";
+            }}
             onPreviewTask={previewTaskInNewTab}
             onCancel={() => setExistingPicker(null)}
             onConfirm={(picks) => {
@@ -1137,65 +1208,6 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
   );
 }
 
-/* Industries are tagged once the Certification exists, not while it's being
-   built — so the last thing a create flow does is hand the new Cert to this
-   modal. Options are the same "Industry › Sub-Industry" paths the cert records
-   and the Certifications filters use. */
-const INDUSTRY_OPTIONS: string[] = [...industries]
-  .sort((a, b) => a.displayPosition - b.displayPosition)
-  .flatMap((ind) => [
-    ind.name,
-    ...[...ind.subIndustries]
-      .sort((a, b) => a.displayPosition - b.displayPosition)
-      .map((sub) => `${ind.name} › ${sub.name}`),
-  ]);
-
-function CertIndustriesModal({
-  certName,
-  value,
-  onChange,
-  onDone,
-}: {
-  certName: string;
-  value: string[];
-  onChange: (v: string[]) => void;
-  onDone: () => void;
-}) {
-  return (
-    <PrmModal
-      title="Add Industries"
-      description={
-        <>
-          <strong>{certName}</strong> has been created. Tag it with the Industries and
-          Sub-Industries learners browse it under.
-        </>
-      }
-      confirmLabel={value.length > 0 ? "Add Industries" : "Done"}
-      cancelLabel="Skip for now"
-      onCancel={onDone}
-      onConfirm={onDone}
-    >
-      <div className="prm-stack">
-        <div className="prm-field">
-          <span className="prm-label">Industries</span>
-          <MultiSelect
-            popupMenu
-            options={INDUSTRY_OPTIONS}
-            value={value}
-            onChange={onChange}
-            placeholder="Select Industries"
-            searchPlaceholder="Search Industries..."
-          />
-          <p className="form-help">
-            Used for catalog browsing and content discovery. A Certification can belong to multiple
-            Industries and Sub-Industries, and can be re-tagged any time from the Industries page.
-          </p>
-        </div>
-      </div>
-    </PrmModal>
-  );
-}
-
 /** Human-readable "Course › Lesson" label for the Task-library picker header. */
 /** The picker's row-end Preview: its own tab, so the builder behind the picker
  *  keeps its place — for now the `?taskPreview=` placeholder page (App.tsx). */
@@ -1205,6 +1217,24 @@ function previewTaskInNewTab(task: Task) {
     "_blank",
     "noopener",
   );
+}
+
+/** Task name → where it sits in the tree ("Course › Lesson", or just the
+ *  Course for a loose Task) — the Add Existing Tasks picker names it on each
+ *  locked row so a ticked-and-locked Task never reads as "preselected". */
+function taskLocations(courses: CertCourse[]): Map<string, string> {
+  const at = new Map<string, string>();
+  courses.forEach((co, i) => {
+    const courseName = co.nameEn.trim() || `Course ${i + 1}`;
+    for (const ch of co.children) {
+      if (ch.kind === "task") at.set(ch.task.name, courseName);
+      else {
+        const where = `${courseName} › ${ch.lesson.nameEn.trim() || "Untitled Lesson"}`;
+        for (const t of ch.lesson.tasks) at.set(t.name, where);
+      }
+    }
+  });
+  return at;
 }
 
 function destinationLabel(
@@ -1290,6 +1320,7 @@ function DetailsStep({
           {nameError && (
             <span className="form-label-error">Enter a name to publish this Certification.</span>
           )}
+          <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
         </label>
         <LangField
           en={data.nameEn}
@@ -1299,11 +1330,15 @@ function DetailsStep({
           placeholderEn="Name"
           placeholderEs="Nombre"
           error={nameError}
+          maxLength={NAME_MAX}
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Description</label>
+        <label className="form-label">
+          Description
+          <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
+        </label>
         <RichTextField
           en={data.descEn}
           es={data.descEs}
@@ -1311,6 +1346,7 @@ function DetailsStep({
           onChangeEs={(v) => update({ descEs: v })}
           placeholderEn="Description"
           placeholderEs="Descripción"
+          maxLength={DESCRIPTION_MAX}
         />
         <p className="form-help">
           Around 200 characters reads best. Longer descriptions are accepted but truncated in compact views.
@@ -1446,7 +1482,10 @@ function AdditionalInfoStep({
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Announcement</label>
+        <label className="form-label">
+          Announcement
+          <LimitError max={DESCRIPTION_MAX} values={[data.announceEn, data.announceEs]} />
+        </label>
         <RichTextField
           en={data.announceEn}
           es={data.announceEs}
@@ -1454,6 +1493,7 @@ function AdditionalInfoStep({
           onChangeEs={(v) => update({ announceEs: v })}
           placeholderEn="Announcement..."
           placeholderEs="Anuncio..."
+          maxLength={DESCRIPTION_MAX}
         />
         <p className="form-help">Shown to learners currently going through this Certification. Use for important updates.</p>
       </div>
@@ -1475,7 +1515,10 @@ function AdditionalInfoStep({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Keywords</label>
+        <label className="form-label">
+          Keywords
+          <LimitError max={NAME_MAX} values={[data.keywordsEn, data.keywordsEs]} />
+        </label>
         <LangField
           en={data.keywordsEn}
           es={data.keywordsEs}
@@ -1483,6 +1526,7 @@ function AdditionalInfoStep({
           onChangeEs={(v) => update({ keywordsEs: v })}
           placeholderEn="Keywords"
           placeholderEs="Palabras clave"
+          maxLength={NAME_MAX}
         />
         <p className="form-help">
           Improves search and discoverability. Separate keywords with a comma
@@ -2118,7 +2162,6 @@ function TasksStep({
           pool={IMPORT_POOL}
           preselected={plan.map((c) => c.id)}
           locked={EMPTY_LOCKED}
-          full
           allowEmpty
           onCancel={() => setImporting(false)}
           onConfirm={applyImport}
@@ -2196,7 +2239,11 @@ function NodeModal({
     descEs: node?.descEs ?? "",
   });
   const patch = (p: Partial<NodeDraft>) => setDraft((d) => ({ ...d, ...p }));
-  const canSave = draft.nameEn.trim().length > 0;
+  // Over a soft character limit blocks the save like an empty name does.
+  const overLimit =
+    isOver(NAME_MAX, draft.nameEn, draft.nameEs) ||
+    isOver(DESCRIPTION_MAX, draft.descEn, draft.descEs);
+  const canSave = draft.nameEn.trim().length > 0 && !overLimit;
 
   function submit() {
     if (!canSave) return;
@@ -2230,9 +2277,11 @@ function NodeModal({
         <div className="prm-field">
           <span className="prm-label">
             Name<span className="prm-req">*</span>
+            <LimitError max={NAME_MAX} values={[draft.nameEn, draft.nameEs]} />
           </span>
           <LangField
             autoFocus
+            maxLength={NAME_MAX}
             en={draft.nameEn}
             es={draft.nameEs}
             onChangeEn={(v) => patch({ nameEn: v })}
@@ -2245,7 +2294,10 @@ function NodeModal({
         </div>
 
         <div className="prm-field">
-          <span className="prm-label">Description</span>
+          <span className="prm-label">
+            Description
+            <LimitError max={DESCRIPTION_MAX} values={[draft.descEn, draft.descEs]} />
+          </span>
           <RichTextField
             en={draft.descEn}
             es={draft.descEs}
@@ -2254,6 +2306,7 @@ function NodeModal({
             placeholderEn="Description"
             placeholderEs="Descripción"
             minRows={2}
+            maxLength={DESCRIPTION_MAX}
           />
         </div>
       </div>
@@ -2821,6 +2874,11 @@ function TaskRow({
           title="Delete Task?"
           confirmLabel="Delete Task"
           danger
+          doubleConfirm={
+            <>
+              <strong>{task.name}</strong> will be permanently deleted. This can't be undone.
+            </>
+          }
           onCancel={() => setDeleting(false)}
           onConfirm={() => { setDeleting(false); onRemove(); }}
         >
@@ -3294,6 +3352,8 @@ function ConditionSetCard({
       createPortal(
         <SelectRequirementModal
           existingNames={set.items.map((i) => i.name)}
+          lockedFlag={() => "In this Condition Set"}
+          lockedTip="Already in this Condition Set — each requirement can be added once."
           onCancel={() => setPicking(false)}
           onConfirm={(picks) => {
             onAddItems(picks.map(pickToItem));
@@ -3790,6 +3850,14 @@ export function ArchiveCertificationPage({
   // start; the permanence is acknowledged in a confirm modal instead of an
   // on-page "Archive this Certification" toggle (removed 2026-09-24).
   const [confirming, setConfirming] = useState(false);
+  // …except while the Replacement Alert runs past its soft character limit,
+  // which holds the CTA back (with a tooltip saying why) until it's trimmed.
+  const alertOver = isOver(DESCRIPTION_MAX, alertEn, alertEs);
+  // Anything picked or written asks before Cancel throws it away.
+  const hasText = (html: string) => html.replace(/<[^>]*>/g, "").trim() !== "";
+  const guard = useLeaveGuard(
+    replacementCerts.length > 0 || hasText(alertEn) || hasText(alertEs),
+  );
   const replacementLine =
     replacementCerts.length === 0
       ? "No replacement is selected, so enrolled learners won't be pointed to another Certification."
@@ -3842,12 +3910,16 @@ export function ArchiveCertificationPage({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Replacement Alert</label>
+                <label className="form-label">
+                  Replacement Alert
+                  <LimitError max={DESCRIPTION_MAX} values={[alertEn, alertEs]} />
+                </label>
                 <RichTextField
                   en={alertEn}
                   es={alertEs}
                   onChangeEn={setAlertEn}
                   onChangeEs={setAlertEs}
+                  maxLength={DESCRIPTION_MAX}
                 />
                 <p className="form-help">
                   Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
@@ -3860,10 +3932,19 @@ export function ArchiveCertificationPage({
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>Cancel</button>
         </div>
         <div className="wizard-actions">
-          <button className="btn-publish" onClick={() => setConfirming(true)}>
+          <button
+            className={`btn-publish${alertOver ? " is-disabled" : ""}`}
+            aria-disabled={alertOver}
+            data-tip={
+              alertOver
+                ? `Shorten this field to archive:\n• ${limitLabel("Replacement Alert", DESCRIPTION_MAX)}`
+                : undefined
+            }
+            onClick={() => !alertOver && setConfirming(true)}
+          >
             Archive Certification
           </button>
         </div>
@@ -3875,6 +3956,12 @@ export function ArchiveCertificationPage({
             title="Archive this Certification?"
             confirmLabel="Archive Certification"
             danger
+            doubleConfirm={
+              <>
+                <strong>{cert.name}</strong> will be archived and leave the catalog. This can't
+                be undone.
+              </>
+            }
             onCancel={() => setConfirming(false)}
             onConfirm={() => { setConfirming(false); onArchive(); }}
           >
@@ -3928,6 +4015,7 @@ function LangField({
   autoFocus,
   onEnter,
   suggestion,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -3947,6 +4035,11 @@ function LangField({
    *  name): it replaces the placeholders, and Tab in an empty row fills every
    *  empty row with it — the Spanish row with `es`, falling back to `en`. */
   suggestion?: { en: string; es: string };
+  /** A SOFT limit per language: each row shows the characters left and the
+   *  shell flags amber past the suggested length, red past the limit — the
+   *  caller's label row names the tier (`LimitError`) and the save gate
+   *  blocks on the red one. */
+  maxLength?: number;
 }) {
   // Focus AND select, so the field is ready to type into — an edit replaces
   // the current name rather than appending to it. Mount only.
@@ -3975,9 +4068,11 @@ function LangField({
       if (!es) onChangeEs(suggestEs);
     }
   };
+  const flag = error ? "has-error" : maxLength !== undefined ? limitClass(maxLength, en, es) : "";
+  const over = flag === "has-error";
   return (
     <>
-      <div className={`lang-field ${error ? "has-error" : ""}`}>
+      <div className={`lang-field ${flag}`}>
         <div className="lang-field-row">
           <span className="lang-tag">EN</span>
           <input
@@ -3985,7 +4080,7 @@ function LangField({
             className="lang-field-input"
             value={en}
             placeholder={suggestEn || placeholderEn}
-            aria-invalid={error || undefined}
+            aria-invalid={error || over || undefined}
             onChange={(e) => onChangeEn(e.target.value)}
             onKeyDown={keyDown(en)}
           />
@@ -3996,6 +4091,7 @@ function LangField({
               <span className="kbd-letter">Tab</span>
             </span>
           )}
+          {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
         </div>
         <div className="lang-field-divider" />
         <div className="lang-field-row">
@@ -4007,6 +4103,7 @@ function LangField({
             onChange={(e) => onChangeEs(e.target.value)}
             onKeyDown={keyDown(es)}
           />
+          {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
         </div>
       </div>
     </>

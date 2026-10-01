@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
 import { certifications } from "../data/certifications";
 import { PrmModal } from "./PrmModal";
+import { TableCols } from "./TableCols";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -15,8 +16,9 @@ import {
 import { SearchTrailing } from "./SearchPanelParts";
 
 /* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
- * inside the shared PrmModal shell: search bar, two filter pills, a 5-column
- * table and pagination, with Cancel / Continue in the modal's own footer.
+ * inside the shared PrmModal shell: search bar, filter pills, a table carrying
+ * the Tasks table's column names (Task Name, Type, Certifications, Date
+ * Modified) with a select-all header, and pagination, with Cancel / Continue in the modal's own footer.
  *
  * The Certification builder's Add Existing Tasks is a different picker —
  * SelectRequirementModal, Tasks only — not this one.
@@ -37,7 +39,7 @@ const VISIBILITIES = ["Visible", "Hidden"];
  *  Skills page derives a Skill's Certifications through its Tasks. */
 const industryOfCert = new Map(certifications.map((c) => [c.name, c.industry]));
 
-type SortKey = "name" | "type" | "certs" | "industry" | "dateModified";
+type SortKey = "name" | "type" | "certs" | "dateModified";
 type SortDir = "asc" | "desc";
 
 /** The node's subtitle is a rule, not decoration: only SkillCat's own Tasks are
@@ -71,8 +73,6 @@ function compare(a: Task, b: Task, key: SortKey): number {
       return a.type.localeCompare(b.type);
     case "certs":
       return certsOf(a).join(", ").localeCompare(certsOf(b).join(", "));
-    case "industry":
-      return industriesOf(a).join(", ").localeCompare(industriesOf(b).join(", "));
     case "dateModified":
       return (
         (Date.parse(a.dateModified ?? "") || 0) -
@@ -176,6 +176,24 @@ export function SelectTasksModal({
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
+  /* Continue only once there's something to hand back: at least one Task
+     ticked, and a set that differs from what the field already holds. */
+  const changed = picked.length !== value.length || picked.some((id) => !value.includes(id));
+  const canContinue = picked.length > 0 && changed;
+
+  /* Select-all covers every row the current search and filters match, not
+     just the visible page — the Select Questions / Grant Attempts scope. */
+  const pickedHere = useMemo(() => sorted.filter((t) => picked.includes(t.id)).length, [sorted, picked]);
+  const allOn = sorted.length > 0 && pickedHere === sorted.length;
+  const someOn = pickedHere > 0 && !allOn;
+
+  function toggleAll() {
+    const ids = new Set(sorted.map((t) => t.id));
+    setPicked((p) =>
+      allOn ? p.filter((id) => !ids.has(id)) : [...p, ...sorted.filter((t) => !p.includes(t.id)).map((t) => t.id)],
+    );
+  }
+
   function toggleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key
@@ -197,8 +215,8 @@ export function SelectTasksModal({
       title="Select Tasks"
       description="Only Tasks that have been created by SkillCat are shown and can be selected here"
       confirmLabel="Continue"
-      pick
-      pickWide
+      pickFull
+      confirmDisabled={!canContinue}
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >
@@ -339,26 +357,31 @@ export function SelectTasksModal({
         </div>
 
         <div className="stm-table-wrap">
-          {/* Column-width floor, per the shared table convention — below it the
-              table scrolls sideways instead of crushing the cells. 44 check +
-              240 name + 136 type + 224 certs + 184 industry + 126 edited. */}
+          {/* Column-width floor = the sum of COL_WIDTHS — below it the table
+              scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "954px" } as React.CSSProperties}
+            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table">
               <ColGroup />
               <thead>
                 <tr>
-                  {/* Spacer only — the node's header carries a Radial Button
-                      with a transparent border to hold the column, not a
-                      select-all control. */}
-                  <th className="stm-col-check no-sort" />
+                  <th className="stm-col-check no-sort">
+                    <button
+                      className={`checkbox ${allOn ? "checked" : someOn ? "partial" : ""}`}
+                      aria-label={allOn ? "Deselect all" : "Select all"}
+                      aria-pressed={allOn}
+                      disabled={sorted.length === 0}
+                      onClick={toggleAll}
+                    >
+                      {allOn ? <CheckIcon /> : someOn ? <span className="checkbox-dash" /> : null}
+                    </button>
+                  </th>
                   <Th col="name" label="Task Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
-                  <Th col="type" label="Task Type" cls="stm-col-type" sort={sort} toggle={toggleSort} />
+                  <Th col="type" label="Type" cls="stm-col-type" sort={sort} toggle={toggleSort} />
                   <Th col="certs" label="Certifications" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="industry" label="Industries" cls="stm-col-industry" sort={sort} toggle={toggleSort} />
-                  <Th col="dateModified" label="Edited On" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
+                  <Th col="dateModified" label="Date Modified" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>
             </table>
@@ -369,7 +392,7 @@ export function SelectTasksModal({
                 <tbody>
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={6}>No Tasks match your search and filters.</td>
+                      <td colSpan={5}>No Tasks match your search and filters.</td>
                     </tr>
                   ) : (
                     rows.map((t) => {
@@ -377,7 +400,7 @@ export function SelectTasksModal({
                       return (
                         <tr
                           key={t.id}
-                          className={on ? "selected" : ""}
+                          className={`${on ? "selected" : ""} ${t.hidden ? "task-dim" : ""}`}
                           onClick={() => toggle(t.id)}
                         >
                           <td className="stm-col-check">
@@ -402,13 +425,15 @@ export function SelectTasksModal({
                               it is one of the classes the app-wide "mute every
                               non-Name cell" rule excludes. Without it that rule
                               (five :not()s deep) silently wins. */}
-                          <td className="stm-col-name col-name">{t.name}</td>
+                          <td className="stm-col-name col-name">
+                            <span className="tsk-name">{t.name}</span>
+                            {/* The Tasks table's Hidden treatment (`.task-dim`):
+                                grey pill, muted name, dimmed cells. */}
+                            {t.hidden && <span className="pr-name-flag pr-name-flag--grey">Hidden</span>}
+                          </td>
                           <td className="stm-col-type">{t.type}</td>
                           <td className="stm-col-certs">
                             <MultiCell values={certsOf(t)} />
-                          </td>
-                          <td className="stm-col-industry">
-                            <MultiCell values={industriesOf(t)} />
                           </td>
                           <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
                         </tr>
@@ -450,17 +475,18 @@ export function SelectTasksModal({
   );
 }
 
+/* The app-wide table rule (Spotlights, Name Change Requests…): every column is sized
+   to what it holds — Task Name, Type ("Hands-On Task"), Certifications
+   ("HVAC JobReady +1"), Date Modified (label + sort caret) — their sum is the
+   floor, and on a wider modal the fixed layout spreads the slack across them
+   in proportion, so the gaps grow evenly. */
+const CHECK_W = 44;
+const COL_WIDTHS = [340, 160, 200, 130];
+const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
+
+/* Check gutter fixed, data columns share the slack — see TableCols. */
 function ColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 136 }} />
-      <col style={{ width: 224 }} />
-      <col style={{ width: 184 }} />
-      <col style={{ width: 126 }} />
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
 }
 
 /* Figma 682:2582 (Certifications) / 1138:1174 (Industry): a cell holding more

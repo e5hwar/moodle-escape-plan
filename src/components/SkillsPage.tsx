@@ -9,8 +9,8 @@ import {
   type Skill,
   type MasterySkill,
 } from "../data/skills";
-import { CERT_BY_USEDIN, topIndustry } from "../data/certifications";
-import { industries as allIndustries } from "../data/industries";
+import { topIndustry } from "../data/certifications";
+import { skillTaskNames, skillCertifications, skillIndustryPaths, skillIndustries, INDUSTRY_OPTIONS, matchesIndustry } from "../data/skillGraph";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
@@ -27,10 +27,11 @@ import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { MultiPill } from "./UsersFilters";
 import { NewSkillWizard } from "./NewSkillWizard";
 import { PrmModal } from "./PrmModal";
-import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, InfoIcon14, AlertCircleFilledIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, InfoIcon14, PagePrevIcon, PageNextIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PreviewPanel } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -50,7 +51,6 @@ type Modal =
      Modal); `linked` adds the unearnable-Mastery-Skills warning when set. */
   | { kind: "archive-skill"; skill: Skill }
   | { kind: "archive-mastery"; mastery: MasterySkill }
-  | { kind: "delete-skill-blocked"; skill: Skill; linked: MasterySkill[] }
   | { kind: "delete-skill"; skill: Skill }
   | { kind: "delete-mastery"; mastery: MasterySkill };
 
@@ -122,9 +122,11 @@ const COLS: Col[] = [
      past the plain-text strip rule. */
   {
     key: "type", label: "Type", className: "col-type col-status", width: 130,
-    render: (r) => (r.kind === "skill"
-      ? <span className="co-status-pill co-status-pill--secondary">Skill</span>
-      : <span className="co-status-pill co-status-pill--yellow">Mastery Skill</span>),
+    /* An archived record of either kind drops to Table Pills - Grey (83:512). */
+    render: (r) => {
+      const tone = recOf(r).status === "Archived" ? "grey" : r.kind === "skill" ? "secondary" : "yellow";
+      return <span className={`co-status-pill co-status-pill--${tone}`}>{r.kind === "skill" ? "Skill" : "Mastery Skill"}</span>;
+    },
   },
   {
     key: "industry", label: "Industries", className: "col-used", width: 140, sortable: false,
@@ -168,60 +170,6 @@ const FIXED = [{ label: "Name" }];
 /* 340 — the row atoms draw 400; the user settled on 340 after seeing it. */
 const NAME_W = 340;
 const ACTIONS_W = 40;
-
-/* A Skill carries no Certification of its own — it inherits both its Tasks and
-   their Certifications from `taskIds`, so the Certification / Task filters (and
-   their options) are derived from the Task graph. Deriving rather than listing
-   means a filter can never offer a value that matches no row. */
-function skillTaskNames(s: Skill): string[] {
-  return s.taskIds.flatMap((id) => {
-    const t = taskById(id);
-    return t ? [t.name] : [];
-  });
-}
-
-function skillCertifications(s: Skill): string[] {
-  return s.taskIds.flatMap((id) => taskById(id)?.usedIn ?? []);
-}
-
-/* A Skill has no Industry of its own — it inherits the Industries of every
-   Certification it reaches through its Tasks. A Skill can therefore land in
-   several Industries, or in none (its Certifications carry no Industry, or it
-   awards no Task at all). These are the FULL paths ("HVAC › Residential"),
-   which is what the filter matches on; the column shows the top level. */
-function skillIndustryPaths(s: Skill): string[] {
-  return [
-    ...new Set(
-      skillCertifications(s).flatMap((name) => {
-        const industry = CERT_BY_USEDIN.get(name)?.industry;
-        return industry ? [industry] : [];
-      }),
-    ),
-  ];
-}
-
-function skillIndustries(s: Skill): string[] {
-  return [...new Set(skillIndustryPaths(s).map(topIndustry))];
-}
-
-/* Industry options are the Industries page's own list: every Industry followed
-   by its Sub-Industries, each reading as its own full path — the same flat
-   list the Certification filters use (see `CertFilters.tsx`). */
-const INDUSTRY_OPTIONS: string[] = [...allIndustries]
-  .sort((a, b) => a.displayPosition - b.displayPosition)
-  .flatMap((ind) => [
-    ind.name,
-    ...[...ind.subIndustries]
-      .sort((a, b) => a.displayPosition - b.displayPosition)
-      .map((sub) => `${ind.name} › ${sub.name}`),
-  ]);
-
-/* A selected option matches its own path and everything beneath it: picking
-   "HVAC" catches "HVAC › Residential", picking the sub path matches only it. */
-function matchesIndustry(s: Skill, selected: string[]): boolean {
-  const paths = skillIndustryPaths(s);
-  return selected.some((opt) => paths.some((p) => p === opt || p.startsWith(`${opt} ›`)));
-}
 
 /** A Mastery Skill's constituent Skills, in its own declared order. */
 function masterySkillsOf(m: MasterySkill, all: Skill[]): Skill[] {
@@ -320,12 +268,6 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
     if (m.status === "Archived") { setMasteryStatus(m.id, "Active"); return; }
     setModal({ kind: "archive-mastery", mastery: m });
   }
-  function requestDeleteSkill(s: Skill) {
-    const linked = masteryUsing(s.id, mastery);
-    if (linked.length > 0) setModal({ kind: "delete-skill-blocked", skill: s, linked });
-    else setModal({ kind: "delete-skill", skill: s });
-  }
-
   /* ─── Certification / Task filters ─── */
   const certOptions = useMemo(
     () => [...new Set(skills.flatMap(skillCertifications))].sort(),
@@ -702,19 +644,23 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
         if (menu.kind === "skill") {
           const s = skills.find((x) => x.id === menu.id);
           if (!s) return null;
+          /* Linked to any Mastery Skill = can't be archived OR deleted
+             (1403:2071): both rows disable with the same reason. */
           const linkedCount = masteryUsing(s.id, mastery).length;
+          const linkedWhy = linkedCount > 0
+            ? `Currently linked to ${linkedCount} Mastery Skill${linkedCount === 1 ? "" : "s"}. Remove ${linkedCount === 1 ? "it" : "them"} to proceed.`
+            : undefined;
           return (
             <ActionsMenu
               rect={menu.rect}
               archived={s.status === "Archived"}
-              archiveBlocked={s.status !== "Archived" && linkedCount > 0
-                ? `Currently linked to ${linkedCount} Mastery Skill${linkedCount === 1 ? "" : "s"}. Remove ${linkedCount === 1 ? "it" : "them"} to proceed.`
-                : undefined}
+              archiveBlocked={s.status !== "Archived" ? linkedWhy : undefined}
+              deleteBlocked={linkedWhy}
               noun="Skill"
               onClose={() => setMenu(null)}
               onEdit={() => closePanelThen(() => setMode({ kind: "edit-skill", skill: s }))}
               onArchive={() => closePanelThen(() => archiveSkill(s))}
-              onDelete={() => closePanelThen(() => requestDeleteSkill(s))}
+              onDelete={() => closePanelThen(() => setModal({ kind: "delete-skill", skill: s }))}
             />
           );
         }
@@ -766,6 +712,12 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
           title="Archive this Skill?"
           confirmLabel="Archive Skill"
           danger
+          doubleConfirm={
+            <>
+              <strong>{modal.skill.name}</strong> will be archived and new users can no longer
+              earn it.
+            </>
+          }
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { setSkillStatus(modal.skill.id, "Archived"); setModal({ kind: "none" }); }}
         >
@@ -781,6 +733,12 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
           title="Archive this Mastery Skill?"
           confirmLabel="Archive Mastery Skill"
           danger
+          doubleConfirm={
+            <>
+              <strong>{modal.mastery.name}</strong> will be archived and new users can no longer
+              earn it.
+            </>
+          }
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { setMasteryStatus(modal.mastery.id, "Archived"); setModal({ kind: "none" }); }}
         >
@@ -791,31 +749,18 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
         </ConfirmModal>
       )}
 
-      {modal.kind === "delete-skill-blocked" && (
-        <ConfirmModal
-          title="Can’t delete this Skill"
-          confirmLabel="Edit Mastery Skills"
-          onCancel={() => setModal({ kind: "none" })}
-          onConfirm={() => {
-            const first = modal.linked[0];
-            setModal({ kind: "none" });
-            setMode({ kind: "edit-mastery", mastery: first });
-          }}
-        >
-          <p>
-            <strong>{modal.skill.name}</strong> ({modal.skill.id}) is required by {modal.linked.length} Mastery Skill{modal.linked.length === 1 ? "" : "s"}, so it can’t be deleted yet.
-          </p>
-          <LinkedMasteryNote title="Remove it from their criteria first" linked={modal.linked}>
-            Edit each Mastery Skill below and take this Skill out of its required Skills, then delete it.
-          </LinkedMasteryNote>
-        </ConfirmModal>
-      )}
-
       {modal.kind === "delete-skill" && (
         <ConfirmModal
           title="Delete this Skill?"
           confirmLabel="Delete Skill"
           danger
+          doubleConfirm={
+            <>
+              <strong>{modal.skill.name}</strong> will be permanently deleted and taken from{" "}
+              {fmtHolders(modal.skill.holders)} user{modal.skill.holders === 1 ? "" : "s"}. This
+              can’t be undone.
+            </>
+          }
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { deleteSkill(modal.skill.id); setModal({ kind: "none" }); }}
         >
@@ -831,6 +776,13 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
           title="Delete this Mastery Skill?"
           confirmLabel="Delete Mastery Skill"
           danger
+          doubleConfirm={
+            <>
+              <strong>{modal.mastery.name}</strong> will be permanently deleted and taken from{" "}
+              {fmtHolders(modal.mastery.holders)} user{modal.mastery.holders === 1 ? "" : "s"}. This
+              can’t be undone.
+            </>
+          }
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => { deleteMastery(modal.mastery.id); setModal({ kind: "none" }); }}
         >
@@ -862,13 +814,7 @@ function compareRec(a: Rec, b: Rec, key: string): number {
 
 function ColGroup({ cols }: { cols: { key: string; width: number }[] }) {
   return (
-    <colgroup>
-      <col style={{ width: NAME_W }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: ACTIONS_W }} />
-    </colgroup>
+    <TableCols data={[NAME_W, ...cols.map((c) => c.width)]} trail={[ACTIONS_W]} />
   );
 }
 
@@ -1120,16 +1066,18 @@ function SortableHeader({
    The shared row menu (`.u-menu`, the Question Bank shape, 1085:1082): no
    header, three bare verbs — Edit, Archive (Unarchive when archived),
    Delete. Identical for a Skill and a Mastery Skill; `noun` only feeds the
-   aria-label. A Skill linked to a Mastery Skill gets a disabled Archive row
-   with its reason underneath (1403:2071) instead of the live one. */
+   aria-label. A Skill linked to a Mastery Skill gets disabled Archive AND
+   Delete rows with the reason underneath (1403:2071) instead of live ones. */
 
 function ActionsMenu({
-  rect, archived, archiveBlocked, noun, onClose, onArchive, onEdit, onDelete,
+  rect, archived, archiveBlocked, deleteBlocked, noun, onClose, onArchive, onEdit, onDelete,
 }: {
   rect: DOMRect;
   archived: boolean;
   /** Why Archive is unavailable; set, the row renders disabled with this note. */
   archiveBlocked?: string;
+  /** Why Delete is unavailable — same treatment. */
+  deleteBlocked?: string;
   /** "Skill" or "Mastery Skill" — names the menu for assistive tech. */
   noun: string;
   onClose: () => void;
@@ -1138,7 +1086,6 @@ function ActionsMenu({
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const subRef = useRef<HTMLSpanElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -1148,14 +1095,13 @@ function ActionsMenu({
        that width even when its lines come up short ("1 Mastery Skill. Remove
        it to proceed." is ~181px at most), leaving a wide right gutter. Fit
        the box to its longest line so the panel hugs the copy. */
-    const sub = subRef.current;
-    if (sub) {
+    el.querySelectorAll<HTMLElement>(".u-menu-item-sub").forEach((sub) => {
       sub.style.width = "";
       const range = document.createRange();
       range.selectNodeContents(sub);
       const widest = Math.max(...Array.from(range.getClientRects(), (r) => r.width));
       if (widest > 0) sub.style.width = `${Math.ceil(widest)}px`;
-    }
+    });
     const h = el.offsetHeight;
     let top = rect.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
@@ -1191,6 +1137,16 @@ function ActionsMenu({
     </button>
   );
 
+  const blockedItem = (icon: JSX.Element, label: string, why: string, danger = false) => (
+    <button className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`} disabled>
+      <span className="u-menu-item-icon">{icon}</span>
+      <span className="u-menu-item-text">
+        {label}
+        <span className="u-menu-item-sub">{why}</span>
+      </span>
+    </button>
+  );
+
   return (
     <div
       ref={ref}
@@ -1206,47 +1162,29 @@ function ActionsMenu({
     >
       {item(<RowEditIcon />, "Edit", onEdit)}
       {/* 1085:1082's archive glyph, for both directions — as Question Bank does. */}
-      {archiveBlocked ? (
-        <button className="u-menu-item" disabled>
-          <span className="u-menu-item-icon"><MenuArchiveOffIcon /></span>
-          <span className="u-menu-item-text">
-            Archive
-            <span ref={subRef} className="u-menu-item-sub">{archiveBlocked}</span>
-          </span>
-        </button>
-      ) : item(<MenuArchiveOffIcon />, archived ? "Unarchive" : "Archive", onArchive)}
-      {item(<RowDeleteIcon />, "Delete", onDelete, true)}
+      {archiveBlocked
+        ? blockedItem(<MenuArchiveOffIcon />, "Archive", archiveBlocked)
+        : item(<MenuArchiveOffIcon />, archived ? "Unarchive" : "Archive", onArchive)}
+      {/* A blocked Delete is grey, not red — `.u-menu-item--danger:disabled`. */}
+      {deleteBlocked
+        ? blockedItem(<RowDeleteIcon />, "Delete", deleteBlocked, true)
+        : item(<RowDeleteIcon />, "Delete", onDelete, true)}
     </div>
   );
 }
 
 /* ─────────────── Confirm modal ───────────────
    The shared shell (PrmModal, Figma 667:884 "General Modal"): body copy is
-   plain white 16px in the `.prm-content` slot — no page-local text class —
-   and any warning is the design-system `.note-card`. */
-
-/** The linked-Mastery-Skills callout — `.note-card` (Figma 1121:1671) with the
-    affected names as its last line. */
-function LinkedMasteryNote({ title, linked, children }: { title: string; linked: MasterySkill[]; children: React.ReactNode }) {
-  return (
-    <div className="note-card">
-      <span className="note-card-icon"><AlertCircleFilledIcon /></span>
-      <div className="note-card-text">
-        <p className="note-card-title">{title}</p>
-        <p className="note-card-body">{children}</p>
-        <p className="note-card-body"><strong>{linked.map((m) => m.name).join(", ")}</strong></p>
-      </div>
-    </div>
-  );
-}
-
+   plain white 16px in the `.prm-content` slot — no page-local text class. */
 
 function ConfirmModal({
-  title, confirmLabel, danger = false, children, onCancel, onConfirm,
+  title, confirmLabel, danger = false, doubleConfirm, children, onCancel, onConfirm,
 }: {
   title: string;
   confirmLabel: string;
   danger?: boolean;
+  /** See PrmModal — every deletion asks twice. */
+  doubleConfirm?: React.ReactNode;
   children: React.ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1256,6 +1194,7 @@ function ConfirmModal({
       title={title}
       confirmLabel={confirmLabel}
       danger={danger}
+      doubleConfirm={doubleConfirm}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >

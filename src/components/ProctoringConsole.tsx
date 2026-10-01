@@ -5,6 +5,9 @@ import type { Submission, WebcamFrame } from "../data/proctoring";
 import { InfoTipIcon, CrumbChevronIcon } from "./icons";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { PrmModal } from "./PrmModal";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { DESCRIPTION_MAX, NAME_MAX, isOver, limitLabel } from "../data/fieldLimits";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { FullscreenViewer } from "./FullscreenViewer";
 import { attemptTaskIdForExam } from "../data/certLookup";
@@ -172,7 +175,11 @@ export function ProctoringConsole({
      that, and it's the only commit point: skipping, rejecting or walking away
      leaves the candidate's name alone. The name is written FIRST so the
      submission is accepted under the name the reviewer settled on. */
+  /* The name field's soft limit — Approve (button and A) waits while the
+     draft runs past it. */
+  const nameOver = isOver(NAME_MAX, nameDraft);
   function approve() {
+    if (nameOver) return;
     const next = nameDraft.trim();
     if (next && next !== submission.candidateName) onUpdateName(next);
     onAccept();
@@ -214,7 +221,7 @@ export function ProctoringConsole({
       else if (e.key === "ArrowRight" && hasNext) gotoIndex(index + 1);
       /* The footer's keycaps (Figma 445:878). Reject keeps R (it matches the red
          button) and Request ID Re-Upload takes I. */
-      else if (e.key === "a" || e.key === "A") setConfirmKind("accept");
+      else if ((e.key === "a" || e.key === "A") && !nameOver) setConfirmKind("accept");
       // No Reject button on ID-only submissions, so no R either.
       else if ((e.key === "r" || e.key === "R") && hasFootage) setConfirmKind("reject");
       else if ((e.key === "i" || e.key === "I") && !idAlreadyRequested) setConfirmKind("request");
@@ -223,7 +230,7 @@ export function ProctoringConsole({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, confirmKind, idFullView, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, submission.id]);
+  }, [zoom, confirmKind, idFullView, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, submission.id, nameOver]);
 
   return (
     <div className="main">
@@ -435,6 +442,8 @@ export function ProctoringConsole({
               <button
                 className="prc-cta prc-cta--ok"
                 onClick={() => setConfirmKind("accept")}
+                disabled={nameOver}
+                title={nameOver ? limitLabel("Name on SkillCat Profile", NAME_MAX) : undefined}
               >
                 Approve
                 <span className="prc-key">A</span>
@@ -638,7 +647,10 @@ function RejectModal({
   const isOther = reasons.has(OTHER_REASON);
   /* Supporting images are optional and are picked on the page, so they can't
      gate this button — a reason is the one thing the modal itself asks for. */
-  const canReject = reasons.size > 0 && (!isOther || otherText.trim().length > 0);
+  const canReject =
+    reasons.size > 0 &&
+    (!isOther || (otherText.trim().length > 0 && !isOver(NAME_MAX, otherText))) &&
+    !isOver(DESCRIPTION_MAX, note);
 
   function toggle<T>(set: React.Dispatch<React.SetStateAction<Set<T>>>, v: T) {
     set((prev) => {
@@ -693,6 +705,7 @@ function RejectModal({
         <div className="prm-field">
           <span className="prm-label">
             Select a Reason<span className="prm-req">*</span>
+            {isOther && <LimitError max={NAME_MAX} values={[otherText]} />}
           </span>
           <div className="prm-checklist">
             {REJECT_REASONS.map((r) => {
@@ -714,7 +727,8 @@ function RejectModal({
                       Indented to line up with the labels above it. */}
                   {r === OTHER_REASON && on && (
                     <div className="prm-other-wrap">
-                      <input
+                      <LimitedInput
+                        max={NAME_MAX}
                         className="prm-other"
                         placeholder="Enter your reason here..."
                         value={otherText}
@@ -733,8 +747,12 @@ function RejectModal({
         {/* Optional, and for the NEXT reviewer — not the candidate. No
             required marker; the CTA never waits on it. */}
         <div className="prm-field">
-          <span className="prm-label">{NOTES_LABEL}</span>
-          <input
+          <span className="prm-label">
+            {NOTES_LABEL}
+            <LimitError max={DESCRIPTION_MAX} values={[note]} />
+          </span>
+          <LimitedInput
+            max={DESCRIPTION_MAX}
             className="prm-text-input"
             placeholder="Add a note for future reviewers..."
             value={note}
@@ -1176,8 +1194,10 @@ function NameMismatchBanner({
       <div className="prc-mismatch-field">
         <label className="form-label" htmlFor="prc-name">
           Name on SkillCat Profile<span className="req">*</span>
+          <LimitError max={NAME_MAX} values={[draft]} />
         </label>
-        <input
+        <LimitedInput
+          max={NAME_MAX}
           id="prc-name"
           className="form-input"
           value={draft}

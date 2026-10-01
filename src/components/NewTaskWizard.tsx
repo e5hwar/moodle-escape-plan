@@ -12,6 +12,8 @@ import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
@@ -20,6 +22,7 @@ import { MultiSelect } from "./NewCompanyWizard";
 import { questions as QUESTION_BANK, type Question } from "../data/questionBank";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { PrmModal } from "./PrmModal";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CheckRow } from "./Filters";
 import { CompletionCriteriaGate, LockedField, sampleCompletionCount } from "./CriteriaLock";
 
@@ -578,6 +581,25 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const update = (patch: Partial<WizardData>) =>
     setData((d) => ({ ...d, ...patch }));
 
+  /* The wizard as it opened — blank, or the edited Task's prefill. Leaving
+     asks (the shared LeaveGuard) only once the data differs from that, so an
+     untouched wizard closes straight away. Embedded in the Certification
+     builder (`onPrimary`) it stacks over the Certification's own guard, so its
+     Cancel asks about this Task alone. Create / Save leave directly: nothing
+     is being thrown away. */
+  const pristine = useRef(data);
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(
+    dirty,
+    onPrimary
+      ? {
+          title: "Discard this Task?",
+          body: "This Task hasn't been added to the Certification yet — everything you've filled in will be lost.",
+        }
+      : { noun: "Task", creating: !isEditing },
+  );
+  const requestClose = () => guard(onClose);
+
   const isXapi = taskType === "xapi";
   const isQuiz = taskType === "quiz";
   const isFile = taskType === "file";
@@ -614,6 +636,10 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     const K = REQUIRED_FIELD_KEYS;
     const basics = 0;
     if (!d.nameEn.trim()) gaps.push({ step: basics, key: K.name });
+    /* Soft character limits (data/fieldLimits.ts): a field past its limit
+       blocks publishing like an empty mandatory one, on the step that owns it. */
+    if (isOver(NAME_MAX, d.nameEn, d.nameEs)) gaps.push({ step: basics, key: K.nameLimit });
+    if (isOver(DESCRIPTION_MAX, d.descEn, d.descEs)) gaps.push({ step: basics, key: K.descLimit });
     if (d.requiresSubscription === null) gaps.push({ step: basics, key: K.subscription });
     if (isXapi) {
       // The Spanish package is optional — Spanish learners fall back to English.
@@ -627,6 +653,14 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         gaps.push({ step: basics, key: K.link });
       }
       if (!d.completion) gaps.push({ step: stepIndex("completion"), key: K.completion });
+    }
+    if (isHandsOn) {
+      const ref = stepIndex("reference");
+      if (isOver(DESCRIPTION_MAX, d.hoToolsEn, d.hoToolsEs)) gaps.push({ step: ref, key: K.hoToolsLimit });
+      if (isOver(DESCRIPTION_MAX, d.hoInstrEn, d.hoInstrEs)) gaps.push({ step: ref, key: K.hoInstrLimit });
+      if (isOver(DESCRIPTION_MAX, d.hoReviewerChecklistEn, d.hoReviewerChecklistEs)) {
+        gaps.push({ step: ref, key: K.hoChecklistLimit });
+      }
     }
     if (isQuiz && d.nateExam && (!d.nateIdEn.trim() || !d.nateIdEs.trim())) {
       gaps.push({ step: stepIndex("payments"), key: K.nateId });
@@ -642,6 +676,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
          a Section with no Spanish name falls back to its English one. */
       if (d.sections.some((sec) => !sec.name.trim())) {
         gaps.push({ step: stepIndex("structure"), key: K.sectionName });
+      }
+      if (d.sections.some((sec) => isOver(NAME_MAX, sec.name, sec.nameEs))) {
+        gaps.push({ step: stepIndex("structure"), key: K.sectionNameLimit });
       }
     }
     /* One pass mark under quiz-level grading, one per Section under
@@ -703,13 +740,18 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       }
     }
     return gaps.sort((a, b) => a.step - b.step);
-  }, [isXapi, isFile, isQuiz, stepIndex]);
+  }, [isXapi, isFile, isQuiz, isHandsOn, stepIndex]);
 
   /* Every mandatory field still empty, right now — the gate on publishing.
      Re-derived each render, so filling the last one enables the button on the
      keystroke rather than on the next attempt. */
   const gaps = useMemo(() => collectMissing(data), [collectMissing, data]);
   const canPublish = gaps.length === 0;
+  /* Editing with nothing changed: Save Changes has nothing to save, so it
+     stays dimmed until a field differs from the opening snapshot. (Not when
+     embedded under a host's own primary label — that one is an add.) */
+  const unchanged = isEditing && !onPrimary && !dirty;
+  const canSave = canPublish && !unchanged;
 
   /* The gaps that SHOW (fieldFlags.tsx): clicked into and out of, on a step
      already moved past, or every one of them after a blocked publish. Live —
@@ -729,8 +771,10 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   /* What the disabled Create Task button says on hover: the fields that are
      holding it back, each with the step that owns it. Without this the button
      is just dim — the admin has no way to tell what is left. */
-  const blockedTip = canPublish
+  const blockedTip = canSave
     ? undefined
+    : canPublish
+    ? "No changes to save"
     : [
         "Fill in every required field to publish:",
         ...gaps.map(
@@ -764,6 +808,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const looksLikeFinalExam = /final exam/i.test(data.nameEn);
 
   function handlePublish(trialConfirmed = false) {
+    if (canPublish && unchanged) return;
     setAttemptedSubmit(true);
     if (!canPublish) {
       goStep(gaps[0].step);
@@ -804,7 +849,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     () => {
       if (trialConfirm) return;
       if (!isLast) goStep(step + 1);
-      else if (canPublish) handlePublish();
+      else if (canSave) handlePublish();
     },
     () => {
       if (!trialConfirm) handlePublish();
@@ -913,7 +958,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>
+          <button className="wizard-cancel" onClick={requestClose}>
             Cancel
           </button>
         </div>
@@ -938,8 +983,8 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               ends on one button rather than two that do the same thing. */}
           {!isLast && (
             <button
-              className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
-              aria-disabled={!canPublish}
+              className={`btn-save-draft${canSave ? "" : " is-disabled"}`}
+              aria-disabled={!canSave}
               data-tip={blockedTip}
               onClick={() => handlePublish()}
             >
@@ -952,9 +997,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               no separate Publish: creating the Task IS publishing it. */}
           <button
             className={`btn-publish${isLast ? "" : " wizard-gate-btn"}${
-              isLast && !canPublish ? " is-disabled" : ""
+              isLast && !canSave ? " is-disabled" : ""
             }`}
-            aria-disabled={isLast && !canPublish}
+            aria-disabled={isLast && !canSave}
             data-tip={isLast ? blockedTip : undefined}
             onClick={isLast ? () => handlePublish() : () => goStep(step + 1)}
           >
@@ -1063,6 +1108,12 @@ const REQUIRED_FIELD_KEYS = {
   cooldown: "cooldown",
   autoAttempts: "autoAttempts",
   subscription: "subscription",
+  nameLimit: "nameLimit",
+  descLimit: "descLimit",
+  sectionNameLimit: "sectionNameLimit",
+  hoToolsLimit: "hoToolsLimit",
+  hoInstrLimit: "hoInstrLimit",
+  hoChecklistLimit: "hoChecklistLimit",
 } as const;
 
 /** Reader-facing name of each mandatory field, for the tooltip that says why
@@ -1083,6 +1134,12 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   completion: "Completion Criteria",
   nateId: "NATE External IDs",
   subscription: "Requires a Subscription",
+  nameLimit: limitLabel("Name", NAME_MAX),
+  descLimit: limitLabel("Description", DESCRIPTION_MAX),
+  sectionNameLimit: limitLabel("Section Names", NAME_MAX),
+  hoToolsLimit: limitLabel("Tools/Materials Required", DESCRIPTION_MAX),
+  hoInstrLimit: limitLabel("Instructions", DESCRIPTION_MAX),
+  hoChecklistLimit: limitLabel("Reviewer's Checklist", DESCRIPTION_MAX),
 };
 
 /** Stable empty set, so the "nothing missing" memo doesn't churn its consumers. */
@@ -1132,7 +1189,10 @@ function XapiDetailsStep({ touch, data, update, nameError, missing }: StepProps)
         <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
         <div className="form-group">
-          <label className="form-label">Description</label>
+          <label className="form-label">
+            Description
+            <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
+          </label>
           <RichTextField
             en={data.descEn}
             es={data.descEs}
@@ -1141,6 +1201,7 @@ function XapiDetailsStep({ touch, data, update, nameError, missing }: StepProps)
             placeholderEn="Description"
             placeholderEs="Descripción"
             minRows={2}
+            maxLength={DESCRIPTION_MAX}
           />
         </div>
 
@@ -1508,10 +1569,14 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Tools/Materials Required</label>
+        <label className="form-label">
+          Tools/Materials Required
+          <LimitError max={DESCRIPTION_MAX} values={[data.hoToolsEn, data.hoToolsEs]} />
+        </label>
         <RichTextField
           en={data.hoToolsEn}
           es={data.hoToolsEs}
+          maxLength={DESCRIPTION_MAX}
           onChangeEn={(v) => update({ hoToolsEn: v })}
           onChangeEs={(v) => update({ hoToolsEs: v })}
           placeholderEn="List of tools or materials to use or involved in performing this activity"
@@ -1520,10 +1585,14 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Instructions</label>
+        <label className="form-label">
+          Instructions
+          <LimitError max={DESCRIPTION_MAX} values={[data.hoInstrEn, data.hoInstrEs]} />
+        </label>
         <RichTextField
           en={data.hoInstrEn}
           es={data.hoInstrEs}
+          maxLength={DESCRIPTION_MAX}
           onChangeEn={(v) => update({ hoInstrEn: v })}
           onChangeEs={(v) => update({ hoInstrEs: v })}
           placeholderEn="Step by step instructions on how to perform the task"
@@ -1548,10 +1617,14 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Reviewer's Checklist</label>
+        <label className="form-label">
+          Reviewer's Checklist
+          <LimitError max={DESCRIPTION_MAX} values={[data.hoReviewerChecklistEn, data.hoReviewerChecklistEs]} />
+        </label>
         <RichTextField
           en={data.hoReviewerChecklistEn}
           es={data.hoReviewerChecklistEs}
+          maxLength={DESCRIPTION_MAX}
           onChangeEn={(v) => update({ hoReviewerChecklistEn: v })}
           onChangeEs={(v) => update({ hoReviewerChecklistEs: v })}
           placeholderEn="A list of Criteria to be used to review this activity"
@@ -1835,7 +1908,10 @@ function QuizBasicsStep({ touch, data, update, nameError, missing }: StepProps) 
       <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
       <div className="form-group">
-        <label className="form-label">Description</label>
+        <label className="form-label">
+          Description
+          <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
+        </label>
         <RichTextField
           en={data.descEn}
           es={data.descEs}
@@ -1844,6 +1920,7 @@ function QuizBasicsStep({ touch, data, update, nameError, missing }: StepProps) 
           placeholderEn="Description"
           placeholderEs="Descripción"
           minRows={2}
+          maxLength={DESCRIPTION_MAX}
         />
       </div>
 
@@ -1950,6 +2027,10 @@ function QuizStructureStep({
           <div className="form-group" onBlur={leave(() => { touch?.("sections"); touch?.("sectionName"); })}>
             <label className="form-label">
               Sections<span className="req">*</span>
+              <LimitError
+                max={NAME_MAX}
+                values={data.sections.flatMap((sec) => [sec.name, sec.nameEs])}
+              />
             </label>
             {/* Figma 1097:1205 "Quiz Sections" — one boxed table: an
                 ORDER / SECTION NAME (/ % TO PASS / MUST PASS) header, a row per
@@ -1985,6 +2066,7 @@ function QuizStructureStep({
                       placeholderEn="Section Name…"
                       placeholderEs="Nombre de la Sección"
                       error={!!missing?.has(REQUIRED_FIELD_KEYS.sectionName) && !sec.name.trim()}
+                      maxLength={NAME_MAX}
                     />
                   </div>
                   {/* Two ways to be unavailable, deliberately spelled
@@ -3762,6 +3844,7 @@ function NameField({ touch, data, update, nameError }: StepProps) {
       <label className="form-label">
         Name<span className="req">*</span>
         {nameError && <span className="form-label-error">Enter a name to publish.</span>}
+        <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
       </label>
       <LangField
         en={data.nameEn}
@@ -3771,6 +3854,7 @@ function NameField({ touch, data, update, nameError }: StepProps) {
         placeholderEn="Name"
         placeholderEs="Nombre"
         error={nameError}
+        maxLength={NAME_MAX}
       />
     </div>
   );
@@ -3782,7 +3866,10 @@ function NameAndDescription({ touch, data, update, nameError }: StepProps) {
       <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
       <div className="form-group">
-        <label className="form-label">Description</label>
+        <label className="form-label">
+          Description
+          <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
+        </label>
         <RichTextField
           en={data.descEn}
           es={data.descEs}
@@ -3791,6 +3878,7 @@ function NameAndDescription({ touch, data, update, nameError }: StepProps) {
           placeholderEn="Description"
           placeholderEs="Descripción"
           minRows={2}
+          maxLength={DESCRIPTION_MAX}
         />
       </div>
     </>
@@ -4291,6 +4379,7 @@ function LangField({
   error = false,
   type,
   inputMode,
+  maxLength,
 }: {
   en: string;
   es: string;
@@ -4303,10 +4392,17 @@ function LangField({
   error?: boolean;
   type?: React.ComponentProps<"input">["type"];
   inputMode?: React.ComponentProps<"input">["inputMode"];
+  /** A SOFT limit per language: each row shows the characters left and the
+   *  shell flags amber past the suggested length, red past the limit — the
+   *  caller's label row names the tier (`LimitError`) and the publish gate
+   *  blocks on the red one. */
+  maxLength?: number;
 }) {
+  const flag = error ? "has-error" : maxLength !== undefined ? limitClass(maxLength, en, es) : "";
+  const over = flag === "has-error";
   return (
     <>
-    <div className={`lang-field ${error ? "has-error" : ""}`}>
+    <div className={`lang-field ${flag}`}>
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
         <input
@@ -4316,8 +4412,9 @@ function LangField({
           value={en}
           onChange={(e) => onChangeEn(e.target.value)}
           placeholder={placeholderEn}
-          aria-invalid={error || undefined}
+          aria-invalid={error || over || undefined}
         />
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
       </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">
@@ -4330,6 +4427,7 @@ function LangField({
           onChange={(e) => onChangeEs(e.target.value)}
           placeholder={placeholderEs}
         />
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
       </div>
     </div>
     </>

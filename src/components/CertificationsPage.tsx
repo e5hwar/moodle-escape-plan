@@ -1,6 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
-  certifications as allCerts,
   CERT_OPTIONAL_COLUMNS,
   CERT_FIXED_COLUMNS,
   topIndustry,
@@ -10,11 +9,12 @@ import { type Award } from "../data/awards";
 import {
   CertFilters,
   certMatches,
+  setupMatches,
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { RowExternalLinkIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { RowExternalLinkIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, CheckIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
 import { pickTag, pickTags, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
 import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
@@ -25,8 +25,97 @@ import { CertBulkUploadModal } from "./CertBulkUploadModal";
 import type { CertImportReport } from "../data/certImport";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CertificationsSearch } from "./CertificationsSearch";
+import { CertIndustriesModal } from "./CertIndustriesModal";
+import { ConfirmCard } from "./ConfirmCard";
+import { CopiedToast } from "./CopiedToast";
+import { usePersisted } from "../hooks/usePersisted";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
+
+/* ── Post-creation setup (Claude Design "Certification Post-Creation Setup",
+   2026-10-01) ──
+   After an admin creates a Certification, four optional follow-ups are
+   expected in most cases: Industries, Content Links, an Award, a Feedback
+   Form. Only Industries used to be prompted (the modal that ends the wizard);
+   the other three sat in the row's ⋯ menu. The page now shows all four
+   without rebuilding any of the flows: a landing banner that condenses into
+   the title note, a yellow "Setup n/4" pill on each unfinished row, a Setup
+   card at the top of the row panel's Details, a Setup › Incomplete filter the
+   banner's "Show All N" applies, and a toast when each flow returns.
+
+   The status is DERIVED, never stored: App.tsx reads each step off the data
+   its flow writes (`setupStepsFor`). The only state of its own is
+   "Mark as Done" (persisted per admin) and the session's "Set up later". */
+export type SetupStepKey = "industries" | "links" | "award" | "feedback";
+/** One step, as App.tsx derives it: done, with a one-line summary when so. */
+export type SetupStep = { done: boolean; detail?: string };
+export type SetupSteps = Record<SetupStepKey, SetupStep>;
+/** The banner's session state, held in App.tsx so it survives the round trip
+ *  through a flow: "Set up later" (cleared by the next create), and the
+ *  Certifications seen pending this session — once they are all done, the
+ *  banner says so (in its green tone) instead of vanishing. */
+export type SetupBannerState = { dismissed: boolean; tracked: string[] };
+
+type SetupStatus = {
+  steps: SetupSteps;
+  done: number;
+  left: number;
+  /** "Mark as Done" was pressed — the remaining steps don't apply. */
+  closed: boolean;
+  /** Steps left, not closed, not archived: counted, pilled, bannered. */
+  pending: boolean;
+};
+
+const SETUP_STEPS: {
+  key: SetupStepKey;
+  short: string;
+  label: string;
+  body: string;
+  doneTitle: string;
+  kbd: string;
+  icon: JSX.Element;
+}[] = [
+  {
+    key: "industries",
+    short: "Industries",
+    label: "Add Industries",
+    body: "Tag the Industries and Sub-Industries learners browse it under.",
+    doneTitle: "Industries added",
+    kbd: "1",
+    // Industries has no glyph of its own in icons.tsx; the folder stands in.
+    icon: <MenuAllTasksIcon />,
+  },
+  {
+    key: "links",
+    short: "Content Links",
+    label: "Add Content Links",
+    body: "Link the prerequisite, recommended and related content.",
+    doneTitle: "Content Links added",
+    kbd: "2",
+    icon: <MenuLinkIcon />,
+  },
+  {
+    key: "award",
+    short: "Award",
+    label: "Add Award",
+    body: "The card or certificate learners earn on completion.",
+    doneTitle: "Award added",
+    kbd: "3",
+    icon: <MenuAwardIcon />,
+  },
+  {
+    key: "feedback",
+    short: "Feedback Form",
+    label: "Add Feedback Form",
+    body: "Ask learners for feedback once they complete it.",
+    doneTitle: "Feedback Form added",
+    kbd: "4",
+    icon: <MenuResponsesIcon />,
+  },
+];
+
+const SETUP_KEYS = SETUP_STEPS.map((s) => s.kbd);
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -117,6 +206,14 @@ function compare(a: Certification, b: Certification, key: SortKey): number {
 }
 
 export function CertificationsPage({
+  certs,
+  setCerts,
+  setupStepsFor,
+  setupBanner,
+  setSetupBanner,
+  flash,
+  onFlashDone,
+  onAddFeedbackForm,
   onNewCert,
   onImportCert,
   onEditCert,
@@ -131,6 +228,22 @@ export function CertificationsPage({
   onOpenIndustries,
   onOpenFeedback,
 }: {
+  /** The list, owned by App.tsx: the wizard's Create appends to it, and the
+   *  setup flows read it. Visibility / archive / delete edit it in place. */
+  certs: Certification[];
+  setCerts: Dispatch<SetStateAction<Certification[]>>;
+  /** Each Certification's four setup steps, derived from the data their
+   *  flows write (App.tsx). */
+  setupStepsFor: (cert: Certification) => SetupSteps;
+  setupBanner: SetupBannerState;
+  setSetupBanner: Dispatch<SetStateAction<SetupBannerState>>;
+  /** A toast handed back by a flow that finished and navigated here —
+   *  "Certification Created", "Award Added" … (`CopiedToast`). */
+  flash?: string | null;
+  onFlashDone?: () => void;
+  /** Setup step 4: a new Feedback Form with this Certification as its
+   *  trigger, opened in the editor. */
+  onAddFeedbackForm: (cert: Certification) => void;
   onNewCert: () => void;
   /** A checked CSV Upload — the wizard opens with its structure built. */
   onImportCert: (report: CertImportReport) => void;
@@ -154,8 +267,10 @@ export function CertificationsPage({
   // The upload path picked from the Create menu, if any — each opens its own
   // modal, and confirming it continues into the wizard.
   const [importMode, setImportMode] = useState<UploadPath | null>(null);
-  // Local working copy so visibility/archive/delete persist in-session.
-  const [certList, setCertList] = useState<Certification[]>(allCerts);
+  // The list lives in App.tsx now (see the props); these keep the page's
+  // older names so the row handlers below read as they did.
+  const certList = certs;
+  const setCertList = setCerts;
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
   const [query, setQuery] = useState("");
   // Set when someone tries to edit a Certification owned by a company — company
@@ -178,7 +293,130 @@ export function CertificationsPage({
     creators: ["SkillCat"],
     visibilities: [],
     tags: [],
+    setup: [],
   });
+
+  /* ── Post-creation setup state (see SETUP_STEPS) ── */
+  // "Mark as Done": per Certification, per admin — the one flag that persists.
+  const [closedSetup, setClosedSetup] = usePersisted<Record<string, true>>("cert-setup-closed", {});
+  // The Industries modal, opened from the Setup card for an existing Cert.
+  const [industriesFor, setIndustriesFor] = useState<{ cert: Certification; value: string[] } | null>(null);
+  // The page's toast: a flow's `flash` on arrival, or one raised here
+  // (Industries Added, Setup Marked as Done).
+  const [toast, setToast] = useState<string | null>(flash ?? null);
+  useEffect(() => {
+    if (flash) setToast(flash);
+  }, [flash]);
+  const onToastDone = useCallback(() => {
+    setToast(null);
+    onFlashDone?.();
+  }, [onFlashDone]);
+
+  const setupFor = useCallback(
+    (cert: Certification): SetupStatus => {
+      const steps = setupStepsFor(cert);
+      const done = SETUP_STEPS.filter((s) => steps[s.key].done).length;
+      const left = SETUP_STEPS.length - done;
+      // The seed's long-settled Certifications arrive closed (data); a new one
+      // closes when this admin presses Mark as Done.
+      const closed = !!cert.setupClosed || !!closedSetup[cert.id];
+      return {
+        steps,
+        done,
+        left,
+        closed,
+        pending: left > 0 && !closed && (cert.visibility ?? "Visible") !== "Archived",
+      };
+    },
+    [setupStepsFor, closedSetup],
+  );
+
+  // Newest first — the table's default order — so "Continue Setup" and S open
+  // the Certification just created.
+  const pendingCerts = useMemo(
+    () =>
+      certList
+        .filter((c) => setupFor(c).pending)
+        .sort((a, b) => compare(b, a, "dateModified")),
+    [certList, setupFor],
+  );
+
+  // Remember every Certification seen pending this session: when the last of
+  // them is finished the banner can say so rather than just disappear.
+  useEffect(() => {
+    const fresh = pendingCerts.map((c) => c.id).filter((id) => !setupBanner.tracked.includes(id));
+    if (fresh.length) setSetupBanner((prev) => ({ ...prev, tracked: [...prev.tracked, ...fresh] }));
+  }, [pendingCerts, setupBanner.tracked, setSetupBanner]);
+
+  const trackedCerts = useMemo(
+    () =>
+      setupBanner.tracked
+        .map((id) => certList.find((c) => c.id === id))
+        .filter((c): c is Certification => !!c),
+    [setupBanner.tracked, certList],
+  );
+  // The banner stays while the Setup filter is on — clicking it applies the
+  // filter, and it shouldn't vanish under the reader's pointer (the user,
+  // 2026-10-01). Only its ✕ / Dismiss takes it away.
+  const showPendingBanner = !setupBanner.dismissed && pendingCerts.length > 0;
+  const showDoneBanner = !setupBanner.dismissed && pendingCerts.length === 0 && trackedCerts.length > 0;
+  const bannerOn = showPendingBanner || showDoneBanner;
+  const dismissBanner = () => setSetupBanner((prev) => ({ ...prev, dismissed: true }));
+
+  /* Continue Setup — the banner, its button, the title note and S all run
+     this. One Certification waiting: its panel, on the Setup card. Several:
+     the table filtered to them (Setup › Incomplete); the banner stays put,
+     and each row's pill opens its panel. */
+  function continueSetup() {
+    if (pendingCerts.length > 1) {
+      setFilters((prev) => ({ ...prev, setup: ["Incomplete"] }));
+      return;
+    }
+    const cert = pendingCerts[0];
+    if (cert) setDrawerId(cert.id);
+  }
+
+  /* Start a setup step — the same existing flow its Add / Manage button or
+     its 1–4 key names. The panel closes first: three of the four navigate
+     away, and the Industries modal would otherwise sit under its scrim. The
+     flows come back to this page with a toast; nothing reopens on its own. */
+  function runSetupStep(cert: Certification, key: SetupStepKey) {
+    const steps = setupFor(cert).steps;
+    closePanelThen(() => {
+      switch (key) {
+        case "industries":
+          setIndustriesFor({ cert, value: cert.industry ? [cert.industry] : [] });
+          break;
+        case "links":
+          onManageContentLinks(cert);
+          break;
+        case "award":
+          onManageAward(cert);
+          break;
+        case "feedback":
+          if (steps.feedback.done) onOpenFeedback?.();
+          else onAddFeedbackForm(cert);
+          break;
+      }
+    });
+  }
+
+  function saveIndustries() {
+    if (!industriesFor) return;
+    const { cert, value } = industriesFor;
+    const had = cert.industry.trim().length > 0;
+    setCertList((prev) =>
+      prev.map((c) => (c.id === cert.id ? { ...c, industry: value[0] ?? "" } : c)),
+    );
+    setIndustriesFor(null);
+    if (value.length > 0) setToast(had ? "Industries Updated" : "Industries Added");
+  }
+
+  function closeSetup(cert: Certification) {
+    const complete = setupFor(cert).left === 0;
+    setClosedSetup((prev) => ({ ...prev, [cert.id]: true }));
+    setToast(complete ? "Setup Complete" : "Setup Marked as Done");
+  }
   /* Default columns: Name, Industry, Career Stage, Date Modified — everything
      else is opt-in from Edit Columns. */
   const [columns, setColumns] = useState<CertColumnState>({
@@ -215,7 +453,7 @@ export function CertificationsPage({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (importMode || drawerId) return;
+      if (importMode || drawerId || industriesFor) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -231,6 +469,12 @@ export function CertificationsPage({
         if (key === "c") {
           e.preventDefault();
           setCreateMenuOpen(true);
+        }
+        // S = Continue Setup: the panel for the newest Certification still
+        // being set up. Only while the banner offers it.
+        if (key === "s" && showPendingBanner) {
+          e.preventDefault();
+          continueSetup();
         }
         return;
       }
@@ -248,15 +492,53 @@ export function CertificationsPage({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createMenuOpen, importMode, drawerId, onNewCert]);
+  }, [createMenuOpen, importMode, drawerId, industriesFor, showPendingBanner, pendingCerts, onNewCert]);
+
+  // With the panel open on a Certification mid-setup, 1–4 start that step —
+  // the same as its Add / Manage button. Esc is the panel's own.
+  const drawerSetup = drawerCert ? setupFor(drawerCert) : null;
+  const drawerSetupCard =
+    !!drawerCert &&
+    !!drawerSetup &&
+    (drawerSetup.pending ||
+      (drawerSetup.left === 0 && !drawerSetup.closed && setupBanner.tracked.includes(drawerCert.id)));
+  useEffect(() => {
+    if (!drawerCert || !drawerSetupCard || menu || industriesFor) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const i = SETUP_KEYS.indexOf(e.key);
+      if (i < 0) return;
+      e.preventDefault();
+      runSetupStep(drawerCert!, SETUP_STEPS[i].key);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerCert, drawerSetupCard, menu, industriesFor]);
 
   const filtered = useMemo(() => {
-    return certList.filter((c) => certMatches(c, query, filters));
-  }, [query, filters, certList]);
+    return certList.filter(
+      (c) => certMatches(c, query, filters) && setupMatches(setupFor(c).pending, filters.setup),
+    );
+  }, [query, filters, certList, setupFor]);
 
+  // Ties keep the list's own order either way (a sort then a reverse would
+  // flip them): a Certification created today sits above the seed's other
+  // rows from today, where Continue Setup and the banner expect it.
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
-    return sort.dir === "desc" ? arr.reverse() : arr;
+    return [...filtered].sort((a, b) =>
+      sort.dir === "desc" ? compare(b, a, sort.key) : compare(a, b, sort.key),
+    );
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -286,7 +568,8 @@ export function CertificationsPage({
   const catalog = useMemo(
     () => ({
       certs: certList.length,
-      industries: new Set(certList.map((c) => topIndustry(c.industry))).size,
+      // A Certification with no Industry yet (setup pending) isn't one.
+      industries: new Set(certList.map((c) => topIndustry(c.industry)).filter(Boolean)).size,
     }),
     [certList],
   );
@@ -365,7 +648,11 @@ export function CertificationsPage({
             standard table header with the rows glued beneath it; after that
             the rows scroll under the pinned header. See useCollapsingHeader
             and the `.tasks.clh` rules in index.css. */}
-        <div className="tasks clh">
+        {/* `clh--banner` while the setup banner shows: its 72px + 16px join
+            the collapse, and it condenses into the title note (the same
+            morph Manage Users' name-change card runs — see the
+            `.tasks.clh.clh--banner` rules). */}
+        <div className={`tasks clh${bannerOn ? " clh--banner" : ""}`}>
           <div className="co-table-col">
             <div
               ref={head.scrollRef}
@@ -429,6 +716,20 @@ export function CertificationsPage({
                     </div>
                   </header>
                   <h1 className="tasks-title">Certifications</h1>
+                  {/* The setup banner's collapsed form: one accent line under
+                      the collapsed title. Its count and text are the twins the
+                      card's pieces travel to, so the count span carries
+                      whatever sits before the shared words ("3 ", "4 steps
+                      left · ") and the text span holds only the words the
+                      card's title shares. */}
+                  {bannerOn && (
+                    <SetupNote
+                      pending={pendingCerts}
+                      tracked={trackedCerts}
+                      setupFor={setupFor}
+                      onClick={showPendingBanner ? continueSetup : dismissBanner}
+                    />
+                  )}
                   {/* The landing's catalog summary, in the shape of the Tasks
                       line in Figma 1356:1864 ("3210 Tasks · Across 230
                       Certifications"). It fades as the header collapses. */}
@@ -439,6 +740,23 @@ export function CertificationsPage({
                       "Industries",
                     )}`}
                   </p>
+
+                  {/* Certifications still being set up announce themselves
+                      above the hero search, and condense into the title note
+                      as the header collapses. The whole card is Continue
+                      Setup; its own buttons stop the click. */}
+                  {showPendingBanner && (
+                    <div className="clh-banner">
+                      <SetupBanner pending={pendingCerts} onContinue={continueSetup} onLater={dismissBanner} />
+                    </div>
+                  )}
+                  {/* Every tracked Certification finished (or closed): the
+                      green tone, until dismissed. */}
+                  {showDoneBanner && (
+                    <div className="clh-banner">
+                      <SetupDoneBanner tracked={trackedCerts} setupFor={setupFor} onDismiss={dismissBanner} />
+                    </div>
+                  )}
 
                   <div className="toolbar">
                     <CertificationsSearch
@@ -497,6 +815,10 @@ export function CertificationsPage({
                           key={cert.id}
                           cert={cert}
                           columns={columns}
+                          setup={(() => {
+                            const st = setupFor(cert);
+                            return st.pending ? { done: st.done, left: st.left } : undefined;
+                          })()}
                           onOpen={() => setDrawerId(cert.id)}
                           onEdit={() => editCert(cert)}
                           onToggleVisibility={() => toggleHidden(cert)}
@@ -581,6 +903,12 @@ export function CertificationsPage({
           title="Delete Certification"
           confirmLabel="Delete Certification"
           danger
+          doubleConfirm={
+            <>
+              <strong>{deleting.name}</strong> and its content links will be permanently
+              deleted. This can't be undone.
+            </>
+          }
           onCancel={() => setDeleting(null)}
           onConfirm={() => deleteCert(deleting)}
         >
@@ -608,6 +936,16 @@ export function CertificationsPage({
         <CertDrawer
           key={drawerCert.id}
           cert={drawerCert}
+          setupCard={
+            drawerSetupCard && drawerSetup ? (
+              <SetupCard
+                cert={drawerCert}
+                status={drawerSetup}
+                onRun={(key) => runSetupStep(drawerCert, key)}
+                onClose={() => closeSetup(drawerCert)}
+              />
+            ) : undefined
+          }
           onClose={() => setDrawerId(null)}
           /* Closes the panel first: editing opens the wizard, or — for a
              company-owned Certification — the blocked-edit modal. */
@@ -618,7 +956,264 @@ export function CertificationsPage({
           onMore={(rect) => setMenu({ cert: drawerCert, rect })}
         />
       )}
+
+      {/* Setup step 1 for an existing Certification: the modal that ends the
+          create flow, lifted out of the wizard. */}
+      {industriesFor && (
+        <CertIndustriesModal
+          mode="manage"
+          certName={industriesFor.cert.name}
+          value={industriesFor.value}
+          onChange={(value) => setIndustriesFor({ ...industriesFor, value })}
+          onCancel={() => setIndustriesFor(null)}
+          onDone={saveIndustries}
+        />
+      )}
+
+      {/* "Certification Created" on arrival (6 s — it is the landing's
+          acknowledgment), 2.5 s for everything else. */}
+      {toast && (
+        <CopiedToast
+          label={toast}
+          ms={toast === "Certification Created" ? 6000 : 2500}
+          onDone={onToastDone}
+        />
+      )}
     </div>
+  );
+}
+
+/* ─────────────── Post-creation setup pieces ─────────────── */
+
+/** The banner's title (Figma 1424:1416 "Certification Setup Pending") — the
+ *  words the card's title and the note's label share, so the morph can hold
+ *  them. The count in front of it is the number of Certifications. */
+function setupTitle(pending: Certification[]): string {
+  return pending.length === 1 ? "Certification Setup Incomplete" : "Certification Setups Incomplete";
+}
+
+function stepsLeftLabel(left: number): string {
+  return `${left} setup step${left === 1 ? "" : "s"} left`;
+}
+
+/** The done banner's title / body for the Certifications tracked this
+ *  session: all finished, or some closed with steps left. */
+function doneCopy(tracked: Certification[], setupFor: (c: Certification) => SetupStatus) {
+  const allComplete = tracked.every((c) => setupFor(c).left === 0);
+  const one = tracked.length === 1 ? tracked[0] : null;
+  return {
+    allComplete,
+    title: one
+      ? allComplete
+        ? `“${one.name}” is set up`
+        : `Setup closed for “${one.name}”`
+      : allComplete
+        ? `All ${tracked.length} Certifications are set up`
+        : "Nothing left to set up",
+    body: allComplete
+      ? "Industries, Content Links, Awards and Feedback Forms are in place."
+      : "Steps marked as done can still be added from the row menu.",
+  };
+}
+
+/* The landing banner (Figma 1424:1416 "Certification Setup Pending"): the
+   count of Certifications still being set up, the title, their names on one
+   line, then Continue Setup and a ✕ that puts the banner off for the session
+   ("Set up later" — the next create brings it back). The whole card is
+   Continue Setup (one pending: its panel; several: the filtered table — see
+   `continueSetup`); its two buttons stop the click. One pending Certification
+   reads the same way, in the singular. */
+function SetupBanner({
+  pending,
+  onContinue,
+  onLater,
+}: {
+  pending: Certification[];
+  onContinue: () => void;
+  onLater: () => void;
+}) {
+  return (
+    <div
+      className="note-card note-card--accent lm-banner cs-banner"
+      role="button"
+      tabIndex={0}
+      onClick={onContinue}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onContinue();
+        }
+      }}
+    >
+      <div className="lm-banner-main">
+        <div className="lm-banner-count">{pending.length}</div>
+        <div className="note-card-text">
+          <p className="note-card-title cs-ellipsis">
+            <span className="nc-shared">{setupTitle(pending)}</span>
+          </p>
+          <p className="note-card-body cs-ellipsis">{pending.map((c) => c.name).join(" · ")}</p>
+        </div>
+      </div>
+      {/* Continue Setup closes onto the note's chevron as the card condenses;
+          the ✕ beside it only fades. */}
+      <button
+        className="cta-quiet"
+        onClick={(e) => {
+          e.stopPropagation();
+          onContinue();
+        }}
+      >
+        Continue Setup
+        <span className="cta-kbd">S</span>
+      </button>
+      <button
+        className="cs-close lm-banner-aside"
+        aria-label="Set up later"
+        data-tip="Set up later"
+        onClick={(e) => {
+          e.stopPropagation();
+          onLater();
+        }}
+      >
+        <RowCloseIcon />
+      </button>
+    </div>
+  );
+}
+
+function SetupDoneBanner({
+  tracked,
+  setupFor,
+  onDismiss,
+}: {
+  tracked: Certification[];
+  setupFor: (c: Certification) => SetupStatus;
+  onDismiss: () => void;
+}) {
+  const copy = doneCopy(tracked, setupFor);
+  return (
+    <div className="note-card note-card--ok lm-banner lm-banner--ok">
+      <div className="lm-banner-main">
+        {/* The count's spot: a disc with the check, which closes onto the
+            note's 16px check the same way a count closes onto its twin. */}
+        <div className="lm-banner-count lm-banner-count--ok" aria-hidden="true">
+          <CheckIcon />
+        </div>
+        <div className="note-card-text">
+          <p className="note-card-title cs-ellipsis">
+            <span className="nc-shared">{copy.title}</span>
+          </p>
+          <p className="note-card-body cs-ellipsis">{copy.body}</p>
+        </div>
+      </div>
+      <button className="cta-quiet" onClick={onDismiss}>
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+/** The banner's collapsed form under the title (see SetupBanner). */
+function SetupNote({
+  pending,
+  tracked,
+  setupFor,
+  onClick,
+}: {
+  pending: Certification[];
+  tracked: Certification[];
+  setupFor: (c: Certification) => SetupStatus;
+  onClick: () => void;
+}) {
+  if (pending.length === 0) {
+    const copy = doneCopy(tracked, setupFor);
+    return (
+      <button className="tasks-note" aria-label={copy.title} onClick={onClick}>
+        <span className="tasks-note-count tasks-note-count--ok" aria-hidden="true">
+          <CheckIcon />
+        </span>
+        <span className="tasks-note-text">
+          <span className="nc-shared">{copy.title}</span>
+        </span>
+        <NoteChevronIcon />
+      </button>
+    );
+  }
+  // The no-break space: a flex item drops a trailing space (the Users note
+  // does the same).
+  const lead = `${pending.length}\u00a0`;
+  const title = setupTitle(pending);
+  return (
+    <button className="tasks-note" aria-label={`${lead}${title}`} onClick={onClick}>
+      <span className="tasks-note-count">{lead}</span>
+      <span className="tasks-note-text">
+        <span className="nc-shared">{title}</span>
+      </span>
+      <NoteChevronIcon />
+    </button>
+  );
+}
+
+/** The Setup card at the top of the row panel's Details: progress, the four
+ *  steps with Add / Manage and their 1–4 keycaps, and Mark as Done. */
+function SetupCard({
+  cert,
+  status,
+  onRun,
+  onClose,
+}: {
+  cert: Certification;
+  status: SetupStatus;
+  onRun: (key: SetupStepKey) => void;
+  onClose: () => void;
+}) {
+  const complete = status.left === 0;
+  return (
+    <ConfirmCard
+      title={complete ? "Setup · Complete" : `Setup · ${status.done} of ${SETUP_STEPS.length}`}
+      trailing={
+        <button className="cs-text-btn" onClick={onClose}>
+          {complete ? "Dismiss" : "Mark as Done"}
+        </button>
+      }
+    >
+      <div className="cs-card">
+        <div className="cs-progress" aria-hidden="true">
+          {SETUP_STEPS.map((s) => (
+            <span key={s.key} className={`cs-seg${status.steps[s.key].done ? " cs-seg--done" : ""}`} />
+          ))}
+        </div>
+        <p className="cs-help">
+          Optional, but most Certifications need all four before learners can find and finish
+          them. Press 1–4 to start a step; each one comes back here.
+        </p>
+        <div className="cs-rows">
+          {SETUP_STEPS.map((s) => {
+            const step = status.steps[s.key];
+            const detail = s.key === "industries" ? cert.industry : step.detail;
+            return (
+              <div key={s.key} className="cs-row">
+                <span className={`cs-row-icon${step.done ? " cs-row-icon--done" : ""}`} aria-hidden="true">
+                  {step.done ? <CheckIcon /> : s.icon}
+                </span>
+                <div className="cs-row-text">
+                  <span className="cs-row-title">{step.done ? s.doneTitle : s.label}</span>
+                  <span className="cs-row-body">{step.done ? detail || "Added" : s.body}</span>
+                </div>
+                <button
+                  className="cta-quiet"
+                  title={`${step.done ? "Manage" : "Add"} ${s.short} — press ${s.kbd}`}
+                  onClick={() => onRun(s.key)}
+                >
+                  {step.done ? "Manage" : "Add"}
+                  <span className="cta-kbd">{s.kbd}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </ConfirmCard>
   );
 }
 
@@ -627,11 +1222,14 @@ export function CertificationsPage({
  *  tree (Content) — beside the Certification as a learner sees it. */
 function CertDrawer({
   cert,
+  setupCard,
   onClose,
   onEdit,
   onMore,
 }: {
   cert: Certification;
+  /** The post-creation Setup card, first in Details while steps are left. */
+  setupCard?: ReactNode;
   onClose: () => void;
   onEdit: () => void;
   onMore: (rect: DOMRect) => void;
@@ -698,7 +1296,18 @@ function CertDrawer({
       onMore={onMore}
       stats={stats}
       tabs={[
-        { key: "details", label: "Details", content: <CertificationSummary cert={cert} part="details" /> },
+        {
+          key: "details",
+          label: "Details",
+          content: setupCard ? (
+            <div className="confirm-cards">
+              {setupCard}
+              <CertificationSummary cert={cert} part="details" />
+            </div>
+          ) : (
+            <CertificationSummary cert={cert} part="details" />
+          ),
+        },
         {
           key: "content",
           label: `Content · ${pv.taskCount} ${pv.taskCount === 1 ? "Task" : "Tasks"}`,
@@ -778,30 +1387,33 @@ function TagCell({ tags }: { tags: string[] }) {
 
 function CertColGroup({ columns }: { columns: CertColumnState }) {
   return (
-    <colgroup>
-      <col style={{ width: 240 }} />
-      {columns.id && <col style={{ width: 100 }} />}
-      {columns.industry && <col style={{ width: 190 }} />}
-      {columns.careerStage && <col style={{ width: 140 }} />}
-      {columns.type && <col style={{ width: 130 }} />}
-      {columns.payment && <col style={{ width: 150 }} />}
-      {columns.tasks && <col style={{ width: 90 }} />}
-      {columns.ceus && <col style={{ width: 90 }} />}
-      {columns.createdBy && <col style={{ width: 180 }} />}
-      {columns.tradeTag && <col style={{ width: 210 }} />}
-      {columns.partnershipTag && <col style={{ width: 160 }} />}
-      {columns.audience && <col style={{ width: 150 }} />}
-      {columns.visibility && <col style={{ width: 120 }} />}
-      {columns.dateCreated && <col style={{ width: 130 }} />}
-      {columns.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols
+      data={[
+        240,
+        columns.id && 100,
+        columns.industry && 190,
+        columns.careerStage && 140,
+        columns.type && 130,
+        columns.payment && 150,
+        columns.tasks && 90,
+        columns.ceus && 90,
+        columns.createdBy && 180,
+        columns.tradeTag && 210,
+        columns.partnershipTag && 160,
+        columns.audience && 150,
+        columns.visibility && 120,
+        columns.dateCreated && 130,
+        columns.dateModified && 130,
+      ]}
+      trail={[40]}
+    />
   );
 }
 
 function CertRow({
   cert,
   columns,
+  setup,
   onOpen,
   onEdit,
   onToggleVisibility,
@@ -810,6 +1422,8 @@ function CertRow({
 }: {
   cert: Certification;
   columns: CertColumnState;
+  /** Set while post-creation setup steps are left: the "Setup n/4" pill. */
+  setup?: { done: number; left: number };
   /** A click anywhere on the row outside its action buttons. */
   onOpen: () => void;
   onEdit: () => void;
@@ -831,6 +1445,15 @@ function CertRow({
             (1126:1686): grey pill beside a muted name, every other cell
             dimmed — see `.task-dim` in the CSS. */}
         {vis !== "Visible" && <span className="pr-name-flag pr-name-flag--grey">{vis}</span>}
+        {/* The shared yellow name flag — the same pill as Exam Reviews' "New
+            ID" (Figma 994:1081 "Table Pills - Yellow"), its hover tip in the
+            shared tooltip. Clicking it is a row click: the panel opens on the
+            Setup card. */}
+        {setup && (
+          <span className="pr-name-flag" data-tip={`${stepsLeftLabel(setup.left)}`}>
+            Setup {setup.done}/{SETUP_STEPS.length}
+          </span>
+        )}
       </td>
       {columns.id && <td className="col-id">{cert.id}</td>}
       {columns.industry && <td className="col-used" data-tip={cert.industry}>{cert.industry}</td>}

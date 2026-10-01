@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type FeedbackForm,
@@ -24,9 +24,7 @@ function taskKindLabel(type: string) {
 }
 
 export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
-  const [picking, setPicking] = useState<"task" | "cert" | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const addWrapRef = useRef<HTMLDivElement>(null);
+  const [picking, setPicking] = useState(false);
 
   const isDisabled = form.status === "disabled";
 
@@ -35,17 +33,25 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
     [form.triggers],
   );
 
-  // Live view of the at-most-one-form rule: refName → the OTHER form holding
-  // it. Disabled forms still occupy their mappings (preserved, just not
-  // firing). Names, not ids: the picker's rows are the real Task and
-  // Certification records, and it locks rows by name.
-  const takenNames = useMemo(() => {
-    const names = new Set<string>();
+  // Live view of the at-most-one-form rule: refName → the form holding it
+  // (this one included). Inactive forms still occupy their mappings
+  // (preserved, just not firing); a deleted form is gone from every list, so
+  // it frees them. Names, not ids: the picker's rows are the real Task and
+  // Certification records, and it locks rows by name. The picker names the
+  // holder on each locked row, so it never reads as "preselected".
+  const holderByName = useMemo(() => {
+    const holders = new Map<string, FeedbackForm>();
     for (const f of allForms) {
-      for (const t of f.triggers) names.add(t.refName);
+      if (f.status === "deleted") continue;
+      for (const t of f.triggers) holders.set(t.refName, f);
     }
-    return [...names];
+    return holders;
   }, [allForms]);
+  const takenNames = useMemo(() => [...holderByName.keys()], [holderByName]);
+  const holderName = (name: string) => {
+    const f = holderByName.get(name);
+    return f ? f.name || "Untitled form" : undefined;
+  };
 
   /* Name → what to print after the "·". A trigger only stores its id and name,
      so the kind label is derived from the live catalogs; an entry that no
@@ -91,31 +97,6 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
     onSave(form.triggers.filter((t) => t.id !== id));
   }
 
-  // Same dismissal rules as the Questions table's Add menu.
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setMenuOpen(false);
-      }
-    }
-    function onDown(e: MouseEvent) {
-      if (!addWrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [menuOpen]);
-
-  function open(kind: "task" | "cert") {
-    setMenuOpen(false);
-    setPicking(kind);
-  }
-
   return (
     <>
       {/* Figma 1236:1161 — the Questions table's twin: one `.qz` card whose
@@ -130,8 +111,8 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
 
         {isDisabled && (
           <div className="fb-archived-note">
-            This form is disabled — trigger mappings are preserved but{" "}
-            <strong>inactive</strong>. Enable the form to resume firing them.
+            This form is inactive — its trigger mappings are preserved but don't
+            fire. Activate the form to resume firing them.
           </div>
         )}
 
@@ -165,34 +146,18 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
         ))}
 
         {!isDisabled && (
-          <div className="qz-addrow qz-addrow--last" ref={addWrapRef}>
+          <div className="qz-addrow qz-addrow--last">
+            {/* Straight into the tabbed picker (Tasks · Certifications, like
+                Create Spotlight's Deep Link modal) — one trip can map both
+                kinds, so there is no "Add Tasks / Add Certifications" menu. */}
             <button
               className="qz-addrow-btn"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
+              onClick={() => setPicking(true)}
+              aria-haspopup="dialog"
             >
               <TreeAddIcon />
               Add Trigger
             </button>
-            {menuOpen && (
-              <div className="u-menu qz-menu" role="menu">
-                <button
-                  className="u-menu-item qz-menu-item"
-                  role="menuitem"
-                  onClick={() => open("task")}
-                >
-                  <span className="qz-menu-label">Add Tasks</span>
-                </button>
-                <button
-                  className="u-menu-item qz-menu-item"
-                  role="menuitem"
-                  onClick={() => open("cert")}
-                >
-                  <span className="qz-menu-label">Add Certifications</span>
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -203,23 +168,26 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
       {picking &&
         createPortal(
           <SelectRequirementModal
-            only={picking}
-            /* Same size as Select Questions: these two catalogs are long, and
-               the form's other picker already fills the screen. */
-            full
-            title={picking === "task" ? "Add Tasks" : "Add Certifications"}
-            description={
-              picking === "task"
-                ? "Completing one of these Tasks shows this form."
-                : "Completing one of these Certifications shows this form."
-            }
-            confirmNoun={picking === "task" ? "Task" : "Certification"}
+            /* Both tabs, one staged selection: Tasks and Certifications can
+               be mapped in the same trip. */
+            title="Add Triggers"
+            description="Completing any of these Tasks or Certifications shows this form."
+            confirmNoun="Trigger"
             existingNames={takenNames}
-            lockedTip="Already mapped to a Feedback Form — a Task or Certification can only show one."
-            onCancel={() => setPicking(null)}
+            lockedFlag={(name) =>
+              holderByName.get(name)?.id === form.id
+                ? "Already a trigger"
+                : `Mapped to ${holderName(name)}`
+            }
+            lockedTip={(name) =>
+              holderByName.get(name)?.id === form.id
+                ? "Already a trigger on this form."
+                : `Already mapped to “${holderName(name)}” — a Task or Certification can show only one Feedback Form.`
+            }
+            onCancel={() => setPicking(false)}
             onConfirm={(picks) => {
               addPicks(picks);
-              setPicking(null);
+              setPicking(false);
             }}
           />,
           document.body,

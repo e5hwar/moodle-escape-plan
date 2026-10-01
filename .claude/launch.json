@@ -164,6 +164,34 @@
       ],
       "port": 5211,
       "url": "http://localhost:5211"
+    },
+    {
+      "name": "dev-5215",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5215",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5215,
+      "url": "http://localhost:5215"
+    },
+    {
+      "name": "dev-5219",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5219",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5219,
+      "url": "http://localhost:5219"
     }
   ]
 }

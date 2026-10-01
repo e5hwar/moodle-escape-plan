@@ -11,6 +11,7 @@ import { CharCount } from "./CharCount";
 import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { DateField, type DateShortcut } from "./DateField";
 import { DeepLinkModal } from "./DeepLinkModal";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 
 export type SpotlightDraft = {
   headingEn: string;
@@ -101,6 +102,31 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   const [image, setImage] = useState<PickedImage | null>(null);
   const [deepLinksOpen, setDeepLinksOpen] = useState(false);
 
+  /* The form as it opened — an edit's saved Spotlight included, so only a
+     real change counts. Anything the admin changes (a field, the image, the
+     queue slot) makes `dirty` true, which is what decides whether Cancel and
+     the app's own exits stop to ask (the shared LeaveGuard); an untouched
+     page closes straight away. The step is navigation, not work. */
+  const snapshot = draftKey({
+    position,
+    headingEn,
+    headingEs,
+    descriptionEn,
+    descriptionEs,
+    ctaEnabled,
+    ctaTextEn,
+    ctaTextEs,
+    ctaUrl,
+    endDate,
+    image: image?.url ?? null,
+  });
+  const pristine = useRef(snapshot);
+  const dirty = snapshot !== pristine.current;
+  const guard = useLeaveGuard(dirty, {
+    noun: "Spotlight",
+    creating: !editing,
+  });
+
   // Only revoke on unmount / replacement, never on every render.
   const imageUrlRef = useRef<string | null>(null);
   useEffect(() => () => {
@@ -155,9 +181,15 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
     },
   ];
   const valid = checks.every((c) => c.valid);
+  /* Editing with nothing changed: Save Changes has nothing to save, so it
+     stays dimmed. Enabling is its own action and isn't gated on a change. */
+  const unchanged = editing && !enabling && !dirty;
+  const canSave = valid && !unchanged;
   const saveVerb = enabling ? "enable" : editing ? "save" : "submit";
-  const ctaTooltip = valid
+  const ctaTooltip = canSave
     ? ""
+    : valid
+    ? "No changes to save"
     : [
         `Fill in every required field to ${saveVerb}:`,
         ...checks.filter((c) => !c.valid).map((c) => `• ${c.label} — ${STEPS[0].label}`),
@@ -179,9 +211,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   function next() {
     if (step < LAST_STEP) {
       gate.goStep(step + 1);
-    } else if (valid) {
+    } else if (canSave) {
       handleSubmit();
-    } else {
+    } else if (!valid) {
       // ⌘↵ on a blocked save: take the admin to what's missing.
       setFlagAll(true);
       gate.goStep(0);
@@ -504,7 +536,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>
             Cancel
           </button>
         </div>
@@ -528,8 +560,8 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                rather than `disabled`, so it can still show the shared tooltip
                naming what's missing and answer a click by going to it. */
             <button
-              className={`btn-publish${valid ? "" : " is-disabled"}`}
-              aria-disabled={!valid}
+              className={`btn-publish${canSave ? "" : " is-disabled"}`}
+              aria-disabled={!canSave}
               data-tip={ctaTooltip || undefined}
               onClick={next}
             >

@@ -36,6 +36,12 @@ export type Certification = {
   // Category tags — at most one Trade, one Partnership, and one User Type tag.
   // See TRADE_TAGS / PARTNERSHIP_TAGS / AUDIENCE_TAGS in data/filters.
   tags?: string[];
+  /* Post-creation setup (Industries, Content Links, Award, Feedback Form) was
+     closed with "Mark as Done" — the remaining steps don't apply. In the
+     product this is the admin's own persisted flag; the seed carries it for
+     every long-established Certification, which an admin settled long ago,
+     so only the recently created ones read as still being set up. */
+  setupClosed?: boolean;
 };
 
 /* The Details step's long-form fields, kept apart from the seed rows below so
@@ -122,6 +128,21 @@ const CERT_DETAILS: Record<string, Pick<Certification, "description" | "timeToCo
     description: "A short job-site safety refresher for HVACR technicians: lockout/tagout, ladders, electrical hazards and handling refrigerant cylinders.",
     timeToComplete: { value: 45, unit: "minutes" },
   },
+  /* The three Certifications still mid-setup (Claude Design "Certification
+     Post-Creation Setup", 2026-10-01): created recently, each missing some of
+     the four follow-up steps — Industries, Content Links, Award, Feedback Form. */
+  "C-0631": {
+    description: "The safety essentials for working around boilers: pressure, combustion air, lockout and the pre-start checks every apprentice runs.",
+    timeToComplete: { value: 3, unit: "hours" },
+  },
+  "C-0629": {
+    description: "Sizing, line set and mounting practice for ductless mini-split systems, from the pre-install survey to commissioning.",
+    timeToComplete: { value: 5, unit: "hours" },
+  },
+  "C-0624": {
+    description: "Permit-required confined spaces: hazard assessment, atmospheric testing, entry roles and rescue planning.",
+    timeToComplete: { value: 4, unit: "hours" },
+  },
 };
 
 const TIME_UNIT_NAMES: Record<CertTimeUnit, [one: string, many: string]> = {
@@ -159,6 +180,7 @@ const C = (
   dateCreated,
   dateModified,
   visibility: "Visible",
+  setupClosed: true,
   ...CERT_DETAILS[id],
   ...extra,
 });
@@ -183,6 +205,11 @@ export const certifications: Certification[] = [
   C("C-0221", "Welding Inspector Prep", "Welding", "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
   // Blank type — exercises the "No Type" filter.
   C("C-0612", "Heat Pump Specialist (2026)", "HVAC › Residential", "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { visibility: "Hidden", careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"], tags: ["Residential HVAC"] }),
+  // Recently created, setup unfinished (see CERT_DETAILS above). Boiler Safety
+  // Basics has no Industry yet — an empty path is what "Add Industries" fixes.
+  C("C-0631", "Boiler Safety Basics", "", "0.6", 5, "SkillCat", "Oct 01, 2026", "Oct 01, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["boiler", "safety", "lockout"] }),
+  C("C-0629", "Ductless Mini-Split Install", "HVAC › Residential", "0.8", 6, "SkillCat", "Sep 29, 2026", "Sep 29, 2026", { setupClosed: false, careerStage: "Journeyman", type: "Unit", keywords: ["mini-split", "ductless", "install"], tags: ["Residential HVAC"] }),
+  C("C-0624", "Confined Space Entry", "OSHA & Safety › General Industry", "0.4", 4, "SkillCat", "Sep 24, 2026", "Sep 24, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["confined space", "permit", "entry"] }),
   // Company-created certifications — owned by a B2B account, editable only from
   // the B2B Dashboard (exercises the company edit-block flow).
   C("C-0588", "ARS Onboarding Path", "HVAC", "1.2", 7, "ARS", "Feb 18, 2026", "Apr 25, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["ars", "onboarding"] }),

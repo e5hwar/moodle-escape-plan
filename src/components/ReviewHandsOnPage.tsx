@@ -7,7 +7,7 @@ import {
   type TaskSubmission,
 } from "../data/reviewSubmissions";
 import { ReviewSearch } from "./ReviewSearch";
-import { ReviewRunsStrip, ReviewRunGroup, ReviewRunCard } from "./ReviewRuns";
+import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
@@ -22,6 +22,7 @@ import {
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -517,29 +518,17 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
             </div>
           </header>
 
-          {/* Review Runs — Figma 1398:2031 (the row) / 1393:1794 (the cards,
-              re-synced 2026-09-30: the row lost its "REVIEW RUNS" eyebrow and
-              the first label reads "RECENT REVIEW RUNS"). Recent = the filters
-              in force each time a review was opened, newest first; Suggested
+          {/* Review Runs — Figma 1392:1793 (re-synced 2026-10-02: one row, no
+              Recent / Suggested headings; a recent card reads "· Recent" in
+              its subtext). Recent = the filters in force each time a review
+              was opened, newest first, ahead of the suggestions; Suggested
               = All Tasks, then the Certifications and Tasks with the most
               pending. A card is a filter preset: clicking it narrows the
               queue to that run and opens the console on its longest-waiting
               submission. Nothing pending → no strip. */}
           {pending.length > 0 && (
             <ReviewRunsStrip>
-              {liveRecents.length > 0 && (
-                <RunGroup label="Recent Review Runs" runs={liveRecents} pending={pending} onPick={startRun} />
-              )}
-              {/* The "SUGGESTED" label only earns its place next to a RECENT
-                  group — alone, the cards need no heading (user, 2026-09-30). */}
-              {suggested.length > 0 && (
-                <RunGroup
-                  label={liveRecents.length > 0 ? "Suggested" : undefined}
-                  runs={suggested}
-                  pending={pending}
-                  onPick={startRun}
-                />
-              )}
+              <RunCards recents={liveRecents} suggested={suggested} pending={pending} onPick={startRun} />
             </ReviewRunsStrip>
           )}
 
@@ -698,49 +687,42 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   );
 }
 
-/** One group of the strip, its cards built from this page's runs. */
-function RunGroup({
-  label,
-  runs,
+/** The strip's cards built from this page's runs — recents first (each
+ *  marked "· Recent"), then the suggestions, in one unlabelled row. */
+function RunCards({
+  recents,
+  suggested,
   pending,
   onPick,
 }: {
-  label?: string;
-  runs: RunKey[];
+  recents: RunKey[];
+  suggested: RunKey[];
   pending: TaskSubmission[];
   onPick: (k: RunKey) => void;
 }) {
+  const runs = [
+    ...recents.map((k) => ({ k, recent: true })),
+    ...suggested.map((k) => ({ k, recent: false })),
+  ];
   return (
-    <ReviewRunGroup label={label}>
-      {runs.map((k) => (
+    <>
+      {runs.map(({ k, recent }) => (
         <ReviewRunCard
           key={runId(k)}
           count={pending.filter((s) => inRun(s, k)).length}
           values={k.kind === "all" ? ["All Tasks"] : k.values}
           sub={RUN_SUBTITLE[k.kind]}
+          recent={recent}
           onClick={() => onPick(k)}
         />
       ))}
-    </ReviewRunGroup>
+    </>
   );
 }
 
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
-    <colgroup>
-      {/* EVERY column carries an explicit width (Task included — it used to be
-         the auto column): a stretched fixed-layout table then distributes
-         slack across all columns in proportion, which is the regime the
-         landing overlay's track formula reproduces. An auto column would
-         swallow the slack alone and bump every column at the morph hand-off
-         — the same lesson the Exam Reviews conversion learned. `--table-min`
-         still reserves the sum, so nothing can shrink below its width. */}
-      <col style={{ width: TASK_WIDTH }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[TASK_WIDTH, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 

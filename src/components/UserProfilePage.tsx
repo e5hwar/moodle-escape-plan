@@ -24,6 +24,9 @@ import type { SortDir } from "./AwardTableParts";
 import { PrmModal } from "./PrmModal";
 import { PrmCheck } from "./ProctoringConsole";
 import { IdModal } from "./IdModal";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 import {
   DownloadIcon,
   IdCardIcon,
@@ -34,6 +37,7 @@ import {
   RowKebabIcon,
   SortIcon,
   } from "./icons";
+import { TableCols } from "./TableCols";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
    itself the tier renders as plain table text like every other column. */
@@ -945,13 +949,10 @@ function AwardsTable({ userName, awards }: { userName: string; awards: AwardReco
       style={{ "--table-min": `${AWARD_TABLE_MIN}px` } as CSSProperties}
     >
       <table className="table sch-table sch-table--tight">
-        <colgroup>
-          <col style={{ width: AWARD_COLS.certification }} />
-          <col style={{ width: AWARD_COLS.tier }} />
-          <col style={{ width: AWARD_COLS.number }} />
-          <col style={{ width: AWARD_COLS.date }} />
-          <col style={{ width: AWARD_COLS.actions }} />
-        </colgroup>
+        <TableCols
+          data={[AWARD_COLS.certification, AWARD_COLS.tier, AWARD_COLS.number, AWARD_COLS.date]}
+          trail={[AWARD_COLS.actions]}
+        />
         <thead>
           <tr>
             <th className="no-sort">Certification</th>
@@ -1230,6 +1231,7 @@ function PrmField({
   autoFocus,
   required = true,
   onLeave,
+  max,
 }: {
   label: string;
   value: string;
@@ -1240,22 +1242,27 @@ function PrmField({
   required?: boolean;
   /** Focus left the field (fieldFlags.tsx `leave`) — the modal marks it touched. */
   onLeave?: () => void;
+  /** Soft character limit (names only — emails / phones / IDs pass none):
+   *  counter + label-row message; the modal's Save blocks on `isOver`. */
+  max?: number;
 }) {
+  const inputProps = {
+    className: `form-input${error ? " has-error" : ""}`,
+    value,
+    placeholder,
+    autoFocus,
+    "aria-invalid": error ? true : undefined,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+  } as const;
   return (
     <div className="prm-field" onBlur={onLeave ? leave(onLeave) : undefined}>
       <label className="prm-label">
         {label}
         {required &&<span className="prm-req">*</span>}
         {error && <span className="form-label-error">{error}</span>}
+        {max !== undefined && <LimitError max={max} values={[value]} />}
       </label>
-      <input
-        className={`form-input${error ? " has-error" : ""}`}
-        value={value}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        aria-invalid={error ? true : undefined}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {max !== undefined ? <LimitedInput {...inputProps} max={max} /> : <input {...inputProps} />}
     </div>
   );
 }
@@ -1288,7 +1295,7 @@ export function EditUserModal({
       : "",
     phone: noContact ? "Enter an email or a phone number." : "",
   };
-  const invalid = Boolean(errors.name || errors.email || errors.phone);
+  const invalid = Boolean(errors.name || errors.email || errors.phone) || isOver(NAME_MAX, form.name);
   // Save stays disabled until a field actually differs (whitespace-only edits don't count).
   const dirty =
     form.name.trim() !== initial.name.trim() ||
@@ -1315,6 +1322,7 @@ export function EditUserModal({
         <PrmField
           label="Name"
           value={form.name}
+          max={NAME_MAX}
           autoFocus
           onChange={(v) => setForm((f) => ({ ...f, name: v }))}
           error={submitted || touched.has("name") ? errors.name : undefined}
@@ -1370,7 +1378,9 @@ function EditNateModal({
       ? ""
       : "Connect ID must be numeric.",
   };
-  const invalid = Boolean(errors.firstName || errors.lastName || errors.email || errors.connectId);
+  const invalid =
+    Boolean(errors.firstName || errors.lastName || errors.email || errors.connectId) ||
+    isOver(NAME_MAX, form.firstName, form.lastName);
   // Editing: Save stays disabled until a field actually differs. Adding has nothing to compare against.
   const dirty =
     !initial ||
@@ -1404,6 +1414,7 @@ function EditNateModal({
           <PrmField
             label="First Name"
             value={form.firstName}
+            max={NAME_MAX}
             autoFocus
             onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
             error={submitted || touched.has("firstName") ? errors.firstName : undefined}
@@ -1412,6 +1423,7 @@ function EditNateModal({
           <PrmField
             label="Last Name"
             value={form.lastName}
+            max={NAME_MAX}
             onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
             error={submitted || touched.has("lastName") ? errors.lastName : undefined}
             onLeave={() => touch("lastName")}

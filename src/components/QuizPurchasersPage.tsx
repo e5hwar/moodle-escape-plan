@@ -25,6 +25,7 @@ import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
 import { PrmModal } from "./PrmModal";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -512,6 +513,12 @@ export function QuizPurchasersPage({
           title="Revoke Access"
           confirmLabel="Revoke Access"
           danger
+          doubleConfirm={
+            <>
+              {revoking.u.name}'s attempt #{revoking.p.attemptNumber} on “{revoking.p.quizName}”
+              will be removed immediately.
+            </>
+          }
           onCancel={() => setRevoking(null)}
           onConfirm={() => revokeAttempt(revoking)}
         >
@@ -699,13 +706,7 @@ function AttemptActionsMenu({
 
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
-    <colgroup>
-      <col style={{ width: 200 }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[200, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 

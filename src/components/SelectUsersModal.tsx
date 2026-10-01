@@ -172,7 +172,7 @@ export function SelectUsersModal({
       description={description}
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
-      pick
+      pickFull
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >

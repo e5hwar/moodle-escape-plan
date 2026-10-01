@@ -276,7 +276,6 @@ export function SelectQuestionsModal({
       }
       confirmLabel="Add Questions"
       confirmDisabled={picked.length === 0}
-      pick
       pickFull
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}

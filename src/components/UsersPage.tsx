@@ -29,6 +29,7 @@ import { loginAs } from "./loginAs";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { CopyIcon, NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -633,13 +634,7 @@ export function UsersPage({
 
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
-    <colgroup>
-      <col style={{ width: 200 }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[200, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 
@@ -1052,6 +1047,12 @@ function RemoveUserConfirm({
       confirmLabel="Remove User"
       cancelLabel="Cancel"
       danger
+      doubleConfirm={
+        <>
+          <strong>{user.name}</strong> will lose access to SkillCat and be removed for good.
+          This can't be undone.
+        </>
+      }
       onCancel={onClose}
       onConfirm={onConfirm}
     >

@@ -30,7 +30,7 @@ import {
  *
  * The picker itself is the shared table picker (Figma 682:2321, the `.stm-*`
  * chrome Select Tasks / Select Users / Select Questions all run on): search,
- * filter pills, table, pagination inside PrmModal's `pick` shell. It is
+ * filter pills, table, pagination inside PrmModal's `pickFull` shell. It is
  * uncapped — one grant can comp any number of users — so it carries a
  * select-all in the header and counts what's ticked in the pagination row.
  *
@@ -355,7 +355,7 @@ function SelectGrantUsersModal({
       description={`Choose who to comp on “${quizName}”. You can grant to as many users as you like in one go.`}
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
-      pick
+      pickFull
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >

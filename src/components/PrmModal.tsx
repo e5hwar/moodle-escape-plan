@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /** Modal close glyph — the design's tdesign:close (20px, 2.42 square-capped). */
 export const ModalCloseIcon = () => (
@@ -28,11 +28,10 @@ export function PrmModal({
   go,
   footerExtra,
   wide,
-  pick,
-  pickWide,
   pickFull,
   className,
   hideFooter,
+  doubleConfirm,
   onCancel,
   onCancelButton,
   onConfirm,
@@ -63,17 +62,10 @@ export function PrmModal({
   footerExtra?: ReactNode;
   /** A form-carrying modal runs wider than the 640px confirm shell. */
   wide?: boolean;
-  /** A table picker — Figma 682:2321's fixed 884px shell, sized to its content
-   *  rather than pinned to `wide`'s viewport-height card. */
-  pick?: boolean;
-  /** The Select Tasks picker only (Figma 682:2321, widened to 1050px on
-   *  2026-09-12 for its Industry column). The other pickers stay at the 884px
-   *  their own nodes still draw. */
-  pickWide?: boolean;
-  /** Full-screen picker: the card fills the viewport inside the scrim's 24px
-   *  gutter, and its row area grows with it. For a picker whose source list is
-   *  thousands of rows deep (Select Questions), where a fixed card spends most
-   *  of the screen on nothing. */
+  /** Table picker (the `.stm-*` family — Select Tasks/Questions/Users/
+   *  Certifications, Add Requirement, Deep Link, Grant Attempts): the card
+   *  fills the viewport inside the scrim's 24px gutter and its row area grows
+   *  with it. Every picker runs at this size since 2026-10-01. */
   pickFull?: boolean;
   /** Per-modal shell class, for a node whose card is its own width/height
    *  (the Question Bank's bulk-upload screens). */
@@ -81,6 +73,12 @@ export function PrmModal({
   /** Drops the footer entirely — the Bulk Upload picker (Figma 1116:1321)
    *  draws none, because nothing is confirmed until a file has been read. */
   hideFooter?: boolean;
+  /** Every deletion asks twice: the CTA stacks an "Are you sure?" confirm on
+   *  top of this one (the Edit Criteria pattern, CriteriaLock.tsx), and only
+   *  ITS CTA runs `onConfirm`. The value is that second modal's body sentence.
+   *  The stacked card is narrower (`.prm--sure`), and Go Back / ✕ / the scrim /
+   *  Escape on it close BOTH modals (`onCancel`). */
+  doubleConfirm?: ReactNode;
   /** Dismisses the modal — overlay click and the close glyph. */
   onCancel: () => void;
   /** The footer's text button, when it does something other than dismiss
@@ -92,61 +90,101 @@ export function PrmModal({
    *  between items that exist, so the title group is left on its own. */
   children?: ReactNode;
 }) {
+  const [sure, setSure] = useState(false);
+
+  // Escape on the stacked confirm closes both. Window capture, so the page's
+  // own Escape handler (which would otherwise run onCancel a second time, or
+  // close something underneath) never sees it.
+  useEffect(() => {
+    if (!sure) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setSure(false);
+      onCancel();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [sure, onCancel]);
+
+  const confirm = doubleConfirm ? () => setSure(true) : onConfirm;
+
   return (
-    <div className="pr-confirm-overlay" onClick={onCancel}>
-      <div
-        className={`prm ${wide ? "prm--wide" : ""}${pick ? " prm--pick" : ""}${
-          pickWide ? " prm--pick-wide" : ""
-        }${pickFull ? " prm--pick-full" : ""}${className ? ` ${className}` : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="prm-body">
-          <div className="prm-headgroup">
-            <div className="prm-head">
-              <h2 className="prm-title">{title}</h2>
-              <button className="prm-close" onClick={onCancel} aria-label="Close">
-                <ModalCloseIcon />
-              </button>
+    <>
+      <div className="pr-confirm-overlay" onClick={onCancel}>
+        <div
+          className={`prm ${wide ? "prm--wide" : ""}${
+            pickFull ? " prm--pick-full" : ""
+          }${className ? ` ${className}` : ""}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="prm-body">
+            <div className="prm-headgroup">
+              <div className="prm-head">
+                <h2 className="prm-title">{title}</h2>
+                <button className="prm-close" onClick={onCancel} aria-label="Close">
+                  <ModalCloseIcon />
+                </button>
+              </div>
+              {description && <p className="prm-text">{description}</p>}
             </div>
-            {description && <p className="prm-text">{description}</p>}
+            {children}
           </div>
-          {children}
-        </div>
-        {!hideFooter && (
-          <div className={`prm-foot${hideCancel ? " prm-foot--solo" : ""}`}>
-            {!hideCancel && (
-              <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
-                {cancelLabel}
-              </button>
-            )}
-            <div className="prm-foot-end">
-              {footerExtra}
-              {confirmHref ? (
-                <a
-                  className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
-                  href={confirmHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onConfirm}
-                >
-                  {confirmLabel}
-                </a>
-              ) : (
-                <button
-                  className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
-                  onClick={onConfirm}
-                  disabled={confirmDisabled}
-                >
-                  {confirmLabel}
+          {!hideFooter && (
+            <div className={`prm-foot${hideCancel ? " prm-foot--solo" : ""}`}>
+              {!hideCancel && (
+                <button className="prm-cancel" onClick={onCancelButton ?? onCancel}>
+                  {cancelLabel}
                 </button>
               )}
+              <div className="prm-foot-end">
+                {footerExtra}
+                {confirmHref ? (
+                  <a
+                    className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
+                    href={confirmHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onConfirm}
+                  >
+                    {confirmLabel}
+                  </a>
+                ) : (
+                  <button
+                    className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
+                    onClick={confirm}
+                    disabled={confirmDisabled}
+                  >
+                    {confirmLabel}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      {sure && (
+        <PrmModal
+          title="Are you sure?"
+          confirmLabel={typeof confirmLabel === "string" ? `Yes, ${confirmLabel}` : confirmLabel}
+          cancelLabel="Go Back"
+          danger
+          className="prm--sure"
+          onCancel={() => {
+            setSure(false);
+            onCancel();
+          }}
+          onConfirm={() => {
+            setSure(false);
+            onConfirm?.();
+          }}
+        >
+          <p className="prm-content">{doubleConfirm}</p>
+        </PrmModal>
+      )}
+    </>
   );
 }

@@ -9,6 +9,8 @@ import {
 import { ChevronLeftIcon, LockIcon } from "./icons";
 import { RteToolbar } from "./RteToolbar";
 import { AutoTextarea } from "./AutoTextarea";
+import { CharCount, LimitError } from "./CharCount";
+import { DESCRIPTION_MAX, isOver, limitClass } from "../data/fieldLimits";
 
 function formatDate(iso: string): string {
   if (!iso) return "";
@@ -210,7 +212,10 @@ export function ReviewSubmissionDetail({
 
                   {/* Reviewer's checklist */}
                   <div className="rh-field">
-                    <div className="rh-field-label">Reviewer's Checklist</div>
+                    <div className="rh-field-label">
+                      Reviewer's Checklist
+                      <LimitError max={DESCRIPTION_MAX} values={[checklist]} />
+                    </div>
                     <ReviewerChecklistField value={checklist} onChange={setChecklist} />
                   </div>
 
@@ -240,9 +245,12 @@ export function ReviewSubmissionDetail({
 
                   {/* Feedback */}
                   <div className="rh-field">
-                    <div className="rh-field-label">Feedback Notes</div>
+                    <div className="rh-field-label">
+                      Feedback Notes
+                      <LimitError max={DESCRIPTION_MAX} values={[feedback]} />
+                    </div>
                     <textarea
-                      className="rh-feedback"
+                      className={`rh-feedback ${limitClass(DESCRIPTION_MAX, feedback)}`.trimEnd()}
                       placeholder="Explain the score and give the learner specific, actionable feedback…"
                       value={feedback}
                       onChange={(e) => setFeedback(e.target.value)}
@@ -256,7 +264,7 @@ export function ReviewSubmissionDetail({
                     </button>
                     <button
                       className="btn-publish rh-submit"
-                      disabled={score === null}
+                      disabled={score === null || isOver(DESCRIPTION_MAX, feedback, checklist)}
                       onClick={() => score !== null && onSubmit({ score, feedback, checklist })}
                     >
                       {isReject ? "Reject Submission" : isPass ? "Pass Submission" : "Submit Review"}
@@ -342,14 +350,20 @@ function ReviewerChecklistField({
 }) {
   // Single-language field (Figma 620:1352): the bottom toolbar is revealed by
   // the shared `.rte-field:not(:focus-within)` rule while the caret is inside.
+  // A tagless `.rte-lang-row` keeps the 12px inset and gives the character
+  // counter its bottom-right seat, as in a dual-language RichTextField.
+  const flag = limitClass(DESCRIPTION_MAX, value);
   return (
-    <div className="rte-field">
-      <AutoTextarea
-        className="rte-area"
-        value={value}
-        onChange={onChange}
-        placeholder="Note what you checked while reviewing this submission…"
-      />
+    <div className={`rte-field${flag ? ` ${flag}` : ""}`}>
+      <div className="rte-lang-row">
+        <AutoTextarea
+          className="rte-area"
+          value={value}
+          onChange={onChange}
+          placeholder="Note what you checked while reviewing this submission…"
+        />
+        <CharCount value={value} max={DESCRIPTION_MAX} />
+      </div>
       <RteToolbar />
     </div>
   );

@@ -54,7 +54,6 @@ export function SelectCertificationsModal({
   locked,
   pool: poolProp,
   preselected,
-  full = false,
   allowEmpty = false,
   onCancel,
   onConfirm,
@@ -71,8 +70,6 @@ export function SelectCertificationsModal({
   /** Rows ticked when the modal opens — unlike `locked` these stay clickable,
    *  so reopening the picker doubles as "manage what's already picked". */
   preselected?: string[];
-  /** Fills the viewport (the Select Questions shell) instead of the 884px card. */
-  full?: boolean;
   /** Lets confirm go through with nothing ticked — for a picker that also
    *  clears an existing selection. */
   allowEmpty?: boolean;
@@ -165,7 +162,7 @@ export function SelectCertificationsModal({
       description={description}
       confirmLabel={confirmLabel}
       confirmDisabled={!allowEmpty && picked.length === 0}
-      {...(full ? { pickFull: true } : { pick: true })}
+      pickFull
       onCancel={onCancel}
       onConfirm={() => onConfirm(picked)}
     >

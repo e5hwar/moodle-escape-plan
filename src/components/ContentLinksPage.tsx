@@ -10,6 +10,7 @@ import { certifications, formatTimeToComplete } from "../data/certifications";
 import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { SearchHints } from "./SearchPanelParts";
 import { SkeletonOverlay } from "./SkeletonOverlay";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import {
   KeyCommandIcon,
   InfoIcon,
@@ -153,15 +154,23 @@ export function ContentLinksPage({
   initialFocus,
   onBack,
   backLabel,
+  links: savedLinks = seedLinks,
+  onSaveLinks,
 }: {
   initialFocus?: ContentNode;
   onBack?: () => void;
   backLabel?: string;
+  /** The graph as last saved. App.tsx holds it, so a Certification's Setup
+   *  card can tell whether it has Content Links yet; without it the page
+   *  works on the seed alone. */
+  links?: Link[];
+  /** Save Changes hands the new graph back up. */
+  onSaveLinks?: (links: Link[]) => void;
 } = {}) {
   const [focusId, setFocusId] = useState<Focus>(initialFocus?.id ?? null);
-  const [links, setLinks] = useState<Link[]>(seedLinks);
+  const [links, setLinks] = useState<Link[]>(savedLinks);
   // Last-saved snapshot; the Save / Discard footer diffs the working set against it.
-  const [baseline, setBaseline] = useState<Link[]>(seedLinks);
+  const [baseline, setBaseline] = useState<Link[]>(savedLinks);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -209,6 +218,15 @@ export function ContentLinksPage({
 
   // Reference identity: any add / remove / strength edit produces a new array.
   const dirty = links !== baseline;
+  // Leaving asks only when the graph really differs — a link added and
+  // removed again, or a strength put back, is nothing to lose.
+  const changed = useMemo(
+    () => dirty && draftKey(links) !== draftKey(baseline),
+    [dirty, links, baseline],
+  );
+  // Staged edits ask before the crumb throws them away. Switching the focused
+  // Certification doesn't: `links` is the whole graph, so edits survive it.
+  const guard = useLeaveGuard(changed);
 
   function pickFocus(id: string) {
     setFocusId(id);
@@ -218,6 +236,7 @@ export function ContentLinksPage({
 
   function saveChanges() {
     setBaseline(links);
+    onSaveLinks?.(links);
   }
 
   function cancelChanges() {
@@ -270,7 +289,7 @@ export function ContentLinksPage({
             <nav className="rvc-crumbs" aria-label="Breadcrumb">
               <button
                 className="rvc-crumb"
-                onClick={onBack}
+                onClick={() => guard(onBack)}
                 title={`Back to ${backLabel ?? "Certifications"}`}
               >
                 {backLabel ?? "Certifications"}
@@ -353,8 +372,10 @@ export function ContentLinksPage({
           )}
 
           {/* Same in-flow save footer as the Spotlights reorder bar — spans the
-              content column only, stops at the left nav. */}
-          {focused && dirty && (
+              content column only, stops at the left nav. Shown only while
+              the graph really differs from the saved one — an edit undone
+              leaves nothing to save, so the bar goes away again. */}
+          {focused && changed && (
             <footer className="sp-save-footer">
               <div className="sp-save-footer-text">Unsaved Changes</div>
               <div className="sp-save-footer-actions">

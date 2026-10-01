@@ -147,11 +147,13 @@ export function ActionsMenu({
 /* ─────────────── Confirm modal ─────────────── */
 
 export function ConfirmModal({
-  title, confirmLabel, danger = false, children, onCancel, onConfirm,
+  title, confirmLabel, danger = false, doubleConfirm, children, onCancel, onConfirm,
 }: {
   title: string;
   confirmLabel: string;
   danger?: boolean;
+  /** See PrmModal — every deletion asks twice. */
+  doubleConfirm?: React.ReactNode;
   children: React.ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
@@ -161,6 +163,7 @@ export function ConfirmModal({
       title={title}
       confirmLabel={confirmLabel}
       danger={danger}
+      doubleConfirm={doubleConfirm}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >

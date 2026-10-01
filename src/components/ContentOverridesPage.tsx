@@ -38,6 +38,7 @@ import { PrmModal } from "./PrmModal";
 import { SearchHints } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { SkeletonOverlay } from "./SkeletonOverlay";
+import { useLeaveGuard } from "./LeaveGuard";
 import {
   ChangeArrowIcon,
   CommandIcon,
@@ -212,6 +213,9 @@ export function ContentOverridesPage({
 
   /* Staged changes — nothing touches `cells` until Review & Save confirms. */
   const [staged, setStaged] = useState<Staged[]>([]);
+  // Unapplied changes ask before the crumb throws them away. Re-scoping the
+  // pickers doesn't: staged changes are keyed by person/task and survive it.
+  const guard = useLeaveGuard(staged.length > 0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -695,7 +699,7 @@ export function ContentOverridesPage({
                 is the way back — same header as Who Paid / Quiz Attempts. */}
             {onBack && backLabel && (
               <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button className="rvc-crumb" onClick={onBack} title={`Back to ${backLabel}`}>
+                <button className="rvc-crumb" onClick={() => guard(onBack)} title={`Back to ${backLabel}`}>
                   {backLabel}
                 </button>
               </nav>

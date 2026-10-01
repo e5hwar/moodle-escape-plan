@@ -17,6 +17,8 @@ import { SearchIcon, AddIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteI
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { useLeaveGuard } from "./LeaveGuard";
+import { TableCols } from "./TableCols";
 
 type DisplayStatus = "active" | "pending" | "ended" | "rejected";
 
@@ -82,12 +84,9 @@ const CrossIcon = () => (
    widths. A bare <col /> would make one column swallow all of it. */
 const SP_TEXT_W = 300 + 24;
 const SP_COL_WIDTHS = [72, 144 + 24, SP_TEXT_W, 84 + 24, 103 + 24, 96 + 24, 103 + 24, 16 + 24];
+/* The last width is the kebab gutter: it stays fixed, the rest take the slack. */
 const SpColGroup = () => (
-  <colgroup>
-    {SP_COL_WIDTHS.map((w, i) => (
-      <col key={i} style={{ width: w }} />
-    ))}
-  </colgroup>
+  <TableCols data={SP_COL_WIDTHS.slice(0, -1)} trail={SP_COL_WIDTHS.slice(-1)} />
 );
 
 const SP_TABLE_MIN = SP_COL_WIDTHS.reduce((a, b) => a + b, 0);
@@ -162,6 +161,9 @@ export function SpotlightsPage() {
       list.map((s) => s.id).join(",") !== committed.map((s) => s.id).join(","),
     [list, committed],
   );
+  // An unsaved reorder asks before leaving the page. The page has no exit of
+  // its own (the sidebar and browser Back go through App), so this only registers.
+  useLeaveGuard(dirty);
 
   // Reordering by drag only makes sense against the full, unfiltered queue.
   const canReorder = !query.trim();
@@ -384,6 +386,26 @@ export function SpotlightsPage() {
     setOverIndex(null);
   }
 
+  /* Once the past group has finished opening, bring it into view if it ran
+     past the bottom of the table — scrolling only as far as keeps the toggle
+     row on screen. Waiting for the grow to finish means the scroll has room. */
+  const archiveRowRef = useRef<HTMLTableRowElement>(null);
+  const archivedRef = useRef<HTMLDivElement>(null);
+  function onPastTransitionEnd(e: React.TransitionEvent<HTMLDivElement>) {
+    if (e.target !== e.currentTarget || e.propertyName !== "grid-template-rows") return;
+    if (!showArchived) return;
+    const past = archivedRef.current;
+    const toggle = archiveRowRef.current;
+    const scroller = past?.closest(".table-xscroll");
+    if (!past || !toggle || !scroller) return;
+    const box = scroller.getBoundingClientRect();
+    const head = scroller.querySelector(".table-head")?.getBoundingClientRect().height ?? 0;
+    const overflow = past.getBoundingClientRect().bottom - box.bottom;
+    const room = toggle.getBoundingClientRect().top - (box.top + head);
+    const by = Math.min(overflow, room);
+    if (by > 0) scroller.scrollBy({ top: by, behavior: "smooth" });
+  }
+
   // Drag indices are positions in `list`, not in the rendered slice, so the
   // live and archived groups can be rendered separately and still reorder.
   function renderRows(rows: Spotlight[]) {
@@ -512,26 +534,47 @@ export function SpotlightsPage() {
                   renderRows(live)
                 )}
 
-                {/* Archived (ended / rejected) Spotlights live behind this row
+                {/* Past (ended / rejected) Spotlights live behind this row
                     at the foot of the table (564:2244). */}
                 {archived.length > 0 && (
-                  <tr className="sp-archive-row">
+                  <tr className="sp-archive-row" ref={archiveRowRef}>
                     <td colSpan={SP_COL_WIDTHS.length}>
                       <button
                         className={`sp-archive-toggle${showArchived ? " is-open" : ""}`}
                         onClick={() => setShowArchived((v) => !v)}
                         aria-expanded={showArchived}
+                        aria-controls="sp-past"
                       >
-                        {showArchived ? "Hide" : "Show"} Archived Spotlights
+                        {showArchived ? "Hide" : "Show"} Past Spotlights
                         <ChevronDownSquareIcon />
                       </button>
                     </td>
                   </tr>
                 )}
-
-                {showArchived && renderRows(archived)}
               </tbody>
             </table>
+
+            {/* The past rows are their own table (same <SpColGroup>, so the
+                columns stay aligned) inside a 0fr → 1fr grid track: the group
+                grows and fades in under the toggle instead of popping in, and
+                collapses the same way. Kept mounted so it can animate out;
+                `inert` keeps the hidden rows out of the tab order. */}
+            {archived.length > 0 && (
+              <div
+                id="sp-past"
+                ref={archivedRef}
+                className={`sp-past${showArchived ? " is-open" : ""}`}
+                onTransitionEnd={onPastTransitionEnd}
+                {...(showArchived ? {} : { inert: "" })}
+              >
+                <div className="sp-past-inner">
+                  <table className="sp-table table-body">
+                    <SpColGroup />
+                    <tbody>{renderRows(archived)}</tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             </div>
           </div>
 
@@ -625,7 +668,7 @@ function ConfirmActionModal({
   onConfirm: () => void;
 }) {
   const name = item.headingEn;
-  const copy: Record<ConfirmKind, { title: string; body: React.ReactNode; cta: string; danger?: boolean }> = {
+  const copy: Record<ConfirmKind, { title: string; body: React.ReactNode; cta: string; danger?: boolean; sure?: React.ReactNode }> = {
     approve: {
       title: "Approve Spotlight",
       body: (
@@ -668,6 +711,7 @@ function ConfirmActionModal({
       ),
       cta: "Delete",
       danger: true,
+      sure: <>“{name}” will be permanently deleted. This can't be undone.</>,
     },
   };
   const c = copy[kind];
@@ -677,6 +721,7 @@ function ConfirmActionModal({
       title={c.title}
       confirmLabel={c.cta}
       danger={c.danger}
+      doubleConfirm={c.sure}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -878,7 +923,7 @@ function SpotlightActionsMenu({
   onDelete: () => void;
 }) {
   // Ended and Rejected are the two archived states — both sit behind the
-  // table's "Show Archived Spotlights" row, and both offer Enable.
+  // table's "Show Past Spotlights" row, and both offer Enable.
   const archived = status === "ended" || status === "rejected";
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);

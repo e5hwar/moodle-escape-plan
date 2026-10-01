@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowUpRightIcon,
   DropdownCaretIcon,
@@ -9,6 +9,7 @@ import { RadioCard } from "./NewCompanyWizard";
 import { SectionHeading } from "./SectionHeading";
 import { ConfirmModal } from "./AwardTableParts";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
+import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { type Certification } from "../data/certifications";
 import {
   MERIT_TIERS,
@@ -83,10 +84,20 @@ export function NewAwardWizard(props: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
 
+  /* The page as it opened — an existing Award prefills it, so an untouched
+     Manage Award is clean too. Anything changed makes leaving stop to ask (the
+     shared LeaveGuard); Save and Delete commit, so they leave directly. */
+  const pristine = useRef(data);
+  const dirty = draftKey(data) !== draftKey(pristine.current);
+  const guard = useLeaveGuard(dirty, { noun: "Award", creating: !isEditing });
+  const requestClose = () => guard(onClose);
+
   // Every Award should display a Card on the Portfolio; require at least one
   // appearance.
   const appearanceValid = !!data.cardTemplateId || !!data.certificateTemplateId;
-  const canSave = appearanceValid;
+  // Editing with nothing changed: nothing to save, so Save Changes stays dimmed.
+  const unchanged = isEditing && !dirty;
+  const canSave = appearanceValid && !unchanged;
   // Either design picker says so once it has been opened and closed empty, or
   // after a blocked save (fieldFlags.tsx) — one appearance satisfies both.
   const { touched, touch } = useTouchedKeys();
@@ -126,6 +137,8 @@ export function NewAwardWizard(props: Props) {
      and a one-page form has no rail — so the button says it on hover. */
   const blockedTip = canSave
     ? undefined
+    : appearanceValid
+    ? "No changes to save"
     : "An Award needs at least one appearance to save: a Card or a Certificate design.";
 
   return (
@@ -139,7 +152,7 @@ export function NewAwardWizard(props: Props) {
                     back out; there is no page for one Certification, so it gets
                     no crumb — every crumb is clickable. */}
                 <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                  <button className="rvc-crumb" onClick={onClose} title="Back to Certifications">
+                  <button className="rvc-crumb" onClick={requestClose} title="Back to Certifications">
                     Certifications
                   </button>
                 </nav>
@@ -158,7 +171,8 @@ export function NewAwardWizard(props: Props) {
                         className="text-link"
                         onClick={(e) => {
                           e.preventDefault();
-                          props.onViewRecipients?.();
+                          const go = props.onViewRecipients;
+                          if (go) guard(go);
                         }}
                       >
                         View Recipients <ArrowUpRightIcon />
@@ -218,7 +232,7 @@ export function NewAwardWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
           {/* Deleting the Award is the only way to give the Certification its
               "Add Award" entry back, and the Awards table that used to carry
               the action is gone — so it sits here, quiet and far from the
@@ -241,7 +255,7 @@ export function NewAwardWizard(props: Props) {
             className={`btn-publish${canSave ? "" : " is-disabled"}`}
             aria-disabled={!canSave}
             data-tip={blockedTip}
-            onClick={() => { if (canSave) handleSave(); else setAttempted(true); }}
+            onClick={() => { if (canSave) handleSave(); else if (!appearanceValid) setAttempted(true); }}
           >
             {isEditing ? "Save Changes" : "Create Award"}
             <WizardKeyHint />
@@ -254,6 +268,14 @@ export function NewAwardWizard(props: Props) {
           title="Delete this Award?"
           confirmLabel="Delete Award"
           danger
+          doubleConfirm={
+            <>
+              The Award for <strong>{cert.name}</strong> will be permanently deleted, and{" "}
+              {fmtHolders(props.editingAward.holders)} user
+              {props.editingAward.holders === 1 ? "’s" : "s’"} Cards and Certificates will stop
+              being valid. This can’t be undone.
+            </>
+          }
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             setConfirmDelete(false);

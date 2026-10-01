@@ -25,10 +25,13 @@ import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
 import { PrmModal } from "./PrmModal";
+import { LimitError } from "./CharCount";
+import { LimitedInput } from "./LimitedInput";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { BulkUploadModal } from "./BulkUploadModal";
 import { CopiedToast } from "./CopiedToast";
 import { questionsFromImport, type ImportReport } from "../data/questionImport";
-import { ReviewRunsStrip, ReviewRunGroup, ReviewRunCard } from "./ReviewRuns";
+import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionVersionsPage } from "./QuestionVersionsPage";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -204,7 +207,38 @@ function buildIndex(cats: Category[]): IndexGroup[] {
   return groups;
 }
 
-/* The index runs in INDEX_COLUMNS columns, read down-then-across. A group is
+/* Responsive index columns (2026-10-01 rule set). Measured on the index's
+   content box (A, inside its 12px padding):
+   - N = as many columns as fit at 260px + a 32px gap, held to 2…5
+     (2 below A 844, 3 from 844, 4 from 1136, 5 from 1428).
+   - The gap scales with the column: 32px at 260 wide → 48px at 320 wide,
+     G = 32 + 0.267 × (W − 260); columns + gaps fill A exactly.
+   - Past 320 the gap stops at 48. Below 5 columns the columns keep growing
+     until the next one fits (widest ≈ 398 at 2 columns, ≈ 346 at 3), so the
+     index always fills A; only at 5 columns (A ≥ 1792) do they stop at 320
+     and the slack sits on the right.
+   - Under 260 (2 columns, A < 552) the gap stays 32 and the columns shrink;
+     names ellipsize, the index never scrolls sideways.
+   Minimums raised from 220 / 24 / 3 columns the same day (user). */
+const INDEX_COL = { minW: 260, maxW: 320, minG: 32, maxG: 48, minN: 2, maxN: 5 };
+const INDEX_SLOPE = (INDEX_COL.maxG - INDEX_COL.minG) / (INDEX_COL.maxW - INDEX_COL.minW);
+
+function indexLayout(avail: number): { n: number; w: number; g: number } {
+  const { minW, maxW, minG, maxG, minN, maxN } = INDEX_COL;
+  const n = Math.min(maxN, Math.max(minN, Math.floor((avail + minG) / (minW + minG))));
+  // Solve avail = n·W + (n − 1)·G(W) for W.
+  const w = (avail - (n - 1) * (minG - INDEX_SLOPE * minW)) / (n + INDEX_SLOPE * (n - 1));
+  if (w >= maxW) {
+    // The 320 cap holds only at the last column count; with fewer, the next
+    // column doesn't fit yet, and capping would leave a blank strip.
+    if (n === maxN) return { n, w: maxW, g: maxG };
+    return { n, w: (avail - (n - 1) * maxG) / n, g: maxG };
+  }
+  if (w <= minW) return { n, w: Math.max(0, (avail - (n - 1) * minG) / n), g: minG };
+  return { n, w, g: minG + INDEX_SLOPE * (w - minW) };
+}
+
+/* The index runs in N columns (see `indexLayout`), read down-then-across. A group is
    never split or carried over, so each column is a contiguous run of whole
    groups — which makes balancing them a linear-partition problem: split the
    A→Z run into EXACTLY this many parts, minimising the tallest one.
@@ -215,9 +249,7 @@ function buildIndex(cats: Category[]): IndexGroup[] {
    its letter head. (CSS `column-count` can do neither: it balances by measured
    height, so it both empties the last column and, once the list outgrows the
    viewport, breaks a group across a column boundary.) */
-const INDEX_COLUMNS = 4;
-
-function balanceIndex(groups: IndexGroup[], columns = INDEX_COLUMNS): IndexGroup[][] {
+function balanceIndex(groups: IndexGroup[], columns: number): IndexGroup[][] {
   const n = groups.length;
   // Fewer groups than columns — one each, and the remainder stay empty.
   if (n <= columns) {
@@ -761,8 +793,27 @@ export function QuestionBankPage({
     setCatMenu({ target, x: r.right, y: r.bottom });
   }
 
-  // The landing's A→Z index of every category.
-  const indexColumns = useMemo(() => balanceIndex(buildIndex(categories)), [categories]);
+  // The landing's A→Z index of every category, in as many columns as its
+  // own width takes (measured, not the window — the side nav counts).
+  const [indexEl, setIndexEl] = useState<HTMLDivElement | null>(null);
+  const [indexWidth, setIndexWidth] = useState(1082);
+  useLayoutEffect(() => {
+    if (!indexEl) return;
+    const measure = () => {
+      const cs = getComputedStyle(indexEl);
+      const w = indexEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (w > 0) setIndexWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(indexEl);
+    return () => ro.disconnect();
+  }, [indexEl]);
+  const indexGrid = indexLayout(indexWidth);
+  const indexColumns = useMemo(
+    () => balanceIndex(buildIndex(categories), indexGrid.n),
+    [categories, indexGrid.n],
+  );
 
   // RECENT shows only labels that still exist (a rename drops its entry).
   const recentShown = useMemo(
@@ -972,7 +1023,6 @@ export function QuestionBankPage({
                 morph. A category without sub-categories has no strip. */}
             {openCat?.subcategories?.length ? (
               <ReviewRunsStrip label={`Sub-Categories in ${openCat.label}`} className="qb-subcards">
-                <ReviewRunGroup>
                   <ReviewRunCard
                     count={preSub.length}
                     values={["All Sub-Categories"]}
@@ -1011,7 +1061,6 @@ export function QuestionBankPage({
                       </div>
                     );
                   })}
-                </ReviewRunGroup>
               </ReviewRunsStrip>
             ) : null}
 
@@ -1121,8 +1170,9 @@ export function QuestionBankPage({
             </div>
 
             <div className="lm-stage">
-              {/* ─── Landing layer: the A→Z category index, and the drop-a-CSV
-                  line pinned under it ─── */}
+              {/* ─── Landing layer: the A→Z category index (the Bulk Upload
+                  footer under it went 2026-10-01; dropping a CSV on the page
+                  still opens the import) ─── */}
               <div className="lm-land qbl-land">
                 {/* Index header — Figma 867:2473: "Categories · n" (the "All"
                     went 2026-09-30 — node 1397:1950) and the landing's Add
@@ -1139,7 +1189,7 @@ export function QuestionBankPage({
                     >
                       Categories · {formatCount(categories.length)}
                     </button>
-                    {/* Icon-only in the re-synced node — the 16px plus alone
+                    {/* Icon-only in the re-synced node — the 20px plus alone
                         carries "add a category" beside the title. */}
                     <button
                       className={`qbl-index-add-btn ${catModalOpen && !atTable ? "is-open" : ""}`}
@@ -1151,7 +1201,17 @@ export function QuestionBankPage({
                     </button>
                   </div>
                 </div>
-                <div className="qbl-index lm-scroll">
+                <div
+                  className="qbl-index lm-scroll"
+                  ref={setIndexEl}
+                  style={
+                    {
+                      "--qbl-cols": indexGrid.n,
+                      "--qbl-col-w": `${indexGrid.w}px`,
+                      "--qbl-gap": `${indexGrid.g}px`,
+                    } as React.CSSProperties
+                  }
+                >
                   {indexColumns.map((col, i) => (
                     <div key={i} className="qbl-index-col">
                       {col.map((g) => (
@@ -1162,12 +1222,13 @@ export function QuestionBankPage({
                               key={c.key}
                               className="qbl-index-row"
                               onClick={() => openCategory(c.label)}
-                              /* Names ellipsize at this column width, so the
-                                 row carries its own name as a tooltip (the app
-                                 adopts native `title` into the shared tip) —
+                              /* Names ellipsize at this column width, so a
+                                 CUT name carries itself as a tooltip —
                                  hovering either the name or the count shows
-                                 the category in full. */
-                              title={c.label}
+                                 it in full. A name that fits shows none
+                                 (`data-tip-overflow`, 2026-10-01). */
+                              data-tip={c.label}
+                              data-tip-overflow
                             >
                               <span className="qbl-index-name">{c.label}</span>
                               <span className="qbl-index-count">{formatCount(c.count)}</span>
@@ -1177,11 +1238,6 @@ export function QuestionBankPage({
                       ))}
                     </div>
                   ))}
-                </div>
-                <div className="qbl-drop-hint">
-                  {dropActive
-                    ? "Drop the CSV to import questions"
-                    : "Bulk upload: drop a CSV anywhere on this page, or use Import CSV"}
                 </div>
               </div>
 
@@ -1546,7 +1602,8 @@ function NewCategoryModal({
   const [name, setName] = useState("");
   const trimmed = name.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
-  const isValid = !!trimmed && !isDuplicate;
+  // Soft limit (data/fieldLimits.ts): typing runs on, creating waits.
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, name);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1586,8 +1643,10 @@ function NewCategoryModal({
                   : "A category with this name already exists."}
               </span>
             )}
+            <LimitError max={NAME_MAX} values={[name]} />
           </span>
-          <input
+          <LimitedInput
+            max={NAME_MAX}
             autoFocus
             className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={name}
@@ -1631,7 +1690,8 @@ function CatNameModal({
   const [value, setValue] = useState(defaultValue);
   const trimmed = value.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
-  const isValid = !!trimmed && !isDuplicate;
+  // Soft limit (data/fieldLimits.ts): typing runs on, renaming waits.
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1659,8 +1719,10 @@ function CatNameModal({
           <span className="prm-label">
             Name<span className="prm-req">*</span>
             {isDuplicate && <span className="form-label-error">{duplicateMessage}</span>}
+            <LimitError max={NAME_MAX} values={[value]} />
           </span>
-          <input
+          <LimitedInput
+            max={NAME_MAX}
             autoFocus
             className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={value}
@@ -1700,6 +1762,12 @@ function QuestionArchiveConfirm({
     <PrmModal
       title="Archive Question?"
       confirmLabel="Archive Question"
+      doubleConfirm={
+        <>
+          <strong>{q.id}</strong> will be archived and hidden from the Question Bank
+          list.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -1729,6 +1797,12 @@ function QuestionDeleteConfirm({
       title="Delete Question?"
       danger
       confirmLabel="Delete Question"
+      doubleConfirm={
+        <>
+          <strong>{q.id}</strong> and its version history will be permanently deleted. This
+          can't be undone.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -1770,6 +1844,11 @@ function CatDeleteConfirm({
       title={`Delete ${noun}?`}
       danger
       confirmLabel={`Delete ${noun}`}
+      doubleConfirm={
+        <>
+          <strong>{label}</strong> will be permanently deleted. This can't be undone.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >

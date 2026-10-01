@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
 import { certifications, type Certification } from "../data/certifications";
+import { TableCols } from "./TableCols";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -29,9 +30,10 @@ import { SearchTrailing } from "./SearchPanelParts";
  * visible as ticked + locked (the Select Questions rule), so it is obvious why
  * they can't be added twice.
  *
- * Tasks only, it is also the Certification builder's "Add Existing Tasks" and
- * Feedback Forms' "Add Tasks". The builder passes `onPreviewTask`, which gives
- * every Task row Select Questions' row-end "Preview ›". */
+ * Tasks only, it is also the Certification builder's "Add Existing Tasks";
+ * with both tabs, Feedback Forms' "Add Trigger". The builder passes
+ * `onPreviewTask`, which gives every Task row Select Questions' row-end
+ * "Preview ›". */
 
 const PAGE_SIZE = 50;
 
@@ -84,7 +86,7 @@ export function SelectRequirementModal({
   description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
   confirmNoun = "Requirement",
   lockedTip = "Already in this Condition Set",
-  full,
+  lockedFlag,
   allCreators,
   onPreviewTask,
   onCancel,
@@ -93,16 +95,19 @@ export function SelectRequirementModal({
   /** Names already in this Condition Set — those rows open ticked and locked. */
   existingNames: string[];
   /** Restrict the modal to one kind: the tab row is hidden and only that
-   *  catalog is listed (Feedback Forms' "Add Tasks" / "Add Certifications"). */
+   *  catalog is listed. */
   only?: Tab;
   title?: string;
   description?: string;
   /** Singular noun in the confirm button — "Add Requirement" / "Add 3 Tasks". */
   confirmNoun?: string;
-  lockedTip?: string;
-  /** Open at the Select Questions size — the picker fills the viewport
-   *  (`pickFull`) instead of the default 80vh card. */
-  full?: boolean;
+  /** Hover line on a locked row — one sentence, or one per row name. */
+  lockedTip?: string | ((name: string) => string);
+  /** A locked row names what holds it in a grey flag beside its name and
+   *  reads as a dimmed row rather than a ticked one, so it never looks
+   *  "preselected". Every caller passes one ("Mapped to <form>", "In
+   *  <Course › Lesson>", "In this Condition Set"). */
+  lockedFlag?: (name: string) => string | undefined;
   /** List every library Task, company-created ones included, instead of only
    *  SkillCat's (the Certification builder's Add Existing Tasks). */
   allCreators?: boolean;
@@ -138,6 +143,28 @@ export function SelectRequirementModal({
   }, [onCancel]);
 
   const taken = useMemo(() => new Set(existingNames), [existingNames]);
+
+  /* A locked row's look and words. Without `lockedFlag` it stays the plain
+     ticked + locked row (no caller does that now); with it, the row dims (`.task-dim`, the shared
+     dim-row treatment) and the name carries a grey flag saying what holds it.
+     The tip sits on the whole row — a disabled checkbox can't be relied on to
+     show one. */
+  const tipFor = (name: string) =>
+    typeof lockedTip === "function" ? lockedTip(name) : lockedTip;
+  const rowClass = (locked: boolean, on: boolean) =>
+    locked && lockedFlag ? "task-dim is-locked" : on ? "selected" : "";
+  function nameCell(name: string, locked: boolean) {
+    const flag = locked ? lockedFlag?.(name) : undefined;
+    if (!flag) return name;
+    return (
+      <>
+        <span className="tsk-name">{name}</span>
+        <span className="pr-name-flag pr-name-flag--grey stm-lock-flag">
+          <span>{flag}</span>
+        </span>
+      </>
+    );
+  }
 
   const taskPool = useMemo(
     () => (allCreators ? taskLibrary : taskLibrary.filter(eligible)),
@@ -223,8 +250,7 @@ export function SelectRequirementModal({
         pickedCount > 1 ? `Add ${pickedCount} ${confirmNoun}s` : `Add ${confirmNoun}`
       }
       confirmDisabled={pickedCount === 0}
-      pick={!full}
-      pickFull={full}
+      pickFull
       className="srq"
       onCancel={onCancel}
       onConfirm={confirm}
@@ -330,12 +356,19 @@ export function SelectRequirementModal({
         </div>
 
         <div className="stm-table-wrap">
-          {/* Column-width floor, per the shared table convention — below it the
-              table scrolls sideways instead of crushing the cells. */}
+          {/* Column-width floor = the active tab's columns + gutters — below
+              it the table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            /* + the 104px Preview column when there is one. */
-            style={{ "--table-min": preview ? "864px" : "760px" } as React.CSSProperties}
+            style={
+              {
+                "--table-min": `${
+                  tab === "task"
+                    ? CHECK_W + sum(TASK_COLS) + (preview ? PREVIEW_W : 0)
+                    : CHECK_W + sum(CERT_COLS)
+                }px`,
+              } as React.CSSProperties
+            }
           >
             {tab === "task" ? (
               <>
@@ -367,7 +400,8 @@ export function SelectRequirementModal({
                           return (
                             <tr
                               key={t.id}
-                              className={on ? "selected" : ""}
+                              className={rowClass(locked, on)}
+                              data-tip={locked ? tipFor(t.name) : undefined}
                               onClick={() => !locked && toggleTask(t.id)}
                             >
                               <td className="stm-col-check">
@@ -376,7 +410,6 @@ export function SelectRequirementModal({
                                   aria-label={on ? "Deselect" : "Select"}
                                   aria-pressed={on}
                                   disabled={locked}
-                                  title={locked ? lockedTip : undefined}
                                   tabIndex={-1}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -389,7 +422,7 @@ export function SelectRequirementModal({
                               {/* `col-name` is the shared Name-column class —
                                   without it the app-wide "mute every non-Name
                                   cell" rule wins and the name greys out. */}
-                              <td className="stm-col-name col-name">{t.name}</td>
+                              <td className="stm-col-name col-name">{nameCell(t.name, locked)}</td>
                               <td className="stm-col-type">{t.type}</td>
                               <td className="stm-col-certs">
                                 <MultiCell values={t.usedIn} />
@@ -463,7 +496,8 @@ export function SelectRequirementModal({
                           return (
                             <tr
                               key={c.id}
-                              className={on ? "selected" : ""}
+                              className={rowClass(locked, on)}
+                              data-tip={locked ? tipFor(c.name) : undefined}
                               onClick={() => !locked && toggleCert(c.id)}
                             >
                               <td className="stm-col-check">
@@ -472,7 +506,6 @@ export function SelectRequirementModal({
                                   aria-label={on ? "Deselect" : "Select"}
                                   aria-pressed={on}
                                   disabled={locked}
-                                  title={locked ? lockedTip : undefined}
                                   tabIndex={-1}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -482,7 +515,7 @@ export function SelectRequirementModal({
                                   {on && <CheckIcon />}
                                 </button>
                               </td>
-                              <td className="stm-col-name col-name">{c.name}</td>
+                              <td className="stm-col-name col-name">{nameCell(c.name, locked)}</td>
                               <td className="stm-col-certs">{c.industry}</td>
                               <td className="stm-col-type">{c.careerStage ?? "—"}</td>
                               <td className="stm-col-edited">{c.tasks}</td>
@@ -535,28 +568,26 @@ function toggleSort<K extends string>(
   set((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 }
 
+/* The shared width rule ([[table-conventions]], `TableCols`): every data
+ * column has a content-sized base width — Name fits a long Task / Cert name
+ * (and a locked row's flag, which ellipsizes first), Task Type "Hands-On
+ * Task", Certifications one name + "+N", Industries "OSHA & Safety › …",
+ * Career Stage "Journeyman", Tasks the header and its caret. Their sum is the
+ * floor; on a wider modal the slack spreads across the data columns in
+ * proportion, so the gaps grow evenly instead of Name swallowing it all. The
+ * check gutter and the Preview column stay fixed. */
+const CHECK_W = 44;
+const PREVIEW_W = 104;
+const TASK_COLS = [340, 160, 220];
+const CERT_COLS = [340, 220, 160, 100];
+const sum = (ws: number[]) => ws.reduce((n, w) => n + w, 0);
+
 function TaskColGroup({ preview }: { preview?: boolean }) {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 136 }} />
-      <col style={{ width: 260 }} />
-      {preview && <col style={{ width: 104 }} />}
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={TASK_COLS} trail={preview ? [PREVIEW_W] : []} />;
 }
 
 function CertColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 200 }} />
-      <col style={{ width: 150 }} />
-      <col style={{ width: 90 }} />
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={CERT_COLS} />;
 }
 
 /* A cell holding more than one value shows the FIRST, ellipsised to the column,

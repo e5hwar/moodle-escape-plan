@@ -32,7 +32,23 @@ export type CertFilterState = {
   // Everything below lives under "More Filters".
   visibilities: string[];
   tags: string[];
+  /** "Incomplete" / "Complete": whether the Certification still has
+   *  post-creation setup steps (Industries, Content Links, Award, Feedback
+   *  Form) left. The landing banner's "Show All N" applies Incomplete. The
+   *  status itself is derived in App.tsx, so `certMatches` leaves this one to
+   *  the page (`setupMatches`). */
+  setup: string[];
 };
+
+export const SETUP_FILTER_OPTIONS = ["Incomplete", "Complete"] as const;
+
+/** The Setup filter's half of `certMatches`, given whether the Certification
+ *  still counts as pending (steps left, not marked done). Both options
+ *  selected = everything. */
+export function setupMatches(pending: boolean, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  return selected.includes(pending ? "Incomplete" : "Complete");
+}
 
 export type CertColumnState = Record<CertColumn, boolean>;
 
@@ -77,6 +93,8 @@ type Props = {
 };
 
 export function CertFilters({ filters, setFilters }: Props) {
+  // Setup is picked under More Filters but shows as a pill of its own once
+  // applied, so it isn't counted twice.
   const moreCount = filters.visibilities.length + filters.tags.length;
 
   const hasFilters =
@@ -84,6 +102,7 @@ export function CertFilters({ filters, setFilters }: Props) {
       filters.careerStages.length +
       filters.types.length +
       filters.creators.length +
+      filters.setup.length +
       moreCount >
     0;
 
@@ -95,6 +114,7 @@ export function CertFilters({ filters, setFilters }: Props) {
       creators: [],
       visibilities: [],
       tags: [],
+      setup: [],
     });
   }
 
@@ -116,9 +136,16 @@ export function CertFilters({ filters, setFilters }: Props) {
         value={filters.creators}
         onApply={(v) => setFilters({ ...filters, creators: v })}
       />
+      {/* Setup lives under More Filters, but once applied it shows as its own
+          pill too, just before More Filters: the landing banner's Continue
+          Setup lands here, and the × is the way back to the full table. */}
+      {filters.setup.length > 0 && (
+        <SetupPill value={filters.setup} onApply={(v) => setFilters({ ...filters, setup: v })} />
+      )}
       <MoreFiltersPill
         visibilities={filters.visibilities}
         tags={filters.tags}
+        setup={filters.setup}
         count={moreCount}
         onApply={(v) => setFilters({ ...filters, ...v })}
       />
@@ -261,11 +288,13 @@ function TypePill({
 type MoreFilters = {
   visibilities: string[];
   tags: string[];
+  setup: string[];
 };
 
 function MoreFiltersPill({
   visibilities,
   tags,
+  setup,
   count,
   onApply,
 }: MoreFilters & {
@@ -282,7 +311,7 @@ function MoreFiltersPill({
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ visibilities: [], tags: [] })}
+          onClear={() => onApply({ visibilities: [], tags: [], setup: [] })}
         />
       )}
     >
@@ -290,6 +319,39 @@ function MoreFiltersPill({
         <MoreFiltersBody
           visibilities={visibilities}
           tags={tags}
+          setup={setup}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
+  );
+}
+
+/* The applied Setup pill (the `.filter-applied` shell): "Setup · Incomplete".
+   Its menu is the same two options the More Filters section offers. */
+function SetupPill({ value, onApply }: { value: string[]; onApply: (v: string[]) => void }) {
+  const summary = summarize(value, [...SETUP_FILTER_OPTIONS]);
+  return (
+    <Dropdown
+      width={220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label="Setup"
+          value={summary}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+          tip="Certifications that still have post-creation setup steps left — Industries, Content Links, Award, Feedback Form."
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: [...SETUP_FILTER_OPTIONS] }]}
+          value={value}
           onApply={(v) => {
             onApply(v);
             close();
@@ -306,9 +368,10 @@ function MoreFiltersPill({
 function MoreFiltersBody({
   visibilities,
   tags,
+  setup,
   onApply,
 }: MoreFilters & { onApply: (v: MoreFilters) => void }) {
-  const value = useMemo(() => ({ visibilities, tags }), [visibilities, tags]);
+  const value = useMemo(() => ({ visibilities, tags, setup }), [visibilities, tags, setup]);
 
   return (
     <CascadingMultiSelect
@@ -323,9 +386,16 @@ function MoreFiltersBody({
           label: "Audience/B2B Tags",
           groups: TAG_GROUPS.map((g) => ({ label: g.label, items: [...g.tags] })),
         },
+        // Post-creation setup — the same option the landing banner's "Show
+        // All N" applies, reachable without the banner.
+        {
+          key: "setup",
+          label: "Setup",
+          groups: [{ items: [...SETUP_FILTER_OPTIONS] }],
+        },
       ]}
       value={value}
-      onApply={(v) => onApply({ visibilities: v.visibilities, tags: v.tags })}
+      onApply={(v) => onApply({ visibilities: v.visibilities, tags: v.tags, setup: v.setup ?? [] })}
     />
   );
 }

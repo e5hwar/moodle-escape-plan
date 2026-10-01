@@ -28,6 +28,7 @@ import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCard } from "./TableCard";
 import { SelectUsersModal } from "./SelectUsersModal";
 import { SkeletonOverlay } from "./SkeletonOverlay";
+import { useLeaveGuard } from "./LeaveGuard";
 
 /**
  * Merge Accounts — a four-step wizard for collapsing two learner accounts into
@@ -531,6 +532,9 @@ export function MergeAccountsPage({
   // Both account fields open the same Select Users picker (Figma 682:2321).
   const [showPicker, setShowPicker] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
+  // Any account picked asks before Cancel throws the setup away. Once the
+  // merge is confirmed it is running, not unsaved, so the guard stands down.
+  const guard = useLeaveGuard(phase === "idle" && !!(primId || secId));
 
   /* The run itself: being in "processing" is what arms the hand-off back to
      Manage Users. Deliberately an effect keyed on the phase, NOT a timeout
@@ -1063,7 +1067,7 @@ export function MergeAccountsPage({
       {/* ── footer (Figma 73:515, keycap 756:3772) ── */}
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => onClose && guard(onClose)}>Cancel</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (

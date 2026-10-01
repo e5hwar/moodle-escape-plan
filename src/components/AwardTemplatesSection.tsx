@@ -24,6 +24,7 @@ import {
 } from "./AwardTableParts";
 import { SearchIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -217,6 +218,12 @@ export function AwardTemplatesSection({
           title="Delete this Design Template?"
           confirmLabel="Delete Template"
           danger
+          doubleConfirm={
+            <>
+              <strong>{modal.template.name}</strong> will be permanently deleted. This can’t be
+              undone.
+            </>
+          }
           onCancel={() => setModal({ kind: "none" })}
           onConfirm={() => {
             onDelete(modal.template.id);
@@ -248,16 +255,18 @@ function compareTemplate(a: AwardDesignTemplate, b: AwardDesignTemplate, key: st
 
 function TemplateColGroup({ cols }: { cols: Record<TemplateColKey, boolean> }) {
   return (
-    <colgroup>
-      <col style={{ width: 72 }} />
-      <col style={{ width: 240 }} />
-      {cols.id && <col style={{ width: 100 }} />}
-      {cols.usage && <col style={{ width: 130 }} />}
-      {cols.createdBy && <col style={{ width: 150 }} />}
-      {cols.dateCreated && <col style={{ width: 130 }} />}
-      {cols.dateModified && <col style={{ width: 130 }} />}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols
+        data={[
+          72,
+          240,
+          cols.id && 100,
+          cols.usage && 130,
+          cols.createdBy && 150,
+          cols.dateCreated && 130,
+          cols.dateModified && 130,
+        ]}
+        trail={[40]}
+      />
   );
 }
 

@@ -27,6 +27,7 @@ import { PrmModal } from "./PrmModal";
 import { SearchTrailing } from "./SearchPanelParts";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -513,6 +514,11 @@ export function CertPurchasersPage({
           title="Revoke Access"
           confirmLabel="Revoke Access"
           danger
+          doubleConfirm={
+            <>
+              {revoking.u.name} will lose access to “{revoking.p.certName}” immediately.
+            </>
+          }
           onCancel={() => setRevoking(null)}
           onConfirm={() => revokeAccess(revoking)}
         >
@@ -532,13 +538,7 @@ export function CertPurchasersPage({
 
 function ColGroup({ cols }: { cols: ColMeta[] }) {
   return (
-    <colgroup>
-      <col style={{ width: 200 }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={[200, ...cols.map((c) => c.width)]} trail={[40]} />
   );
 }
 

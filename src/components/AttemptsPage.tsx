@@ -18,6 +18,7 @@ import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -481,6 +482,12 @@ export function AttemptsPage({
           title="Delete Attempt"
           confirmLabel="Delete Attempt"
           danger
+          doubleConfirm={
+            <>
+              {deleting.name}'s attempt #{deleting.attemptNumber}, with its answers and grade,
+              will be permanently deleted. This can't be undone.
+            </>
+          }
           onCancel={() => setDeleting(null)}
           onConfirm={() => deleteAttempt(deleting)}
         >
@@ -617,12 +624,7 @@ function openAttemptPlaceholder() {
 
 function ColGroup() {
   return (
-    <colgroup>
-      {COLS.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: 40 }} />
-    </colgroup>
+    <TableCols data={COLS.map((c) => c.width)} trail={[40]} />
   );
 }
 

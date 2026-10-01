@@ -18,8 +18,9 @@ import {
   type DateRangeState,
 } from "./DateRangeFilter";
 import { ProctoringSearch } from "./ProctoringSearch";
-import { ReviewRunsStrip, ReviewRunGroup, ReviewRunCard } from "./ReviewRuns";
+import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -478,7 +479,8 @@ export function ProctoringPage({
             </div>
           </header>
 
-          {/* Review Runs — the Hands-On strip (Figma 1398:2031 / 1392:1793).
+          {/* Review Runs — the Hands-On strip (Figma 1392:1793): one row,
+              recents first (marked "· Recent"), then suggestions.
               Recent = the filters in force each time a review was opened,
               newest first; Suggested = All, Proctored Exams, ID Reviews, ID
               Re-Uploads. A card narrows the queue to its run and opens the
@@ -486,18 +488,7 @@ export function ProctoringPage({
               strip. */}
           {pending.length > 0 && (
             <ReviewRunsStrip>
-              {liveRecents.length > 0 && (
-                <RunGroup label="Recent Review Runs" runs={liveRecents} pending={pending} onPick={startRun} />
-              )}
-              {/* "SUGGESTED" only labels itself beside a RECENT group. */}
-              {suggested.length > 0 && (
-                <RunGroup
-                  label={liveRecents.length > 0 ? "Suggested" : undefined}
-                  runs={suggested}
-                  pending={pending}
-                  onPick={startRun}
-                />
-              )}
+              <RunCards recents={liveRecents} suggested={suggested} pending={pending} onPick={startRun} />
             </ReviewRunsStrip>
           )}
 
@@ -649,30 +640,36 @@ export function ProctoringPage({
   );
 }
 
-/** One group of the strip, its cards built from this page's runs. */
-function RunGroup({
-  label,
-  runs,
+/** The strip's cards built from this page's runs — recents first (each
+ *  marked "· Recent"), then the suggestions, in one unlabelled row. */
+function RunCards({
+  recents,
+  suggested,
   pending,
   onPick,
 }: {
-  label?: string;
-  runs: RunKey[];
+  recents: RunKey[];
+  suggested: RunKey[];
   pending: Submission[];
   onPick: (k: RunKey) => void;
 }) {
+  const runs = [
+    ...recents.map((k) => ({ k, recent: true })),
+    ...suggested.map((k) => ({ k, recent: false })),
+  ];
   return (
-    <ReviewRunGroup label={label}>
-      {runs.map((k) => (
+    <>
+      {runs.map(({ k, recent }) => (
         <ReviewRunCard
           key={runId(k)}
           count={pending.filter((s) => inRun(s, k)).length}
           values={runTitles(k)}
           sub={RUN_SUBTITLE[k.kind]}
+          recent={recent}
           onClick={() => onPick(k)}
         />
       ))}
-    </ReviewRunGroup>
+    </>
   );
 }
 
@@ -702,17 +699,10 @@ const TABLE_MIN =
 
 function ProctoringColGroup() {
   return (
-    <colgroup>
-      {/* Name carries its minimum here (not left auto) so a stretched table
-          distributes slack across ALL columns proportionally instead of one
-          auto column swallowing it. */}
-      <col style={{ width: NAME_MIN }} />
-      <col style={{ width: COL_WIDTHS.email }} />
-      <col style={{ width: COL_WIDTHS.phone }} />
-      <col style={{ width: COL_WIDTHS.quiz }} />
-      <col style={{ width: COL_WIDTHS.date }} />
-      <col style={{ width: ACTIONS_WIDTH }} />
-    </colgroup>
+    <TableCols
+      data={[NAME_MIN, COL_WIDTHS.email, COL_WIDTHS.phone, COL_WIDTHS.quiz, COL_WIDTHS.date]}
+      trail={[ACTIONS_WIDTH]}
+    />
   );
 }
 
