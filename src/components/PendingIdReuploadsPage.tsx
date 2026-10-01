@@ -4,7 +4,7 @@ import {
   matchesQuery,
   type Submission,
 } from "../data/proctoring";
-import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ProctoringSearch } from "./ProctoringSearch";
 import { MultiPill } from "./UsersFilters";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -117,19 +117,15 @@ export function PendingIdReuploadsPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks sch-page">
+          {/* Reached from the Exam Reviews header, the same way Name Changes
+              used to be — so the crumb is the way back. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Exam Reviews">
+              Exam Reviews
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* Reached from the Exam Reviews header, the same way Name Changes
-                used to be — so the crumb is the way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Operations</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={onBack} title="Back to Exam Reviews">
-                  Exam Reviews
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Pending ID Re-Uploads</span>
-              </nav>
               <h1 className="tasks-title">Pending ID Re-Uploads</h1>
               <div className="tasks-subtitle">
                 <span>

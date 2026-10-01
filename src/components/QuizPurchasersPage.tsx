@@ -22,7 +22,7 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
 import { PrmModal } from "./PrmModal";
 
@@ -356,15 +356,13 @@ export function QuizPurchasersPage({
           {/* Reached from a Task's "Who Paid" action, so the Tasks crumb is the
               way back — same header as Quiz Attempts. The Quiz this opened on
               is carried by the pre-applied Quiz Name pill, not a subtitle. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
+              Tasks
+            </button>
+          </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
-                  Tasks
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
-              </nav>
               <h1 className="tasks-title">Who Paid</h1>
             </div>
             <div className="tasks-header-actions">
@@ -519,7 +517,7 @@ export function QuizPurchasersPage({
         >
           {/* Body copy is children, not `description` — the shell's own
               convention for a confirm (Figma 483:588). */}
-          <p className="prm-text">
+          <p className="prm-content">
             {revoking.u.name}'s {revoking.p.granted ? "free" : "purchased"} attempt #
             {revoking.p.attemptNumber} on “{revoking.p.quizName}” is removed
             immediately.{" "}

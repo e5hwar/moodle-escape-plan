@@ -15,8 +15,7 @@ import {
   RowKebabIcon,
   PagePrevIcon,
   PageNextIcon,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -229,19 +228,15 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
     <div className="main">
       <div className="workspace">
         <div className="tasks sch-page">
+          {/* This page is reached from Manage Users' header button (it no
+              longer has its own sidebar entry), so the crumb is the way back. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
+              Manage Users
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* This page is reached from Manage Users' header button (it no
-                longer has its own sidebar entry), so the crumb is the way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Users</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-                  Manage Users
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Scholarships</span>
-              </nav>
               <h1 className="tasks-title">Scholarship</h1>
               {/* Subtext + the shared tooltip glyph — the one-liner says what a
                   scholarship is, the ⓘ carries how it starts, ends and is revoked. */}

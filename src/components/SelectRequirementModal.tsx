@@ -305,7 +305,7 @@ export function SelectRequirementModal({
                 width={300}
                 trigger={({ open, toggle: t }) => (
                   <PillTrigger
-                    label="Industry"
+                    label="Industries"
                     tip={FILTER_TIPS.taskPicker.industry}
                     value={summarize(inds, allIndustries)}
                     open={open}
@@ -441,7 +441,7 @@ export function SelectRequirementModal({
                     <tr>
                       <th className="stm-col-check no-sort" />
                       <Th label="Certification" cls="stm-col-name" active={certSort.key === "name"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "name")} />
-                      <Th label="Industry" cls="stm-col-certs" active={certSort.key === "industry"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "industry")} />
+                      <Th label="Industries" cls="stm-col-certs" active={certSort.key === "industry"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "industry")} />
                       <Th label="Career Stage" cls="stm-col-type" active={certSort.key === "careerStage"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "careerStage")} />
                       <Th label="Tasks" cls="stm-col-edited" active={certSort.key === "tasks"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "tasks")} />
                     </tr>

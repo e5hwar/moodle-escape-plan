@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon } from "./icons";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -69,6 +70,8 @@ type Props = {
   allSkills: Skill[];
   allMastery: MasterySkill[];
   onClose: () => void;
+  /** Skills has no sidebar entry — it hangs off Tasks — so the trail starts there. */
+  onBackToTasks: () => void;
   onSaveSkill: (skill: Skill) => void;
   onSaveMastery: (mastery: MasterySkill) => void;
 };
@@ -129,10 +132,19 @@ export function NewSkillWizard(props: Props) {
   const nameValid = data.nameEn.trim().length > 0;
   const criteriaValid = isMastery ? data.skillIds.length > 0 : data.taskIds.length > 0;
   const canSave = nameValid && criteriaValid;
+  /* Set by a blocked Create / Save (click or ⌘↵). From then on each empty
+     mandatory field carries the label-row error until it is filled — never
+     while the form is first being filled in. */
+  const [attempted, setAttempted] = useState(false);
+  // ...or the field was clicked into and out of while empty (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const nameMissing = !nameValid && (attempted || touched.has("name"));
+  const criteriaMissing = !criteriaValid && (attempted || touched.has("criteria"));
 
   /* ⌘/Ctrl+Enter is the footer's only button, and waits on the same fields. */
   useWizardEnterShortcut(() => {
     if (canSave) handleSave();
+    else setAttempted(true);
   });
 
   function handleSave() {
@@ -197,27 +209,29 @@ export function NewSkillWizard(props: Props) {
           <div className="wizard-content">
             <div className="wizard-paneout">
               <div className="wizard-pane">
-                {/* Shared crumb row (.rvc-pagehead): the wizard is reached
-                    from Skills, and "Skills" is also the way back out, so it
-                    stays a button; the record itself is the current crumb. */}
+                {/* Shared breadcrumb strip (.rvc-crumbs, Figma 1417:1395): the
+                    full trail above this page — Skills hangs off Tasks — and
+                    every step navigates. It never names the page itself. */}
+                <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                  <button className="rvc-crumb" onClick={props.onBackToTasks} title="Back to Tasks">
+                    Tasks
+                  </button>
+                  <CrumbChevronIcon />
+                  <button className="rvc-crumb" onClick={onClose} title="Back to Skills">
+                    Skills
+                  </button>
+                </nav>
                 <div className="rvc-pagehead">
-                  <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                    <button className="rvc-crumb" onClick={onClose} title="Back to Skills">
-                      Skills
-                    </button>
-                    <CrumbChevronIcon />
-                    <span className="rvc-crumb rvc-crumb--current">{title}</span>
-                  </nav>
                   <h1 className="wizard-title">{title}</h1>
                 </div>
                 <p className="wizard-desc">{COPY[props.kind].pageSub}</p>
 
-                <DetailsStep data={data} update={update} isMastery={isMastery} />
+                <DetailsStep data={data} update={update} isMastery={isMastery} nameMissing={nameMissing} touch={touch} />
 
                 {isMastery ? (
-                  <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} />
+                  <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} missing={criteriaMissing} touch={touch} />
                 ) : (
-                  <CriteriaStep data={data} update={update} />
+                  <CriteriaStep data={data} update={update} missing={criteriaMissing} touch={touch} />
                 )}
               </div>
             </div>
@@ -238,7 +252,7 @@ export function NewSkillWizard(props: Props) {
             className={`btn-publish${canSave ? "" : " is-disabled"}`}
             aria-disabled={!canSave}
             data-tip={blockedTip}
-            onClick={() => { if (canSave) handleSave(); }}
+            onClick={() => { if (canSave) handleSave(); else setAttempted(true); }}
           >
             {isEditing ? "Save Changes" : `Create ${noun}`}
             <WizardKeyHint />
@@ -252,22 +266,28 @@ export function NewSkillWizard(props: Props) {
 /* ─────────────── Details fields ─────────────── */
 
 function DetailsStep({
+  touch,
   data,
   update,
   isMastery,
+  nameMissing = false,
 }: {
+  touch: (key: string) => void;
   data: Data;
   update: (p: Partial<Data>) => void;
   isMastery: boolean;
+  /** A blocked save found the name empty. */
+  nameMissing?: boolean;
 }) {
   const noun = isMastery ? "Mastery Skill" : "Skill";
   const copy = COPY[isMastery ? "mastery" : "skill"];
 
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
-          Name <span className="req">*</span>
+          Name<span className="req">*</span>
+          {nameMissing && <span className="form-label-error">Name cannot be left empty</span>}
         </label>
         <LangField
           en={data.nameEn}
@@ -276,6 +296,7 @@ function DetailsStep({
           onChangeEs={(v) => update({ nameEs: v })}
           placeholderEn="Name..."
           placeholderEs="Nombre..."
+          error={nameMissing}
         />
         <p className="form-help">{copy.name}</p>
       </div>
@@ -294,7 +315,7 @@ function DetailsStep({
       </div>
 
       <div className="form-group">
-        <label className="form-label">{noun} Icon <span className="req">*</span></label>
+        <label className="form-label">{noun} Icon<span className="req">*</span></label>
         <ImagePicker />
         <p className="form-help">{copy.icon}</p>
       </div>
@@ -304,16 +325,28 @@ function DetailsStep({
 
 /* ─────────────── Skill awarding criteria ─────────────── */
 
-function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>) => void }) {
+function CriteriaStep({
+  touch,
+  data,
+  update,
+  missing = false,
+}: {
+  touch: (key: string) => void;
+  data: Data;
+  update: (p: Partial<Data>) => void;
+  /** A blocked save found no Task chosen. */
+  missing?: boolean;
+}) {
   const selected = data.taskIds;
 
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("criteria"))}>
         <label className="form-label">
-          Awarding Tasks <span className="req">*</span>
+          Awarding Tasks<span className="req">*</span>
+          {missing && <span className="form-label-error">Awarding Tasks cannot be left empty</span>}
         </label>
-        <TaskPicker selected={selected} onChange={(ids) => update({ taskIds: ids })} />
+        <TaskPicker selected={selected} onChange={(ids) => update({ taskIds: ids })} error={missing} onLeave={() => touch("criteria")} />
         <p className="form-help">
           Choose the Tasks that award this Skill. A Task counts as soon as it’s marked complete,
           whatever its completion criteria. The same Task can award more than one Skill.
@@ -359,9 +392,17 @@ function CriteriaStep({ data, update }: { data: Data; update: (p: Partial<Data>)
 function TaskPicker({
   selected,
   onChange,
+  error = false,
+  onLeave,
 }: {
   selected: string[];
   onChange: (ids: string[]) => void;
+  /** The dropdown shell's red edge (Figma 1376:1618) — same trigger, same flag. */
+  error?: boolean;
+  /** The picker was opened and closed (fieldFlags.tsx). The trigger is a div,
+   *  not a focusable control, so "clicked into and out of" is the modal's
+   *  open-and-close rather than a blur. */
+  onLeave?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const pool = tasks;
@@ -372,7 +413,7 @@ function TaskPicker({
   return (
     <>
       <div className="multiselect">
-        <div className="multiselect-field" onClick={() => setOpen(true)}>
+        <div className={`multiselect-field${error ? " has-error" : ""}`} onClick={() => setOpen(true)}>
           {chosen.length === 0 ? (
             <span className="multiselect-placeholder">Select Tasks</span>
           ) : (
@@ -394,10 +435,11 @@ function TaskPicker({
       {open && createPortal(
         <SelectTasksModal
           value={selected}
-          onCancel={() => setOpen(false)}
+          onCancel={() => { setOpen(false); onLeave?.(); }}
           onConfirm={(ids) => {
             onChange(ids);
             setOpen(false);
+            onLeave?.();
           }}
         />,
         document.body,
@@ -411,13 +453,18 @@ function TaskPicker({
 /* Linked Skills uses the plain dropdown field (Figma 101:272 + 591:1322) — a
    Skill has no table's worth of metadata to weigh up, so the menu is enough. */
 function LinkedSkillsStep({
+  touch,
   data,
   update,
   allSkills,
+  missing = false,
 }: {
+  touch: (key: string) => void;
   data: Data;
   update: (p: Partial<Data>) => void;
   allSkills: Skill[];
+  /** A blocked save found no Skill chosen. */
+  missing?: boolean;
 }) {
   const selected = data.skillIds;
 
@@ -433,11 +480,14 @@ function LinkedSkillsStep({
 
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("criteria"))}>
         <label className="form-label">
-          Linked Skills <span className="req">*</span>
+          Linked Skills<span className="req">*</span>
+          {missing && <span className="form-label-error">Linked Skills cannot be left empty</span>}
         </label>
         <MultiSelect
+          hasError={missing}
+          onLeave={() => touch("criteria")}
           options={allSkills.map((s) => s.name)}
           value={chosen.map((s) => s.name)}
           onChange={(names) =>
@@ -503,6 +553,7 @@ function LangField({
   onChangeEs,
   placeholderEn,
   placeholderEs,
+  error = false,
 }: {
   en: string;
   es: string;
@@ -510,12 +561,15 @@ function LangField({
   onChangeEs: (v: string) => void;
   placeholderEn?: string;
   placeholderEs?: string;
+  /** Mandatory and empty after a blocked save — reddens the shell; the
+   *  message lives in the caller's label row. */
+  error?: boolean;
 }) {
   return (
-    <div className="lang-field">
+    <div className={`lang-field${error ? " has-error" : ""}`}>
       <div className="lang-field-row">
         <span className="lang-tag">EN</span>
-        <input className="lang-field-input" value={en} placeholder={placeholderEn} onChange={(e) => onChangeEn(e.target.value)} />
+        <input className="lang-field-input" value={en} placeholder={placeholderEn} aria-invalid={error || undefined} onChange={(e) => onChangeEn(e.target.value)} />
       </div>
       <div className="lang-field-divider" />
       <div className="lang-field-row">

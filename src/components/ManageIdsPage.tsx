@@ -6,7 +6,7 @@ import {
   type IdRecord,
   type IdStatus,
 } from "../data/manageIds";
-import { SortIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
 import { IdModal } from "./IdModal";
 
@@ -115,27 +115,21 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
     <div className="main">
       <div className="workspace">
         <div className="tasks pr-page">
+          {/* Breadcrumb strip above the header — the same .rvc-crumbs chrome the
+              Proctoring and Hands-On consoles use. This page is reached from
+              Exam Reviews' "View All IDs", so the trail names both, and
+              the Exam Reviews crumb is the way back out. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button
+              className="rvc-crumb"
+              onClick={onBack}
+              title="Back to Exam Reviews"
+            >
+              Exam Reviews
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* Breadcrumb over the title — the same .rvc-crumbs chrome the
-                Proctoring and Hands-On consoles use. This page is reached from
-                Exam Reviews' "View All IDs", so the trail names both, and
-                the Exam Reviews crumb is the way back out. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Home</span>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb">Operations</span>
-                <CrumbChevronIcon />
-                <button
-                  className="rvc-crumb"
-                  onClick={onBack}
-                  title="Back to Exam Reviews"
-                >
-                  Exam Reviews
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">View All IDs</span>
-              </nav>
               <h1 className="tasks-title">Manage IDs</h1>
             </div>
           </header>

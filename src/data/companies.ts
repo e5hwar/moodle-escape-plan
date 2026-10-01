@@ -208,7 +208,7 @@ export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] =
   { key: "signUp", label: "Sign-Up Method" },
   { key: "billingCycle", label: "Billing Cycle" },
   { key: "payment", label: "Payment Method" },
-  { key: "industry", label: "Industry" },
+  { key: "industry", label: "Industries" },
   { key: "partnership", label: "Partnership" },
   { key: "createdOn", label: "Created On" },
   { key: "canceledOn", label: "Canceled On" },

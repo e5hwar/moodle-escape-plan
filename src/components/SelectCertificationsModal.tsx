@@ -199,7 +199,7 @@ export function SelectCertificationsModal({
               width={260}
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
-                  label="Industry"
+                  label="Industries"
                   tip={FILTER_TIPS.certificationPicker.industry}
                   value={summarize(industries, allIndustries)}
                   open={open}
@@ -264,7 +264,7 @@ export function SelectCertificationsModal({
                       select-all control. */}
                   <th className="stm-col-check no-sort" />
                   <Th col="name" label="Certification" cls="scm-col-name" sort={sort} toggle={toggleSort} />
-                  <Th col="industry" label="Industry" cls="scm-col-industry" sort={sort} toggle={toggleSort} />
+                  <Th col="industry" label="Industries" cls="scm-col-industry" sort={sort} toggle={toggleSort} />
                   <Th col="level" label="Level" cls="scm-col-level" sort={sort} toggle={toggleSort} />
                   <Th col="tasksCount" label="Tasks" cls="scm-col-tasks" sort={sort} toggle={toggleSort} />
                   <Th col="enrolled" label="Enrolled" cls="scm-col-enrolled" sort={sort} toggle={toggleSort} />

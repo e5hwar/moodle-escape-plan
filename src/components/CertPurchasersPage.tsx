@@ -26,7 +26,7 @@ import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { SearchTrailing } from "./SearchPanelParts";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SortIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -351,15 +351,13 @@ export function CertPurchasersPage({
               Certifications crumb is the way back — same header as the quiz
               Who Paid page. The Certification this opened on is carried by the
               pre-applied Certification pill, not a subtitle. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Certifications">
+              Certifications
+            </button>
+          </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button className="rvc-crumb" onClick={onBack} title="Back to Certifications">
-                  Certifications
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Who Paid</span>
-              </nav>
               <h1 className="tasks-title">Who Paid</h1>
             </div>
             <div className="tasks-header-actions">
@@ -520,7 +518,7 @@ export function CertPurchasersPage({
         >
           {/* Body copy is children, not `description` — the shell's own
               convention for a confirm (Figma 483:588). */}
-          <p className="prm-text">
+          <p className="prm-content">
             {revoking.u.name}'s access to “{revoking.p.certName}” ends immediately.{" "}
             {revokeTerms(revoking).consumable
               ? `${revokeTerms(revoking).resets ? "Their progress on this Certification is reset, and they" : "They"} can purchase the Certification again to regain access.`

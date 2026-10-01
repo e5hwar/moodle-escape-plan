@@ -37,13 +37,13 @@ import {
 import { PrmModal } from "./PrmModal";
 import { SearchHints } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
+import { SkeletonOverlay } from "./SkeletonOverlay";
 import {
   ChangeArrowIcon,
   CommandIcon,
   EnterKeyIcon,
   ErrorTriangleIcon,
   FlagIcon,
-  KeyCommandIcon,
   HourglassIcon,
   MenuAttemptsIcon,
   MenuGrantAttemptsIcon,
@@ -53,8 +53,7 @@ import {
   SearchClearIcon,
   SearchIcon,
   SmallCloseIcon,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 
 /**
  * Manage Completions — search an employee, then a certification or a single
@@ -699,8 +698,6 @@ export function ContentOverridesPage({
                 <button className="rvc-crumb" onClick={onBack} title={`Back to ${backLabel}`}>
                   {backLabel}
                 </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Manage Completions</span>
               </nav>
             )}
             <h1 className="tasks-title">Manage Completions</h1>
@@ -752,22 +749,15 @@ export function ContentOverridesPage({
             {!hasScope && (
               <div className="mc-empty">
                 <ScopeGhost />
-                <div className={`mc-empty-inner${searchOpen ? " is-dull" : ""}`}>
-                  <div className="mc-empty-title">{half.title}</div>
-                  <div className="mc-empty-sub">{half.sub}</div>
-                  <button className="btn-save-draft mc-empty-cta" onClick={half.open}>
-                    {half.cta}
-                    {/* The node ends on the search bar's own ⌘K badge — and it
-                        is honest here: the page's handler below sends ⌘K to
-                        whichever half this button opens. */}
-                    <span className="usearch-kbd">
-                      <span className="kbd-cmd">
-                        <KeyCommandIcon />
-                      </span>
-                      <span className="kbd-letter">K</span>
-                    </span>
-                  </button>
-                </div>
+                {/* The ⌘K on its button is honest: the page's handler below
+                    sends ⌘K to whichever half this button opens. */}
+                <SkeletonOverlay
+                  title={half.title}
+                  sub={half.sub}
+                  cta={half.cta}
+                  onCta={half.open}
+                  dull={searchOpen}
+                />
               </div>
             )}
 

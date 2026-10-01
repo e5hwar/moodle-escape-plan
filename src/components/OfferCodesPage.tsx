@@ -17,8 +17,7 @@ import {
   RowKebabIcon,
   PagePrevIcon,
   PageNextIcon,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -197,19 +196,15 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
     <div className="main">
       <div className="workspace">
         <div className="tasks sch-page">
+          {/* This page is reached from Manage Users' header button (it no
+              longer has its own sidebar entry), so the crumb is the way back. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
+              Manage Users
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* This page is reached from Manage Users' header button (it no
-                longer has its own sidebar entry), so the crumb is the way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Users</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-                  Manage Users
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Offer Codes</span>
-              </nav>
               <h1 className="tasks-title">Offer Codes</h1>
               <div className="tasks-subtitle">
                 <span>{counts.active} active</span>
@@ -719,25 +714,24 @@ function CreateOfferCodeModal({
         <div className="prm-field">
           <span className="prm-label">
             Offer Code<span className="prm-req">*</span>
+            {duplicate && (
+              <span className="form-label-error">
+                That code already exists. Choose a different one.
+              </span>
+            )}
           </span>
           <input
             autoFocus
-            className="form-input"
+            className={`form-input${duplicate ? " has-error" : ""}`}
             placeholder="SUMMERPRO25"
             value={code}
             maxLength={24}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
           />
-          {duplicate ? (
-            <p className="form-help oc-error">
-              That code already exists. Choose a different one.
-            </p>
-          ) : (
-            <p className="form-help">
-              Letters and numbers, automatically uppercased. Used by customers at checkout on
-              all platforms.
-            </p>
-          )}
+          <p className="form-help">
+            Letters and numbers, automatically uppercased. Used by customers at checkout on
+            all platforms.
+          </p>
         </div>
 
         <div className="prm-field">

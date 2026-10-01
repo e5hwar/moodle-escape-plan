@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -8,13 +8,14 @@ import {
   type QuestionType,
 } from "../data/questionBank";
 import { QuestionHistoryModal } from "./QuestionHistoryModal";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import {
   SmallXIcon,
   MoveIcon,
   InfoIcon12,
   PlusThinIcon,
   CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 import { RichTextField } from "./RichTextField";
 import { SelectField } from "./SelectField";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -363,6 +364,9 @@ function collectMissing(d: QuestionDraft): string[] {
 
 /* ─────────────────  Editor  ───────────────── */
 
+/** One step of the breadcrumb trail — a page above the editor. */
+export type Crumb = { label: string; onClick: () => void };
+
 type Props = {
   onClose: () => void;
   // Called with the built question when "Create Question" is clicked
@@ -376,8 +380,10 @@ type Props = {
      `editingQuestion` already carries that version's content; this locks the
      form, so the screen is a viewer with a dead Save Changes button. */
   atVersion?: number;
-  /** What the back crumb says — where `onClose` actually goes. */
-  backLabel?: string;
+  /** The full trail above the editor (Figma 1417:1395), outermost first —
+   *  it depends on where the editor was opened (the Question Bank, Version
+   *  History, a Feedback Form). The last step is where `onClose` goes. */
+  crumbs: Crumb[];
 };
 
 let createdSeq = 0;
@@ -461,7 +467,7 @@ export function NewQuestionWizard({
   initialType,
   editingQuestion,
   atVersion,
-  backLabel = "Question Bank",
+  crumbs,
 }: Props) {
   const isEditing = !!editingQuestion;
   /* A past version is a record, not a draft: every control is disabled and the
@@ -499,11 +505,12 @@ export function NewQuestionWizard({
      against the live gaps, so an error clears on the keystroke that fixes it
      instead of waiting for another attempt. */
   const [missingKeys, setMissingKeys] = useState<ReadonlySet<string>>(EMPTY_KEYS);
+  // ...or clicked into and out of while still empty (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
   const missing = useMemo(() => {
-    if (missingKeys.size === 0) return EMPTY_KEYS;
-    const still = new Set(gaps);
-    return new Set([...missingKeys].filter((k) => still.has(k)));
-  }, [missingKeys, gaps]);
+    const out = new Set(gaps.filter((k) => missingKeys.has(k) || touched.has(k)));
+    return out.size === 0 ? EMPTY_KEYS : out;
+  }, [missingKeys, touched, gaps]);
 
   /* What the unavailable button says on hover — dim alone doesn't tell the
      author what is left (the Task wizard's `blockedTip`). */
@@ -553,31 +560,27 @@ export function NewQuestionWizard({
     ? `${TYPE_TITLES[data.type]} Question · v${atVersion}`
     : `${isEditing ? "Edit" : "New"} ${TYPE_TITLES[data.type]} Question`;
 
-  /* The Task wizard's two-column shell (.wizard-body: main pane + rail),
-     mirrored — the question itself runs in the main pane on the LEFT with the
-     wizard's own title/subtext header, and the settings rail sits on the
-     right. The rail is not a step list, so it keeps its own controls and drops
-     the card background for the wizard's plain bordered column. */
+  /* The Task wizard's shell with no rail: one column, every type
+     (2026-09-29 — the settings rail on the right was folded in). */
   return (
     <div className="wizard qed" ref={rootRef}>
       <div className="wizard-body">
         <div className="wizard-main">
           <div className="wizard-content">
-            {/* Shared crumb row (.rvc-pagehead) — the editor is reached from
-                the Question Bank, and "Question Bank" is also the way back out,
-                so it stays a button; the question itself is the current crumb. */}
+            {/* Shared breadcrumb strip (.rvc-crumbs, Figma 1417:1395) — the
+                full trail above the editor, every step a way back. It never
+                names the page itself. */}
+            <nav className="rvc-crumbs" aria-label="Breadcrumb">
+              {crumbs.map((c, i) => (
+                <Fragment key={c.label}>
+                  {i > 0 && <CrumbChevronIcon />}
+                  <button className="rvc-crumb" onClick={c.onClick} title={`Back to ${c.label}`}>
+                    {c.label}
+                  </button>
+                </Fragment>
+              ))}
+            </nav>
             <div className="rvc-pagehead qed-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button
-                  className="rvc-crumb"
-                  onClick={onClose}
-                  title={`Back to ${backLabel}`}
-                >
-                  {backLabel}
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">{title}</span>
-              </nav>
               <h1 className="wizard-title qed-title-solo">{title}</h1>
             </div>
 
@@ -586,50 +589,47 @@ export function NewQuestionWizard({
                 and button inside it, so no control needs to know. The crumb
                 and the footer sit outside it and stay live. */}
             <Lock on={readOnly}>
-              <QuestionTextSection data={data} update={update} missing={missing} />
+              {/* One column for every type (2026-09-29) — the settings rail
+                  folded in. Type, Category and Grading lead: the type is what
+                  the rest of the screen is. Then the question, its answers,
+                  the type's own settings, and Feedback last. */}
+              <SetupSection
+                data={data}
+                update={update}
+                isEditing={isEditing}
+                catOptions={catOptions}
+                missing={missing} touch={touch}
+                gradable={gradable}
+                usedInQuizzes={usedInQuizzes}
+              />
+
+              <QuestionTextSection data={data} update={update} missing={missing} touch={touch} />
 
               {data.type === "mcq" && (
-                <McqSection data={data} update={update} grading={grading} missing={missing} />
+                <McqSection data={data} update={update} grading={grading} missing={missing} touch={touch} />
               )}
               {data.type === "true-false" && (
                 <TrueFalseSection data={data} update={update} grading={grading} />
               )}
               {data.type === "match" && (
-                <MatchSection data={data} update={update} missing={missing} />
+                <MatchSection data={data} update={update} missing={missing} touch={touch} />
               )}
+              {data.type === "file" && <FileRulesSection data={data} update={update} />}
+              {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
               {data.type === "scale" && (
-                <ScaleLabelsSection data={data} update={update} missing={missing} />
+                <ScaleLabelsSection data={data} update={update} missing={missing} touch={touch} />
+              )}
+
+              <OptionTogglesSection data={data} update={update} grading={grading} />
+
+              {data.type === "match" && grading && (
+                <MatchScoringSection data={data} update={update} />
               )}
 
               {grading && <FeedbackSection data={data} update={update} />}
             </Lock>
           </div>
         </div>
-
-        <aside className="qed-side">
-          <Lock on={readOnly}>
-            <SetupSection
-              data={data}
-              update={update}
-              isEditing={isEditing}
-              catOptions={catOptions}
-              missing={missing}
-              gradable={gradable}
-              usedInQuizzes={usedInQuizzes}
-            />
-
-            {/* The switches follow the fields — they read as more of the same
-                plain rail rows — and the type's own block closes the rail. Only
-                Match shows both, so this order is only visible there. */}
-            <OptionTogglesSection data={data} update={update} grading={grading} />
-
-            {data.type === "match" && grading && (
-              <MatchScoringSection data={data} update={update} />
-            )}
-            {data.type === "file" && <FileRulesSection data={data} update={update} />}
-            {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
-          </Lock>
-        </aside>
       </div>
 
       {/* Footer (Figma 73:515) */}
@@ -684,6 +684,7 @@ function Lock({ on, children }: { on: boolean; children: React.ReactNode }) {
 /* ─────────────────  Sections  ───────────────── */
 
 function SetupSection({
+  touch,
   data,
   update,
   isEditing,
@@ -692,6 +693,7 @@ function SetupSection({
   gradable,
   usedInQuizzes,
 }: {
+  touch: (key: string) => void;
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
   isEditing: boolean;
@@ -741,7 +743,7 @@ function SetupSection({
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">
-            Question Type <span className="req">*</span>
+            Question Type<span className="req">*</span>
           </label>
           {/* Same single-select as Category, without the search header — six
               fixed types is a glance, not a lookup. */}
@@ -760,9 +762,12 @@ function SetupSection({
           )}
         </div>
 
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch("category"))}>
           <label className="form-label">
-            Category <span className="req">*</span>
+            Category<span className="req">*</span>
+            {missing.has("category") && (
+              <span className="form-label-error">Pick a Category to create this question.</span>
+            )}
           </label>
           {/* Searchable single-select (Figma 668:943) — the Question Bank runs
               to dozens of category / sub-category rows, so the picker filters. */}
@@ -780,13 +785,7 @@ function SetupSection({
               missing.has("category") ? " has-error" : ""
             }`}
           />
-          {missing.has("category") ? (
-            <p className="form-error-text">
-              Pick a Category to create this question.
-            </p>
-          ) : (
-            <p className="form-help">Where it goes in the Question Bank</p>
-          )}
+          <p className="form-help">Where it goes in the Question Bank</p>
         </div>
 
         <GradingToggle
@@ -801,10 +800,12 @@ function SetupSection({
 }
 
 function QuestionTextSection({
+  touch,
   data,
   update,
   missing,
 }: {
+  touch: (key: string) => void;
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
@@ -812,9 +813,12 @@ function QuestionTextSection({
   const flagged = missing.has("text");
   return (
     <div className="wizard-fields">
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("text"))}>
         <label className="form-label">
-          Question <span className="req">*</span>
+          Question<span className="req">*</span>
+          {flagged && (
+            <span className="form-label-error">Write the question to create it.</span>
+          )}
         </label>
         {/* Spanish is optional throughout — only the English row is required,
             and an untranslated question still saves. */}
@@ -827,9 +831,6 @@ function QuestionTextSection({
           placeholderEs="Texto de la pregunta…"
           error={flagged}
         />
-        {flagged && (
-          <p className="form-error-text">Write the question to create it.</p>
-        )}
       </div>
     </div>
   );
@@ -908,11 +909,13 @@ function useRowDrag<T extends { id: string }>(
 }
 
 function McqSection({
+  touch,
   data,
   update,
   grading,
   missing,
 }: {
+  touch: (key: string) => void;
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
   grading: boolean;
@@ -949,9 +952,18 @@ function McqSection({
      field, grade, remove), then a footer row holding the add CTA. */
   return (
     <div className="wizard-fields">
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => { touch("options"); touch("answer"); })}>
         <label className="form-label">
-          Options <span className="req">*</span>
+          Options<span className="req">*</span>
+          {missing.has("options") ? (
+            <span className="form-label-error">
+              Fill in at least two options to create this question.
+            </span>
+          ) : missing.has("answer") ? (
+            <span className="form-label-error">
+              Grade one option above 0% so the question has a correct answer.
+            </span>
+          ) : null}
         </label>
 
         <div
@@ -1047,23 +1059,13 @@ function McqSection({
           </div>
         </div>
 
-        {missing.has("options") ? (
-          <p className="form-error-text">
-            Fill in at least two options to create this question.
-          </p>
-        ) : missing.has("answer") ? (
-          <p className="form-error-text">
-            Grade one option above 0% so the question has a correct answer.
-          </p>
-        ) : (
-          /* The two-option floor holds whether or not the question is graded,
-             so it leads the subtext either way. */
-          <p className="form-help">
-            {grading
-              ? "Minimum of 2 options are required. The total of all percentages must be 100%"
-              : "Minimum of 2 options are required. Ungraded — responses are collected, not scored."}
-          </p>
-        )}
+        {/* The two-option floor holds whether or not the question is graded,
+            so it leads the subtext either way. */}
+        <p className="form-help">
+          {grading
+            ? "Minimum of 2 options are required. The total of all percentages must be 100%"
+            : "Minimum of 2 options are required. Ungraded — responses are collected, not scored."}
+        </p>
       </div>
     </div>
   );
@@ -1082,7 +1084,7 @@ function TrueFalseSection({
     <div className="wizard-fields">
       <div className="form-group">
         <label className="form-label">
-          Correct Answer <span className="req">*</span>
+          Correct Answer<span className="req">*</span>
         </label>
         {/* Radio cards (Figma 134:1790 / 136:294), title only — the subtext
             under the group already says how the two values are scored, so a
@@ -1110,10 +1112,12 @@ function TrueFalseSection({
 }
 
 function MatchSection({
+  touch,
   data,
   update,
   missing,
 }: {
+  touch: (key: string) => void;
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
@@ -1148,9 +1152,14 @@ function MatchSection({
      card explains distractors in words now. */
   return (
     <div className="wizard-fields">
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("pairs"))}>
         <label className="form-label">
-          Questions &amp; Answers <span className="req">*</span>
+          Questions &amp; Answers<span className="req">*</span>
+          {flagged && (
+            <span className="form-label-error">
+              Add at least two questions and three answers to create this question.
+            </span>
+          )}
         </label>
 
         <div className={`qed-tbl qed-tbl--pairs${flagged ? " has-error" : ""}`}>
@@ -1222,18 +1231,12 @@ function MatchSection({
           </div>
         </div>
 
-        {flagged ? (
-          <p className="form-error-text">
-            Add at least two questions and three answers to create this question.
-          </p>
-        ) : (
-          <p className="form-help">
-            You must provide at least two questions and three answers. You can
-            provide extra wrong answers by giving an answer with a blank
-            question. Entries where both the question and the answer are blank
-            will be ignored.
-          </p>
-        )}
+        <p className="form-help">
+          You must provide at least two questions and three answers. You can
+          provide extra wrong answers by giving an answer with a blank
+          question. Entries where both the question and the answer are blank
+          will be ignored.
+        </p>
       </div>
     </div>
   );
@@ -1365,10 +1368,12 @@ function ScaleRangeSection({
 }
 
 function ScaleLabelsSection({
+  touch,
   data,
   update,
   missing,
 }: {
+  touch: (key: string) => void;
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
@@ -1381,8 +1386,11 @@ function ScaleLabelsSection({
   const pairTip = "Label both ends of the scale, or neither.";
   return (
     <div className="wizard-fields">
-      <div className="form-group">
-        <label className="form-label">Label for {data.scaleMin}</label>
+      <div className="form-group" onBlur={leave(() => touch("scaleLabels"))}>
+        <label className="form-label">
+          Label for {data.scaleMin}
+          {minBlank && <span className="form-label-error">{pairTip}</span>}
+        </label>
         <LangField
           en={data.scaleMinLabel}
           es={data.scaleMinLabelEs}
@@ -1392,15 +1400,14 @@ function ScaleLabelsSection({
           esPlaceholder="p. ej. Muy decepcionado"
           error={minBlank}
         />
-        {minBlank ? (
-          <p className="form-error-text">{pairTip}</p>
-        ) : (
-          <p className="form-help">Optional — shown at the low end of the scale.</p>
-        )}
+        <p className="form-help">Optional — shown at the low end of the scale.</p>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Label for {data.scaleMax}</label>
+      <div className="form-group" onBlur={leave(() => touch("scaleLabels"))}>
+        <label className="form-label">
+          Label for {data.scaleMax}
+          {maxBlank && <span className="form-label-error">{pairTip}</span>}
+        </label>
         <LangField
           en={data.scaleMaxLabel}
           es={data.scaleMaxLabelEs}
@@ -1410,11 +1417,7 @@ function ScaleLabelsSection({
           esPlaceholder="p. ej. Muy satisfecho"
           error={maxBlank}
         />
-        {maxBlank ? (
-          <p className="form-error-text">{pairTip}</p>
-        ) : (
-          <p className="form-help">Optional — shown at the high end of the scale.</p>
-        )}
+        <p className="form-help">Optional — shown at the high end of the scale.</p>
       </div>
     </div>
   );

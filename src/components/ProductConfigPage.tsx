@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SYSTEM_DEEP_LINKS, type SystemDeepLink } from "../data/deepLinks";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import {
@@ -100,13 +101,6 @@ type ForceUpdate = { id: string; version: string; date: string };
 
 type BilingualDoc = { en: string; es: string };
 
-type DeepLink = { id: string; label: string; url: string; requiresLogin: boolean };
-
-const APP_DEEP_LINKS: DeepLink[] = [
-  { id: "dl-cert-list", label: "Certification List", url: "skillcat.app/browse", requiresLogin: false },
-  { id: "dl-id-reupload", label: "ID Reupload", url: "skillcat.app/reupload-id", requiresLogin: true },
-  { id: "dl-verify-cert", label: "Verify Certificate", url: "skillcat.app/verify-certificate", requiresLogin: false },
-];
 
 const tabRow = (id: string, nameEn: string, nameEs = ""): TabRow => ({
   id, nameEn, nameEs, visible: true, url: "", icon: null,
@@ -456,10 +450,15 @@ function ForceUpdateModal({
         <div className="prm-field">
           <span className="prm-label">
             Minimum Version<span className="prm-req">*</span>
+            {v && !isFormat ? (
+              <span className="form-label-error">Use numbers separated by dots, e.g. 4.3.0.</span>
+            ) : isDuplicate ? (
+              <span className="form-label-error">Version {v} is already in the log.</span>
+            ) : null}
           </span>
           <input
             autoFocus
-            className="form-input"
+            className={`form-input${(v && !isFormat) || isDuplicate ? " has-error" : ""}`}
             placeholder="e.g. 4.3.0"
             value={version}
             onChange={(e) => setVersion(e.target.value)}
@@ -468,12 +467,6 @@ function ForceUpdateModal({
             }}
             spellCheck={false}
           />
-          {v && !isFormat && (
-            <p className="form-help oc-error">Use numbers separated by dots, e.g. 4.3.0.</p>
-          )}
-          {isDuplicate && (
-            <p className="form-help oc-error">Version {v} is already in the log.</p>
-          )}
         </div>
       </div>
     </PrmModal>
@@ -499,34 +492,33 @@ function RemoveForceUpdateModal({
   return (
     <PrmModal
       title="Remove Force Update?"
-      description={
-        <>
-          Remove force update <strong>{entry.version}</strong>?{" "}
-          {i === 0 ? (
-            fallback ? (
-              <>
-                Users will fall back to the previous forced version{" "}
-                <strong>{fallback.version}</strong>.
-              </>
-            ) : (
-              <>No version will be forced after this.</>
-            )
-          ) : (
-            <>This removes it from the log.</>
-          )}
-        </>
-      }
       confirmLabel="Remove"
       danger
       onCancel={onCancel}
       onConfirm={onRemove}
-    />
+    >
+      <p className="prm-content">
+        Remove force update <strong>{entry.version}</strong>?{" "}
+        {i === 0 ? (
+          fallback ? (
+            <>
+              Users will fall back to the previous forced version{" "}
+              <strong>{fallback.version}</strong>.
+            </>
+          ) : (
+            <>No version will be forced after this.</>
+          )
+        ) : (
+          <>This removes it from the log.</>
+        )}
+      </p>
+    </PrmModal>
   );
 }
 
 /* Read-only: a reference list, so the rows carry no controls — just the link
    out to each destination. */
-function DeepLinksField({ links }: { links: DeepLink[] }) {
+function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
   return (
     <div className="form-group">
       <label className="form-label">App Deep Links</label>
@@ -922,10 +914,13 @@ function OptionNameModal({
         <div className="prm-field">
           <span className="prm-label">
             {fieldLabel}<span className="prm-req">*</span>
+            {isDuplicate && (
+              <span className="form-label-error">“{trimmed}” is already in the list.</span>
+            )}
           </span>
           <input
             autoFocus
-            className="form-input"
+            className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -933,9 +928,6 @@ function OptionNameModal({
             }}
             placeholder={`${fieldLabel}...`}
           />
-          {isDuplicate && (
-            <p className="form-help oc-error">“{trimmed}” is already in the list.</p>
-          )}
         </div>
       </div>
     </PrmModal>
@@ -1092,7 +1084,7 @@ export function ProductConfigPage({
                         onChange={set("webcamFrequency")}
                         min={1}
                       />
-                      <DeepLinksField links={APP_DEEP_LINKS} />
+                      <DeepLinksField links={SYSTEM_DEEP_LINKS} />
                     </>
                   )}
 

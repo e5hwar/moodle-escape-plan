@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   spotlights as seedSpotlights,
   type Spotlight,
@@ -6,13 +6,14 @@ import {
 import {
   CreateSpotlightPage,
   SpotlightCardPreview,
+  SpotlightThumb,
   type SpotlightDraft,
 } from "./CreateSpotlightPage";
 import { PrmModal } from "./PrmModal";
+import { CopiedToast } from "./CopiedToast";
 import { FullscreenViewer } from "./FullscreenViewer";
 import { SearchTrailing } from "./SearchPanelParts";
 import { SearchIcon, AddIcon, RowKebabIcon, RowDragIcon, RowEditIcon, RowDeleteIcon, RowEyeIcon, RowEyeOffIcon, MenuPreviewIcon, InfoIcon14, ChevronDownSquareIcon } from "./icons";
-import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import spotlightHomePreview from "../assets/spotlight-home-preview.png";
 import { formatShortDate } from "../formatDate";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -103,6 +104,12 @@ function daysUntil(iso: string): number {
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
+/* Active or In-Review — a Spotlight in the Home-Screen queue. */
+function isLive(s: Spotlight): boolean {
+  const ds = deriveStatus(s);
+  return ds === "active" || ds === "pending";
+}
+
 /* The index just past the last Active / In-Review row — where a Spotlight
    joining the queue goes in, ahead of anything archived. */
 function endOfLive(arr: Spotlight[]): number {
@@ -129,11 +136,13 @@ export function SpotlightsPage() {
   const [enabling, setEnabling] = useState(false);
   const [previewing, setPreviewing] = useState<Spotlight | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  /* A just-created Spotlight, dropped into the table so its queue slot can be
-     dragged before it is submitted. It lives in `list` only — `committed` does
-     not get it until "Submit for Review", so backing out leaves no trace. */
-  const [placing, setPlacing] = useState<Spotlight | null>(null);
-  const placingRowRef = useRef<HTMLTableRowElement | null>(null);
+  /* Success toast (the shared CopiedToast chrome, as on Companies / Users) for
+     a created, approved or rejected Spotlight. `at` keys it, so a second one
+     restarts the toast instead of being swallowed by the first. */
+  const [toast, setToast] = useState<{ label: string; at: number } | null>(null);
+  const flash = (label: string) => setToast({ label, at: Date.now() });
+  // Stable, so re-renders under the toast don't restart its timer.
+  const clearToast = useCallback(() => setToast(null), []);
   const [menu, setMenu] = useState<{ item: Spotlight; rect: DOMRect } | null>(null);
   /* Every action that changes a Spotlight's standing — approve, reject,
      disable, delete — asks first, on the shared confirm shell. */
@@ -147,14 +156,6 @@ export function SpotlightsPage() {
     setCommitted((prev) => fn(prev));
     setList((prev) => fn(prev));
   }
-
-  /* Land on the new Spotlight rather than at whatever scroll position the table
-     happened to be at — it goes in at the end of the queue, which is usually
-     off-screen. Keyed on `placing`, so it also re-runs after Continue Editing. */
-  useEffect(() => {
-    if (!placing) return;
-    placingRowRef.current?.scrollIntoView({ block: "center" });
-  }, [placing]);
 
   const dirty = useMemo(
     () =>
@@ -203,35 +204,52 @@ export function SpotlightsPage() {
     return [l, a];
   }, [filtered]);
 
-  // Starting a fresh create abandons any Spotlight still awaiting placement.
   function openCreate() {
     setEditing(null);
     setEnabling(false);
-    dropPlacing();
     setCreating(true);
   }
 
-  // No new Spotlight while one is still being placed — the footer owns the page
-  // until that one is submitted or dropped.
-  useCreateShortcut(openCreate, !creating && !placing);
+  useCreateShortcut(openCreate, !creating);
 
-  function dropPlacing() {
-    if (!placing) return;
-    setList((l) => l.filter((s) => s.id !== placing.id));
-    setPlacing(null);
-  }
-
-  // Cancel — nothing is kept, including a placement that was being revised.
+  // Cancel — nothing is kept.
   function cancelCreate() {
     setCreating(false);
     setEditing(null);
     setEnabling(false);
-    dropPlacing();
   }
 
-  function handleSubmit(draft: SpotlightDraft) {
-    // Editing writes the draft back over the existing row, in place: its id,
-    // status, submitter and queue slot are all unchanged.
+  /* The live queue (Active + In-Review, in order) the wizard's Queue Position
+     step places into — less the Spotlight being edited, which the wizard slots
+     back in itself. Taken from the working copy, so it is the order on screen. */
+  const wizardQueue = useMemo(
+    () => list.filter((s) => isLive(s) && s.id !== editing?.id),
+    [list, editing],
+  );
+  /* Where that step starts the Spotlight: an edit at its current slot, a new
+     or re-enabled one at the end of the queue. */
+  const wizardStart = editing && !enabling
+    ? Math.max(0, list.filter(isLive).findIndex((s) => s.id === editing.id))
+    : wizardQueue.length;
+
+  /* Saving the wizard puts the Spotlight at `position` in the live queue and
+     commits the queue as the wizard showed it. */
+  function handleSubmit(draft: SpotlightDraft, position: number) {
+    const place = (l: Spotlight[], item: Spotlight) => {
+      const without = l.filter((s) => s.id !== item.id);
+      const liveRows = without.filter(isLive);
+      const at = position < liveRows.length ? without.indexOf(liveRows[position]) : endOfLive(without);
+      const next = [...without];
+      next.splice(at, 0, item);
+      return next;
+    };
+    const commit = (next: Spotlight[]) => {
+      setList(next);
+      setCommitted(next);
+    };
+
+    // Editing writes the draft back over the existing row: its id, submitter
+    // and (unless re-enabled) status are unchanged; its slot is the step 2 pick.
     if (editing) {
       const rewrite = (s: Spotlight): Spotlight => ({
         ...s,
@@ -246,26 +264,17 @@ export function SpotlightsPage() {
         imageHint: draft.imageHint ?? s.imageHint,
       });
 
-      if (enabling) {
+      const target = list.find((s) => s.id === editing.id);
+      if (target) {
         /* Enabling puts an archived Spotlight back in the queue with its new
            end date. One that was approved before (it simply ran out) goes
            straight back to Active; a rejected one was never signed off, so it
-           returns as In-Review. Either way it re-enters at the end of the
-           queue, and the admin drags it from there. */
-        applyBoth((l) => {
-          const target = l.find((s) => s.id === editing.id);
-          if (!target) return l;
-          const revived: Spotlight = {
-            ...rewrite(target),
-            status: target.status === "rejected" ? "pending" : "approved",
-          };
-          const without = l.filter((s) => s.id !== editing.id);
-          const next = [...without];
-          next.splice(endOfLive(without), 0, revived);
-          return next;
-        });
-      } else {
-        applyBoth((l) => l.map((s) => (s.id === editing.id ? rewrite(s) : s)));
+           returns as In-Review. */
+        const updated: Spotlight = enabling
+          ? { ...rewrite(target), status: target.status === "rejected" ? "pending" : "approved" }
+          : rewrite(target);
+        commit(place(list, updated));
+        flash(enabling ? "Spotlight Enabled" : "Spotlight Updated");
       }
 
       setCreating(false);
@@ -274,9 +283,7 @@ export function SpotlightsPage() {
       return;
     }
 
-    // Resuming keeps the id it was given the first time round, so returning to
-    // the table replaces the provisional row instead of adding a second one.
-    const id = placing?.id ?? `SP-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const id = `SP-${String(Math.floor(Math.random() * 9000) + 1000)}`;
     const newSpotlight: Spotlight = {
       id,
       headingEn: draft.headingEn || "Untitled Spotlight",
@@ -292,35 +299,10 @@ export function SpotlightsPage() {
       submittedAt: TODAY,
       status: "pending",
     };
-    /* Goes into the working copy only, at the end of the live queue (after the
-       last Active / In-Review row, ahead of anything archived). The admin drags
-       it from there; nothing is committed until "Submit for Review". */
-    setList((l) => {
-      const without = l.filter((s) => s.id !== id);
-      const next = [...without];
-      next.splice(endOfLive(without), 0, newSpotlight);
-      return next;
-    });
-    setPlacing(newSpotlight);
-    /* A live search would hide the new row and, since dragging is disabled while
-       filtering, make it unplaceable — clear it so the queue is whole. */
-    setQuery("");
+    commit(place(list, newSpotlight));
     setCreating(false);
     setEditing(null);
-  }
-
-  // "Submit for Review" — the placement is accepted and the queue is committed.
-  function submitForReview() {
-    setCommitted(list);
-    setPlacing(null);
-  }
-
-  // "Continue Editing" — pull the provisional row back out and reopen the form
-  // with what was typed.
-  function continueEditing() {
-    if (!placing) return;
-    setList((l) => l.filter((s) => s.id !== placing.id));
-    setCreating(true);
+    flash("Spotlight Created");
   }
 
   function remove(item: Spotlight) {
@@ -354,6 +336,7 @@ export function SpotlightsPage() {
       ...l.filter((s) => s.id !== item.id),
       { ...item, status: "rejected" },
     ]);
+    flash("Spotlight Rejected");
   }
 
 /* Approving takes the row live where it already sits. There is no position
@@ -364,6 +347,7 @@ export function SpotlightsPage() {
     applyBoth((l) =>
       l.map((s) => (s.id === item.id ? { ...s, status: "approved" } : s)),
     );
+    flash("Spotlight Approved");
   }
 
   // ── Drag-to-reorder (working copy only, until saved) ──
@@ -415,8 +399,6 @@ export function SpotlightsPage() {
           isOver={overIndex === idx && dragIndex !== idx}
           onOpenMenu={(rect) => setMenu({ item: s, rect })}
           menuOpen={menu?.item.id === s.id}
-          isNew={placing?.id === s.id}
-          rowRef={placing?.id === s.id ? placingRowRef : undefined}
           onApprove={() => setConfirming({ kind: "approve", item: s })}
           onDecline={() => setConfirming({ kind: "reject", item: s })}
           onDragStart={() => startDrag(idx)}
@@ -439,7 +421,8 @@ export function SpotlightsPage() {
         onSubmit={handleSubmit}
         editing={editing ?? undefined}
         enabling={enabling}
-        resuming={placing ?? undefined}
+        queue={wizardQueue}
+        startPosition={wizardStart}
       />
     );
   }
@@ -468,8 +451,6 @@ export function SpotlightsPage() {
               <button
                 className="new-task"
                 onClick={openCreate}
-                disabled={!!placing}
-                title={placing ? "Finish placing the new Spotlight first" : undefined}
               >
                 <AddIcon />
                 Create Spotlight
@@ -532,13 +513,8 @@ export function SpotlightsPage() {
                 )}
 
                 {/* Archived (ended / rejected) Spotlights live behind this row
-                    at the foot of the table (564:2244) — but not while a new
-                    Spotlight is being placed. Placement is about the live queue
-                    and nothing else, and the archive only puts rows between the
-                    dragged row and the end of the list it is being dropped
-                    into. The toggle comes back, in whatever state it was left,
-                    as soon as the placement is submitted or dropped. */}
-                {!placing && archived.length > 0 && (
+                    at the foot of the table (564:2244). */}
+                {archived.length > 0 && (
                   <tr className="sp-archive-row">
                     <td colSpan={SP_COL_WIDTHS.length}>
                       <button
@@ -553,7 +529,7 @@ export function SpotlightsPage() {
                   </tr>
                 )}
 
-                {!placing && showArchived && renderRows(archived)}
+                {showArchived && renderRows(archived)}
               </tbody>
             </table>
             </div>
@@ -561,26 +537,9 @@ export function SpotlightsPage() {
 
           {/* In flow at the bottom of the page column, not fixed to the viewport,
               so it stops at the left nav — the same way the Create Spotlight
-              page's wizard footer does. Two modes: placing a newly created
-              Spotlight, or a plain reorder of the committed queue. */}
-          {placing ? (
-            <footer className="sp-save-footer">
-              <div className="sp-save-footer-text">
-                Drag to reorder the Spotlight in the queue
-              </div>
-              <div className="sp-save-footer-actions">
-                <button className="btn-save-draft" onClick={continueEditing}>
-                  Continue Editing
-                </button>
-                <button
-                  className="btn-publish sp-submit"
-                  onClick={submitForReview}
-                >
-                  Submit for Review
-                </button>
-              </div>
-            </footer>
-          ) : dirty ? (
+              page's wizard footer does. Shown while the queue has an unsaved
+              drag-reorder. */}
+          {dirty ? (
             <footer className="sp-save-footer">
               <div className="sp-save-footer-text">Order Updated</div>
               <div className="sp-save-footer-actions">
@@ -640,6 +599,9 @@ export function SpotlightsPage() {
         />
       )}
 
+      {toast && (
+        <CopiedToast key={toast.at} label={toast.label} onDone={clearToast} />
+      )}
     </div>
   );
 }
@@ -720,7 +682,7 @@ function ConfirmActionModal({
     >
       {/* Body copy is children, not `description` — the shell's own convention
           for a confirm (Figma 483:588). */}
-      <p className="prm-text">{c.body}</p>
+      <p className="prm-content">{c.body}</p>
     </PrmModal>
   );
 }
@@ -739,8 +701,6 @@ function SpotlightRow({
   onDropRow,
   onDragEndRow,
   menuOpen,
-  isNew,
-  rowRef,
 }: {
   spotlight: Spotlight;
   /** Queue position — null for rows out of the queue (rejected / ended). */
@@ -750,10 +710,6 @@ function SpotlightRow({
   isOver: boolean;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
-  /** The Spotlight just created and awaiting placement — call it out. */
-  isNew: boolean;
-  /** Set on that same row so the page can scroll it into view. */
-  rowRef?: React.MutableRefObject<HTMLTableRowElement | null>;
   onOpenMenu: (rect: DOMRect) => void;
   onApprove: () => void;
   onDecline: () => void;
@@ -771,10 +727,9 @@ function SpotlightRow({
 
   return (
     <tr
-      ref={rowRef}
       className={`sp-tr sp-tr--${s.status} ${isDragging ? "is-dragging" : ""} ${
         isOver ? "is-drop-target" : ""
-      } ${menuOpen ? "menu-open" : ""} ${isNew ? "is-new" : ""}`}
+      } ${menuOpen ? "menu-open" : ""}`}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragEnter={canReorder ? onDragEnterRow : undefined}
@@ -799,7 +754,7 @@ function SpotlightRow({
         {position !== null && <span className="sp-pos-num">{position}</span>}
       </td>
       <td>
-        <SpotlightPreview spotlight={s} />
+        <SpotlightThumb spotlight={s} />
       </td>
       <td className="sp-td-text">
         <div className="sp-cell-name-line">
@@ -817,12 +772,9 @@ function SpotlightRow({
       <td className="sp-td-by">{s.submittedBy}</td>
       <td className="sp-td-muted">{formatShortDate(s.endDate)}</td>
       {/* Actions is only the Approve / Reject pair; the kebab is in its own
-          unlabelled column after it (558:2046 shows them side by side). Both
-          stay empty while this row is the Spotlight being placed. That one has
-          not been submitted yet, so there is nothing to approve, edit or
-          delete; the page's footer owns it until "Submit for Review". */}
+          unlabelled column after it (558:2046 shows them side by side). */}
       <td className="sp-td-actions">
-        {isPending && !isNew && (
+        {isPending && (
           <div className="sp-decide">
             <button
               className="sp-decide-btn sp-decide-btn--approve"
@@ -848,20 +800,18 @@ function SpotlightRow({
         )}
       </td>
       <td className="sp-td-menu">
-        {!isNew && (
-          <div className="sp-menu">
-            <button
-              className="sp-kebab"
-              aria-label="More actions"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenMenu(e.currentTarget.getBoundingClientRect());
-              }}
-            >
-              <RowKebabIcon />
-            </button>
-          </div>
-        )}
+        <div className="sp-menu">
+          <button
+            className="sp-kebab"
+            aria-label="More actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMenu(e.currentTarget.getBoundingClientRect());
+            }}
+          >
+            <RowKebabIcon />
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -891,23 +841,6 @@ function SpotlightInfoTip() {
       </span>
       <img className="sp-infotip-img" src={spotlightHomePreview} alt="" />
     </span>
-  );
-}
-
-function SpotlightPreview({ spotlight }: { spotlight: Spotlight }) {
-  // 165×87 artwork tile (558:2070). The prototype has no per-Spotlight image
-  // file — only a `imageHint` filename — so this shows the same default artwork
-  // the Create Spotlight preview falls back to, tinted by `backgroundColor`
-  // when a Spotlight was authored without an image.
-  return (
-    <div
-      className="sp-thumb"
-      style={spotlight.backgroundColor ? { background: spotlight.backgroundColor } : undefined}
-    >
-      {!spotlight.backgroundColor || spotlight.imageHint ? (
-        <img className="sp-thumb-img" src={defaultSpotlightBg} alt="" />
-      ) : null}
-    </div>
   );
 }
 

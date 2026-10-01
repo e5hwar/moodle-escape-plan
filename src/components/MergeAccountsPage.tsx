@@ -11,7 +11,6 @@ import {
   ExpandVerticalIcon,
   InfoCircleIcon,
   InfoTipIcon,
-  KeyCommandIcon,
   ClearXIcon,
   SearchIcon,
   ShrinkVerticalIcon,
@@ -28,6 +27,7 @@ import { PrmModal } from "./PrmModal";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCard } from "./TableCard";
 import { SelectUsersModal } from "./SelectUsersModal";
+import { SkeletonOverlay } from "./SkeletonOverlay";
 
 /**
  * Merge Accounts — a four-step wizard for collapsing two learner accounts into
@@ -883,24 +883,14 @@ export function MergeAccountsPage({
                       with whatever is still missing asked over the top of it. */}
                   <div className="mgf-empty">
                     <MergeGhost />
-                    <div className="mgf-empty-inner">
-                      <div className="mc-empty-title">{emptyAsk.title}</div>
-                      <div className="mc-empty-sub">{emptyAsk.sub}</div>
-                      {/* The node ends on the search bar's own ⌘K badge, and it
-                          is honest here: step 1 binds ⌘K to this same picker. */}
-                      <button
-                        className="btn-save-draft mc-empty-cta"
-                        onClick={() => setShowPicker(true)}
-                      >
-                        {emptyAsk.cta}
-                        <span className="usearch-kbd">
-                          <span className="kbd-cmd">
-                            <KeyCommandIcon />
-                          </span>
-                          <span className="kbd-letter">K</span>
-                        </span>
-                      </button>
-                    </div>
+                    {/* The ⌘K on its button is honest: step 1 binds ⌘K to
+                        this same picker. */}
+                    <SkeletonOverlay
+                      title={emptyAsk.title}
+                      sub={emptyAsk.sub}
+                      cta={emptyAsk.cta}
+                      onCta={() => setShowPicker(true)}
+                    />
                   </div>
                 </>
               )}
@@ -1116,19 +1106,19 @@ export function MergeAccountsPage({
           /* Prose, not a summary list: the review step behind this dialog is
              where the detail lives, and repeating a digest of it here just
              asks to be read twice. */
-          description={
-            <>
-              Everything on <strong>{s.email}</strong> — {totalMerged} learning records, its
-              certifications, skills, awards and purchases — moves into{" "}
-              <strong>{p.email}</strong>, which keeps its own login. {s.name}'s account and
-              login are then permanently deleted. This cannot be undone.
-            </>
-          }
           confirmLabel="Yes, merge accounts"
           danger
           onCancel={() => setShowModal(false)}
           onConfirm={confirmMerge}
-        />
+        >
+          {/* Pop-up content (Figma 667:884), not a grey subtitle under the title. */}
+          <p className="prm-content">
+            Everything on <strong>{s.email}</strong> — {totalMerged} learning records, its
+            certifications, skills, awards and purchases — moves into{" "}
+            <strong>{p.email}</strong>, which keeps its own login. {s.name}'s account and
+            login are then permanently deleted. This cannot be undone.
+          </p>
+        </PrmModal>
       )}
     </div>
   );

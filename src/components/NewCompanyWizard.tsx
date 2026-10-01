@@ -34,13 +34,14 @@ import {
 } from "../data/countries";
 import { lookupZip } from "../data/zipcodes";
 import { CheckIcon, CheckBoldIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
-import { ConfirmCard } from "./ConfirmCard";
+import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
+import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 import { PrmModal } from "./PrmModal";
@@ -63,7 +64,7 @@ export const US_STATES = [
   "Washington", "West Virginia", "Wisconsin", "Wyoming",
 ];
 
-type Plan = "free-trial" | "subscription" | "complimentary";
+export type Plan = "free-trial" | "subscription" | "complimentary";
 /** Kept as an alias so the billing-diff types read as "a plan you pay for";
  *  every Tier is one now that Free Trial / Free Access are statuses. */
 type PaidTier = Tier;
@@ -103,14 +104,14 @@ export const CURRENT_SALES_REP = "Brendan Arsenault";
 // currency code (USD/CAD are always billed; others can be defined for future use).
 /* `label` is the price's description on Stripe — not every price carries one,
    and the menu row simply drops its right-hand column when it is missing. */
-/** `cycle` is set only on prices created through the modal, which captures one.
- *  The seeded defaults carry their cycle in the label instead, so anything
- *  reading it has to tolerate its absence. */
+/** `cycle` is the billing cycle the price bills on. A Stripe price is either
+ *  monthly or yearly, so the Plan step's picker only offers prices whose
+ *  cycle matches the selected Billing Cycle. */
 type SavedPrice = {
   id: string;
   label?: string;
   rates: Record<string, number>;
-  cycle?: BillingCycle;
+  cycle: BillingCycle;
 };
 
 function r2(usd: number, cad: number): Record<string, number> {
@@ -119,27 +120,27 @@ function r2(usd: number, cad: number): Record<string, number> {
 
 function buildDefaultSavedPrices(): SavedPrice[] {
   return [
-    { id: "ess-mo",       label: "Essentials — Monthly (default)",          rates: r2(defaultRate("Essentials", "Monthly", "USD"), defaultRate("Essentials", "Monthly", "CAD")) },
-    { id: "ess-an",       label: "Essentials — Annual (default)",            rates: r2(defaultRate("Essentials", "Annual",  "USD"), defaultRate("Essentials", "Annual",  "CAD")) },
-    { id: "gro-mo",       label: "Growth — Monthly (default)",               rates: r2(defaultRate("Growth",     "Monthly", "USD"), defaultRate("Growth",     "Monthly", "CAD")) },
-    { id: "gro-an",       label: "Growth — Annual (default)",                rates: r2(defaultRate("Growth",     "Annual",  "USD"), defaultRate("Growth",     "Annual",  "CAD")) },
-    { id: "pro-mo",       label: "Professional — Monthly (default)",                  rates: r2(defaultRate("Professional",        "Monthly", "USD"), defaultRate("Professional",        "Monthly", "CAD")) },
-    { id: "pro-an",       label: "Professional — Annual (default)",                   rates: r2(defaultRate("Professional",        "Annual",  "USD"), defaultRate("Professional",        "Annual",  "CAD")) },
+    { id: "ess-mo",       label: "Essentials — Monthly (default)",          rates: r2(defaultRate("Essentials", "Monthly", "USD"), defaultRate("Essentials", "Monthly", "CAD")), cycle: "Monthly" },
+    { id: "ess-an",       label: "Essentials — Annual (default)",            rates: r2(defaultRate("Essentials", "Annual",  "USD"), defaultRate("Essentials", "Annual",  "CAD")), cycle: "Annual" },
+    { id: "gro-mo",       label: "Growth — Monthly (default)",               rates: r2(defaultRate("Growth",     "Monthly", "USD"), defaultRate("Growth",     "Monthly", "CAD")), cycle: "Monthly" },
+    { id: "gro-an",       label: "Growth — Annual (default)",                rates: r2(defaultRate("Growth",     "Annual",  "USD"), defaultRate("Growth",     "Annual",  "CAD")), cycle: "Annual" },
+    { id: "pro-mo",       label: "Professional — Monthly (default)",                  rates: r2(defaultRate("Professional",        "Monthly", "USD"), defaultRate("Professional",        "Monthly", "CAD")), cycle: "Monthly" },
+    { id: "pro-an",       label: "Professional — Annual (default)",                   rates: r2(defaultRate("Professional",        "Annual",  "USD"), defaultRate("Professional",        "Annual",  "CAD")), cycle: "Annual" },
     // Custom / partner prices. Annual ones are yearly amounts, like the
     // defaults above — a discount off ten months, not off a monthly rate.
-    { id: "part-ess-mo",  label: "Essentials — Monthly (Preferred Partner)", rates: r2(27,  36)  },
-    { id: "part-ess-an",  label: "Essentials — Annual (Preferred Partner)",  rates: r2(270, 360) },
-    { id: "part-gro-mo",  label: "Growth — Monthly (Preferred Partner)",     rates: r2(36,  48)  },
-    { id: "part-gro-an",  label: "Growth — Annual (Preferred Partner)",      rates: r2(360, 480) },
-    { id: "ngo-ess-mo",   label: "Essentials — Monthly (NGO Rate)",          rates: r2(22,  29)  },
-    { id: "ngo-gro-mo",   label: "Growth — Monthly (NGO Rate)",              rates: r2(30,  40)  },
-    { id: "elite-pro-mo", label: "Professional — Monthly (Elite Partner)",  rates: r2(45,  60)  },
-    { id: "elite-pro-an", label: "Professional — Annual (Elite Partner)",   rates: r2(450, 600) },
+    { id: "part-ess-mo",  label: "Essentials — Monthly (Preferred Partner)", rates: r2(27,  36), cycle: "Monthly" },
+    { id: "part-ess-an",  label: "Essentials — Annual (Preferred Partner)",  rates: r2(270, 360), cycle: "Annual" },
+    { id: "part-gro-mo",  label: "Growth — Monthly (Preferred Partner)",     rates: r2(36,  48), cycle: "Monthly" },
+    { id: "part-gro-an",  label: "Growth — Annual (Preferred Partner)",      rates: r2(360, 480), cycle: "Annual" },
+    { id: "ngo-ess-mo",   label: "Essentials — Monthly (NGO Rate)",          rates: r2(22,  29), cycle: "Monthly" },
+    { id: "ngo-gro-mo",   label: "Growth — Monthly (NGO Rate)",              rates: r2(30,  40), cycle: "Monthly" },
+    { id: "elite-pro-mo", label: "Professional — Monthly (Elite Partner)",  rates: r2(45,  60), cycle: "Monthly" },
+    { id: "elite-pro-an", label: "Professional — Annual (Elite Partner)",   rates: r2(450, 600), cycle: "Annual" },
     // A Stripe price carries no nickname unless someone typed one, so a real
     // list has unnamed rows in it. They read as the amount alone.
-    { id: "px-1J4nQ2",                                                       rates: r2(34,  45)  },
-    { id: "px-8KdW7f",                                                       rates: r2(380, 505) },
-    { id: "px-3RmT9c",                                                       rates: r2(58,  77)  },
+    { id: "px-1J4nQ2",                                                       rates: r2(34,  45), cycle: "Monthly" },
+    { id: "px-8KdW7f",                                                       rates: r2(380, 505), cycle: "Annual" },
+    { id: "px-3RmT9c",                                                       rates: r2(58,  77), cycle: "Monthly" },
   ];
 }
 
@@ -170,7 +171,7 @@ type Props = {
 
 /* Which plan step a company opens on. Tier only says WHICH plan it is on, so
  * whether that plan is being trialed, granted or paid for comes from status. */
-function planFor(c: Company): Plan {
+export function planFor(c: Company): Plan {
   const status = getCompanyBilling(c).status;
   if (status === "Free Trial" || status === "Trial Expired") return "free-trial";
   if (status === "Free Access" || status === "Free Access Ended") return "complimentary";
@@ -279,6 +280,10 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // subscription-only mode the wizard is locked to the Plan step and the step
   // rail is hidden.
   const [step, setStep] = useState(subscriptionOnly ? 2 : 0);
+  // Fields clicked into and out of, and the furthest step opened — what lets
+  // a mandatory field say "cannot be left empty" (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const maxVisited = useMaxVisited(step);
 
   // Success / confirmation
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
@@ -355,10 +360,17 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // useLayoutEffect so the new rate is flushed before paint — no stale-rate frame
   // in the billing-impact rail after a tier switch.
   const priceInitRef = useRef(false);
+  // Set when a newly saved price switches the cycle, so it survives the reset.
+  const pendingPriceRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!priceInitRef.current) {
       priceInitRef.current = true;
       if (isEdit) return;
+    }
+    if (pendingPriceRef.current !== null) {
+      setPriceStr(pendingPriceRef.current);
+      pendingPriceRef.current = null;
+      return;
     }
     // An unpriced currency clears the field instead: seeding it with a rate the
     // catalogue can't match would flag the field red the moment the currency
@@ -385,11 +397,18 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   ];
   // A per-seat rate that isn't a saved Stripe price can't be used to create a
   // subscription — the admin must save it as a new price first.
-  const priceValid = !isSubscription || savedPrices.some((p) => (p.rates[currency] ?? 0) === effectiveRate);
+  const priceValid = !isSubscription || savedPrices.some(
+    (p) => p.cycle === billingCycle && (p.rates[currency] ?? 0) === effectiveRate,
+  );
   // A subscription must have at least one paid seat before it can be saved.
   const seatsValid = !isSubscription || seatCount > 0;
+  const seatsMissing = !seatsValid && touched.has("seats");
   // Free Access is open-ended unless an end date is set, so one is required.
   const freeAccessValid = plan !== "complimentary" || freeAccessEndDate.trim().length > 0;
+  // The Plan step is the last one, so its fields flag on touch alone (Figma
+  // 1376:1675 Price, 1390:1710 Seats, 1387:1311 End Date).
+  const priceMissing = isSubscription && !(parseFloat(priceStr) > 0) && touched.has("price");
+  const endDateMissing = !freeAccessValid && touched.has("endDate");
   const step2Checks: { valid: boolean; message: string }[] = [
     // Editing saves a CHANGE. With the form still exactly as it was loaded
     // there is nothing to write, so the CTA stays disabled and says why.
@@ -498,6 +517,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     count: STEPS.length,
     incomplete: (i) => (stepChecks[i] ?? []).some((c) => !c.valid),
   });
+
+  // Company Details and Admin Account fields: clicked into and out of, or the
+  // step was moved past (Address per Figma 1389:1624 — its Zipcode is the one
+  // mandatory part).
+  const nameMissing = !name.trim() && (maxVisited > 0 || touched.has("name"));
+  const zipMissing = !addrPin.trim() && (maxVisited > 0 || touched.has("zip"));
+  const holderMissing = !contactName.trim() && (maxVisited > 1 || touched.has("holder"));
+  const emailMissing = !email.trim() && (maxVisited > 1 || touched.has("email"));
 
   // Details-only edit: patch the identity & segmentation fields onto the
   // existing company, leaving plan, billing, status, and the admin account
@@ -655,7 +682,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
-              {isEdit ? "Editing" : "Creating"}
+              {isEdit ? "Editing Company" : "Creating"}
             </span>
             <span className="wizard-brand-name">
               {editCompany ? editCompany.name : "New Company"}
@@ -704,6 +731,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   addrLine2={addrLine2} setAddrLine2={setAddrLine2}
                   addrCity={addrCity} setAddrCity={setAddrCity}
                   addrPin={addrPin} setAddrPin={setAddrPin}
+                  nameMissing={nameMissing} zipMissing={zipMissing} touch={touch}
                   addrState={addrState} setAddrState={setAddrState}
                   industries={industries} setIndustries={setIndustries}
                   partnerships={partnerships} setPartnerships={setPartnerships}
@@ -714,6 +742,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   contactName={contactName} setContactName={setContactName}
                   email={email} setEmail={setEmail}
                   phone={phone} setPhone={setPhone}
+                  holderMissing={holderMissing} emailMissing={emailMissing} touch={touch}
                 />
               ) : (
                 <Step2Plan
@@ -723,6 +752,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   currency={currency} setCurrency={setCurrency}
                   priceStr={priceStr} setPriceStr={setPriceStr}
                   seats={seats} setSeats={setSeats}
+                  seatsMissing={seatsMissing} priceMissing={priceMissing} endDateMissing={endDateMissing} touch={touch}
                   payment={payment} setPayment={setPayment}
                   noteRate={noteRate} noteSym={noteSym} effectiveRate={effectiveRate}
                   planTotal={planTotal} seatCount={seatCount} sym={sym}
@@ -808,7 +838,15 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           onClose={() => setShowNewPriceModal(false)}
           onCreate={(p) => {
             setSavedPrices((prev) => [...prev, p]);
-            setPriceStr(p.rates[currency] ? String(p.rates[currency]) : "");
+            const nextPrice = p.rates[currency] ? String(p.rates[currency]) : "";
+            // A price saved on the other cycle moves the field to that cycle,
+            // since the picker only offers prices on the selected one. The
+            // cycle change would otherwise reset the field to the tier default.
+            if (p.cycle !== billingCycle) {
+              pendingPriceRef.current = nextPrice;
+              setBillingCycle(p.cycle);
+            }
+            setPriceStr(nextPrice);
             setShowNewPriceModal(false);
           }}
         />
@@ -1568,6 +1606,8 @@ function SubPreview({ model }: { model: PreviewModel }) {
 /* ─────────────── Step 1 — Company Details ─────────────── */
 
 function Step1Details({
+  nameMissing = false,
+  touch,
   name, setName,
   taxStatus, setTaxStatus,
   assignedCsm, setAssignedCsm,
@@ -1577,11 +1617,14 @@ function Step1Details({
   addrLine2, setAddrLine2,
   addrCity, setAddrCity,
   addrPin, setAddrPin,
+  zipMissing = false,
   addrState, setAddrState,
   industries, setIndustries,
   partnerships, setPartnerships,
   onNavigateToProductConfig,
 }: {
+  nameMissing?: boolean;
+  touch: (key: string) => void;
   name: string; setName: (v: string) => void;
   taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
   assignedCsm: string; setAssignedCsm: (v: string) => void;
@@ -1591,6 +1634,9 @@ function Step1Details({
   addrLine2: string; setAddrLine2: (v: string) => void;
   addrCity: string; setAddrCity: (v: string) => void;
   addrPin: string; setAddrPin: (v: string) => void;
+  /** Details was left with the Zipcode empty — reddens the Address shell and
+   *  says so in its label row. */
+  zipMissing?: boolean;
   addrState: string; setAddrState: (v: string) => void;
   industries: string[]; setIndustries: (v: string[]) => void;
   partnerships: string[]; setPartnerships: (v: string[]) => void;
@@ -1603,11 +1649,15 @@ function Step1Details({
         Identify the company. Industry and partnership are used for segmentation and reporting.
       </p>
 
-      <div className="form-group">
-        <label className="form-label">Company Name <span className="req">*</span></label>
+      <div className="form-group" onBlur={leave(() => touch("name"))}>
+        <label className="form-label">
+          Company Name<span className="req">*</span>
+          {nameMissing && <span className="form-label-error">Company Name cannot be left empty</span>}
+        </label>
         <input
           autoFocus
-          className="form-input"
+          className={`form-input${nameMissing ? " has-error" : ""}`}
+          aria-invalid={nameMissing || undefined}
           placeholder="Company Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -1615,9 +1665,12 @@ function Step1Details({
         <p className="form-help">This will be the name shown on Stripe's receipts</p>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Address <span className="req">*</span></label>
-        <div className="address-field">
+      <div className="form-group" onBlur={leave(() => touch("zip"))}>
+        <label className="form-label">
+          Address<span className="req">*</span>
+          {zipMissing && <span className="form-label-error">Zipcode cannot be left empty</span>}
+        </label>
+        <div className={`address-field${zipMissing ? " has-error" : ""}`}>
           <SelectField
             value={country}
             options={COUNTRY_OPTIONS}
@@ -1654,6 +1707,7 @@ function Step1Details({
               className="address-input address-cell"
               placeholder="Zipcode*"
               value={addrPin}
+              aria-invalid={zipMissing || undefined}
               onChange={(e) => {
                 const zip = e.target.value;
                 setAddrPin(zip);
@@ -1688,7 +1742,7 @@ function Step1Details({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Tax Status <span className="req">*</span></label>
+        <label className="form-label">Tax Status<span className="req">*</span></label>
         <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} />
         <p className="form-help">
           Refer to{" "}
@@ -1706,7 +1760,7 @@ function Step1Details({
 
       <div className="form-row-2">
         <div className="form-group">
-          <label className="form-label">Industry</label>
+          <label className="form-label">Industries</label>
           <MultiSelect
             options={INDUSTRY_OPTIONS}
             value={industries}
@@ -1851,10 +1905,16 @@ function PhoneField({ phone, setPhone }: { phone: string; setPhone: (v: string) 
 }
 
 function StepAdminAccount({
+  holderMissing = false,
+  emailMissing = false,
+  touch,
   contactName, setContactName,
   email, setEmail,
   phone, setPhone,
 }: {
+  holderMissing?: boolean;
+  emailMissing?: boolean;
+  touch: (key: string) => void;
   contactName: string; setContactName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
@@ -1866,21 +1926,29 @@ function StepAdminAccount({
         The primary contact and first Admin account for the company.
       </p>
 
-      <div className="form-group">
-        <label className="form-label">Account Holder <span className="req">*</span></label>
+      <div className="form-group" onBlur={leave(() => touch("holder"))}>
+        <label className="form-label">
+          Account Holder<span className="req">*</span>
+          {holderMissing && <span className="form-label-error">Account Holder cannot be left empty</span>}
+        </label>
         <input
           autoFocus
-          className="form-input"
+          className={`form-input${holderMissing ? " has-error" : ""}`}
+          aria-invalid={holderMissing || undefined}
           placeholder="Name..."
           value={contactName}
           onChange={(e) => setContactName(e.target.value)}
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Email <span className="req">*</span></label>
+      <div className="form-group" onBlur={leave(() => touch("email"))}>
+        <label className="form-label">
+          Email<span className="req">*</span>
+          {emailMissing && <span className="form-label-error">Email cannot be left empty</span>}
+        </label>
         <input
-          className="form-input"
+          className={`form-input${emailMissing ? " has-error" : ""}`}
+          aria-invalid={emailMissing || undefined}
           type="email"
           placeholder="Email..."
           value={email}
@@ -1902,6 +1970,10 @@ function StepAdminAccount({
 /* ─────────────── Step 3 — Plan selection ─────────────── */
 
 function Step2Plan({
+  seatsMissing = false,
+  priceMissing = false,
+  endDateMissing = false,
+  touch,
   plan, setPlan,
   tier, setTier,
   billingCycle, setBillingCycle,
@@ -1921,6 +1993,10 @@ function Step2Plan({
   hideSummary = false,
   manageMode = false,
 }: {
+  seatsMissing?: boolean;
+  priceMissing?: boolean;
+  endDateMissing?: boolean;
+  touch: (key: string) => void;
   plan: Plan; setPlan: (v: Plan) => void;
   tier: PaidTier; setTier: (v: PaidTier) => void;
   billingCycle: BillingCycle; setBillingCycle: (v: BillingCycle) => void;
@@ -1951,7 +2027,7 @@ function Step2Plan({
       </p>
 
       <div className="form-group">
-        <label className="form-label">Plan <span className="req">*</span></label>
+        <label className="form-label">Plan<span className="req">*</span></label>
         <div className="radio-card-group">
           <RadioCard
             selected={plan === "subscription"}
@@ -1989,7 +2065,7 @@ function Step2Plan({
       {isSubscription && (
         <>
           <div className="form-group">
-            <label className="form-label">Subscription Tier <span className="req">*</span></label>
+            <label className="form-label">Subscription Tier<span className="req">*</span></label>
             <div className="seg-control">
               {(TIERS as PaidTier[]).map((t) => (
                 <button
@@ -2005,7 +2081,7 @@ function Step2Plan({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Billing Cycle <span className="req">*</span></label>
+            <label className="form-label">Billing Cycle<span className="req">*</span></label>
             <div className="seg-control">
               {BILLING_CYCLES.map((c) => (
                 <button
@@ -2020,9 +2096,13 @@ function Step2Plan({
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Per-Seat Price <span className="req">*</span></label>
+          <div className="form-group" onBlur={leave(() => touch("price"))}>
+            <label className="form-label">
+              Per-Seat Price<span className="req">*</span>
+              {priceMissing && <span className="form-label-error">Per-Seat Price cannot be left empty</span>}
+            </label>
             <PerSeatPriceField
+              missing={priceMissing}
               currency={currency}
               setCurrency={setCurrency}
               priceStr={priceStr}
@@ -2037,13 +2117,17 @@ function Step2Plan({
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Seats <span className="req">*</span></label>
+          <div className="form-group" onBlur={leave(() => touch("seats"))}>
+            <label className="form-label">
+              Seats<span className="req">*</span>
+              {seatsMissing && <span className="form-label-error">Seats cannot be left empty</span>}
+            </label>
             <Stepper
               value={seats}
               onChange={setSeats}
               min={1}
               disabled={seatsLocked}
+              hasError={seatsMissing}
             />
             <p className="form-help">
               {seatsLocked
@@ -2053,7 +2137,7 @@ function Step2Plan({
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Payment Method <span className="req">*</span></label>
+            <label className="form-label">Payment Method<span className="req">*</span></label>
             <div className="radio-card-group">
               <RadioCard
                 selected={payment === "Automatic"}
@@ -2096,12 +2180,16 @@ function Step2Plan({
       )}
 
       {plan === "complimentary" && (
-        <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
-          <label className="form-label">Access End Date <span className="req">*</span></label>
+        <div className="form-group" onBlur={leave(() => touch("endDate"))} style={{ marginTop: 16, marginBottom: 0 }}>
+          <label className="form-label">
+            Access End Date<span className="req">*</span>
+            {endDateMissing && <span className="form-label-error">Access End Date cannot be left empty</span>}
+          </label>
           <DateField
             value={freeAccessEndDate}
             onChange={setFreeAccessEndDate}
             placeholder="Select Date..."
+            hasError={endDateMissing}
           />
         </div>
       )}
@@ -2112,11 +2200,14 @@ function Step2Plan({
 /* ─────────────── Per-seat price — combined currency + price dropdown ─────────────── */
 
 function PerSeatPriceField({
+  missing = false,
   currency, setCurrency,
   priceStr, setPriceStr,
   savedPrices, onCreatePrice,
   sym, tier, billingCycle, noteRate, noteSym,
 }: {
+  /** Empty after a touch — the shell's red edge without the not-saved rule. */
+  missing?: boolean;
   currency: Currency;
   setCurrency: (v: Currency) => void;
   priceStr: string;
@@ -2160,21 +2251,27 @@ function PerSeatPriceField({
   const entered = parseFloat(priceStr);
   const hasEntered = !isNaN(entered) && entered > 0;
 
-  /* Saved prices available in the chosen currency, narrowed by the menu's own
-     search. It matches the amount OR the price's name, since the row shows
-     both and either is a reasonable thing to type. */
+  /* Saved prices on the selected Billing Cycle and available in the chosen
+     currency — a Monthly subscription never offers an Annual price, and vice
+     versa — narrowed by the menu's own search. It matches the amount OR the
+     price's name, since the row shows both and either is a reasonable thing to
+     type. */
   const query = priceSearch.trim().toLowerCase();
+  const cyclePrices = useMemo(
+    () => savedPrices.filter((p) => p.cycle === billingCycle),
+    [savedPrices, billingCycle],
+  );
   const matches = useMemo(() => {
-    const pool = savedPrices.filter((p) => rateOf(p) > 0);
+    const pool = cyclePrices.filter((p) => rateOf(p) > 0);
     if (!query) return pool;
     return pool.filter(
       (p) =>
         String(rateOf(p)).startsWith(query) ||
         (p.label ?? "").toLowerCase().includes(query),
     );
-  }, [savedPrices, currency, query]);
+  }, [cyclePrices, currency, query]);
 
-  const exact = savedPrices.find((p) => rateOf(p) === entered) ?? null;
+  const exact = cyclePrices.find((p) => rateOf(p) === entered) ?? null;
   const unitWordLong = billingCycle === "Annual" ? "year" : "month";
 
   function pick(p: SavedPrice) {
@@ -2184,7 +2281,7 @@ function PerSeatPriceField({
 
   return (
     <div className="cw-price" ref={wrapRef}>
-      <div className={`cw-price-field${priceOpen || currencyOpen ? " is-open" : ""}${hasEntered && !exact ? " has-error" : ""}`}>
+      <div className={`cw-price-field${priceOpen || currencyOpen ? " is-open" : ""}${missing || (hasEntered && !exact) ? " has-error" : ""}`}>
         {/* Each half of the shell is its own positioning context, so a menu sizes
             to the cell that opens it — the currency list to the currency cell,
             the prices list to the amount cell — instead of spanning the whole
@@ -2266,11 +2363,9 @@ function PerSeatPriceField({
                   className={`cw-price-opt cw-price-opt--saved${p === exact ? " is-current" : ""}`}
                   onMouseDown={(e) => { e.preventDefault(); pick(p); }}
                 >
-                  {/* Node 619:1332 writes the cycle into the row ("$56 USD/month"),
-                      but a SavedPrice stores only a rate — its cycle lives in the
-                      label, and the list is not filtered by the field's cycle, so
-                      taking the unit from the field labels Monthly prices "/year".
-                      The rate and currency are what the data can state. */}
+                  {/* The list only holds prices on the field's cycle, so the
+                      field's own "/seat/<unit>" already states it; the row
+                      carries the rate and currency. */}
                   <span className="cw-price-opt-rate">
                     {sym}{rateOf(p)} {currency}
                   </span>
@@ -2280,7 +2375,7 @@ function PerSeatPriceField({
   
               {matches.length === 0 && (
                 <div className="cw-price-empty">
-                  {query ? `No matches for “${priceSearch.trim()}”` : "No saved prices in this currency."}
+                  {query ? `No matches for “${priceSearch.trim()}”` : `No saved ${billingCycle === "Annual" ? "annual" : "monthly"} prices in this currency.`}
                 </div>
               )}
               </div>
@@ -2338,7 +2433,7 @@ function CompanySummaryRows({
       {company.contactName && detail("Account Holder", company.contactName)}
       {detail("Email", company.email)}
       {company.phone && detail("Phone", company.phone)}
-      {company.industry.length > 0 && detail("Industry", company.industry.join(", "))}
+      {company.industry.length > 0 && detail("Industries", company.industry.join(", "))}
       {company.partnership.length > 0 && detail("Partnership", company.partnership.join(", "))}
       {company.taxStatus && detail("Tax status", company.taxStatus)}
       {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
@@ -2399,6 +2494,80 @@ function StripeLinkBox({ stripeLink, onCopy }: {
   );
 }
 
+/* The Review step's three cards (Confirm Details 6B) — one per wizard step,
+ * stacked. Shared with the Companies drawer, which reads a saved company back
+ * through these same cards, the way a Task's and a Certification's drawers read
+ * theirs back through their own wizards' summaries. The two detail cards list
+ * every field, blanks included, so a missing one is visible as "—"; the
+ * Subscription card drops fields that don't apply to the plan. */
+export function CompanyReviewCards({
+  company, plan, tier, onEditStep, compact = false,
+}: {
+  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier;
+  /** Jumps back to the wizard step a card came from. Without it the cards
+   *  carry no pencil. */
+  onEditStep?: (step: number) => void;
+  /** Laid out for the drawer's two-up column: Company Name drops out (the
+   *  drawer's title already says it) and the Email takes a full row after the
+   *  Phone, since an address breaks mid-word in a 200px field. */
+  compact?: boolean;
+}) {
+  const isSubscription = plan === "subscription";
+  const currency = company.currency ?? "USD";
+  // The node reads "USD $79.00" — code, then symbol, then amount. A currency
+  // with no symbol on file would repeat its code, so it prints the code alone.
+  const rate = company.ratePerSeat ?? 0;
+  const perSeat = `${currency} ${CURRENCY_SYMBOL[currency] ?? ""}${rate.toFixed(2)}`;
+
+  const planLabel =
+    plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription";
+  const edit = (step: number) => (onEditStep ? () => onEditStep(step) : undefined);
+
+  const details: ConfirmField[] = [
+    ["Company Name", company.name],
+    ["Address", company.address, true],
+    ["Tax Behaviour", company.taxStatus],
+    ["Industries", company.industry.join(", ")],
+    ["Partnership", company.partnership.join(", ")],
+    ["Assigned CSM", company.assignedCsm],
+    ["Assigned Sales Rep", company.assignedSalesRep],
+  ];
+
+  return (
+    <>
+      <ConfirmCard title="Company Details" fillBlanks onEdit={edit(0)} rows={compact ? details.slice(1) : details} />
+
+      <ConfirmCard title="Account Holder" fillBlanks onEdit={edit(1)} rows={
+        compact
+          ? [
+              ["Company Admin", company.contactName],
+              ["Phone Number", company.phone],
+              ["Email", company.email, true],
+            ]
+          : [
+              ["Company Admin", company.contactName],
+              ["Email", company.email],
+              ["Phone Number", company.phone],
+            ]
+      } />
+
+      <ConfirmCard title="Subscription" onEdit={edit(2)} rows={[
+        ["Plan", planLabel],
+        ["Free Access Ends", plan === "complimentary" && company.freeAccessEndDate
+          ? fmtAccessDate(company.freeAccessEndDate)
+          : undefined],
+        ["Subscription Tier", isSubscription ? tier : undefined],
+        ["Billing Cycle", isSubscription ? (company.billingCycle === "Annual" ? "Annual" : "Monthly") : undefined],
+        ["Price Per-Seat", isSubscription ? perSeat : undefined],
+        ["No. of Seats", isSubscription ? String(company.seats) : undefined],
+        ["Payment Method", isSubscription
+          ? (company.payment === "Automatic" ? "Automatic Payment" : "Manual Invoice")
+          : undefined],
+      ]} />
+    </>
+  );
+}
+
 /* Reviewed-but-not-yet-created — shown for brand-new companies (not edits)
  * after the wizard's final step, before anything is actually saved. No
  * payment link here; that only appears once the company is confirmed. */
@@ -2410,16 +2579,6 @@ function ConfirmCompanyScreen({
   /** Jumps back to the wizard step a card came from. */
   onEditStep: (step: number) => void;
 }) {
-  const isSubscription = plan === "subscription";
-  const currency = company.currency ?? "USD";
-  // The node reads "USD $79.00" — code, then symbol, then amount. A currency
-  // with no symbol on file would repeat its code, so it prints the code alone.
-  const rate = company.ratePerSeat ?? 0;
-  const perSeat = `${currency} ${CURRENCY_SYMBOL[currency] ?? ""}${rate.toFixed(2)}`;
-
-  const planLabel =
-    plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription";
-
   return (
     <div className="wizard">
       {/* The plain wizard body, not the centred success one — this is a page
@@ -2431,39 +2590,9 @@ function ConfirmCompanyScreen({
             Review all the details. Once done, the company's account will be created.
           </p>
 
-          {/* Confirm Details 6B — one full-width card per wizard step, stacked,
-              each headed by its title and a pencil that returns to that step.
-              The two detail cards list every field, blanks included, so a
-              missing one is visible as "—"; the Subscription card drops fields
-              that don't apply to the plan. */}
+          {/* Each card's pencil returns to the step it came from. */}
           <div className="confirm-cards">
-            <ConfirmCard title="Company Details" fillBlanks onEdit={() => onEditStep(0)} rows={[
-              ["Company Name", company.name],
-              ["Address", company.address, true],
-              ["Tax Behaviour", company.taxStatus],
-              ["Industry", company.industry.join(", ")],
-              ["Partnership", company.partnership.join(", ")],
-              ["Assigned CSM", company.assignedCsm],
-              ["Assigned Sales Rep", company.assignedSalesRep],
-            ]} />
-
-            <ConfirmCard title="Account Holder" fillBlanks onEdit={() => onEditStep(1)} rows={[
-              ["Company Admin", company.contactName],
-              ["Email", company.email],
-              ["Phone Number", company.phone],
-            ]} />
-
-            <ConfirmCard title="Subscription" onEdit={() => onEditStep(2)} rows={[
-              ["Plan", planLabel],
-              ["Free Access Ends", plan === "complimentary" ? company.freeAccessEndDate : undefined],
-              ["Subscription Tier", isSubscription ? tier : undefined],
-              ["Billing Cycle", isSubscription ? (company.billingCycle === "Annual" ? "Annual" : "Monthly") : undefined],
-              ["Price Per-Seat", isSubscription ? perSeat : undefined],
-              ["No. of Seats", isSubscription ? String(company.seats) : undefined],
-              ["Payment Method", isSubscription
-                ? (company.payment === "Automatic" ? "Automatic Payment" : "Manual Invoice")
-                : undefined],
-            ]} />
+            <CompanyReviewCards company={company} plan={plan} tier={tier} onEditStep={onEditStep} />
           </div>
         </div>
       </div>
@@ -2665,7 +2794,7 @@ function CreatePriceModal({
       </div>
 
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Price Per-Seat <span className="req">*</span></label>
+        <label className="form-label">Price Per-Seat<span className="req">*</span></label>
         {/* Figma 940:1013 "Paywall - Single Price": a tinted card of rows, each
             a split currency+amount control with a remove glyph beside it, over
             an "Add Currency" action. */}
@@ -2755,7 +2884,14 @@ function CreatePriceModal({
 
 export function MultiSelect({
   options, value, onChange, placeholder, searchPlaceholder, popupMenu = false, defaultOpen = false,
+  hasError = false,
+  onLeave,
 }: {
+  /** Flagged after a blocked save: the dropdown's red edge (Figma 1376:1618). */
+  hasError?: boolean;
+  /** The menu was opened and closed (fieldFlags.tsx) — the trigger is a div,
+   *  so this stands in for a blur. */
+  onLeave?: () => void;
   options: string[]; value: string[]; onChange: (v: string[]) => void;
   placeholder: string;
   /** Search box label, e.g. "Search Industries…" (Figma 591:1322). OMIT it to
@@ -2803,11 +2939,11 @@ export function MultiSelect({
         width={fieldWidth || 300}
         panelClass={`ms-menu${popupMenu ? " ms-menu--popup" : ""}`}
         open={open}
-        onOpenChange={(o) => { setOpen(o); if (!o) setQuery(""); }}
+        onOpenChange={(o) => { setOpen(o); if (!o) { setQuery(""); onLeave?.(); } }}
         trigger={({ open, toggle: toggleOpen }) => (
           <div
             ref={fieldRef}
-            className={`multiselect-field${open ? " is-open" : ""}`}
+            className={`multiselect-field${open ? " is-open" : ""}${hasError ? " has-error" : ""}`}
             onClick={toggleOpen}
           >
             {value.length === 0 ? (

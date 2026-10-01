@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import {
   ArrowUpRightIcon,
   DropdownCaretIcon,
-  InfoIcon14,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import { SelectField } from "./SelectField";
+import { RadioCard } from "./NewCompanyWizard";
 import { SectionHeading } from "./SectionHeading";
 import { ConfirmModal } from "./AwardTableParts";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -87,10 +87,17 @@ export function NewAwardWizard(props: Props) {
   // appearance.
   const appearanceValid = !!data.cardTemplateId || !!data.certificateTemplateId;
   const canSave = appearanceValid;
+  // Either design picker says so once it has been opened and closed empty, or
+  // after a blocked save (fieldFlags.tsx) — one appearance satisfies both.
+  const { touched, touch } = useTouchedKeys();
+  const [attempted, setAttempted] = useState(false);
+  const cardMissing = !appearanceValid && (attempted || touched.has("card"));
+  const certificateMissing = !appearanceValid && (attempted || touched.has("certificate"));
 
   /* ⌘/Ctrl+Enter is the footer's only button, and waits on the same fields. */
   useWizardEnterShortcut(() => {
     if (canSave && !confirmDelete) handleSave();
+    else if (!confirmDelete) setAttempted(true);
   });
 
   function handleSave() {
@@ -128,21 +135,15 @@ export function NewAwardWizard(props: Props) {
           <div className="wizard-content">
             <div className="wizard-paneout">
               <div className="wizard-pane">
-                {/* Shared crumb row (.rvc-pagehead). The Certification is the
-                    middle crumb rather than a field — it is what the Award
-                    belongs to, and Certifications is the way back out. There is
-                    no page for one Certification, so that crumb is a plain
-                    span. */}
+                {/* Shared breadcrumb strip (.rvc-crumbs, Figma 1417:1395). Certifications is the way
+                    back out; there is no page for one Certification, so it gets
+                    no crumb — every crumb is clickable. */}
+                <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                  <button className="rvc-crumb" onClick={onClose} title="Back to Certifications">
+                    Certifications
+                  </button>
+                </nav>
                 <div className="rvc-pagehead">
-                  <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                    <button className="rvc-crumb" onClick={onClose} title="Back to Certifications">
-                      Certifications
-                    </button>
-                    <CrumbChevronIcon />
-                    <span className="rvc-crumb">{cert.name}</span>
-                    <CrumbChevronIcon />
-                    <span className="rvc-crumb rvc-crumb--current">{title}</span>
-                  </nav>
                   <h1 className="wizard-title">{title}</h1>
                 </div>
                 <p className="wizard-desc">
@@ -181,6 +182,8 @@ export function NewAwardWizard(props: Props) {
                 <TemplateField
                   label="Card Design"
                   required
+                  error={cardMissing}
+                  onLeave={() => touch("card")}
                   templates={props.templates}
                   selectedId={data.cardTemplateId}
                   onSelect={(id) => update({ cardTemplateId: id })}
@@ -190,6 +193,8 @@ export function NewAwardWizard(props: Props) {
                 <TemplateField
                   label="Certificate Design"
                   required
+                  error={certificateMissing}
+                  onLeave={() => touch("certificate")}
                   templates={props.templates}
                   selectedId={data.certificateTemplateId}
                   onSelect={(id) => update({ certificateTemplateId: id })}
@@ -236,7 +241,7 @@ export function NewAwardWizard(props: Props) {
             className={`btn-publish${canSave ? "" : " is-disabled"}`}
             aria-disabled={!canSave}
             data-tip={blockedTip}
-            onClick={() => { if (canSave) handleSave(); }}
+            onClick={() => { if (canSave) handleSave(); else setAttempted(true); }}
           >
             {isEditing ? "Save Changes" : "Create Award"}
             <WizardKeyHint />
@@ -271,16 +276,10 @@ export function NewAwardWizard(props: Props) {
 
 /* ─────────────── Merit Tier ─────────────── */
 
-/* The segmented Single-Select (Figma 359:2373), accent-active per 639:895 — the
-   four tiers are a fixed, ordered set, which is what the control is for. The
-   segments are plain text: the tier colours belong to the Portfolio and the
-   table pill, and repeating them here only competed with the active segment.
-
-   What each tier is FOR hangs off the SUBTEXT, in one tooltip covering all
-   four — the same 14px info glyph the Skills and Spotlights subtexts carry.
-   Per-segment tooltips were tried first and dropped: an option in a segmented
-   control has no hover state of its own to hang an explanation on, and reading
-   the set meant hovering it a piece at a time. */
+/* Radio cards, one per tier — what each tier is FOR is the card's own
+   description, so the set reads at a glance with no tooltip to hover. The
+   cards stay plain: the tier colours belong to the Portfolio and the table
+   pill. */
 function MeritTierField({
   data,
   update,
@@ -291,35 +290,22 @@ function MeritTierField({
   return (
     <div className="form-group">
       <label className="form-label">
-        Merit Tier <span className="req">*</span>
+        Merit Tier<span className="req">*</span>
       </label>
-      <div className="seg-control">
+      <div className="radio-card-group">
         {MERIT_TIERS.map((tier) => (
-          <button
+          <RadioCard
             key={tier}
-            type="button"
-            className={`seg-btn accent ${data.meritTier === tier ? "active" : ""}`}
-            onClick={() => update({ meritTier: tier })}
-          >
-            {tier}
-          </button>
+            selected={data.meritTier === tier}
+            onSelect={() => update({ meritTier: tier })}
+            title={tier}
+            desc={MERIT_INTENT[tier]}
+          />
         ))}
       </div>
       <p className="form-help">
         Tiers are fixed and control where the Award sits in the user’s Portfolio — Platinum at the
         top, Bronze at the bottom.
-        {/* One tooltip for the whole set, listed in the control's own order.
-            A plain `title` is auto-adopted by the app-wide tooltip. */}
-        <span
-          className="form-help-info"
-          tabIndex={0}
-          aria-label="What each tier is for"
-          /* A colon, not a dash — each intent line already has an em dash
-             inside it ("Standard Certifications — Electrical Troubleshooting"). */
-          title={MERIT_TIERS.map((t) => `${t}: ${MERIT_INTENT[t]}`).join("\n")}
-        >
-          <InfoIcon14 />
-        </span>
       </p>
     </div>
   );
@@ -380,10 +366,17 @@ function TemplateField({
   templates,
   selectedId,
   onSelect,
+  error = false,
+  onLeave,
 }: {
   label: string;
   help: string;
   required?: boolean;
+  /** No appearance chosen yet, and this picker has been opened and closed
+   *  (or a save was blocked): the dropdown's red edge (Figma 1376:1618). */
+  error?: boolean;
+  /** Focus left the field group (fieldFlags.tsx). */
+  onLeave?: () => void;
   /** The "no template" row's label, e.g. "No Certificate". */
   emptyLabel: string;
   templates: AwardDesignTemplate[];
@@ -411,9 +404,12 @@ function TemplateField({
   );
 
   return (
-    <div className="form-group">
+    <div className="form-group" onBlur={onLeave ? leave(onLeave) : undefined}>
       <label className="form-label">
-        {label} {required && <span className="req">*</span>}
+        {label}{required && <span className="req">*</span>}
+        {error && (
+          <span className="form-label-error">Choose a Card or a Certificate design</span>
+        )}
       </label>
       <SelectField
         value={value}
@@ -433,7 +429,7 @@ function TemplateField({
         renderTrigger={({ open, toggle }) => (
           <button
             type="button"
-            className={`select-field select-field--full aw-tpl-field${open ? " is-open" : ""}`}
+            className={`select-field select-field--full aw-tpl-field${open ? " is-open" : ""}${error ? " has-error" : ""}`}
             aria-haspopup="listbox"
             aria-expanded={open}
             onClick={toggle}

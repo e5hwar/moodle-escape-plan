@@ -1,3 +1,5 @@
+import type { PickedImage } from "../components/ImageUploadField";
+
 export type CareerStage = "Apprentice" | "Journeyman" | "Master";
 
 export type IndustryCert = {
@@ -12,6 +14,8 @@ export type SubIndustry = {
   name: string;
   // Spanish translation of the name, shown to Spanish-locale learners
   nameEs?: string;
+  // Icon learners see beside the name when browsing
+  icon?: PickedImage;
   // Whether this Sub-Industry is visible to learners
   hidden?: boolean;
   displayPosition: number;
@@ -24,6 +28,8 @@ export type Industry = {
   name: string;
   // Spanish translation of the name, shown to Spanish-locale learners
   nameEs?: string;
+  // Icon learners see beside the name when browsing
+  icon?: PickedImage;
   // Whether this Industry is visible to learners
   hidden?: boolean;
   displayPosition: number;

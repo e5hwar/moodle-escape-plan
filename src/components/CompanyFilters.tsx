@@ -201,7 +201,7 @@ function IndustryPill({
       width={260}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Industry"
+          label="Industries"
           value={summary}
           open={open}
           toggle={toggle}

@@ -17,6 +17,7 @@ export type Platform = "Stripe" | "Apple" | "Google";
 export type User = {
   id: string;
   name: string;
+  /** Only one of email/phone is required — the other may be "" (not on file). */
   email: string;
   phone: string;
   emailVerified: boolean;
@@ -57,8 +58,8 @@ const baseUsers: BaseUser[] = [
   { id: "U-10132", name: "Diego Ramirez", email: "diego.ramirez@arscooling.com", phone: "+1 (832) 555-0117", userType: "B2B", companyName: "ARS Cooling & Heating", role: "Admin", subscriptionStatus: "Subscriber", platform: "Stripe" },
   { id: "U-10157", name: "Ayesha Khan", email: "ayesha.khan@arscooling.com", phone: "+1 (832) 555-0198", userType: "B2B", companyName: "ARS Cooling & Heating", role: "Employee", subscriptionStatus: "Company Plan" },
   { id: "U-10203", name: "Jordan Whitfield", email: "j.whitfield@gmail.com", phone: "+1 (404) 555-0103", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Subscriber", platform: "Apple", cancelsOn: "2026-08-27" },
-  { id: "U-10248", name: "Sophia Andersson", email: "sophia.a@brennanhvac.com", phone: "+1 (646) 555-0134", userType: "B2B", companyName: "Brennan HVAC Solutions", role: "Manager", subscriptionStatus: "Subscriber", platform: "Stripe" },
-  { id: "U-10291", name: "Tyrese Booker", email: "ty.booker@gmail.com", phone: "+1 (470) 555-0166", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
+  { id: "U-10248", name: "Sophia Andersson", email: "sophia.a@brennanhvac.com", phone: "", userType: "B2B", companyName: "Brennan HVAC Solutions", role: "Manager", subscriptionStatus: "Subscriber", platform: "Stripe" },
+  { id: "U-10291", name: "Tyrese Booker", email: "", phone: "+1 (470) 555-0166", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
   { id: "U-10330", name: "Lena Petrov", email: "lena.petrov@deltaelectrical.com", phone: "+1 (305) 555-0177", userType: "B2B", companyName: "Delta Electrical Group", role: "Admin", subscriptionStatus: "Subscriber", platform: "Stripe" },
   { id: "U-10376", name: "Carlos Mendoza", email: "carlos.mendoza@gmail.com", phone: "+1 (915) 555-0142", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Scholarship" },
   { id: "U-10412", name: "Hana Yamamoto", email: "hana.y@gmail.com", phone: "+1 (206) 555-0156", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Subscriber", platform: "Google" },
@@ -70,8 +71,8 @@ const baseUsers: BaseUser[] = [
   { id: "U-10655", name: "Olivia Tran", email: "olivia.tran@gmail.com", phone: "+1 (408) 555-0190", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
   { id: "U-10692", name: "Samuel Okafor", email: "sam.okafor@greenshieldsolar.com", phone: "+1 (510) 555-0173", userType: "B2B", companyName: "Green Shield Solar", role: "Admin", subscriptionStatus: "Subscriber", platform: "Stripe" },
   { id: "U-10731", name: "Isabella Rossi", email: "bella.rossi@gmail.com", phone: "+1 (917) 555-0128", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Free Trial" },
-  { id: "U-10778", name: "Kwame Mensah", email: "kwame.m@harborcitymech.com", phone: "+1 (332) 555-0155", userType: "B2B", companyName: "Harbor City Mechanical", role: "Employee", subscriptionStatus: "Company Plan" },
-  { id: "U-10814", name: "Grace Liu", email: "grace.liu@gmail.com", phone: "+1 (628) 555-0139", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Subscriber", platform: "Google", cancelsOn: "2026-09-02" },
+  { id: "U-10778", name: "Kwame Mensah", email: "kwame.m@harborcitymech.com", phone: "", userType: "B2B", companyName: "Harbor City Mechanical", role: "Employee", subscriptionStatus: "Company Plan" },
+  { id: "U-10814", name: "Grace Liu", email: "grace.liu@gmail.com", phone: "", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Subscriber", platform: "Google", cancelsOn: "2026-09-02" },
   { id: "U-10859", name: "Mateo Garcia", email: "mateo.garcia@metropipe.com", phone: "+1 (713) 555-0184", userType: "B2B", companyName: "Metro Pipe & Drain", role: "Manager", subscriptionStatus: "Subscriber", platform: "Stripe" },
   { id: "U-10903", name: "Chloe Bennett", email: "chloe.bennett@gmail.com", phone: "+1 (469) 555-0112", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Scholarship" },
   { id: "U-10948", name: "Raj Patel", email: "raj.patel@northstarrefrig.com", phone: "+1 (646) 555-0107", userType: "B2B", companyName: "NorthStar Refrigeration", role: "Admin", subscriptionStatus: "Cancelled" },
@@ -82,9 +83,9 @@ const baseUsers: BaseUser[] = [
   { id: "U-11147", name: "Harper Wright", email: "harper.wright@gmail.com", phone: "+1 (615) 555-0168", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Free Trial" },
   { id: "U-11189", name: "Nina Kowalski", email: "nina.k@onyxcommercial.com", phone: "+1 (312) 555-0159", userType: "B2B", companyName: "Onyx Commercial Services", role: "Employee", subscriptionStatus: "Company Plan" },
   { id: "U-11224", name: "Theo Martin", email: "theo.martin@gmail.com", phone: "+1 (971) 555-0144", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Scholarship" },
-  { id: "U-11268", name: "Devon Riley", email: "devon.riley@gmail.com", phone: "+1 (313) 555-0136", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
+  { id: "U-11268", name: "Devon Riley", email: "", phone: "+1 (313) 555-0136", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
   { id: "U-11302", name: "Alina Volkov", email: "alina.volkov@yahoo.com", phone: "+1 (702) 555-0151", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
-  { id: "U-11347", name: "Malik Johnson", email: "malik.johnson@gmail.com", phone: "+1 (216) 555-0129", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
+  { id: "U-11347", name: "Malik Johnson", email: "", phone: "+1 (216) 555-0129", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
   { id: "U-11383", name: "Priscilla Nunez", email: "p.nunez@onyxcommercial.com", phone: "+1 (312) 555-0188", userType: "B2B", companyName: "Onyx Commercial Services", role: "Employee", subscriptionStatus: "Starter" },
   { id: "U-11419", name: "Owen Fitzgerald", email: "owen.fitz@gmail.com", phone: "+1 (802) 555-0164", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Cancelled" },
   { id: "U-11429", name: "Renee Alvarado", email: "renee.alvarado@gmail.com", phone: "+1 (505) 555-0172", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Cancelled" },
@@ -94,7 +95,7 @@ const baseUsers: BaseUser[] = [
   { id: "U-11452", name: "Dominique Carter", email: "dom.carter@jetstreamair.com", phone: "+1 (623) 555-0158", userType: "B2B", companyName: "Jetstream Air Systems", role: "Employee", subscriptionStatus: "Company Plan" },
   { id: "U-11461", name: "Tanvi Iyer", email: "tanvi.iyer@gmail.com", phone: "+1 (669) 555-0127", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Scholarship" },
   { id: "U-11484", name: "Gabriel Sousa", email: "gabriel.sousa@gmail.com", phone: "+1 (786) 555-0181", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Subscriber", platform: "Stripe", cancelsOn: "2026-07-22" },
-  { id: "U-11496", name: "Leah Braun", email: "leah.braun@gmail.com", phone: "+1 (414) 555-0135", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
+  { id: "U-11496", name: "Leah Braun", email: "leah.braun@gmail.com", phone: "", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Starter" },
   { id: "U-11541", name: "Aaron Mbeki", email: "aaron.mbeki@gmail.com", phone: "+1 (901) 555-0163", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Free Trial" },
   { id: "U-11560", name: "Hallie Nguyen", email: "hallie.nguyen@gmail.com", phone: "+1 (360) 555-0174", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Free Trial" },
 ];
@@ -125,9 +126,10 @@ export const users: User[] = baseUsers.map((u) => {
   const isDashboardUser = u.role === "Manager" || u.role === "Admin";
   return {
     ...u,
-    // Most emails verified; a deterministic minority not.
-    emailVerified: k % 6 !== 0,
-    phoneVerified: k % 3 !== 0,
+    // Most emails verified; a deterministic minority not. A missing contact
+    // (see User.email/phone) is never verified.
+    emailVerified: !!u.email && k % 6 !== 0,
+    phoneVerified: !!u.phone && k % 3 !== 0,
     // Joined 5 months – ~3 years ago.
     joinedOn: isoDaysAgo(150 + (k % 950)),
     // Last access within the past ~45 days (some users more recent than others).

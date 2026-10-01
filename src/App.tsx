@@ -903,6 +903,21 @@ function AdminApp() {
               ? setView({ name: "feedback-detail", formId: view.forFormId })
               : setView({ name: "question-bank" })
           }
+          crumbs={
+            view.forFormId
+              ? [
+                  { label: "Certifications", onClick: () => navigate("certs") },
+                  { label: "Feedback Forms", onClick: () => setView({ name: "feedback" }) },
+                  {
+                    label: "Edit Feedback Form",
+                    onClick: () => setView({ name: "feedback-detail", formId: view.forFormId! }),
+                  },
+                ]
+              : [
+                  { label: "Tasks", onClick: () => navigate("tasks") },
+                  { label: "Question Bank", onClick: () => setView({ name: "question-bank" }) },
+                ]
+          }
         />
       ) : view.name === "edit-question" ? (
         (() => {
@@ -925,7 +940,19 @@ function AdminApp() {
                   : view.question
               }
               atVersion={past ? view.atVersion : undefined}
-              backLabel={view.atVersion !== undefined ? "Version History" : undefined}
+              crumbs={[
+                { label: "Tasks", onClick: () => navigate("tasks") },
+                { label: "Question Bank", onClick: () => setView({ name: "question-bank" }) },
+                ...(view.atVersion !== undefined
+                  ? [
+                      {
+                        label: "Version History",
+                        onClick: () =>
+                          setView({ name: "question-bank", historyForId: view.question.id }),
+                      },
+                    ]
+                  : []),
+              ]}
               onClose={() =>
                 setView(
                   view.atVersion !== undefined
@@ -954,7 +981,7 @@ function AdminApp() {
       ) : view.name === "scholarship" ? (
         <ScholarshipsPage onBack={() => navigate("manage-users")} />
       ) : view.name === "industries" ? (
-        <IndustriesPage />
+        <IndustriesPage onBackToCerts={() => navigate("certs")} />
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}
@@ -1084,6 +1111,7 @@ function AdminApp() {
           allForms={forms}
           bank={bank}
           onBack={() => setView({ name: "feedback" })}
+          onBackToCerts={() => navigate("certs")}
           /* A never-finished new form is purged outright, not tombstoned: it
              has no responses to keep resolving. */
           onDiscard={() => {

@@ -25,6 +25,7 @@ export function ReviewSearch({
   onCertificationsChange,
   query,
   onCommit,
+  secondary = false,
 }: {
   submissions: TaskSubmission[];
   companies: string[];
@@ -36,6 +37,9 @@ export function ReviewSearch({
   onCertificationsChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
+  /** Figma 1397:2017 "Search Bar - Secondary": no fill, hairline only, for a
+   *  search that sits under a heavier landing block (Hands-On's Review Runs). */
+  secondary?: boolean;
 }) {
   const [text, setText] = useState(query);
   // Pending scopes selected in THIS search session (not yet applied to the table).
@@ -310,7 +314,7 @@ export function ReviewSearch({
     : "Search by User's Name, Email, Phone, Task, or Parent Certification...";
 
   return (
-    <div className="usearch" ref={wrapRef}>
+    <div className={`usearch${secondary ? " usearch--secondary" : ""}`} ref={wrapRef}>
       <div className={`usearch-bar ${open ? "open" : ""}`}>
         <span className="usearch-icon">
           <SearchIcon />

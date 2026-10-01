@@ -128,9 +128,9 @@ export function CompaniesSearch({
       counts: counts.status,
     },
     {
-      label: "Industry",
+      label: "Industries",
       example: "HVAC",
-      desc: "Filter by Industry",
+      desc: "Filter by Industries",
       plural: "industries",
       emptyHint: "Start typing an industry name…",
       values: COMPANY_INDUSTRIES,

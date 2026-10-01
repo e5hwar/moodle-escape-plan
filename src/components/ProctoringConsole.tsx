@@ -229,42 +229,38 @@ export function ProctoringConsole({
     <div className="main">
       <div className="workspace">
         <div className="rvc-root">
-          {/* ── header — breadcrumb over the candidate + exam ── */}
+          {/* ── breadcrumb strip (Figma 1417:1395), then the header — candidate + exam ── */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            {/* Opened from the review queue, Exam Reviews IS the page to go
+                back to. Opened from a page that hangs off it, that page is
+                the trailing crumb instead and Exam Reviews reads as the
+                section it sits under. */}
+            {originLabel ? (
+              <>
+                <button
+                  className="rvc-crumb"
+                  onClick={onExitToSection}
+                  title="Back to Exam Reviews"
+                >
+                  Exam Reviews
+                </button>
+                <CrumbChevronIcon />
+                <button
+                  className="rvc-crumb"
+                  onClick={onExit}
+                  title={`Back to ${originLabel}`}
+                >
+                  {originLabel}
+                </button>
+              </>
+            ) : (
+              <button className="rvc-crumb" onClick={onExit} title="Back to Exam Reviews">
+                Exam Reviews
+              </button>
+            )}
+          </nav>
           <div className="rvc-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Home</span>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb">Operations</span>
-                <CrumbChevronIcon />
-                {/* Opened from the review queue, Exam Reviews IS the page to go
-                    back to. Opened from a page that hangs off it, that page is
-                    the trailing crumb instead and Exam Reviews reads as the
-                    section it sits under. */}
-                {originLabel ? (
-                  <>
-                    <button
-                      className="rvc-crumb"
-                      onClick={onExitToSection}
-                      title="Back to Exam Reviews"
-                    >
-                      Exam Reviews
-                    </button>
-                    <CrumbChevronIcon />
-                    <button
-                      className="rvc-crumb rvc-crumb--current"
-                      onClick={onExit}
-                      title={`Back to ${originLabel}`}
-                    >
-                      {originLabel}
-                    </button>
-                  </>
-                ) : (
-                  <button className="rvc-crumb rvc-crumb--current" onClick={onExit} title="Back to Exam Reviews">
-                    Exam Reviews
-                  </button>
-                )}
-              </nav>
               <div className="rvc-pagehead-id">
                 <h1 className="tasks-title">
                   {/* Hovering the name peeks at the candidate's details (Figma
@@ -585,7 +581,7 @@ function ConfirmActionModal({
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      <p className="prm-text prm-text--primary">{copy.body}</p>
+      <p className="prm-content">{copy.body}</p>
     </PrmModal>
   );
 }

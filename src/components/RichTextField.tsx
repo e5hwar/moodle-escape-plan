@@ -1,4 +1,5 @@
 import { AutoTextarea } from "./AutoTextarea";
+import { CharCount } from "./CharCount";
 import { RteToolbar } from "./RteToolbar";
 
 /* Rich Text Input — Figma 327:137 "Dual Language - Focus State" (single
@@ -24,6 +25,7 @@ export function RichTextField({
   placeholderEs,
   disabled,
   error,
+  maxLength,
   minRows,
   maxRows,
 }: {
@@ -42,11 +44,17 @@ export function RichTextField({
   minRows?: number;
   /** Line count the row grows to before it holds and scrolls (default 4). */
   maxRows?: number;
+  /** A SOFT character limit per language (Figma 1376:1599): each row shows
+   *  the characters left at its bottom-right corner, and running past the
+   *  limit flags the shell like `error` does — the caller names the limit in
+   *  the label row. */
+  maxLength?: number;
 }) {
+  const over = maxLength !== undefined && Math.max(en.length, es.length) > maxLength;
   return (
     <div
       className={`rte-field${disabled ? " is-disabled" : ""}${
-        error ? " has-error" : ""
+        error || over ? " has-error" : ""
       }`}
     >
       <div className="rte-lang-row">
@@ -60,6 +68,7 @@ export function RichTextField({
           minRows={minRows}
           maxRows={maxRows}
         />
+        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
       </div>
       <div className="rte-field-divider" />
       <div className="rte-lang-row">
@@ -73,6 +82,7 @@ export function RichTextField({
           minRows={minRows}
           maxRows={maxRows}
         />
+        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
       </div>
       <RteToolbar />
     </div>

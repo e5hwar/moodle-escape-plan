@@ -4,11 +4,10 @@ import {
   matchesQuery,
   displayStatus,
   NO_ACTION_STATUS,
-  REVIEW_TODAY,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import { SectionHeading } from "./SectionHeading";
 import { ReviewSearch } from "./ReviewSearch";
+import { ReviewRunsStrip, ReviewRunGroup, ReviewRunCard } from "./ReviewRuns";
 import { ReviewConsole } from "./ReviewConsole";
 import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
@@ -22,9 +21,6 @@ import {
 } from "./Filters";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
-import { useLandingMorph } from "../hooks/useLandingMorph";
-import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
@@ -39,13 +35,15 @@ const STATUS_OPTIONS: string[] = ["Review Pending", "Completed", "Rejected", NO_
 // plus the B2B customers.
 const CREATOR_OPTIONS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
 
-/* ── Columns: User's Name and Task are fixed (always on, never in the menu).
-   Certifications / Status / Submitted On are the toggleable columns shown by
-   default; everything else is off until switched on from Edit Columns. ── */
+/* ── Columns: Task is fixed (always first, never in the menu). Certifications /
+   Status / Submitted On / User's Name are the toggleable columns shown by
+   default, in that order; everything else is off until switched on from Edit
+   Columns. ── */
 type ColKey =
   | "certifications"
   | "status"
   | "submittedOn"
+  | "name"
   | "taskId"
   | "email"
   | "phone"
@@ -59,6 +57,7 @@ const DEFAULT_COLUMNS: ColState = {
   certifications: true,
   status: true,
   submittedOn: true,
+  name: true,
   taskId: false,
   email: false,
   phone: false,
@@ -71,10 +70,6 @@ const DEFAULT_COLUMNS: ColState = {
 /** The learner's current attempt number = how many submissions they've made. */
 const attemptNumber = (s: TaskSubmission) => s.versions.length;
 
-/** Whole days a submission has been waiting, against the dataset's fixed today. */
-const waitDays = (iso: string) =>
-  Math.max(1, Math.round((REVIEW_TODAY.getTime() - new Date(iso).getTime()) / 86_400_000));
-
 /** Pending-submission counts per key (certification / task name), largest first. */
 function rankedCounts(
   pending: TaskSubmission[],
@@ -85,31 +80,56 @@ function rankedCounts(
   return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-/** The landing's wait column: "Waiting 4 days" (submittedOn is date-only, so
- *  there is no hours case here — the minimum read is one day). */
-function waitingLabelOf(s: TaskSubmission): string {
-  const d = waitDays(s.submittedOn);
-  return `Waiting ${d} day${d === 1 ? "" : "s"}`;
-}
+/* ── Review Runs (Figma 1394:1947 row / 1392:1793 cards) ──
+   A run is ONE filter the reviewer clears in a sitting: everything pending,
+   one Certification, one Task, or one Company's employees. Status and Created
+   By are never part of a run — every run is the reviewable queue (Review
+   Pending, made by SkillCat) narrowed by the run's own filter, oldest first.
+   A card is that filter preset; its number is how many are still pending in
+   it. Suggested cards come from the pending counts; Recent cards are the
+   filters that were in force each time a review was opened. */
+type RunKind = "all" | "cert" | "task" | "company";
+type RunKey = { kind: RunKind; values: string[] };
 
-/* A run's grouping (the Exam Reviews semantics): the queue is ordered by this
-   sequence, longest-waiting first WITHIN each group, so the reviewer clears
-   one certification (or one task) before the next begins. A submission can sit
-   in several certifications — it ranks by the earliest one in the sequence.
-   `null` = the table's plain column sort. */
-type RunOrder = { field: "cert" | "task"; sequence: string[] } | null;
+const ALL_RUN: RunKey = { kind: "all", values: [] };
 
-function rankOf(s: TaskSubmission, order: RunOrder): number {
-  if (!order) return 0;
-  if (order.field === "task") {
-    const i = order.sequence.indexOf(s.taskName);
-    return i === -1 ? order.sequence.length : i;
+/** Identity: the same filter (whatever the value order) is the same card. */
+const runId = (k: RunKey) => `${k.kind}:${[...k.values].sort().join("\u0000")}`;
+
+/** Does a submission fall inside the run? */
+function inRun(s: TaskSubmission, k: RunKey): boolean {
+  switch (k.kind) {
+    case "all":
+      return true;
+    case "cert":
+      return s.certifications.some((c) => k.values.includes(c));
+    case "task":
+      return k.values.includes(s.taskName);
+    case "company":
+      return !!s.companyName && k.values.includes(s.companyName);
   }
-  const ranks = s.certifications
-    .map((c) => order.sequence.indexOf(c))
-    .filter((i) => i !== -1);
-  return ranks.length ? Math.min(...ranks) : order.sequence.length;
 }
+
+/* The card's second line names the KIND of filter (1392:1793 — "Certification",
+   "Hands-On Task", "B2B Company Employees"); All Tasks has no second line. */
+const RUN_SUBTITLE: Record<RunKind, string | null> = {
+  all: null,
+  cert: "Certification",
+  task: "Hands-On Task",
+  company: "B2B Company Employees",
+};
+
+/* Recents keep up to 5, suggested up to 5, and the strip never holds more than
+   7 — recents take their slots first and the suggested list backfills what is
+   left (user, 2026-09-30). */
+const MAX_RECENT = 5;
+const MAX_SUGGESTED = 5;
+const MAX_RUNS = 7;
+
+/* Recents outlive the page: App unmounts it on every navigation, and this
+   prototype has no storage layer, so they live at module scope for the
+   session. */
+let recentRunsStore: RunKey[] = [];
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -165,6 +185,10 @@ const COLS: ColMeta[] = [
   // design-system component and was removed 2026-08-26.
   { key: "status", label: "Status", className: "col-rh-status", width: 200, render: (s) => displayStatus(s), sortValue: (s) => displayStatus(s) },
   { key: "submittedOn", label: "Submitted On", className: "col-rh-date", width: 150, render: (s) => formatDate(s.submittedOn), sortValue: (s) => s.submittedOn },
+  /* `col-rh-user`, not the shared `col-name`: on this table the TASK is the
+     primary column, so the submitter reads as a plain data cell (the shared
+     muted rule covers it). */
+  { key: "name", label: "User's Name", className: "col-rh-user", width: 190, render: (s) => s.userName, sortValue: (s) => s.userName.toLowerCase() },
   { key: "taskId", label: "Task ID", className: "col-rh-taskid", width: 120, sortable: false, render: (s) => s.taskId, sortValue: (s) => s.taskId },
   { key: "email", label: "User's Email", className: "col-rh-email", width: 220, sortable: false, copyable: true, render: (s) => s.email, sortValue: (s) => s.email.toLowerCase() },
   { key: "phone", label: "User's Phone", className: "col-rh-phone", width: 170, sortable: false, copyable: true, render: (s) => s.phone, sortValue: (s) => s.phone },
@@ -175,39 +199,25 @@ const COLS: ColMeta[] = [
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
-const NAME_WIDTH = 190;
 const TASK_WIDTH = 260;
-
-/* Landing-morph columns — mirror the table's DEFAULT visible columns so the
-   p=1 hand-off to the real table lines up (Edit Columns changes are a
-   table-state concern; the landing always shows the default set). The minimal
-   view is Name plus the right-aligned wait column, which IS the Submitted On
-   column — its cell crossfades from "Waiting 4 days" to the date as the table
-   forms. Task/Certifications/Status grow in between. */
-const LM_COLS: LandingCol[] = [
-  { key: "task", label: "Task", width: TASK_WIDTH },
-  { key: "certifications", label: "Certifications", width: COL_BY_KEY.get("certifications")!.width },
-  { key: "status", label: "Status", width: COL_BY_KEY.get("status")!.width },
-  { key: "submittedOn", label: "Submitted On", width: COL_BY_KEY.get("submittedOn")!.width, fixed: true },
-];
 
 // Adapter so the existing Edit-Columns dropdown (built for the Users page) can
 // drive this page's column set. Only the keys present here are shown.
 const EDIT_COLUMN_DEFS = COLS.map((c) => ({ key: c.key, label: c.label }));
 
-/** The two columns that are always rendered, in order (Edit Columns lists these
- * as "Fixed columns" — they can't be switched off or reordered). */
-const FIXED_COLUMNS = [{ label: "User's Name" }, { label: "Task" }];
+/** The column that is always rendered first (Edit Columns lists it as a
+ * "Fixed column" — it can't be switched off or reordered). */
+const FIXED_COLUMNS = [{ label: "Task" }];
 
 type SortKey = "name" | "task" | ColKey;
 type SortDir = "asc" | "desc";
 
 export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmissions }: {
   /* Deep link from a Hands-On Task's "View All Attempts" in the Tasks table:
-     the page opens on the TABLE (not the review-run landing) with just that
-     Task selected. The defaults that scope the reviewer's own queue — Review
-     Pending, Created By SkillCat — are cleared in that case, since the ask is
-     every attempt on this Task, whoever made it and wherever it stands. */
+     the page opens with just that Task selected. The defaults that scope the
+     reviewer's own queue — Review Pending, Created By SkillCat — are cleared
+     in that case, since the ask is every attempt on this Task, whoever made
+     it and wherever it stands. */
   initialTaskFilter?: string;
   /** Seeds the search bar — Manage Completions deep-links one LEARNER's
    *  attempts on the Task, and the search already matches the submitter. */
@@ -229,17 +239,13 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
   const [creators, setCreators] = useState<string[]>(initialTaskFilter ? [] : ["SkillCat"]);
   const [committedQuery, setCommittedQuery] = useState(initialQuery ?? "");
-  // Longest waiting first — the landing's framing, and the default review-run
-  // order, so the table below the morph reads in the same order as the queue.
+  // Longest waiting first — the default review-run order, so the table reads
+  // in the same order as the console's queue.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
-  // Set while a By Certification / By Task run is active; overrides the column sort.
-  const [runOrder, setRunOrder] = useState<RunOrder>(null);
-
-  // Landing morph — the page opens as the review-run landing and the wheel (or
-  // any pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph(!!initialTaskFilter);
+  // Recent runs, newest first — seeded from, and mirrored to, the module store.
+  const [recents, setRecents] = useState<RunKey[]>(() => recentRunsStore);
 
   const companyNames = useMemo(() => {
     const set = new Set<string>();
@@ -261,10 +267,9 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
     return [...set].sort();
   }, [list]);
 
-  /* ── "Start a review run" cards: the landing overview of everything a
-     SkillCat reviewer can act on. Computed from the full list, not the
-     filtered one — the cards describe the whole pending queue whatever the
-     filter row below is set to. ── */
+  /* ── Review Runs: computed from the full list, not the filtered one — the
+     cards describe the whole pending queue whatever the filter row is set
+     to. ── */
   const pending = useMemo(
     () => list.filter((s) => displayStatus(s) === "Review Pending"),
     [list],
@@ -272,44 +277,84 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   const certRanked = useMemo(() => rankedCounts(pending, (s) => s.certifications), [pending]);
   const taskRanked = useMemo(() => rankedCounts(pending, (s) => [s.taskName]), [pending]);
 
-  /** Start a run: reset the filters to the reviewable queue, order the whole
-   * pending queue by the run's grouping (longest wait first within each
-   * group), and open the console on its first submission. The console's queue
-   * IS the table's filtered+sorted list, so ordering the table is all a run
-   * has to do — the reviewer walks the entire queue in that sequence. */
-  function startRun(order: RunOrder) {
-    const first = [...pending].sort(
-      (a, b) =>
-        rankOf(a, order) - rankOf(b, order) || a.submittedOn.localeCompare(b.submittedOn),
-    )[0];
+  // A recent whose queue has been cleared has nothing left to open — it drops
+  // out of the strip (and frees its slot) rather than showing a 0.
+  const liveRecents = useMemo(
+    () => recents.filter((r) => pending.some((s) => inRun(s, r))),
+    [recents, pending],
+  );
+
+  /* Suggested = the ranked sequence All Tasks → the 2 Certifications with the
+     most pending → the 2 Tasks with the most pending → the next Certification
+     → the next Task → …, skipping anything already in Recent, cut to what the
+     7 slots leave after the recents (never more than 5). By default that is
+     exactly All + 2 + 2; as suggested cards are clicked they move to Recent
+     and the sequence backfills behind them. */
+  const suggested = useMemo(() => {
+    const certs = certRanked.map(([name]): RunKey => ({ kind: "cert", values: [name] }));
+    const tasks = taskRanked.map(([name]): RunKey => ({ kind: "task", values: [name] }));
+    const seq: RunKey[] = [ALL_RUN, ...certs.slice(0, 2), ...tasks.slice(0, 2)];
+    for (let i = 2; i < Math.max(certs.length, tasks.length); i++) {
+      if (certs[i]) seq.push(certs[i]);
+      if (tasks[i]) seq.push(tasks[i]);
+    }
+    const taken = new Set(liveRecents.map(runId));
+    const room = Math.max(0, Math.min(MAX_SUGGESTED, MAX_RUNS - liveRecents.length));
+    return seq.filter((k) => !taken.has(runId(k))).slice(0, room);
+  }, [certRanked, taskRanked, liveRecents]);
+
+  /** Push a run to the front of Recent (a repeat just moves it up); cleared
+   *  runs fall away so they never hold a slot. */
+  function recordRecent(key: RunKey) {
+    const id = runId(key);
+    const next = [
+      key,
+      ...recents.filter((r) => runId(r) !== id && pending.some((s) => inRun(s, r))),
+    ].slice(0, MAX_RECENT);
+    recentRunsStore = next;
+    setRecents(next);
+  }
+
+  /* The run the table's filters describe, by precedence Company > Task >
+     Certification (user, 2026-09-30): Task + Certification records the Task.
+     Status, Created By, User Type and the search text never count — they
+     scope what the reviewer is looking at, not what they are clearing. With
+     none of the three applied the run is All Tasks. */
+  function runFromFilters(): RunKey {
+    if (companies.length) return { kind: "company", values: companies };
+    if (tasks.length) return { kind: "task", values: tasks };
+    if (certs.length) return { kind: "cert", values: certs };
+    return ALL_RUN;
+  }
+
+  /** Open the console from a table row: the filters in force become the
+   *  newest recent run. */
+  function openReview(id: string) {
+    recordRecent(runFromFilters());
+    setOpenId(id);
+  }
+
+  /** A card click: reset the filter row to the reviewable queue narrowed by
+   * the run, oldest first, and open the console on its longest-waiting
+   * submission. The console's queue IS the table's filtered+sorted list, so
+   * setting the filters is all a run has to do. The card becomes (or moves to
+   * the front of) Recent. */
+  function startRun(key: RunKey) {
+    const first = pending
+      .filter((s) => inRun(s, key))
+      .sort((a, b) => a.submittedOn.localeCompare(b.submittedOn))[0];
     if (!first) return;
     setStatuses(["Review Pending"]);
     setCreators(["SkillCat"]);
     setTypes([]);
-    setCompanies([]);
-    setCerts([]);
-    setTasks([]);
+    setCompanies(key.kind === "company" ? key.values : []);
+    setTasks(key.kind === "task" ? key.values : []);
+    setCerts(key.kind === "cert" ? key.values : []);
     setCommittedQuery("");
     setSort({ key: "submittedOn", dir: "asc" });
-    setRunOrder(order);
+    recordRecent(key);
     setOpenId(first.id);
   }
-
-  /* The three run cards carry keycaps, so each CTA has the matching letter
-     shortcut (S / C / T) — live only on the landing; the console binds its own
-     keys. This page has no Create CTA, so C is free. */
-  const runnable = !openId && pending.length > 0;
-  useCreateShortcut(() => startRun(null), runnable, "s");
-  useCreateShortcut(
-    () => startRun({ field: "cert", sequence: certRanked.map(([name]) => name) }),
-    runnable,
-    "c",
-  );
-  useCreateShortcut(
-    () => startRun({ field: "task", sequence: taskRanked.map(([name]) => name) }),
-    runnable,
-    "t",
-  );
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -327,15 +372,7 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    // A run's grouping wins until the reviewer clicks a column header.
-    if (runOrder) {
-      return arr.sort(
-        (a, b) =>
-          rankOf(a, runOrder) - rankOf(b, runOrder) || a.submittedOn.localeCompare(b.submittedOn),
-      );
-    }
     arr.sort((a, b) => {
-      if (sort.key === "name") return a.userName.localeCompare(b.userName);
       if (sort.key === "task") return a.taskName.localeCompare(b.taskName);
       const col = COL_BY_KEY.get(sort.key)!;
       const va = col.sortValue(a);
@@ -344,10 +381,10 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
       return String(va).localeCompare(String(vb));
     });
     return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort, runOrder]);
+  }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort, runOrder]);
+  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -355,15 +392,12 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 2; // name + task + cols
-  // Natural table width (name col + optional cols + actions) so the table
+  const colSpan = visibleCols.length + 2; // task + cols + actions
+  // Natural table width (task col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
-  const tableMin =
-    NAME_WIDTH + TASK_WIDTH + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
+  const tableMin = TASK_WIDTH + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
-    // Sorting by a column is an explicit override of a run's grouping.
-    setRunOrder(null);
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
@@ -473,136 +507,40 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   const hasFilters =
     statuses.length + types.length + creators.length + companies.length + tasks.length + certs.length > 0;
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => ({
-    key: s.id,
-    /* Figma 1103:1051 "Minimal State - Content Row - Hands-On Task": the
-       collapsed row leads with the TASK, with the submitter trailing it as a
-       muted "· Name" — the table's own Name column is the user, so the cell
-       swaps the way the wait column does (`.prl-swap`): the minimal label is an
-       overlay that fades out early in the gesture while the real user name
-       fades up underneath, in flow, ready for the p=1 hand-off. */
-    name: (
-      <span className="lm-nm">
-        <span className="lm-nm-real">{s.userName}</span>
-        <span className="lm-nm-min">
-          {s.taskName}
-          <span className="lm-nm-sub">· {s.userName}</span>
-        </span>
-      </span>
-    ),
-    cells: {
-      task: <span className="lm-task">{s.taskName}</span>,
-      certifications: orDash(COL_BY_KEY.get("certifications")!.render(s)),
-      status: orDash(COL_BY_KEY.get("status")!.render(s)),
-      submittedOn: (
-        <span className="prl-swap">
-          <span className="prl-swap-real">{formatDate(s.submittedOn)}</span>
-          <span className="prl-swap-wait">{waitingLabelOf(s)}</span>
-        </span>
-      ),
-    },
-  }));
-
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm lm-cards" ref={morph.rootRef}>
+        <div className="tasks">
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Hands-On Task Submissions</h1>
             </div>
           </header>
 
-          {/* Start a Review Run — the same cards-hero landing as Exam Reviews
-              (Figma 685:2654 chrome); it collapses away as the wheel morphs the
-              landing into the table. By certification / By task list the ranked
-              groups (open-ended sets, so no reorder arrows — the ranking is the
-              sequence). */}
+          {/* Review Runs — Figma 1398:2031 (the row) / 1393:1794 (the cards,
+              re-synced 2026-09-30: the row lost its "REVIEW RUNS" eyebrow and
+              the first label reads "RECENT REVIEW RUNS"). Recent = the filters
+              in force each time a review was opened, newest first; Suggested
+              = All Tasks, then the Certifications and Tasks with the most
+              pending. A card is a filter preset: clicking it narrows the
+              queue to that run and opens the console on its longest-waiting
+              submission. Nothing pending → no strip. */}
           {pending.length > 0 && (
-            <section className="run-section">
-              <SectionHeading label="Start a Review Run" />
-              <div className="run-cards">
-                <div className="run-card run-card--rec">
-                  <div className="run-head">
-                    <div className="run-headtext">
-                      <span className="run-title">Oldest first</span>
-                      <span className="run-sub">Longest Wait First</span>
-                    </div>
-                    <span className="run-badge">Recommended</span>
-                  </div>
-                  <div className="run-countblock">
-                    <span className="run-countlabel">Pending:</span>
-                    <span className="run-count">{pending.length}</span>
-                  </div>
-                  <button className="btn-publish run-cta" onClick={() => startRun(null)}>
-                    Start Review
-                    <span className="run-kbd">S</span>
-                  </button>
-                </div>
-
-                <div className="run-card">
-                  <div className="run-headtext">
-                    <span className="run-title">By certification</span>
-                    <span className="run-sub">One Certification at a time</span>
-                  </div>
-                  <div className="run-list">
-                    <div className="run-items">
-                      {certRanked.slice(0, 3).map(([name, n]) => (
-                        <div key={name} className="run-item">
-                          <span className="run-item-label">
-                            {name}
-                            <span className="run-item-count">· {n}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {certRanked.length > 3 && (
-                      <p className="run-more">+ {certRanked.length - 3} more</p>
-                    )}
-                  </div>
-                  <button
-                    className="btn-save-draft run-cta"
-                    onClick={() =>
-                      startRun({ field: "cert", sequence: certRanked.map(([name]) => name) })
-                    }
-                  >
-                    Review By Certification
-                    <span className="run-kbd">C</span>
-                  </button>
-                </div>
-
-                <div className="run-card">
-                  <div className="run-headtext">
-                    <span className="run-title">By task</span>
-                    <span className="run-sub">Same Task back-to-back</span>
-                  </div>
-                  <div className="run-list">
-                    <div className="run-items">
-                      {taskRanked.slice(0, 3).map(([name, n]) => (
-                        <div key={name} className="run-item">
-                          <span className="run-item-label">
-                            {name}
-                            <span className="run-item-count">· {n}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {taskRanked.length > 3 && (
-                      <p className="run-more">+ {taskRanked.length - 3} more</p>
-                    )}
-                  </div>
-                  <button
-                    className="btn-save-draft run-cta"
-                    onClick={() =>
-                      startRun({ field: "task", sequence: taskRanked.map(([name]) => name) })
-                    }
-                  >
-                    Review By Task
-                    <span className="run-kbd">T</span>
-                  </button>
-                </div>
-              </div>
-            </section>
+            <ReviewRunsStrip>
+              {liveRecents.length > 0 && (
+                <RunGroup label="Recent Review Runs" runs={liveRecents} pending={pending} onPick={startRun} />
+              )}
+              {/* The "SUGGESTED" label only earns its place next to a RECENT
+                  group — alone, the cards need no heading (user, 2026-09-30). */}
+              {suggested.length > 0 && (
+                <RunGroup
+                  label={liveRecents.length > 0 ? "Suggested" : undefined}
+                  runs={suggested}
+                  pending={pending}
+                  onPick={startRun}
+                />
+              )}
+            </ReviewRunsStrip>
           )}
 
           <div className="tasks-row">
@@ -617,10 +555,8 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                   certifications={certs}
                   onCertificationsChange={setCerts}
                   query={committedQuery}
-                  onCommit={(q) => {
-                    setCommittedQuery(q);
-                    morph.showTable();
-                  }}
+                  onCommit={setCommittedQuery}
+                  secondary
                 />
               </div>
 
@@ -663,27 +599,11 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                 )}
               </div>
 
-              <div className="lm-stage">
-              <LandingOverlay
-                caption="Longest waiting"
-                columns={LM_COLS}
-                rows={landingRows}
-                nameLabel="User's Name"
-                nameWidth={NAME_WIDTH}
-                actionsGlyph="chevron"
-                onShowAll={morph.showTable}
-                onRowClick={(row) => setOpenId(row.key)}
-              />
-              <div className="lm-table">
               <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
               <table className="table table-head">
                 <ColGroup cols={visibleCols} />
                 <thead>
                   <tr>
-                    {/* `col-rh-user`, not the shared `col-name`: on this table the
-                        TASK is the primary column, so the submitter reads as a
-                        plain data cell (the shared muted rule covers it). */}
-                    <SortableHeader col="name" label="User's Name" className="col-rh-user" sort={sort} toggle={toggleSort} />
                     <SortableHeader col="task" label="Task" className="col-rh-task" sort={sort} toggle={toggleSort} />
                     {visibleCols.map((c) => (
                       <SortableHeader key={c.key} col={c.key} label={c.label} className={c.className} sort={sort} toggle={toggleSort} sortable={c.sortable} />
@@ -707,8 +627,7 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                   <ColGroup cols={visibleCols} />
                   <tbody>
                     {paged.map((s) => (
-                      <tr key={s.id} onClick={() => setOpenId(s.id)}>
-                        <td className="col-rh-user">{s.userName}</td>
+                      <tr key={s.id} onClick={() => openReview(s.id)}>
                         <td className="col-rh-task">{s.taskName}</td>
                         {visibleCols.map((c) => (
                           <td
@@ -732,14 +651,14 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                           <button
                             className="row-action-btn lone-dots row-chevron"
                             aria-label="Review Task"
-                            onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}
+                            onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                           >
                             <RowChevronIcon />
                           </button>
                           <div className="row-action-bar">
                             <button
                               className="row-action-btn row-action-btn--label"
-                              onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}
+                              onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                             >
                               Review Task
                               <RowChevronIcon />
@@ -763,7 +682,6 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
               </div>
 
               <div className="pagination">
-                <BackToSearch onClick={morph.showLanding} label="Back to Review Options" />
                 <span>
                   Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
                 </span>
@@ -772,13 +690,38 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                   <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
-              </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** One group of the strip, its cards built from this page's runs. */
+function RunGroup({
+  label,
+  runs,
+  pending,
+  onPick,
+}: {
+  label?: string;
+  runs: RunKey[];
+  pending: TaskSubmission[];
+  onPick: (k: RunKey) => void;
+}) {
+  return (
+    <ReviewRunGroup label={label}>
+      {runs.map((k) => (
+        <ReviewRunCard
+          key={runId(k)}
+          count={pending.filter((s) => inRun(s, k)).length}
+          values={k.kind === "all" ? ["All Tasks"] : k.values}
+          sub={RUN_SUBTITLE[k.kind]}
+          onClick={() => onPick(k)}
+        />
+      ))}
+    </ReviewRunGroup>
   );
 }
 
@@ -792,7 +735,6 @@ function ColGroup({ cols }: { cols: ColMeta[] }) {
          swallow the slack alone and bump every column at the morph hand-off
          — the same lesson the Exam Reviews conversion learned. `--table-min`
          still reserves the sum, so nothing can shrink below its width. */}
-      <col style={{ width: NAME_WIDTH }} />
       <col style={{ width: TASK_WIDTH }} />
       {cols.map((c) => (
         <col key={c.key} style={{ width: c.width }} />

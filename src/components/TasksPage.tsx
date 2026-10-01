@@ -20,8 +20,10 @@ import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CERT_BY_USEDIN } from "../data/certifications";
-import { Drawer } from "./Drawer";
-import { TaskSummary } from "./NewTaskWizard";
+import { TaskSummary, useTaskPreview } from "./NewTaskWizard";
+import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
+import { SubscriptionMark } from "./NewCertificationWizard";
+import { ConfirmCard } from "./ConfirmCard";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -380,6 +382,13 @@ export function TasksPage({
     setHideTarget(task);
   }
 
+  // A row menu opened from the preview panel's kebab: every item closes the
+  // panel first, so the modal or page it opens isn't left under the panel.
+  function closePanelThen(run: () => void) {
+    setDrawerId(null);
+    run();
+  }
+
   function editTask(task: Task) {
     // Tasks created by a company are owned by that company's B2B account and can
     // only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
@@ -570,12 +579,12 @@ export function TasksPage({
           task={menu.task}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEdit={() => editTask(menu.task)}
-          onToggleVisibility={() => toggleVisibility(menu.task)}
-          onViewPayers={() => onViewPayers(menu.task)}
-          onViewAttempts={() => onViewAttempts(menu.task)}
-          onManageProgress={() => onManageProgress(menu.task)}
-          onDelete={() => deleteTask(menu.task)}
+          onEdit={() => closePanelThen(() => editTask(menu.task))}
+          onToggleVisibility={() => closePanelThen(() => toggleVisibility(menu.task))}
+          onViewPayers={() => closePanelThen(() => onViewPayers(menu.task))}
+          onViewAttempts={() => closePanelThen(() => onViewAttempts(menu.task))}
+          onManageProgress={() => closePanelThen(() => onManageProgress(menu.task))}
+          onDelete={() => closePanelThen(() => deleteTask(menu.task))}
         />
       )}
 
@@ -614,30 +623,127 @@ export function TasksPage({
       )}
 
       {drawerTask && (
-        <Drawer
-          title={drawerTask.name}
-          description={drawerTask.description}
-          actions={
-            /* Closes the drawer first: editing opens the wizard, or — for a
-               company-owned Task — the blocked-edit modal, which would
-               otherwise sit under the drawer's scrim. */
-            <button
-              className="cta-quiet"
-              onClick={() => {
-                setDrawerId(null);
-                editTask(drawerTask);
-              }}
-            >
-              <RowEditIcon />
-              Edit
-            </button>
-          }
+        <TaskDrawer
+          key={drawerTask.id}
+          task={drawerTask}
           onClose={() => setDrawerId(null)}
-        >
-          <TaskSummary task={drawerTask} />
-        </Drawer>
+          /* Closes the panel first: editing opens the wizard, or — for a
+             company-owned Task — the blocked-edit modal, which would
+             otherwise sit under the panel. */
+          onEdit={() => {
+            setDrawerId(null);
+            editTask(drawerTask);
+          }}
+          onMore={(rect) => setMenu({ task: drawerTask, rect })}
+        />
       )}
     </div>
+  );
+}
+
+/** A Task's row preview panel ("Preview Panel 3a"): the record — meta,
+ *  actions, its figures, then the wizard's review cards (Details) and the
+ *  Certifications it's in (Used In) — beside the Task as a learner sees it. */
+function TaskDrawer({
+  task,
+  onClose,
+  onEdit,
+  onMore,
+}: {
+  task: Task;
+  onClose: () => void;
+  onEdit: () => void;
+  onMore: (rect: DOMRect) => void;
+}) {
+  // The Certifications carrying it, by their canonical names (usedIn holds
+  // aliases such as "NATE RTW").
+  const certs = useMemo(
+    () =>
+      [...new Set(task.usedIn)].map((u) => {
+        const c = CERT_BY_USEDIN.get(u);
+        return { name: c?.name ?? u, industry: c?.industry };
+      }),
+    [task.usedIn],
+  );
+  const pv = useTaskPreview(task, certs);
+  const graded = task.type === "Quiz" || task.type === "Hands-On Task";
+  const attempts = seededInt(task.id, "attempts", 90, 5200);
+  const rate = seededInt(task.id, "rate", graded ? 58 : 70, graded ? 92 : 97);
+  const stats: PreviewStat[] = task.hidden
+    ? [
+        { count: "—", title: graded ? "Attempts" : "Completions", sub: "Hidden from learners" },
+        { count: "—", title: graded ? "Pass Rate" : "Completion Rate", sub: "Hidden from learners" },
+      ]
+    : [
+        {
+          count: formatCount(attempts),
+          title: graded ? "Attempts" : "Completions",
+          sub: `+${seededInt(task.id, "month", 6, 180)} / month`,
+        },
+        {
+          count: `${rate}%`,
+          title: graded ? "Pass Rate" : "Completion Rate",
+          sub: graded ? "Of attempts" : "Of starters",
+        },
+      ];
+  stats.push({ count: String(certs.length), title: "Used In", sub: certs.length === 1 ? "Certification" : "Certifications" });
+  const edited = task.dateModified && `Edited ${task.dateModified}${timeAgo(task.dateModified) ? ` (${timeAgo(task.dateModified)})` : ""}`;
+
+  return (
+    <PreviewPanel
+      title={task.name}
+      description={task.description}
+      meta={[
+        <span className="pp-id">{task.id}</span>,
+        pv.typeLabel,
+        pv.time,
+        task.finalExam && "Final Exam",
+        <span className={`co-status-pill co-status-pill--${task.hidden ? "grey" : "green"}`}>
+          {task.hidden ? "Hidden" : "Visible"}
+        </span>,
+        task.requiresSubscription ? (
+          <>
+            <SubscriptionMark />
+            Subscription
+          </>
+        ) : (
+          "Free Trial"
+        ),
+        edited,
+      ]}
+      onEdit={onEdit}
+      onMore={onMore}
+      stats={stats}
+      tabs={[
+        { key: "details", label: "Details", content: <TaskSummary task={task} /> },
+        {
+          key: "used-in",
+          label: `Used In · ${certs.length}`,
+          content: (
+            <div className="confirm-cards">
+              <ConfirmCard title={`Certifications · ${certs.length}`} tableBody={certs.length > 0}>
+                {certs.length > 0 ? (
+                  <div className="ctb-tasktable">
+                    {certs.map((c) => (
+                      <div key={c.name} className="cdr-task">
+                        <div className="cdr-task-name-row">
+                          <span className="cdr-task-name">{c.name}</span>
+                        </div>
+                        {c.industry && <span className="ctb-row-meta">{c.industry}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="form-help">Not in any Certification yet.</p>
+                )}
+              </ConfirmCard>
+            </div>
+          ),
+        },
+      ]}
+      preview={(device) => <PreviewScreen device={device} model={pv.screen} lock={<SubscriptionMark />} />}
+      onClose={onClose}
+    />
   );
 }
 
@@ -665,11 +771,11 @@ function HideTaskModal({
   return (
     <PrmModal
       title={`Hide “${task.name}”`}
-      description="Hiding the Task temporarily removes it for all users."
       confirmLabel="Hide Task"
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
+      <p className="prm-content">Hiding the Task temporarily removes it for all users.</p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
           <p>
@@ -711,12 +817,14 @@ function DeleteTaskModal({
   return (
     <PrmModal
       title={`Delete “${task.name}”`}
-      description={`Deleting the Task (${task.id}) removes it permanently. This can't be undone.`}
       confirmLabel="Delete Task"
       danger
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
+      <p className="prm-content">
+        Deleting the Task ({task.id}) removes it permanently. This can't be undone.
+      </p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
           <p>
@@ -748,15 +856,14 @@ function HideBlockedModal({ task, onClose }: { task: Task; onClose: () => void }
   return (
     <PrmModal
       title={`Can't hide “${task.name}”`}
-      description="This Task is part of an Access Restriction chain."
       confirmLabel="Okay"
       hideCancel
       onCancel={onClose}
       onConfirm={onClose}
     >
       <p className="prm-content">
-        Hiding it would break the content it gates. Remove the Task from that chain first,
-        then hide it.
+        This Task is part of an Access Restriction chain. Hiding it would break the
+        content it gates. Remove the Task from that chain first, then hide it.
       </p>
     </PrmModal>
   );
@@ -774,17 +881,14 @@ function CompanyEditBlockedModal({
   return (
     <PrmModal
       title="Can't edit this task here"
-      description={
-        <>
-          Tasks created by a company can only be edited from the B2B Dashboard.
-          Login as <strong>{task.createdBy}</strong> to make changes.
-        </>
-      }
       confirmLabel="Open Company Dashboard"
       onCancel={onClose}
       onConfirm={onOpenDashboard}
     >
-      {null}
+      <p className="prm-content">
+        Tasks created by a company can only be edited from the B2B Dashboard.
+        Login as <strong>{task.createdBy}</strong> to make changes.
+      </p>
     </PrmModal>
   );
 }

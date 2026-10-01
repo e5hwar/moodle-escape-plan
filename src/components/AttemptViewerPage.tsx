@@ -771,7 +771,7 @@ const page: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   shell: { minHeight: "100%" },
-  container: { maxWidth: 1080, margin: "0 auto", padding: "30px 26px 120px" },
+  container: { maxWidth: 1080, margin: "0 auto", padding: "32px 26px" },
   headRow: {
     display: "flex",
     alignItems: "flex-start",

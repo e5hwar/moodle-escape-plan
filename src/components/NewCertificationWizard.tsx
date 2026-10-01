@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, slugify } from "../data/deepLinks";
 import { createPortal } from "react-dom";
 import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
 import { InfoTipIcon, SmallXIcon } from "./icons";
@@ -9,6 +10,7 @@ import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
 import { SearchIcon, AddCircleIcon, ChevronRightIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
+import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
@@ -20,6 +22,7 @@ import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { MultiSelect } from "./NewCompanyWizard";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { CopiedToast } from "./CopiedToast";
+import type { PreviewScreenModel } from "./PreviewPanel";
 import {
   type Certification,
   certifications,
@@ -525,10 +528,6 @@ type WizardData = {
 // "unit"; career stage starts unset (a Cert may have no career stage).
 /* ─────────────────  Deep Link slugs (spec §19)  ───────────────── */
 
-// The host every Deep Link resolves to. Shown as a read-only prefix; the string
-// is the one on Figma 699:1071 (the spec's §19.1 draft said "skillcat.app/").
-const DEEP_LINK_BASE = "www.skillcatapp.com/";
-
 /** Stable empty set — keeps `missing` referentially stable before any publish. */
 const EMPTY_KEYS: ReadonlySet<string> = new Set();
 
@@ -553,16 +552,6 @@ const RESERVED_SLUGS = new Set(
   ].map((s) => s.toLowerCase()),
 );
 
-// Auto-generate a URL-safe slug from a Certification name (§19.3.5) — keep
-// alphanumeric runs, drop everything else, and CamelCase-join the words
-// (e.g. "Heat Pump Specialist (2026)" → "HeatPumpSpecialist2026").
-function slugify(name: string): string {
-  return name
-    .trim()
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .join("");
-}
 
 // Slugs already taken by other Certifications (case-insensitive), excluding the
 // one being edited so re-saving its own slug isn't flagged as a duplicate.
@@ -757,6 +746,10 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
   // Set once a publish has been attempted, so the rail and the fields only start
   // flagging gaps after the admin has said they're done.
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  // Fields clicked into and out of, and the furthest step opened — with the
+  // attempt flag, what lets a gap show (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const maxVisited = useMaxVisited(step);
   // Open once the Certification exists — Industries are tagged after creation,
   // not as a Details field.
   const [showIndustries, setShowIndustries] = useState(false);
@@ -814,18 +807,22 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
     [stepIndex],
   );
 
-  // Live view of the gaps: a field stops flagging the moment it's filled, without
-  // waiting for another publish attempt.
-  const missing = useMemo(
-    () => (attemptedSubmit ? new Set(collectMissing(data).map((g) => g.key)) : EMPTY_KEYS),
-    [attemptedSubmit, collectMissing, data],
-  );
-
   /* Every mandatory field still empty, right now — the gate on the footer's
      create button. Re-derived each render, so filling the last one enables the
      button on the keystroke rather than on the next attempt. */
   const gaps = useMemo(() => collectMissing(data), [collectMissing, data]);
   const canPublish = gaps.length === 0;
+
+  /* The gaps that SHOW (fieldFlags.tsx): clicked into and out of, on a step
+     already moved past, or every one after a blocked publish. Live — a field
+     stops flagging the moment it's filled. */
+  const missing = useMemo(() => {
+    const out = new Set<string>();
+    for (const g of gaps) {
+      if (attemptedSubmit || maxVisited > g.step || touched.has(g.key)) out.add(g.key);
+    }
+    return out.size === 0 ? EMPTY_KEYS : out;
+  }, [gaps, attemptedSubmit, maxVisited, touched]);
 
   /* What the unavailable Create Certification button says on hover: the fields
      holding it back, each with the step that owns it. Without this the button
@@ -869,10 +866,22 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
     setShowIndustries(true);
   }
 
-  /* ⌘/Ctrl+Enter is the footer's primary button. Off while the split Task
-     wizard has taken over the screen — that wizard answers the shortcut with
-     its own footer instead. */
-  useWizardEnterShortcut(handlePublish, undefined, !splitTask);
+  const isLast = step === lastStep;
+  const createLabel = isEditing ? "Save Changes" : "Create Certification";
+
+  /* The same footer as the Task wizard: ⌘/Ctrl+Enter fires the primary
+     (Continue, or Create Certification on the last step); adding Shift fires
+     Create Certification from any step. Off while the split Task wizard has
+     taken over the screen — that wizard answers the shortcut with its own
+     footer instead. */
+  useWizardEnterShortcut(
+    () => {
+      if (!isLast) goStep(step + 1);
+      else if (canPublish) handlePublish();
+    },
+    handlePublish,
+    !splitTask,
+  );
 
   // Append a built CertTask to a Course (or a Lesson within it). Shared by both
   // the "Create New" split-screen flow and the "Add Existing" picker.
@@ -938,7 +947,7 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
-              {isEditing ? "Editing" : "Creating"}
+              {isEditing ? "Editing Certification" : "Creating"}
             </span>
             <span className="wizard-brand-name">
               {editingCert ? editingCert.name : "New Certification"}
@@ -977,7 +986,7 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
               {step !== 2 && stepHead}
 
               {step === 0 && (
-                <DetailsStep data={data} update={update} nameError={missing.has("name")} />
+                <DetailsStep data={data} update={update} nameError={missing.has("name")} touch={touch} />
               )}
               {step === 1 && (
                 <AdditionalInfoStep
@@ -1000,11 +1009,9 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
                   update={update}
                   criteriaLocked={isEditing && !completionUnlocked}
                   onUnlockCriteria={() => setCompletionUnlocked(true)}
-                  // A draft has never been published, so nobody has completed it.
-                  completions={
-                    editingCert && !editingCert.draft ? sampleCompletionCount(editingCert.id) : 0
-                  }
+                  completions={editingCert ? sampleCompletionCount(editingCert.id) : 0}
                   missing={missing.has("completion")}
+                  touch={touch}
                 />
               )}
               {step === 4 && <PaywallStep data={data} update={update} />}
@@ -1023,18 +1030,44 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
           <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
         </div>
         <div className="wizard-actions">
-          {/* Unavailable until every mandatory field on every step is filled.
-              `aria-disabled` rather than `disabled`: a disabled button fires no
-              mouse events, so it could neither show the tooltip that says what
-              is missing nor answer a click by jumping to the first gap. */}
+          {step > 0 && (
+            <button className="btn-save-draft wizard-gate-btn" onClick={() => goStep(step - 1)}>
+              <span className="wizard-gate-fill" ref={gate.backFillRef} />
+              <span className="wizard-gate-btn-inner">Back</span>
+            </button>
+          )}
+          {/* Creates from any step, and is unavailable until every mandatory
+              field on every step is filled. `aria-disabled` rather than
+              `disabled`: a disabled button fires no mouse events, so it could
+              neither show the tooltip that says what is missing nor answer a
+              click by jumping to the first gap. Hidden on the last step, where
+              it IS the primary. */}
+          {!isLast && (
+            <button
+              className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
+              aria-disabled={!canPublish}
+              data-tip={blockedTip}
+              onClick={handlePublish}
+            >
+              {createLabel}
+              <WizardKeyHint shift />
+            </button>
+          )}
+          {/* Continue, until the last step — where it becomes the create
+              action itself, carrying the same gate. */}
           <button
-            className={`btn-publish${canPublish ? "" : " is-disabled"}`}
-            aria-disabled={!canPublish}
-            data-tip={blockedTip}
-            onClick={handlePublish}
+            className={`btn-publish${isLast ? "" : " wizard-gate-btn"}${
+              isLast && !canPublish ? " is-disabled" : ""
+            }`}
+            aria-disabled={isLast && !canPublish}
+            data-tip={isLast ? blockedTip : undefined}
+            onClick={isLast ? handlePublish : () => goStep(step + 1)}
           >
-            {isEditing ? "Save Changes" : "Create Certification"}
-            <WizardKeyHint />
+            {!isLast && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
+            <span className="wizard-gate-btn-inner">
+              {isLast ? createLabel : "Continue"}
+              <WizardKeyHint />
+            </span>
           </button>
         </div>
       </footer>
@@ -1045,17 +1078,18 @@ export function NewCertificationWizard({ onClose, editingCert, imported }: Props
         createPortal(
           <PrmModal
             title={isEditing ? "Discard changes?" : "Discard this Certification?"}
-            description={
-              isEditing
-                ? "Your changes to this Certification will be lost. This can't be undone."
-                : "This Certification hasn't been created yet — everything you've filled in will be lost."
-            }
             confirmLabel="Discard"
             cancelLabel="Keep editing"
             danger
             onCancel={() => setConfirmCancel(false)}
             onConfirm={() => { setConfirmCancel(false); onClose(); }}
-          />,
+          >
+            <p className="prm-content">
+              {isEditing
+                ? "Your changes to this Certification will be lost. This can't be undone."
+                : "This Certification hasn't been created yet — everything you've filled in will be lost."}
+            </p>
+          </PrmModal>,
           document.body,
         )}
 
@@ -1204,37 +1238,58 @@ const CAREER_STAGES: { value: CareerStage | ""; label: string }[] = [
   { value: "master", label: "Master" },
 ];
 
-const CERT_TYPES: { value: CertType | ""; label: string }[] = [
-  { value: "", label: "None" },
-  { value: "unit", label: "Unit" },
-  { value: "credential", label: "Credential" },
-  { value: "program", label: "Program" },
-  { value: "bundle", label: "Bundle" },
+/* What each Career Stage means — same info-glyph treatment as the Type tip. */
+const CAREER_STAGE_TIP =
+  "Pre-Apprentice is for people exploring or just entering the trades, " +
+  "Apprentice for those learning on the job under supervision, Journeyman " +
+  "for licensed technicians working independently, and Master for the most " +
+  "experienced technicians who lead, train or run a shop. Leave it as None " +
+  "if the Certification suits every stage.";
+
+/* Each Type's meaning is its radio card's description. There is no "None"
+   card: an untyped Certification simply has no card selected. */
+const CERT_TYPES: { value: CertType; label: string; desc: string }[] = [
+  {
+    value: "unit",
+    label: "Unit",
+    desc: "Short and focussed (Intro to HVAC, Using a Multimeter, etc.)",
+  },
+  {
+    value: "credential",
+    label: "Credential",
+    desc: "Industry-recognised certifications (EPA, NATE, OSHA, etc.)",
+  },
+  {
+    value: "program",
+    label: "Program",
+    desc: "Structured learning tracks spanning multiple weeks (JobReady, Trade Schools, etc.)",
+  },
+  {
+    value: "bundle",
+    label: "Bundle",
+    desc: "B2B-specific groupings of training tailored for a company’s workforce",
+  },
 ];
 
-/* What each Type means. Too long for a subtext, so it hangs off the info glyph
-   in the shared hover tooltip (Figma 451:545) instead. */
-const CERT_TYPE_TIP =
-  "Units are short and focussed (Intro to HVAC, Using a Multimeter, etc.). " +
-  "Credentials are industry-recognised certifications (EPA, NATE, OSHA, etc.), " +
-  "Programs are structured learning tracks spanning multiple weeks (JobReady, " +
-  "Trade Schools, etc.), and Bundles are B2B-specific groupings of training " +
-  "tailored for a company's workforce.";
-
 function DetailsStep({
+  touch,
   data,
   update,
   nameError,
 }: {
+  touch: (key: string) => void;
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
   nameError?: boolean;
 }) {
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
-          Name <span className="req">*</span>
+          Name<span className="req">*</span>
+          {nameError && (
+            <span className="form-label-error">Enter a name to publish this Certification.</span>
+          )}
         </label>
         <LangField
           en={data.nameEn}
@@ -1244,7 +1299,6 @@ function DetailsStep({
           placeholderEn="Name"
           placeholderEs="Nombre"
           error={nameError}
-          errorMessage="Enter a name to publish this Certification."
         />
       </div>
 
@@ -1345,38 +1399,34 @@ function DetailsStep({
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Type</label>
-        <div className="seg-control">
-          {CERT_TYPES.map((t) => (
-            <button
-              key={t.value || "none"}
-              type="button"
-              className={`seg-btn${
-                data.type === t.value ? (t.value ? " active accent" : " active") : ""
-              }`}
-              aria-pressed={data.type === t.value}
-              onClick={() => update({ type: t.value })}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {/* Subtext + tooltip glyph (Figma 696:1224): one centred row, 4px gap. */}
         <p className="form-help form-help--tip">
-          Only used for internal reference
+          The experience level this Certification is aimed at
           <span
             className="form-help-info"
             tabIndex={0}
             role="note"
-            aria-label={CERT_TYPE_TIP}
-            data-tip={CERT_TYPE_TIP}
+            aria-label={CAREER_STAGE_TIP}
+            data-tip={CAREER_STAGE_TIP}
           >
             <InfoTipIcon />
           </span>
         </p>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Type</label>
+        <div className="radio-card-group">
+          {CERT_TYPES.map((t) => (
+            <RadioCard
+              key={t.value}
+              selected={data.type === t.value}
+              onSelect={() => update({ type: t.value })}
+              title={t.label}
+              desc={t.desc}
+            />
+          ))}
+        </div>
+        <p className="form-help">Only used for internal reference</p>
       </div>
     </>
   );
@@ -1440,7 +1490,6 @@ function AdditionalInfoStep({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Deep Link</label>
         <DeepLinkField data={data} update={update} editingName={editingName} />
         <p className="form-help">
           URL-safe characters only (letters, numbers, dashes, underscores). Must be unique across
@@ -1483,6 +1532,12 @@ function DeepLinkField({
 
   return (
     <>
+      {/* The label lives here rather than in the caller because the slug
+          error it carries in its row (Figma 1369:1479) is this field's own. */}
+      <label className="form-label">
+        Deep Link
+        {error && <span className="form-label-error">{error}</span>}
+      </label>
       <div className={`deeplink-input ${error ? "invalid" : ""}`}>
         <span className="deeplink-base">{DEEP_LINK_BASE}</span>
         <div className="deeplink-cell">
@@ -1505,7 +1560,6 @@ function DeepLinkField({
           </button>
         </div>
       </div>
-      {error && <p className="form-error-text">{error}</p>}
     </>
   );
 }
@@ -2605,7 +2659,7 @@ function TaskGate({ names, mode }: { names: string[]; mode: AccessRestriction["m
    shared tooltip. */
 const SUBSCRIPTION_TIP = "Requires a Subscription — not available on the Free Trial";
 
-function SubscriptionMark() {
+export function SubscriptionMark() {
   return (
     <span
       className="cert-sub-mark"
@@ -2748,12 +2802,16 @@ function TaskRow({
         createPortal(
         <PrmModal
           title="Edit Task"
-          description={`Editing "${task.name}" opens the Task editor, which isn't wired up from the Certification builder yet.`}
           confirmLabel="Got it"
           hideCancel
           onCancel={() => setEditing(false)}
           onConfirm={() => setEditing(false)}
-        />,
+        >
+          <p className="prm-content">
+            Editing "{task.name}" opens the Task editor, which isn't wired up from the
+            Certification builder yet.
+          </p>
+        </PrmModal>,
         document.body,
       )}
 
@@ -2761,12 +2819,15 @@ function TaskRow({
         createPortal(
         <PrmModal
           title="Delete Task?"
-          description={`"${task.name}" will be deleted, not just removed from this Course. This can't be undone.`}
           confirmLabel="Delete Task"
           danger
           onCancel={() => setDeleting(false)}
           onConfirm={() => { setDeleting(false); onRemove(); }}
-        />,
+        >
+          <p className="prm-content">
+            "{task.name}" will be deleted, not just removed from this Course. This can't be undone.
+          </p>
+        </PrmModal>,
         document.body,
       )}
     </div>
@@ -3006,6 +3067,7 @@ function AddTaskMenuContent({
 const MAX_CONDITION_SETS = 4;
 
 function CompletionStep({
+  touch,
   data,
   update,
   criteriaLocked = false,
@@ -3013,6 +3075,7 @@ function CompletionStep({
   completions = 0,
   missing = false,
 }: {
+  touch: (key: string) => void;
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
   criteriaLocked?: boolean;
@@ -3060,9 +3123,14 @@ function CompletionStep({
 
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("completion"))}>
         <label className="form-label cc-label">
-          Completion Criteria <span className="req">*</span>
+          Completion Criteria<span className="req">*</span>
+          {missing && (
+            <span className="form-label-error">
+              Add at least one Condition Set with a requirement to publish.
+            </span>
+          )}
         </label>
         <CompletionCriteriaGate
           locked={criteriaLocked}
@@ -3082,37 +3150,38 @@ function CompletionStep({
                         </div>
                       </div>
                     )}
+                    {/* Locked (Figma 1378:1946) reads the sets back like
+                        the drawer does: no minus, no ✕, no Add Requirement —
+                        Edit Criteria on the banner is the only way in. */}
                     <ConditionSetCard
                       set={set}
                       index={idx + 1}
-                      onRemove={() => removeConditionSet(set.id)}
-                      onAddItems={(items) => addItems(set.id, items)}
-                      onRemoveItem={(itemId) => removeItem(set.id, itemId)}
+                      onRemove={criteriaLocked ? undefined : () => removeConditionSet(set.id)}
+                      onAddItems={criteriaLocked ? undefined : (items) => addItems(set.id, items)}
+                      onRemoveItem={
+                        criteriaLocked ? undefined : (itemId) => removeItem(set.id, itemId)
+                      }
                     />
                   </Fragment>
                 ))}
               </div>
             )}
 
-            <button
-              type="button"
-              className={`cc-add-set${missing && sets.length === 0 ? " has-error" : ""}`}
-              onClick={addConditionSet}
-              disabled={atCap}
-            >
-              <span className="cc-add-icon">
-                <PlusThinIcon />
-              </span>
-              Add Condition Set
-            </button>
+            {!criteriaLocked && (
+              <button
+                type="button"
+                className={`cc-add-set${missing && sets.length === 0 ? " has-error" : ""}`}
+                onClick={addConditionSet}
+                disabled={atCap}
+              >
+                <span className="cc-add-icon">
+                  <PlusThinIcon />
+                </span>
+                Add Condition Set
+              </button>
+            )}
           </div>
         </CompletionCriteriaGate>
-
-        {missing && (
-          <p className="form-error-text">
-            Add at least one Condition Set with a requirement to publish.
-          </p>
-        )}
 
         <p className="form-help">
           Learner must satisfy any one Condition Set in full. Within the Condition Set, all items
@@ -3434,7 +3503,15 @@ function AudienceStep({
    Certification with — so the drawer and the editor can't disagree. The first
    card keeps the drawer node's "Overview" title; the rest take their step's
    name. The bilingual fields show their English half only. */
-export function CertificationSummary({ cert }: { cert: Certification }) {
+export function CertificationSummary({
+  cert,
+  part,
+}: {
+  cert: Certification;
+  /** The preview panel's tabs: "details" = every card but Tasks, "content" =
+   *  the Tasks card alone. Omitted, all of them. */
+  part?: "details" | "content";
+}) {
   // Once per Certification: the sample structure mints fresh node ids.
   const data = useMemo(() => buildInitialData(cert), [cert]);
   const allTasks = flattenTasks(data.courses);
@@ -3446,6 +3523,12 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
       .map((t) => t.value)
       .join(", ");
   const paid = data.accessType !== "open";
+  const tasksCard = (
+    <ConfirmCard title={`Tasks · ${allTasks.length}`}>
+      <CourseTreeSummary courses={data.courses} allTasks={allTasks} />
+    </ConfirmCard>
+  );
+  if (part === "content") return <div className="confirm-cards">{tasksCard}</div>;
 
   return (
     <div className="confirm-cards">
@@ -3460,7 +3543,7 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
           ],
           // The record's own state — the wizard folds Archived into Hidden.
           ["Visibility", cert.visibility ?? "Visible"],
-          ["Industry", data.industries.join(", ")],
+          ["Industries", data.industries.join(", ")],
           ["Career Stage", CAREER_STAGES.find((s) => s.value === data.careerStage)?.label],
           ["Type", CERT_TYPES.find((t) => t.value === data.type)?.label],
           ["Thumbnail", data.thumbnail?.name],
@@ -3491,9 +3574,7 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
         ]}
       />
 
-      <ConfirmCard title={`Tasks · ${allTasks.length}`}>
-        <CourseTreeSummary courses={data.courses} allTasks={allTasks} />
-      </ConfirmCard>
+      {part !== "details" && tasksCard}
 
       <ConfirmCard title="Completion Criteria">
         <div className="cc-sets">
@@ -3539,6 +3620,44 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
       />
     </div>
   );
+}
+
+/** What a Certification's row preview panel reads (PreviewPanel.tsx) beyond
+ *  the review cards: the meta strip's labels, the Deep Link and the
+ *  learner-side screen — from `buildInitialData(cert)`, the data the edit
+ *  wizard opens with, so the panel and the editor can't disagree. */
+export function useCertPreview(cert: Certification) {
+  const data = useMemo(() => buildInitialData(cert), [cert]);
+  return useMemo(() => {
+    const allTasks = flattenTasks(data.courses);
+    const slug = data.slugCustom ? data.slug : slugify(data.nameEn);
+    const deepLink = slug ? `${DEEP_LINK_BASE}${slug}` : "";
+    const time = data.timeValue
+      ? formatTimeToComplete({ value: Number(data.timeValue), unit: data.timeUnit })
+      : undefined;
+    const industry = data.industries.join(", ");
+    const careerStage = CAREER_STAGES.find((s) => s.value === data.careerStage)?.label;
+    const type = CERT_TYPES.find((t) => t.value === data.type)?.label;
+    const paid = data.accessType !== "open";
+    const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+    const screen: PreviewScreenModel = {
+      eyebrow: [industry, type].filter(Boolean).join(" · ") || undefined,
+      title: data.nameEn || cert.name,
+      meta: [plural(allTasks.length, "Task"), time, paid ? "Paid" : "Free"].filter(Boolean).join(" · "),
+      description: cert.description,
+      cta: "Start Certification",
+      listTitle: "What you'll do",
+      items: allTasks.map((t) => ({
+        key: t.id,
+        name: t.name,
+        meta: taskMeta(t),
+        kind: t.kind,
+        locked: !!t.requiresSubscription,
+      })),
+      url: deepLink || undefined,
+    };
+    return { taskCount: allTasks.length, deepLink, paid, careerStage, type, industry, screen };
+  }, [data, cert]);
 }
 
 /* The Add Tasks tree, read back without its controls: each Course's eyebrow,
@@ -3754,17 +3873,16 @@ export function ArchiveCertificationPage({
         createPortal(
           <PrmModal
             title="Archive this Certification?"
-            description={
-              <>
-                Archive <strong>{cert.name}</strong> ({cert.id})? It leaves the catalog and
-                can't be un-archived. {replacementLine}
-              </>
-            }
             confirmLabel="Archive Certification"
             danger
             onCancel={() => setConfirming(false)}
             onConfirm={() => { setConfirming(false); onArchive(); }}
-          />,
+          >
+            <p className="prm-content">
+              Archive <strong>{cert.name}</strong> ({cert.id})? It leaves the catalog and
+              can't be un-archived. {replacementLine}
+            </p>
+          </PrmModal>,
           document.body,
         )}
     </div>
@@ -3807,7 +3925,6 @@ function LangField({
   placeholderEn,
   placeholderEs,
   error = false,
-  errorMessage,
   autoFocus,
   onEnter,
   suggestion,
@@ -3818,9 +3935,9 @@ function LangField({
   onChangeEs: (v: string) => void;
   placeholderEn?: string;
   placeholderEs?: string;
-  /** Flags the field as a missing mandatory value (red shell + message). */
+  /** Flags the field as a missing mandatory value (red shell; the message
+   *  belongs in the caller's label row, `.form-label-error`). */
   error?: boolean;
-  errorMessage?: string;
   /** Takes the caret on mount — the first field of a modal form. */
   autoFocus?: boolean;
   /** Enter from either language row submits (modal forms only; on a wizard
@@ -3892,7 +4009,6 @@ function LangField({
           />
         </div>
       </div>
-      {error && errorMessage && <p className="form-error-text">{errorMessage}</p>}
     </>
   );
 }

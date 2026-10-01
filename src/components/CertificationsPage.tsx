@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   certifications as allCerts,
-  NO_CAREER_STAGE,
-  NO_TYPE,
   CERT_OPTIONAL_COLUMNS,
   CERT_FIXED_COLUMNS,
   topIndustry,
@@ -11,15 +9,16 @@ import {
 import { type Award } from "../data/awards";
 import {
   CertFilters,
+  certMatches,
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon } from "./icons";
-import { pickTag, pickTags, matchesTagFilter, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
+import { RowExternalLinkIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { pickTag, pickTags, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
-import { Drawer } from "./Drawer";
-import { CertificationSummary } from "./NewCertificationWizard";
+import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
+import { CertificationSummary, SubscriptionMark, useCertPreview } from "./NewCertificationWizard";
 import { Dropdown } from "./Dropdown";
 import { CertImportModal } from "./CertImportModal";
 import { CertBulkUploadModal } from "./CertBulkUploadModal";
@@ -115,15 +114,6 @@ function compare(a: Certification, b: Certification, key: SortKey): number {
     case "dateCreated": return (Date.parse(a.dateCreated ?? "") || 0) - (Date.parse(b.dateCreated ?? "") || 0);
     case "dateModified": return (Date.parse(a.dateModified ?? "") || 0) - (Date.parse(b.dateModified ?? "") || 0);
   }
-}
-
-// A selected Industry option matches its own tag and everything beneath it:
-// picking "HVAC" catches "HVAC", "HVAC › Residential", etc.; picking a sub
-// path matches only that sub.
-function matchesIndustry(cert: Certification, selected: string[]): boolean {
-  return selected.some(
-    (opt) => cert.industry === opt || cert.industry.startsWith(`${opt} ›`),
-  );
 }
 
 export function CertificationsPage({
@@ -261,31 +251,7 @@ export function CertificationsPage({
   }, [createMenuOpen, importMode, drawerId, onNewCert]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return certList.filter((c) => {
-      if (q && !(
-        c.id.toLowerCase().includes(q) ||
-        c.name.toLowerCase().includes(q) ||
-        c.industry.toLowerCase().includes(q)
-      )) return false;
-      if (filters.industries.length && !matchesIndustry(c, filters.industries)) return false;
-      if (filters.careerStages.length) {
-        const match = c.careerStage
-          ? filters.careerStages.includes(c.careerStage)
-          : filters.careerStages.includes(NO_CAREER_STAGE);
-        if (!match) return false;
-      }
-      if (filters.types.length) {
-        const match = c.type
-          ? filters.types.includes(c.type)
-          : filters.types.includes(NO_TYPE);
-        if (!match) return false;
-      }
-      if (filters.creators.length && !filters.creators.includes(c.createdBy)) return false;
-      if (filters.visibilities.length && !filters.visibilities.includes(c.visibility ?? "Visible")) return false;
-      if (filters.tags.length && !matchesTagFilter(c.tags, filters.tags)) return false;
-      return true;
-    });
+    return certList.filter((c) => certMatches(c, query, filters));
   }, [query, filters, certList]);
 
   const sorted = useMemo(() => {
@@ -364,6 +330,13 @@ export function CertificationsPage({
       return;
     }
     setHideTarget(cert);
+  }
+
+  // A row menu opened from the preview panel's kebab: every item closes the
+  // panel first, so the modal or page it opens isn't left under the panel.
+  function closePanelThen(run: () => void) {
+    setDrawerId(null);
+    run();
   }
 
   function editCert(cert: Certification) {
@@ -490,7 +463,7 @@ export function CertificationsPage({
                     <tr>
                       <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
                       {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                      {columns.industry && <SortableHeader col="industry" label="Industry" className="col-used" sort={sort} toggle={toggleSort} />}
+                      {columns.industry && <SortableHeader col="industry" label="Industries" className="col-used" sort={sort} toggle={toggleSort} />}
                       {columns.careerStage && <SortableHeader col="careerStage" label="Career Stage" className="col-type" sort={sort} toggle={toggleSort} />}
                       {columns.type && <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />}
                       {columns.payment && <SortableHeader col="payment" label="Payment" className="col-type" sort={sort} toggle={toggleSort} />}
@@ -555,17 +528,17 @@ export function CertificationsPage({
           cert={menu.cert}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEdit={() => editCert(menu.cert)}
-          onToggleVisibility={() => toggleHidden(menu.cert)}
-          onDelete={() => setDeleting(menu.cert)}
-          onViewPayers={() => onViewPayers(menu.cert)}
-          onViewAllTasks={() => onViewAllTasks(menu.cert)}
+          onEdit={() => closePanelThen(() => editCert(menu.cert))}
+          onToggleVisibility={() => closePanelThen(() => toggleHidden(menu.cert))}
+          onDelete={() => closePanelThen(() => setDeleting(menu.cert))}
+          onViewPayers={() => closePanelThen(() => onViewPayers(menu.cert))}
+          onViewAllTasks={() => closePanelThen(() => onViewAllTasks(menu.cert))}
           hasAward={!!awardForCert(menu.cert)}
-          onManageAward={() => onManageAward(menu.cert)}
+          onManageAward={() => closePanelThen(() => onManageAward(menu.cert))}
           onBackup={() => backupCertification(menu.cert)}
-          onManageContentLinks={() => onManageContentLinks(menu.cert)}
-          onManageProgress={() => onManageProgress(menu.cert)}
-          onArchive={() => onArchiveCert(menu.cert)}
+          onManageContentLinks={() => closePanelThen(() => onManageContentLinks(menu.cert))}
+          onManageProgress={() => closePanelThen(() => onManageProgress(menu.cert))}
+          onArchive={() => closePanelThen(() => onArchiveCert(menu.cert))}
         />
       )}
 
@@ -613,7 +586,7 @@ export function CertificationsPage({
         >
           {/* Body copy is children, not `description` — the shell's own
               convention for a confirm (Figma 483:588). */}
-          <p className="prm-text">
+          <p className="prm-content">
             “{deleting.name}” ({deleting.id}) is removed from the Certifications list along
             with its content links. This can't be undone.
           </p>
@@ -631,18 +604,110 @@ export function CertificationsPage({
         />
       )}
 
-      {drawerCert && <CertDrawer cert={drawerCert} onClose={() => setDrawerId(null)} />}
+      {drawerCert && (
+        <CertDrawer
+          key={drawerCert.id}
+          cert={drawerCert}
+          onClose={() => setDrawerId(null)}
+          /* Closes the panel first: editing opens the wizard, or — for a
+             company-owned Certification — the blocked-edit modal. */
+          onEdit={() => {
+            setDrawerId(null);
+            editCert(drawerCert);
+          }}
+          onMore={(rect) => setMenu({ cert: drawerCert, rect })}
+        />
+      )}
     </div>
   );
 }
 
-/** A Certification's side drawer (Figma 1316:1846): its name and description,
- *  then every field its wizard holds, one review card per step. */
-function CertDrawer({ cert, onClose }: { cert: Certification; onClose: () => void }) {
+/** A Certification's row preview panel ("Preview Panel 3a"): the record —
+ *  meta, actions, its figures, then the review cards (Details) and the Task
+ *  tree (Content) — beside the Certification as a learner sees it. */
+function CertDrawer({
+  cert,
+  onClose,
+  onEdit,
+  onMore,
+}: {
+  cert: Certification;
+  onClose: () => void;
+  onEdit: () => void;
+  onMore: (rect: DOMRect) => void;
+}) {
+  const pv = useCertPreview(cert);
+  const vis = cert.visibility ?? "Visible";
+  const live = vis === "Visible" && pv.taskCount > 0;
+  const enrolled = seededInt(cert.id, "enrolled", 140, 4200);
+  const completed = Math.round((enrolled * seededInt(cert.id, "rate", 38, 84)) / 100);
+  const stats: PreviewStat[] = live
+    ? [
+        { count: formatCount(enrolled), title: "Enrollments", sub: `+${seededInt(cert.id, "month", 8, 140)} / month` },
+        {
+          count: formatCount(completed),
+          title: "Completions",
+          sub: `${Math.round((completed / enrolled) * 100)}% of enrolled`,
+        },
+        {
+          count: formatCount(seededInt(cert.id, "active", 20, Math.max(21, Math.round(enrolled / 5)))),
+          title: "Active",
+          sub: "This month",
+        },
+      ]
+    : [
+        { count: "—", title: "Enrollments", sub: "Not live yet" },
+        { count: "—", title: "Completions", sub: "Not live yet" },
+        { count: "—", title: "Active", sub: "Not live yet" },
+      ];
+  const edited = cert.dateModified && `Edited ${cert.dateModified}${timeAgo(cert.dateModified) ? ` (${timeAgo(cert.dateModified)})` : ""}`;
+
   return (
-    <Drawer title={cert.name} description={cert.description} onClose={onClose}>
-      <CertificationSummary cert={cert} />
-    </Drawer>
+    <PreviewPanel
+      title={cert.name}
+      description={cert.description}
+      meta={[
+        <span className="pp-id">{cert.id}</span>,
+        pv.industry,
+        pv.type,
+        pv.careerStage,
+        <span className={`co-status-pill co-status-pill--${vis === "Visible" ? "green" : "grey"}`}>{vis}</span>,
+        pv.paid ? (
+          <>
+            <SubscriptionMark />
+            Paid
+          </>
+        ) : (
+          "Free"
+        ),
+        edited,
+      ]}
+      onEdit={onEdit}
+      actions={
+        pv.deepLink
+          ? [
+              { label: "Copy Link", icon: <MenuLinkIcon />, copy: `https://${pv.deepLink}` },
+              {
+                label: "Open in App",
+                icon: <RowExternalLinkIcon />,
+                onClick: () => window.open(`https://${pv.deepLink}`, "_blank", "noopener"),
+              },
+            ]
+          : []
+      }
+      onMore={onMore}
+      stats={stats}
+      tabs={[
+        { key: "details", label: "Details", content: <CertificationSummary cert={cert} part="details" /> },
+        {
+          key: "content",
+          label: `Content · ${pv.taskCount} ${pv.taskCount === 1 ? "Task" : "Tasks"}`,
+          content: <CertificationSummary cert={cert} part="content" />,
+        },
+      ]}
+      preview={(device) => <PreviewScreen device={device} model={pv.screen} lock={<SubscriptionMark />} />}
+      onClose={onClose}
+    />
   );
 }
 
@@ -671,11 +736,13 @@ function HideCertModal({
   return (
     <PrmModal
       title={`Hide “${cert.name}”`}
-      description="Hiding the Certification temporarily removes it for all users."
       confirmLabel="Hide Certification"
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
+      <p className="prm-content">
+        Hiding the Certification temporarily removes it for all users.
+      </p>
       {cert.industry && (
         <div className="prm-content">
           <p>
@@ -755,7 +822,7 @@ function CertRow({
   const hidden = vis === "Hidden";
   return (
     <tr
-      className={`${cert.draft ? "draft" : ""} ${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
+      className={`${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onOpen}
     >
       <td className="col-name" data-tip={cert.name}>
@@ -1002,17 +1069,14 @@ function CompanyEditBlockedModal({
   return (
     <PrmModal
       title="Can't edit this certification here"
-      description={
-        <>
-          Certifications created by a company can only be edited from the B2B
-          Dashboard. Login as <strong>{companyName}</strong> to make changes.
-        </>
-      }
       confirmLabel="Open Company Dashboard"
       onCancel={onClose}
       onConfirm={onOpenDashboard}
     >
-      {null}
+      <p className="prm-content">
+        Certifications created by a company can only be edited from the B2B
+        Dashboard. Login as <strong>{companyName}</strong> to make changes.
+      </p>
     </PrmModal>
   );
 }

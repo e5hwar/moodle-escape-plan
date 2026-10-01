@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   nodes as allNodes,
   links as seedLinks,
@@ -6,18 +6,17 @@ import {
   type Link,
   type LinkKind,
 } from "../data/contentLinks";
-import { SectionHeading } from "./SectionHeading";
+import { certifications, formatTimeToComplete } from "../data/certifications";
 import { SelectCertificationsModal } from "./SelectCertificationsModal";
 import { SearchHints } from "./SearchPanelParts";
+import { SkeletonOverlay } from "./SkeletonOverlay";
 import {
   KeyCommandIcon,
   InfoIcon,
-  InfoTipIcon,
-  PlusThinIcon,
+  RowCloseIcon,
   SearchIcon,
   SearchClearIcon,
-  SmallXIcon,
-  CrumbChevronIcon,
+  TreeAddIcon,
 } from "./icons";
 
 /* Content Links — rebuilt 2026-08-26 on the shared design-system components:
@@ -31,6 +30,15 @@ import {
  * CERTIFICATION / LINK STRENGTH table, in place of the old SectionHeading +
  * loose-card column.
  *
+ * 2026-10-01 — 802:2260 re-cut: a 16px title with no count or plus, the add
+ * affordance is the panel's last row (the shared `.qz-addrow`), the row meta
+ * gains the Time to Complete, and a `.form-help` line under each panel says
+ * what the section means (it replaces the page-subtext ⓘ that carried it).
+ *
+ * 2026-10-01 — Referenced By left the scroll for a pinned footer (Figma
+ * 1417:1373): one sentence naming who recommends this Certification and who
+ * lists it as a prerequisite, the names linking to their own Content Links.
+ *
  * 2026-08-30 — the search bar moved onto the shared `.usearch` combobox shell
  * (the Tasks / Certifications bar) with keyboard navigation. It stays a PICKER:
  * the panel lists content to focus, not filter scopes to apply. */
@@ -38,13 +46,21 @@ import {
 type Focus = string | null;
 
 const KIND_PLURAL: Record<LinkKind, string> = {
-  prerequisite: "Prerequisites",
+  prerequisite: "Pre-Requisites",
   recommended: "Recommended Next",
   related: "Related",
 };
 
+// The panel's last row (Figma 1416:1365) — one link at a time reads singular.
+const KIND_ADD_ROW: Record<LinkKind, string> = {
+  prerequisite: "Add Pre-Requisite",
+  recommended: "Add Recommended Next",
+  related: "Add Related Certification",
+};
+
+// The picker adds several at once, so its title is plural.
 const KIND_ADD_TITLE: Record<LinkKind, string> = {
-  prerequisite: "Add Prerequisites",
+  prerequisite: "Add Pre-Requisites",
   recommended: "Add Recommended Next",
   related: "Add Related Certifications",
 };
@@ -59,17 +75,32 @@ const KIND_ADD_DESC: Record<LinkKind, string> = {
     "Adjacent Certifications at the same level, for exploring sideways. Ones already linked here are ticked",
 };
 
-/* What the three link kinds mean — too long for the subtext line, so it hangs
- * off the page-subtext info glyph (Figma 742:1061). */
-const LINK_KINDS_TIP =
-  "Prerequisites - Content the user should study before starting this Certification. Without it, they may struggle to follow the concepts here.\n\n" +
-  "Recommended Next - Where the user should go to learn more about this topic after finishing. Use this for depth: the next level up on the same subject.\n\n" +
-  "Related - Adjacent topics at the same level, for users who want to explore sideways rather than go deeper.";
+/* What each section means — the subtext under its panel (Figma 1416:1360).
+ * Moved verbatim from the page-subtext ⓘ, which is gone. */
+const KIND_HELP: Record<LinkKind, string> = {
+  prerequisite:
+    "Content the user should study before starting this Certification. Without it, they may struggle to follow the concepts here.",
+  recommended:
+    "Where the user should go to learn more about this topic after finishing. Use this for depth: the next level up on the same subject.",
+  related:
+    "Adjacent topics at the same level, for users who want to explore sideways rather than go deeper.",
+};
 
 // Tooltip on every section's LINK STRENGTH column header.
 const LINK_STRENGTH_TIP =
   "A value between 0 and 100 that controls the order links appear in. Higher Link Strength shows first. " +
-  "Only compared against other links of the same type on this Certification - a Prerequisite at 90 and a Related at 80 don't compete with each other.";
+  "Only compared against other links of the same type on this Certification - a Pre-Requisite at 90 and a Related at 80 don't compete with each other.";
+
+/* Row meta (Figma 801:2111, "HVAC · 10-12 Hours") ends on the Time to
+ * Complete. Content nodes don't carry one, so it comes from the catalog
+ * Certification of the same name — node names match certifications.ts. */
+const TIME_BY_NAME = new Map(
+  certifications.map((c) => [c.name, formatTimeToComplete(c.timeToComplete)])
+);
+
+function rowMeta(n: ContentNode): string {
+  return [n.industry, TIME_BY_NAME.get(n.name)].filter(Boolean).join(" · ") || "—";
+}
 
 function nodeById(id: string): ContentNode | undefined {
   return allNodes.find((n) => n.id === id);
@@ -133,6 +164,7 @@ export function ContentLinksPage({
   const [baseline, setBaseline] = useState<Link[]>(seedLinks);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
 
   // Add-link picker state — { kind: which list we're adding to }
   const [picker, setPicker] = useState<{ kind: LinkKind } | null>(null);
@@ -158,18 +190,18 @@ export function ContentLinksPage({
 
   // "Referenced by" = relationships authored on *other* certifications that point
   // at this one. They're read-only here (edit them from the other cert's page):
-  //  - this cert is a prerequisite of another  → tagged PREREQ
-  //  - another cert recommends this one as next → tagged REC NEXT
+  //  - this cert is a prerequisite of another
+  //  - another cert recommends this one as next
   const referencedBy = useMemo(() => {
-    if (!focusId) return [] as { id: string; name: string; tag: string }[];
-    const out: { id: string; name: string; tag: string }[] = [];
+    const out: RefItem[] = [];
+    if (!focusId) return out;
     for (const e of links) {
       if (e.kind === "prerequisite" && e.from === focusId) {
         const n = nodeById(e.to);
-        if (n) out.push({ id: n.id, name: n.name, tag: "PREREQ" });
+        if (n) out.push({ id: n.id, name: n.name, kind: "prerequisite" });
       } else if (e.kind === "recommended" && e.to === focusId) {
         const n = nodeById(e.from);
-        if (n) out.push({ id: n.id, name: n.name, tag: "REC NEXT" });
+        if (n) out.push({ id: n.id, name: n.name, kind: "recommended" });
       }
     }
     return out;
@@ -233,41 +265,26 @@ export function ContentLinksPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks lc-page">
+          {/* Reached from a Certification's 3-dot menu — the crumb is the way back. */}
+          {onBack && (
+            <nav className="rvc-crumbs" aria-label="Breadcrumb">
+              <button
+                className="rvc-crumb"
+                onClick={onBack}
+                title={`Back to ${backLabel ?? "Certifications"}`}
+              >
+                {backLabel ?? "Certifications"}
+              </button>
+            </nav>
+          )}
           <header className="tasks-header">
-            {/* Reached from a Certification's 3-dot menu — the crumb is the way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Content</span>
-                <CrumbChevronIcon />
-                {onBack ? (
-                  <button
-                    className="rvc-crumb"
-                    onClick={onBack}
-                    title={`Back to ${backLabel ?? "Certifications"}`}
-                  >
-                    {backLabel ?? "Certifications"}
-                  </button>
-                ) : (
-                  <span className="rvc-crumb">Certifications</span>
-                )}
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Content Links</span>
-              </nav>
+              {/* The focused Certification is named in the search bar, not here. */}
               <h1 className="tasks-title">Content Links</h1>
-              {/* Subtext + tooltip glyph (Figma 742:1061) — the glyph carries
-                  what each of the three sections means. */}
+              {/* What each section means lives under its own panel now. */}
               <div className="tasks-subtitle">
                 Suggest what a user should study before, after, or alongside
                 this Certification.
-                <span
-                  className="form-help-info tasks-subtitle-info"
-                  tabIndex={0}
-                  role="note"
-                  aria-label={LINK_KINDS_TIP}
-                  data-tip={LINK_KINDS_TIP}
-                >
-                  <InfoTipIcon />
-                </span>
               </div>
             </div>
           </header>
@@ -287,6 +304,7 @@ export function ContentLinksPage({
               open={searchOpen && !focused}
               query={query}
               onPick={pickFocus}
+              inputRef={searchInput}
             />
           </div>
 
@@ -319,13 +337,20 @@ export function ContentLinksPage({
                     onPickNode={pickFocus}
                   />
                 </div>
-
-                <ReferencedBy items={referencedBy} onPickNode={pickFocus} />
               </>
             ) : (
-              <EmptyState onPick={pickFocus} />
+              <EmptyState
+                dull={searchOpen}
+                onSearch={() => searchInput.current?.focus()}
+              />
             )}
           </div>
+
+          {/* Pinned under the scroll like a table's pagination row — the
+              panels scroll up to its rule. */}
+          {focused && referencedBy.length > 0 && (
+            <ReferencedByFooter items={referencedBy} onPickNode={pickFocus} />
+          )}
 
           {/* Same in-flow save footer as the Spotlights reorder bar — spans the
               content column only, stops at the left nav. */}
@@ -374,6 +399,7 @@ function SearchField({
   query,
   onPick,
   onClose,
+  inputRef,
 }: {
   value: string;
   placeholder: string;
@@ -384,8 +410,22 @@ function SearchField({
   query: string;
   onPick: (id: string) => void;
   onClose: () => void;
+  inputRef: React.RefObject<HTMLInputElement>;
 }) {
   const [active, setActive] = useState(-1);
+  const root = useRef<HTMLDivElement>(null);
+
+  // A press anywhere outside the bar and its panel closes the panel — blur
+  // alone misses it when focus never leaves the input (or never arrived).
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (root.current?.contains(e.target as Node)) return;
+      onClose();
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, onClose]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -421,12 +461,13 @@ function SearchField({
   }
 
   return (
-    <div className="usearch lc-search">
+    <div className="usearch lc-search" ref={root}>
       <div className={`usearch-bar ${open ? "open" : ""}`}>
         <span className="usearch-icon">
           <SearchIcon />
         </span>
         <input
+          ref={inputRef}
           className="usearch-input"
           placeholder={placeholder}
           value={value}
@@ -476,7 +517,7 @@ function SearchField({
               >
                 <span className="usearch-row-ex">{n.name}</span>
                 <span className="usearch-row-desc">
-                  {n.kind} · {n.level} · {n.tasksCount} Tasks
+                  {n.kind} · {n.level}
                 </span>
               </button>
             ))
@@ -490,48 +531,57 @@ function SearchField({
 
 /* --------------------------------- Empty state -------------------------------- */
 
-function EmptyState({ onPick }: { onPick: (id: string) => void }) {
-  const suggestions = allNodes.slice(0, 4);
+/** Same shape as Manage Completions' empty state (`.mc-empty`): the three link
+ *  panels the page is about to load drawn as a ghost backdrop, with the
+ *  question centred over it and a CTA that opens the search (⌘K does too). */
+function EmptyState({ dull, onSearch }: { dull: boolean; onSearch: () => void }) {
   return (
-    <div className="lc-empty">
-      <div aria-hidden>
-        <EmptyGraph />
-      </div>
-      <h2 className="lc-empty-title">Search for content to view its links</h2>
-      <p className="lc-empty-sub">
-        Pick a course, certification, or task above. The page will show
-        prerequisites, recommended next steps, and related content.
-      </p>
-      <div className="lc-empty-suggest">
-        <span className="form-help">Try:</span>
-        {suggestions.map((n) => (
-          <button key={n.id} className="cta-quiet" onClick={() => onPick(n.id)}>
-            {n.name}
-          </button>
-        ))}
-      </div>
+    <div className="mc-empty lc-empty">
+      <LinksGhost />
+      <SkeletonOverlay
+        title="Select a Certification"
+        sub="Its prerequisites, recommended next steps, and related Certifications load here — with the strength of every link."
+        cta="Search Certifications"
+        onCta={onSearch}
+        dull={dull}
+      />
     </div>
   );
 }
 
-function EmptyGraph() {
+const GHOST_LINK_ROWS = [0, 1, 2, 3];
+
+/** The three `.lc-sec` panels with every value replaced by a bar. */
+function LinksGhost() {
   return (
-    <svg width="320" height="200" viewBox="0 0 320 200" fill="none">
-      <g opacity="0.45">
-        {/* center node */}
-        <rect x="120" y="80" width="80" height="36" rx="8" stroke="var(--border-strong)" strokeDasharray="3 3" fill="transparent" />
-        {/* satellites */}
-        <rect x="18" y="40" width="68" height="28" rx="6" stroke="var(--border)" fill="transparent" />
-        <rect x="18" y="130" width="68" height="28" rx="6" stroke="var(--border)" fill="transparent" />
-        <rect x="234" y="40" width="68" height="28" rx="6" stroke="var(--border)" fill="transparent" />
-        <rect x="234" y="130" width="68" height="28" rx="6" stroke="var(--border)" fill="transparent" />
-        {/* connectors */}
-        <path d="M86 54 L120 90" stroke="var(--border-strong)" />
-        <path d="M86 144 L120 108" stroke="var(--border-strong)" />
-        <path d="M200 90 L234 54" stroke="var(--border-strong)" strokeDasharray="4 4" />
-        <path d="M200 108 L234 144" stroke="var(--border-strong)" strokeDasharray="1 4" />
-      </g>
-    </svg>
+    <div className="mc-ghost lc-ghost" aria-hidden="true">
+      <div className="lc-grid">
+        {[0, 1, 2].map((c) => (
+          <section className="lc-sec" key={c}>
+            <span className="mc-ghost-bar lc-ghost-title" />
+            <div className="lc-panel">
+              <div className="lc-row lc-row-head">
+                <span className="mc-ghost-bar lc-ghost-th" />
+                <span className="mc-ghost-bar lc-ghost-th lc-ghost-th-str" />
+              </div>
+              {GHOST_LINK_ROWS.map((r) => (
+                <div className="lc-row lc-ghost-row" key={r}>
+                  <span className="lc-ghost-lines">
+                    <span className="mc-ghost-bar lc-ghost-name" />
+                    <span className="mc-ghost-bar lc-ghost-meta" />
+                  </span>
+                  <span className="lc-ghost-box" />
+                </div>
+              ))}
+              <div className="lc-row lc-ghost-add">
+                <span className="mc-ghost-bar lc-ghost-add-bar" />
+              </div>
+            </div>
+            <span className="mc-ghost-bar lc-ghost-help" />
+          </section>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -556,32 +606,24 @@ function LinkSection({
 }) {
   return (
     <section className="lc-sec">
-      {/* Figma 802:2255 — 20px SemiBold title with a 24px plus on the far edge. */}
-      <div className="lc-sec-head">
-        <h2 className="lc-sec-title">
-          {KIND_PLURAL[kind]} · {items.length}
-        </h2>
-        <button
-          className="lc-sec-add"
-          onClick={onAdd}
-          title={KIND_ADD_TITLE[kind]}
-          aria-label={KIND_ADD_TITLE[kind]}
-        >
-          <PlusThinIcon />
-        </button>
-      </div>
+      {/* Figma 1416:1370 — 16px SemiBold, no count. */}
+      <h2 className="lc-sec-title">{KIND_PLURAL[kind]}</h2>
 
-      {/* Figma 801:2099 — the DS wash panel: header row + one row per link. */}
+      {/* Figma 801:2099 — the DS wash panel: header row, one row per link, then
+          the Add row. With nothing linked the Add row stands alone — a column
+          header over no rows says nothing. */}
       <div className="lc-panel">
-        <div className="lc-row lc-row-head">
-          <div className="lc-hcell">CERTIFICATION</div>
-          <div className="lc-hcell lc-hcell-str">
-            LINK STRENGTH
-            <span className="lc-info" data-tip={LINK_STRENGTH_TIP} role="note">
-              <InfoIcon />
-            </span>
+        {items.length > 0 && (
+          <div className="lc-row lc-row-head">
+            <div className="lc-hcell">CERTIFICATION</div>
+            <div className="lc-hcell lc-hcell-str">
+              LINK STRENGTH
+              <span className="lc-info" data-tip={LINK_STRENGTH_TIP} role="note">
+                <InfoIcon />
+              </span>
+            </div>
           </div>
-        </div>
+        )}
         {items.map(({ other, strength, edge }) => {
           const n = nodeById(other);
           if (!n) return null;
@@ -590,17 +632,23 @@ function LinkSection({
               key={edgeKey(edge)}
               node={n}
               strength={strength}
-              related={kind === "related"}
               onStrength={(v) => onStrength(edge, v)}
               onRemove={() => onRemove(edge)}
               onPick={() => onPickNode(other)}
             />
           );
         })}
-        {items.length === 0 && (
-          <div className="lc-panel-empty">Nothing linked yet.</div>
-        )}
+        {/* Figma 1416:1362 — the Quiz Questions card's Add row (`.qz-addrow`),
+            the panel's last row so it drops the hairline. */}
+        <div className="qz-addrow qz-addrow--last">
+          <button className="qz-addrow-btn" onClick={onAdd}>
+            <TreeAddIcon />
+            {KIND_ADD_ROW[kind]}
+          </button>
+        </div>
       </div>
+
+      <p className="form-help">{KIND_HELP[kind]}</p>
     </section>
   );
 }
@@ -608,14 +656,12 @@ function LinkSection({
 function LinkRow({
   node,
   strength,
-  related,
   onStrength,
   onRemove,
   onPick,
 }: {
   node: ContentNode;
   strength: number;
-  related: boolean;
   onStrength: (strength: number) => void;
   onRemove: () => void;
   onPick: () => void;
@@ -626,11 +672,8 @@ function LinkRow({
       <button className="lc-row-main" onClick={onPick} title={node.name}>
         <span className="lc-row-name">
           {node.name}
-          {related && <span className="lc-row-swap" title="Two-way link"> ⇄</span>}
         </span>
-        <span className="lc-row-meta">
-          {node.industry ?? "—"} · {node.tasksCount} Tasks
-        </span>
+        <span className="lc-row-meta">{rowMeta(node)}</span>
       </button>
       <div className="lc-row-imp">
         <input
@@ -646,7 +689,7 @@ function LinkRow({
           aria-label="Link Strength"
         />
         <button className="lc-row-remove" title="Remove Link" onClick={onRemove}>
-          <SmallXIcon />
+          <RowCloseIcon />
         </button>
       </div>
     </div>
@@ -655,40 +698,54 @@ function LinkRow({
 
 /* -------------------------------- Referenced by ------------------------------- */
 
-function ReferencedBy({
+type RefItem = { id: string; name: string; kind: "prerequisite" | "recommended" };
+
+/** Figma 1417:1373 — "Referenced by 4 · A, B and C recommend this
+ *  Certification to users following their completion. D lists this as a
+ *  prerequisite." Each name opens that Certification's own Content Links. */
+function ReferencedByFooter({
   items,
   onPickNode,
 }: {
-  items: { id: string; name: string; tag: string }[];
+  items: RefItem[];
   onPickNode: (id: string) => void;
 }) {
-  if (items.length === 0) return null;
-  const shown = items.slice(0, 6);
-  const extra = items.length - shown.length;
+  const recommenders = items.filter((r) => r.kind === "recommended");
+  const prereqOf = items.filter((r) => r.kind === "prerequisite");
+  // A Certification on both sides is still one referrer.
+  const count = new Set(items.map((r) => r.id)).size;
+
+  function names(list: RefItem[]) {
+    return list.map((r, i) => (
+      <span key={`${r.id}-${i}`}>
+        {i > 0 && (i === list.length - 1 ? " and " : ", ")}
+        <button className="lc-foot-link" onClick={() => onPickNode(r.id)}>
+          {r.name}
+        </button>
+      </span>
+    ));
+  }
+
   return (
-    <div className="lc-refby">
-      <SectionHeading
-        label={`Referenced By · ${items.length}`}
-        trailing={
-          <span className="form-help lc-refby-note">
-            Read-only — edit from the other Certification's page
-          </span>
-        }
-      />
-      <div className="lc-refby-row">
-        {shown.map((r, i) => (
-          <button
-            key={`${r.id}-${i}`}
-            className="cta-quiet"
-            onClick={() => onPickNode(r.id)}
-            title="Focus on this certification"
-          >
-            {r.name}
-            <span className="lc-ref-tag">{r.tag}</span>
-          </button>
-        ))}
-        {extra > 0 && <span className="lc-ref-more">+ {extra} more</span>}
-      </div>
-    </div>
+    <footer className="lc-foot">
+      <p className="lc-foot-text">
+        <span className="lc-foot-count">Referenced by {count}</span>
+        {" · "}
+        {recommenders.length > 0 && (
+          <>
+            {names(recommenders)}
+            {recommenders.length === 1 ? " recommends" : " recommend"} this
+            Certification to users following their completion.
+          </>
+        )}
+        {recommenders.length > 0 && prereqOf.length > 0 && " "}
+        {prereqOf.length > 0 && (
+          <>
+            {names(prereqOf)}
+            {prereqOf.length === 1 ? " lists" : " list"} this as a prerequisite.
+          </>
+        )}
+      </p>
+    </footer>
   );
 }

@@ -16,10 +16,9 @@ export type Certification = {
   tasks: number;
   createdBy: string;
   // The Details step's description and Time to Complete estimate. Both are
-  // optional, so a draft can be saved without them.
+  // optional, so a Certification can be saved without them.
   description?: string;
   timeToComplete?: { value: number; unit: CertTimeUnit };
-  draft?: boolean;
   dateCreated?: string;
   dateModified?: string;
   visibility?: CertVisibility;
@@ -40,7 +39,7 @@ export type Certification = {
 };
 
 /* The Details step's long-form fields, kept apart from the seed rows below so
-   each row stays one scannable line. The draft (Heat Pump Specialist) has
+   each row stays one scannable line. Heat Pump Specialist (hidden) has
    neither yet, so the empty case is covered too. */
 const CERT_DETAILS: Record<string, Pick<Certification, "description" | "timeToComplete">> = {
   "C-0421": {
@@ -183,7 +182,7 @@ export const certifications: Certification[] = [
   C("C-0242", "Solar PV Installer Basics", "Solar & Renewables › Solar PV", "2.2", 12, "SkillCat", "Jan 18, 2023", "Sep 12, 2025", { careerStage: "Apprentice", type: "Program", payment: "Consumable", resetsProgress: true, keywords: ["solar", "pv", "installer", "renewables"], tags: ["MultiFamily Maintenance"] }),
   C("C-0221", "Welding Inspector Prep", "Welding", "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
   // Blank type — exercises the "No Type" filter.
-  C("C-0612", "Heat Pump Specialist (2026)", "HVAC › Residential", "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { draft: true, careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"], tags: ["Residential HVAC"] }),
+  C("C-0612", "Heat Pump Specialist (2026)", "HVAC › Residential", "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { visibility: "Hidden", careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"], tags: ["Residential HVAC"] }),
   // Company-created certifications — owned by a B2B account, editable only from
   // the B2B Dashboard (exercises the company edit-block flow).
   C("C-0588", "ARS Onboarding Path", "HVAC", "1.2", 7, "ARS", "Feb 18, 2026", "Apr 25, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["ars", "onboarding"] }),
@@ -216,7 +215,7 @@ export const CERT_BY_USEDIN: Map<string, Certification> = (() => {
 
 /* A Certification stores its Industry as a full path ("HVAC › Residential").
    The top-level Industry is everything before the first separator — what a
-   column headed "Industry" shows, so two sub-Industries of one Industry read
+   column headed "Industries" shows, so two sub-Industries of one Industry read
    as that one Industry rather than as two entries. */
 export function topIndustry(path: string): string {
   return path.split(" › ")[0];
@@ -250,7 +249,7 @@ export type CertColumn =
 
 export const CERT_OPTIONAL_COLUMNS: { key: CertColumn; label: string }[] = [
   { key: "id", label: "ID" },
-  { key: "industry", label: "Industry" },
+  { key: "industry", label: "Industries" },
   { key: "careerStage", label: "Career Stage" },
   { key: "type", label: "Type" },
   { key: "payment", label: "Payment" },

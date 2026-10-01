@@ -17,7 +17,7 @@ import { dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -329,22 +329,19 @@ export function AttemptsPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks">
+          {/* Reached from a Task's "View Attempts" action, so the Tasks crumb
+              is the way back. Opened as a standalone tab there is nowhere to
+              go back to, and the trail never names the page itself (Figma
+              1356:1828), so there is no crumb row at all. */}
+          {onBack && (
+            <nav className="rvc-crumbs" aria-label="Breadcrumb">
+              <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
+                Tasks
+              </button>
+            </nav>
+          )}
           <header className="tasks-header">
-            {/* Reached from a Task's "View Attempts" action, so the Tasks crumb
-                is the way back. Opened as a standalone tab there is nowhere to
-                go back to, and it stays a plain label. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                {onBack ? (
-                  <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
-                    Tasks
-                  </button>
-                ) : (
-                  <span className="rvc-crumb">Tasks</span>
-                )}
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Quiz Attempts</span>
-              </nav>
               <h1 className="tasks-title">Quiz Attempts</h1>
             </div>
           </header>
@@ -489,7 +486,7 @@ export function AttemptsPage({
         >
           {/* Body copy is children, not `description` — the shell's own
               convention for a confirm (Figma 483:588). */}
-          <p className="prm-text">
+          <p className="prm-content">
             {deleting.name}'s attempt #{deleting.attemptNumber} on “{deleting.quizName}”
             is removed, along with its answers and grade. This can't be undone.
           </p>

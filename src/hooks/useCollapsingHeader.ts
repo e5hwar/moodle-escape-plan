@@ -30,6 +30,12 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  *   data-clh     "landing" | "moving" | "collapsed" on the header — the coarse
  *                state CSS can't derive (what may take focus at either end);
  *                written only when it changes
+ *   --clh-nc-*   Manage Users only: the sizes the name-change card's morph
+ *                into its title note needs (the card's and the note's widths,
+ *                each one's count, the card's text column) — sizes text
+ *                decides and CSS can't know, measured like everything here:
+ *                on a resize or a content / font change, never per scroll
+ *                frame
  * and, in a browser without scroll timelines, feeds the fallback rules the
  * scroll offset (`--clh-s`, and the distance as a number, `--clh-dn`).
  */
@@ -114,12 +120,54 @@ export function useCollapsingHeader(startCollapsed = false) {
         width = w;
         header!.style.setProperty("--clh-vw", `${w}px`);
       }
+      measureMorph();
     }
 
+    // Manage Users' name-change card condenses into the note under the title
+    // (the `.tasks.clh.clh--banner` rules): every piece of the card travels to
+    // its twin in the note, so the CSS needs the two widths, the two counts'
+    // widths and the card's text-column height (it wraps on a narrow card,
+    // which moves its first line up). Layout sizes — computed style, never the
+    // bounding box, which carries the running transforms. The boxes are
+    // observed too: a count that changes, a font that loads or a line that
+    // wraps resizes them, not the header.
+    const observed = new Set<Element>();
+    let morph = "";
+    function measureMorph() {
+      const card = header!.querySelector<HTMLElement>(":scope > .clh-banner > .lm-banner");
+      const note = header!.querySelector<HTMLElement>(":scope > .tasks-note");
+      const cardCount = card?.querySelector<HTMLElement>(".lm-banner-count");
+      const cardText = card?.querySelector<HTMLElement>(".note-card-text");
+      const noteCount = note?.querySelector<HTMLElement>(".tasks-note-count");
+      if (!card || !note || !cardCount || !cardText || !noteCount) return;
+      for (const el of [card, note, cardCount, cardText, noteCount]) {
+        // Observe each once — observing again re-fires the callback.
+        if (!observed.has(el)) {
+          observed.add(el);
+          ro.observe(el);
+        }
+      }
+      const [cardW, noteW, cardCountW, noteCountW] = [card, note, cardCount, noteCount].map((el) =>
+        parseFloat(getComputedStyle(el).width),
+      );
+      const cardTextH = parseFloat(getComputedStyle(cardText).height);
+      if (!(cardW > 0 && noteW > 0 && cardCountW > 0 && noteCountW > 0 && cardTextH > 0)) return;
+      const key = `${cardW}|${noteW}|${cardCountW}|${noteCountW}|${cardTextH}`;
+      if (key === morph) return;
+      morph = key;
+      const st = header!.style;
+      st.setProperty("--clh-nc-card-w", `${cardW}px`);
+      st.setProperty("--clh-nc-note-w", `${noteW}px`);
+      st.setProperty("--clh-nc-card-count-w", `${cardCountW}px`);
+      st.setProperty("--clh-nc-note-count-w", `${noteCountW}px`);
+      st.setProperty("--clh-nc-card-text-h", `${cardTextH}px`);
+      st.setProperty("--clh-nc-sx", (noteW / cardW).toFixed(5));
+    }
+
+    const ro = new ResizeObserver(measure);
     apply();
     measure();
     sc.addEventListener("scroll", apply, { passive: true });
-    const ro = new ResizeObserver(measure);
     ro.observe(sc);
     ro.observe(header);
     return () => {

@@ -79,8 +79,6 @@ export function ReviewSubmissionDetail({
               Hands-On Task Submissions
             </button>
             <span className="rh-crumb-sep">›</span>
-            <span className="rh-crumb-link">{submission.userName}</span>
-            <span className="rh-crumb-sep">›</span>
             <span className="rh-crumb-current">{submission.taskName}</span>
           </div>
 

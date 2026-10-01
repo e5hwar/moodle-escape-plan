@@ -5,8 +5,9 @@ import {
 } from "../data/nameChangeRequests";
 import { users } from "../data/users";
 import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import { PrmModal } from "./PrmModal";
-import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon, CrumbChevronIcon } from "./icons";
+import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 
 const PAGE_SIZE = 25;
@@ -127,20 +128,16 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
     <div className="main">
       <div className="workspace">
         <div className="tasks sch-page">
+          {/* This page is reached from the Manage Users header's Name Changes
+              button (it has no sidebar entry of its own), so the crumb is the
+              way back. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
+              Manage Users
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* This page is reached from the Manage Users header's Name Changes
-                button (it has no sidebar entry of its own), so the crumb is the
-                way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Operations</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-                  Manage Users
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Name Changes</span>
-              </nav>
               <h1 className="tasks-title">Name Change Requests</h1>
               <div className="tasks-subtitle">
                 <span>
@@ -318,10 +315,14 @@ function ReviewModal({
   const [mode, setMode] = useState<ReviewMode>("main");
   const [requestedName, setRequestedName] = useState(request.requestedName);
   const valid = requestedName.trim().length > 1;
+  // Says so once the field has been clicked into and out of empty (fieldFlags.tsx).
+  const { touched, touch, reset: resetTouched } = useTouchedKeys();
+  const nameMissing = requestedName.trim().length === 0 && touched.has("name");
 
   // Reset per-request state when the review target changes (e.g. after cycling to the next one).
   useEffect(() => {
     setMode("main");
+    resetTouched();
     setRequestedName(request.requestedName);
   }, [request.id, request.requestedName]);
 
@@ -416,13 +417,15 @@ function ReviewModal({
               <p className="form-help">The name currently on the account. This can't be edited.</p>
             </div>
 
-            <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
+            <div className="form-group" onBlur={leave(() => touch("name"))} style={{ marginBottom: 0, maxWidth: "none" }}>
               <label className="form-label">
-                Requested name <span className="req">*</span>
+                Requested name<span className="req">*</span>
+                {nameMissing && <span className="form-label-error">Requested name cannot be left empty</span>}
               </label>
               <input
                 autoFocus
-                className="form-input"
+                className={`form-input${nameMissing ? " has-error" : ""}`}
+                aria-invalid={nameMissing || undefined}
                 value={requestedName}
                 onChange={(e) => setRequestedName(e.target.value)}
               />
@@ -435,14 +438,16 @@ function ReviewModal({
       {confirm && (
         <PrmModal
           title={confirm.title}
-          description={confirm.description}
           cancelLabel="Back"
           onCancel={() => setMode("main")}
           confirmLabel={confirm.cta}
           danger={mode === "reject"}
           go={mode === "approve"}
           onConfirm={() => onResolved(request.id)}
-        />
+        >
+          {/* Pop-up content (Figma 667:884), not a grey subtitle under the title. */}
+          <p className="prm-content">{confirm.description}</p>
+        </PrmModal>
       )}
     </>
   );

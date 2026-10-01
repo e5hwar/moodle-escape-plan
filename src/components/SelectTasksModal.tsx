@@ -92,7 +92,9 @@ export function SelectTasksModal({
   onConfirm: (ids: string[]) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [types, setTypes] = useState<string[]>([]);
+  /* Opens pre-filtered to the Task types that award Skills — Hands-On and
+     Quiz. Clearing the pill reveals xAPI and Resources. */
+  const [types, setTypes] = useState<string[]>(["Hands-On Task", "Quiz"]);
   /* Figma 1138:1119 draws this pill APPLIED with "Visible": the picker opens
      showing only Tasks learners can currently see. Clearing it reveals the
      hidden ones. */
@@ -145,10 +147,25 @@ export function SelectTasksModal({
     });
   }, [pool, query, types, vis, certs, inds]);
 
+  /* The Tasks already on the field when the picker opened are pinned to the
+     top, ticked, whatever the search, the filters or the SkillCat-only rule
+     say — a Skill can already link a Task from elsewhere, and hiding it here
+     would leave no way to see or untick it. Pinned by the OPENING value, so
+     unticking one doesn't make it jump away mid-edit. */
+  const [pinnedIds] = useState(value);
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort]);
+    const order = (arr: Task[]) => {
+      const out = [...arr].sort((a, b) => compare(a, b, sort.key));
+      return sort.dir === "desc" ? out.reverse() : out;
+    };
+    const pinned = order(
+      pinnedIds.flatMap((id) => {
+        const t = taskLibrary.find((x) => x.id === id);
+        return t ? [t] : [];
+      }),
+    );
+    return [...pinned, ...order(filtered.filter((t) => !pinnedIds.includes(t.id)))];
+  }, [filtered, sort, pinnedIds]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const visiblePage = Math.min(page, totalPages);
@@ -219,7 +236,13 @@ export function SelectTasksModal({
                 <PillTrigger
                   label="Task Type"
                   tip={FILTER_TIPS.taskPicker.type}
-                  value={summarize(types, TASK_TYPES)}
+                  /* Only four short types, so name them ("Hands-On Task, Quiz")
+                     rather than the shared "2 Selected" — in menu order. */
+                  value={
+                    types.length > 1 && types.length < TASK_TYPES.length
+                      ? TASK_TYPES.filter((t) => types.includes(t)).join(", ")
+                      : summarize(types, TASK_TYPES)
+                  }
                   open={open}
                   toggle={t}
                   onClear={() => resetPage(setTypes)([])}
@@ -292,7 +315,7 @@ export function SelectTasksModal({
               width={300}
               trigger={({ open, toggle: t }) => (
                 <PillTrigger
-                  label="Industry"
+                  label="Industries"
                   tip={FILTER_TIPS.taskPicker.industry}
                   value={summarize(inds, allIndustries)}
                   open={open}
@@ -334,7 +357,7 @@ export function SelectTasksModal({
                   <Th col="name" label="Task Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="type" label="Task Type" cls="stm-col-type" sort={sort} toggle={toggleSort} />
                   <Th col="certs" label="Certifications" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="industry" label="Industry" cls="stm-col-industry" sort={sort} toggle={toggleSort} />
+                  <Th col="industry" label="Industries" cls="stm-col-industry" sort={sort} toggle={toggleSort} />
                   <Th col="dateModified" label="Edited On" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>

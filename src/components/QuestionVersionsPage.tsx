@@ -11,7 +11,7 @@ import {
   PagePrevIcon,
   PageNextIcon,
   CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Version History — a full page, opened from the Question Bank row menu.
@@ -104,11 +104,14 @@ function trimToSubtext(text: string): string {
 export function QuestionVersionsPage({
   question,
   onBack,
+  onBackToTasks,
   onView,
 }: {
   question: Question;
   /** Back to the Question Bank list — the breadcrumb and Escape. */
   onBack: () => void;
+  /** The trail's first step: the Question Bank hangs off Tasks. */
+  onBackToTasks: () => void;
   /** Opens the question editor on that version — locked unless it's current. */
   onView: (version: number) => void;
 }) {
@@ -146,18 +149,20 @@ export function QuestionVersionsPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks">
-          {/* Reached from the Question Bank row menu, so that crumb is the way
-              back — the same page head Quiz Attempts and Who Paid wear. The
-              subtext names the question this history belongs to. */}
+          {/* Reached from the Question Bank row menu — the full trail above
+              it, Tasks › Question Bank, every step a way back. The subtext
+              names the question this history belongs to. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+              Tasks
+            </button>
+            <CrumbChevronIcon />
+            <button className="rvc-crumb" onClick={onBack} title="Back to the Question Bank">
+              Question Bank
+            </button>
+          </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button className="rvc-crumb" onClick={onBack} title="Back to the Question Bank">
-                  Question Bank
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Version History</span>
-              </nav>
               <h1 className="tasks-title">Version History</h1>
               {/* The full stem is on the hover tip, so the 200-character cut
                   never hides anything. */}

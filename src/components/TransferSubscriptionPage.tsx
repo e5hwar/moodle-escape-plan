@@ -12,7 +12,6 @@ import {
 import {
   InfoCircleIcon,
   InfoTipIcon,
-  KeyCommandIcon,
   SwapRolesIcon,
   WarnTriangleIcon,
 } from "./icons";
@@ -24,6 +23,7 @@ import { PrmModal } from "./PrmModal";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCard } from "./TableCard";
 import { SelectUsersModal } from "./SelectUsersModal";
+import { SkeletonOverlay } from "./SkeletonOverlay";
 
 /**
  * Transfer Subscription — a two-step wizard for moving an active subscription
@@ -460,24 +460,14 @@ export function TransferSubscriptionPage({
                       <span className="mc-ghost-bar mgf-ghost-heading" />
                       <GhostCompare rows={3} />
                     </div>
-                    <div className="mgf-empty-inner">
-                      <div className="mc-empty-title">{emptyAsk.title}</div>
-                      <div className="mc-empty-sub">{emptyAsk.sub}</div>
-                      {/* The node ends on the search bar's own ⌘K badge, and it
-                          is honest here: step 1 binds ⌘K to this same picker. */}
-                      <button
-                        className="btn-save-draft mc-empty-cta"
-                        onClick={() => setShowPicker(true)}
-                      >
-                        {emptyAsk.cta}
-                        <span className="usearch-kbd">
-                          <span className="kbd-cmd">
-                            <KeyCommandIcon />
-                          </span>
-                          <span className="kbd-letter">K</span>
-                        </span>
-                      </button>
-                    </div>
+                    {/* The ⌘K on its button is honest: step 1 binds ⌘K to
+                        this same picker. */}
+                    <SkeletonOverlay
+                      title={emptyAsk.title}
+                      sub={emptyAsk.sub}
+                      cta={emptyAsk.cta}
+                      onCta={() => setShowPicker(true)}
+                    />
                   </div>
                 </>
               )}
@@ -582,22 +572,21 @@ export function TransferSubscriptionPage({
           /* Prose, not a summary list: the review step behind this dialog is
              where the detail lives, and repeating a digest of it here just
              asks to be read twice. */
-          description={
-            <>
-              <strong>{src.sub.plan}</strong> moves off <strong>{src.email}</strong> — with its
-              billing, renewal date and remaining term — and onto{" "}
-              <strong>{dst.email}</strong>.{" "}
-              {dstHasActive
-                ? `${dst.name}'s ${dst.sub.plan} is cancelled and refunded pro-rata first, and `
-                : ""}
-              {src.name} drops to Free, keeping every record and purchase on the account.
-            </>
-          }
           confirmLabel="Yes, transfer subscription"
           danger
           onCancel={() => setShowModal(false)}
           onConfirm={confirmTransfer}
-        />
+        >
+          <p className="prm-content">
+            <strong>{src.sub.plan}</strong> moves off <strong>{src.email}</strong> — with its
+            billing, renewal date and remaining term — and onto{" "}
+            <strong>{dst.email}</strong>.{" "}
+            {dstHasActive
+              ? `${dst.name}'s ${dst.sub.plan} is cancelled and refunded pro-rata first, and `
+              : ""}
+            {src.name} drops to Free, keeping every record and purchase on the account.
+          </p>
+        </PrmModal>
       )}
     </div>
   );

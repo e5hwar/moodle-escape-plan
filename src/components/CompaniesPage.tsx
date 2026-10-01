@@ -66,7 +66,9 @@ import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./Date
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
-import { MultiSelect, RadioCard } from "./NewCompanyWizard";
+import { MultiSelect, RadioCard, CompanyReviewCards, planFor } from "./NewCompanyWizard";
+import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
+import { ConfirmCard } from "./ConfirmCard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
 
@@ -257,7 +259,19 @@ type Props = {
 };
 
 export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig }: Props) {
-  useCreateShortcut(onNewCompany);
+  // The Company whose row was clicked — read back in the side drawer, the way
+  // a Task or Certification row opens its own. Held by id so the drawer follows
+  // the record through an update.
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const drawerCompany = drawerId ? companies.find((c) => c.id === drawerId) : undefined;
+  // A row menu opened from the preview panel's kebab: every item that opens a
+  // modal or another view closes the panel first, so nothing is left under it.
+  function closePanelThen(run: () => void) {
+    setDrawerId(null);
+    run();
+  }
+  // "C" stands down while the drawer is open — the wizard would open behind it.
+  useCreateShortcut(onNewCompany, !drawerId);
   const [query, setQuery] = useState(initialQuery);
   /* Opens UNFILTERED — every company is listed until the user narrows it. The
      table used to default to Status: Active, which quietly hid trials, grants
@@ -513,6 +527,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                           company={c}
                           cols={visibleCols}
                           ctx={colContext}
+                          onOpen={() => setDrawerId(c.id)}
                           onEdit={() => onEditCompany(c)}
                           onManageSubscription={() => onManageSubscription(c)}
                           onOpenMenu={(rect) => setMenu({ company: c, rect })}
@@ -543,13 +558,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           company={menu.company}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEditCompany={() => onEditCompany(menu.company)}
-          onManageSubscription={() => onManageSubscription(menu.company)}
-          onEditAccountHolder={() => setHolderModal(menu.company)}
-          onAddBillingEmails={() => setBillingModal(menu.company)}
-          onCancelSubscription={() => setCancelModal(menu.company)}
-          onViewEmployees={() => onViewEmployees(menu.company)}
-          onViewInvoices={() => setInvoicesModal(menu.company)}
+          onEditCompany={() => closePanelThen(() => onEditCompany(menu.company))}
+          onManageSubscription={() => closePanelThen(() => onManageSubscription(menu.company))}
+          onEditAccountHolder={() => closePanelThen(() => setHolderModal(menu.company))}
+          onAddBillingEmails={() => closePanelThen(() => setBillingModal(menu.company))}
+          onCancelSubscription={() => closePanelThen(() => setCancelModal(menu.company))}
+          onViewEmployees={() => closePanelThen(() => onViewEmployees(menu.company))}
+          onViewInvoices={() => closePanelThen(() => setInvoicesModal(menu.company))}
           onCopyPaymentLink={() => {
             navigator.clipboard?.writeText(
               stripePaymentLink(menu.company.email, menu.company.name),
@@ -558,7 +573,26 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
             // the write would otherwise give no sign the item did anything.
             setCopiedAt(Date.now());
           }}
-          onDeleteCompany={() => setDeleteModal(menu.company)}
+          onDeleteCompany={() => closePanelThen(() => setDeleteModal(menu.company))}
+        />
+      )}
+
+      {drawerCompany && (
+        <CompanyDrawer
+          key={drawerCompany.id}
+          company={drawerCompany}
+          onClose={() => setDrawerId(null)}
+          /* Closes the panel first: Edit Company Details replaces the page,
+             and nothing of this panel should survive into it. */
+          onEdit={() => {
+            setDrawerId(null);
+            onEditCompany(drawerCompany);
+          }}
+          onViewEmployees={() => {
+            setDrawerId(null);
+            onViewEmployees(drawerCompany);
+          }}
+          onMore={(rect) => setMenu({ company: drawerCompany, rect })}
         />
       )}
 
@@ -814,13 +848,15 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, cols, ctx, onEdit, onManageSubscription, onOpenMenu, menuOpen,
+  company, cols, ctx, onOpen, onEdit, onManageSubscription, onOpenMenu, menuOpen,
 }: {
   company: Company;
   /** Page state the date-scoped cells report within. */
   ctx: ColContext;
   /** The visible optional columns, in the user's order. */
   cols: CompanyCol[];
+  /** Row click — opens the Company's drawer. The row's buttons stop propagation. */
+  onOpen: () => void;
   onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
@@ -832,7 +868,7 @@ function CompanyRow({
      kebab, and without it the menu would be unreachable while hovering. */
   const pendingSetup = billing.status === "Pending Payment Setup";
   return (
-    <tr className={menuOpen ? "menu-open" : ""}>
+    <tr className={menuOpen ? "menu-open" : ""} onClick={onOpen}>
       <td className="col-name">{company.name}</td>
       <td className="col-status"><StatusPill billing={billing} /></td>
       {cols.map((c) => (
@@ -848,29 +884,136 @@ function CompanyRow({
         <button
           className="row-action-btn lone-dots"
           aria-label="More"
-          onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
+          onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
         >
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit" title="Edit company details" onClick={onEdit}>
+          <button className="row-action-btn" aria-label="Edit" title="Edit company details" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
             <RowEditIcon />
           </button>
           {!pendingSetup && (
-            <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={onManageSubscription}>
+            <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={(e) => { e.stopPropagation(); onManageSubscription(); }}>
               <RowCardIcon />
             </button>
           )}
           <button
             className="row-action-btn"
             aria-label="More"
-            onClick={(e) => onOpenMenu(e.currentTarget.getBoundingClientRect())}
+            onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget.getBoundingClientRect()); }}
           >
             <RowKebabIcon />
           </button>
         </div>
       </td>
     </tr>
+  );
+}
+
+/* ─────────────── Row drawer ─────────────── */
+
+/* The review values a Company's panel shows. Seed records store few of the
+ * fields, so the owners, the account holder and the billing terms come from
+ * the same derivations the table and the hover card use, and Tax Behaviour
+ * from the Edit form's own default. */
+function reviewCompany(company: Company): Omit<Company, "id"> {
+  const billing = getCompanyBilling(company);
+  const holder = currentHolder(company);
+  return {
+    ...company,
+    taxStatus: company.taxStatus ?? "Taxable",
+    assignedCsm: getAssignedCsm(company),
+    assignedSalesRep: getAssignedSalesRep(company),
+    contactName: holder.name,
+    phone: holder.phone,
+    billingCycle: billing.billingCycle,
+    currency: billing.currency,
+    ratePerSeat: billing.ratePerSeat,
+    payment: billing.payment,
+  };
+}
+
+/** A Company's row preview panel ("Preview Panel 3a"): the account at a
+ *  glance — status, plan, seats, the dashboard's last visit — then the
+ *  Overview card and the New Company wizard's own Review cards. No learner
+ *  preview: an account isn't content. */
+function CompanyDrawer({
+  company,
+  onClose,
+  onEdit,
+  onViewEmployees,
+  onMore,
+}: {
+  company: Company;
+  onClose: () => void;
+  onEdit: () => void;
+  onViewEmployees: () => void;
+  onMore: (rect: DOMRect) => void;
+}) {
+  const billing = getCompanyBilling(company);
+  const free = Math.max(0, billing.seatsTotal - billing.seatsUsed);
+  const lastDays = getDashboardLastAccessDays(company);
+  const actions: PreviewAction[] = [
+    { label: "View Employees", icon: <MenuUsersIcon />, onClick: onViewEmployees },
+  ];
+  if (billing.status === "Pending Payment Setup")
+    actions.push({
+      label: "Copy Payment Link",
+      icon: <CopyIcon />,
+      copy: stripePaymentLink(company.email, company.name),
+    });
+
+  return (
+    <PreviewPanel
+      title={company.name}
+      description={company.email}
+      meta={[
+        <span className="pp-id">{company.id}</span>,
+        company.tier ?? "No plan",
+        company.industry[0] &&
+          (company.industry.length > 1
+            ? `${company.industry[0]} +${company.industry.length - 1}`
+            : company.industry[0]),
+        <StatusPill billing={billing} />,
+        `Created ${billing.createdOn}`,
+      ]}
+      onEdit={onEdit}
+      actions={actions}
+      onMore={onMore}
+      stats={[
+        { count: String(billing.seatsUsed), title: "Seats in Use", sub: `Of ${billing.seatsTotal}` },
+        { count: String(free), title: "Seats Free", sub: free > 0 ? "To assign" : "All taken" },
+        {
+          count: lastDays === null ? "—" : String(lastDays),
+          title: "Last Login",
+          sub: lastDays === null ? "Never" : lastDays === 1 ? "Day ago" : "Days ago",
+        },
+      ]}
+      tabs={[{ key: "details", label: "Details", content: <CompanySummary company={company} /> }]}
+      onClose={onClose}
+    />
+  );
+}
+
+/* The panel's review cards: an Overview of what the table knows about the
+ * account that no form sets (its status, how it signed up, when, the
+ * dashboard's last visit), then the New Company wizard's own Review cards. */
+function CompanySummary({ company }: { company: Company }) {
+  const billing = getCompanyBilling(company);
+  return (
+    <div className="confirm-cards">
+      <ConfirmCard
+        title="Overview"
+        fillBlanks
+        rows={[
+          ["Status", <StatusPill billing={billing} />],
+          ["Sign-Up Method", billing.signUp],
+          ["Created On", billing.createdOn],
+          ["Dashboard Last Access", getDashboardLastAccess(company)],
+        ]}
+      />
+      <CompanyReviewCards company={reviewCompany(company)} plan={planFor(company)} tier={company.tier} compact />
+    </div>
   );
 }
 

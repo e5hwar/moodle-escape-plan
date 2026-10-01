@@ -3,8 +3,9 @@ import { createPortal } from "react-dom";
 import { FieldLockIcon } from "./icons";
 import { PrmModal } from "./PrmModal";
 
-/* Locked completion criteria while editing an existing Task or Certification
-   (Figma 1360:1883 "Atomic Component - Locked Field").
+/* The Locked Field (Figma 1360:1883 "Atomic Component - Locked Field"), and
+   the completion-criteria gate built on it while editing an existing Task or
+   Certification.
 
    The field keeps its label and its controls in place; between them sits a
    Locked banner — padlock, "Locked", a line saying how many learners have
@@ -32,6 +33,50 @@ function learnersLine(count: number, subject: CriteriaSubject): string {
   return count === 1
     ? `1 learner has completed this ${subject}.`
     : `${n} learners have completed this ${subject}.`;
+}
+
+/** The Locked Field itself (Figma 1360:1883): a banner — padlock, a title, a
+ *  line of explanation and an optional action on the right — over a disabled
+ *  <fieldset> holding the field's controls, which stay drawn as they are.
+ *  Completion criteria put their Edit Criteria button in the action slot; a
+ *  permanent lock (a Quiz's Structure) passes none. Banner and controls space
+ *  themselves (8px, the node's gap), so the field reads the same inside a flex
+ *  form-group or a block one, and the wrapper stays after unlocking so the
+ *  controls' tree is stable. */
+export function LockedField({
+  locked,
+  title = "Locked",
+  sub,
+  action,
+  children,
+}: {
+  locked: boolean;
+  title?: string;
+  sub: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="crit-lock-wrap">
+      {locked && (
+        <div className="crit-lock-banner" role="note">
+          <div className="crit-lock-lead">
+            <span className="crit-lock-icon">
+              <FieldLockIcon />
+            </span>
+            <div className="crit-lock-text">
+              <span className="crit-lock-title">{title}</span>
+              <span className="crit-lock-sub">{sub}</span>
+            </div>
+          </div>
+          {action}
+        </div>
+      )}
+      <fieldset className="crit-lock" disabled={locked}>
+        {children}
+      </fieldset>
+    </div>
+  );
 }
 
 /** Wraps the criteria controls. `banner` false = a second gated stretch of the
@@ -76,37 +121,26 @@ export function CompletionCriteriaGate({
   return (
     <>
       {banner ? (
-        /* Banner and controls space themselves (8px, the node's gap), so the
-           field reads the same inside a flex form-group or a block one. The
-           wrapper stays after unlocking, keeping the controls' tree stable. */
-        <div className="crit-lock-wrap">
-          {locked && (
-            <div className="crit-lock-banner" role="note">
-              <div className="crit-lock-lead">
-                <span className="crit-lock-icon">
-                  <FieldLockIcon />
-                </span>
-                <div className="crit-lock-text">
-                  <span className="crit-lock-title">Locked</span>
-                  <span className="crit-lock-sub">
-                    {learners} Editing the criteria recomputes their completion
-                    status and time of completion when you save.
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="prm-quiet"
-                onClick={() => setStep(1)}
-              >
-                Edit Criteria
-              </button>
-            </div>
-          )}
-          <fieldset className="crit-lock" disabled={locked}>
-            {children}
-          </fieldset>
-        </div>
+        <LockedField
+          locked={locked}
+          sub={
+            <>
+              {learners} Editing the criteria recomputes their completion
+              status and time of completion when you save.
+            </>
+          }
+          action={
+            <button
+              type="button"
+              className="prm-quiet"
+              onClick={() => setStep(1)}
+            >
+              Edit Criteria
+            </button>
+          }
+        >
+          {children}
+        </LockedField>
       ) : (
         <fieldset className="crit-lock" disabled={locked}>
           {children}
@@ -119,12 +153,12 @@ export function CompletionCriteriaGate({
         createPortal(
           <PrmModal
             title="Edit Completion Criteria?"
-            description={learners}
             confirmLabel="Edit Criteria"
             onCancel={() => setStep(0)}
             onConfirm={() => setStep(2)}
           >
-            <p className="prm-text">
+            <p className="prm-content">{learners}</p>
+            <p className="prm-content">
               When you save, every learner's completion status and time of
               completion for this {noun} is recomputed under the new criteria,
               and learners who no longer meet them lose their completion.{" "}
@@ -140,7 +174,6 @@ export function CompletionCriteriaGate({
         createPortal(
           <PrmModal
             title="Are you sure?"
-            description={`Completion for this ${noun} will be recomputed under the new criteria when you save. This can't be undone.`}
             confirmLabel="Yes, Edit Criteria"
             cancelLabel="Go Back"
             danger
@@ -149,7 +182,12 @@ export function CompletionCriteriaGate({
               setStep(0);
               onUnlock();
             }}
-          />,
+          >
+            <p className="prm-content">
+              Completion for this {noun} will be recomputed under the new criteria when
+              you save. This can't be undone.
+            </p>
+          </PrmModal>,
           document.body,
         )}
     </>

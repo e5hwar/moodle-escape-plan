@@ -6,12 +6,14 @@ import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, PriceIdMatrix, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
 import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
-import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, LockIcon, InfoTipIcon, InfoIcon12, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
+import type { PreviewScreenModel } from "./PreviewPanel";
+import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon12, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
+import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -19,7 +21,7 @@ import { questions as QUESTION_BANK, type Question } from "../data/questionBank"
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { PrmModal } from "./PrmModal";
 import { CheckRow } from "./Filters";
-import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
+import { CompletionCriteriaGate, LockedField, sampleCompletionCount } from "./CriteriaLock";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -179,8 +181,9 @@ type WizardData = {
   timeUnit: TimeUnit;
   visibility: Visibility | null;
   /** Paywall flag — the Task needs a paid subscription, i.e. it is NOT part of
-   * the Free Trial. Distinct from the Task's `finalExam` flag. */
-  requiresSubscription: boolean;
+   * the Free Trial. Distinct from the Task's `finalExam` flag. `null` until the
+   * admin answers — a mandatory field with no default. */
+  requiresSubscription: boolean | null;
   tags: string[];
 
   // xAPI
@@ -297,10 +300,9 @@ const INITIAL_DATA: WizardData = {
   timeValue: "",
   timeUnit: "minutes",
   visibility: DEFAULT_VISIBILITY,
-  /* Defaults off for every Task type — the toggle's copy still recommends
-     turning it on for Tasks that complete a Certification, but that's a
-     per-Task call, not the default. */
-  requiresSubscription: false,
+  /* No default for any Task type: a mandatory answer, so free-trial access is
+     always a decision rather than whatever the control happened to start on. */
+  requiresSubscription: null,
   tags: [],
 
   packageEn: [],
@@ -525,7 +527,7 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
     descEn: editingTask.description ?? base.descEn,
     tags: editingTask.tags ?? base.tags,
     visibility: editingTask.hidden ? "hidden" : "visible",
-    requiresSubscription: editingTask.requiresSubscription ?? base.requiresSubscription,
+    requiresSubscription: editingTask.requiresSubscription ?? null,
     discoverable: editingTask.discoverable ?? base.discoverable,
     contentTags: recordContentTags(editingTask.tags),
     ...(time ? { timeValue: time.timeValue, timeUnit: time.timeUnit } : {}),
@@ -592,11 +594,11 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   // flags "needs input" once you've moved past it with an empty name, or after a
   // publish attempt — never while you're still filling it in for the first time.
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
-  const nameMissing = !data.nameEn.trim();
-  const showNameError = nameMissing && (step > 0 || attemptedSubmit);
-  // Set on a failed publish attempt: the mandatory fields, on any step, that
-  // are still empty. Cleared field-by-field as they're filled in.
-  const [missingKeys, setMissingKeys] = useState<ReadonlySet<string>>(new Set());
+  // Which fields have been clicked into and out of, and the furthest step
+  // opened so far — with `attemptedSubmit`, the three things that let a gap
+  // show (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const maxVisited = useMaxVisited(step);
 
   const stepIndex = useCallback(
     (id: string) => Math.max(0, steps.findIndex((s) => s.id === id)),
@@ -612,6 +614,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     const K = REQUIRED_FIELD_KEYS;
     const basics = 0;
     if (!d.nameEn.trim()) gaps.push({ step: basics, key: K.name });
+    if (d.requiresSubscription === null) gaps.push({ step: basics, key: K.subscription });
     if (isXapi) {
       // The Spanish package is optional — Spanish learners fall back to English.
       if (d.packageEn.length === 0) gaps.push({ step: basics, key: K.package });
@@ -702,19 +705,23 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
     return gaps.sort((a, b) => a.step - b.step);
   }, [isXapi, isFile, isQuiz, stepIndex]);
 
-  // Live view of the flagged fields: once a field is filled its error clears
-  // without waiting for another publish attempt.
-  const missing = useMemo(() => {
-    if (missingKeys.size === 0) return EMPTY_KEYS;
-    const still = new Set(collectMissing(data).map((g) => g.key));
-    return new Set([...missingKeys].filter((k) => still.has(k)));
-  }, [missingKeys, collectMissing, data]);
-
   /* Every mandatory field still empty, right now — the gate on publishing.
      Re-derived each render, so filling the last one enables the button on the
      keystroke rather than on the next attempt. */
   const gaps = useMemo(() => collectMissing(data), [collectMissing, data]);
   const canPublish = gaps.length === 0;
+
+  /* The gaps that SHOW (fieldFlags.tsx): clicked into and out of, on a step
+     already moved past, or every one of them after a blocked publish. Live —
+     filling a field clears it on the keystroke. */
+  const missing = useMemo(() => {
+    const out = new Set<string>();
+    for (const g of gaps) {
+      if (attemptedSubmit || maxVisited > g.step || touched.has(g.key)) out.add(g.key);
+    }
+    return out.size === 0 ? EMPTY_KEYS : out;
+  }, [gaps, attemptedSubmit, maxVisited, touched]);
+  const showNameError = missing.has(REQUIRED_FIELD_KEYS.name);
 
   /** Steps that still hold an empty mandatory field, whatever owns it. */
   const gapSteps = useMemo(() => new Set(gaps.map((g) => g.step)), [gaps]);
@@ -749,17 +756,28 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
      Task — the gap branch below is what a click on the *unavailable* button
      does instead: flag every missing field and jump to the step that owns the
      first one. */
-  function handlePublish() {
+  /* A new Task named like a Final Exam but open on the Free Trial is almost
+     always a mistake — it would let trial learners finish a Certification
+     without subscribing — so creating one asks first. Editing doesn't: the
+     rule is about what a Task starts out as. */
+  const [trialConfirm, setTrialConfirm] = useState(false);
+  const looksLikeFinalExam = /final exam/i.test(data.nameEn);
+
+  function handlePublish(trialConfirmed = false) {
     setAttemptedSubmit(true);
-    setMissingKeys(new Set(gaps.map((g) => g.key)));
     if (!canPublish) {
       goStep(gaps[0].step);
       return;
     }
+    if (!isEditing && !trialConfirmed && looksLikeFinalExam && data.requiresSubscription === false) {
+      setTrialConfirm(true);
+      return;
+    }
+    setTrialConfirm(false);
     if (onPrimary) {
       onPrimary(
         data.nameEn,
-        data.requiresSubscription,
+        data.requiresSubscription === true,
         data.timeValue.trim() ? `~${data.timeValue} ${data.timeUnit}` : undefined,
       );
       return;
@@ -784,10 +802,13 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
      two buttons have merged into one. */
   useWizardEnterShortcut(
     () => {
+      if (trialConfirm) return;
       if (!isLast) goStep(step + 1);
       else if (canPublish) handlePublish();
     },
-    handlePublish,
+    () => {
+      if (!trialConfirm) handlePublish();
+    },
   );
 
   return (
@@ -796,7 +817,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
-              {isEditing ? "Editing" : "Creating"}
+              {isEditing ? `Editing ${NEW_TITLE[taskType].replace(/^New /, "")}` : "Creating"}
             </span>
             <span className="wizard-brand-name">
               {editingTask ? editingTask.name : NEW_TITLE[taskType]}
@@ -858,24 +879,24 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             };
             return (
           isXapi ? (
-            step === 0 ? <XapiDetailsStep data={data} update={update} nameError={showNameError} missing={missing} /> :
+            step === 0 ? <XapiDetailsStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
             step === 1 ? <XapiLaunchStep data={data} update={update} /> :
-            <XapiCompletionStep data={data} update={update} missing={missing} {...gateProps} />
+            <XapiCompletionStep data={data} update={update} missing={missing} touch={touch} {...gateProps} />
           ) : isQuiz ? (
-            step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} /> :
-            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} /> :
+            step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
+            step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} /> :
             step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
-            step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} {...gateProps} /> :
-            step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} /> :
-            step === 5 ? <QuizIntegrityStep data={data} update={update} missing={missing} /> :
+            step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} {...gateProps} /> :
+            step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} touch={touch} /> :
+            step === 5 ? <QuizIntegrityStep data={data} update={update} missing={missing} touch={touch} /> :
             step === 6 ? <QuizReviewStep data={data} update={update} /> :
-            <QuizPaymentsStep data={data} update={update} missing={missing} />
+            <QuizPaymentsStep data={data} update={update} missing={missing} touch={touch} />
           ) : isFile ? (
-            step === 0 ? <ResourceBasicInfoStep data={data} update={update} nameError={showNameError} missing={missing} /> :
+            step === 0 ? <ResourceBasicInfoStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
             step === 1 ? <ResourceLaunchStep data={data} update={update} /> :
-            <UrlCompletionStep data={data} update={update} missing={missing} {...gateProps} />
+            <UrlCompletionStep data={data} update={update} missing={missing} touch={touch} {...gateProps} />
           ) : isHandsOn ? (
-            step === 0 ? <HandsOnBasicStep data={data} update={update} nameError={showNameError} /> :
+            step === 0 ? <HandsOnBasicStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
             step === 1 ? <HandsOnReferenceStep data={data} update={update} /> :
             step === 2 ? <HandsOnSubmissionStep data={data} update={update} /> :
             step === 3 ? <HandsOnCompletionStep data={data} update={update} {...gateProps} /> :
@@ -920,7 +941,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
               className={`btn-save-draft${canPublish ? "" : " is-disabled"}`}
               aria-disabled={!canPublish}
               data-tip={blockedTip}
-              onClick={handlePublish}
+              onClick={() => handlePublish()}
             >
               {createLabel}
               <WizardKeyHint shift />
@@ -935,7 +956,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
             }`}
             aria-disabled={isLast && !canPublish}
             data-tip={isLast ? blockedTip : undefined}
-            onClick={isLast ? handlePublish : () => goStep(step + 1)}
+            onClick={isLast ? () => handlePublish() : () => goStep(step + 1)}
           >
             {!isLast && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
             <span className="wizard-gate-btn-inner">
@@ -945,6 +966,35 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           </button>
         </div>
       </footer>
+
+      {/* Portalled to <body>, like the wizard's other modals, so the overlay
+          covers the whole screen rather than one pane. */}
+      {trialConfirm &&
+        createPortal(
+          <PrmModal
+            title="Allow access on the Free Trial?"
+            confirmLabel={`Yes, ${createLabel}`}
+            cancelLabel="Go Back"
+            onCancel={() => setTrialConfirm(false)}
+            onCancelButton={() => {
+              setTrialConfirm(false);
+              goStep(0);
+            }}
+            onConfirm={() => handlePublish(true)}
+          >
+            <p className="prm-content">
+              “{data.nameEn.trim()}” looks like a Final Exam, but it's set so learners can
+              access it during the Free Trial.
+            </p>
+            <p className="prm-content">
+              Are you sure this Task should be accessible during the trial? A Final Exam
+              that doesn't require a subscription lets learners complete a Certification
+              without subscribing. If you're unsure, check with the Product Team before
+              creating it.
+            </p>
+          </PrmModal>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -981,6 +1031,9 @@ type StepProps = {
   /** Keys of the mandatory fields a publish attempt found empty — see
    * {@link REQUIRED_FIELD_KEYS}. Steps read it to flag their own fields. */
   missing?: ReadonlySet<string>;
+  /** Marks a mandatory field as clicked-into-and-out-of (see fieldFlags.tsx);
+   * each field group's `onBlur` calls it with its own key. */
+  touch?: (key: string) => void;
 };
 
 /** Mandatory-field keys, shared by the collector and the steps that flag them. */
@@ -1009,6 +1062,7 @@ const REQUIRED_FIELD_KEYS = {
   timeLimit: "timeLimit",
   cooldown: "cooldown",
   autoAttempts: "autoAttempts",
+  subscription: "subscription",
 } as const;
 
 /** Reader-facing name of each mandatory field, for the tooltip that says why
@@ -1028,6 +1082,7 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   link: "Link",
   completion: "Completion Criteria",
   nateId: "NATE External IDs",
+  subscription: "Requires a Subscription",
 };
 
 /** Stable empty set, so the "nothing missing" memo doesn't churn its consumers. */
@@ -1059,7 +1114,7 @@ function buildTask(d: WizardData, taskType: TaskTypeKey): Omit<Task, "id"> {
     hidden,
     visibility: hidden ? "Hidden" : "Visible · published",
     discoverable: d.discoverable,
-    requiresSubscription: d.requiresSubscription,
+    requiresSubscription: d.requiresSubscription === true,
     ...(d.descEn.trim() ? { description: d.descEn.trim() } : {}),
     ...(d.timeValue.trim() ? { timeToComplete: `~${d.timeValue} ${d.timeUnit}` } : {}),
     ...(taskType === "quiz" && d.paywallOn ? { paywall: true } : {}),
@@ -1070,11 +1125,11 @@ function buildTask(d: WizardData, taskType: TaskTypeKey): Omit<Task, "id"> {
    no section dividers. Name is dual-language like everything else on the form
    (Figma 49:348 "Plain Text Input - Dual Language", EN Name / ES Nombre) — it
    was the last single-language name left in the wizard. */
-function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
+function XapiDetailsStep({ touch, data, update, nameError, missing }: StepProps) {
   return (
     <>
       <div className="wizard-fields">
-        <NameField data={data} update={update} nameError={nameError} />
+        <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
         <div className="form-group">
           <label className="form-label">Description</label>
@@ -1093,9 +1148,12 @@ function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
 
         <VisibilityField data={data} update={update} />
 
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("package"))}>
           <label className="form-label">
-            xAPI Package <span className="req">*</span>
+            xAPI Package<span className="req">*</span>
+            {missing?.has("package") && (
+              <span className="form-label-error">Upload the English xAPI package to publish.</span>
+            )}
           </label>
           <PackageField
             enFiles={data.packageEn}
@@ -1105,16 +1163,13 @@ function XapiDetailsStep({ data, update, nameError, missing }: StepProps) {
             error={missing?.has("package")}
             single
           />
-          {missing?.has("package") && (
-            <p className="form-error-text">Upload the English xAPI package to publish.</p>
-          )}
           <p className="form-help">
             If the Spanish file is left empty, Spanish learners will also see the
             English version
           </p>
         </div>
 
-        <SubscriptionAccessField data={data} update={update} />
+        <SubscriptionAccessField data={data} update={update} missing={missing} touch={touch} />
       </div>
     </>
   );
@@ -1131,7 +1186,7 @@ function XapiLaunchStep({ data, update }: StepProps) {
 }
 
 function XapiCompletionStep(props: StepProps) {
-  const { data, update, missing } = props;
+  const { touch, data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Task is reference content only — never marked complete." },
     { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the package." },
@@ -1141,12 +1196,15 @@ function XapiCompletionStep(props: StepProps) {
 
   return (
     <>
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria <span className="req">*</span>
+          Completion Criteria<span className="req">*</span>
+          {missing?.has("completion") && (
+            <span className="form-label-error">Choose how this Task is completed to publish.</span>
+          )}
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
-          <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
+          <div className="radio-card-group">
             {options.map((o) => (
               <RadioCard
                 key={o.key}
@@ -1158,9 +1216,6 @@ function XapiCompletionStep(props: StepProps) {
             ))}
           </div>
         </CompletionCriteriaGate>
-        {missing?.has("completion") && (
-          <p className="form-error-text">Choose how this Task is completed to publish.</p>
-        )}
       </div>
 
       <ScoreCaptureField data={data} update={update} />
@@ -1244,7 +1299,7 @@ function OrientationField({
 }
 
 function UrlCompletionStep(props: StepProps) {
-  const { data, update, missing } = props;
+  const { touch, data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Reference content only — the Task is never marked complete." },
     { key: "on-view", title: "Completes Upon Viewing", desc: "Marks complete as soon as the learner opens the Resource. When it opens outside the app (External Browser or External Application) the Task completes on launch, since the app can't observe it once it opens elsewhere." },
@@ -1252,12 +1307,15 @@ function UrlCompletionStep(props: StepProps) {
   ];
 
   return (
-    <div className="form-group">
+    <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
       <label className="form-label">
-        Completion Criteria <span className="req">*</span>
+        Completion Criteria<span className="req">*</span>
+        {missing?.has("completion") && (
+          <span className="form-label-error">Choose how this Task is completed to publish.</span>
+        )}
       </label>
       <CompletionCriteriaGate {...gateOf(props)}>
-        <div className={`radio-card-group${missing?.has("completion") ? " has-error" : ""}`}>
+        <div className="radio-card-group">
           {options.map((o) => (
             <RadioCard
               key={o.key}
@@ -1269,9 +1327,6 @@ function UrlCompletionStep(props: StepProps) {
           ))}
         </div>
       </CompletionCriteriaGate>
-      {missing?.has("completion") && (
-        <p className="form-error-text">Choose how this Task is completed to publish.</p>
-      )}
     </div>
   );
 }
@@ -1281,11 +1336,11 @@ function UrlCompletionStep(props: StepProps) {
 /* Flat field stack, same assembly as {@link XapiDetailsStep} — Resource type is
    a mandatory field like Name/Description (label + subtext + control), not a
    titled Section. */
-function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) {
+function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: StepProps) {
   const isFileType = data.resourceType === "file";
   return (
     <div className="wizard-fields">
-      <NameAndDescription data={data} update={update} nameError={nameError} />
+      <NameAndDescription data={data} update={update} nameError={nameError} touch={touch} />
 
       <TimeToCompleteField data={data} update={update} />
 
@@ -1293,7 +1348,7 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
 
       <div className="form-group">
         <label className="form-label">
-          Resource Type <span className="req">*</span>
+          Resource Type<span className="req">*</span>
         </label>
         <div className="radio-card-group">
           <RadioCard
@@ -1316,9 +1371,12 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
       </div>
 
       {isFileType ? (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("file"))}>
           <label className="form-label">
-            File <span className="req">*</span>
+            File<span className="req">*</span>
+            {missing?.has("file") && (
+              <span className="form-label-error">Upload the English file to publish.</span>
+            )}
           </label>
           <PackageField
             enFiles={data.fileEn}
@@ -1329,14 +1387,14 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
             error={missing?.has("file")}
             single
           />
-          {missing?.has("file") && (
-            <p className="form-error-text">Upload the English file to publish.</p>
-          )}
         </div>
       ) : (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("link"))}>
           <label className="form-label">
-            Link <span className="req">*</span>
+            Link<span className="req">*</span>
+            {missing?.has("link") && (
+              <span className="form-label-error">Enter a link to publish.</span>
+            )}
           </label>
           <LangField
             en={data.url}
@@ -1348,7 +1406,6 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
             type="url"
             inputMode="url"
             error={missing?.has("link")}
-            errorMessage="Enter a link to publish."
           />
           <p className="form-help">
             An external web address (including https://) or a SkillCat Deep Link
@@ -1358,7 +1415,7 @@ function ResourceBasicInfoStep({ data, update, nameError, missing }: StepProps) 
         </div>
       )}
 
-      <SubscriptionAccessField data={data} update={update} />
+      <SubscriptionAccessField data={data} update={update} missing={missing} touch={touch} />
     </div>
   );
 }
@@ -1436,13 +1493,13 @@ function ResourceLaunchStep({ data, update }: StepProps) {
 
 /* ─────────────────  Hands-On step components  ───────────────── */
 
-function HandsOnBasicStep({ data, update, nameError }: StepProps) {
+function HandsOnBasicStep({ touch, data, update, nameError, missing }: StepProps) {
   return (
     <>
-      <NameAndDescription data={data} update={update} nameError={nameError} />
+      <NameAndDescription data={data} update={update} nameError={nameError} touch={touch} />
       <TimeToCompleteField data={data} update={update} />
       <VisibilityField data={data} update={update} />
-      <SubscriptionAccessField data={data} update={update} />
+      <SubscriptionAccessField data={data} update={update} missing={missing} touch={touch} />
     </>
   );
 }
@@ -1557,7 +1614,12 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Media File Types Allowed</label>
+        <label className="form-label">
+          Media File Types Allowed
+          {noneSelected && (
+            <span className="form-label-error">Select at least one media type.</span>
+          )}
+        </label>
         <div className="review-list">
           <Toggle
             row
@@ -1578,9 +1640,6 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
             label="Audio"
           />
         </div>
-        {noneSelected && (
-          <p className="form-help error">Select at least one media type.</p>
-        )}
         <p className="form-help">
           Pick one or more. At least one type must be allowed.
         </p>
@@ -1590,7 +1649,7 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
 }
 
 function HandsOnCompletionStep(props: StepProps) {
-  const { data, update } = props;
+  const { touch, data, update } = props;
   const reviewerGrade = data.hoCompletion === "reviewer_grade";
 
   /* Maximum Attempts sits outside the lock: it doesn't decide what completes
@@ -1606,9 +1665,9 @@ function HandsOnCompletionStep(props: StepProps) {
       {/* Named and marked the same way the xAPI and Resource steps name theirs —
           one Completion Criteria field per Task type. No subtext: the two cards
           already say what each one means. */}
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria <span className="req">*</span>
+          Completion Criteria<span className="req">*</span>
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
           <div className="radio-card-group">
@@ -1770,10 +1829,10 @@ function ContentTagsSection({ data, update }: StepProps) {
 
 /* ─────────────────  Quiz step components  ───────────────── */
 
-function QuizBasicsStep({ data, update, nameError }: StepProps) {
+function QuizBasicsStep({ touch, data, update, nameError, missing }: StepProps) {
   return (
     <>
-      <NameField data={data} update={update} nameError={nameError} />
+      <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
       <div className="form-group">
         <label className="form-label">Description</label>
@@ -1790,7 +1849,7 @@ function QuizBasicsStep({ data, update, nameError }: StepProps) {
 
       <TimeToCompleteField data={data} update={update} />
       <VisibilityField data={data} update={update} />
-      <SubscriptionAccessField data={data} update={update} />
+      <SubscriptionAccessField data={data} update={update} missing={missing} touch={touch} />
     </>
   );
 }
@@ -1813,6 +1872,7 @@ const blankSection = (): QuizSection => ({
 const MIN_SECTIONS = 2;
 
 function QuizStructureStep({
+  touch,
   data,
   update,
   locked,
@@ -1836,73 +1896,60 @@ function QuizStructureStep({
 
   return (
     <>
-      {/* The structure itself is frozen once the Quiz exists. The Sections
-          table below sits OUTSIDE the lock — its pass marks recompute from
-          existing attempts — with its own structural controls disabled
+      {/* The structure itself is frozen once the Quiz exists: the shared Locked
+          Field (1360:1883) under the label, with no Edit action — there is
+          nothing to unlock. The Sections table below sits OUTSIDE the lock —
+          names can still change — with its own structural controls disabled
           individually. The grading model and the Quiz pass mark moved to the
           Grading & Completion step. */}
-      <div className={`step-lockable ${locked ? "locked" : ""}`}>
-        {locked && (
-          <div className="step-lock-overlay" role="note">
-            <div className="step-lock-card">
-              <div className="step-lock-icon">
-                <LockIcon />
-              </div>
-              <div className="step-lock-title">Structure can't be changed after a Quiz is created</div>
-              <p className="step-lock-text">
-                Adding or removing Sections, or switching between a single block and Sections, is a
-                structural change. Past attempts don't carry the data to re-evaluate completion under
-                the new structure, so it can't be changed in place.
-              </p>
-              <p className="step-lock-text">
-                {sectioned && "You can still rename Sections below. "}To change the structure
-                itself, create a new Quiz Task instead.
-              </p>
-            </div>
+      <div className="form-group">
+        <label className="form-label">Structure</label>
+        <LockedField
+          locked={!!locked}
+          sub={
+            "Adding or removing Sections, or switching between a single block and Sections, " +
+            "can't be re-evaluated against past attempts, so the structure is fixed once a Quiz " +
+            "is created. " +
+            (sectioned ? "You can still rename Sections below. " : "") +
+            "To change it, create a new Quiz Task instead."
+          }
+        >
+          <div className="radio-card-group">
+            <RadioCard
+              selected={!sectioned}
+              onSelect={() => update({ structure: "single_block", gradingModel: "quiz_level" })}
+              title="Single Block of Questions"
+              desc="One question list, one overall score. The default — best for mid-course assessments and simple final exams."
+              disabled={locked}
+            />
+            <RadioCard
+              selected={sectioned}
+              onSelect={() =>
+                update({
+                  structure: "sectioned",
+                  /* The table opens at the floor — one Section is not a
+                     split, so an empty list would just be a chore. Sections
+                     the admin already has are left alone. */
+                  ...(data.sections.length === 0
+                    ? { sections: Array.from({ length: MIN_SECTIONS }, blankSection) }
+                    : {}),
+                })
+              }
+              title="Two or More Sections"
+              desc="Each Section has its own questions and can be graded independently."
+              disabled={locked}
+            />
           </div>
-        )}
-
-        <fieldset className="step-lock-content" disabled={locked}>
-          <div className="form-group">
-            <label className="form-label">Structure</label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={!sectioned}
-                onSelect={() => update({ structure: "single_block", gradingModel: "quiz_level" })}
-                title="Single Block of Questions"
-                desc="One question list, one overall score. The default — best for mid-course assessments and simple final exams."
-                disabled={locked}
-              />
-              <RadioCard
-                selected={sectioned}
-                onSelect={() =>
-                  update({
-                    structure: "sectioned",
-                    /* The table opens at the floor — one Section is not a
-                       split, so an empty list would just be a chore. Sections
-                       the admin already has are left alone. */
-                    ...(data.sections.length === 0
-                      ? { sections: Array.from({ length: MIN_SECTIONS }, blankSection) }
-                      : {}),
-                  })
-                }
-                title="Two or More Sections"
-                desc="Each Section has its own questions and can be graded independently."
-                disabled={locked}
-              />
-            </div>
-          </div>
-
-        </fieldset>
+        </LockedField>
       </div>
 
       {/* No completion gate here: pass marks live on Grading & Completion, so
           this table is names and order only. Its structural controls (add /
           remove) stay disabled on an existing Quiz via `locked`. */}
         {sectioned && (
-          <div className="form-group">
+          <div className="form-group" onBlur={leave(() => { touch?.("sections"); touch?.("sectionName"); })}>
             <label className="form-label">
-              Sections <span className="req">*</span>
+              Sections<span className="req">*</span>
             </label>
             {/* Figma 1097:1205 "Quiz Sections" — one boxed table: an
                 ORDER / SECTION NAME (/ % TO PASS / MUST PASS) header, a row per
@@ -2003,7 +2050,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
           data.sections.map((s, i) => (
             <div key={s.id} className="form-group">
               <label className="form-label">
-                {`Section ${i + 1}: ${s.name || "Untitled"}`}{" "}
+                {`Section ${i + 1}: ${s.name || "Untitled"}`}
                 <span className="req">*</span>
               </label>
               <QuestionGroupEditor
@@ -2018,7 +2065,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
       ) : (
         <div className="form-group">
           <label className="form-label">
-            Questions <span className="req">*</span>
+            Questions<span className="req">*</span>
           </label>
           <QuestionGroupEditor
             staticQuestions={data.blockStatic}
@@ -2523,7 +2570,7 @@ function QuestionGroupEditor({
 }
 
 function QuizCompletionStep(props: StepProps) {
-  const { data, update, locked, missing } = props;
+  const { touch, data, update, locked, missing } = props;
   const sectioned = data.structure === "sectioned";
   const sectionLevel = data.gradingModel === "section_level";
 
@@ -2539,9 +2586,9 @@ function QuizCompletionStep(props: StepProps) {
       {/* Named and marked like every other Task type's completion field. No
           subtext: the cards already say what each one means, and the pass mark
           they refer to is now the field two below. */}
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria <span className="req">*</span>
+          Completion Criteria<span className="req">*</span>
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
           {/* No Completion Tracking leads, the way it does on every other Task
@@ -2575,7 +2622,7 @@ function QuizCompletionStep(props: StepProps) {
           full-step lock card the Structure step draws. */}
       <div className="form-group">
         <label className="form-label">
-          Grading Model <span className="req">*</span>
+          Grading Model<span className="req">*</span>
         </label>
         <div className="radio-card-group">
           <RadioCard
@@ -2613,9 +2660,9 @@ function QuizCompletionStep(props: StepProps) {
           criteria lock, with the banner already up under Completion Criteria. */}
       <CompletionCriteriaGate {...gateOf(props)} banner={false}>
       {sectionLevel && (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
-            Section Pass Marks <span className="req">*</span>
+            Section Pass Marks<span className="req">*</span>
           </label>
           <div className="qsec qsec--pass">
             <div className="qsec-hd">
@@ -2698,9 +2745,9 @@ function QuizCompletionStep(props: StepProps) {
       )}
 
       {!sectionLevel && (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
-            Quiz Passing Percentage <span className="req">*</span>
+            Quiz Passing Percentage<span className="req">*</span>
           </label>
           {/* No "% to pass" beside the box — the label names the unit and the
               subtext gives the range. */}
@@ -2720,7 +2767,7 @@ function QuizCompletionStep(props: StepProps) {
   );
 }
 
-function QuizAttemptsStep({ data, update, missing }: StepProps) {
+function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
   return (
     <>
       {/* How many attempts a learner gets and the gap between them. The clock
@@ -2765,9 +2812,9 @@ function QuizAttemptsStep({ data, update, missing }: StepProps) {
           the same way Time Limit and its minutes are two fields — the value
           used to hang off the radio group as an unlabelled input. */}
       {data.cooldownMode === "uniform" && (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("cooldown"))}>
           <label className="form-label">
-            Set Cooldown in Minutes <span className="req">*</span>
+            Set Cooldown in Minutes<span className="req">*</span>
           </label>
           <input
             className={`form-input no-spinner small${
@@ -2798,7 +2845,7 @@ function QuizAttemptsStep({ data, update, missing }: StepProps) {
       )}
 
 
-      <AutoUnlockField data={data} update={update} missing={missing} />
+      <AutoUnlockField data={data} update={update} missing={missing} touch={touch} />
     </>
   );
 }
@@ -2885,7 +2932,7 @@ function VariableCooldownEditor({ data, update }: StepProps) {
    uses. Trigger Tasks are picked with the shared MultiSelect, exactly as a
    Mastery Skill picks its linked Skills: a Task name is the whole decision
    here, so a table picker was more chrome than the choice needs. */
-function AutoUnlockField({ data, update, missing }: StepProps) {
+function AutoUnlockField({ touch, data, update, missing }: StepProps) {
   /* Nothing to unlock when a learner already has every attempt they want, so
      the whole field goes inert under Unlimited. The stored `autoAttempts` is
      left alone rather than forced off — switching back to a limit restores
@@ -2929,9 +2976,9 @@ function AutoUnlockField({ data, update, missing }: StepProps) {
       </div>
 
       {on && (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("autoAttempts"))}>
           <label className="form-label">
-            Attempts to Unlock <span className="req">*</span>
+            Attempts to Unlock<span className="req">*</span>
           </label>
           <input
             className={`form-input no-spinner small${
@@ -2974,7 +3021,7 @@ function AutoUnlockField({ data, update, missing }: StepProps) {
   );
 }
 
-function QuizIntegrityStep({ data, update, missing }: StepProps) {
+function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
   return (
     <>
       {/* A seg-control rather than a toggle (standalone yes/no fields moved onto
@@ -3007,9 +3054,9 @@ function QuizIntegrityStep({ data, update, missing }: StepProps) {
       </div>
 
       {data.timeLimitOn && (
-        <div className="form-group">
+        <div className="form-group" onBlur={leave(() => touch?.("timeLimit"))}>
           <label className="form-label">
-            Set Time in Minutes <span className="req">*</span>
+            Set Time in Minutes<span className="req">*</span>
           </label>
           <input
             className={`form-input no-spinner small${
@@ -3512,7 +3559,7 @@ function QuizReviewStep({ data, update }: StepProps) {
   );
 }
 
-function QuizPaymentsStep({ data, update, missing }: StepProps) {
+function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
   return (
     <>
       {/* Three sibling fields rather than one Toggle with everything nested
@@ -3544,7 +3591,7 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
 
       {data.paywallOn && <PaywallStructureField data={data} update={update} />}
       {data.paywallOn && (
-        <PaywallPriceIdsField data={data} update={update} missing={missing} />
+        <PaywallPriceIdsField data={data} update={update} missing={missing} touch={touch} />
       )}
 
       <div className="form-group">
@@ -3579,9 +3626,12 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
           lands under whichever one is actually empty. */}
       {data.nateExam && (
         <div className="form-row-2">
-          <div className="form-group">
+          <div className="form-group" onBlur={leave(() => touch?.("nateId"))}>
             <label className="form-label">
-              External ID (English) <span className="req">*</span>
+              External ID (English)<span className="req">*</span>
+              {missing?.has("nateId") && !data.nateIdEn.trim() && (
+                <span className="form-label-error">Required when NATE Exam is enabled.</span>
+              )}
             </label>
             <input
               className={`form-input${missing?.has("nateId") && !data.nateIdEn.trim() ? " has-error" : ""}`}
@@ -3589,13 +3639,13 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
               placeholder="NATE-assigned exam ID (EN)"
               onChange={(e) => update({ nateIdEn: e.target.value })}
             />
-            {missing?.has("nateId") && !data.nateIdEn.trim() && (
-              <p className="form-error-text">Required when NATE Exam is enabled.</p>
-            )}
           </div>
-          <div className="form-group">
+          <div className="form-group" onBlur={leave(() => touch?.("nateId"))}>
             <label className="form-label">
-              External ID (Spanish) <span className="req">*</span>
+              External ID (Spanish)<span className="req">*</span>
+              {missing?.has("nateId") && !data.nateIdEs.trim() && (
+                <span className="form-label-error">Required when NATE Exam is enabled.</span>
+              )}
             </label>
             <input
               className={`form-input${missing?.has("nateId") && !data.nateIdEs.trim() ? " has-error" : ""}`}
@@ -3603,9 +3653,6 @@ function QuizPaymentsStep({ data, update, missing }: StepProps) {
               placeholder="NATE-assigned exam ID (ES)"
               onChange={(e) => update({ nateIdEs: e.target.value })}
             />
-            {missing?.has("nateId") && !data.nateIdEs.trim() && (
-              <p className="form-error-text">Required when NATE Exam is enabled.</p>
-            )}
           </div>
         </div>
       )}
@@ -3639,12 +3686,15 @@ function PaywallStructureField({ data, update }: StepProps) {
 
 /* The store IDs themselves. Which shape they take follows Paywall Structure:
    one column for a single price, the attempt matrix for per-attempt pricing. */
-function PaywallPriceIdsField({ data, update, missing }: StepProps) {
+function PaywallPriceIdsField({ touch, data, update, missing }: StepProps) {
   const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.priceIds);
   return (
-    <div className="form-group">
+    <div className="form-group" onBlur={leave(() => touch?.("priceIds"))}>
       <label className="form-label">
-        Product/Price IDs <span className="req">*</span>
+        Product/Price IDs<span className="req">*</span>
+        {flagEmpty && (
+          <span className="form-label-error">Every channel needs an ID while the paywall is on.</span>
+        )}
       </label>
       {data.paywallMode === "per_attempt" ? (
         <PerAttemptPrices data={data} update={update} flagEmpty={flagEmpty} />
@@ -3655,13 +3705,7 @@ function PaywallPriceIdsField({ data, update, missing }: StepProps) {
           flagEmpty={flagEmpty}
         />
       )}
-      {flagEmpty ? (
-        <p className="form-error-text">
-          Every channel needs an ID while the paywall is on.
-        </p>
-      ) : (
-        <p className="form-help">Enter the Product IDs from the respective stores.</p>
-      )}
+      <p className="form-help">Enter the Product IDs from the respective stores.</p>
     </div>
   );
 }
@@ -3712,11 +3756,12 @@ function PerAttemptPrices({ data, update, flagEmpty }: StepProps & { flagEmpty?:
 
 /* The one Name field every Task wizard uses (Quiz included — it used to carry
    its own "Quiz name" label/placeholders). Dual-language, EN Name / ES Nombre. */
-function NameField({ data, update, nameError }: StepProps) {
+function NameField({ touch, data, update, nameError }: StepProps) {
   return (
-    <div className="form-group">
+    <div className="form-group" onBlur={leave(() => touch?.("name"))}>
       <label className="form-label">
-        Name <span className="req">*</span>
+        Name<span className="req">*</span>
+        {nameError && <span className="form-label-error">Enter a name to publish.</span>}
       </label>
       <LangField
         en={data.nameEn}
@@ -3726,16 +3771,15 @@ function NameField({ data, update, nameError }: StepProps) {
         placeholderEn="Name"
         placeholderEs="Nombre"
         error={nameError}
-        errorMessage="Enter a name to publish."
       />
     </div>
   );
 }
 
-function NameAndDescription({ data, update, nameError }: StepProps) {
+function NameAndDescription({ touch, data, update, nameError }: StepProps) {
   return (
     <>
-      <NameField data={data} update={update} nameError={nameError} />
+      <NameField data={data} update={update} nameError={nameError} touch={touch} />
 
       <div className="form-group">
         <label className="form-label">Description</label>
@@ -3825,30 +3869,33 @@ function MaxAttemptsField({
 /* Paywall flag (Figma 367:6411). Note this is NOT `finalExam` — the field used
    to write to the Certification's Final Exam flag, which drives the Tasks-list
    filter. It has its own field now, and it is what the Certification tree's
-   "Requires Subscription" tag reads. A segmented control like Visibility:
-   No = neutral active, Yes = the accent pill. */
-function SubscriptionAccessField({ data, update }: StepProps) {
+   "Requires Subscription" tag reads. A two-card radio field; neither card is
+   selected until the admin picks one. */
+function SubscriptionAccessField({ touch, data, update, missing }: StepProps) {
+  // No default — the field stays unanswered until the admin picks one.
   const requires = data.requiresSubscription;
+  const flagged = !!missing?.has(REQUIRED_FIELD_KEYS.subscription);
   return (
-    <div className="form-group">
-      <label className="form-label">Requires a Subscription to Access this Task?</label>
-      <div className="seg-control">
-        <button
-          type="button"
-          className={`seg-btn${!requires ? " active" : ""}`}
-          aria-pressed={!requires}
-          onClick={() => update({ requiresSubscription: false })}
-        >
-          No: Can Access on Free Trial
-        </button>
-        <button
-          type="button"
-          className={`seg-btn${requires ? " active accent" : ""}`}
-          aria-pressed={requires}
-          onClick={() => update({ requiresSubscription: true })}
-        >
-          Yes: Requires Subscription
-        </button>
+    <div className="form-group" onBlur={leave(() => touch?.("subscription"))}>
+      <label className="form-label">
+        Requires a Subscription to Access this Task?<span className="req">*</span>
+        {flagged && (
+          <span className="form-label-error">Choose whether this Task requires a subscription to publish.</span>
+        )}
+      </label>
+      <div className="radio-card-group">
+        <RadioCard
+          selected={requires === false}
+          onSelect={() => update({ requiresSubscription: false })}
+          title="No: Can Access on Free Trial"
+          desc="Free Trial users can open and complete this Task without subscribing."
+        />
+        <RadioCard
+          selected={requires === true}
+          onSelect={() => update({ requiresSubscription: true })}
+          title="Yes: Requires Subscription"
+          desc="Only subscribers can open this Task. Free Trial users are prompted to subscribe."
+        />
       </div>
       <p className="form-help">
         Tasks that complete a Certification should have this
@@ -4242,7 +4289,6 @@ function LangField({
   placeholderEn,
   placeholderEs,
   error = false,
-  errorMessage,
   type,
   inputMode,
 }: {
@@ -4252,8 +4298,9 @@ function LangField({
   onChangeEs: (v: string) => void;
   placeholderEn?: string;
   placeholderEs?: string;
+  /** Mandatory and still empty after a publish attempt — reddens the shell.
+   *  The message belongs in the caller's label row (`.form-label-error`). */
   error?: boolean;
-  errorMessage?: string;
   type?: React.ComponentProps<"input">["type"];
   inputMode?: React.ComponentProps<"input">["inputMode"];
 }) {
@@ -4285,7 +4332,6 @@ function LangField({
         />
       </div>
     </div>
-    {error && errorMessage && <p className="form-error-text">{errorMessage}</p>}
     </>
   );
 }
@@ -4356,6 +4402,36 @@ function priceIdLines(ids: PriceIds) {
   );
 }
 
+/** What a Task's row preview panel reads (PreviewPanel.tsx) beyond the
+ *  review cards: the meta strip's labels and the learner-side screen, from the
+ *  same `buildInitialData` the edit wizard and `TaskSummary` open with.
+ *  `certs` = the Certifications it's in. */
+export function useTaskPreview(task: Task, certs: { name: string }[]) {
+  const type = taskTypeKey(task.type);
+  const data = useMemo(() => buildInitialData(type, task), [type, task]);
+  return useMemo(() => {
+    const time = data.timeValue ? `${data.timeValue} ${TIME_UNIT_LABEL[data.timeUnit]}` : undefined;
+    const CTA: Record<TaskTypeKey, string> = {
+      xapi: "Launch Module",
+      quiz: "Start Quiz",
+      "hands-on": "Start Task",
+      file: "Open Resource",
+    };
+    const screen: PreviewScreenModel = {
+      eyebrow: TYPE_LABEL[type],
+      title: task.name,
+      meta: [TYPE_LABEL[type], time, data.requiresSubscription ? "Subscription" : "Free Trial"]
+        .filter(Boolean)
+        .join(" · "),
+      description: task.description,
+      cta: CTA[type],
+      listTitle: certs.length > 0 ? "Part of" : undefined,
+      items: certs.map((c) => ({ key: c.name, name: c.name, meta: "Certification" })),
+    };
+    return { screen, time, typeLabel: TYPE_LABEL[type] };
+  }, [data, type, task, certs]);
+}
+
 export function TaskSummary({ task }: { task: Task }) {
   const type = taskTypeKey(task.type);
   const data = useMemo(() => buildInitialData(type, task), [type, task]);
@@ -4377,7 +4453,11 @@ export function TaskSummary({ task }: { task: Task }) {
     ["Visibility", task.hidden ? "Hidden" : "Visible"],
     [
       "Requires a Subscription",
-      data.requiresSubscription ? "Yes: Requires Subscription" : "No: Can Access on Free Trial",
+      data.requiresSubscription === null
+        ? "—"
+        : data.requiresSubscription
+          ? "Yes: Requires Subscription"
+          : "No: Can Access on Free Trial",
     ],
   ];
 

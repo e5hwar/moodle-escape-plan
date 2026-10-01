@@ -66,13 +66,16 @@ export const FILTER_TIPS = {
 
   /** Question Bank. */
   questionBank: {
+    subCategory: "Show only questions in the chosen sub-categories.",
     type: "Show only questions of the chosen types.",
     status: "Show only Active or only Archived questions.",
   },
 
   /** Skills — the page that set the convention. */
   skills: {
-    type: "Show only Skills, only Mastery Skills, or both grouped together.",
+    type: "Show only Skills, only Mastery Skills, or both.",
+    linkedMastery: "Show Skills that belong to the chosen Mastery Skills.",
+    linkedSkill: "Show Mastery Skills made up of the chosen Skills.",
     certification: "Show Skills whose Tasks count towards the chosen Certifications.",
     task: "Show Skills awarded by the chosen Tasks.",
     industry: "Show Skills whose Certifications sit in the chosen Industries.",

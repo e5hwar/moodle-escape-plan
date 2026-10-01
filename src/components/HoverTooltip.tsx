@@ -146,7 +146,19 @@ export function HoverTooltip() {
     }
     // The hovered element's tip changed under the pointer (a cell flipping to
     // "Copied" — see CopyCells.tsx): re-read it and show at once, no delay.
-    function onRefresh() {
+    function onRefresh(e: Event) {
+      // A tip APPEARED on an element the pointer was already inside, so no
+      // mouseover announced it — a copy cell entered off its value, whose
+      // "Click to Copy" is only written once the pointer reaches the text.
+      // The event names that element; treat it as a fresh hover.
+      const hint = (e as CustomEvent<HTMLElement | undefined>).detail;
+      if (hint instanceof HTMLElement && hint !== current.current) {
+        if (!hint.getAttribute("data-tip")) return;
+        current.current = hint;
+        clearTimer();
+        timer.current = window.setTimeout(() => show(hint), DELAY);
+        return;
+      }
       const el = current.current as HTMLElement | null;
       if (!el) return;
       clearTimer();

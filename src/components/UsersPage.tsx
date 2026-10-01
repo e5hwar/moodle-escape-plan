@@ -14,7 +14,8 @@ import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import { nameChangeRequests } from "../data/nameChangeRequests";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
-import { EditUserModal } from "./UserProfilePage";
+import { EditUserModal, UserSummary, useUserPreview } from "./UserProfilePage";
+import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -27,7 +28,7 @@ import { UsersSearch } from "./UsersSearch";
 import { loginAs } from "./loginAs";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { CopyIcon, NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -140,8 +141,8 @@ type ColMeta = {
 };
 
 const COLS: ColMeta[] = [
-  { key: "email", label: "Email", copyable: true, className: "col-u-email", width: 190, render: (u) => u.email, sortValue: (u) => u.email.toLowerCase() },
-  { key: "phone", label: "Phone", copyable: true, className: "col-u-phone", width: 165, render: (u) => u.phone, sortValue: (u) => u.phone },
+  { key: "email", label: "Email", copyable: true, className: "col-u-email", width: 190, render: (u) => u.email || "—", sortValue: (u) => u.email.toLowerCase() },
+  { key: "phone", label: "Phone", copyable: true, className: "col-u-phone", width: 165, render: (u) => u.phone || "—", sortValue: (u) => u.phone },
   { key: "userType", label: "User Type", className: "col-u-type", width: 114, render: (u) => <TypePill type={u.userType} />, sortValue: (u) => u.userType },
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: (u) => (u.userType === "B2B" && u.companyName ? u.companyName : null), sortValue: (u) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: (u) => u.role, sortValue: (u) => ROLE_ORDER[u.role] },
@@ -198,9 +199,15 @@ export function UsersPage({
   const [list, setList] = useState<User[]>(() => seedUsers.filter((u) => !removedUserIds.has(u.id)));
   // "S" opens Scholarships from the page 3-dot menu. Offer Codes is hidden
   // from the header for now, so it keeps no shortcut of its own.
-  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships, "s");
+  // The User whose row was clicked — read back in the side drawer, the way a
+  // Task or Certification row opens its own. Held by id so the drawer follows
+  // an edit made from it.
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  // Both page shortcuts stand down while the drawer is open: each would open a
+  // page or a menu behind (or above) its scrim.
+  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships && !drawerId, "s");
   // "N" is the landing banner's Review Names badge.
-  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges, "n");
+  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges && !drawerId, "n");
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
@@ -231,6 +238,13 @@ export function UsersPage({
   // Edit User — the Full Profile's own modal, from the row pencil or the menu.
   const [editing, setEditing] = useState<User | null>(null);
   const [removedToast, setRemovedToast] = useState(0);
+  const drawerUser = drawerId ? list.find((u) => u.id === drawerId) : undefined;
+  // A row menu opened from the preview panel's kebab: every item that opens a
+  // modal or another view closes the panel first, so nothing is left under it.
+  function closePanelThen(run: () => void) {
+    setDrawerId(null);
+    run();
+  }
 
   const rows = useMemo<Row[]>(
     () => list.map((u) => ({ u, f: profiles.get(u.id)! })),
@@ -309,7 +323,10 @@ export function UsersPage({
   );
 
   // Pending name changes: the banner at the landing, the note under the title
-  // once collapsed — the same statement at two sizes, exactly one showing.
+  // once collapsed — ONE callout at two sizes. The collapse condenses the card
+  // into the note (its box shrinks onto the note's line, its count, title and
+  // CTA travel onto the note's count, label and chevron), so it reads as the
+  // same thing changing shape, never one leaving and another arriving.
   const hasNameChanges = nameChangeRequests.length > 0 && !!onOpenNameChanges;
 
   function toggleSort(key: SortKey) {
@@ -359,12 +376,23 @@ export function UsersPage({
                     </div>
                   </header>
                   <h1 className="tasks-title">Manage Users</h1>
-                  {/* The landing banner's collapsed form (Figma 1268:1736): as
-                      the header collapses, the pending count fades in under the
-                      title as one accent line that opens the queue. */}
+                  {/* The landing banner's collapsed form (Figma 1268:1736): one
+                      accent line under the title that opens the queue. Its count,
+                      label and chevron are separate pieces so each can arrive from
+                      its twin in the card (the count's no-break space stands in
+                      for the space a flex item would drop), so the button
+                      carries its sentence as a label. */}
                   {hasNameChanges && (
-                    <button className="tasks-note" onClick={() => onOpenNameChanges?.()}>
-                      {nameChangeRequests.length} Name Changes Pending Review
+                    <button
+                      className="tasks-note"
+                      aria-label={`${nameChangeRequests.length} Name Changes Pending Review`}
+                      onClick={() => onOpenNameChanges?.()}
+                    >
+                      <span className="tasks-note-count">{nameChangeRequests.length}{" "}</span>
+                      <span className="tasks-note-text">
+                        <span className="nc-shared">Name Change</span>
+                        <span className="nc-rest">s Pending Review</span>
+                      </span>
                       <NoteChevronIcon />
                     </button>
                   )}
@@ -380,9 +408,9 @@ export function UsersPage({
                   </p>
 
                   {/* Pending name changes announce themselves above the hero
-                      search, and fade as the header collapses. The whole card
-                      opens the queue — the CTA is the affordance, not the only
-                      target. Figma 1268:1714. */}
+                      search, and condense into the title note as the header
+                      collapses. The whole card opens the queue — the CTA is the
+                      affordance, not the only target. Figma 1268:1714. */}
                   {hasNameChanges && (
                     <div className="clh-banner">
                       <div
@@ -400,7 +428,13 @@ export function UsersPage({
                         <div className="lm-banner-main">
                           <div className="lm-banner-count">{nameChangeRequests.length}</div>
                           <div className="note-card-text">
-                            <p className="note-card-title">Name Change Requests Pending</p>
+                            {/* "Name Change" is the words the title shares with
+                                the note's label, so the morph can hold it while
+                                only the rest swaps. */}
+                            <p className="note-card-title">
+                              <span className="nc-shared">Name Change</span>
+                              <span className="nc-rest"> Requests Pending</span>
+                            </p>
                             <p className="note-card-body">Check against their ID saved on SkillCat</p>
                           </div>
                         </div>
@@ -460,6 +494,7 @@ export function UsersPage({
                           key={row.u.id}
                           row={row}
                           cols={visibleCols}
+                          onOpen={() => setDrawerId(row.u.id)}
                           onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
                           onEdit={() => setEditing(row.u)}
                           menuOpen={menu?.user.id === row.u.id}
@@ -501,15 +536,18 @@ export function UsersPage({
           onOpenProfile={() => openProfile(menu.user)}
           onViewCompany={
             menu.user.userType === "B2B" && menu.user.companyName && onViewCompany
-              ? () => onViewCompany(menu.user.companyName!)
+              ? () => closePanelThen(() => onViewCompany(menu.user.companyName!))
               : undefined
           }
           onViewAllEmployees={
             menu.user.userType === "B2B" && menu.user.companyName
-              ? () => setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] }))
+              ? () =>
+                  closePanelThen(() =>
+                    setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] })),
+                  )
               : undefined
           }
-          onManageCompletions={() => onManageCompletions(menu.user.id)}
+          onManageCompletions={() => closePanelThen(() => onManageCompletions(menu.user.id))}
           onCancelSubscription={
             /* Only subscribers billed through a platform we can cancel from
                here — Apple subs are managed by Apple, and company-seat users
@@ -518,11 +556,11 @@ export function UsersPage({
             !menu.user.companyName &&
             (menu.user.platform === "Stripe" || menu.user.platform === "Google") &&
             !canceledSubs.has(menu.user.id)
-              ? () => setCancelSub(menu.user)
+              ? () => closePanelThen(() => setCancelSub(menu.user))
               : undefined
           }
-          onRemove={() => setRemoving(menu.user)}
-          onEdit={() => setEditing(menu.user)}
+          onRemove={() => closePanelThen(() => setRemoving(menu.user))}
+          onEdit={() => closePanelThen(() => setEditing(menu.user))}
         />
       )}
       {pageMenu && (
@@ -566,6 +604,20 @@ export function UsersPage({
             setRemoving(null);
             setRemovedToast(Date.now());
           }}
+        />
+      )}
+      {drawerUser && (
+        <UserDrawer
+          key={drawerUser.id}
+          user={drawerUser}
+          subCanceled={canceledSubs.has(drawerUser.id)}
+          onClose={() => setDrawerId(null)}
+          /* Closes the panel first, so the Edit User modal isn't left under it. */
+          onEdit={() => {
+            setDrawerId(null);
+            setEditing(drawerUser);
+          }}
+          onMore={(rect) => setMenu({ user: drawerUser, rect })}
         />
       )}
       {removedToast > 0 && (
@@ -652,12 +704,15 @@ function subscriptionLabel(user: User): string {
 function UserRow({
   row,
   cols,
+  onOpen,
   onOpenMenu,
   onEdit,
   menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
+  /** Row click — opens the User's drawer. The row's buttons stop propagation. */
+  onOpen: () => void;
   onOpenMenu: (anchor: HTMLElement) => void;
   onEdit: () => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
@@ -665,7 +720,7 @@ function UserRow({
 }) {
   const { u, f } = row;
   return (
-    <tr className={menuOpen ? "menu-open" : ""}>
+    <tr className={menuOpen ? "menu-open" : ""} onClick={onOpen}>
       <td className="col-name">{u.name}</td>
       {cols.map((c) => (
         <td key={c.key} className={c.className} data-copyable={c.copyable ? "" : undefined}>
@@ -676,26 +731,26 @@ function UserRow({
         <button
           className="row-action-btn lone-dots"
           aria-label="Actions"
-          onClick={(e) => onOpenMenu(e.currentTarget)}
+          onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget); }}
         >
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit User Details" onClick={onEdit}>
+          <button className="row-action-btn" aria-label="Edit User Details" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
             <RowEditIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="Open profile in new tab"
             title="Open full profile in a new tab"
-            onClick={() => openProfile(u)}
+            onClick={(e) => { e.stopPropagation(); openProfile(u); }}
           >
             <RowExternalLinkIcon />
           </button>
           <button
             className="row-action-btn"
             aria-label="More actions"
-            onClick={(e) => onOpenMenu(e.currentTarget)}
+            onClick={(e) => { e.stopPropagation(); onOpenMenu(e.currentTarget); }}
           >
             <RowKebabIcon />
           </button>
@@ -928,12 +983,12 @@ function CancelSubscriptionConfirm({
       onCancel={onClose}
       onConfirm={onConfirm}
     >
-      <p className="prm-text">
+      <p className="prm-content">
         This cancels <strong>{user.name}</strong>&rsquo;s {sub.platform} subscription at the end of
         the current billing period. No further charges will be made.
       </p>
       {sub.renewsOn && (
-        <p className="prm-text">
+        <p className="prm-content">
           They keep full access until <strong>{formatDate(sub.renewsOn)}</strong>. No refund is
           issued for the current period.
         </p>
@@ -1013,6 +1068,76 @@ function RemoveUserConfirm({
 
 /* ─── Open the full profile in a new browser tab ─── */
 /* Opens a real in-app page via URL params, rendered standalone by App. */
+
+/* The status pill tone per plan — the `co-status-pill` set. */
+const SUB_TONE: Record<SubscriptionStatus, "green" | "yellow" | "grey" | "secondary"> = {
+  Subscriber: "green",
+  "Company Plan": "green",
+  Scholarship: "secondary",
+  "Free Trial": "yellow",
+  Starter: "grey",
+  Cancelled: "grey",
+};
+
+/** A User's row preview panel ("Preview Panel 3a"): who they are and their
+ *  figures, then the Full Profile's own review cards split across Details,
+ *  Achievements and Billing. No learner preview — a person isn't content. */
+function UserDrawer({
+  user,
+  subCanceled,
+  onClose,
+  onEdit,
+  onMore,
+}: {
+  user: User;
+  subCanceled: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onMore: (rect: DOMRect) => void;
+}) {
+  const pv = useUserPreview(user);
+  const status = subCanceled ? "Canceled" : user.subscriptionStatus;
+  const actions: PreviewAction[] = [
+    { label: "View Profile", icon: <RowExternalLinkIcon />, onClick: () => openProfile(user) },
+  ];
+  if (user.email) actions.push({ label: "Copy Email", icon: <CopyIcon />, copy: user.email });
+  return (
+    <PreviewPanel
+      title={user.name}
+      // Only one of email/phone is required — list whichever are on file.
+      description={[user.email, user.phone].filter(Boolean).join(" · ")}
+      avatar={<span className="mc-avatar prof-avatar">{pv.initials}</span>}
+      meta={[
+        <span className="pp-id">{user.id}</span>,
+        user.userType,
+        user.companyName,
+        user.role,
+        <span className={`co-status-pill co-status-pill--${subCanceled ? "grey" : SUB_TONE[user.subscriptionStatus]}`}>
+          {user.platform && !subCanceled ? `${status} · ${user.platform}` : status}
+        </span>,
+        `Last access ${pv.lastAccess}`,
+      ]}
+      onEdit={onEdit}
+      actions={actions}
+      onMore={onMore}
+      stats={[
+        { count: String(pv.skills), title: "Skills", sub: "Earned" },
+        { count: String(pv.awards), title: "Awards", sub: "Earned" },
+        { count: String(pv.purchases), title: "Purchases", sub: `${pv.spent} spent` },
+      ]}
+      tabs={[
+        { key: "details", label: "Details", content: <UserSummary user={user} subCanceled={subCanceled} part="profile" /> },
+        {
+          key: "achievements",
+          label: "Achievements",
+          content: <UserSummary user={user} subCanceled={subCanceled} part="achievements" />,
+        },
+        { key: "billing", label: "Billing", content: <UserSummary user={user} subCanceled={subCanceled} part="billing" /> },
+      ]}
+      onClose={onClose}
+    />
+  );
+}
 
 function openProfile(user: User) {
   window.open(

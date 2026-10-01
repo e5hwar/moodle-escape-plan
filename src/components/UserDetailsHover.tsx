@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RowExternalLinkIcon, CopyIcon, PencilIcon } from "./icons";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import { useHoverCard, type HoverPos } from "../hooks/useHoverCard";
 import { PrmModal } from "./PrmModal";
 
@@ -235,7 +236,7 @@ function UserDetailsCard({
           </button>
         )}
       </div>
-      <CopyRow label="Email:" value={user.email} last={!user.phone} />
+      {user.email && <CopyRow label="Email:" value={user.email} last={!user.phone} />}
       {user.phone && <CopyRow label="Phone:" value={user.phone} last />}
     </div>
   );
@@ -255,6 +256,9 @@ function EditNameModal({
   const [value, setValue] = useState(initial);
   const trimmed = value.trim();
   const isValid = !!trimmed;
+  // Says so once the field has been clicked into and out of empty (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const nameMissing = !isValid && touched.has("name");
 
   // Esc closes the modal and stops there. Captured, because everything this
   // card sits in already handles Esc on document/window — the review console
@@ -278,14 +282,16 @@ function EditNameModal({
       onCancel={onCancel}
       onConfirm={() => isValid && onSave(trimmed)}
     >
-      <div className="form-group">
+      <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label" htmlFor="udh-edit-name">
-          Name <span className="req">*</span>
+          Name<span className="req">*</span>
+          {nameMissing && <span className="form-label-error">Name cannot be left empty</span>}
         </label>
         <input
           id="udh-edit-name"
           autoFocus
-          className="form-input"
+          className={`form-input${nameMissing ? " has-error" : ""}`}
+          aria-invalid={nameMissing || undefined}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {

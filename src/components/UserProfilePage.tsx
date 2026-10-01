@@ -15,6 +15,7 @@ import {
 import type { User } from "../data/users";
 import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
 import { loginAs } from "./loginAs";
+import { leave, useTouchedKeys } from "./fieldFlags";
 import { ConfirmCard } from "./ConfirmCard";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -32,8 +33,7 @@ import {
   RowEditIcon,
   RowKebabIcon,
   SortIcon,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
    itself the tier renders as plain table text like every other column. */
@@ -251,32 +251,33 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
     <div className="main prof">
       <div className="workspace">
         <div className="tasks pr-page">
-          {/* ── header — breadcrumb over the identity row, actions on the right ── */}
+          {/* ── breadcrumb strip (Figma 1417:1395), then the header — identity row, actions on the right ── */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={backToUsers} title="Back to Manage Users">
+              Manage Users
+            </button>
+          </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Home</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={backToUsers} title="Back to Manage Users">
-                  Manage Users
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Full Profile</span>
-              </nav>
               <div className="prof-headrow">
                 <span className="mc-avatar prof-avatar">{initialsOf(user.name)}</span>
                 <div className="rvc-pagehead-id">
                   <h1 className="tasks-title">{user.name}</h1>
                   <div className="tasks-subtitle">
-                    <span className="prof-contact">
-                      {user.email}
-                      {user.emailVerified && <Verified />}
-                    </span>
-                    <span className="tasks-subtitle-dot" />
-                    <span className="prof-contact">
-                      {user.phone}
-                      {user.phoneVerified && <Verified />}
-                    </span>
+                    {/* Only one of email/phone is required — show whichever are on file. */}
+                    {user.email && (
+                      <span className="prof-contact">
+                        {user.email}
+                        {user.emailVerified && <Verified />}
+                      </span>
+                    )}
+                    {user.email && user.phone && <span className="tasks-subtitle-dot" />}
+                    {user.phone && (
+                      <span className="prof-contact">
+                        {user.phone}
+                        {user.phoneVerified && <Verified />}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -509,13 +510,13 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             setModal(null);
           }}
         >
-          <p className="prm-text">
+          <p className="prm-content">
             This cancels the <strong>{base.epaCard.certification} Physical Card</strong> ordered on{" "}
             <strong>{formatDate(base.epaCard.orderedOn)}</strong>. The card will not be produced or
             shipped.
           </p>
           {epaPurchase && (
-            <p className="prm-text">
+            <p className="prm-content">
               The <strong>{money(epaPurchase.amount)}</strong> charge ({epaPurchase.receiptId}) is
               refunded to the original {epaPurchase.platform} payment method.
             </p>
@@ -555,7 +556,244 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   );
 }
 
+/* ── The Manage Users drawer — a row's read-back, the way a Task or a
+ * Certification row opens its own ──
+ * This page's cards in this page's order, drawn for the drawer's 464px column.
+ * The field cards come over as they are (200px fields sit two-up there, so the
+ * Profile fields are paired to leave no holes). The card tables don't: Awards
+ * alone is 836px, and a table scrolling sideways inside a side panel reads
+ * badly, so Skills, Awards and Purchases take the Certifications drawer's
+ * read-only rows instead — the name over one grey meta line, inside the same
+ * bordered r10 panel the card tables sit in. Downloads, refunds and
+ * cancellations stay on the Full Profile, which the drawer's head links to. */
+/** The figures a User's row preview panel shows in its stat strip, from
+ *  `buildUserProfile` as `UserSummary` is. */
+export function useUserPreview(user: User) {
+  const p = useMemo(() => buildUserProfile(user), [user]);
+  return useMemo(() => {
+    const paid = p.purchases.filter((pu) => !pu.refunded);
+    return {
+      skills: p.skills.length,
+      awards: p.awards.length,
+      purchases: paid.length,
+      spent: money(paid.reduce((sum, pu) => sum + pu.amount, 0)),
+      joined: formatDate(user.joinedOn),
+      lastAccess: formatDate(user.lastAccess),
+      initials: initialsOf(user.name),
+    };
+  }, [p, user]);
+}
 
+export function UserSummary({
+  user,
+  subCanceled = false,
+  part,
+}: {
+  user: User;
+  subCanceled?: boolean;
+  /** One tab of the preview panel: "profile" = the Profile card,
+   *  "achievements" = Skills and Awards, "billing" = Subscription, Purchases &
+   *  Bills, EPA and NATE. Omitted, all of them. */
+  part?: "profile" | "achievements" | "billing";
+}) {
+  const show = (p: "profile" | "achievements" | "billing") => !part || part === p;
+  const p = useMemo(() => buildUserProfile(user), [user]);
+  const zip = ZIP_LOCATIONS[p.fields.zipCode];
+  // Newest first, the default order of the Full Profile's own tables.
+  const skills = [...p.skills].sort((a, b) => b.dateAwarded.localeCompare(a.dateAwarded));
+  const awards = [...p.awards].sort((a, b) => b.dateAwarded.localeCompare(a.dateAwarded));
+  const purchases = [...p.purchases].sort((a, b) => b.date.localeCompare(a.date));
+  const portfolioHref = `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`;
+
+  return (
+    <div className="confirm-cards">
+      {show("profile") && (
+        <ConfirmCard
+          title="Profile"
+          fillBlanks
+          rows={[
+            ["Role", user.role],
+            ["Language", p.fields.language],
+            ["Current Company", p.fields.currentCompany],
+            ["Industry Preference", p.fields.industryPreference],
+            ["Goal", p.fields.goal, true],
+            ["Attribution", p.fields.attribution],
+            ["Notification Preference", p.fields.notificationPreference],
+            [
+              "Zip Code",
+              zip ? `${p.fields.zipCode} · ${zip.city}, ${zip.state}, ${zip.country}` : p.fields.zipCode,
+              true,
+            ],
+            ["Joined SkillCat", formatDate(user.joinedOn)],
+            ["Last Access", formatDate(user.lastAccess)],
+            [
+              "Public Portfolio Link",
+              <a className="rvc-headlink" href={portfolioHref} target="_blank" rel="noreferrer">
+                {p.portfolioUrl}
+              </a>,
+              true,
+            ],
+          ]}
+        />
+      )}
+
+      {show("achievements") && (
+        <>
+          <ConfirmCard title={`Skills · ${skills.length}`} tableBody={skills.length > 0}>
+            {skills.length > 0 ? (
+              <div className="ctb-tasktable">
+                {skills.map((s) => (
+                  <SummaryRow
+                    key={s.name}
+                    name={s.name}
+                    meta={`${s.mastery ? "Mastery Skill" : "Skill"} · Awarded ${formatDate(s.dateAwarded)}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="form-help">No skills earned yet.</p>
+            )}
+          </ConfirmCard>
+
+          <ConfirmCard title={`Awards · ${awards.length}`} tableBody={awards.length > 0}>
+            {awards.length > 0 ? (
+              <div className="ctb-tasktable">
+                {awards.map((a) => (
+                  <SummaryRow
+                    key={a.id}
+                    name={a.certification}
+                    meta={`${a.meritTier} · ${a.awardNumber} · Awarded ${formatDate(a.dateAwarded)}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="form-help">No awards yet.</p>
+            )}
+          </ConfirmCard>
+        </>
+      )}
+
+      {show("billing") && (
+        <>
+          <ConfirmCard
+            title="Subscription"
+            fillBlanks
+            rows={[
+              [
+                "Status",
+                subCanceled ? (
+                  <span className="co-status-pill co-status-pill--grey">Canceled</span>
+                ) : (
+                  p.subscription.status
+                ),
+              ],
+              ["Platform", p.subscription.platform],
+              ["Started", formatDate(p.subscription.startedOn)],
+              [subCanceled ? "Access Until" : "Renews", formatDate(p.subscription.renewsOn)],
+              ["Offer Code", p.subscription.offerCode ?? "None"],
+            ]}
+          />
+
+          <ConfirmCard title={`Purchases & Bills · ${purchases.length}`} tableBody={purchases.length > 0}>
+            {purchases.length > 0 ? (
+              <div className="ctb-tasktable">
+                {purchases.map((pu, i) => (
+                  <SummaryRow
+                    key={i}
+                    name={pu.item}
+                    /* The Status column's pills ride beside the name, as a Task's
+                       state pills do in the Certifications drawer. */
+                    pill={
+                      pu.refunded
+                        ? undefined
+                        : pu.kind === "Certification"
+                          ? certStatusPill(pu)
+                          : pu.kind === "Quiz Attempt"
+                            ? attemptStatusPill(pu)
+                            : undefined
+                    }
+                    meta={[
+                      pu.kind,
+                      money(pu.amount),
+                      pu.platform,
+                      formatDate(pu.date),
+                      pu.refunded ? "Refunded" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="form-help">No purchases yet.</p>
+            )}
+          </ConfirmCard>
+
+          <ConfirmCard
+            title="EPA Card Order"
+            rows={
+              p.epaCard
+                ? [
+                    ["Card", p.epaCard.certification],
+                    [
+                      "Status",
+                      <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
+                        {p.epaCard.status}
+                      </span>,
+                    ],
+                    ["Ordered", formatDate(p.epaCard.orderedOn)],
+                    ["Recipient", p.epaCard.recipient],
+                    ["Shipping Address", p.epaCard.shippingAddress, true],
+                    p.epaCard.tracking
+                      ? [
+                          "Tracking",
+                          <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
+                            {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
+                          </a>,
+                          true,
+                        ]
+                      : ["Tracking", undefined, true],
+                  ]
+                : undefined
+            }
+          >
+            {!p.epaCard && <p className="form-help">No EPA card ordered.</p>}
+          </ConfirmCard>
+
+          <ConfirmCard
+            title="NATE Details"
+            rows={
+              p.nate
+                ? [
+                    ["First Name", p.nate.firstName],
+                    ["Last Name", p.nate.lastName],
+                    ["Email", p.nate.email],
+                    ["NATE Connect ID", p.nate.connectId],
+                  ]
+                : undefined
+            }
+          >
+            {!p.nate && <p className="form-help">No NATE registration on record.</p>}
+          </ConfirmCard>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* One read-only row in the drawer's lists — the Certifications drawer's Task
+   row (`.cdr-task`): the name and any state pill, over a grey meta line. */
+function SummaryRow({ name, pill, meta }: { name: string; pill?: ReactNode; meta: string }) {
+  return (
+    <div className="cdr-task">
+      <div className="cdr-task-name-row">
+        <span className="cdr-task-name">{name}</span>
+        {pill}
+      </div>
+      <span className="ctb-row-meta">{meta}</span>
+    </div>
+  );
+}
 
 /* ── Skills table — the same card table as Awards (Figma 1278:1571) ──
  * Skill as the node's primary (white Medium) column, then its type, then when
@@ -990,6 +1228,8 @@ function PrmField({
   error,
   placeholder,
   autoFocus,
+  required = true,
+  onLeave,
 }: {
   label: string;
   value: string;
@@ -997,21 +1237,25 @@ function PrmField({
   error?: string;
   placeholder?: string;
   autoFocus?: boolean;
+  required?: boolean;
+  /** Focus left the field (fieldFlags.tsx `leave`) — the modal marks it touched. */
+  onLeave?: () => void;
 }) {
   return (
-    <div className="prm-field">
+    <div className="prm-field" onBlur={onLeave ? leave(onLeave) : undefined}>
       <label className="prm-label">
         {label}
-        <span className="prm-req">*</span>
+        {required &&<span className="prm-req">*</span>}
+        {error && <span className="form-label-error">{error}</span>}
       </label>
       <input
-        className={`form-input ${error ? "has-error" : ""}`}
+        className={`form-input${error ? " has-error" : ""}`}
         value={value}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        aria-invalid={error ? true : undefined}
         onChange={(e) => onChange(e.target.value)}
       />
-      {error && <p className="form-error-text">{error}</p>}
     </div>
   );
 }
@@ -1031,19 +1275,28 @@ export function EditUserModal({
 }) {
   const [form, setForm] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
+  const { touched, touch } = useTouchedKeys();
 
+  // Only one of email/phone is required; flag both when both are empty.
+  const noContact = !form.email.trim() && !form.phone.trim();
   const errors = {
     name: form.name.trim() ? "" : "Name is required.",
-    email: !form.email.trim()
-      ? "Email is required."
-      : EMAIL_RE.test(form.email.trim())
-      ? ""
-      : "Enter a valid email address.",
-    phone: form.phone.trim() ? "" : "Phone is required.",
+    email: noContact
+      ? "Enter an email or a phone number."
+      : form.email.trim() && !EMAIL_RE.test(form.email.trim())
+      ? "Enter a valid email address."
+      : "",
+    phone: noContact ? "Enter an email or a phone number." : "",
   };
   const invalid = Boolean(errors.name || errors.email || errors.phone);
+  // Save stays disabled until a field actually differs (whitespace-only edits don't count).
+  const dirty =
+    form.name.trim() !== initial.name.trim() ||
+    form.email.trim() !== initial.email.trim() ||
+    form.phone.trim() !== initial.phone.trim();
 
   function submit() {
+    if (!dirty) return;
     setSubmitted(true);
     if (invalid) return;
     onSave({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() });
@@ -1052,8 +1305,9 @@ export function EditUserModal({
   return (
     <PrmModal
       title="Edit User"
-      description="Changing the email or phone resets its verified status."
+      description="An email or a phone number is required. Changing either resets its verified status."
       confirmLabel="Save Changes"
+      confirmDisabled={!dirty}
       onCancel={onClose}
       onConfirm={submit}
     >
@@ -1063,19 +1317,24 @@ export function EditUserModal({
           value={form.name}
           autoFocus
           onChange={(v) => setForm((f) => ({ ...f, name: v }))}
-          error={submitted ? errors.name : undefined}
+          error={submitted || touched.has("name") ? errors.name : undefined}
+          onLeave={() => touch("name")}
         />
         <PrmField
           label="Email"
           value={form.email}
+          required={false}
           onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-          error={submitted ? errors.email : undefined}
+          error={submitted || touched.has("email") ? errors.email : undefined}
+          onLeave={() => touch("email")}
         />
         <PrmField
           label="Phone"
           value={form.phone}
+          required={false}
           onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
-          error={submitted ? errors.phone : undefined}
+          error={submitted || touched.has("phone") ? errors.phone : undefined}
+          onLeave={() => touch("phone")}
         />
       </div>
     </PrmModal>
@@ -1095,6 +1354,7 @@ function EditNateModal({
     initial ?? { connectId: "", firstName: "", lastName: "", email: "" },
   );
   const [submitted, setSubmitted] = useState(false);
+  const { touched, touch } = useTouchedKeys();
 
   const errors = {
     firstName: form.firstName.trim() ? "" : "First name is required.",
@@ -1111,8 +1371,15 @@ function EditNateModal({
       : "Connect ID must be numeric.",
   };
   const invalid = Boolean(errors.firstName || errors.lastName || errors.email || errors.connectId);
+  // Editing: Save stays disabled until a field actually differs. Adding has nothing to compare against.
+  const dirty =
+    !initial ||
+    (["connectId", "firstName", "lastName", "email"] as const).some(
+      (k) => form[k].trim() !== initial[k].trim(),
+    );
 
   function submit() {
+    if (!dirty) return;
     setSubmitted(true);
     if (invalid) return;
     onSave({
@@ -1128,6 +1395,7 @@ function EditNateModal({
       title={initial ? "Edit NATE Details" : "Add NATE Details"}
       description="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
       confirmLabel={initial ? "Save Changes" : "Add Details"}
+      confirmDisabled={!dirty}
       onCancel={onClose}
       onConfirm={submit}
     >
@@ -1138,27 +1406,31 @@ function EditNateModal({
             value={form.firstName}
             autoFocus
             onChange={(v) => setForm((f) => ({ ...f, firstName: v }))}
-            error={submitted ? errors.firstName : undefined}
+            error={submitted || touched.has("firstName") ? errors.firstName : undefined}
+            onLeave={() => touch("firstName")}
           />
           <PrmField
             label="Last Name"
             value={form.lastName}
             onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
-            error={submitted ? errors.lastName : undefined}
+            error={submitted || touched.has("lastName") ? errors.lastName : undefined}
+            onLeave={() => touch("lastName")}
           />
         </div>
         <PrmField
           label="Email"
           value={form.email}
           onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-          error={submitted ? errors.email : undefined}
+          error={submitted || touched.has("email") ? errors.email : undefined}
+          onLeave={() => touch("email")}
         />
         <PrmField
           label="NATE Connect ID"
           value={form.connectId}
           placeholder="e.g. 483920"
           onChange={(v) => setForm((f) => ({ ...f, connectId: v }))}
-          error={submitted ? errors.connectId : undefined}
+          error={submitted || touched.has("connectId") ? errors.connectId : undefined}
+          onLeave={() => touch("connectId")}
         />
       </div>
     </PrmModal>
@@ -1188,12 +1460,12 @@ export function CancelSubscriptionModal({
       onCancel={onClose}
       onConfirm={onConfirm}
     >
-      <p className="prm-text">
+      <p className="prm-content">
         This cancels <strong>{user.name}</strong>&rsquo;s {platform} subscription at the end of the
         current billing period. No further charges will be made.
       </p>
       {renewsOn && (
-        <p className="prm-text">
+        <p className="prm-content">
           They keep full access until <strong>{formatDate(renewsOn)}</strong>. No refund is issued
           for the current period.
         </p>
@@ -1454,11 +1726,11 @@ function PurchasesSection({
             setRefundTarget(null);
           }}
         >
-          <p className="prm-text">
+          <p className="prm-content">
             This refunds <strong>{money(refundTarget.amount)}</strong> for{" "}
             <strong>{refundTarget.item}</strong>.
           </p>
-          <p className="prm-text">
+          <p className="prm-content">
             The {refundTarget.receiptId} charge is returned to the original {refundTarget.platform}{" "}
             payment method.
           </p>

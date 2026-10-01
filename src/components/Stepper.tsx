@@ -14,6 +14,7 @@ export function Stepper({
   max,
   disabled = false,
   ariaLabel,
+  hasError = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -23,6 +24,9 @@ export function Stepper({
   disabled?: boolean;
   /** Labels the value input when the field's own label isn't adjacent. */
   ariaLabel?: string;
+  /** The value is required and has been cleared (Figma 1390:1710): the
+   *  shell's red edge. The message belongs in the caller's label row. */
+  hasError?: boolean;
 }) {
   const n = parseInt(value, 10);
   const current = Number.isFinite(n) ? n : min;
@@ -31,7 +35,7 @@ export function Stepper({
   const step = (d: number) => onChange(String(clamp(current + d)));
 
   return (
-    <div className={`stepper${disabled ? " is-disabled" : ""}`}>
+    <div className={`stepper${disabled ? " is-disabled" : ""}${hasError ? " has-error" : ""}`}>
       <button
         type="button"
         className="stepper-btn"
@@ -47,6 +51,7 @@ export function Stepper({
         min={min}
         max={max}
         aria-label={ariaLabel}
+        aria-invalid={hasError || undefined}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}

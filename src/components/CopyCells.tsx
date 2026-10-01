@@ -5,13 +5,17 @@ import { useEffect } from "react";
    Opt-in per cell: a `<td data-copyable>` gets the behaviour, nothing else
    does. Today that is the Email and Phone columns on Exam Reviews
    (ProctoringPage), ID Re-Uploads (PendingIdReuploadsPage), Hands-On Task
-   Submissions (ReviewHandsOnPage), Quiz Attempts (AttemptsPage) and both Who
-   Paid tables (Quiz/CertPurchasersPage) — the last four via their column
-   registry's `copyable` flag. The tables whose values admins actually paste elsewhere. Marking more
+   Submissions (ReviewHandsOnPage), Quiz Attempts (AttemptsPage), Users
+   (UsersPage), Scholarships, both Who Paid tables (Quiz/CertPurchasersPage) —
+   the registry-driven ones via their `copyable` flag — plus the Deep Link
+   modal's Link column. The tables whose values admins actually paste elsewhere. Marking more
    columns later is a one-attribute change; no other file needs to know.
 
-   One document-level handler, like HoverTooltip. Hovering a marked cell
-   marks it `data-copy="fit" | "clip"` and the CSS paints a copy glyph (a
+   One document-level handler, like HoverTooltip. Only the VALUE is the
+   target, not the whole cell: the pointer has to be on the text itself (or on
+   the glyph beside it) — a cell's blank space, however wide, stays inert, and a
+   click there is an ordinary row click. While the pointer is on the value the
+   cell is marked `data-copy="fit" | "clip"` and the CSS paints a copy glyph (a
    `::before` pseudo-element, so React's DOM is never touched):
 
    - "fit"  — the text leaves room for the 12px glyph + 4px gap, so it sits
@@ -21,7 +25,7 @@ import { useEffect } from "react";
               edge, like the email cell. Column widths never change — widths
               are border-box, so padding comes out of the content box.
 
-   Clicking anywhere on the cell copies its text. For 3s afterwards the cell
+   Clicking the value copies the cell's full text. For 3s afterwards the cell
    carries `data-copied` (the glyph crossfades to a check) and the tooltip
    reads "Copied". The tooltip text rides on `data-tip`, which HoverTooltip
    already renders; a cell's own tip (full name, "Used in" list…) is kept
@@ -37,9 +41,14 @@ const GAP = 4;
 const CELL = "tbody td[data-copyable]";
 const CONTROL = "a, button, input, select, textarea, label, [role='button'], [contenteditable]";
 
+/* The part of a cell that copies — its text plus the glyph slot — in px from
+   the cell's border-box corner, so it survives the table scrolling under it. */
+type Zone = { left: number; right: number; top: number; bottom: number };
+
 type Active = {
   td: HTMLTableCellElement;
   ownTip: string | null;
+  zone: Zone;
 };
 
 const copied = new Map<HTMLTableCellElement, number>();
@@ -69,13 +78,19 @@ function tipFor(own: string | null, done: boolean): string {
   return own ? `${own}\n${line}` : line;
 }
 
-function refreshTip() {
-  window.dispatchEvent(new Event("tip-refresh"));
+/* `td` names the cell whose tip changed, for the case HoverTooltip has no
+   anchor yet: the pointer came into the cell off the value, so its mouseover
+   found no tip to show, and it only reached the value by moving within it. */
+function refreshTip(td?: HTMLTableCellElement) {
+  window.dispatchEvent(new CustomEvent("tip-refresh", { detail: td }));
 }
 
+type Layout = { fits: boolean; copyX: number; padR: number; zone: Zone };
+
 /* Measure the content's laid-out extent (unclipped — ellipsis is paint-only)
-   against the cell's content box and decide where the glyph goes. */
-function place(td: HTMLTableCellElement) {
+   against the cell's content box: where the glyph goes, and so where the
+   copy target ends. Read-only; expects the cell at rest (see `place`). */
+function measure(td: HTMLTableCellElement): Layout {
   const cs = getComputedStyle(td);
   const box = td.getBoundingClientRect();
   const padL = parseFloat(cs.paddingLeft) || 0;
@@ -87,32 +102,72 @@ function place(td: HTMLTableCellElement) {
   const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
   range.detach();
 
+  let left = rects.length ? Infinity : box.left + padL;
   let right = box.left + padL;
   let top = Infinity;
   let bottom = -Infinity;
   for (const r of rects) {
+    left = Math.min(left, r.left);
     right = Math.max(right, r.right);
     top = Math.min(top, r.top);
     bottom = Math.max(bottom, r.bottom);
   }
+  if (!rects.length) {
+    top = box.top;
+    bottom = box.bottom;
+  }
   const singleLine = rects.length === 0 || bottom - top <= parseFloat(cs.fontSize) * 1.8;
   const fits = singleLine && right + GAP + GLYPH <= contentRight;
 
-  if (fits) {
-    td.style.setProperty("--copy-x", `${right - box.left + GAP}px`);
+  // "fit": the glyph sits GAP after the text, so the target runs to its far
+  // edge. "clip": the text already runs to the content edge, and the glyph is
+  // set inside the grown padding ending on that same edge (`right: 12px`).
+  const end = fits ? right + GAP + GLYPH : contentRight;
+  return {
+    fits,
+    copyX: right - box.left + GAP,
+    padR,
+    zone: {
+      left: left - box.left,
+      right: Math.min(end, box.right) - box.left,
+      top: top - box.top,
+      bottom: bottom - box.top,
+    },
+  };
+}
+
+function inside(td: HTMLTableCellElement, zone: Zone, x: number, y: number): boolean {
+  const box = td.getBoundingClientRect();
+  const rx = x - box.left;
+  const ry = y - box.top;
+  return rx >= zone.left && rx <= zone.right && ry >= zone.top && ry <= zone.bottom;
+}
+
+function apply(td: HTMLTableCellElement, l: Layout) {
+  if (l.fits) {
+    td.style.setProperty("--copy-x", `${l.copyX}px`);
     td.style.removeProperty("padding-right");
     td.dataset.copy = "fit";
   } else {
     td.style.removeProperty("--copy-x");
-    td.style.paddingRight = `${padR + GAP + GLYPH}px`;
+    td.style.paddingRight = `${l.padR + GAP + GLYPH}px`;
     td.dataset.copy = "clip";
   }
 }
 
-function activate(td: HTMLTableCellElement) {
+/* Re-lay an active cell out. Its grown "clip" padding comes off first, or it
+   would be measured as the cell's own and grown again on every pass. */
+function place(td: HTMLTableCellElement): Zone {
+  td.style.removeProperty("padding-right");
+  const l = measure(td);
+  apply(td, l);
+  return l.zone;
+}
+
+function activate(td: HTMLTableCellElement, l: Layout) {
   const ownTip = td.getAttribute("data-tip");
-  active = { td, ownTip };
-  place(td);
+  active = { td, ownTip, zone: l.zone };
+  apply(td, l);
   if (copied.has(td)) td.dataset.copied = "";
   td.setAttribute("data-tip", tipFor(ownTip, copied.has(td)));
   watch(td);
@@ -147,19 +202,22 @@ function deactivate() {
 
    So while a cell is active, watch its table for mutations and re-check
    against the real pointer position: still inside the same cell → re-measure,
-   because the value underneath may be a different length now; anywhere else →
-   let go, and pick up whatever cell the pointer is genuinely over. */
+   because the value underneath may be a different length now (and may no
+   longer reach the pointer); anywhere else → let go, and pick up whatever
+   value the pointer is genuinely on. */
 function revalidate() {
   if (!active) return;
-  const el = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
-  if (el && active.td.contains(el)) {
-    place(active.td);
+  if (!pointer) {
+    deactivate();
+    refreshTip();
     return;
   }
-  const td = el ? cellOf(el) : null;
-  deactivate();
-  if (td) activate(td);
-  refreshTip();
+  const el = document.elementFromPoint(pointer.x, pointer.y);
+  if (el && active.td.contains(el) && isCopyable(active.td)) {
+    active.zone = place(active.td);
+    if (inside(active.td, active.zone, pointer.x, pointer.y)) return;
+  }
+  track(el, pointer.x, pointer.y);
 }
 
 function watch(td: HTMLTableCellElement) {
@@ -178,6 +236,32 @@ function unwatch() {
 function cellOf(target: EventTarget | null): HTMLTableCellElement | null {
   const td = (target as HTMLElement)?.closest?.(CELL) as HTMLTableCellElement | null;
   return td && isCopyable(td) ? td : null;
+}
+
+/* Settle which cell (if any) is active for a pointer at (x, y) over `target`:
+   the cell it is in, and only while it is on that cell's value. */
+function track(target: EventTarget | null, x: number, y: number) {
+  pointer = { x, y };
+  const td = cellOf(target);
+  if (active && td === active.td) {
+    if (inside(td, active.zone, x, y)) return;
+    deactivate();
+    refreshTip();
+    return;
+  }
+  if (td) {
+    const l = measure(td);
+    if (inside(td, l.zone, x, y)) {
+      deactivate();
+      activate(td, l);
+      refreshTip(td);
+      return;
+    }
+  }
+  if (active) {
+    deactivate();
+    refreshTip();
+  }
 }
 
 async function writeClipboard(text: string): Promise<boolean> {
@@ -228,24 +312,29 @@ function markCopied(td: HTMLTableCellElement) {
 
 export function CopyCells() {
   useEffect(() => {
+    // The value is a region inside the cell, not an element, so crossing onto
+    // it fires no mouseover — every move is checked.
     function onMove(e: MouseEvent) {
-      pointer = { x: e.clientX, y: e.clientY };
+      track(e.target, e.clientX, e.clientY);
     }
 
-    // Capture phase: runs before HoverTooltip's bubble listener, so the tip
-    // text is on the cell by the time the tooltip resolves it.
+    // Capture phase: runs before HoverTooltip's bubble listener, so when the
+    // pointer enters a cell straight onto its value the tip text is already
+    // on the cell by the time the tooltip resolves it.
     function onOver(e: MouseEvent) {
-      pointer = { x: e.clientX, y: e.clientY };
-      const td = cellOf(e.target);
-      if (td === active?.td) return;
-      deactivate();
-      if (td) activate(td);
+      track(e.target, e.clientX, e.clientY);
     }
     function onOut(e: MouseEvent) {
       if (!active) return;
       const related = e.relatedTarget as Node | null;
       if (related && active.td.contains(related)) return;
       deactivate();
+    }
+    // The table scrolling under a still pointer moves the value off it (or
+    // onto it) with no mouse event at all.
+    function onScroll() {
+      if (!pointer) return;
+      track(document.elementFromPoint(pointer.x, pointer.y), pointer.x, pointer.y);
     }
     function onClick(e: MouseEvent) {
       if (e.button !== 0) return;
@@ -258,13 +347,12 @@ export function CopyCells() {
       if (sel && !sel.isCollapsed && td.contains(sel.anchorNode)) return;
       const text = cellText(td);
       if (!text) return;
-      if (active?.td !== td) {
-        deactivate();
-        activate(td);
-      }
-      // Both tables carrying these cells open a detail view when their row is
-      // clicked. A copy that also navigated away would be useless, so a marked
-      // cell is a copy target only — the row's own click stops here.
+      // Off the value, the cell is like any other: the row's click goes ahead.
+      track(e.target, e.clientX, e.clientY);
+      if (active?.td !== td) return;
+      // Most tables carrying these cells open a detail view when their row is
+      // clicked. A copy that also navigated away would be useless, so the
+      // value is a copy target only — the row's own click stops here.
       e.preventDefault();
       e.stopPropagation();
       void writeClipboard(text).then((ok) => {
@@ -276,11 +364,13 @@ export function CopyCells() {
     document.addEventListener("mouseover", onOver, true);
     document.addEventListener("mouseout", onOut, true);
     document.addEventListener("click", onClick, true);
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener("mousemove", onMove, true);
       document.removeEventListener("mouseover", onOver, true);
       document.removeEventListener("mouseout", onOut, true);
       document.removeEventListener("click", onClick, true);
+      window.removeEventListener("scroll", onScroll, true);
       deactivate();
       copied.forEach((t) => window.clearTimeout(t));
       copied.clear();

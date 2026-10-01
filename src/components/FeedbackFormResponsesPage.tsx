@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { formResponses, type FeedbackForm } from "../data/feedbackForms";
 import { type Question } from "../data/questionBank";
-import { CrumbChevronIcon } from "./icons";
 import {
   buildRows,
   exportFormCsv,
@@ -35,17 +34,13 @@ export function FeedbackFormResponsesPage({ form, bank, onBack }: Props) {
     <div className="main">
       <div className="workspace">
         <div className="tasks fb-page">
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBack} title="Back to Feedback Forms">
+              Feedback Forms
+            </button>
+          </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <button className="rvc-crumb" onClick={onBack} title="Back to Feedback Forms">
-                  Feedback Forms
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">
-                  {form.name || "Untitled form"}
-                </span>
-              </nav>
               <h1 className="tasks-title">{form.name || "Untitled form"}</h1>
               <div className="tasks-subtitle">
                 <span>

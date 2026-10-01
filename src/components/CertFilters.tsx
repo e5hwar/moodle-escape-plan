@@ -11,7 +11,7 @@ import {
   CheckRow,
 } from "./Filters";
 import { industries } from "../data/industries";
-import { TAG_GROUPS } from "../data/filters";
+import { TAG_GROUPS, matchesTagFilter } from "../data/filters";
 import {
   CAREER_STAGES,
   CERT_TYPES,
@@ -21,6 +21,7 @@ import {
   CERT_OPTIONAL_COLUMNS,
   CERT_FIXED_COLUMNS,
   type CertColumn,
+  type Certification,
 } from "../data/certifications";
 
 export type CertFilterState = {
@@ -34,6 +35,41 @@ export type CertFilterState = {
 };
 
 export type CertColumnState = Record<CertColumn, boolean>;
+
+/* An Industry option is a top-level Industry or an "Industry › Sub-Industry"
+   path; a certification tagged with the path counts for both. */
+function matchesIndustry(cert: Certification, selected: string[]): boolean {
+  return selected.some(
+    (opt) => cert.industry === opt || cert.industry.startsWith(`${opt} ›`),
+  );
+}
+
+/** Whether a Certification passes the search query and every filter — the one
+ *  rule behind the Certifications table and any picker that reuses its search
+ *  bar and filter row (Create Spotlight's Find a Deep Link). */
+export function certMatches(c: Certification, query: string, filters: CertFilterState): boolean {
+  const q = query.trim().toLowerCase();
+  if (q && !(
+    c.id.toLowerCase().includes(q) ||
+    c.name.toLowerCase().includes(q) ||
+    c.industry.toLowerCase().includes(q)
+  )) return false;
+  if (filters.industries.length && !matchesIndustry(c, filters.industries)) return false;
+  if (filters.careerStages.length) {
+    const match = c.careerStage
+      ? filters.careerStages.includes(c.careerStage)
+      : filters.careerStages.includes(NO_CAREER_STAGE);
+    if (!match) return false;
+  }
+  if (filters.types.length) {
+    const match = c.type ? filters.types.includes(c.type) : filters.types.includes(NO_TYPE);
+    if (!match) return false;
+  }
+  if (filters.creators.length && !filters.creators.includes(c.createdBy)) return false;
+  if (filters.visibilities.length && !filters.visibilities.includes(c.visibility ?? "Visible")) return false;
+  if (filters.tags.length && !matchesTagFilter(c.tags, filters.tags)) return false;
+  return true;
+}
 
 type Props = {
   filters: CertFilterState;
@@ -123,7 +159,7 @@ function IndustryPill({
       width={300}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Industry"
+          label="Industries"
           value={summary}
           open={open}
           toggle={toggle}

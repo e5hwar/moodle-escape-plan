@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   type FeedbackForm,
   type FormQuestionLink,
@@ -5,6 +6,8 @@ import {
 } from "../data/feedbackForms";
 import { type Question } from "../data/questionBank";
 import { FeedbackFormEditor } from "./FeedbackFormEditor";
+// `leave` is aliased: this file's own `leave()` is leaving the PAGE.
+import { leave as leaveField, useTouchedKeys } from "./fieldFlags";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
 import { InfoIcon14, CrumbChevronIcon } from "./icons";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -16,6 +19,8 @@ type Props = {
   allForms: FeedbackForm[];
   bank: Question[];
   onBack: () => void;
+  /** The trail's first step — Feedback Forms hangs off Certifications. */
+  onBackToCerts: () => void;
   /** Throw the record away — only ever called on a form this page CREATED that
    *  never became valid. See `leave()`. */
   onDiscard: () => void;
@@ -57,6 +62,7 @@ export function FeedbackFormWizard({
   allForms,
   bank,
   onBack,
+  onBackToCerts,
   onDiscard,
   onUpdate,
   onCreateQuestion,
@@ -88,23 +94,32 @@ export function FeedbackFormWizard({
     mapped ? null : "map at least one trigger",
   ].filter(Boolean) as string[];
   const ready = missing.length === 0;
+  // Each field says so once clicked into and out of while empty, or after a
+  // blocked Done (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const [attempted, setAttempted] = useState(false);
+  const nameMissing = !named && (attempted || touched.has("name"));
+  const triggersMissing = !mapped && (attempted || touched.has("triggers"));
   const blockedTip = ready
     ? undefined
     : `To finish, ${missing.join(" and ")}. A form with no trigger is never shown to anyone.`;
 
   function done() {
     if (ready) onBack();
+    else setAttempted(true);
   }
 
   /* Leaving without finishing. Everything here saves live, so a brand-new form
      abandoned half-made would otherwise sit in the list as an untitled row with
      no trigger — exactly the state the gate above exists to prevent. So a form
      this page created that never became valid is DISCARDED on the way out
-     (Cancel and the breadcrumb both). A form that is already valid is kept —
-     leaving is then just navigation — and an existing form is never touched. */
-  function leave() {
+     (Cancel and every crumb). A form that is already valid is kept —
+     leaving is then just navigation — and an existing form is never touched.
+     `go` is where the exit lands: Feedback Forms, or a step further up the
+     trail (a discard lands on Feedback Forms first; `go` then overrides it). */
+  function leave(go: () => void = onBack) {
     if (isCreating && !ready) onDiscard();
-    else onBack();
+    go();
   }
 
   /* The create button's shortcut is ⌘/Ctrl+Shift+Enter, as on the Task
@@ -120,24 +135,27 @@ export function FeedbackFormWizard({
             <div className="wizard-paneout">
               <div className="wizard-pane">
                 {/* Feedback Forms has no sidebar entry — it is reached from the
-                    Certifications header — so the crumbs repeat that page's
-                    own trail and the last one is the way back out. */}
+                    Certifications header — so the full trail is Certifications
+                    › Feedback Forms, every step a way back out. The trail
+                    never names the page itself. */}
+                <nav className="rvc-crumbs" aria-label="Breadcrumb">
+                  <button
+                    className="rvc-crumb"
+                    onClick={() => leave(onBackToCerts)}
+                    title="Back to Certifications"
+                  >
+                    Certifications
+                  </button>
+                  <CrumbChevronIcon />
+                  <button
+                    className="rvc-crumb"
+                    onClick={() => leave()}
+                    title="Back to Feedback Forms"
+                  >
+                    Feedback Forms
+                  </button>
+                </nav>
                 <div className="rvc-pagehead">
-                  <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                    <span className="rvc-crumb">Content</span>
-                    <CrumbChevronIcon />
-                    <button
-                      className="rvc-crumb"
-                      onClick={leave}
-                      title="Back to Feedback Forms"
-                    >
-                      Feedback Forms
-                    </button>
-                    <CrumbChevronIcon />
-                    <span className="rvc-crumb rvc-crumb--current">
-                      {form.name || title}
-                    </span>
-                  </nav>
                   <h1 className="wizard-title">{title}</h1>
                 </div>
                 <p className="wizard-desc">
@@ -145,12 +163,16 @@ export function FeedbackFormWizard({
                   the Tasks and Certifications whose completion should show it.
                 </p>
 
-                <div className="form-group">
+                <div className="form-group" onBlur={leaveField(() => touch("name"))}>
                   <label className="form-label">
-                    Feedback Form Name <span className="req">*</span>
+                    Feedback Form Name<span className="req">*</span>
+                    {nameMissing && (
+                      <span className="form-label-error">Feedback Form Name cannot be left empty</span>
+                    )}
                   </label>
                   <input
-                    className="form-input"
+                    className={`form-input${nameMissing ? " has-error" : ""}`}
+                    aria-invalid={nameMissing || undefined}
                     value={form.name}
                     placeholder="Feedback Form Name"
                     onChange={(e) => rename(e.target.value)}
@@ -190,11 +212,14 @@ export function FeedbackFormWizard({
                   </p>
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" onBlur={leaveField(() => touch("triggers"))}>
                   {/* Required, like the name: a form with no trigger never
                       fires, so the footer's Done waits on this field too. */}
                   <label className="form-label">
-                    Triggers <span className="req">*</span>
+                    Triggers<span className="req">*</span>
+                    {triggersMissing && (
+                      <span className="form-label-error">Triggers cannot be left empty</span>
+                    )}
                   </label>
                   <FeedbackFormTriggers
                     form={form}
@@ -226,7 +251,7 @@ export function FeedbackFormWizard({
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={leave}>
+          <button className="wizard-cancel" onClick={() => leave()}>
             Cancel
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { renameUser } from "../data/users";
 import {
   submissions as seedSubmissions,
@@ -18,18 +18,8 @@ import {
   type DateRangeState,
 } from "./DateRangeFilter";
 import { ProctoringSearch } from "./ProctoringSearch";
-import { SectionHeading } from "./SectionHeading";
-import { useLandingMorph } from "../hooks/useLandingMorph";
-import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { LandingOverlay, BackToSearch, type LandingCol, type LandingRow } from "./LandingMorph";
-import {
-  SortIcon,
-  RunMoveUpIcon,
-  RunMoveDownIcon,
-  RowChevronIcon,
-  PagePrevIcon,
-  PageNextIcon,
-} from "./icons";
+import { ReviewRunsStrip, ReviewRunGroup, ReviewRunCard } from "./ReviewRuns";
+import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 
 const PAGE_SIZE = 50;
 
@@ -45,30 +35,7 @@ function parseSubmittedAt(s: string): number {
   return Date.parse(readableDate(s)) || 0;
 }
 
-/* The run card names the types the way Figma 300:363 does — "Proctored Exams",
-   not the filter pills' wording. */
-const RUN_TYPE_LABEL: Record<ProctoringKind, string> = {
-  proctoring: "Proctored Exams",
-  "id-review": "ID Reviews",
-  "id-reupload": "ID Re-Uploads",
-};
-
 const TYPE_SEQUENCE: ProctoringKind[] = ["proctoring", "id-review", "id-reupload"];
-
-/** How many quiz rows the By Quiz card lists before "+ N more" (Figma 714:1515). */
-const QUIZ_ROWS = 3;
-
-/* A run's grouping: the queue is ordered by this sequence, longest-waiting
-   first WITHIN each group, so the reviewer clears one type (or one quiz)
-   before the next begins. `null` = the table's plain column sort. */
-type RunOrder = { field: "kind" | "exam"; sequence: string[] } | null;
-
-function rankOf(s: Submission, order: RunOrder): number {
-  if (!order) return 0;
-  const i = order.sequence.indexOf(order.field === "kind" ? s.kind : s.exam);
-  // Anything outside the sequence sorts after it rather than jumping to the front.
-  return i === -1 ? order.sequence.length : i;
-}
 
 const SORT_FIELD: Record<Exclude<SortKey, "submittedAt">, (s: Submission) => string> = {
   candidate: (s) => s.candidateName,
@@ -103,17 +70,6 @@ const KIND_BY_REVIEW_TYPE = new Map<string, ProctoringKind>(
   TYPE_SEQUENCE.map((k) => [REVIEW_TYPE_LABEL[k], k]),
 );
 
-/** The landing's wait column: "Waiting 20 hours" under a day, "Waiting 4 days"
- *  from there up. */
-function waitingLabelOf(s: Submission): string {
-  const t = parseSubmittedAt(s.submittedAt);
-  if (!t) return "";
-  const hours = Math.max(1, Math.floor((Date.now() - t) / 3_600_000));
-  if (hours < 24) return `Waiting ${hours} hour${hours === 1 ? "" : "s"}`;
-  const days = Math.floor(hours / 24);
-  return `Waiting ${days} day${days === 1 ? "" : "s"}`;
-}
-
 /* Short date for the flag's tooltip — "Mar 9, 2026" from the row's own
    "March 9th, 2026, 11:20 AM" display string. */
 const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -125,8 +81,7 @@ function shortDate(display: string): string {
 }
 
 /** The candidate's name with the "New ID" flag when this row is a re-upload the
- *  candidate has sent back (Figma 994:1081 "Table Pills - Yellow"). Shared by
- *  the table and the landing overlay so the morph hand-off doesn't pop. */
+ *  candidate has sent back (Figma 994:1081 "Table Pills - Yellow"). */
 function CandidateName({ submission }: { submission: Submission }) {
   if (submission.kind !== "id-reupload") return <>{submission.candidateName}</>;
   return (
@@ -144,19 +99,67 @@ function CandidateName({ submission }: { submission: Submission }) {
   );
 }
 
-/* Landing-morph columns — mirror the table's columns (key, label, width) so
-   the p=1 hand-off to the real table lines up. The minimal view is Name plus
-   the right-aligned wait column (the Tasks landing's Name + Type shape); the
-   wait column IS the Submitted On column — its cell crossfades from
-   "Waiting N days" to the full timestamp as the track widens from the label's
-   snug 170px to the table column's 265. Email and Quiz grow in between. */
-const WAIT_LANDING_WIDTH = 170;
-const LM_COLS: LandingCol[] = [
-  { key: "email", label: "Email", width: 310 },
-  { key: "phone", label: "Phone", width: 170 },
-  { key: "quiz", label: "Quiz", width: 316 },
-  { key: "date", label: "Submitted On", width: 265, fixed: true, landingWidth: WAIT_LANDING_WIDTH },
+/* ── Review Runs (the `.rr` strip, shared with Hands-On Submissions) ──
+   A run is ONE filter over the pending queue — every Review Type, one or more
+   Review Types, or one or more Quizzes — oldest first. A card is that filter
+   preset; its number is how many are still pending in it. Suggested cards are
+   the fixed four below; Recent cards are the filters that were in force each
+   time a review was opened. */
+type RunKind = "all" | "type" | "quiz";
+/** `values` are ProctoringKinds for a "type" run, quiz names for a "quiz" run. */
+type RunKey = { kind: RunKind; values: string[] };
+
+const ALL_RUN: RunKey = { kind: "all", values: [] };
+
+/** Identity: the same filter (whatever the value order) is the same card. */
+const runId = (k: RunKey) => `${k.kind}:${[...k.values].sort().join("\u0000")}`;
+
+function inRun(s: Submission, k: RunKey): boolean {
+  switch (k.kind) {
+    case "all":
+      return true;
+    case "type":
+      return k.values.includes(s.kind);
+    case "quiz":
+      return k.values.includes(s.exam);
+  }
+}
+
+/* Card titles name the types the way the old run cards (Figma 300:363) did —
+   "Proctored Exams", not the Review Type pill's wording. */
+const RUN_TYPE_LABEL: Record<ProctoringKind, string> = {
+  proctoring: "Proctored Exams",
+  "id-review": "ID Reviews",
+  "id-reupload": "ID Re-Uploads",
+};
+
+function runTitles(k: RunKey): string[] {
+  if (k.kind === "all") return ["All Reviews"];
+  if (k.kind === "type") return k.values.map((v) => RUN_TYPE_LABEL[v as ProctoringKind] ?? v);
+  return k.values;
+}
+
+/* The second line names the KIND of filter, as on Hands-On; All has none. */
+const RUN_SUBTITLE: Record<RunKind, string | null> = {
+  all: null,
+  type: "Review Type",
+  quiz: "Quiz",
+};
+
+/* Suggested is a fixed four (user, 2026-09-30): All, then each Review Type —
+   minus anything already in Recent or with nothing pending. Recents keep up
+   to 5 and the strip never holds more than 7, recents first. */
+const SUGGESTED_RUNS: RunKey[] = [
+  ALL_RUN,
+  ...TYPE_SEQUENCE.map((k): RunKey => ({ kind: "type", values: [k] })),
 ];
+const MAX_RECENT = 5;
+const MAX_RUNS = 7;
+
+/* Recents outlive the page: App unmounts it on every navigation, and this
+   prototype has no storage layer, so they live at module scope for the
+   session. */
+let recentRunsStore: RunKey[] = [];
 
 export function ProctoringPage({
   onPendingIdReuploads,
@@ -191,73 +194,17 @@ export function ProctoringPage({
      submission: from then on they're working this page's queue, and exiting
      belongs on this page's table. */
   const [returnToOrigin, setReturnToOrigin] = useState(!!initialSubmissionId);
-  // Longest waiting first — the landing's framing, and the default review-run
-  // order, so the table below the morph reads in the same order as the queue.
+  // Longest waiting first — the default review-run order, so the table reads
+  // in the same order as the console's queue.
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedAt", dir: "asc" });
-  // The order the By Type card walks the queue in — reordered by its arrows.
-  const [typeOrder, setTypeOrder] = useState<ProctoringKind[]>(TYPE_SEQUENCE);
-  // Set while a By Type / By Quiz run is active; overrides the column sort.
-  const [runOrder, setRunOrder] = useState<RunOrder>(null);
-
-  // Landing morph — the page opens as the review-run landing and the wheel (or
-  // any search / pill / row interaction) morphs it into the table view.
-  const morph = useLandingMorph();
+  // Recent runs, newest first — seeded from, and mirrored to, the module store.
+  const [recents, setRecents] = useState<RunKey[]>(() => recentRunsStore);
 
   function toggleSort(key: SortKey) {
-    // Sorting by a column is an explicit override of a run's grouping.
-    setRunOrder(null);
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
   }
-
-  /* FLIP the By Type LABELS on reorder: capture each label's position before
-     the state change, then (in the layout effect below) start every displaced
-     label at its old position and release it — the two swapped labels visibly
-     slide into each other's slots. Deliberately the label spans, NOT the rows:
-     the arrow clusters are per-slot fixtures (slot 0 always shows ↓, the last
-     always ↑), so animating whole rows made static controls appear to move.
-     The rows still swap in the DOM instantly (keyed by kind), which is what
-     keeps each slot's arrows and hairline in place. */
-  const typeLabelRefs = useRef(new Map<ProctoringKind, HTMLSpanElement | null>());
-  const typeLabelTopsBefore = useRef<Map<ProctoringKind, number> | null>(null);
-
-  function moveType(from: number, to: number) {
-    const tops = new Map<ProctoringKind, number>();
-    typeLabelRefs.current.forEach((el, kind) => {
-      if (el) tops.set(kind, el.getBoundingClientRect().top);
-    });
-    typeLabelTopsBefore.current = tops;
-    setTypeOrder((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
-  }
-
-  useLayoutEffect(() => {
-    const before = typeLabelTopsBefore.current;
-    if (!before) return;
-    typeLabelTopsBefore.current = null;
-    const displaced: HTMLSpanElement[] = [];
-    typeLabelRefs.current.forEach((el, kind) => {
-      const prevTop = before.get(kind);
-      if (!el || prevTop === undefined) return;
-      const delta = prevTop - el.getBoundingClientRect().top;
-      if (delta === 0) return;
-      el.style.transition = "none";
-      el.style.transform = `translateY(${delta}px)`;
-      displaced.push(el);
-    });
-    if (displaced.length === 0) return;
-    // Commit the inverted positions before releasing them into the transition.
-    void displaced[0].offsetHeight;
-    displaced.forEach((el) => {
-      el.style.transition = "transform 0.18s ease";
-      el.style.transform = "";
-    });
-  }, [typeOrder]);
 
   // Once a submission is accepted/rejected it's off the review queue entirely. A
   // requested reupload doesn't count toward the run cards' counts — only true
@@ -271,27 +218,25 @@ export function ProctoringPage({
     [reviewTypeFilter],
   );
 
-  const counts = useMemo(() => {
-    return {
-      proctoring: pending.filter((s) => s.kind === "proctoring").length,
-      "id-review": pending.filter((s) => s.kind === "id-review").length,
-      "id-reupload": pending.filter((s) => s.kind === "id-reupload").length,
-    };
-  }, [pending]);
+  // A recent whose queue has been cleared has nothing left to open — it drops
+  // out of the strip (and frees its slot) rather than showing a 0.
+  const liveRecents = useMemo(
+    () => recents.filter((r) => pending.some((s) => inRun(s, r))),
+    [recents, pending],
+  );
 
-  /* ── "Start a review run" cards: the landing overview of everything pending.
-     Computed from the full pending queue, not the filtered table — the cards
-     describe the whole queue whatever the pills beside the search say. ── */
-  const quizRanked = useMemo(() => {
-    const byQuiz = new Map<string, number>();
-    pending.forEach((s) => byQuiz.set(s.exam, (byQuiz.get(s.exam) ?? 0) + 1));
-    return [...byQuiz.entries()].sort((a, b) => b[1] - a[1]);
-  }, [pending]);
+  const suggested = useMemo(() => {
+    const taken = new Set(liveRecents.map(runId));
+    const room = Math.max(0, MAX_RUNS - liveRecents.length);
+    return SUGGESTED_RUNS.filter(
+      (k) => !taken.has(runId(k)) && pending.some((s) => inRun(s, k)),
+    ).slice(0, room);
+  }, [liveRecents, pending]);
 
   /** Every quiz with something pending — the Quiz pill's option list. */
   const examNames = useMemo(
-    () => quizRanked.map(([name]) => name).sort((a, b) => a.localeCompare(b)),
-    [quizRanked],
+    () => [...new Set(pending.map((s) => s.exam))].sort((a, b) => a.localeCompare(b)),
+    [pending],
   );
 
   /* All Time IS the Submission Date filter's empty state, so a set range counts
@@ -305,24 +250,46 @@ export function ProctoringPage({
     setDateRange(allTimeDateRange());
   }
 
-  /** Start a run: clear the filters, order the whole pending queue by the run's
-   * grouping (longest wait first within each group), and open the console on
-   * its first submission. The console's queue IS the table's filtered+sorted
-   * list, so ordering the table is all a run has to do — the reviewer then
-   * walks the entire queue in that sequence rather than one scope at a time. */
-  function startRun(order: RunOrder) {
-    const first = [...pending].sort(
-      (a, b) =>
-        rankOf(a, order) - rankOf(b, order) ||
-        parseSubmittedAt(a.submittedAt) - parseSubmittedAt(b.submittedAt),
-    )[0];
+  /** Push a run to the front of Recent (a repeat just moves it up); cleared
+   *  runs fall away so they never hold a slot. */
+  function recordRecent(key: RunKey) {
+    const id = runId(key);
+    const next = [
+      key,
+      ...recents.filter((r) => runId(r) !== id && pending.some((s) => inRun(s, r))),
+    ].slice(0, MAX_RECENT);
+    recentRunsStore = next;
+    setRecents(next);
+  }
+
+  /* The run the filters describe: Quiz outranks Review Type — the narrower
+     filter wins, as Task outranks Certification on Hands-On. Submission Date
+     and the search text never count — they scope what the reviewer is looking
+     at, not what they are clearing. Neither applied → All Reviews. */
+  function runFromFilters(): RunKey {
+    if (examFilter.length) return { kind: "quiz", values: examFilter };
+    if (kinds.length) return { kind: "type", values: kinds };
+    return ALL_RUN;
+  }
+
+  /** A card click: reset the filters to the run, oldest first, and open the
+   * console on its longest-waiting submission. The console's queue IS the
+   * table's filtered+sorted list, so setting the filters is all a run has to
+   * do. The card becomes (or moves to the front of) Recent. */
+  function startRun(key: RunKey) {
+    const first = pending
+      .filter((s) => inRun(s, key))
+      .sort((a, b) => parseSubmittedAt(a.submittedAt) - parseSubmittedAt(b.submittedAt))[0];
     if (!first) return;
-    setReviewTypeFilter([]);
-    setExamFilter([]);
+    setReviewTypeFilter(
+      key.kind === "type" ? key.values.map((k) => REVIEW_TYPE_LABEL[k as ProctoringKind]) : [],
+    );
+    setExamFilter(key.kind === "quiz" ? key.values : []);
     setDateRange(allTimeDateRange());
     setQuery("");
     setSort({ key: "submittedAt", dir: "asc" });
-    setRunOrder(order);
+    recordRecent(key);
+    setReturnToOrigin(false);
     setActiveId(first.id);
   }
 
@@ -348,17 +315,9 @@ export function ProctoringPage({
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    // A run's grouping wins until the reviewer clicks a column header.
-    if (runOrder) {
-      return arr.sort(
-        (a, b) =>
-          rankOf(a, runOrder) - rankOf(b, runOrder) ||
-          parseSubmittedAt(a.submittedAt) - parseSubmittedAt(b.submittedAt),
-      );
-    }
     arr.sort((a, b) => compareRows(a, b, sort.key));
     return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort, runOrder]);
+  }, [filtered, sort]);
 
   /* Paging matches the Hands-On table (same PAGE_SIZE, same footer). The queue
      rarely fills a page, but the "Showing x–y of n" line is the table's standard
@@ -366,7 +325,7 @@ export function ProctoringPage({
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   useEffect(
     () => setPage(1),
-    [query, reviewTypeFilter, examFilter, dateRange, sort, runOrder],
+    [query, reviewTypeFilter, examFilter, dateRange, sort],
   );
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -380,18 +339,6 @@ export function ProctoringPage({
     ? sorted.find((s) => s.id === activeId) ?? list.find((s) => s.id === activeId) ?? null
     : null;
 
-  /* The three run cards carry keycaps (Figma 713:1358 / 714:1478 / 714:1542),
-     so each CTA has the matching letter shortcut. Live only on the landing —
-     the console binds its own A/R/I keys. */
-  const runnable = !active && pending.length > 0;
-  useCreateShortcut(() => startRun(null), runnable, "s");
-  useCreateShortcut(() => startRun({ field: "kind", sequence: typeOrder }), runnable, "t");
-  useCreateShortcut(
-    () => startRun({ field: "exam", sequence: quizRanked.map(([name]) => name) }),
-    runnable,
-    "q",
-  );
-
   // Prior rejected attempts by this candidate, across any exam — not just the one open now.
   const previousRejected = useMemo(() => {
     if (!active) return [];
@@ -399,6 +346,13 @@ export function ProctoringPage({
       (s) => s.candidateEmail === active.candidateEmail && s.status === "rejected" && s.id !== active.id,
     );
   }, [list, active]);
+
+  /** Open the console from a table row: the filters in force become the
+   *  newest recent run. */
+  function openReview(id: string) {
+    recordRecent(runFromFilters());
+    openSubmission(id);
+  }
 
   function openSubmission(id: string) {
     // Moving to a different submission means they're working this page's queue.
@@ -415,14 +369,13 @@ export function ProctoringPage({
   }
 
   /* The console's "Exam Reviews" crumb when it was opened from elsewhere:
-     leaves that origin behind for this page's own landing. The re-upload
+     leaves that origin behind for this page's own table. The re-upload
      preselection goes with it — it exists only to make the handed-over row
-     visible, and the landing is the whole queue. */
+     visible. */
   function exitToSection() {
     setReturnToOrigin(false);
     setReviewTypeFilter([]);
     setActiveId(null);
-    morph.showLanding();
   }
 
   // Decide a submission (accept/reject): it leaves the review queue entirely and
@@ -485,22 +438,6 @@ export function ProctoringPage({
   }
 
 
-  const landingRows: LandingRow[] = sorted.slice(0, 24).map((s) => ({
-    key: s.id,
-    name: <CandidateName submission={s} />,
-    cells: {
-      email: s.candidateEmail,
-      phone: s.candidatePhone,
-      quiz: s.exam,
-      date: (
-        <span className="prl-swap">
-          <span className="prl-swap-real">{s.submittedAt}</span>
-          <span className="prl-swap-wait">{waitingLabelOf(s)}</span>
-        </span>
-      ),
-    },
-  }));
-
   if (active) {
     return (
       <ProctoringConsole
@@ -525,7 +462,7 @@ export function ProctoringPage({
   return (
     <div className="main">
       <div className="workspace">
-        <div className="tasks lm lm-cards pr-page" ref={morph.rootRef}>
+        <div className="tasks pr-page">
           <header className="tasks-header">
             <div>
               <h1 className="tasks-title">Exam Reviews</h1>
@@ -541,120 +478,27 @@ export function ProctoringPage({
             </div>
           </header>
 
-          {/* Start a Review Run (Figma 685:2654 "Cards") — the landing's hero;
-              it collapses away as the wheel morphs the landing into the table.
-              Card shells/CTAs are the shared .btn-publish / .btn-save-draft;
-              only the card chrome is new (.run-*). */}
+          {/* Review Runs — the Hands-On strip (Figma 1398:2031 / 1392:1793).
+              Recent = the filters in force each time a review was opened,
+              newest first; Suggested = All, Proctored Exams, ID Reviews, ID
+              Re-Uploads. A card narrows the queue to its run and opens the
+              console on the longest-waiting submission. Nothing pending → no
+              strip. */}
           {pending.length > 0 && (
-            <section className="run-section">
-              <SectionHeading label="Start a Review Run" />
-              <div className="run-cards">
-                {/* Oldest first (300:311) — the recommended run: no grouping,
-                    just the whole queue longest-waiting first. */}
-                <div className="run-card run-card--rec">
-                  <div className="run-head">
-                    <div className="run-headtext">
-                      <span className="run-title">Oldest first</span>
-                      <span className="run-sub">Longest Wait First</span>
-                    </div>
-                    <span className="run-badge">Recommended</span>
-                  </div>
-                  <div className="run-countblock">
-                    <span className="run-countlabel">Pending:</span>
-                    <span className="run-count">{pending.length}</span>
-                  </div>
-                  <button className="btn-publish run-cta" onClick={() => startRun(null)}>
-                    Start Review
-                    <span className="run-kbd">S</span>
-                  </button>
-                </div>
-
-                {/* By type (300:363) — the arrows set the sequence the run walks,
-                    so the reviewer clears one type before the next begins. */}
-                <div className="run-card">
-                  <div className="run-headtext">
-                    <span className="run-title">By type</span>
-                    <span className="run-sub">One Review Type at a time</span>
-                  </div>
-                  <div className="run-list">
-                    <div className="run-items">
-                      {typeOrder.map((kind, i) => (
-                        <div key={kind} className="run-item">
-                          <span
-                            className="run-item-label"
-                            ref={(el) => {
-                              typeLabelRefs.current.set(kind, el);
-                            }}
-                          >
-                            {RUN_TYPE_LABEL[kind]}
-                            <span className="run-item-count">· {counts[kind]}</span>
-                          </span>
-                          <span className="run-item-arrows">
-                            {i > 0 && (
-                              <button
-                                className="run-arrow"
-                                onClick={() => moveType(i, i - 1)}
-                                aria-label={`Move ${RUN_TYPE_LABEL[kind]} earlier`}
-                              >
-                                <RunMoveUpIcon />
-                              </button>
-                            )}
-                            {i < typeOrder.length - 1 && (
-                              <button
-                                className="run-arrow"
-                                onClick={() => moveType(i, i + 1)}
-                                aria-label={`Move ${RUN_TYPE_LABEL[kind]} later`}
-                              >
-                                <RunMoveDownIcon />
-                              </button>
-                            )}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    className="btn-save-draft run-cta"
-                    onClick={() => startRun({ field: "kind", sequence: typeOrder })}
-                  >
-                    Review By Type
-                    <span className="run-kbd">T</span>
-                  </button>
-                </div>
-
-                {/* By quiz (714:1515) — no arrows; the busiest quiz leads. */}
-                <div className="run-card">
-                  <div className="run-headtext">
-                    <span className="run-title">By quiz</span>
-                    <span className="run-sub">One Quiz back-to-back</span>
-                  </div>
-                  <div className="run-list">
-                    <div className="run-items">
-                      {quizRanked.slice(0, QUIZ_ROWS).map(([name, n]) => (
-                        <div key={name} className="run-item">
-                          <span className="run-item-label">
-                            {name}
-                            <span className="run-item-count">· {n}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {quizRanked.length > QUIZ_ROWS && (
-                      <p className="run-more">+ {quizRanked.length - QUIZ_ROWS} more</p>
-                    )}
-                  </div>
-                  <button
-                    className="btn-save-draft run-cta"
-                    onClick={() =>
-                      startRun({ field: "exam", sequence: quizRanked.map(([name]) => name) })
-                    }
-                  >
-                    Review By Quiz
-                    <span className="run-kbd">Q</span>
-                  </button>
-                </div>
-              </div>
-            </section>
+            <ReviewRunsStrip>
+              {liveRecents.length > 0 && (
+                <RunGroup label="Recent Review Runs" runs={liveRecents} pending={pending} onPick={startRun} />
+              )}
+              {/* "SUGGESTED" only labels itself beside a RECENT group. */}
+              {suggested.length > 0 && (
+                <RunGroup
+                  label={liveRecents.length > 0 ? "Suggested" : undefined}
+                  runs={suggested}
+                  pending={pending}
+                  onPick={startRun}
+                />
+              )}
+            </ReviewRunsStrip>
           )}
 
           {/* Same shell as Hands-On Task Submissions (.tasks-row > .tasks-content):
@@ -663,20 +507,13 @@ export function ProctoringPage({
               list. */}
           <div className="tasks-row">
             <div className="tasks-content">
-              {/* Search and filters belong to the EXPANDED table only — the
-                  collapsed view is the run cards plus the list, and both rows
-                  fade in with the table chrome (see `.tasks.lm.pr-page` in
-                  index.css). */}
               <div className="toolbar">
                 <ProctoringSearch
                   submissions={pending}
                   exams={examFilter}
                   onExamsChange={setExamFilter}
                   query={query}
-                  onCommit={(q) => {
-                    setQuery(q);
-                    morph.showTable();
-                  }}
+                  onCommit={setQuery}
                 />
               </div>
 
@@ -722,101 +559,86 @@ export function ProctoringPage({
                 )}
               </div>
 
-              <div className="lm-stage">
-                <LandingOverlay
-                  caption="Longest waiting"
-                  columns={LM_COLS}
-                  rows={landingRows}
-                  nameLabel="User's Name"
-                  nameWidth={NAME_MIN}
-                  actionsGlyph="chevron"
-                  onShowAll={morph.showTable}
-                  onRowClick={(row) => openSubmission(row.key)}
-                />
-                <div className="lm-table">
-                  {/* Table — the shared .table system the Hands-On Task Submissions
-                      page uses, minus Edit Columns (this column set is fixed). */}
-                  <div
-                    className="table-xscroll"
-                    style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
-                  >
-                    <table className="table table-head">
-                      <ProctoringColGroup />
-                      <thead>
-                        <tr>
-                          <SortableHeader col="candidate" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
-                          <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
-                          <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
-                          <SortableHeader col="exam" label="Quiz" className="pr-col-exam" sort={sort} toggle={toggleSort} />
-                          <SortableHeader col="submittedAt" label="Submitted On" className="pr-col-date" sort={sort} toggle={toggleSort} />
-                          <th className="col-actions" />
+              {/* Table — the shared .table system the Hands-On Task Submissions
+                  page uses, minus Edit Columns (this column set is fixed). */}
+              <div
+                className="table-xscroll"
+                style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
+              >
+                <table className="table table-head">
+                  <ProctoringColGroup />
+                  <thead>
+                    <tr>
+                      <SortableHeader col="candidate" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="exam" label="Quiz" className="pr-col-exam" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="submittedAt" label="Submitted On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                      <th className="col-actions" />
+                    </tr>
+                  </thead>
+                </table>
+
+                <div className="tasks-scroll">
+                  <table className="table table-body">
+                    <ProctoringColGroup />
+                    <tbody>
+                      {paged.map((s) => (
+                        <tr key={s.id} onClick={() => openReview(s.id)}>
+                          <td className="col-name"><CandidateName submission={s} /></td>
+                          {/* Click-to-copy (see CopyCells.tsx) — the two
+                              values an admin pastes into a mail client or
+                              a phone dialler while chasing a candidate. */}
+                          <td className="pr-col-email" data-copyable>{s.candidateEmail}</td>
+                          <td className="pr-col-phone" data-copyable>{s.candidatePhone}</td>
+                          <td className="pr-col-exam">{s.exam}</td>
+                          <td className="pr-col-date">{s.submittedAt}</td>
+                          {/* Row-end affordance, identical to the Hands-On
+                              Task Submissions table: a centred chevron that
+                              hides on row hover, replaced in place by a
+                              labelled bar whose own chevron lands on the
+                              same pixel. */}
+                          <td className="col-actions">
+                            <button
+                              className="row-action-btn lone-dots row-chevron"
+                              aria-label="Review Exam"
+                              onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
+                            >
+                              <RowChevronIcon />
+                            </button>
+                            <div className="row-action-bar">
+                              <button
+                                className="row-action-btn row-action-btn--label"
+                                onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
+                              >
+                                Review Exam
+                                <RowChevronIcon />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                    </table>
+                      ))}
+                      {paged.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="u-empty">
+                            {query.trim()
+                              ? `No submissions match "${query.trim()}".`
+                              : "No submissions match these filters."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-                    <div className="tasks-scroll">
-                      <table className="table table-body">
-                        <ProctoringColGroup />
-                        <tbody>
-                          {paged.map((s) => (
-                            <tr key={s.id} onClick={() => openSubmission(s.id)}>
-                              <td className="col-name"><CandidateName submission={s} /></td>
-                              {/* Click-to-copy (see CopyCells.tsx) — the two
-                                  values an admin pastes into a mail client or
-                                  a phone dialler while chasing a candidate. */}
-                              <td className="pr-col-email" data-copyable>{s.candidateEmail}</td>
-                              <td className="pr-col-phone" data-copyable>{s.candidatePhone}</td>
-                              <td className="pr-col-exam">{s.exam}</td>
-                              <td className="pr-col-date">{s.submittedAt}</td>
-                              {/* Row-end affordance, identical to the Hands-On
-                                  Task Submissions table: a centred chevron that
-                                  hides on row hover, replaced in place by a
-                                  labelled bar whose own chevron lands on the
-                                  same pixel. */}
-                              <td className="col-actions">
-                                <button
-                                  className="row-action-btn lone-dots row-chevron"
-                                  aria-label="Review Exam"
-                                  onClick={(e) => { e.stopPropagation(); openSubmission(s.id); }}
-                                >
-                                  <RowChevronIcon />
-                                </button>
-                                <div className="row-action-bar">
-                                  <button
-                                    className="row-action-btn row-action-btn--label"
-                                    onClick={(e) => { e.stopPropagation(); openSubmission(s.id); }}
-                                  >
-                                    Review Exam
-                                    <RowChevronIcon />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {paged.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="u-empty">
-                                {query.trim()
-                                  ? `No submissions match "${query.trim()}".`
-                                  : "No submissions match these filters."}
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="pagination">
-                    <BackToSearch onClick={morph.showLanding} label="Back to Review Options" />
-                    <span>
-                      Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
-                    </span>
-                    <div className="pagination-controls">
-                      <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
-                      <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
-                    </div>
-                  </div>
+              <div className="pagination">
+                <span>
+                  Showing {sorted.length === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
+                </span>
+                <div className="pagination-controls">
+                  <button className="page-btn" disabled={visiblePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><PagePrevIcon /></button>
+                  <button className="page-btn" disabled={visiblePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}><PageNextIcon /></button>
                 </div>
               </div>
             </div>
@@ -827,11 +649,37 @@ export function ProctoringPage({
   );
 }
 
+/** One group of the strip, its cards built from this page's runs. */
+function RunGroup({
+  label,
+  runs,
+  pending,
+  onPick,
+}: {
+  label?: string;
+  runs: RunKey[];
+  pending: Submission[];
+  onPick: (k: RunKey) => void;
+}) {
+  return (
+    <ReviewRunGroup label={label}>
+      {runs.map((k) => (
+        <ReviewRunCard
+          key={runId(k)}
+          count={pending.filter((s) => inRun(s, k)).length}
+          values={runTitles(k)}
+          sub={RUN_SUBTITLE[k.kind]}
+          onClick={() => onPick(k)}
+        />
+      ))}
+    </ReviewRunGroup>
+  );
+}
+
 /* Column widths mirror the Hands-On table: an explicit width on every column
    except one left auto, which soaks up the leftover space (.table is
    fixed-layout, so an auto column can only grow past its reserved minimum).
-   Name is that column now — same as every other list page, and it's what lets
-   the landing morph's flexible name track hand off to the table pixel-exact.
+   Name is that column now — same as every other list page.
    Email is fixed at what the longest seeded address needs
    ("andre.dubois@keystoneelectrical.com", ~270px, plus the cell's 2×20px
    padding); Quiz at its longest value ("Building Science Principles
@@ -855,11 +703,9 @@ const TABLE_MIN =
 function ProctoringColGroup() {
   return (
     <colgroup>
-      {/* Name carries its 240px minimum here (not left auto) so a stretched
-          table distributes slack across ALL columns proportionally — that's
-          the regime the landing overlay's track formula reproduces. An auto
-          column would swallow the slack alone and bump every column at the
-          morph hand-off. */}
+      {/* Name carries its minimum here (not left auto) so a stretched table
+          distributes slack across ALL columns proportionally instead of one
+          auto column swallowing it. */}
       <col style={{ width: NAME_MIN }} />
       <col style={{ width: COL_WIDTHS.email }} />
       <col style={{ width: COL_WIDTHS.phone }} />

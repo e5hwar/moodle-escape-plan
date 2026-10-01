@@ -6,8 +6,8 @@ import { useEffect } from "react";
  * badge shown on the button. Ignored while a modifier is held, focus is in a
  * form field, or `enabled` is false (e.g. the create flow is already open).
  *
- * `key` overrides the letter for pages whose badge isn't a C — the Industries
- * rail uses "I" for Add Industry alongside "C" for Add Certification.
+ * `key` overrides the letter for pages whose badge isn't a C — the quiet
+ * header buttons (e.g. Offer Codes "O", Scholarships "S").
  */
 export function useCreateShortcut(onCreate: () => void, enabled = true, key = "c") {
   useEffect(() => {

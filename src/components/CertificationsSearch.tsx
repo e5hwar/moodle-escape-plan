@@ -53,13 +53,14 @@ export function CertificationsSearch({
 
   const scopes: SearchScope[] = [
     {
-      token: "Industry",
+      token: "Industries",
+      noun: "industry",
       options: industryOpts.names,
       applied: industries,
       onAppliedChange: onIndustriesChange,
       optionsLabel: "Industries",
-      example: "Industry: HVAC",
-      hint: "Filter by Industry",
+      example: "Industries: HVAC",
+      hint: "Filter by Industries",
       describe: (name) => plural(industryOpts.counts.get(name) ?? 0),
     },
     {

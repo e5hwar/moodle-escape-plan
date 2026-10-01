@@ -21,8 +21,7 @@ import {
   CalendarIcon,
   PagePrevIcon,
   PageNextIcon,
-  CrumbChevronIcon,
-} from "./icons";
+  } from "./icons";
 import { PrmModal } from "./PrmModal";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
@@ -269,7 +268,10 @@ export function FeedbackFormsPage({
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key, dateRange));
-    return sort.dir === "desc" ? arr.reverse() : arr;
+    if (sort.dir === "desc") arr.reverse();
+    // Disabled forms always sink to the bottom (the user, 2026-09-29), in the
+    // chosen order among themselves, whichever column / direction is sorted.
+    return [...arr.filter((f) => f.status !== "disabled"), ...arr.filter((f) => f.status === "disabled")];
   }, [filtered, sort, dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -327,19 +329,15 @@ export function FeedbackFormsPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks fb-page">
+          {/* This page is reached from the Certifications header button (it
+              no longer has its own sidebar entry), so the crumb is the way back. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+              Certifications
+            </button>
+          </nav>
           <header className="tasks-header">
-            {/* This page is reached from the Certifications header button (it
-                no longer has its own sidebar entry), so the crumb is the way back. */}
             <div className="rvc-pagehead">
-              <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                <span className="rvc-crumb">Content</span>
-                <CrumbChevronIcon />
-                <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
-                  Certifications
-                </button>
-                <CrumbChevronIcon />
-                <span className="rvc-crumb rvc-crumb--current">Feedback</span>
-              </nav>
               <h1 className="tasks-title">Feedback Forms</h1>
             </div>
             <div className="tasks-header-actions">
@@ -699,8 +697,12 @@ function FormStatusConfirm({
   return (
     <PrmModal
       title={deactivating ? "Deactivate Form?" : "Activate Form?"}
-      description={
-        deactivating ? (
+      confirmLabel={deactivating ? "Deactivate Form" : "Activate Form"}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <p className="prm-content">
+        {deactivating ? (
           <>
             Deactivate <strong>{form.name || form.id}</strong>? It stops being shown to
             users on its triggers, and responses already collected are kept. You can
@@ -711,12 +713,9 @@ function FormStatusConfirm({
             Activate <strong>{form.name || form.id}</strong>? It starts being shown to
             users again on its triggers.
           </>
-        )
-      }
-      confirmLabel={deactivating ? "Deactivate Form" : "Activate Form"}
-      onCancel={onCancel}
-      onConfirm={onConfirm}
-    />
+        )}
+      </p>
+    </PrmModal>
   );
 }
 

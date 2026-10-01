@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { UploadIcon } from "./icons";
+import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import type { AwardDesignTemplate } from "../data/awards";
@@ -38,6 +39,9 @@ export function NewDesignTemplateWizard(props: Props) {
   const { onClose } = props;
   const isEditing = !!props.editingTemplate;
   const [step, setStep] = useState(0);
+  // Fields clicked into and out of, and the furthest step opened (fieldFlags.tsx).
+  const { touched, touch } = useTouchedKeys();
+  const maxVisited = useMaxVisited(step);
   const [data, setData] = useState<Data>(() => initialData(props));
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
 
@@ -56,6 +60,8 @@ export function NewDesignTemplateWizard(props: Props) {
 
   const nameValid = data.name.trim().length > 0;
   const bgValid = data.background.trim().length > 0;
+  const nameMissing = !nameValid && (maxVisited > 0 || touched.has("name"));
+  const bgMissing = !bgValid && (maxVisited > 0 || touched.has("bg"));
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
   // No canGoNext guard: the wheel walks the steps freely, as in every other
@@ -130,7 +136,7 @@ export function NewDesignTemplateWizard(props: Props) {
               <h1 className="wizard-title">{STEPS[step].label}</h1>
               <p className="wizard-desc">{STEPS[step].desc}</p>
 
-              {step === 0 && <DetailsStep data={data} update={update} />}
+              {step === 0 && <DetailsStep data={data} update={update} nameMissing={nameMissing} bgMissing={bgMissing} touch={touch} />}
               {step === 1 && <PositioningStep />}
               </div>
             </div>
@@ -167,13 +173,29 @@ export function NewDesignTemplateWizard(props: Props) {
 
 /* ─────────────── Step 1 — Details ─────────────── */
 
-function DetailsStep({ data, update }: { data: Data; update: (p: Partial<Data>) => void }) {
+function DetailsStep({
+  data,
+  update,
+  nameMissing = false,
+  bgMissing = false,
+  touch,
+}: {
+  data: Data;
+  update: (p: Partial<Data>) => void;
+  nameMissing?: boolean;
+  bgMissing?: boolean;
+  touch: (key: string) => void;
+}) {
   return (
     <>
-      <div className="form-group">
-        <label className="form-label">Template name <span className="req">*</span></label>
+      <div className="form-group" onBlur={leave(() => touch("name"))}>
+        <label className="form-label">
+          Template name<span className="req">*</span>
+          {nameMissing && <span className="form-label-error">Template name cannot be left empty</span>}
+        </label>
         <input
-          className="form-input"
+          className={`form-input${nameMissing ? " has-error" : ""}`}
+          aria-invalid={nameMissing || undefined}
           placeholder="e.g. EPA Card — 2026 Brand"
           value={data.name}
           onChange={(e) => update({ name: e.target.value })}
@@ -181,9 +203,12 @@ function DetailsStep({ data, update }: { data: Data; update: (p: Partial<Data>) 
         <p className="form-help">Internal name used by admins to find and reuse this template.</p>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Background image <span className="req">*</span></label>
-        <div className="aw-bg-picker">
+      <div className="form-group" onBlur={leave(() => touch("bg"))}>
+        <label className="form-label">
+          Background image<span className="req">*</span>
+          {bgMissing && <span className="form-label-error">Background image cannot be left empty</span>}
+        </label>
+        <div className={`aw-bg-picker${bgMissing ? " has-error" : ""}`}>
           <div className="aw-bg-preview" style={{ background: data.swatch }}>
             {data.background ? (
               <span className="aw-bg-filename">{data.background}</span>

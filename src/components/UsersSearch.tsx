@@ -13,6 +13,9 @@ const MAX_RESULTS = 6;
 export type SearchScope = {
   /** The chip text and the prefix the user types — "Company" ⇒ "company:". */
   token: string;
+  /** Singular noun for the empty-state prompt when the token is plural
+   *  ("Industries" ⇒ "industry"). Defaults to the lowercased token. */
+  noun?: string;
   /** Everything selectable under this scope. */
   options: string[];
   /** Values the matching Filters-row pill already has applied. */
@@ -262,7 +265,7 @@ export function EntitySearch({
                 <div className="usearch-empty">
                   {mode.query.trim()
                     ? `No ${mode.scope.optionsLabel.toLowerCase()} match “${mode.query.trim()}”.`
-                    : `Start typing a ${mode.scope.token.toLowerCase()} name…`}
+                    : `Start typing ${/^[aeiou]/i.test(mode.scope.noun ?? mode.scope.token) ? "an" : "a"} ${mode.scope.noun ?? mode.scope.token.toLowerCase()} name…`}
                 </div>
               ) : (
                 scopeResults.map((name, i) => (
