@@ -309,6 +309,7 @@ export function SpotlightsPage() {
 
   function remove(item: Spotlight) {
     applyBoth((l) => l.filter((s) => s.id !== item.id));
+    flash("Spotlight Deleted");
   }
 
   /* Disable — the Spotlight comes off the Home Screen now. It is not a status
@@ -321,6 +322,7 @@ export function SpotlightsPage() {
       ...l.filter((s) => s.id !== item.id),
       { ...item, endDate: TODAY },
     ]);
+    flash("Spotlight Disabled");
   }
 
   /* Enable — opens the editor on an archived Spotlight with its (spent) end

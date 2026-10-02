@@ -4,6 +4,11 @@ import {
   categories as QB_CATEGORIES,
   flattenCategories,
   longQuestionType,
+  matchesUsage,
+  NO_FORM,
+  NO_FORM_HINT,
+  NO_QUIZ,
+  NO_QUIZ_HINT,
   questionDates,
   supportsGrading,
   QUESTION_TYPE_MENU,
@@ -17,15 +22,14 @@ import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   RowChevronIcon,
-  SearchIcon,
   SortIcon,
   PagePrevIcon,
   PageNextIcon,
 } from "./icons";
-import { SearchTrailing } from "./SearchPanelParts";
+import { QuestionSearch } from "./QuestionSearch";
 
 /* Select Questions — the Quiz wizard's Question Bank twin of SelectTasksModal
- * (Figma 682:2321): search bar, two filter pills, a sortable table and
+ * (Figma 682:2321): search bar, filter pills, a sortable table and
  * pagination inside the shared PrmModal shell, with Cancel / Continue in the
  * modal's own footer. All the chrome is the `.stm-*` geometry that modal
  * introduced; only the column widths here are new.
@@ -56,14 +60,21 @@ const GRADED_TYPES = QUESTION_TYPE_OPTIONS.filter((label) =>
   QUESTION_TYPE_MENU.some((m) => m.label === label && supportsGrading(m.type)),
 );
 
+/* The Question Bank's own Grading options and test (QuestionBankPage's
+   `isGraded`): grading on AND a type that can be graded. */
+const GRADING_OPTIONS = ["Graded", "Ungraded"];
+function isGraded(q: Question) {
+  return q.gradingEnabled && supportsGrading(q.type);
+}
+
 type SortKey = "question" | "type" | "category" | "dateModified";
 type SortDir = "asc" | "desc";
 
 /** Only Active, graded Bank questions are eligible for Quizzes — both as
  *  hand-picked statics and as random-pool members. Feedback Forms drop the
- *  grading half of the test. */
+ *  grading half of the test (their Grading pill narrows instead). */
 function eligible(q: Question, gradedOnly: boolean) {
-  return q.status === "Active" && (!gradedOnly || q.gradingEnabled);
+  return q.status === "Active" && (!gradedOnly || isGraded(q));
 }
 
 function categoryOf(q: Question) {
@@ -127,6 +138,13 @@ export function SelectQuestionsModal({
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
   const [cats, setCats] = useState<string[]>([]);
+  /* The filter row differs by who opened the picker (the Question Bank's own
+     pills and names): a Quiz takes graded questions only — automatically, so
+     there is no Grading pill — and filters by Quizzes; a Feedback Form gets a
+     Grading pill that starts on Ungraded (what forms are made of) and filters
+     by Feedback Forms. */
+  const [grading, setGrading] = useState<string[]>(gradedOnly ? [] : ["Ungraded"]);
+  const [usage, setUsage] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>(value);
   const [page, setPage] = useState(1);
   /** The row whose "Preview" was clicked — a read-only look at the question,
@@ -148,6 +166,9 @@ export function SelectQuestionsModal({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
+      /* An open search-suggestion panel takes the first Escape (the page
+         search closes it itself); only the next one closes the modal. */
+      if (document.querySelector(".usearch-panel")) return;
       if (preview) setPreview(null);
       else onCancel();
     }
@@ -156,6 +177,16 @@ export function SelectQuestionsModal({
   }, [onCancel, preview]);
 
   const pool = useMemo(() => QUESTION_BANK.filter((q) => eligible(q, gradedOnly)), [gradedOnly]);
+
+  /* Quizzes (Quiz picker) or Feedback Forms (form picker) — named on at least
+     one eligible question, "None" first, exactly as the Bank's menu lists them. */
+  const usageOf = (q: Question) => (gradedOnly ? q.quizzes : q.forms);
+  const NONE = gradedOnly ? NO_QUIZ : NO_FORM;
+  const usageNames = useMemo(
+    () => [...new Set(pool.flatMap(usageOf))].sort((a, b) => a.localeCompare(b)),
+    // usageOf only varies with gradedOnly, which `pool` already follows.
+    [pool],
+  );
 
   // Category options limited to branches that actually hold graded questions.
   const allCats = useMemo(
@@ -189,22 +220,19 @@ export function SelectQuestionsModal({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return pool.filter((question) => {
-      if (
-        q &&
-        !(
-          question.text.toLowerCase().includes(q) ||
-          question.id.toLowerCase().includes(q) ||
-          categoryOf(question).toLowerCase().includes(q)
-        )
-      )
+      // The Bank's own rule: question text or ID (categories are a filter).
+      if (q && !(question.text.toLowerCase().includes(q) || question.id.toLowerCase().includes(q)))
         return false;
       if (types.length && !types.includes(longQuestionType(question.type)))
         return false;
       if (cats.length && !cats.some((c) => matchesCategoryLabel(question, c)))
         return false;
+      if (grading.length && !grading.includes(isGraded(question) ? "Graded" : "Ungraded"))
+        return false;
+      if (usage.length && !matchesUsage(usageOf(question), usage, NONE)) return false;
       return true;
     });
-  }, [pool, query, types, cats]);
+  }, [pool, query, types, cats, grading, usage, gradedOnly]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -282,86 +310,72 @@ export function SelectQuestionsModal({
     >
       <div className="stm">
         <div className="stm-toolbar">
-          <div className="search-wrap stm-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search Questions..."
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchTrailing
-              active={!!query}
-              onClear={() => {
-                setQuery("");
+          {/* The Question Bank page's own search bar: Enter applies the query
+              (text or ID, the Bank's rule), and a picked Category / Type /
+              Quizzes / Feedback Form suggestion lands on the matching pill.
+              Only the usage filter this picker has is offered. */}
+          <div className="toolbar">
+            <QuestionSearch
+              questions={pool}
+              categoryOptions={allCats}
+              selection={cats}
+              onSelectionChange={resetPage(setCats)}
+              types={types}
+              onTypesChange={resetPage(setTypes)}
+              typeOptions={typeOptions}
+              {...(gradedOnly
+                ? { quizzes: usage, onQuizzesChange: resetPage(setUsage) }
+                : { forms: usage, onFormsChange: resetPage(setUsage) })}
+              query={query}
+              onCommit={(v) => {
+                setQuery(v);
                 setPage(1);
               }}
             />
           </div>
 
           <div className="filters stm-filters">
-            <Dropdown
-              width={220}
-              trigger={({ open, toggle: t }) => (
-                <PillTrigger
-                  label="Question Type"
-                  tip={FILTER_TIPS.questionPicker.type}
-                  value={summarize(types, typeOptions)}
-                  open={open}
-                  toggle={t}
-                  onClear={() => resetPage(setTypes)([])}
-                />
-              )}
-            >
-              {({ close }) => (
-                <SectionedMultiSelect
-                  sections={[{ items: typeOptions }]}
-                  value={types}
-                  onApply={(v) => {
-                    resetPage(setTypes)(v);
-                    close();
-                  }}
-                />
-              )}
-            </Dropdown>
-
-            <Dropdown
+            {/* Category leads in both pickers (the user's order). */}
+            <FilterPill
+              label="Category"
+              tip={FILTER_TIPS.questionPicker.category}
+              options={allCats}
+              value={cats}
+              onApply={resetPage(setCats)}
               /* The 384px a hints clause needs (same as `.cascading-sub--wide`)
-                 — at 280 every row wrapped to three lines. */
+                 — at 280 every row wrapped to three lines. The Bank has
+                 hundreds of categories, so the list searches. */
               width={384}
-              trigger={({ open, toggle: t }) => (
-                <PillTrigger
-                  label="Category"
-                  tip={FILTER_TIPS.questionPicker.category}
-                  value={summarize(cats, allCats)}
-                  open={open}
-                  toggle={t}
-                  onClear={() => resetPage(setCats)([])}
-                />
-              )}
-            >
-              {({ close }) => (
-                <SectionedMultiSelect
-                  sections={[{ items: allCats }]}
-                  value={cats}
-                  /* The Bank has hundreds of categories and sub-categories —
-                     unusable as a plain scroll list. */
-                  searchable
-                  searchPlaceholder="Search Categories..."
-                  labels={catLabels}
-                  hints={catHints}
-                  onApply={(v) => {
-                    resetPage(setCats)(v);
-                    close();
-                  }}
-                />
-              )}
-            </Dropdown>
+              searchPlaceholder="Search Categories..."
+              labels={catLabels}
+              hints={catHints}
+            />
+            <FilterPill
+              label="Question Type"
+              tip={FILTER_TIPS.questionPicker.type}
+              options={typeOptions}
+              value={types}
+              onApply={resetPage(setTypes)}
+            />
+            {!gradedOnly && (
+              <FilterPill
+                label="Grading"
+                tip={FILTER_TIPS.questionPicker.grading}
+                options={GRADING_OPTIONS}
+                value={grading}
+                onApply={resetPage(setGrading)}
+              />
+            )}
+            <FilterPill
+              label={gradedOnly ? "Quizzes" : "Feedback Forms"}
+              tip={gradedOnly ? FILTER_TIPS.questionPicker.quizzes : FILTER_TIPS.questionPicker.forms}
+              options={[NONE, ...usageNames]}
+              value={usage}
+              onApply={resetPage(setUsage)}
+              width={384}
+              searchPlaceholder={gradedOnly ? "Search Quizzes..." : "Search Feedback Forms..."}
+              hints={{ [NONE]: gradedOnly ? NO_QUIZ_HINT : NO_FORM_HINT }}
+            />
           </div>
         </div>
 
@@ -405,7 +419,9 @@ export function SelectQuestionsModal({
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
                       <td colSpan={6}>
-                        No graded questions match your search and filters.
+                        {gradedOnly
+                          ? "No graded questions match your search and filters."
+                          : "No questions match your search and filters."}
                       </td>
                     </tr>
                   ) : (
@@ -649,5 +665,63 @@ function Th({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
+  );
+}
+
+/* One filter pill: the shared Dropdown + PillTrigger + checklist/Apply body,
+   the same build as the Question Bank's own pills. An empty value is the
+   dashed, unapplied pill. */
+function FilterPill({
+  label,
+  tip,
+  options,
+  value,
+  onApply,
+  width,
+  searchPlaceholder,
+  labels,
+  hints,
+}: {
+  label: string;
+  tip: string;
+  options: string[];
+  value: string[];
+  onApply: (v: string[]) => void;
+  /** Defaults to 220 — the hint-carrying lists pass 384. */
+  width?: number;
+  /** A search box for the long lists. */
+  searchPlaceholder?: string;
+  labels?: Record<string, string>;
+  hints?: Record<string, string>;
+}) {
+  return (
+    <Dropdown
+      width={width ?? 220}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label={label}
+          tip={tip}
+          value={value.length === 1 ? labels?.[value[0]] ?? value[0] : summarize(value, options)}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: options }]}
+          value={value}
+          searchable={!!searchPlaceholder}
+          searchPlaceholder={searchPlaceholder}
+          labels={labels}
+          hints={hints}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
   );
 }

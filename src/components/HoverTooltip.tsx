@@ -21,17 +21,43 @@ function adopt(el: HTMLElement) {
 }
 
 // `data-tip-overflow` makes a tip conditional: it shows only while the anchor
-// (or text inside it) is ellipsized — a name that fits says everything the tip
+// (or text inside it) is ellipsized — on one line or a line-clamp's last —
+// a name that fits says everything the tip
 // would. Measured on hover, so it follows the column width as the page resizes.
 function truncated(el: HTMLElement): boolean {
   return [el, ...el.querySelectorAll<HTMLElement>("*")].some(
-    (n) => n.scrollWidth > n.clientWidth + 1,
+    (n) => n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1,
   );
+}
+
+const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+
+// The text an anchor's tooltip should show right now, or null for none.
+//
+// A tip inside a table body cell only earns its place when it says something
+// the cell doesn't: the cell's text is cut off, or the tip holds lines the
+// cell can't show (the rest of a "+1" list, an explanation). One that only
+// repeats what is fully visible is dropped — for every table in the app,
+// modals included, without each call site opting in. A live copy cell
+// (CopyCells, `data-copy`) keeps its "Click to Copy"/"Copied" line; only the
+// lines above it are judged.
+function tipText(el: HTMLElement): string | null {
+  const tip = el.getAttribute("data-tip");
+  if (!tip) return null;
+  if (el.hasAttribute("data-tip-overflow")) return truncated(el) ? tip : null;
+  const td = el.closest<HTMLElement>("tbody td");
+  if (!td || truncated(td)) return tip;
+  const lines = tip.split("\n");
+  const action = el.hasAttribute("data-copy") ? lines.pop()! : null;
+  const visible = norm(el.innerText);
+  const redundant = lines.every((l) => !norm(l) || visible.includes(norm(l)));
+  if (!redundant) return tip;
+  return action;
 }
 
 // Nearest ancestor (self included) that actually has tooltip text. Elements
 // carrying an empty tip are skipped rather than swallowing an outer one, and so
-// is an overflow-only tip whose text currently fits.
+// is a conditional tip (see `tipText`) that currently has nothing to add.
 function resolve(target: EventTarget | null): HTMLElement | null {
   // A trigger that already opens a hover card doesn't also get a tooltip: the
   // card says more than the tip could, and the tip lands on top of it. Titles
@@ -47,9 +73,7 @@ function resolve(target: EventTarget | null): HTMLElement | null {
   let el = (target as HTMLElement)?.closest?.("[data-tip],[title]") as HTMLElement | null;
   while (el) {
     adopt(el);
-    if (el.getAttribute("data-tip") && (!el.hasAttribute("data-tip-overflow") || truncated(el))) {
-      return el;
-    }
+    if (tipText(el)) return el;
     el = (el.parentElement?.closest("[data-tip],[title]") as HTMLElement | null) ?? null;
   }
   return null;
@@ -128,14 +152,15 @@ export function HoverTooltip() {
       setTip(null);
     }
     function show(el: HTMLElement) {
-      const text = el.getAttribute("data-tip");
-      if (!text) return;
+      const text = tipText(el);
+      if (!text) return setTip(null);
       const r = el.getBoundingClientRect();
       // Left-align under the cell; flip to the right edge near the viewport edge.
       const nearRight = r.left + 320 > window.innerWidth;
       setTip({
         text,
-        head: el.getAttribute("data-tip-head"),
+        // The head labels the tip's list — gone when only a copy line is left.
+        head: text === el.getAttribute("data-tip") ? el.getAttribute("data-tip-head") : null,
         anchor: nearRight ? window.innerWidth - r.right : r.left,
         below: r.bottom + 6,
         above: r.top - 6,
@@ -165,7 +190,7 @@ export function HoverTooltip() {
       // The event names that element; treat it as a fresh hover.
       const hint = (e as CustomEvent<HTMLElement | undefined>).detail;
       if (hint instanceof HTMLElement && hint !== current.current) {
-        if (!hint.getAttribute("data-tip")) return;
+        if (!tipText(hint)) return;
         current.current = hint;
         clearTimer();
         timer.current = window.setTimeout(() => show(hint), DELAY);
@@ -174,8 +199,7 @@ export function HoverTooltip() {
       const el = current.current as HTMLElement | null;
       if (!el) return;
       clearTimer();
-      if (el.getAttribute("data-tip")) show(el);
-      else setTip(null);
+      show(el);
     }
     document.addEventListener("mouseover", onOver);
     document.addEventListener("mouseout", onOut);

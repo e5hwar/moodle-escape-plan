@@ -317,8 +317,8 @@ export function TransferSubscriptionPage({
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-          <h1 className="wizard-title">{STEPS[step].title}</h1>
-          <p className="wizard-desc">
+          <h1 className="tasks-title">{STEPS[step].title}</h1>
+          <p className="tasks-subtitle wizard-desc">
             {STEPS[step].desc}
             {/* The step's long explanation hangs off the subtext as one ⓘ —
                 the app's rule for a field's own help, applied to the page's. */}

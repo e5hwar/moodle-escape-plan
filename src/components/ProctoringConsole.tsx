@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
 import type { Submission, WebcamFrame } from "../data/proctoring";
-import { InfoTipIcon, CrumbChevronIcon } from "./icons";
+import { InfoTipIcon, CrumbChevronIcon, AlertCircleOutlineIcon, RowExternalLinkIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { PrmModal } from "./PrmModal";
 import { LimitError } from "./CharCount";
@@ -35,32 +36,6 @@ function idCardOf(s: Submission): IdCardData {
    review content (ID card, webcam grids, integrity/mismatch banners, accept/
    reject/request-ID actions) is the same content ProctoringDetailModal used
    to show in an overlay — it just lives in a page body now. ── */
-
-/* ── Integrity Note icons (Figma 457:583 / 457:586) ──
-   Both transcribed from the exported assets. The note's 20px outline triangle
-   and chevron are gone with the expand/collapse: it now carries an 11px FILLED
-   alert circle and, on the right, the 10.5px open-in-new glyph. Each is drawn
-   at its own natural size and centred by its wrapper span. */
-const NoteAlertIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path
-      d="M8 0.666667C12.05 0.666667 15.3333 3.95 15.3333 8C15.3333 12.05 12.05 15.3333 8 15.3333C3.95 15.3333 0.666667 12.05 0.666667 8C0.666667 3.95 3.95 0.666667 8 0.666667ZM7.33333 9.33333H8.66667V4.33333H7.33333V9.33333ZM8.66933 10.3333H7.33333V11.6693H8.66933V10.3333Z"
-      fill="currentColor"
-    />
-  </svg>
-);
-
-const NoteOpenIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <path
-      d="M5.25 2.33333H2.33333V11.6667H11.6667V8.75M11.2292 2.77083L7 7M8.16667 2.33333H11.6667V5.83333"
-      stroke="currentColor"
-      strokeWidth="1.16667"
-      strokeLinecap="square"
-    />
-  </svg>
-);
-
 
 /** Standalone pages open in their own tab, matching the Users table's `?profile=` pattern. */
 function openInNewTab(query: string) {
@@ -401,7 +376,7 @@ export function ProctoringConsole({
 
           {/* ── footer (Figma 445:878) — Skip + View Queue on the left, the three
                  CTAs on the right ── */}
-          <div className="wizard-footer rvc-footer">
+          <div className="wizard-footer rvc-footer prc-footer">
             <div className="wizard-footer-left prc-footer-left">
               <button
                 className="prc-skip"
@@ -1107,7 +1082,11 @@ function IntegrityNoteBanner({
   submission: Submission;
   previousRejected: Submission[];
 }) {
-  if (!submission.integrityNote && previousRejected.length === 0) return null;
+  /* Shown for anyone with a quiz attempt rejected in the past (user,
+     2026-10-02) — that alone decides it. The Proctor's Note line is optional:
+     a note with no past rejection shows nothing, and a past rejection with no
+     note shows the title alone. */
+  if (previousRejected.length === 0) return null;
 
   /* The note used to expand to list the rejected attempts inline. It doesn't any
      more (Figma 457:577): the whole banner is a link to the Attempts page for
@@ -1124,39 +1103,37 @@ function IntegrityNoteBanner({
         )
     : undefined;
 
-  const body = (
-    <>
-      <span className="prc-inote-lead">
-        <span className="prc-inote-icon" aria-hidden>
-          <NoteAlertIcon />
-        </span>
-        {/* Two lines now (Figma 458:590): the note sits UNDER the title rather
-            than trailing it after a middot. */}
-        <span className="prc-banner-text prc-inote-text">
-          <span className="prc-inote-title">Past Attempt Flagged By Proctor</span>
-          {submission.integrityNote && (
-            <span className="prc-inote-sub">{submission.integrityNote}</span>
-          )}
-        </span>
-      </span>
-      {openRejected && (
-        <span className="prc-inote-open" aria-hidden>
-          <NoteOpenIcon />
-        </span>
-      )}
-    </>
-  );
-
-  return openRejected ? (
-    <button
-      className="prc-inote prc-inote--link"
+  /* Figma 457:577 "Past Attempts Flagged Card" on the shared NoteCard (danger
+     tone): title and the "Proctor’s Note: " lead verbatim from the node, the
+     trailing open-in-new-tab icon button runs the same open as the card. */
+  const tip = "Open this candidate's rejected attempts in a new tab";
+  return (
+    <NoteCard
+      tone="danger"
+      className="prc-inote"
+      singleLine
+      icon={<AlertCircleOutlineIcon />}
+      mutedIcon
+      title="Caught Cheating in Past Quizzes"
+      body={submission.integrityNote ? `Proctor’s Note: ${submission.integrityNote}` : undefined}
       onClick={openRejected}
-      title="Open this candidate's rejected attempts in a new tab"
-    >
-      {body}
-    </button>
-  ) : (
-    <div className="prc-inote">{body}</div>
+      clickTip={tip}
+      action={
+        openRejected && (
+          <button
+            type="button"
+            className="note-card-icon-btn"
+            aria-label={tip}
+            onClick={(e) => {
+              e.stopPropagation();
+              openRejected();
+            }}
+          >
+            <RowExternalLinkIcon />
+          </button>
+        )
+      }
+    />
   );
 }
 
@@ -1183,11 +1160,12 @@ function NameMismatchBanner({
 
   return (
     <div className="prc-mismatch">
+      {/* Copy verbatim from Figma 308:2299 (re-cut 2026-10-02): the save note
+          is the subtext now, so the card has no closing line. */}
       <div className="prc-mismatch-head">
-        <div className="prc-mismatch-title">Names Don&apos;t Match</div>
+        <div className="prc-mismatch-title">Names Don’t Match - Set The Name To Keep</div>
         <p className="prc-mismatch-sub">
-          The ID reads a different name than the SkillCat profile. Set the name we
-          should keep.
+          Type to correct the name. Saved when you approve the review.
         </p>
       </div>
 
@@ -1223,10 +1201,6 @@ function NameMismatchBanner({
           </button>
         </p>
       </div>
-
-      <p className="prc-mismatch-note">
-        Type to correct the name. Saved when you approve the review.
-      </p>
     </div>
   );
 }

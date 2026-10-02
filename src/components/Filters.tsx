@@ -257,12 +257,16 @@ export function CreatedByPill({
   );
 }
 
-function CertificationsPill({
+/** Exported for pickers that reuse the Tasks filter row (Add Triggers / Add
+ *  Requirement); `tip` swaps in the picker's own hover line. */
+export function CertificationsPill({
   value,
   onApply,
+  tip = FILTER_TIPS.tasks.certifications,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  tip?: string;
 }) {
   const summary = summarize(value, CERTIFICATIONS);
 
@@ -276,7 +280,7 @@ function CertificationsPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
-          tip={FILTER_TIPS.tasks.certifications}
+          tip={tip}
         />
       )}
     >
@@ -296,12 +300,16 @@ function CertificationsPill({
   );
 }
 
-function TaskTypePill({
+/** Exported for pickers that reuse the Tasks filter row (Add Triggers / Add
+ *  Requirement); `tip` swaps in the picker's own hover line. */
+export function TaskTypePill({
   value,
   onApply,
+  tip = FILTER_TIPS.tasks.type,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  tip?: string;
 }) {
   const summary = summarize(value, TASK_TYPES);
 
@@ -315,7 +323,7 @@ function TaskTypePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
-          tip={FILTER_TIPS.tasks.type}
+          tip={tip}
         />
       )}
     >
@@ -1008,7 +1016,14 @@ export function ColumnsBody<C extends Record<string, boolean>>({
   }
 
   const clearAll = () => setAll(false);
-  const activateAll = () => setAll(true);
+  /* "All" adds the Available columns AFTER the active ones, in the order the
+     Available list shows them — not back in their default slots between the
+     columns already on screen. A table without reordering has no order to
+     write, so it only flips visibility. */
+  const activateAll = () => {
+    if (canReorder) onOrderChange!([...active, ...available].map((c) => c.key));
+    setAll(true);
+  };
 
   const setOne = (key: keyof C & string, on: boolean) =>
     onApply({ ...value, [key]: on as C[keyof C & string] });
@@ -1034,7 +1049,7 @@ export function ColumnsBody<C extends Record<string, boolean>>({
           )}
         </div>
         {active.length === 0 ? (
-          <div className="cols-empty">No active columns</div>
+          <div className="cols-empty">-</div>
         ) : (
           active.map(({ key, label }) => (
             <CheckRow
@@ -1064,7 +1079,7 @@ export function ColumnsBody<C extends Record<string, boolean>>({
           )}
         </div>
         {available.length === 0 ? (
-          <div className="cols-empty">All columns are active</div>
+          <div className="cols-empty">-</div>
         ) : (
           available.map(({ key, label }) => (
             <CheckRow

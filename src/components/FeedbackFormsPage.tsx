@@ -59,7 +59,7 @@ const STATUS_OPTIONS = ["Active", "Inactive"];
    day ("Apr 03, 2026"), so the column stays flush down its left edge. */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function formatDate(iso: string): string {
+export function formatDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return iso;
   return `${MONTHS[Number(m[2]) - 1]} ${m[3]}, ${m[1]}`;
@@ -457,7 +457,6 @@ export function FeedbackFormsPage({
                                 form={f}
                                 cols={visibleCols}
                                 range={dateRange}
-                                onClick={() => onOpen(f.id)}
                                 onEdit={() => onOpen(f.id)}
                                 onOpenMenu={(rect) => setMenu({ form: f, rect })}
                                 menuOpen={menu?.form.id === f.id}
@@ -577,7 +576,6 @@ function FormRow({
   form,
   cols,
   range,
-  onClick,
   onEdit,
   onOpenMenu,
   menuOpen,
@@ -585,17 +583,15 @@ function FormRow({
   form: FeedbackForm;
   cols: FbColMeta[];
   range: DateRangeState;
-  onClick: () => void;
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
+  // The row itself isn't a link — editing is only reached from the hover
+  // bar's pencil or the row menu, so a stray click never opens the editor.
   return (
-    <tr
-      className={`${form.status === "disabled" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
-      onClick={onClick}
-    >
+    <tr className={`${form.status === "disabled" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className={`col-name ${form.name ? "" : "fb-faint"}`} data-tip={form.name || undefined}>
         {/* Same markup a hidden Task row uses (`.task-dim` + `.tsk-name` +
             the grey name flag): the name truncates and the pill stays whole.

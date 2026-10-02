@@ -62,11 +62,12 @@ export const PlusThinIcon = () => (
   </svg>
 );
 
-/* Thin minus — the same Icon Library pair as the plus above, at the 12px size
-   the Condition Set header uses (Figma 856:1854). Same 1:12 stroke ratio. */
-export const MinusThinIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
-    <path d="M9.5 6H2.5" />
+/* Card-table minus — the Condition Set header's "remove set" (Figma 856:1854,
+   Icon Library at 16px since the 2026-10-03 Card Tables pass; was 12px). The
+   16px plus's horizontal bar, same 1.333 stroke and square caps. */
+export const CardMinusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M12.6667 8H3.33333" />
   </svg>
 );
 
@@ -388,10 +389,12 @@ export const NoteChevronIcon = () => (
 );
 
 /* edit-off — marks a read-only review rail (Figma 298:1886). */
+/* "edit-off" — the review rail's Read-Only card (Figma 1448:2570): a 16px
+   square-capped pencil with a slash, from the Icon Library family. */
 export const EditOffIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 5.8l3.2 3.2M4.5 19.5H8l9.6-9.6-3.2-3.2-9.9 9.9z" />
-    <path d="M3 3l18 18" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M6.70289 6.70296L3.19149 10.2144L2.66523 13.3333L5.78422 12.8071L9.29562 9.29569M8.40612 5L11.4413 1.96484L14.0341 4.55757L10.9988 7.59272M11.9962 6.59565L9.40352 4.00293" />
+    <path d="M2.6668 2.6668L6.70315 6.70315L9.29588 9.29588L13.3335 13.3335" />
   </svg>
 );
 
@@ -1207,17 +1210,6 @@ export const RangeArrowIcon = () => (
    stroke only lands cleanly in an odd-width box. Re-centring it on 12 splits
    each stroke across two pixel columns and the glyph turns to mush at this
    size. */
-/* Icon Library "info" at the 12px size the question editor uses (Figma
-   814:1689 / 814:1829). Drawn natively on a 12 viewBox rather than scaling the
-   11px one — a 1px stroke scaled by 12/11 lands off the pixel grid and the
-   glyph goes soft. Circle r5.5 at (6,6), so both edges sit on a half pixel. */
-export const InfoIcon12 = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="square">
-    <path d="M0.5 6C0.5 2.9624 2.9624 0.5 6 0.5C9.0376 0.5 11.5 2.9624 11.5 6C11.5 9.0376 9.0376 11.5 6 11.5C2.9624 11.5 0.5 9.0376 0.5 6Z" />
-    <path d="M6 8.5V5.5M6 3.5H5.998V3.498H6V3.5Z" />
-  </svg>
-);
-
 /* Page-subtext info glyph (Figma 742:1061 → Icon Library 7:5006 at 14px): the
    circle-i drawn AT 14px — 1.1667 stroke, square caps, 8.33% inset — so it
    renders crisp. `InfoIcon` below is the 11px cut; scaling it to 14px via CSS
@@ -1373,6 +1365,19 @@ export const ErrorTriangleIcon = () => (
    (Figma 1031:1038 "Icon Library", the Outstanding Balance card's glyph).
    Path data is the Figma export verbatim. Distinct from InfoFilledIcon,
    which is the smaller "i" disc. */
+/* Outline alert circle — Figma 457:583 "Icon Library" (the Past Attempts
+   Flagged card). The node's 14.667px group sits 0.667px in from the 16px box;
+   path data verbatim, stroked in currentColor (the node's #a8a8a8 comes from
+   NoteCard's `mutedIcon`). */
+export const AlertCircleOutlineIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <g transform="translate(0.666667 0.666667)" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <path d="M14 7.33333C14 11.0153 11.0153 14 7.33333 14C3.65133 14 0.666667 11.0153 0.666667 7.33333C0.666667 3.65133 3.65133 0.666667 7.33333 0.666667C11.0153 0.666667 14 3.65133 14 7.33333Z" />
+      <path d="M7.33333 4.33333V8M7.33333 10.3333H7.336V10.336H7.33333V10.3333Z" />
+    </g>
+  </svg>
+);
+
 export const AlertCircleFilledIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path

@@ -25,12 +25,16 @@ export function ProctoringSearch({
   onExamsChange,
   query,
   onCommit,
+  secondary = false,
 }: {
   submissions: Submission[];
   exams: string[];
   onExamsChange: (next: string[]) => void;
   query: string;
   onCommit: (q: string) => void;
+  /** Figma 1397:2017 "Search Bar - Secondary": no fill, hairline only, for a
+   *  search that sits under a heavier landing block (the Review Runs strip). */
+  secondary?: boolean;
 }) {
   const [text, setText] = useState(query);
   // Scopes picked in THIS search session — not yet applied to the table.
@@ -197,7 +201,7 @@ export function ProctoringSearch({
     : "Search User's Name, Email, or Phone...";
 
   return (
-    <div className="usearch" ref={wrapRef}>
+    <div className={`usearch${secondary ? " usearch--secondary" : ""}`} ref={wrapRef}>
       <div className={`usearch-bar ${open ? "open" : ""}`}>
         <span className="usearch-icon">
           <SearchIcon />

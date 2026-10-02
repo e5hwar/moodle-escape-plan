@@ -25,7 +25,7 @@ import {
 import { SearchTrailing } from "./SearchPanelParts";
 import { IndustriesSearch } from "./IndustriesSearch";
 import { Dropdown } from "./Dropdown";
-import { PillTrigger } from "./Filters";
+import { CheckRow, PillTrigger } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { CharCount, LimitError } from "./CharCount";
@@ -2055,20 +2055,18 @@ function SelectPill({
     >
       {({ close }) => (
         <div className="dropdown-list">
+          {/* The shared checklist row, so this menu keeps the filter family's
+              32px rows, 12px checkbox gap and wrapping (Figma 772:1108). */}
           {options.map((o) => (
-            <button
+            <CheckRow
               key={o}
-              className="dropdown-item"
-              onClick={() => {
+              label={o}
+              checked={o === value}
+              onChange={() => {
                 onChange(o);
                 close();
               }}
-            >
-              <span className={`checkbox ${o === value ? "checked" : ""}`}>
-                {o === value && <CheckIcon />}
-              </span>
-              {o}
-            </button>
+            />
           ))}
         </div>
       )}

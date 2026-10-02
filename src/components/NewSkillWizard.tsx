@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
@@ -244,9 +245,9 @@ export function NewSkillWizard(props: Props) {
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="wizard-title">{title}</h1>
+                  <h1 className="tasks-title">{title}</h1>
                 </div>
-                <p className="wizard-desc">{COPY[props.kind].pageSub}</p>
+                <p className="tasks-subtitle wizard-desc">{COPY[props.kind].pageSub}</p>
 
                 <DetailsStep data={data} update={update} isMastery={isMastery} nameMissing={nameMissing} touch={touch} />
 
@@ -570,15 +571,11 @@ function LinkedSkillsStep({
    callout card — 16px filled alert circle, SemiBold title, muted 14px body. */
 function RetroNote({ noun }: { noun: string }) {
   return (
-    <div className="note-card">
-      <span className="note-card-icon"><AlertCircleFilledIcon /></span>
-      <div className="note-card-text">
-        <p className="note-card-title">Applies to Existing Users</p>
-        <p className="note-card-body">
-          Anyone who already meets the criteria gets this {noun} when you save, without a notification or email.
-        </p>
-      </div>
-    </div>
+    <NoteCard
+      icon={<AlertCircleFilledIcon />}
+      title="Applies to Existing Users"
+      body={`Anyone who already meets the criteria gets this ${noun} when you save, without a notification or email.`}
+    />
   );
 }
 

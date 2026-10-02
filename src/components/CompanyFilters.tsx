@@ -5,8 +5,8 @@ import { FILTER_TIPS } from "../data/filterTips";
 import {
   TIERS,
   SUBSCRIPTION_STATUSES,
-  COMPANY_INDUSTRIES,
-  COMPANY_PARTNERSHIPS,
+  INDUSTRY_FILTER_OPTIONS,
+  PARTNERSHIP_FILTER_OPTIONS,
   COMPANY_OPTIONAL_COLUMNS,
   COMPANY_FIXED_COLUMNS,
   SIGN_UP_CHANNELS,
@@ -195,7 +195,7 @@ function IndustryPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
-  const summary = summarize(value, COMPANY_INDUSTRIES);
+  const summary = summarize(value, INDUSTRY_FILTER_OPTIONS);
   return (
     <Dropdown
       width={260}
@@ -212,7 +212,7 @@ function IndustryPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: COMPANY_INDUSTRIES }]}
+          sections={[{ items: INDUSTRY_FILTER_OPTIONS }]}
           value={value}
           onApply={(v) => {
             onApply(v);
@@ -233,7 +233,7 @@ function PartnershipPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
-  const summary = summarize(value, COMPANY_PARTNERSHIPS);
+  const summary = summarize(value, PARTNERSHIP_FILTER_OPTIONS);
   return (
     <Dropdown
       width={260}
@@ -250,7 +250,7 @@ function PartnershipPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: COMPANY_PARTNERSHIPS }]}
+          sections={[{ items: PARTNERSHIP_FILTER_OPTIONS }]}
           value={value}
           onApply={(v) => {
             onApply(v);

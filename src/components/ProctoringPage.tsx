@@ -62,9 +62,9 @@ function compareRows(a: Submission, b: Submission, key: SortKey): number {
    the same line. No selection means every kind, the way an unapplied filter
    reads everywhere else. */
 const REVIEW_TYPE_LABEL: Record<ProctoringKind, string> = {
-  proctoring: "Proctoring",
+  proctoring: "Proctored Exams",
   "id-review": "ID Reviews",
-  "id-reupload": "ID Re-uploads",
+  "id-reupload": "ID Re-Uploads",
 };
 const REVIEW_TYPE_OPTIONS: string[] = TYPE_SEQUENCE.map((k) => REVIEW_TYPE_LABEL[k]);
 const KIND_BY_REVIEW_TYPE = new Map<string, ProctoringKind>(
@@ -126,17 +126,9 @@ function inRun(s: Submission, k: RunKey): boolean {
   }
 }
 
-/* Card titles name the types the way the old run cards (Figma 300:363) did —
-   "Proctored Exams", not the Review Type pill's wording. */
-const RUN_TYPE_LABEL: Record<ProctoringKind, string> = {
-  proctoring: "Proctored Exams",
-  "id-review": "ID Reviews",
-  "id-reupload": "ID Re-Uploads",
-};
-
 function runTitles(k: RunKey): string[] {
   if (k.kind === "all") return ["All Reviews"];
-  if (k.kind === "type") return k.values.map((v) => RUN_TYPE_LABEL[v as ProctoringKind] ?? v);
+  if (k.kind === "type") return k.values.map((v) => REVIEW_TYPE_LABEL[v as ProctoringKind] ?? v);
   return k.values;
 }
 
@@ -485,9 +477,10 @@ export function ProctoringPage({
               newest first; Suggested = All, Proctored Exams, ID Reviews, ID
               Re-Uploads. A card narrows the queue to its run and opens the
               console on the longest-waiting submission. Nothing pending → no
-              strip. */}
+              strip. Cards share the row's width equally (`rr--fill`), never
+              below 280px. */}
           {pending.length > 0 && (
-            <ReviewRunsStrip>
+            <ReviewRunsStrip className="rr--fill">
               <RunCards recents={liveRecents} suggested={suggested} pending={pending} onPick={startRun} />
             </ReviewRunsStrip>
           )}
@@ -505,6 +498,7 @@ export function ProctoringPage({
                   onExamsChange={setExamFilter}
                   query={query}
                   onCommit={setQuery}
+                  secondary
                 />
               </div>
 

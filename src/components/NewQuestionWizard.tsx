@@ -11,9 +11,9 @@ import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import {
-  SmallXIcon,
+  RowCloseIcon,
   MoveIcon,
-  InfoIcon12,
+  InfoIcon,
   PlusThinIcon,
   CrumbChevronIcon,
   } from "./icons";
@@ -626,7 +626,7 @@ export function NewQuestionWizard({
               ))}
             </nav>
             <div className="rvc-pagehead qed-pagehead">
-              <h1 className="wizard-title qed-title-solo">{title}</h1>
+              <h1 className="tasks-title qed-title-solo">{title}</h1>
             </div>
 
             {/* A disabled <fieldset> is what makes the past-version view
@@ -1029,7 +1029,7 @@ function McqSection({
                   className="qed-tbl-info"
                   title="Share of the question's mark this option earns."
                 >
-                  <InfoIcon12 />
+                  <InfoIcon />
                 </span>
               </span>
             )}
@@ -1071,7 +1071,7 @@ function McqSection({
                 data-tip={atFloor ? floorTip : undefined}
                 onClick={() => removeChoice(c.id)}
               >
-                <SmallXIcon />
+                <RowCloseIcon />
               </button>
             </div>
             );
@@ -1108,12 +1108,12 @@ function McqSection({
           </div>
         </div>
 
-        {/* The two-option floor holds whether or not the question is graded,
-            so it leads the subtext either way. */}
+        {/* 1481:3500's copy. The two-option floor is still enforced; it just
+            no longer leads the subtext. */}
         <p className="form-help">
           {grading
-            ? "Minimum of 2 options are required. The total of all percentages must be 100%"
-            : "Minimum of 2 options are required. Ungraded — responses are collected, not scored."}
+            ? "The total of all percentages must be 100%"
+            : "Ungraded — responses are collected, not scored."}
         </p>
       </div>
     </div>
@@ -1269,7 +1269,7 @@ function MatchSection({
                   data-tip={atFloor ? floorTip : undefined}
                   onClick={() => removePair(p.id)}
                 >
-                  <SmallXIcon />
+                  <RowCloseIcon />
                 </button>
               </div>
             );
@@ -1742,7 +1742,7 @@ function ToggleRow({
             {sub}
             {info && (
               <span className="qed-tbl-info" title={info}>
-                <InfoIcon12 />
+                <InfoIcon />
               </span>
             )}
           </p>

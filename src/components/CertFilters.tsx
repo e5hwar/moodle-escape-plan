@@ -1,14 +1,12 @@
 import { useMemo } from "react";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
-import { EditColumnsIcon } from "./icons";
 import {
   PillTrigger,
   summarize,
   SectionedMultiSelect,
   CascadingMultiSelect,
   CreatedByPill,
-  CheckRow,
 } from "./Filters";
 import { industries } from "../data/industries";
 import { TAG_GROUPS, matchesTagFilter } from "../data/filters";
@@ -18,8 +16,6 @@ import {
   CERT_VISIBILITIES,
   NO_CAREER_STAGE,
   NO_TYPE,
-  CERT_OPTIONAL_COLUMNS,
-  CERT_FIXED_COLUMNS,
   type CertColumn,
   type Certification,
 } from "../data/certifications";
@@ -173,12 +169,16 @@ const INDUSTRY_OPTIONS: string[] = [...industries]
       .map((sub) => `${ind.name} › ${sub.name}`),
   ]);
 
-function IndustryPill({
+/** Exported for pickers that reuse the Certifications filter row (Add
+ *  Triggers / Add Requirement); `tip` swaps in the picker's own hover line. */
+export function IndustryPill({
   value,
   onApply,
+  tip = FILTER_TIPS.certifications.industry,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  tip?: string;
 }) {
   const summary = summarize(value, INDUSTRY_OPTIONS);
   return (
@@ -191,7 +191,7 @@ function IndustryPill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
-          tip={FILTER_TIPS.certifications.industry}
+          tip={tip}
         />
       )}
     >
@@ -211,12 +211,16 @@ function IndustryPill({
   );
 }
 
-function CareerStagePill({
+/** Exported for pickers that reuse the Certifications filter row (Add
+ *  Triggers / Add Requirement); `tip` swaps in the picker's own hover line. */
+export function CareerStagePill({
   value,
   onApply,
+  tip = FILTER_TIPS.certifications.careerStage,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  tip?: string;
 }) {
   const all = [...CAREER_STAGES, NO_CAREER_STAGE];
   const summary = summarize(value, all);
@@ -230,7 +234,7 @@ function CareerStagePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
-          tip={FILTER_TIPS.certifications.careerStage}
+          tip={tip}
         />
       )}
     >
@@ -248,12 +252,16 @@ function CareerStagePill({
   );
 }
 
-function TypePill({
+/** Exported for pickers that reuse the Certifications filter row (Add
+ *  Triggers / Add Requirement); `tip` swaps in the picker's own hover line. */
+export function TypePill({
   value,
   onApply,
+  tip = FILTER_TIPS.certifications.type,
 }: {
   value: string[];
   onApply: (v: string[]) => void;
+  tip?: string;
 }) {
   const all = [...CERT_TYPES, NO_TYPE];
   const summary = summarize(value, all);
@@ -267,7 +275,7 @@ function TypePill({
           open={open}
           toggle={toggle}
           onClear={() => onApply([])}
-          tip={FILTER_TIPS.certifications.type}
+          tip={tip}
         />
       )}
     >
@@ -397,97 +405,5 @@ function MoreFiltersBody({
       value={value}
       onApply={(v) => onApply({ visibilities: v.visibilities, tags: v.tags, setup: v.setup ?? [] })}
     />
-  );
-}
-
-/* ──────────── Edit Columns ──────────── */
-
-export function CertEditColumnsButton({
-  columns,
-  setColumns,
-}: {
-  columns: CertColumnState;
-  setColumns: (c: CertColumnState) => void;
-}) {
-  return (
-    <Dropdown
-      width={300}
-      align="right"
-      trigger={({ toggle }) => (
-        <button
-          className="edit-columns-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggle();
-          }}
-          aria-label="Edit columns"
-          data-tooltip="Edit Columns"
-        >
-          <EditColumnsIcon />
-        </button>
-      )}
-    >
-      {() => <CertColumnsBody value={columns} onApply={(c) => setColumns(c)} />}
-    </Dropdown>
-  );
-}
-
-function CertColumnsBody({
-  value,
-  onApply,
-}: {
-  value: CertColumnState;
-  onApply: (v: CertColumnState) => void;
-}) {
-  // Available columns read alphabetically — it is a lookup list, not an
-  // ordering (see ColumnsBody in Filters.tsx).
-  const active = CERT_OPTIONAL_COLUMNS.filter((c) => value[c.key]);
-  const available = CERT_OPTIONAL_COLUMNS.filter((c) => !value[c.key]).sort((a, b) =>
-    a.label.localeCompare(b.label),
-  );
-  return (
-    <div className="dropdown-list cols-menu">
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Fixed columns</div>
-        {CERT_FIXED_COLUMNS.map(({ label }) => (
-          <div key={label} className="cols-fixed-row">
-            {label}
-          </div>
-        ))}
-      </div>
-
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Active columns</div>
-        {active.length === 0 ? (
-          <div className="cols-empty">No active columns</div>
-        ) : (
-          active.map(({ key, label }) => (
-            <CheckRow
-              key={key}
-              label={label}
-              checked
-              draggable
-              onChange={() => onApply({ ...value, [key]: false })}
-            />
-          ))
-        )}
-      </div>
-
-      <div className="dropdown-section">
-        <div className="dropdown-section-label">Available columns</div>
-        {available.length === 0 ? (
-          <div className="cols-empty">All columns are active</div>
-        ) : (
-          available.map(({ key, label }) => (
-            <CheckRow
-              key={key}
-              label={label}
-              checked={false}
-              onChange={() => onApply({ ...value, [key]: true })}
-            />
-          ))
-        )}
-      </div>
-    </div>
   );
 }

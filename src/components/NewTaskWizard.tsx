@@ -7,7 +7,7 @@ import { PriceIdFields, PriceIdMatrix, PRICE_CHANNELS, newPriceIds, samplePriceI
 import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import type { PreviewScreenModel } from "./PreviewPanel";
-import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon12, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
+import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -898,8 +898,8 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-          <h1 className="wizard-title">{steps[step].label}</h1>
-          <p className="wizard-desc">
+          <h1 className="tasks-title">{steps[step].label}</h1>
+          <p className="tasks-subtitle wizard-desc">
             {steps[step].desc}
             {steps[step].tip && (
               <span
@@ -1048,7 +1048,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
 function PlaceholderStep({ type }: { type: string }) {
   return (
-    <p className="wizard-desc">
+    <p className="tasks-subtitle wizard-desc">
       The {type} wizard isn't built out yet. The xAPI and Quiz wizards are
       the references — the same shell will host the {type} steps next.
     </p>
@@ -2761,7 +2761,7 @@ function QuizCompletionStep(props: StepProps) {
                      a different, weaker rule. */
                   title="If the learner fails a Section marked Must Pass, no Section completion is recorded from that attempt — not even for the Sections they passed."
                 >
-                  <InfoIcon12 />
+                  <InfoIcon />
                 </span>
               </span>
             </div>

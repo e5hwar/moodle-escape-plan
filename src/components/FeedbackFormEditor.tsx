@@ -5,8 +5,9 @@ import {
   type FormQuestionLink,
 } from "../data/feedbackForms";
 import { type Question, type QuestionType } from "../data/questionBank";
-import { InfoTipIcon, MoveIcon, SmallXIcon, TreeAddIcon } from "./icons";
+import { InfoTipIcon, MoveIcon, RowCloseIcon, TreeAddIcon } from "./icons";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
+import { formatDate } from "./FeedbackFormsPage";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 
 type Props = {
@@ -70,15 +71,6 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
     commit(
       actives.filter((x) => x.questionId !== questionId),
       [...inactives, { ...l, status: "inactive", deactivatedAt: TODAY }],
-    );
-  }
-
-  function reactivateLink(questionId: string) {
-    const l = inactives.find((x) => x.questionId === questionId);
-    if (!l) return;
-    commit(
-      [...actives, { ...l, status: "active", deactivatedAt: undefined }],
-      inactives.filter((x) => x.questionId !== questionId),
     );
   }
 
@@ -261,7 +253,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
                 }
                 onClick={() => removeLink(l.questionId)}
               >
-                <SmallXIcon />
+                <RowCloseIcon />
               </button>
             </div>
           );
@@ -297,42 +289,6 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
         </div>
       </div>
 
-      {inactives.length > 0 && (
-        <div className="fb-inactive-section">
-          <div className="fb-inactive-head">
-            <h3 className="fb-section-title">Inactive questions</h3>
-            <p className="fb-section-sub">
-              No longer shown to users. The questions and all responses already
-              collected against them remain attached to this form.
-            </p>
-          </div>
-          <div className="qz">
-            {inactives.map((l) => {
-              const q = byId.get(l.questionId);
-              return (
-                <div key={l.questionId} className="qz-row qz-row--inactive">
-                  <div className="qz-q">
-                    <div className="qz-q-title">
-                      {q ? q.text : `${l.questionId} — not found in the Question Bank`}
-                    </div>
-                    <div className="qz-q-type">
-                      {q ? TYPE_LABEL[q.type] : ""}
-                      {l.deactivatedAt && ` · inactive since ${l.deactivatedAt}`}
-                    </div>
-                  </div>
-                  <button
-                    className="btn-save-draft fb-reactivate-btn"
-                    onClick={() => reactivateLink(l.questionId)}
-                  >
-                    Reactivate
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Portalled to <body>: the wizard's step container is transformed, which
           would otherwise turn the overlay's position:fixed into a local box. */}
       {picking && createPortal(
@@ -350,5 +306,66 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
         document.body,
       )}
     </>
+  );
+}
+
+/* "Inactive Questions" — its own form field under Questions (Figma 1478:3391),
+ * built on the same `.qz` card so the two read as one component: QUESTION and
+ * INACTIVE SINCE over rows of title + type, and a Secondary Button that puts
+ * the link back at the end of the active order. The header's last cell is an
+ * empty spacer the button's width, as in the node. Renders nothing when no
+ * link is inactive — the wizard hides the whole field then. */
+export function FeedbackInactiveQuestions({
+  form,
+  bank,
+  onUpdate,
+}: {
+  form: FeedbackForm;
+  bank: Question[];
+  onUpdate: (links: FormQuestionLink[]) => void;
+}) {
+  const byId = useMemo(() => new Map(bank.map((q) => [q.id, q])), [bank]);
+  const actives = form.questions.filter((l) => l.status === "active");
+  const inactives = form.questions.filter((l) => l.status === "inactive");
+
+  function makeActive(questionId: string) {
+    const l = inactives.find((x) => x.questionId === questionId);
+    if (!l) return;
+    onUpdate([
+      ...actives,
+      { ...l, status: "active", deactivatedAt: undefined },
+      ...inactives.filter((x) => x.questionId !== questionId),
+    ]);
+  }
+
+  return (
+    <div className="qz qz--inactive">
+      <div className="qz-hd">
+        <span className="qz-hd-q">QUESTION</span>
+        <span className="qz-since">INACTIVE SINCE</span>
+        <span className="qz-reactivate" aria-hidden="true" />
+      </div>
+      {inactives.map((l) => {
+        const q = byId.get(l.questionId);
+        const title = q ? q.text : `${l.questionId} — not found in the Question Bank`;
+        return (
+          <div key={l.questionId} className="qz-row">
+            <div className="qz-q">
+              {/* Two lines at most; the full question tips only when cut. */}
+              <div className="qz-q-title qz-q-title--clamp" data-tip={title} data-tip-overflow="">
+                {title}
+              </div>
+              <div className="qz-q-type">{q ? TYPE_LABEL[q.type] : ""}</div>
+            </div>
+            <span className="qz-since">{l.deactivatedAt ? formatDate(l.deactivatedAt) : "—"}</span>
+            <span className="qz-reactivate">
+              <button type="button" className="btn-save-draft" onClick={() => makeActive(l.questionId)}>
+                Make Active
+              </button>
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }

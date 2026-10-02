@@ -32,7 +32,10 @@ export function Stepper({
   const current = Number.isFinite(n) ? n : min;
   const clamp = (v: number) =>
     Math.max(min, max === undefined ? v : Math.min(max, v));
-  const step = (d: number) => onChange(String(clamp(current + d)));
+  // A blank field has no value to step from, so + fills in the minimum
+  // rather than counting the blank as `min` and skipping past it.
+  const step = (d: number) =>
+    onChange(String(clamp(Number.isFinite(n) ? current + d : min)));
 
   return (
     <div className={`stepper${disabled ? " is-disabled" : ""}${hasError ? " has-error" : ""}`}>

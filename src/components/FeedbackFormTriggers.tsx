@@ -5,7 +5,7 @@ import {
   type FormTrigger,
 } from "../data/feedbackForms";
 import { tasks as taskLibrary } from "../data/tasks";
-import { SmallXIcon, TreeAddIcon } from "./icons";
+import { RowCloseIcon, TreeAddIcon } from "./icons";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 
 type Props = {
@@ -139,7 +139,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
                 data-tip={atFloor ? floorTip : "Remove trigger"}
                 onClick={() => removeTrigger(t.id)}
               >
-                <SmallXIcon />
+                <RowCloseIcon />
               </button>
             )}
           </div>
@@ -173,6 +173,11 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
             title="Add Triggers"
             description="Completing any of these Tasks or Certifications shows this form."
             confirmNoun="Trigger"
+            /* Only SkillCat-made content every learner can reach (no
+               Audience/B2B tag) — a form must be showable to everyone who
+               completes its trigger. Certifications lead. */
+            allUsersOnly
+            certFirst
             existingNames={takenNames}
             lockedFlag={(name) =>
               holderByName.get(name)?.id === form.id

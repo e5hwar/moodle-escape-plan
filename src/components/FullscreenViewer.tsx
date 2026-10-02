@@ -188,6 +188,14 @@ export function FullscreenViewer({
   const fitRef = useRef(1);
   /** The opening fit is applied once; after that the zoom is the reviewer's. */
   const fittedRef = useRef(false);
+  /** Whether the content, at `zoom`, overflows the stage on either axis — the
+   *  only time a drag is allowed (user, 2026-10-02). */
+  const overflows = useCallback((zoom: number) => {
+    const stage = stageRef.current;
+    const base = baseRef.current;
+    if (!stage || !base.w || !base.h) return false;
+    return base.w * zoom > stage.clientWidth + 0.5 || base.h * zoom > stage.clientHeight + 0.5;
+  }, []);
   /** Active drag: pointer origin + the pan it started from. */
   const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   /** Distinguishes a click (closes) from the end of a drag (must not). */
@@ -215,15 +223,17 @@ export function FullscreenViewer({
     if (el) el.style.transform = `translate3d(${v.x}px, ${v.y}px, 0) scale(${v.zoom})`;
   }, []);
 
-  /** Keeps the content anchored to the stage: it can be dragged until an edge
-   *  meets the matching stage edge and no further, whichever of the two is the
-   *  larger. Without this a zoomed-in card could be flung off screen entirely. */
+  /** Keeps the content anchored to the stage: on an axis where it overflows
+   *  the screen it can be dragged until its edge meets the stage edge and no
+   *  further; on an axis where it FITS it stays centred and doesn't move at all
+   *  (user, 2026-10-02 — it used to wander inside the spare space). Without
+   *  this a zoomed-in card could be flung off screen entirely. */
   const clampPan = useCallback((x: number, y: number, zoom: number) => {
     const stage = stageRef.current;
     const base = baseRef.current;
     if (!stage || !base.w || !base.h) return { x, y };
-    const limitX = Math.abs(base.w * zoom - stage.clientWidth) / 2;
-    const limitY = Math.abs(base.h * zoom - stage.clientHeight) / 2;
+    const limitX = Math.max(0, base.w * zoom - stage.clientWidth) / 2;
+    const limitY = Math.max(0, base.h * zoom - stage.clientHeight) / 2;
     return {
       x: Math.min(limitX, Math.max(-limitX, x)),
       y: Math.min(limitY, Math.max(-limitY, y)),
@@ -477,6 +487,10 @@ export function FullscreenViewer({
     downOnEmptyRef.current = false;
     if ((e.target as HTMLElement).closest("a, button, input, select, textarea")) return;
     downOnEmptyRef.current = e.target === stageRef.current || e.target === contentRef.current;
+    movedRef.current = false;
+    /* The whole image is on screen — nothing to drag to. The press still
+       counts as a click (closing on empty stage, the double-click zoom). */
+    if (!overflows(currentRef.current.zoom)) return;
     /* Grabbing mid-glide takes over from wherever the content IS, not where it
        was heading — the hand wins over the animation. */
     const cur = currentRef.current;
@@ -544,7 +558,10 @@ export function FullscreenViewer({
      at either end of a longer set exactly one of them is undefined, which is
      what disables that button rather than hiding the pair. */
   const nav = onPrev !== undefined || onNext !== undefined;
-  const pannable = controls && uiZoom > fitZoom + 0.001;
+  /* The grab cursor follows the same rule as the drag: only while the content
+     overflows the screen (re-read on every render — zoom, resize and rotation
+     all re-render through uiZoom / stageBox / fitZoom). */
+  const pannable = controls && overflows(uiZoom);
   const stageClass = [
     "idfs-stage",
     dragging ? "is-dragging" : "",

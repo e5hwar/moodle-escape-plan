@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { CheckIcon } from "./icons";
 
-/* "Payment Link Copied!" toast (Figma 1046:1141). Raised by the Company
+/* "Payment Link Copied" toast (Figma 1046:1141). Raised by the Company
  * Created screen and by the Companies table's "Copy Payment Link", so the two
  * acknowledge a copy the same way.
  *
@@ -9,7 +9,7 @@ import { CheckIcon } from "./icons";
  * stylesheet switches it to absolute, so that 40px is measured from where the
  * footer begins rather than from the window's edge. */
 export function CopiedToast({
-  label = "Payment Link Copied!",
+  label = "Payment Link Copied",
   onDone,
   ms = 2500,
 }: {

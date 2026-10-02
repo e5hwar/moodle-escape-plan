@@ -5,7 +5,7 @@ import {
   type FormTrigger,
 } from "../data/feedbackForms";
 import { type Question } from "../data/questionBank";
-import { FeedbackFormEditor } from "./FeedbackFormEditor";
+import { FeedbackFormEditor, FeedbackInactiveQuestions } from "./FeedbackFormEditor";
 // `leave` is aliased: this file's own `leave()` is leaving the PAGE.
 import { leave as leaveField, useTouchedKeys } from "./fieldFlags";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
@@ -60,6 +60,10 @@ const TRIGGER_RULES = [
  * [[wizard-flat-layout]] under the Award page's shell — breadcrumb head, then
  * Name, Questions and Triggers in the order the two steps used to run.
  */
+/** Each form-being-created's snapshot as it first opened, by form id — see
+ *  `pristine` below. Tiny strings; a few per session at most. */
+const OPENED_AS = new Map<string, string>();
+
 export function FeedbackFormWizard({
   form,
   creating,
@@ -113,8 +117,14 @@ export function FeedbackFormWizard({
   /* The form as it opened (also the LeaveGuard's snapshot below). Editing an
      existing form with nothing changed leaves Save Changes dimmed. */
   const pristine = useRef(
-    draftKey({ name: form.name, questions: form.questions, triggers: form.triggers }),
+    (isCreating && OPENED_AS.get(form.id)) ||
+      draftKey({ name: form.name, questions: form.questions, triggers: form.triggers }),
   );
+  /* A new form survives a detour to Create New Question (this page unmounts
+     and comes back), so its snapshot must too — otherwise the half-made form
+     reads as untouched on return, and leaving would discard it, question and
+     all, without the confirm. */
+  if (isCreating && !OPENED_AS.has(form.id)) OPENED_AS.set(form.id, pristine.current);
   const currentKey = draftKey({ name: form.name, questions: form.questions, triggers: form.triggers });
   const unchanged = !isCreating && currentKey === pristine.current;
   const canFinish = ready && !unchanged;
@@ -192,9 +202,9 @@ export function FeedbackFormWizard({
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="wizard-title">{title}</h1>
+                  <h1 className="tasks-title">{title}</h1>
                 </div>
-                <p className="wizard-desc">
+                <p className="tasks-subtitle wizard-desc">
                   Link the Question Bank questions this form asks, then map it to
                   the Tasks and Certifications whose completion should show it.
                 </p>
@@ -255,6 +265,20 @@ export function FeedbackFormWizard({
                     </span>
                   </p>
                 </div>
+
+                {/* Inactive links get a field of their own, on the Questions
+                    table's card (Figma 1478:3391) — present only while there
+                    is something to bring back. */}
+                {form.questions.some((l) => l.status === "inactive") && (
+                  <div className="form-group">
+                    <label className="form-label">Inactive Questions</label>
+                    <FeedbackInactiveQuestions form={form} bank={bank} onUpdate={saveLinks} />
+                    <p className="form-help">
+                      No longer shown to users. The questions and all responses
+                      already collected against them remain attached to this form.
+                    </p>
+                  </div>
+                )}
 
                 <div className="form-group" onBlur={leaveField(() => touch("triggers"))}>
                   {/* Required, like the name: a form with no trigger never

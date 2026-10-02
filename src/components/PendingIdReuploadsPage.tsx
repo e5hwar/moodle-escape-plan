@@ -8,6 +8,13 @@ import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ProctoringSearch } from "./ProctoringSearch";
 import { MultiPill } from "./UsersFilters";
 import { FILTER_TIPS } from "../data/filterTips";
+import {
+  DateRangePill,
+  allTimeDateRange,
+  isAllTimeRange,
+  dateRangeIncludes,
+  type DateRangeState,
+} from "./DateRangeFilter";
 
 const PAGE_SIZE = 50;
 
@@ -32,8 +39,11 @@ type SortDir = "asc" | "desc";
 /** submittedAt is a display string like "November 5th, 2025, 2:30 PM" — strip
  *  the ordinal suffix so Date.parse can read it. Same reader the Exam Reviews
  *  table uses, kept local so the two pages can't drift apart silently. */
+function readableDate(s: string): string {
+  return s.replace(/(\d+)(st|nd|rd|th)/, "$1");
+}
 function parseSubmittedAt(s: string): number {
-  return Date.parse(s.replace(/(\d+)(st|nd|rd|th)/, "$1")) || 0;
+  return Date.parse(readableDate(s)) || 0;
 }
 
 function compare(a: Submission, b: Submission, key: SortKey): number {
@@ -68,21 +78,31 @@ export function PendingIdReuploadsPage({
   const [query, setQuery] = useState("");
   // The search bar.s Quiz scope, applied the same way Exam Reviews applies it.
   const [examFilter, setExamFilter] = useState<string[]>([]);
-  // Longest-waiting first, matching the review queue's own default ordering.
+  // Oldest request first — the longest chase leads, the date this page is
+  // measured from (user, 2026-10-02).
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "submittedAt",
+    key: "requestedAt",
     dir: "asc",
   });
   const [page, setPage] = useState(1);
+  /* One range per date column, both the Exam Reviews pill: All Time is the
+     unapplied, dashed state, so neither narrows anything until it's set. */
+  const [submittedRange, setSubmittedRange] = useState<DateRangeState>(() => allTimeDateRange());
+  const [requestedRange, setRequestedRange] = useState<DateRangeState>(() => allTimeDateRange());
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return seed.filter((s) => {
       if (examFilter.length > 0 && !examFilter.includes(s.exam)) return false;
       if (q && !matchesQuery(s, q)) return false;
+      if (!dateRangeIncludes(submittedRange, readableDate(s.submittedAt))) return false;
+      if (!isAllTimeRange(requestedRange)) {
+        if (!s.reuploadRequestedAt) return false;
+        if (!dateRangeIncludes(requestedRange, readableDate(s.reuploadRequestedAt))) return false;
+      }
       return true;
     });
-  }, [query, examFilter]);
+  }, [query, examFilter, submittedRange, requestedRange]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -90,7 +110,7 @@ export function PendingIdReuploadsPage({
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, sort, examFilter]);
+  useEffect(() => setPage(1), [query, sort, examFilter, submittedRange, requestedRange]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -101,10 +121,13 @@ export function PendingIdReuploadsPage({
     [],
   );
 
-  const hasFilters = examFilter.length > 0;
+  const hasFilters =
+    examFilter.length > 0 || !isAllTimeRange(submittedRange) || !isAllTimeRange(requestedRange);
 
   function clearFilters() {
     setExamFilter([]);
+    setSubmittedRange(allTimeDateRange());
+    setRequestedRange(allTimeDateRange());
   }
 
   function toggleSort(key: SortKey) {
@@ -148,10 +171,14 @@ export function PendingIdReuploadsPage({
                   onExamsChange={setExamFilter}
                   query={query}
                   onCommit={setQuery}
+                  secondary
                 />
               </div>
 
-              {/* Quiz gets a pill of its own, as on Exam Reviews. */}
+              {/* Quiz gets a pill of its own, as on Exam Reviews, then one
+                  Exam Reviews date pill per date column, in column order — inline, dashed at
+                  All Time, cleared with the rest; `align="left"` + the pill's
+                  overlay keep the wide panel on screen. */}
               <div className="filters">
                 <MultiPill
                   label="Quiz"
@@ -162,6 +189,22 @@ export function PendingIdReuploadsPage({
                   searchPlaceholder="Search Quizzes..."
                   width={300}
                   tip={FILTER_TIPS.examReviews.reuploadQuiz}
+                />
+                <DateRangePill
+                  label="Re-Upload Request Date"
+                  value={requestedRange}
+                  onChange={setRequestedRange}
+                  tip={FILTER_TIPS.examReviews.reuploadRequested}
+                  allTimeIsEmpty
+                  align="left"
+                />
+                <DateRangePill
+                  label="Submission Date"
+                  value={submittedRange}
+                  onChange={setSubmittedRange}
+                  tip={FILTER_TIPS.examReviews.reuploadSubmitted}
+                  allTimeIsEmpty
+                  align="left"
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
@@ -202,13 +245,13 @@ export function PendingIdReuploadsPage({
                       <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="phone" label="Phone" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="exam" label="Quiz" sort={sort} toggle={toggleSort} />
-                      {/* Two distinct dates: "Submitted On" is the candidate's
-                          original attempt (the value the Exam Reviews table
-                          shows), "Re-Upload Requested On" is when an admin asked
-                          for a new ID — always the later of the two, and the
-                          one this page's chase is measured from. */}
-                      <SortableHeader col="submittedAt" label="Submitted On" sort={sort} toggle={toggleSort} />
+                      {/* Two distinct dates: "Re-Upload Requested On" is when an
+                          admin asked for a new ID — the one this page's chase is
+                          measured from, so it leads and sorts the page — and
+                          "Submitted On" is the candidate's original attempt (the
+                          value the Exam Reviews table shows), always earlier. */}
                       <SortableHeader col="requestedAt" label="Re-Upload Requested On" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="submittedAt" label="Submitted On" sort={sort} toggle={toggleSort} />
                       <th className="col-actions" />
                     </tr>
                   </thead>
@@ -221,8 +264,8 @@ export function PendingIdReuploadsPage({
                         <td className="col-u-email" data-copyable>{s.candidateEmail}</td>
                         <td className="col-u-phone" data-copyable>{s.candidatePhone}</td>
                         <td>{s.exam}</td>
-                        <td>{s.submittedAt}</td>
                         <td>{s.reuploadRequestedAt ?? "—"}</td>
+                        <td>{s.submittedAt}</td>
                         {/* Same row-end affordance as the Exam Reviews table: a
                             resting chevron that hides on row hover, replaced in
                             place by the labelled bar. */}

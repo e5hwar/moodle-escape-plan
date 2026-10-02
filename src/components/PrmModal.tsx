@@ -32,6 +32,7 @@ export function PrmModal({
   className,
   hideFooter,
   doubleConfirm,
+  doubleConfirmLabel,
   onCancel,
   onCancelButton,
   onConfirm,
@@ -56,7 +57,7 @@ export function PrmModal({
   /** Affirmative confirm — the green variant of the same recipe (Figma
    *  1004:1298, the review footer's Approve). */
   go?: boolean;
-  /** Extra actions seated to the LEFT of the CTA, in the footer's own 16px
+  /** Extra actions seated to the LEFT of the CTA, in the footer's own 12px
    *  group (Figma 445:878 runs Secondary + Reject + Approve together). Use
    *  `.prm-quiet` for a secondary and `.prm-cta--danger` for a red primary. */
   footerExtra?: ReactNode;
@@ -79,6 +80,9 @@ export function PrmModal({
    *  The stacked card is narrower (`.prm--sure`), and Go Back / ✕ / the scrim /
    *  Escape on it close BOTH modals (`onCancel`). */
   doubleConfirm?: ReactNode;
+  /** The stacked confirm's CTA, when "Yes, <confirmLabel>" doesn't read — a
+   *  first step whose own button is just "Continue". */
+  doubleConfirmLabel?: ReactNode;
   /** Dismisses the modal — overlay click and the close glyph. */
   onCancel: () => void;
   /** The footer's text button, when it does something other than dismiss
@@ -169,7 +173,10 @@ export function PrmModal({
       {sure && (
         <PrmModal
           title="Are you sure?"
-          confirmLabel={typeof confirmLabel === "string" ? `Yes, ${confirmLabel}` : confirmLabel}
+          confirmLabel={
+            doubleConfirmLabel ??
+            (typeof confirmLabel === "string" ? `Yes, ${confirmLabel}` : confirmLabel)
+          }
           cancelLabel="Go Back"
           danger
           className="prm--sure"

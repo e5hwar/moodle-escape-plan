@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
-import { ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger } from "./Filters";
-import { CheckIcon, EditColumnsIcon, DragHandleIcon } from "./icons";
+import { CheckRow, ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger } from "./Filters";
+import { EditColumnsIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
 import { companies } from "../data/companies";
 
@@ -422,30 +422,5 @@ function MoreFiltersBody({
         onApply({ roles: v.roles, goals: v.goals, industries: v.industries })
       }
     />
-  );
-}
-
-
-function CheckRow({
-  label,
-  checked,
-  onChange,
-  draggable = false,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-  draggable?: boolean;
-}) {
-  return (
-    <button className="dropdown-item cols-row" onClick={onChange}>
-      <span className={`checkbox ${checked ? "checked" : ""}`}>{checked && <CheckIcon />}</span>
-      <span className="cols-row-label">{label}</span>
-      {draggable && (
-        <span className="cols-drag-handle" aria-hidden="true">
-          <DragHandleIcon />
-        </span>
-      )}
-    </button>
   );
 }

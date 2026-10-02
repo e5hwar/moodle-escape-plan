@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, slugify } from "../data/deepLinks";
 import { createPortal } from "react-dom";
 import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
-import { InfoTipIcon, SmallXIcon } from "./icons";
+import { InfoTipIcon, RowCloseIcon } from "./icons";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
@@ -10,7 +10,7 @@ import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../da
 import { CertSplitTaskWizard } from "./CertSplitTaskWizard";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
-import { SearchIcon, AddCircleIcon, ChevronRightIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, MinusThinIcon, PencilIcon } from "./icons";
+import { SearchIcon, AddCircleIcon, ChevronRightIcon, DragHandleIcon, RowKebabIcon, PlusThinIcon, CardMinusIcon, PencilIcon } from "./icons";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
@@ -1004,8 +1004,8 @@ export function NewCertificationWizard({ onClose, onCreate, editingCert, importe
   // nav and opens straight on the selected Course (Figma 886:1148).
   const stepHead = (
     <>
-      <h1 className="wizard-title">{steps[step].label}</h1>
-      <p className="wizard-desc">
+      <h1 className="tasks-title">{steps[step].label}</h1>
+      <p className="tasks-subtitle wizard-desc">
         {steps[step].desc}
         {steps[step].tip && (
           <span
@@ -2038,8 +2038,8 @@ function TasksStep({
         <div className="ctb ctb--empty">
           <div className="ctb-start">
             <span className="wizard-brand-eyebrow">Add Tasks</span>
-            <h1 className="wizard-title">Build the Certification</h1>
-            <p className="wizard-desc">
+            <h1 className="tasks-title">Build the Certification</h1>
+            <p className="tasks-subtitle wizard-desc">
               A Certification is made of Courses. Each Course holds Lessons and Tasks. Start with
               one Course, or bring Courses over from a Certification you have already built.
             </p>
@@ -3298,7 +3298,7 @@ function ConditionSetCard({
           <span>CONDITION SET {index}</span>
           {set.items.length > 1 && (
             <span>
-              · COMPLETE <strong>ALL</strong> OF THESE:
+              · COMPLETE ALL OF THESE:
             </span>
           )}
         </div>
@@ -3309,7 +3309,7 @@ function ConditionSetCard({
             title="Remove Condition Set"
             aria-label={`Remove Condition Set ${index}`}
           >
-            <MinusThinIcon />
+            <CardMinusIcon />
           </button>
         )}
       </div>
@@ -3326,7 +3326,7 @@ function ConditionSetCard({
               onClick={() => onRemoveItem(item.id)}
               aria-label={`Remove ${item.name}`}
             >
-              <SmallXIcon />
+              <RowCloseIcon />
             </button>
           )}
         </div>
@@ -3871,8 +3871,8 @@ export function ArchiveCertificationPage({
         <div className="wizard-main">
           <div className="wizard-content">
             <div className="wizard-pane">
-              <h1 className="wizard-title">Archive &amp; Replace</h1>
-              <p className="wizard-desc">
+              <h1 className="tasks-title">Archive &amp; Replace</h1>
+              <p className="tasks-subtitle wizard-desc">
                 Retire “{cert.name}” ({cert.id}) and point enrolled learners to a
                 replacement. Archiving is permanent.
                 <span

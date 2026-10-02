@@ -301,8 +301,8 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
           <div className="wizard-content spc-form" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-                <h1 className="wizard-title">{STEPS[step].label}</h1>
-                <p className="wizard-desc">
+                <h1 className="tasks-title">{STEPS[step].label}</h1>
+                <p className="tasks-subtitle wizard-desc">
                   {step === 0 && enabling
                     ? "Set a new end date to put this Spotlight back on the SkillCat Home Page."
                     : STEPS[step].desc}
@@ -312,6 +312,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                   <QueuePositionStep
                     queue={queue}
                     self={self}
+                    isNew={!editing}
                     position={position}
                     onMove={setPosition}
                   />
@@ -618,15 +619,14 @@ export function SpotlightCardPreview({
       <span className="spc-hero-scrim" aria-hidden />
       <div className="spc-hero-row">
         <div className="spc-hero-col">
-          <div className="spc-hero-text">
-            <div className="spc-hero-title">
-              {title || "Title appears here..."}
+          {/* Only what the user has typed — no placeholder copy on the card. */}
+          {(title || description) && (
+            <div className="spc-hero-text">
+              {title && <div className="spc-hero-title">{title}</div>}
+              {description && <div className="spc-hero-desc">{description}</div>}
             </div>
-            <div className="spc-hero-desc">
-              {description || "Description appears here..."}
-            </div>
-          </div>
-          {ctaEnabled &&
+          )}
+          {ctaEnabled && cta &&
             (ctaHref ? (
               <a
                 className="spc-hero-pill spc-hero-pill--link"
@@ -634,10 +634,10 @@ export function SpotlightCardPreview({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {cta || "Button Name..."}
+                {cta}
               </a>
             ) : (
-              <span className="spc-hero-pill">{cta || "Button Name..."}</span>
+              <span className="spc-hero-pill">{cta}</span>
             ))}
         </div>
         <span className="spc-hero-close" aria-hidden>
@@ -678,11 +678,15 @@ type QueueSelf = { title: string; description: string; status: Spotlight["status
 function QueuePositionStep({
   queue,
   self,
+  isNew,
   position,
   onMove,
 }: {
   queue: Spotlight[];
   self: QueueSelf;
+  /** Creating rather than editing: this Spotlight's row wears the orange
+   *  "New" tag (Table Pill - Accent, 107:1132) instead of a status. */
+  isNew: boolean;
   position: number;
   onMove: (position: number) => void;
 }) {
@@ -786,9 +790,13 @@ function QueuePositionStep({
               {description && <div className="qz-q-type">{description}</div>}
             </div>
             <span className="spq-status">
-              <span className={`co-status-pill co-status-pill--${pending ? "yellow" : "green"}`}>
-                {pending ? "In-Review" : "Active"}
-              </span>
+              {isSelf && isNew ? (
+                <span className="co-status-pill co-status-pill--accent">New</span>
+              ) : (
+                <span className={`co-status-pill co-status-pill--${pending ? "yellow" : "green"}`}>
+                  {pending ? "In-Review" : "Active"}
+                </span>
+              )}
             </span>
             {/* Same short format as the Spotlight table; "—" until this
                 Spotlight's date is picked on Details. */}

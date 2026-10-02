@@ -53,7 +53,7 @@ import { useLeaveGuard } from "./LeaveGuard";
  *   gating       -> the disabled CTA explains itself on hover (aria-disabled +
  *                   data-tip); the rail locks steps not yet reached
  *   confirmation -> PrmModal (Figma 483:588) with the destructive CTA (495:2247)
- *   result       -> .wizard-body--success / .success-summary
+ *   result       -> .wizard-body--success
  * The page-local .mgf-* rules are layout-only (see the block in index.css).
  *
  * All data is demo data (see ../data/mergeAccounts). Nothing is persisted.
@@ -479,10 +479,10 @@ export function FlowProcessing({ title, sub }: { title: string; sub: string }) {
       <div className="wizard-body wizard-body--success">
         <div className="wizard-content wizard-success-content mgf-done">
           <span className="mgf-spinner" />
-          <h1 className="wizard-title">{title}</h1>
+          <h1 className="tasks-title">{title}</h1>
           {/* The "don't navigate away" note lives up here with the copy it
               belongs to, not as footer status text. */}
-          <p className="wizard-desc">{sub} This takes a moment — don't navigate away.</p>
+          <p className="tasks-subtitle wizard-desc">{sub} This takes a moment — don't navigate away.</p>
         </div>
       </div>
 
@@ -763,8 +763,8 @@ export function MergeAccountsPage({
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-          <h1 className="wizard-title">{STEPS[step].title}</h1>
-          <p className="wizard-desc">
+          <h1 className="tasks-title">{STEPS[step].title}</h1>
+          <p className="tasks-subtitle wizard-desc">
             {STEPS[step].desc}
             {/* The step's long explanation hangs off the subtext as one ⓘ —
                 the app's rule for a field's own help, applied to the page's. */}

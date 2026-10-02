@@ -237,7 +237,7 @@ export function PreviewPanel({
           </div>
         )}
         {copiedAt > 0 && (
-          <CopiedToast key={copiedAt} label="Link Copied!" onDone={() => setCopiedAt(0)} />
+          <CopiedToast key={copiedAt} label="Link Copied" onDone={() => setCopiedAt(0)} />
         )}
       </div>
     </div>

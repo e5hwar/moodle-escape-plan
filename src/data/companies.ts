@@ -301,6 +301,14 @@ export const companies: Company[] = [
     seats: 120,
     industry: ["HVAC", "Refrigeration"],
     partnership: ["Preferred Partner", "NGO Partner"],
+    address: "1820 Market St, Denver, Colorado, 80202, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1820 Market St",
+      city: "Denver",
+      pin: "80202",
+      state: "Colorado",
+    },
   },
   {
     id: "CO-002",
@@ -310,6 +318,14 @@ export const companies: Company[] = [
     seats: 45,
     industry: ["HVAC"],
     partnership: [],
+    address: "455 W Grand Ave, Chicago, Illinois, 60654, United States",
+    addressParts: {
+      country: "United States",
+      line1: "455 W Grand Ave",
+      city: "Chicago",
+      pin: "60654",
+      state: "Illinois",
+    },
   },
   {
     id: "CO-003",
@@ -319,6 +335,14 @@ export const companies: Company[] = [
     seats: 18,
     industry: ["HVAC"],
     partnership: [],
+    address: "2100 Ross Ave, Dallas, Texas, 75201, United States",
+    addressParts: {
+      country: "United States",
+      line1: "2100 Ross Ave",
+      city: "Dallas",
+      pin: "75201",
+      state: "Texas",
+    },
   },
   {
     id: "CO-004",
@@ -328,6 +352,14 @@ export const companies: Company[] = [
     seats: 200,
     industry: ["Electrical", "Solar"],
     partnership: ["Elite Partner"],
+    address: "88 Pine St, Seattle, Washington, 98101, United States",
+    addressParts: {
+      country: "United States",
+      line1: "88 Pine St",
+      city: "Seattle",
+      pin: "98101",
+      state: "Washington",
+    },
   },
   {
     id: "CO-005",
@@ -337,6 +369,14 @@ export const companies: Company[] = [
     seats: 60,
     industry: ["Plumbing"],
     partnership: [],
+    address: "301 Congress Ave, Austin, Texas, 78701, United States",
+    addressParts: {
+      country: "United States",
+      line1: "301 Congress Ave",
+      city: "Austin",
+      pin: "78701",
+      state: "Texas",
+    },
   },
   {
     id: "CO-006",
@@ -345,6 +385,14 @@ export const companies: Company[] = [
     seats: 5,
     industry: ["Appliance Repair"],
     partnership: [],
+    address: "1500 Peachtree St NE, Atlanta, Georgia, 30309, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1500 Peachtree St NE",
+      city: "Atlanta",
+      pin: "30309",
+      state: "Georgia",
+    },
     status: "Free Trial",
   },
   {
@@ -355,6 +403,14 @@ export const companies: Company[] = [
     seats: 22,
     industry: [],
     partnership: [],
+    address: "700 N Central Ave, Phoenix, Arizona, 85004, United States",
+    addressParts: {
+      country: "United States",
+      line1: "700 N Central Ave",
+      city: "Phoenix",
+      pin: "85004",
+      state: "Arizona",
+    },
   },
   {
     id: "CO-008",
@@ -364,6 +420,14 @@ export const companies: Company[] = [
     seats: 85,
     industry: ["HVAC", "Plumbing", "Refrigeration"],
     partnership: ["Preferred Partner"],
+    address: "250 Summer St, Boston, Massachusetts, 02210, United States",
+    addressParts: {
+      country: "United States",
+      line1: "250 Summer St",
+      city: "Boston",
+      pin: "02210",
+      state: "Massachusetts",
+    },
   },
   {
     id: "CO-009",
@@ -372,6 +436,14 @@ export const companies: Company[] = [
     seats: 8,
     industry: ["Roofing"],
     partnership: [],
+    address: "1201 S Main St, Charlotte, North Carolina, 28203, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1201 S Main St",
+      city: "Charlotte",
+      pin: "28203",
+      state: "North Carolina",
+    },
     status: "Trial Expired",
   },
   {
@@ -382,6 +454,14 @@ export const companies: Company[] = [
     seats: 37,
     industry: ["HVAC", "Electrical"],
     partnership: [],
+    address: "410 Nicollet Mall, Minneapolis, Minnesota, 55401, United States",
+    addressParts: {
+      country: "United States",
+      line1: "410 Nicollet Mall",
+      city: "Minneapolis",
+      pin: "55401",
+      state: "Minnesota",
+    },
   },
   {
     id: "CO-011",
@@ -391,6 +471,14 @@ export const companies: Company[] = [
     seats: 14,
     industry: ["Electrical"],
     partnership: [],
+    address: "900 Elm St, Manchester, New Hampshire, 03101, United States",
+    addressParts: {
+      country: "United States",
+      line1: "900 Elm St",
+      city: "Manchester",
+      pin: "03101",
+      state: "New Hampshire",
+    },
   },
   {
     id: "CO-012",
@@ -399,6 +487,14 @@ export const companies: Company[] = [
     seats: 10,
     industry: ["Solar"],
     partnership: ["NGO Partner"],
+    address: "333 W Washington St, Indianapolis, Indiana, 46204, United States",
+    addressParts: {
+      country: "United States",
+      line1: "333 W Washington St",
+      city: "Indianapolis",
+      pin: "46204",
+      state: "Indiana",
+    },
     status: "Free Access",
     freeAccessEndDate: "2026-11-30",
   },
@@ -410,6 +506,14 @@ export const companies: Company[] = [
     seats: 50,
     industry: [],
     partnership: [],
+    address: "1600 Smith St, Houston, Texas, 77002, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1600 Smith St",
+      city: "Houston",
+      pin: "77002",
+      state: "Texas",
+    },
   },
   {
     id: "CO-014",
@@ -419,6 +523,14 @@ export const companies: Company[] = [
     seats: 95,
     industry: ["Refrigeration"],
     partnership: ["Elite Partner"],
+    address: "525 B St, San Diego, California, 92101, United States",
+    addressParts: {
+      country: "United States",
+      line1: "525 B St",
+      city: "San Diego",
+      pin: "92101",
+      state: "California",
+    },
   },
   {
     id: "CO-015",
@@ -428,6 +540,14 @@ export const companies: Company[] = [
     seats: 42,
     industry: ["HVAC"],
     partnership: [],
+    address: "200 E Pratt St, Baltimore, Maryland, 21202, United States",
+    addressParts: {
+      country: "United States",
+      line1: "200 E Pratt St",
+      city: "Baltimore",
+      pin: "21202",
+      state: "Maryland",
+    },
   },
   {
     id: "CO-016",
@@ -436,6 +556,14 @@ export const companies: Company[] = [
     seats: 3,
     industry: ["Construction"],
     partnership: [],
+    address: "1100 Walnut St, Kansas City, Missouri, 64106, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1100 Walnut St",
+      city: "Kansas City",
+      pin: "64106",
+      state: "Missouri",
+    },
     status: "Free Trial",
   },
   {
@@ -446,6 +574,14 @@ export const companies: Company[] = [
     seats: 28,
     industry: ["Electrical"],
     partnership: [],
+    address: "77 E Broad St, Columbus, Ohio, 43215, United States",
+    addressParts: {
+      country: "United States",
+      line1: "77 E Broad St",
+      city: "Columbus",
+      pin: "43215",
+      state: "Ohio",
+    },
   },
   {
     id: "CO-018",
@@ -455,6 +591,14 @@ export const companies: Company[] = [
     seats: 130,
     industry: ["Fire Protection", "Electrical"],
     partnership: ["Preferred Partner", "Elite Partner"],
+    address: "600 Grant St, Pittsburgh, Pennsylvania, 15219, United States",
+    addressParts: {
+      country: "United States",
+      line1: "600 Grant St",
+      city: "Pittsburgh",
+      pin: "15219",
+      state: "Pennsylvania",
+    },
   },
   {
     id: "CO-019",
@@ -463,6 +607,14 @@ export const companies: Company[] = [
     seats: 15,
     industry: ["Utilities", "Solar"],
     partnership: ["NGO Partner"],
+    address: "150 S State St, Salt Lake City, Utah, 84111, United States",
+    addressParts: {
+      country: "United States",
+      line1: "150 S State St",
+      city: "Salt Lake City",
+      pin: "84111",
+      state: "Utah",
+    },
     status: "Free Access",
     freeAccessEndDate: "2027-02-28",
   },
@@ -474,6 +626,14 @@ export const companies: Company[] = [
     seats: 55,
     industry: ["HVAC"],
     partnership: [],
+    address: "400 Capitol Mall, Sacramento, California, 95814, United States",
+    addressParts: {
+      country: "United States",
+      line1: "400 Capitol Mall",
+      city: "Sacramento",
+      pin: "95814",
+      state: "California",
+    },
   },
   {
     id: "CO-021",
@@ -483,6 +643,14 @@ export const companies: Company[] = [
     seats: 175,
     industry: ["HVAC", "Plumbing"],
     partnership: ["Elite Partner", "NGO Partner"],
+    address: "2 S Biscayne Blvd, Miami, Florida, 33131, United States",
+    addressParts: {
+      country: "United States",
+      line1: "2 S Biscayne Blvd",
+      city: "Miami",
+      pin: "33131",
+      state: "Florida",
+    },
   },
   {
     id: "CO-022",
@@ -492,6 +660,14 @@ export const companies: Company[] = [
     seats: 20,
     industry: ["Plumbing"],
     partnership: [],
+    address: "222 W Las Colinas Blvd, Irving, Texas, 75039, United States",
+    addressParts: {
+      country: "United States",
+      line1: "222 W Las Colinas Blvd",
+      city: "Irving",
+      pin: "75039",
+      state: "Texas",
+    },
   },
   {
     id: "CO-023",
@@ -500,6 +676,14 @@ export const companies: Company[] = [
     seats: 6,
     industry: [],
     partnership: ["NGO Partner"],
+    address: "500 Woodward Ave, Detroit, Michigan, 48226, United States",
+    addressParts: {
+      country: "United States",
+      line1: "500 Woodward Ave",
+      city: "Detroit",
+      pin: "48226",
+      state: "Michigan",
+    },
     status: "Trial Expired",
   },
   {
@@ -510,6 +694,14 @@ export const companies: Company[] = [
     seats: 33,
     industry: ["Roofing", "Construction"],
     partnership: [],
+    address: "1 Riverfront Plaza, Newark, New Jersey, 07102, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1 Riverfront Plaza",
+      city: "Newark",
+      pin: "07102",
+      state: "New Jersey",
+    },
   },
   {
     id: "CO-025",
@@ -519,6 +711,14 @@ export const companies: Company[] = [
     seats: 110,
     industry: ["HVAC"],
     partnership: ["Preferred Partner"],
+    address: "320 S Boston Ave, Tulsa, Oklahoma, 74103, United States",
+    addressParts: {
+      country: "United States",
+      line1: "320 S Boston Ave",
+      city: "Tulsa",
+      pin: "74103",
+      state: "Oklahoma",
+    },
   },
   {
     // Subscription scheduled to cancel at the end of the cycle — demonstrates
@@ -530,6 +730,14 @@ export const companies: Company[] = [
     seats: 40,
     industry: ["HVAC", "Refrigeration"],
     partnership: [],
+    address: "501 Union St, Nashville, Tennessee, 37219, United States",
+    addressParts: {
+      country: "United States",
+      line1: "501 Union St",
+      city: "Nashville",
+      pin: "37219",
+      state: "Tennessee",
+    },
     status: "Canceled",
     cancelsOn: "Aug 27, 2026",
   },
@@ -543,6 +751,14 @@ export const companies: Company[] = [
     seats: 18,
     industry: ["Plumbing"],
     partnership: [],
+    address: "210 N Tucker Blvd, St. Louis, Missouri, 63101, United States",
+    addressParts: {
+      country: "United States",
+      line1: "210 N Tucker Blvd",
+      city: "St. Louis",
+      pin: "63101",
+      state: "Missouri",
+    },
     status: "Canceled",
     cancelsOn: "Mar 12, 2026",
   },
@@ -555,6 +771,14 @@ export const companies: Company[] = [
     seats: 8,
     industry: ["Roofing"],
     partnership: ["NGO Partner"],
+    address: "16 Court St, Brooklyn, New York, 11241, United States",
+    addressParts: {
+      country: "United States",
+      line1: "16 Court St",
+      city: "Brooklyn",
+      pin: "11241",
+      state: "New York",
+    },
     status: "Free Access",
     freeAccessEndDate: "2026-03-01",
   },
@@ -565,6 +789,14 @@ export const companies: Company[] = [
     seats: 12,
     industry: ["Fire Protection", "Construction"],
     partnership: ["Preferred Partner"],
+    address: "1000 Ponce de Leon Blvd, Coral Gables, Florida, 33134, United States",
+    addressParts: {
+      country: "United States",
+      line1: "1000 Ponce de Leon Blvd",
+      city: "Coral Gables",
+      pin: "33134",
+      state: "Florida",
+    },
     status: "Free Access",
     freeAccessEndDate: "2026-05-15",
   },
@@ -581,6 +813,18 @@ export const COMPANY_INDUSTRIES = Array.from(
 export const COMPANY_PARTNERSHIPS = Array.from(
   new Set(companies.flatMap((c) => c.partnership)),
 ).sort();
+
+/* "None" leads both filters — the only way to ask for companies with no
+ * Industry / Partnership set (the same sentinel as Question Bank's NO_QUIZ). */
+export const NO_INDUSTRY = "None";
+export const NO_PARTNERSHIP = "None";
+export const INDUSTRY_FILTER_OPTIONS = [NO_INDUSTRY, ...COMPANY_INDUSTRIES];
+export const PARTNERSHIP_FILTER_OPTIONS = [NO_PARTNERSHIP, ...COMPANY_PARTNERSHIPS];
+
+/** A multi-value filter matches an empty field only via its "None" option. */
+export function matchesTags(values: string[], picked: string[], none: string): boolean {
+  return values.length ? values.some((v) => picked.includes(v)) : picked.includes(none);
+}
 
 /* ───────────────── Pricing (Default Rates, per seat) ─────────────────
  * Section 21.3: set per Tier, per cycle, per currency. A rate is quoted in the
@@ -719,7 +963,13 @@ export function getCompanyBilling(c: Company): CompanyBilling {
 
   const billingCycle: BillingCycle = c.billingCycle ?? (h % 3 === 0 ? "Annual" : "Monthly");
   const currency: Currency = c.currency ?? (h % 4 === 0 ? "CAD" : "USD");
-  const signUp: SignUpChannel = c.signUp ?? (c.partnership ? "Internal Sign-Up" : h % 2 === 0 ? "Self Sign-Up" : "Internal Sign-Up");
+  // A partner-referred company came in through the sales team; the rest split
+  // between signing themselves up and being set up internally. `.length`, not
+  // the array itself — an empty array is truthy, which once made every seed
+  // company Internal.
+  const signUp: SignUpChannel =
+    c.signUp ??
+    (c.partnership.length > 0 ? "Internal Sign-Up" : h % 2 === 0 ? "Self Sign-Up" : "Internal Sign-Up");
   const payment: PaymentCollection =
     c.payment ?? (signUp === "Internal Sign-Up" && h % 3 === 1 ? "Invoice" : "Automatic");
 

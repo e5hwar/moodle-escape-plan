@@ -130,10 +130,12 @@ export const FILTER_TIPS = {
 
   /** Exam Reviews (the proctoring console) and the ID re-upload queue. */
   examReviews: {
-    reviewType: "Show only Proctoring runs, only ID Reviews or only ID Re-uploads.",
+    reviewType: "Show only Proctored Exams, only ID Reviews or only ID Re-Uploads.",
     quiz: "Show only reviews for attempts at the chosen Quizzes.",
     reuploadQuiz: "Show only re-uploads from attempts at the chosen Quizzes.",
     dateRange: "Show only reviews submitted inside the chosen dates.",
+    reuploadSubmitted: "Show only re-uploads whose attempt was submitted inside the chosen dates.",
+    reuploadRequested: "Show only re-uploads requested inside the chosen dates.",
   },
 
   /** The "Add Certifications" picker on an Industry. */
@@ -160,6 +162,15 @@ export const FILTER_TIPS = {
     visibility: "Narrow the list to Tasks learners can see, or to hidden ones.",
     certifications: "Narrow the list to Tasks used in the chosen Certifications.",
     industry: "Narrow the list to Tasks whose Certifications sit in the chosen Industries.",
+    subscription: "Narrow the list to Tasks open on the free trial, or to subscriber-only ones.",
+  },
+
+  /** The Certifications tab of the Add Requirement / Add Triggers picker. */
+  certPicker: {
+    industry: "Narrow the list to Certifications in the chosen Industries and Sub-Industries.",
+    careerStage: "Narrow the list to Certifications aimed at the chosen career stages.",
+    type: "Narrow the list to Certifications of the chosen type.",
+    visibility: "Narrow the list to visible, hidden or archived Certifications.",
   },
 
   /** Select Skills (the Mastery Skill wizard's Linked Skills picker). */
@@ -180,5 +191,8 @@ export const FILTER_TIPS = {
   questionPicker: {
     type: "Narrow the list to questions of the chosen types.",
     category: "Narrow the list to questions in the chosen categories.",
+    grading: "Narrow the list to graded or ungraded questions.",
+    quizzes: "Narrow the list to questions used in the chosen Quizzes.",
+    forms: "Narrow the list to questions used in the chosen Feedback Forms.",
   },
 } as const;

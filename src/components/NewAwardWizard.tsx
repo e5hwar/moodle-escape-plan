@@ -157,9 +157,9 @@ export function NewAwardWizard(props: Props) {
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="wizard-title">{title}</h1>
+                  <h1 className="tasks-title">{title}</h1>
                 </div>
-                <p className="wizard-desc">
+                <p className="tasks-subtitle wizard-desc">
                   Completing <strong>{cert.name}</strong> issues this Award. Set its Merit Tier and
                   choose how it appears in the user’s Portfolio.
                   {isEditing && props.editingAward && props.onViewRecipients && (

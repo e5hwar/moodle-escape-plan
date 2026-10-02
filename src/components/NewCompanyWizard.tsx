@@ -32,8 +32,10 @@ import {
   dialLabelFor,
   findPhoneCountry,
 } from "../data/countries";
+import { NoteCard } from "./NoteCard";
 import { lookupZip } from "../data/zipcodes";
-import { CheckIcon, CheckBoldIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
+import { zipFormatError, zipRequired } from "../data/postalCodes";
+import { CheckIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
@@ -50,6 +52,8 @@ import { DateField } from "./DateField";
 import { PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CopiedToast } from "./CopiedToast";
+import { LockedField } from "./CriteriaLock";
+import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { CURRENCY_INFO, currencyOptionFor, codeFromCurrencyOption } from "../data/currencies";
 
 /* ─────────────── Constants ─────────────── */
@@ -156,6 +160,11 @@ function buildDefaultSavedPrices(): SavedPrice[] {
 type Props = {
   onClose: () => void;
   onCreate?: (company: Omit<Company, "id">) => void;
+  /** Every finish except an auto-pay create (which has a Stripe link to hand
+   *  over) ends here: the wizard hands back the toast copy — "Company Added",
+   *  "Subscription Updated", "Company Updated" — and the caller returns to the
+   *  Companies list to show it. Without it, the wizard just closes. */
+  onCreated?: (message: string) => void;
   // When provided, the wizard runs in edit mode: fields are prefilled from the
   // company and saving calls onSave with the same id instead of creating a new one.
   editCompany?: Company;
@@ -182,7 +191,7 @@ export function planFor(c: Company): Plan {
   return "subscription";
 }
 
-export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subscriptionOnly = false, detailsOnly = false, onNavigateToProductConfig }: Props) {
+export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, onSave, subscriptionOnly = false, detailsOnly = false, onNavigateToProductConfig }: Props) {
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
   // so the edit form starts populated either way.
@@ -421,7 +430,8 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     { valid: name.trim().length > 0, message: "Add a company name to continue." },
     // Soft limit: typing past it is allowed, saving isn't.
     { valid: !isOver(NAME_MAX, name), message: `Shorten the company name to ${NAME_MAX} characters to continue.` },
-    { valid: addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
+    { valid: !zipRequired(country) || addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
+    { valid: !zipFormatError(addrPin, country), message: `${zipFormatError(addrPin, country)} to continue.` },
     // Only when this step IS the save — in the full wizard it is a way-point,
     // and an untouched details step is a perfectly good one to walk past.
     ...(detailsOnly && isEdit
@@ -563,7 +573,12 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
   // step was moved past (Address per Figma 1389:1624 — its Zipcode is the one
   // mandatory part).
   const nameMissing = !name.trim() && (maxVisited > 0 || touched.has("name"));
-  const zipMissing = !addrPin.trim() && (maxVisited > 0 || touched.has("zip"));
+  const zipMissing =
+    zipRequired(country) && !addrPin.trim() && (maxVisited > 0 || touched.has("zip"));
+  // A Zipcode that doesn't fit the selected Country's format — shown once the
+  // address was left (or the step passed), like the empty check, then live.
+  const zipInvalid =
+    maxVisited > 0 || touched.has("zip") ? zipFormatError(addrPin, country) : null;
   const holderMissing = !contactName.trim() && (maxVisited > 1 || touched.has("holder"));
   const emailMissing = !email.trim() && (maxVisited > 1 || touched.has("email"));
 
@@ -593,7 +608,14 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
           }
         : undefined,
     });
-    onClose();
+    finish("Company Updated");
+  }
+
+  // Back to the list with a success toast, or just close for a caller that
+  // doesn't raise one.
+  function finish(message: string) {
+    if (onCreated) onCreated(message);
+    else onClose();
   }
 
   function handleCreate() {
@@ -654,7 +676,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
     };
     if (isEdit && editCompany) {
       onSave?.({ ...company, id: editCompany.id });
-      setCreatedCompany(company);
+      finish("Subscription Updated");
     } else {
       // New companies go through a confirmation screen before they're actually
       // created — nothing is saved yet.
@@ -681,26 +703,42 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
         .catch(() => { /* blocked — the Copy button still works by hand */ });
     }
     onCreate?.(pendingCompany);
-    setCreatedCompany(pendingCompany);
-    setPendingCompany(null);
+    // Only an auto-pay subscription has something left to hand over (its Stripe
+    // link). Invoicing, trials and free access go straight back to the list.
+    if (isSubscription && pendingCompany.payment === "Automatic") {
+      setCreatedCompany(pendingCompany);
+      setPendingCompany(null);
+    } else {
+      finish("Company Added");
+    }
   }
 
+  /* ⌘/Ctrl+Enter runs the footer's primary button — Continue, then Review
+     Details / Save Changes — under the same guards that disable it. The review
+     and done screens register their own, so this one stands down while either
+     has the screen. */
+  useWizardEnterShortcut(
+    () => {
+      if (step === 0) {
+        if (!companyValid || detailsUnchanged) return;
+        if (detailsOnly) handleSaveDetails();
+        else gate.goStep(1);
+      } else if (step === 1) {
+        if (adminValid) gate.goStep(2);
+      } else if (canSave) {
+        if (isEdit) setShowSaveConfirm(true);
+        else handleCreate();
+      }
+    },
+    undefined,
+    !createdCompany && !pendingCompany,
+  );
+
+  // Only a new auto-pay subscription gets here (see handleConfirmCreate): its
+  // Stripe payment link to send to the account holder. Every other finish
+  // returns to the Companies list with a toast.
   if (createdCompany) {
-    // A subscription billed automatically gets a Stripe payment link to send to
-    // the account holder; everything else (invoicing, trials, free access, or an
-    // edit) has nothing further to collect, so it goes straight to the full summary.
-    const showPaymentLink = !isEdit && isSubscription && createdCompany.payment === "Automatic";
-    return showPaymentLink ? (
-      <PaymentLinkScreen company={createdCompany} autoCopied={linkAutoCopied} onClose={onClose} />
-    ) : (
-      <SuccessScreen
-        company={createdCompany}
-        plan={plan}
-        tier={isSubscription ? tier : undefined}
-        isEdit={isEdit}
-        onClose={onClose}
-      />
-    );
+    return <PaymentLinkScreen company={createdCompany} autoCopied={linkAutoCopied} onClose={onClose} />;
   }
 
   if (pendingCompany) {
@@ -772,7 +810,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
                   addrLine2={addrLine2} setAddrLine2={setAddrLine2}
                   addrCity={addrCity} setAddrCity={setAddrCity}
                   addrPin={addrPin} setAddrPin={setAddrPin}
-                  nameMissing={nameMissing} zipMissing={zipMissing} touch={touch}
+                  nameMissing={nameMissing} zipMissing={zipMissing} zipInvalid={zipInvalid} touch={touch}
                   addrState={addrState} setAddrState={setAddrState}
                   industries={industries} setIndustries={setIndustries}
                   partnerships={partnerships} setPartnerships={setPartnerships}
@@ -836,7 +874,10 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
             >
               {!detailsOnly && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
-              <span className="wizard-gate-btn-inner">{detailsOnly ? "Save Changes" : "Continue"}</span>
+              <span className="wizard-gate-btn-inner">
+                {detailsOnly ? "Save Changes" : "Continue"}
+                <WizardKeyHint />
+              </span>
             </button>
           ) : step === 1 ? (
             <button
@@ -846,7 +887,10 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               onClick={() => gate.goStep(2)}
             >
               <span className="wizard-gate-fill" ref={gate.nextFillRef} />
-              <span className="wizard-gate-btn-inner">Continue</span>
+              <span className="wizard-gate-btn-inner">
+                Continue
+                <WizardKeyHint />
+              </span>
             </button>
           ) : (
             <button
@@ -856,6 +900,7 @@ export function NewCompanyWizard({ onClose, onCreate, editCompany, onSave, subsc
               onClick={isEdit ? () => setShowSaveConfirm(true) : handleCreate}
             >
               {saveCta}
+              <WizardKeyHint />
             </button>
           )}
         </div>
@@ -943,6 +988,11 @@ function fmtAccessDate(iso: string): string {
 }
 function fmtFullDate(d: Date): string {
   return `${FULL_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+/** "Jun 24, 2026" — the timeline's date labels, in title case (Figma 616:1052:
+ *  "Today · Jun 10, 2026", "Jul 1, 2026 Onwards"). Prose keeps the full month. */
+function fmtTimelineDate(d: Date): string {
+  return `${FULL_MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`;
 }
 // The first occurrence of the 1st of `monthIdx` strictly after APP_TODAY.
 function nextFirstOfMonth(monthIdx: number): Date {
@@ -1179,15 +1229,15 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   const timeline: TimelineEntry[] = anyChange
     ? [
         {
-          date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+          date: `Today · ${fmtTimelineDate(APP_TODAY)}`,
           amount: todayAmount,
           desc: todayDesc,
           now: true,
         },
         {
-          // "<date> ONWARDS" folds the old "first full charge" and "recurring"
+          // "<date> Onwards" folds the old "first full charge" and "recurring"
           // dots into the one entry the node shows (616:1060).
-          date: `${fmtFullDate(renewDate).toUpperCase()} ONWARDS`,
+          date: `${fmtTimelineDate(renewDate)} Onwards`,
           amount: newCycleTotalStr,
           desc: collectionOnly
             ? `Recurring ${cycleAdj} charge collected via ${payMethodWord}`
@@ -1420,7 +1470,7 @@ function accessChangeToModel(prevIso: string, nextIso: string): PreviewModel {
     ],
     timeline: [
       {
-        date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+        date: `Today · ${fmtTimelineDate(APP_TODAY)}`,
         desc: shortened
           ? "Complimentary free access shortened. No charge or payment method required"
           : "Complimentary free access extended. No charge or payment method required",
@@ -1428,7 +1478,7 @@ function accessChangeToModel(prevIso: string, nextIso: string): PreviewModel {
       },
       ...(next
         ? [{
-            date: `FREE ACCESS ENDS · ${fmtFullDate(next).toUpperCase()}`,
+            date: `Free Access Ends · ${fmtTimelineDate(next)}`,
             desc: "Complimentary Free Access can be reinstated",
           }]
         : []),
@@ -1462,13 +1512,13 @@ function planTypeChangeToModel(
     ],
     timeline: [
       {
-        date: `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`,
+        date: `Today · ${fmtTimelineDate(APP_TODAY)}`,
         amount: money(0, curSym),
         desc: `No charge today — the change is scheduled for cycle end on ${renewStr}.`,
         now: true,
       },
       {
-        date: `${renewStr.toUpperCase()} ONWARDS`,
+        date: `${fmtTimelineDate(renewDate)} Onwards`,
         amount: money(0, curSym),
         desc: isTrial
           ? "Subscription ends and the free trial begins — converts to a paid subscription when the trial ends"
@@ -1495,7 +1545,7 @@ function createToModel({
 }): PreviewModel {
   const y = APP_TODAY.getFullYear();
   const m = APP_TODAY.getMonth();
-  const todayLabel = `TODAY · ${fmtFullDate(APP_TODAY).toUpperCase()}`;
+  const todayLabel = `Today · ${fmtTimelineDate(APP_TODAY)}`;
 
   if (plan === "free-trial") {
     const trialEnd = new Date(APP_TODAY.getTime() + TRIAL_DAYS * 86400000);
@@ -1509,7 +1559,7 @@ function createToModel({
           now: true,
         },
         {
-          date: `TRIAL ENDS · ${fmtFullDate(trialEnd).toUpperCase()}`,
+          date: `Trial Ends · ${fmtTimelineDate(trialEnd)}`,
           desc: `Trial length is set in Product Config (${TRIAL_DAYS} days)`,
         },
       ],
@@ -1538,7 +1588,7 @@ function createToModel({
         // it — no amount, since nothing is charged either way.
         ...(accessEnd
           ? [{
-              date: `FREE ACCESS ENDS · ${fmtFullDate(accessEnd).toUpperCase()}`,
+              date: `Free Access Ends · ${fmtTimelineDate(accessEnd)}`,
               desc: "Complimentary Free Access can be reinstated",
             }]
           : []),
@@ -1576,7 +1626,7 @@ function createToModel({
       now: true,
     },
     {
-      date: `${fmtFullDate(firstFullDate).toUpperCase()} ONWARDS`,
+      date: `${fmtTimelineDate(firstFullDate)} Onwards`,
       amount: money(planTotal, sym),
       desc: billingCycle === "Annual"
         ? `Recurring annual charge for the ${tier} Tier`
@@ -1659,6 +1709,7 @@ function Step1Details({
   addrCity, setAddrCity,
   addrPin, setAddrPin,
   zipMissing = false,
+  zipInvalid = null,
   addrState, setAddrState,
   industries, setIndustries,
   partnerships, setPartnerships,
@@ -1678,6 +1729,8 @@ function Step1Details({
   /** Details was left with the Zipcode empty — reddens the Address shell and
    *  says so in its label row. */
   zipMissing?: boolean;
+  /** The Zipcode doesn't fit the Country's format — the label-row message. */
+  zipInvalid?: string | null;
   addrState: string; setAddrState: (v: string) => void;
   industries: string[]; setIndustries: (v: string[]) => void;
   partnerships: string[]; setPartnerships: (v: string[]) => void;
@@ -1685,8 +1738,8 @@ function Step1Details({
 }) {
   return (
     <>
-      <h1 className="wizard-title">Company Details</h1>
-      <p className="wizard-desc">
+      <h1 className="tasks-title">Company Details</h1>
+      <p className="tasks-subtitle wizard-desc">
         Identify the company. Industry and partnership are used for segmentation and reporting.
       </p>
 
@@ -1694,10 +1747,13 @@ function Step1Details({
         <label className="form-label">
           Company Name<span className="req">*</span>
           {nameMissing && <span className="form-label-error">Company Name cannot be left empty</span>}
-          <LimitError max={NAME_MAX} values={[name]} />
+          {/* Admin- and receipt-facing, never truncated in the app: the hard
+              128 limit only, no amber warning. */}
+          <LimitError max={NAME_MAX} values={[name]} warn={false} />
         </label>
         <LimitedInput
           max={NAME_MAX}
+          warn={false}
           autoFocus
           className={`form-input${nameMissing ? " has-error" : ""}`}
           aria-invalid={nameMissing || undefined}
@@ -1712,8 +1768,9 @@ function Step1Details({
         <label className="form-label">
           Address<span className="req">*</span>
           {zipMissing && <span className="form-label-error">Zipcode cannot be left empty</span>}
+          {zipInvalid && <span className="form-label-error">{zipInvalid}</span>}
         </label>
-        <div className={`address-field${zipMissing ? " has-error" : ""}`}>
+        <div className={`address-field${zipMissing || zipInvalid ? " has-error" : ""}`}>
           <SelectField
             value={country}
             options={COUNTRY_OPTIONS}
@@ -1748,9 +1805,9 @@ function Step1Details({
             />
             <input
               className="address-input address-cell"
-              placeholder="Zipcode*"
+              placeholder={zipRequired(country) ? "Zipcode*" : "Zipcode"}
               value={addrPin}
-              aria-invalid={zipMissing || undefined}
+              aria-invalid={zipMissing || !!zipInvalid || undefined}
               onChange={(e) => {
                 const zip = e.target.value;
                 setAddrPin(zip);
@@ -1781,7 +1838,11 @@ function Step1Details({
             )}
           />
         </div>
-        <p className="form-help">Country and Zipcode are mandatory</p>
+        <p className="form-help">
+          {zipRequired(country)
+            ? "Country and Zipcode are mandatory"
+            : `Country is mandatory. ${country} doesn't use postal codes, so Zipcode is optional`}
+        </p>
       </div>
 
       <div className="form-group">
@@ -1964,8 +2025,8 @@ function StepAdminAccount({
 }) {
   return (
     <>
-      <h1 className="wizard-title">Admin Account</h1>
-      <p className="wizard-desc">
+      <h1 className="tasks-title">Admin Account</h1>
+      <p className="tasks-subtitle wizard-desc">
         The primary contact and first Admin account for the company.
       </p>
 
@@ -1973,10 +2034,12 @@ function StepAdminAccount({
         <label className="form-label">
           Account Holder<span className="req">*</span>
           {holderMissing && <span className="form-label-error">Account Holder cannot be left empty</span>}
-          <LimitError max={NAME_MAX} values={[contactName]} />
+          {/* Admin-facing, never truncated: the hard 128 limit only. */}
+          <LimitError max={NAME_MAX} values={[contactName]} warn={false} />
         </label>
         <LimitedInput
           max={NAME_MAX}
+          warn={false}
           autoFocus
           className={`form-input${holderMissing ? " has-error" : ""}`}
           aria-invalid={holderMissing || undefined}
@@ -2064,47 +2127,74 @@ function Step2Plan({
 }) {
   const isSubscription = plan === "subscription";
 
+  // Why an option of the Plan field can't be picked — the lock card's copy.
+  // The options themselves keep their normal subtext (the Quiz Structure lock's
+  // format). A trial that has expired leaves Free Access open; a paid plan that
+  // is still running closes both.
+  const trialUnavailable = trialExpired || trialLocked;
+  const planLock: { title: string; sub: string } | null = trialExpired
+    ? {
+        title: "Free Trial Unavailable",
+        sub: "This company's trial has already expired. Convert to a Subscription or grant Complimentary Free Access.",
+      }
+    : trialLocked && complimentaryLocked
+    ? {
+        title: "Free Trial and Free Access Unavailable",
+        sub: "This company is already on a paid plan, so a trial can't be started from here, and its subscription must be cancelled before it can be given Free Access.",
+      }
+    : trialLocked
+    ? {
+        title: "Free Trial Unavailable",
+        sub: "This company is already on a paid or complimentary plan, so a trial can't be started from here.",
+      }
+    : complimentaryLocked
+    ? {
+        title: "Free Access Unavailable",
+        sub: "This company's subscription must be cancelled before it can be given Free Access.",
+      }
+    : null;
+
   return (
     <>
-      <h1 className="wizard-title">{manageMode ? "Manage Subscription" : "Plan Selection"}</h1>
-      <p className="wizard-desc">
+      <h1 className="tasks-title">{manageMode ? "Manage Subscription" : "Plan Selection"}</h1>
+      <p className="tasks-subtitle wizard-desc">
         {manageMode ? "Update the company's plan" : "Set up the company's plan"}
       </p>
 
       <div className="form-group">
         <label className="form-label">Plan<span className="req">*</span></label>
-        <div className="radio-card-group">
-          <RadioCard
-            selected={plan === "subscription"}
-            onSelect={() => setPlan("subscription")}
-            title="Subscription"
-            desc="Paid plan. You can set the Tier, Price-Per Seat, and Payment Method"
-          />
-          <RadioCard
-            selected={plan === "free-trial"}
-            onSelect={() => setPlan("free-trial")}
-            disabled={trialExpired || trialLocked}
-            title="Free Trial"
-            desc={
-              trialExpired
-                ? "Unavailable — this company's trial has already expired. Convert to a Subscription or grant Complimentary Free Access."
-                : trialLocked
-                ? "Unavailable — this company is already on a paid or complimentary plan. A trial can't be started from here."
-                : `${TRIAL_DAYS}-day free trial. No payment method required to start the trial.`
-            }
-          />
-          <RadioCard
-            selected={plan === "complimentary"}
-            onSelect={() => setPlan("complimentary")}
-            disabled={complimentaryLocked}
-            title="Complimentary Free Access"
-            desc={
-              complimentaryLocked
-                ? "Company's subscription must be cancelled before they can be given Free Access"
-                : "Free access, with all the same features as that of the Pro Tier."
-            }
-          />
-        </div>
+        {/* The Quiz Structure lock's format: why an option is unavailable goes
+            in the lock card above; every option keeps its own subtext, and only
+            the unavailable ones are disabled. */}
+        <LockedField
+          locked={!!planLock}
+          lockChildren={false}
+          title={planLock?.title}
+          sub={planLock?.sub}
+        >
+          <div className="radio-card-group">
+            <RadioCard
+              selected={plan === "subscription"}
+              onSelect={() => setPlan("subscription")}
+              title="Subscription"
+              desc="Paid plan. You can set the Tier, Price-Per Seat, and Payment Method"
+            />
+            <RadioCard
+              selected={plan === "free-trial"}
+              onSelect={() => setPlan("free-trial")}
+              disabled={trialUnavailable}
+              title="Free Trial"
+              desc={`${TRIAL_DAYS}-day free trial. No payment method required to start the trial.`}
+            />
+            <RadioCard
+              selected={plan === "complimentary"}
+              onSelect={() => setPlan("complimentary")}
+              disabled={complimentaryLocked}
+              title="Complimentary Free Access"
+              desc="Free access, with all the same features as that of the Pro Tier."
+            />
+          </div>
+        </LockedField>
       </div>
 
       {isSubscription && (
@@ -2183,25 +2273,28 @@ function Step2Plan({
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Payment Method<span className="req">*</span></label>
-            <div className="radio-card-group">
-              <RadioCard
-                selected={payment === "Automatic"}
-                onSelect={() => setPayment("Automatic")}
-                disabled={automaticLocked}
-                title="Automatically charge a payment method"
-                desc={
-                  automaticLocked
-                    ? "Companies can switch to automatic payment via the Billing Tab of their Dashboard"
-                    : "Generates a unique payment link that must be shared with the company"
-                }
-              />
-              <RadioCard
-                selected={payment === "Invoice"}
-                onSelect={() => setPayment("Invoice")}
-                title="Email invoice to pay manually"
-                desc="Payment due 30 days after the invoice is sent"
-              />
-            </div>
+            <LockedField
+              locked={automaticLocked}
+              lockChildren={false}
+              title="Automatic Payment Unavailable"
+              sub="Companies can switch to automatic payment via the Billing Tab of their Dashboard."
+            >
+              <div className="radio-card-group">
+                <RadioCard
+                  selected={payment === "Automatic"}
+                  onSelect={() => setPayment("Automatic")}
+                  disabled={automaticLocked}
+                  title="Automatically charge a payment method"
+                  desc="Generates a unique payment link that must be shared with the company"
+                />
+                <RadioCard
+                  selected={payment === "Invoice"}
+                  onSelect={() => setPayment("Invoice")}
+                  title="Email invoice to pay manually"
+                  desc="Payment due 30 days after the invoice is sent"
+                />
+              </div>
+            </LockedField>
           </div>
 
           {!hideSummary && (
@@ -2454,51 +2547,7 @@ function PerSeatPriceField({
   );
 }
 
-/* ─────────────── Success screen ─────────────── */
-
-function CompanySummaryRows({
-  company, plan, tier,
-}: {
-  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier;
-}) {
-  const isSubscription = plan === "subscription";
-  const sym = company.currency ? currencySymbol(company.currency) : "$";
-
-  const detail = (label: string, value: React.ReactNode) => (
-    <div className="success-detail-row" key={label}>
-      <span className="success-detail-label">{label}</span>
-      <span className="success-detail-value">{value}</span>
-    </div>
-  );
-
-  return (
-    <>
-      {detail("Company", company.name)}
-      {company.address && detail("Address", company.address)}
-      {company.contactName && detail("Account Holder", company.contactName)}
-      {detail("Email", company.email)}
-      {company.phone && detail("Phone", company.phone)}
-      {company.industry.length > 0 && detail("Industries", company.industry.join(", "))}
-      {company.partnership.length > 0 && detail("Partnership", company.partnership.join(", "))}
-      {company.taxStatus && detail("Tax status", company.taxStatus)}
-      {company.assignedCsm && detail("Assigned CSM", company.assignedCsm)}
-      {company.assignedSalesRep && detail("Assigned Sales Rep", company.assignedSalesRep)}
-      <div className="success-divider" />
-      {detail("Plan", plan === "free-trial" ? "Free Trial" : plan === "complimentary" ? "Free Access" : "Subscription")}
-      {plan === "complimentary" && company.freeAccessEndDate && detail("Free access ends", company.freeAccessEndDate)}
-      {isSubscription && tier && detail("Tier", tier)}
-      {isSubscription && detail("Billing cycle", company.billingCycle === "Annual" ? "Annual" : "Monthly")}
-      {isSubscription && detail("Currency", company.currency ?? "USD")}
-      {isSubscription && detail("Per-seat rate", `${sym}${company.ratePerSeat} / ${company.billingCycle === "Annual" ? "year" : "month"}`)}
-      {isSubscription && detail("Seats", String(company.seats))}
-      {isSubscription && detail("Payment method", company.payment === "Automatic" ? "Automatic" : "Manual (invoice)")}
-      {isSubscription && detail(
-        company.billingCycle === "Annual" ? "Est. annual total" : "Est. monthly total",
-        `${sym}${((company.ratePerSeat ?? 0) * company.seats).toLocaleString()}`,
-      )}
-    </>
-  );
-}
+/* ─────────────── Payment link screen ─────────────── */
 
 function StripeLinkBox({ stripeLink, onCopy }: {
   stripeLink: string;
@@ -2516,20 +2565,25 @@ function StripeLinkBox({ stripeLink, onCopy }: {
 
   return (
     <div className="stripe-link-box">
-      {/* Figma 1046:1250 — a tinted card holding the link and a copy glyph. The
-          glyph never swaps to a check: the toast is the whole acknowledgement,
-          so the button reads the same before and after. */}
-      <div className="stripe-link-row">
-        <span className="stripe-link-url">{stripeLink}</span>
-        <button
-          className="stripe-link-copy"
-          title="Copy link"
-          aria-label="Copy payment link"
-          onClick={copy}
-        >
-          <CopyIcon />
-        </button>
-      </div>
+      {/* Figma 1046:1250 — the shared NoteCard: the link as its title, the
+          copy glyph as its trailing icon button. The glyph never swaps to a
+          check: the toast is the whole acknowledgement, so the button reads
+          the same before and after. */}
+      <NoteCard
+        className="stripe-link-card"
+        title={stripeLink}
+        action={
+          <button
+            type="button"
+            className="note-card-icon-btn"
+            data-tip="Copy link"
+            aria-label="Copy payment link"
+            onClick={copy}
+          >
+            <CopyIcon />
+          </button>
+        }
+      />
       <p className="stripe-link-note">
         Share this link with the company to collect their payment method. The Stripe
         subscription and Dashboard activate once payment method is added. The link remains
@@ -2578,11 +2632,15 @@ export function CompanyReviewCards({
     ["Assigned Sales Rep", company.assignedSalesRep],
   ];
 
+  // The Review step locks every card to the node's four columns (1046:1147),
+  // spread across the card; the compact drawer copy fits what its width allows.
+  const columns = compact ? undefined : 4;
+
   return (
     <>
-      <ConfirmCard title="Company Details" fillBlanks onEdit={edit(0)} rows={compact ? details.slice(1) : details} />
+      <ConfirmCard title="Company Details" fillBlanks onEdit={edit(0)} columns={columns} rows={compact ? details.slice(1) : details} />
 
-      <ConfirmCard title="Account Holder" fillBlanks onEdit={edit(1)} rows={
+      <ConfirmCard title="Account Holder" fillBlanks onEdit={edit(1)} columns={columns} rows={
         compact
           ? [
               ["Company Admin", company.contactName],
@@ -2596,7 +2654,7 @@ export function CompanyReviewCards({
             ]
       } />
 
-      <ConfirmCard title="Subscription" onEdit={edit(2)} rows={[
+      <ConfirmCard title="Subscription" onEdit={edit(2)} columns={columns} rows={[
         ["Plan", planLabel],
         ["Free Access Ends", plan === "complimentary" && company.freeAccessEndDate
           ? fmtAccessDate(company.freeAccessEndDate)
@@ -2624,14 +2682,15 @@ function ConfirmCompanyScreen({
   /** Jumps back to the wizard step a card came from. */
   onEditStep: (step: number) => void;
 }) {
+  useWizardEnterShortcut(onConfirm);
   return (
     <div className="wizard">
       {/* The plain wizard body, not the centred success one — this is a page
           with a header and content, the same shape as the steps before it. */}
       <div className="wizard-body">
         <div className="wizard-content">
-          <h1 className="wizard-title">Review Details</h1>
-          <p className="wizard-desc">
+          <h1 className="tasks-title">Review Details</h1>
+          <p className="tasks-subtitle wizard-desc">
             Review all the details. Once done, the company's account will be created.
           </p>
 
@@ -2647,7 +2706,10 @@ function ConfirmCompanyScreen({
           <button className="wizard-cancel" onClick={onBack}>Back</button>
         </div>
         <div className="wizard-actions">
-          <button className="btn-publish" onClick={onConfirm}>Create Company</button>
+          <button className="btn-publish" onClick={onConfirm}>
+            Create Company
+            <WizardKeyHint />
+          </button>
         </div>
       </footer>
     </div>
@@ -2662,6 +2724,7 @@ function PaymentLinkScreen({
 }: {
   company: Omit<Company, "id">; autoCopied?: boolean; onClose: () => void;
 }) {
+  useWizardEnterShortcut(onClose);
   const stripeLink = stripePaymentLink(company.email, company.name);
   // The toast (Figma 1046:1141) fires alongside the button's own "Copied"
   // flash — the auto-copy included — and re-fires on every manual click
@@ -2684,8 +2747,8 @@ function PaymentLinkScreen({
           <div className="wizard-success-icon wizard-success-icon--brand">
             <CheckIcon />
           </div>
-          <h1 className="wizard-title">Company Created</h1>
-          <p className="wizard-desc">
+          <h1 className="tasks-title">Company Created</h1>
+          <p className="tasks-subtitle wizard-desc">
             Almost done! Just the Payment Method needs to be added.
           </p>
 
@@ -2701,40 +2764,10 @@ function PaymentLinkScreen({
       <footer className="wizard-footer">
         <div className="wizard-footer-left" />
         <div className="wizard-actions">
-          <button className="btn-publish" onClick={onClose}>Done</button>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function SuccessScreen({
-  company, plan, tier, isEdit = false, onClose,
-}: {
-  company: Omit<Company, "id">; plan: Plan; tier?: PaidTier; isEdit?: boolean; onClose: () => void;
-}) {
-  return (
-    <div className="wizard">
-      <div className="wizard-body wizard-body--success">
-        <div className="wizard-content wizard-success-content">
-          <div className="wizard-success-icon">
-            <CheckBoldIcon />
-          </div>
-          <h1 className="wizard-title">{isEdit ? "Company updated" : "Company created"}</h1>
-          <p className="wizard-desc">
-            <strong>{company.name}</strong> has been {isEdit ? "updated" : "added"}. Here's a summary of what was set up.
-          </p>
-
-          <div className="success-summary">
-            <CompanySummaryRows company={company} plan={plan} tier={tier} />
-          </div>
-        </div>
-      </div>
-
-      <footer className="wizard-footer">
-        <div className="wizard-footer-left" />
-        <div className="wizard-actions">
-          <button className="btn-publish" onClick={onClose}>Done</button>
+          <button className="btn-publish" onClick={onClose}>
+            Done
+            <WizardKeyHint />
+          </button>
         </div>
       </footer>
     </div>

@@ -212,7 +212,7 @@ export function ColumnsMenu({
           <div className="dropdown-section">
             <div className="dropdown-section-label">Active columns</div>
             {active.length === 0 ? (
-              <div className="cols-empty">No active columns</div>
+              <div className="cols-empty">-</div>
             ) : (
               active.map((c) => (
                 <CheckRow key={c.key} label={c.label} checked draggable onChange={() => onChange({ ...value, [c.key]: false })} />
@@ -222,7 +222,7 @@ export function ColumnsMenu({
           <div className="dropdown-section">
             <div className="dropdown-section-label">Available columns</div>
             {available.length === 0 ? (
-              <div className="cols-empty">All columns are active</div>
+              <div className="cols-empty">-</div>
             ) : (
               available.map((c) => (
                 <CheckRow key={c.key} label={c.label} checked={false} onChange={() => onChange({ ...value, [c.key]: true })} />

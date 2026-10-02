@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { RowEditIcon } from "./icons";
 
 /* One review card (Figma 1046:1147, "Review Company Details"): a 20px title
@@ -22,6 +22,7 @@ export function ConfirmCard({
   rows,
   fillBlanks = false,
   tableBody = false,
+  columns,
   children,
 }: {
   title: string;
@@ -38,6 +39,10 @@ export function ConfirmCard({
    *  table is its own bordered panel there, so the head gives up its hairline
    *  and the table sits flush beneath it. */
   tableBody?: boolean;
+  /** Lock the field grid to this many columns, sharing the card's width
+   *  evenly (the Create Company Review step is 4 — Figma 1046:1147). Without
+   *  it the card fits as many 200px columns as its width allows. */
+  columns?: number;
   /** A body that isn't the field grid: a table, pills, a tab bar. */
   children?: ReactNode;
 }) {
@@ -66,7 +71,10 @@ export function ConfirmCard({
           a little wider for the card's lead field) with the label above the
           value, rather than one label/value row per line. */}
       {rows && (
-        <div className="confirm-card-body">
+        <div
+          className={`confirm-card-body${columns ? " confirm-card-body--fixed" : ""}`}
+          style={columns ? ({ "--cc-cols": columns } as CSSProperties) : undefined}
+        >
           {shown.map(([label, value, wide]) => (
             <div className={`confirm-card-field${wide ? " confirm-card-field--wide" : ""}`} key={label}>
               <div className="confirm-card-label">{label}</div>

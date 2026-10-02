@@ -3,8 +3,10 @@ import {
   getCompanyBilling,
   TIERS,
   SUBSCRIPTION_STATUSES,
-  COMPANY_INDUSTRIES,
-  COMPANY_PARTNERSHIPS,
+  INDUSTRY_FILTER_OPTIONS,
+  PARTNERSHIP_FILTER_OPTIONS,
+  NO_INDUSTRY,
+  NO_PARTNERSHIP,
   type Company,
 } from "../data/companies";
 import { KeyCommandIcon, SearchClearIcon, SearchIcon } from "./icons";
@@ -86,21 +88,20 @@ export function CompaniesSearch({
     /* Multi-value fields (Industry, Partnership) count a company under EVERY
        value it carries, which is what the facet filter matches on — so the
        counts can total more than the company count, and a company with none
-       is counted nowhere. */
-    const tallyAll = (pick: (c: Company) => string[]) => {
+       is counted under the "None" option. */
+    const tallyAll = (pick: (c: Company) => string[], none: string) => {
       const m = new Map<string, number>();
       companies.forEach((c) => {
-        pick(c).forEach((v) => {
-          if (v) m.set(v, (m.get(v) ?? 0) + 1);
-        });
+        const vs = pick(c).filter(Boolean);
+        (vs.length ? vs : [none]).forEach((v) => m.set(v, (m.get(v) ?? 0) + 1));
       });
       return m;
     };
     return {
       tier: tally((c) => c.tier ?? ""),
       status: tally((c) => getCompanyBilling(c).status),
-      industry: tallyAll((c) => c.industry),
-      partnership: tallyAll((c) => c.partnership),
+      industry: tallyAll((c) => c.industry, NO_INDUSTRY),
+      partnership: tallyAll((c) => c.partnership, NO_PARTNERSHIP),
     };
   }, [companies]);
 
@@ -133,7 +134,7 @@ export function CompaniesSearch({
       desc: "Filter by Industries",
       plural: "industries",
       emptyHint: "Start typing an industry name…",
-      values: COMPANY_INDUSTRIES,
+      values: INDUSTRY_FILTER_OPTIONS,
       applied: appliedIndustries,
       onChange: onIndustriesChange,
       counts: counts.industry,
@@ -144,7 +145,7 @@ export function CompaniesSearch({
       desc: "Filter by Partnership",
       plural: "partnerships",
       emptyHint: "All partnerships are already applied.",
-      values: COMPANY_PARTNERSHIPS,
+      values: PARTNERSHIP_FILTER_OPTIONS,
       applied: appliedPartnerships,
       onChange: onPartnershipsChange,
       counts: counts.partnership,

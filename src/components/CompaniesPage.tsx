@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getCompanyBilling,
+  matchesTags,
+  NO_INDUSTRY,
+  NO_PARTNERSHIP,
   getCompanyUsers,
   getStatusPill,
   getCanceledOn,
@@ -66,6 +69,7 @@ import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./Date
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
+import { NoteCard } from "./NoteCard";
 import { MultiSelect, RadioCard, CompanyReviewCards, planFor } from "./NewCompanyWizard";
 import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
@@ -257,9 +261,13 @@ type Props = {
   /** Jump to Product Config → B2B Management, where the lists these forms
    *  pick from (cancellation reasons, industries, partnerships) are edited. */
   onNavigateToProductConfig?: () => void;
+  /** A one-line success handed back by a flow that finished here ("Company
+   *  Added"), raised as the page's toast on arrival. */
+  flash?: string | null;
+  onFlashDone?: () => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig }: Props) {
+export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig, flash, onFlashDone }: Props) {
   // The Company whose row was clicked — read back in the side drawer, the way
   // a Task or Certification row opens its own. Held by id so the drawer follows
   // the record through an update.
@@ -303,7 +311,11 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
      alone, so toggling it back on returns it to where you put it. */
   function applyColumns(next: CompanyColumnState) {
     const added = COLS.filter((c) => next[c.key] && !columns[c.key]).map((c) => c.key);
-    if (added.length) setOrder((o) => [...o.filter((k) => !added.includes(k)), ...added]);
+    // The added columns keep their order RELATIVE TO EACH OTHER from the
+    // current order — which the menu's All has just set to the Available
+    // list's — rather than falling back to the definition order.
+    if (added.length)
+      setOrder((o) => [...o.filter((k) => !added.includes(k)), ...o.filter((k) => added.includes(k))]);
     setColumns(next);
   }
 
@@ -323,6 +335,9 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   /* Bumped on every copy so a second click restarts the toast rather than
      being swallowed while the first one is still up. */
   const [copiedAt, setCopiedAt] = useState(0);
+  /* A success raised on this page itself ("Subscription Canceled"), shown with
+     the same toast a flow's `flash` uses on arrival. */
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => setQuery(initialQuery), [initialQuery]);
 
@@ -338,8 +353,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       )) return false;
       if (filters.tiers.length && !(c.tier && filters.tiers.includes(c.tier))) return false;
       // Multi-value: a company matches when ANY of its values is picked.
-      if (filters.industries.length && !c.industry.some((v) => filters.industries.includes(v))) return false;
-      if (filters.partnerships.length && !c.partnership.some((v) => filters.partnerships.includes(v))) return false;
+      if (filters.industries.length && !matchesTags(c.industry, filters.industries, NO_INDUSTRY)) return false;
+      if (filters.partnerships.length && !matchesTags(c.partnership, filters.partnerships, NO_PARTNERSHIP)) return false;
       if (filters.statuses.length && !filters.statuses.includes(getCompanyBilling(c).status)) return false;
       if (filters.signUps.length && !filters.signUps.includes(getCompanyBilling(c).signUp)) return false;
       if (filters.billingCycles.length) {
@@ -397,12 +412,12 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
   }, [query, filters, sort, dateRange, visiblePage, scrollToFirstRow]);
 
   // The landing's summary line — the whole book of companies, not the filtered
-  // rows (the pagination footer counts those), and the Industries they span (a
-  // company can sit in several; each Industry counts once).
+  // rows (the pagination footer counts those), and how many of their
+  // subscriptions are Past Due (the status pill's own definition).
   const catalog = useMemo(
     () => ({
       companies: companies.length,
-      industries: new Set(companies.flatMap((c) => c.industry)).size,
+      pastDue: companies.filter((c) => getCompanyBilling(c).status === "Past Due").length,
     }),
     [companies],
   );
@@ -452,14 +467,13 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                   </header>
                   <h1 className="tasks-title">Companies</h1>
                   {/* The landing's summary line, in the shape of Figma
-                      1356:1864 ("3210 Tasks · Across 230 Certifications"). It
-                      fades as the header collapses. */}
+                      1356:1864 ("3210 Tasks · Across 230 Certifications"). The
+                      Past Due half drops out when nothing is overdue. It fades
+                      as the header collapses. */}
                   <p className="tasks-subtitle clh-sub">
-                    {`${plural(catalog.companies, "Company", "Companies")} · Across ${plural(
-                      catalog.industries,
-                      "Industry",
-                      "Industries",
-                    )}`}
+                    {plural(catalog.companies, "Company", "Companies")}
+                    {catalog.pastDue > 0 &&
+                      ` · ${plural(catalog.pastDue, "Subscription", "Subscriptions")} Past Due`}
                   </p>
 
                   <div className="toolbar">
@@ -625,6 +639,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       {copiedAt > 0 && (
         <CopiedToast key={copiedAt} onDone={() => setCopiedAt(0)} />
       )}
+      {flash && <CopiedToast label={flash} ms={4000} onDone={() => onFlashDone?.()} />}
+      {toast && <CopiedToast label={toast} ms={4000} onDone={() => setToast(null)} />}
 
       {deleteModal && (
         <PrmModal
@@ -644,20 +660,14 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
             setDeleteModal(null);
           }}
         >
-          {/* Both paragraphs are CONTENT, so both are white (Figma 667:884 —
-              only the optional description under the title is grey). The first
-              used to be passed as that description, which greyed out the very
-              sentence explaining why deleting is safe here. */}
-          <div className="prm-stack">
-            <p className="prm-content">
-              <strong>{deleteModal.name}</strong> has not added a payment method, so nothing
-              has been billed. Deleting removes the company and its account holder invitation
-              for good.
-            </p>
-            <p className="prm-content">
-              This cannot be undone. The payment link already shared with them stops working.
-            </p>
-          </div>
+          {/* One paragraph of CONTENT, so white (Figma 667:884 — only the
+              optional description under the title is grey). */}
+          <p className="prm-content">
+            <strong>{deleteModal.name}</strong> has not added a payment method, so nothing
+            has been billed. Deleting removes the company and its account holder invitation
+            for good. This cannot be undone. The payment link already shared with them stops
+            working.
+          </p>
         </PrmModal>
       )}
 
@@ -674,10 +684,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
               cancellationReason: reason || undefined,
             });
             setCancelModal(null);
-            window.alert(
-              `${cancelModal.name}'s subscription is scheduled to cancel at the end of the current billing cycle.` +
-                (reason ? `\n\nReason: ${reason}` : ""),
-            );
+            setToast("Subscription Canceled");
           }}
         />
       )}
@@ -1385,16 +1392,16 @@ function OutstandingBalanceCard({ company }: { company: Company }) {
     maximumFractionDigits: 2,
   })}`;
 
+  // Figma 1031:1036 — the shared NoteCard in its red tone, the alert glyph in
+  // the muted grey.
   return (
-    <div className="co-balance">
-      <span className="co-balance-icon"><AlertCircleFilledIcon /></span>
-      <div className="co-balance-text">
-        <p className="co-balance-title">Outstanding Balance: {amount}</p>
-        <p className="co-balance-sub">
-          The customer will be billed at the end of the period.
-        </p>
-      </div>
-    </div>
+    <NoteCard
+      tone="danger"
+      mutedIcon
+      icon={<AlertCircleFilledIcon />}
+      title={`Outstanding Balance: ${amount}`}
+      body="The customer will be billed at the end of the period."
+    />
   );
 }
 function CancelSubscriptionModal({
@@ -1413,11 +1420,10 @@ function CancelSubscriptionModal({
      they were picked. */
   const [reasons, setReasons] = useState<string[]>([]);
   const reasonText = reasons.join(", ");
-  const [step, setStep] = useState<"form" | "confirm">("form");
 
   // Seats ADDED this cycle still bill (prorated) on the upcoming invoice; a
-  // company that shed seats has nothing pending. Same source as the card on
-  // step one, so the two screens cannot disagree about what is owed.
+  // company that shed seats has nothing pending. Same source as the balance
+  // card, so the form and its confirm cannot disagree about what is owed.
   const balance = getOutstandingBalance(company);
   /* The date this modal PRINTS is the date it stores on confirm. The raw
      nextBillingDate carries no year ("Feb 1"), which read as ambiguous beside
@@ -1426,15 +1432,31 @@ function CancelSubscriptionModal({
   const pendingSeats = balance.pendingSeats;
   const pendingCharge = balance.pendingSeatCharge;
 
-  return step === "form" ? (
+  return (
     <PrmModal
       title="Cancel Subscription"
-      cancelLabel="Keep subscription"
+      description={company.name}
+      cancelLabel="Back"
       confirmLabel="Continue"
       onCancel={onClose}
-      onConfirm={() => setStep("confirm")}
+      onConfirm={() => onConfirm(reasonText)}
+      /* Continue asks once more in the app's standard stacked confirm, the way
+         every Delete / Archive / Revoke does — no separate summary step. */
+      doubleConfirmLabel="Yes, Cancel Subscription"
+      doubleConfirm={
+        <>
+          The subscription ends with the current billing cycle ({effectiveDate}) and{" "}
+          {company.name} is not billed again after that date
+          {pendingSeats > 0
+            ? `, apart from ~${sym}${pendingCharge.toLocaleString()} in pending seat charges on the final invoice`
+            : ""}
+          .
+        </>
+      }
     >
-      <div className="prm-stack">
+      {/* 24px between the sentence, the reason field and the balance card —
+          tighter than the shared 32px (user, 2026-10-02). */}
+      <div className="prm-stack prm-stack--24">
         {/* An Active account keeps working to the cycle end; a Past Due one is
             already inside its grace period and can lose access sooner, so it must
             not be told it keeps "full access" until then. */}
@@ -1479,42 +1501,6 @@ function CancelSubscriptionModal({
         </div>
 
         <OutstandingBalanceCard company={company} />
-      </div>
-    </PrmModal>
-  ) : (
-    <PrmModal
-      title={`Cancel ${company.name}'s subscription?`}
-      cancelLabel="Go back"
-      onCancelButton={() => setStep("form")}
-      confirmLabel="Cancel subscription"
-      onCancel={onClose}
-      onConfirm={() => onConfirm(reasonText)}
-    >
-      <div className="prm-stack">
-        <p className="prm-content">
-          This schedules cancellation for the end of the current billing cycle
-          ({effectiveDate}). The status changes to Canceled and the company is not
-          billed again after that date.
-        </p>
-
-        <div className="co-cancel-summary">
-          <div className="co-cancel-summary-row">
-            <span className="co-cancel-summary-label">Reason</span>
-            {/* The reason is optional, so this row can be empty — it takes the
-                same em dash every other blank value in the app uses. */}
-            <span>{reasonText || "—"}</span>
-          </div>
-          <div className="co-cancel-summary-row">
-            <span className="co-cancel-summary-label">Effective</span>
-            <span>End of cycle · {effectiveDate}</span>
-          </div>
-          {pendingSeats > 0 && (
-            <div className="co-cancel-summary-row">
-              <span className="co-cancel-summary-label">Final invoice</span>
-              <span>Includes ~{sym}{pendingCharge.toLocaleString()} in pending seat charges</span>
-            </div>
-          )}
-        </div>
       </div>
     </PrmModal>
   );

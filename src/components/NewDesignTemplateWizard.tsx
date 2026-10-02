@@ -148,8 +148,8 @@ export function NewDesignTemplateWizard(props: Props) {
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-              <h1 className="wizard-title">{STEPS[step].label}</h1>
-              <p className="wizard-desc">{STEPS[step].desc}</p>
+              <h1 className="tasks-title">{STEPS[step].label}</h1>
+              <p className="tasks-subtitle wizard-desc">{STEPS[step].desc}</p>
 
               {step === 0 && <DetailsStep data={data} update={update} nameMissing={nameMissing} bgMissing={bgMissing} touch={touch} />}
               {step === 1 && <PositioningStep />}

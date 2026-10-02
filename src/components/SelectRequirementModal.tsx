@@ -1,20 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
-import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
-import { certifications, type Certification } from "../data/certifications";
+import { tasks as taskLibrary, subscriptionLabel, type Task } from "../data/tasks";
+import { certifications, CERT_VISIBILITIES, type Certification } from "../data/certifications";
+import { AUDIENCE_ALL_USERS, SUBSCRIPTION_OPTIONS, VISIBILITIES, audienceOf } from "../data/filters";
 import { TableCols } from "./TableCols";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
-import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import {
+  CertificationsPill,
+  PillTrigger,
+  SectionedMultiSelect,
+  TaskTypePill,
+  summarize,
+} from "./Filters";
+import {
+  CareerStagePill,
+  IndustryPill,
+  TypePill,
+  certMatches,
+  type CertFilterState,
+} from "./CertFilters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
   RowChevronIcon,
-  SearchIcon,
   SortIcon,
   PagePrevIcon,
   PageNextIcon,
 } from "./icons";
-import { SearchTrailing } from "./SearchPanelParts";
+import { TasksSearch } from "./TasksSearch";
+import { CertificationsSearch } from "./CertificationsSearch";
 
 /* Add Requirement — the Certification wizard's Completion Criteria picker.
  *
@@ -37,8 +51,6 @@ import { SearchTrailing } from "./SearchPanelParts";
 
 const PAGE_SIZE = 50;
 
-const TASK_TYPES: TaskType[] = ["Hands-On Task", "Quiz", "xAPI", "Resource"];
-
 /** What the modal hands back — the source rows. The wizard turns these into
  *  its own Completion Items, so the picker stays free of the wizard's model. */
 export type RequirementPick =
@@ -47,13 +59,43 @@ export type RequirementPick =
 
 type Tab = "task" | "cert";
 
-type TaskSortKey = "name" | "type" | "certs";
-type CertSortKey = "name" | "industry" | "careerStage" | "tasks";
+/* Columns, filters and their names are the Tasks and Certifications tables'
+   own (TasksPage / CertificationsPage, Filters / CertFilters): the same pills,
+   options and match rules, and both tabs open sorted by Date Modified, newest
+   first — the tables' default. */
+type TaskSortKey = "name" | "type" | "certs" | "dateModified";
+type CertSortKey = "name" | "industry" | "careerStage" | "dateModified";
 type SortDir = "asc" | "desc";
+
+type TaskFilterState = {
+  types: string[];
+  certifications: string[];
+  visibilities: string[];
+  /** "Requires Subscription?" — SUBSCRIPTION_OPTIONS / `subscriptionLabel`. */
+  subscription: string[];
+};
+const NO_TASK_FILTERS: TaskFilterState = { types: [], certifications: [], visibilities: [], subscription: [] };
+const NO_CERT_FILTERS: CertFilterState = {
+  industries: [],
+  careerStages: [],
+  types: [],
+  creators: [],
+  visibilities: [],
+  tags: [],
+  setup: [],
+};
 
 /** Only SkillCat's own content can gate a Certification — the same rule the
  *  Select Tasks node states in its subtitle. */
-const eligible = (t: Task) => t.createdBy === "SkillCat";
+const bySkillCat = (r: { createdBy: string }) => r.createdBy === "SkillCat";
+/** …and, where every learner must be able to reach it (a Feedback Form's
+ *  trigger), no Audience/B2B tag — the All Users audience. */
+const forAllUsers = (r: { createdBy: string; tags?: string[] }) =>
+  bySkillCat(r) && audienceOf(r.tags) === AUDIENCE_ALL_USERS;
+
+const dateOf = (d?: string) => Date.parse(d ?? "") || 0;
+/** The Tasks table's Visibility value. */
+const taskVisibility = (t: Task) => (t.hidden ? "Hidden" : "Visible");
 
 function compareTask(a: Task, b: Task, key: TaskSortKey): number {
   switch (key) {
@@ -63,6 +105,8 @@ function compareTask(a: Task, b: Task, key: TaskSortKey): number {
       return a.type.localeCompare(b.type);
     case "certs":
       return a.usedIn.join(", ").localeCompare(b.usedIn.join(", "));
+    case "dateModified":
+      return dateOf(a.dateModified) - dateOf(b.dateModified);
   }
 }
 
@@ -74,8 +118,8 @@ function compareCert(a: Certification, b: Certification, key: CertSortKey): numb
       return a.industry.localeCompare(b.industry);
     case "careerStage":
       return (a.careerStage ?? "").localeCompare(b.careerStage ?? "");
-    case "tasks":
-      return a.tasks - b.tasks;
+    case "dateModified":
+      return dateOf(a.dateModified) - dateOf(b.dateModified);
   }
 }
 
@@ -88,6 +132,8 @@ export function SelectRequirementModal({
   lockedTip = "Already in this Condition Set",
   lockedFlag,
   allCreators,
+  allUsersOnly,
+  certFirst,
   onPreviewTask,
   onCancel,
   onConfirm,
@@ -111,32 +157,41 @@ export function SelectRequirementModal({
   /** List every library Task, company-created ones included, instead of only
    *  SkillCat's (the Certification builder's Add Existing Tasks). */
   allCreators?: boolean;
+  /** List only SkillCat-made, All Users (no Audience/B2B tag) Tasks AND
+   *  Certifications — what a Feedback Form may trigger on. */
+  allUsersOnly?: boolean;
+  /** Certifications tab first (and open on it) — Add Triggers. */
+  certFirst?: boolean;
   /** Adds a row-end "Preview ›" to every Task row — the Select Questions
    *  affordance: a resting chevron that becomes a labelled bar on hover. */
   onPreviewTask?: (task: Task) => void;
   onCancel: () => void;
   onConfirm: (picks: RequirementPick[]) => void;
 }) {
-  const [tab, setTab] = useState<Tab>(only ?? "task");
+  const [tab, setTab] = useState<Tab>(only ?? (certFirst ? "cert" : "task"));
   const [query, setQuery] = useState("");
-  const [types, setTypes] = useState<string[]>([]);
-  const [inds, setInds] = useState<string[]>([]);
+  const [taskFilters, setTaskFilters] = useState<TaskFilterState>(NO_TASK_FILTERS);
+  const [certFilters, setCertFilters] = useState<CertFilterState>(NO_CERT_FILTERS);
   const [pickedTasks, setPickedTasks] = useState<string[]>([]);
   const [pickedCerts, setPickedCerts] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [taskSort, setTaskSort] = useState<{ key: TaskSortKey; dir: SortDir }>({
-    key: "name",
-    dir: "asc",
+    key: "dateModified",
+    dir: "desc",
   });
   const [certSort, setCertSort] = useState<{ key: CertSortKey; dir: SortDir }>({
-    key: "name",
-    dir: "asc",
+    key: "dateModified",
+    dir: "desc",
   });
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      /* An open search-suggestion panel takes the first Escape (the page
+         search closes it itself); only the next one closes the modal. */
+      if (document.querySelector(".usearch-panel")) return;
+      onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -167,35 +222,43 @@ export function SelectRequirementModal({
   }
 
   const taskPool = useMemo(
-    () => (allCreators ? taskLibrary : taskLibrary.filter(eligible)),
-    [allCreators],
+    () =>
+      allUsersOnly
+        ? taskLibrary.filter(forAllUsers)
+        : allCreators
+          ? taskLibrary
+          : taskLibrary.filter(bySkillCat),
+    [allCreators, allUsersOnly],
   );
-  const allIndustries = useMemo(
-    () => Array.from(new Set(certifications.map((c) => c.industry))).sort(),
-    [],
+  const certPool = useMemo(
+    () => (allUsersOnly ? certifications.filter(forAllUsers) : certifications),
+    [allUsersOnly],
   );
 
   const q = query.trim().toLowerCase();
 
+  // The Tasks table's match rule for these four filters (TasksPage).
   const taskRows = useMemo(() => {
+    const f = taskFilters;
     const rows = taskPool.filter((t) => {
-      if (q && !(t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q))) return false;
-      if (types.length && !types.includes(t.type)) return false;
+      if (q && !(t.id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q)))
+        return false;
+      if (f.types.length && !f.types.includes(t.type)) return false;
+      if (f.certifications.length && !t.usedIn.some((c) => f.certifications.includes(c))) return false;
+      if (f.visibilities.length && !f.visibilities.includes(taskVisibility(t))) return false;
+      if (f.subscription.length && !f.subscription.includes(subscriptionLabel(t))) return false;
       return true;
     });
     rows.sort((a, b) => compareTask(a, b, taskSort.key));
     return taskSort.dir === "desc" ? rows.reverse() : rows;
-  }, [taskPool, q, types, taskSort]);
+  }, [taskPool, q, taskFilters, taskSort]);
 
+  // The Certifications table's own rule, search included (`certMatches`).
   const certRows = useMemo(() => {
-    const rows = certifications.filter((c) => {
-      if (q && !(c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))) return false;
-      if (inds.length && !inds.includes(c.industry)) return false;
-      return true;
-    });
+    const rows = certPool.filter((c) => certMatches(c, query, certFilters));
     rows.sort((a, b) => compareCert(a, b, certSort.key));
     return certSort.dir === "desc" ? rows.reverse() : rows;
-  }, [q, inds, certSort]);
+  }, [certPool, query, certFilters, certSort]);
 
   const total = tab === "task" ? taskRows.length : certRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -225,17 +288,19 @@ export function SelectRequirementModal({
   }
 
   /** Any filter change can shrink the list under the current page. */
-  function resetPage<T>(set: (v: T) => void) {
-    return (v: T) => {
-      set(v);
-      setPage(1);
-    };
+  function setTaskF(patch: Partial<TaskFilterState>) {
+    setTaskFilters((f) => ({ ...f, ...patch }));
+    setPage(1);
+  }
+  function setCertF(patch: Partial<CertFilterState>) {
+    setCertFilters((f) => ({ ...f, ...patch }));
+    setPage(1);
   }
 
   function confirm() {
     const picks: RequirementPick[] = [
       ...taskPool.filter((t) => pickedTasks.includes(t.id)).map((task) => ({ kind: "task" as const, task })),
-      ...certifications
+      ...certPool
         .filter((c) => pickedCerts.includes(c.id))
         .map((cert) => ({ kind: "cert" as const, cert })),
     ];
@@ -261,96 +326,109 @@ export function SelectRequirementModal({
             single-kind modal has nothing to switch between, so it has none. */}
         {!only && (
         <div className="tabbar srq-tabs">
-          <button
-            className={`tab ${tab === "task" ? "is-active" : ""}`}
-            onClick={() => switchTab("task")}
-          >
-            Tasks
-          </button>
-          <button
-            className={`tab ${tab === "cert" ? "is-active" : ""}`}
-            onClick={() => switchTab("cert")}
-          >
-            Certifications
-          </button>
+          {(certFirst ? (["cert", "task"] as const) : (["task", "cert"] as const)).map((k) => (
+            <button
+              key={k}
+              className={`tab ${tab === k ? "is-active" : ""}`}
+              onClick={() => switchTab(k)}
+            >
+              {k === "task" ? "Tasks" : "Certifications"}
+            </button>
+          ))}
         </div>
         )}
 
         <div className="stm-toolbar">
-          <div className="search-wrap stm-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder={tab === "task" ? "Search Tasks..." : "Search Certifications..."}
-              autoFocus
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchTrailing
-              active={!!query}
-              onClear={() => {
-                setQuery("");
-                setPage(1);
-              }}
-            />
+          {/* The pages' own search bars (TasksSearch / CertificationsSearch —
+              the Deep Link modal reuses the Certifications one the same way):
+              Enter applies the query, and a picked Certification / Type /
+              Industry / Career Stage suggestion lands on the pill below. */}
+          <div className="toolbar">
+            {tab === "task" ? (
+              <TasksSearch
+                tasks={taskPool}
+                certifications={taskFilters.certifications}
+                onCertificationsChange={(v) => setTaskF({ certifications: v })}
+                types={taskFilters.types}
+                onTypesChange={(v) => setTaskF({ types: v })}
+                query={query}
+                onCommit={(v) => {
+                  setQuery(v);
+                  setPage(1);
+                }}
+              />
+            ) : (
+              <CertificationsSearch
+                certifications={certPool}
+                industries={certFilters.industries}
+                onIndustriesChange={(v) => setCertF({ industries: v })}
+                careerStages={certFilters.careerStages}
+                onCareerStagesChange={(v) => setCertF({ careerStages: v })}
+                types={certFilters.types}
+                onTypesChange={(v) => setCertF({ types: v })}
+                query={query}
+                onCommit={(v) => {
+                  setQuery(v);
+                  setPage(1);
+                }}
+              />
+            )}
           </div>
 
           <div className="filters stm-filters">
             {tab === "task" ? (
-              <Dropdown
-                width={220}
-                trigger={({ open, toggle: t }) => (
-                  <PillTrigger
-                    label="Task Type"
-                    tip={FILTER_TIPS.taskPicker.type}
-                    value={summarize(types, TASK_TYPES)}
-                    open={open}
-                    toggle={t}
-                    onClear={() => resetPage(setTypes)([])}
-                  />
-                )}
-              >
-                {({ close }) => (
-                  <SectionedMultiSelect
-                    sections={[{ items: [...TASK_TYPES] }]}
-                    value={types}
-                    onApply={(v) => {
-                      resetPage(setTypes)(v);
-                      close();
-                    }}
-                  />
-                )}
-              </Dropdown>
+              <>
+                <TaskTypePill
+                  value={taskFilters.types}
+                  onApply={(v) => setTaskF({ types: v })}
+                  tip={FILTER_TIPS.taskPicker.type}
+                />
+                <CertificationsPill
+                  value={taskFilters.certifications}
+                  onApply={(v) => setTaskF({ certifications: v })}
+                  tip={FILTER_TIPS.taskPicker.certifications}
+                />
+                <ListPill
+                  label="Visibility"
+                  tip={FILTER_TIPS.taskPicker.visibility}
+                  options={VISIBILITIES}
+                  value={taskFilters.visibilities}
+                  onApply={(v) => setTaskF({ visibilities: v })}
+                />
+                <ListPill
+                  label="Requires Subscription?"
+                  tip={FILTER_TIPS.taskPicker.subscription}
+                  options={SUBSCRIPTION_OPTIONS}
+                  value={taskFilters.subscription}
+                  onApply={(v) => setTaskF({ subscription: v })}
+                  width={300}
+                />
+              </>
             ) : (
-              <Dropdown
-                width={300}
-                trigger={({ open, toggle: t }) => (
-                  <PillTrigger
-                    label="Industries"
-                    tip={FILTER_TIPS.taskPicker.industry}
-                    value={summarize(inds, allIndustries)}
-                    open={open}
-                    toggle={t}
-                    onClear={() => resetPage(setInds)([])}
-                  />
-                )}
-              >
-                {({ close }) => (
-                  <SectionedMultiSelect
-                    sections={[{ items: allIndustries }]}
-                    value={inds}
-                    onApply={(v) => {
-                      resetPage(setInds)(v);
-                      close();
-                    }}
-                  />
-                )}
-              </Dropdown>
+              <>
+                <IndustryPill
+                  value={certFilters.industries}
+                  onApply={(v) => setCertF({ industries: v })}
+                  tip={FILTER_TIPS.certPicker.industry}
+                />
+                <CareerStagePill
+                  value={certFilters.careerStages}
+                  onApply={(v) => setCertF({ careerStages: v })}
+                  tip={FILTER_TIPS.certPicker.careerStage}
+                />
+                <TypePill
+                  value={certFilters.types}
+                  onApply={(v) => setCertF({ types: v })}
+                  tip={FILTER_TIPS.certPicker.type}
+                />
+                <ListPill
+                  label="Visibility"
+                  tip={FILTER_TIPS.certPicker.visibility}
+                  options={CERT_VISIBILITIES}
+                  value={certFilters.visibilities}
+                  onApply={(v) => setCertF({ visibilities: v })}
+                />
+              </>
             )}
           </div>
         </div>
@@ -378,8 +456,9 @@ export function SelectRequirementModal({
                     <tr>
                       <th className="stm-col-check no-sort" />
                       <Th label="Task Name" cls="stm-col-name" active={taskSort.key === "name"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "name")} />
-                      <Th label="Task Type" cls="stm-col-type" active={taskSort.key === "type"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "type")} />
+                      <Th label="Type" cls="stm-col-type" active={taskSort.key === "type"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "type")} />
                       <Th label="Certifications" cls="stm-col-certs" active={taskSort.key === "certs"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "certs")} />
+                      <Th label="Date Modified" cls="stm-col-edited" active={taskSort.key === "dateModified"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "dateModified")} />
                       {preview && <th className="col-actions no-sort" />}
                     </tr>
                   </thead>
@@ -391,7 +470,7 @@ export function SelectRequirementModal({
                     <tbody>
                       {pagedTasks.length === 0 ? (
                         <tr className="stm-empty-row">
-                          <td colSpan={preview ? 5 : 4}>No Tasks match your search and filters.</td>
+                          <td colSpan={preview ? 6 : 5}>No Tasks match your search and filters.</td>
                         </tr>
                       ) : (
                         pagedTasks.map((t) => {
@@ -404,20 +483,24 @@ export function SelectRequirementModal({
                               data-tip={locked ? tipFor(t.name) : undefined}
                               onClick={() => !locked && toggleTask(t.id)}
                             >
+                              {/* A locked row has no checkbox at all — a
+                                  filled one read as "already picked". Its
+                                  flag and tip say why it can't be added. */}
                               <td className="stm-col-check">
-                                <button
-                                  className={`checkbox ${on ? "checked" : ""}`}
-                                  aria-label={on ? "Deselect" : "Select"}
-                                  aria-pressed={on}
-                                  disabled={locked}
-                                  tabIndex={-1}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!locked) toggleTask(t.id);
-                                  }}
-                                >
-                                  {on && <CheckIcon />}
-                                </button>
+                                {!locked && (
+                                  <button
+                                    className={`checkbox ${on ? "checked" : ""}`}
+                                    aria-label={on ? "Deselect" : "Select"}
+                                    aria-pressed={on}
+                                    tabIndex={-1}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleTask(t.id);
+                                    }}
+                                  >
+                                    {on && <CheckIcon />}
+                                  </button>
+                                )}
                               </td>
                               {/* `col-name` is the shared Name-column class —
                                   without it the app-wide "mute every non-Name
@@ -427,6 +510,7 @@ export function SelectRequirementModal({
                               <td className="stm-col-certs">
                                 <MultiCell values={t.usedIn} />
                               </td>
+                              <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
                               {/* Row-end Preview, the same two layers as
                                   Select Questions': a resting chevron that
                                   hides on hover and a labelled bar in its
@@ -473,10 +557,10 @@ export function SelectRequirementModal({
                   <thead>
                     <tr>
                       <th className="stm-col-check no-sort" />
-                      <Th label="Certification" cls="stm-col-name" active={certSort.key === "name"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "name")} />
+                      <Th label="Name" cls="stm-col-name" active={certSort.key === "name"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "name")} />
                       <Th label="Industries" cls="stm-col-certs" active={certSort.key === "industry"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "industry")} />
                       <Th label="Career Stage" cls="stm-col-type" active={certSort.key === "careerStage"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "careerStage")} />
-                      <Th label="Tasks" cls="stm-col-edited" active={certSort.key === "tasks"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "tasks")} />
+                      <Th label="Date Modified" cls="stm-col-edited" active={certSort.key === "dateModified"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "dateModified")} />
                     </tr>
                   </thead>
                 </table>
@@ -500,25 +584,29 @@ export function SelectRequirementModal({
                               data-tip={locked ? tipFor(c.name) : undefined}
                               onClick={() => !locked && toggleCert(c.id)}
                             >
+                              {/* A locked row has no checkbox at all — a
+                                  filled one read as "already picked". Its
+                                  flag and tip say why it can't be added. */}
                               <td className="stm-col-check">
-                                <button
-                                  className={`checkbox ${on ? "checked" : ""}`}
-                                  aria-label={on ? "Deselect" : "Select"}
-                                  aria-pressed={on}
-                                  disabled={locked}
-                                  tabIndex={-1}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!locked) toggleCert(c.id);
-                                  }}
-                                >
-                                  {on && <CheckIcon />}
-                                </button>
+                                {!locked && (
+                                  <button
+                                    className={`checkbox ${on ? "checked" : ""}`}
+                                    aria-label={on ? "Deselect" : "Select"}
+                                    aria-pressed={on}
+                                    tabIndex={-1}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleCert(c.id);
+                                    }}
+                                  >
+                                    {on && <CheckIcon />}
+                                  </button>
+                                )}
                               </td>
                               <td className="stm-col-name col-name">{nameCell(c.name, locked)}</td>
                               <td className="stm-col-certs">{c.industry}</td>
                               <td className="stm-col-type">{c.careerStage ?? "—"}</td>
-                              <td className="stm-col-edited">{c.tasks}</td>
+                              <td className="stm-col-edited">{c.dateModified ?? "—"}</td>
                             </tr>
                           );
                         })
@@ -578,8 +666,10 @@ function toggleSort<K extends string>(
  * check gutter and the Preview column stay fixed. */
 const CHECK_W = 44;
 const PREVIEW_W = 104;
-const TASK_COLS = [340, 160, 220];
-const CERT_COLS = [340, 220, 160, 100];
+/* Name gets the widest base (480) so a locked row's "Mapped to <form>" /
+   "In <Course › Lesson>" flag has room before it ellipsizes. */
+const TASK_COLS = [480, 160, 220, 130];
+const CERT_COLS = [480, 220, 160, 130];
 const sum = (ws: number[]) => ws.reduce((n, w) => n + w, 0);
 
 function TaskColGroup({ preview }: { preview?: boolean }) {
@@ -622,5 +712,51 @@ function Th({
         <SortIcon active={active} dir={active ? dir : undefined} />
       </span>
     </th>
+  );
+}
+
+/* A plain fixed-option filter pill (Visibility, Requires Subscription?) — the
+   tables keep these under More Filters; here each is a pill of its own. Same
+   Dropdown + PillTrigger + checklist body as every filter pill. */
+function ListPill({
+  label,
+  tip,
+  options,
+  value,
+  onApply,
+  width = 220,
+}: {
+  label: string;
+  tip: string;
+  options: readonly string[];
+  value: string[];
+  onApply: (v: string[]) => void;
+  width?: number;
+}) {
+  return (
+    <Dropdown
+      width={width}
+      trigger={({ open, toggle }) => (
+        <PillTrigger
+          label={label}
+          tip={tip}
+          value={summarize(value, [...options])}
+          open={open}
+          toggle={toggle}
+          onClear={() => onApply([])}
+        />
+      )}
+    >
+      {({ close }) => (
+        <SectionedMultiSelect
+          sections={[{ items: [...options] }]}
+          value={value}
+          onApply={(v) => {
+            onApply(v);
+            close();
+          }}
+        />
+      )}
+    </Dropdown>
   );
 }

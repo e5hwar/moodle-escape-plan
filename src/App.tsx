@@ -135,7 +135,17 @@ type View =
   /* `historyForId` opens the bank straight on one question's Version History
      page — how a version opened in the editor gets back where it came from. */
   | { name: "question-bank"; historyForId?: string }
-  | { name: "new-question"; categoryPath?: string[]; initialType?: QuestionType; forFormId?: string }
+  | {
+      name: "new-question";
+      categoryPath?: string[];
+      initialType?: QuestionType;
+      forFormId?: string;
+      /** Launched from a form still being CREATED: the crumb names it "New
+       *  Feedback Form" and the way back reopens it in create mode (with the
+       *  Certification it was started from, if any). */
+      forFormCreating?: boolean;
+      forFormCertId?: string;
+    }
   /* `atVersion` means the editor was opened from Version History, on that
      version — so Cancel goes back there. An OLDER version than the question's
      current one also locks the editor: it loads that version's content and
@@ -1069,7 +1079,12 @@ function AdminApp() {
           onCreate={(q) => handleQuestionCreated(q, view.forFormId)}
           onClose={() =>
             view.forFormId
-              ? setView({ name: "feedback-detail", formId: view.forFormId })
+              ? setView({
+                  name: "feedback-detail",
+                  formId: view.forFormId,
+                  creating: view.forFormCreating,
+                  forCertId: view.forFormCertId,
+                })
               : setView({ name: "question-bank" })
           }
           crumbs={
@@ -1078,8 +1093,14 @@ function AdminApp() {
                   { label: "Certifications", onClick: () => navigate("certs") },
                   { label: "Feedback Forms", onClick: () => setView({ name: "feedback" }) },
                   {
-                    label: "Edit Feedback Form",
-                    onClick: () => setView({ name: "feedback-detail", formId: view.forFormId! }),
+                    label: view.forFormCreating ? "New Feedback Form" : "Edit Feedback Form",
+                    onClick: () =>
+                      setView({
+                        name: "feedback-detail",
+                        formId: view.forFormId!,
+                        creating: view.forFormCreating,
+                        forCertId: view.forFormCertId,
+                      }),
                   },
                 ]
               : [
@@ -1154,6 +1175,8 @@ function AdminApp() {
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
           onDeleteCompany={deleteCompany}
           initialQuery={view.query}
           onNewCompany={() => setView({ name: "new-company" })}
@@ -1167,6 +1190,10 @@ function AdminApp() {
         <NewCompanyWizard
           onClose={() => setView({ name: "companies" })}
           onCreate={addCompany}
+          onCreated={(message) => {
+            setFlash(message);
+            setView({ name: "companies" });
+          }}
           onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
       ) : view.name === "edit-company" ? (
@@ -1175,6 +1202,10 @@ function AdminApp() {
           detailsOnly
           onClose={() => setView({ name: "companies" })}
           onSave={updateCompany}
+          onCreated={(message) => {
+            setFlash(message);
+            setView({ name: "companies" });
+          }}
           onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
       ) : view.name === "manage-subscription" ? (
@@ -1183,6 +1214,10 @@ function AdminApp() {
           subscriptionOnly
           onClose={() => setView({ name: "companies" })}
           onSave={updateCompany}
+          onCreated={(message) => {
+            setFlash(message);
+            setView({ name: "companies" });
+          }}
         />
       ) : view.name === "users" ? (
         <UsersPage
@@ -1302,10 +1337,13 @@ function AdminApp() {
           }}
           onUpdate={upsertForm}
           onCreateQuestion={() =>
+            // No category pre-picked: the admin chooses where it lives (user,
+            // 2026-10-03 — was "Learner Feedback").
             setView({
               name: "new-question",
-              categoryPath: ["Learner Feedback"],
               forFormId: activeForm.id,
+              forFormCreating: view.creating,
+              forFormCertId: view.forCertId,
             })
           }
         />

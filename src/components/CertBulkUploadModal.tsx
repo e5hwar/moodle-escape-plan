@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckBoldIcon, DownloadIcon, UploadTrayIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { PrmModal } from "./PrmModal";
 import {
   analyzeCertImport,
@@ -235,16 +236,12 @@ export function CertBulkUploadModal({
       onCancel={onClose}
       onConfirm={() => onImport(report)}
     >
-      <div className="note-card note-card--ok">
-        <span className="note-card-icon"><CheckBoldIcon /></span>
-        <div className="note-card-text">
-          <p className="note-card-title">All {plural(n, "Row")} Passed</p>
-          <p className="note-card-body">
-            Nothing has been imported yet. Review what will be added, then continue into
-            the Certification wizard.
-          </p>
-        </div>
-      </div>
+      <NoteCard
+        tone="ok"
+        icon={<CheckBoldIcon />}
+        title={`All ${plural(n, "Row")} Passed`}
+        body="Nothing has been imported yet. Review what will be added, then continue into the Certification wizard."
+      />
 
       <div className="qbu-sum">
         <div className="qbu-sum-row">

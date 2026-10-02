@@ -25,6 +25,37 @@ const TOKEN_LABELS: Record<Token["kind"], string> = {
   form: FORM_PREFIX,
 };
 
+const SUGGEST_ROW: Record<SuggestKind, React.ReactNode> = {
+  category: (
+    <>
+      <span className="usearch-chip">Category:</span>
+      <span className="usearch-row-ex">Category: EPA 608 &gt; Universal</span>
+      <span className="usearch-row-desc">Filter by Category or Subcategory</span>
+    </>
+  ),
+  type: (
+    <>
+      <span className="usearch-chip">Type:</span>
+      <span className="usearch-row-ex">Type: Multiple Choice</span>
+      <span className="usearch-row-desc">Filter by Question Type</span>
+    </>
+  ),
+  quiz: (
+    <>
+      <span className="usearch-chip">Quizzes:</span>
+      <span className="usearch-row-ex">Quizzes: EPA Universal Exam</span>
+      <span className="usearch-row-desc">Filter by the Quiz using the Question</span>
+    </>
+  ),
+  form: (
+    <>
+      <span className="usearch-chip">Feedback Form:</span>
+      <span className="usearch-row-ex">Feedback Form: Post-Cert Satisfaction</span>
+      <span className="usearch-row-desc">Filter by the Feedback Form using the Question</span>
+    </>
+  ),
+};
+
 type Opt =
   | { kind: "category-filter" }
   | { kind: "type-filter" }
@@ -33,8 +64,10 @@ type Opt =
   | { kind: "search" }
   | { kind: "pick"; token: Token };
 
-// The four "Suggested filters" rows, in render order.
-const FILTER_ROWS = 4;
+/* The "Suggested filters" rows, in render order. Category and Type are always
+   offered; Quizzes / Feedback Form only when the caller wires that filter (a
+   picker that has no such pill must not apply one it can't show). */
+type SuggestKind = "category" | "type" | "quiz" | "form";
 
 export function QuestionSearch({
   categoryOptions,
@@ -47,6 +80,7 @@ export function QuestionSearch({
   onQuizzesChange,
   forms,
   onFormsChange,
+  typeOptions,
   query,
   onCommit,
   placeholder,
@@ -60,14 +94,28 @@ export function QuestionSearch({
   onSelectionChange: (next: string[]) => void;
   types: string[];
   onTypesChange: (next: string[]) => void;
-  quizzes: string[];
-  onQuizzesChange: (next: string[]) => void;
-  forms: string[];
-  onFormsChange: (next: string[]) => void;
+  /** Optional pair: without `onQuizzesChange` there is no Quizzes: filter. */
+  quizzes?: string[];
+  onQuizzesChange?: (next: string[]) => void;
+  /** Optional pair: without `onFormsChange` there is no Feedback Form: filter. */
+  forms?: string[];
+  onFormsChange?: (next: string[]) => void;
+  /** The Type: list — defaults to every Bank type (a Quiz picker passes the
+   *  graded ones only). */
+  typeOptions?: readonly string[];
   query: string;
   /** Applied only on Enter — the table never filters as you type. */
   onCommit: (q: string) => void;
 }) {
+  const quizList = quizzes ?? [];
+  const formList = forms ?? [];
+  const suggest: SuggestKind[] = [
+    "category",
+    "type",
+    ...(onQuizzesChange ? (["quiz"] as const) : []),
+    ...(onFormsChange ? (["form"] as const) : []),
+  ];
+  const FILTER_ROWS = suggest.length;
   const [text, setText] = useState(query);
   // Pending tokens — one per kind, in the order they were picked. Nothing here
   // reaches the table until Enter.
@@ -106,8 +154,8 @@ export function QuestionSearch({
   // Prefix detection (case-insensitive) puts the box into a filter-selection mode.
   const categoryMatch = text.match(/^\s*categor(?:y|ies):\s*(.*)$/i);
   const typeMatch = text.match(/^\s*type:\s*(.*)$/i);
-  const quizMatch = text.match(/^\s*quiz(?:zes)?:\s*(.*)$/i);
-  const formMatch = text.match(/^\s*(?:feedback\s*)?forms?:\s*(.*)$/i);
+  const quizMatch = onQuizzesChange ? text.match(/^\s*quiz(?:zes)?:\s*(.*)$/i) : null;
+  const formMatch = onFormsChange ? text.match(/^\s*(?:feedback\s*)?forms?:\s*(.*)$/i) : null;
 
   const inCategoryMode = categoryMatch != null;
   const inTypeMode = !inCategoryMode && typeMatch != null;
@@ -135,7 +183,7 @@ export function QuestionSearch({
   const typeResults = useMemo(() => {
     const q = typeQuery.trim().toLowerCase();
     const taken = drafted("type");
-    return QUESTION_TYPE_OPTIONS.filter(
+    return (typeOptions ?? QUESTION_TYPE_OPTIONS).filter(
       (t) =>
         t !== taken &&
         !types.includes(t) &&
@@ -148,7 +196,7 @@ export function QuestionSearch({
     const q = quizQuery.trim().toLowerCase();
     const taken = drafted("quiz");
     return [...quizCounts.keys()]
-      .filter((name) => name !== taken && !quizzes.includes(name) && name.toLowerCase().includes(q))
+      .filter((name) => name !== taken && !quizList.includes(name) && name.toLowerCase().includes(q))
       .sort((a, b) => a.localeCompare(b))
       .slice(0, MAX_RESULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +206,7 @@ export function QuestionSearch({
     const q = formQuery.trim().toLowerCase();
     const taken = drafted("form");
     return [...formCounts.keys()]
-      .filter((name) => name !== taken && !forms.includes(name) && name.toLowerCase().includes(q))
+      .filter((name) => name !== taken && !formList.includes(name) && name.toLowerCase().includes(q))
       .sort((a, b) => a.localeCompare(b))
       .slice(0, MAX_RESULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,10 +252,7 @@ export function QuestionSearch({
       const n = formResults[i];
       return n ? { kind: "pick", token: { kind: "form", name: n } } : null;
     }
-    if (i === 0) return { kind: "category-filter" };
-    if (i === 1) return { kind: "type-filter" };
-    if (i === 2) return { kind: "quiz-filter" };
-    if (i === 3) return { kind: "form-filter" };
+    if (i < FILTER_ROWS) return { kind: `${suggest[i]}-filter` } as Opt;
     const cat = freeCategoryResults[i - FILTER_ROWS];
     if (cat) return { kind: "pick", token: { kind: "category", name: cat } };
     if (i === searchRow && hasQuery) return { kind: "search" };
@@ -278,9 +323,9 @@ export function QuestionSearch({
     const newTypes = picked("type");
     if (newTypes.length) onTypesChange([...new Set([...types, ...newTypes])]);
     const newQuizzes = picked("quiz");
-    if (newQuizzes.length) onQuizzesChange([...new Set([...quizzes, ...newQuizzes])]);
+    if (newQuizzes.length) onQuizzesChange?.([...new Set([...quizList, ...newQuizzes])]);
     const newForms = picked("form");
-    if (newForms.length) onFormsChange([...new Set([...forms, ...newForms])]);
+    if (newForms.length) onFormsChange?.([...new Set([...formList, ...newForms])]);
     onCommit(freeQuery.trim());
     setDraft([]);
     setOpen(false);
@@ -393,44 +438,16 @@ export function QuestionSearch({
           {!inMode && (
             <>
               <div className="usearch-head">Suggested filters</div>
-              <OptionRow
-                active={active === 0}
-                onHover={() => setActive(0)}
-                onClick={() => activate({ kind: "category-filter" })}
-              >
-                <span className="usearch-chip">Category:</span>
-                <span className="usearch-row-ex">Category: EPA 608 &gt; Universal</span>
-                <span className="usearch-row-desc">Filter by Category or Subcategory</span>
-              </OptionRow>
-              <OptionRow
-                active={active === 1}
-                onHover={() => setActive(1)}
-                onClick={() => activate({ kind: "type-filter" })}
-              >
-                <span className="usearch-chip">Type:</span>
-                <span className="usearch-row-ex">Type: Multiple Choice</span>
-                <span className="usearch-row-desc">Filter by Question Type</span>
-              </OptionRow>
-              <OptionRow
-                active={active === 2}
-                onHover={() => setActive(2)}
-                onClick={() => activate({ kind: "quiz-filter" })}
-              >
-                <span className="usearch-chip">Quizzes:</span>
-                <span className="usearch-row-ex">Quizzes: EPA Universal Exam</span>
-                <span className="usearch-row-desc">Filter by the Quiz using the Question</span>
-              </OptionRow>
-              <OptionRow
-                active={active === 3}
-                onHover={() => setActive(3)}
-                onClick={() => activate({ kind: "form-filter" })}
-              >
-                <span className="usearch-chip">Feedback Form:</span>
-                <span className="usearch-row-ex">Feedback Form: Post-Cert Satisfaction</span>
-                <span className="usearch-row-desc">
-                  Filter by the Feedback Form using the Question
-                </span>
-              </OptionRow>
+              {suggest.map((kind, i) => (
+                <OptionRow
+                  key={kind}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => activate({ kind: `${kind}-filter` } as Opt)}
+                >
+                  {SUGGEST_ROW[kind]}
+                </OptionRow>
+              ))}
             </>
           )}
 

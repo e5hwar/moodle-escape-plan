@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { FieldLockIcon } from "./icons";
 import { PrmModal } from "./PrmModal";
+import { NoteCard } from "./NoteCard";
 
 /* The Locked Field (Figma 1360:1883 "Atomic Component - Locked Field"), and
    the completion-criteria gate built on it while editing an existing Task or
@@ -43,37 +44,42 @@ function learnersLine(count: number, subject: CriteriaSubject): string {
  *  permanent lock (a Quiz's Structure) passes none. Banner and controls space
  *  themselves (8px, the node's gap), so the field reads the same inside a flex
  *  form-group or a block one, and the wrapper stays after unlocking so the
- *  controls' tree is stable. */
+ *  controls' tree is stable.
+ *
+ *  `lockChildren={false}` is the partial lock: the banner explains why SOME
+ *  options are unavailable (a company's Plan / Payment Method), but the field
+ *  stays usable — each unavailable option carries its own `disabled`, and every
+ *  option keeps its normal subtext. */
 export function LockedField({
   locked,
   title = "Locked",
   sub,
   action,
+  lockChildren = true,
   children,
 }: {
   locked: boolean;
   title?: string;
   sub: ReactNode;
   action?: ReactNode;
+  lockChildren?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="crit-lock-wrap">
       {locked && (
-        <div className="crit-lock-banner" role="note">
-          <div className="crit-lock-lead">
-            <span className="crit-lock-icon">
-              <FieldLockIcon />
-            </span>
-            <div className="crit-lock-text">
-              <span className="crit-lock-title">{title}</span>
-              <span className="crit-lock-sub">{sub}</span>
-            </div>
-          </div>
-          {action}
-        </div>
+        /* The banner is the shared callout card (NoteCard) — padlock, title,
+           line, and the optional action in its trailing slot. */
+        <NoteCard
+          role="note"
+          mutedIcon
+          icon={<FieldLockIcon />}
+          title={title}
+          body={sub}
+          action={action}
+        />
       )}
-      <fieldset className="crit-lock" disabled={locked}>
+      <fieldset className="crit-lock" disabled={locked && lockChildren}>
         {children}
       </fieldset>
     </div>

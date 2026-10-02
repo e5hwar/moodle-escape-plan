@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { certifications, type Certification } from "../data/certifications";
+import { CAREER_STAGES, certifications, type Certification } from "../data/certifications";
 import { CERT_DEEP_LINK_BASE, SYSTEM_DEEP_LINKS, slugify } from "../data/deepLinks";
 import { PrmModal } from "./PrmModal";
 import { CertFilters, certMatches, type CertFilterState } from "./CertFilters";
 import { CertificationsSearch } from "./CertificationsSearch";
 import { RowChevronIcon, SearchIcon, SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
+import { TableCols } from "./TableCols";
 
 /* "Need help finding a Deep Link?" — Create Spotlight's reference for the
    Button Destination field. The shared PrmModal shell (no footer) with the
@@ -19,17 +20,32 @@ import { SearchTrailing } from "./SearchPanelParts";
 
 const PAGE_SIZE = 50;
 
+/* Name · Industries · Career Stage (Certifications tab only — the
+   Certifications page's 140px column) · Deep Link. */
+const DATA_COLS: Record<"cert" | "system", number[]> = {
+  cert: [340, 264, 140, 410],
+  system: [340, 264, 410],
+};
+const CHEVRON_W = 56;
+const tableMin = (cols: number[]) => cols.reduce((n, w) => n + w, 0) + CHEVRON_W;
+
 type Tab = "cert" | "system";
 type SortDir = "asc" | "desc";
 
-type Row = { id: string; name: string; link: string; extra: string };
+type Row = { id: string; name: string; link: string; extra: string; stage?: string };
 
 const certRow = (c: Certification): Row => ({
   id: c.id,
   name: c.name,
   link: `${CERT_DEEP_LINK_BASE}${slugify(c.name)}`,
   extra: c.industry,
+  stage: c.careerStage ?? "",
 });
+
+/* Career Stage sorts by seniority (as on the Certifications page), unset last. */
+const stageRank = (r: Row) => (r.stage ? CAREER_STAGES.indexOf(r.stage as (typeof CAREER_STAGES)[number]) : 99);
+
+type SortKey = "name" | "extra" | "stage";
 
 const SYSTEM_ROWS: Row[] = SYSTEM_DEEP_LINKS.map((l) => ({
   id: l.id,
@@ -71,12 +87,16 @@ export function DeepLinkModal({
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<CertFilterState>(DEFAULT_CERT_FILTERS);
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<{ key: "name" | "extra"; dir: SortDir }>({ key: "name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      /* An open search-suggestion panel takes the first Escape (the page
+         search closes it itself); only the next one closes the modal. */
+      if (document.querySelector(".usearch-panel")) return;
+      onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -97,7 +117,10 @@ export function DeepLinkModal({
         (r) => !q || r.name.toLowerCase().includes(q) || r.link.toLowerCase().includes(q),
       );
     }
-    out.sort((a, b) => a[sort.key].localeCompare(b[sort.key]));
+    const key = sort.key;
+    out.sort((a, b) =>
+      key === "stage" ? stageRank(a) - stageRank(b) || a.name.localeCompare(b.name) : a[key].localeCompare(b[key]),
+    );
     return sort.dir === "desc" ? out.reverse() : out;
   }, [tab, query, filters, sort]);
 
@@ -115,25 +138,21 @@ export function DeepLinkModal({
     setSort({ key: "name", dir: "asc" });
   }
 
-  function toggleSort(key: "name" | "extra") {
+  function toggleSort(key: SortKey) {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
 
   const pick = (r: Row) => onPick(`https://${r.link}`);
 
-  /* Sized to the longest values — a nested Industry ("OSHA & Safety › General
-     Industry", ~240px) and a Certification link (~381px) — plus cell padding.
-     The last column holds the resting chevron; the "Select Deep Link" bar
-     overlays the row end on hover, as it does on the review pages. The name
-     column takes the rest. */
-  const colGroup = (
-    <colgroup>
-      <col />
-      <col style={{ width: 264 }} />
-      <col style={{ width: 410 }} />
-      <col style={{ width: 56 }} />
-    </colgroup>
-  );
+  /* The shared width rule (`TableCols`): content-sized base widths — the
+     Certifications picker's 340px name, a nested Industry ("OSHA & Safety ›
+     General Industry", ~240px), Career Stage at the Certifications page's
+     140 and a Certification link (~381px), plus cell padding — summed into
+     the floor; wider, the slack spreads across the data columns in
+     proportion. The chevron column is a fixed gutter; the "Select
+     Deep Link" bar overlays the row end on hover, as on the review pages. */
+  const isCert = tab === "cert";
+  const colGroup = <TableCols data={DATA_COLS[tab]} trail={[CHEVRON_W]} />;
 
   return (
     <PrmModal
@@ -193,13 +212,16 @@ export function DeepLinkModal({
         )}
 
         <div className="stm-table-wrap">
-          <div className="table-xscroll" style={{ "--table-min": "960px" } as React.CSSProperties}>
+          <div className="table-xscroll" style={{ "--table-min": `${tableMin(DATA_COLS[tab])}px` } as React.CSSProperties}>
             <table className="table table-head stm-table stm-table--preview">
               {colGroup}
               <thead>
                 <tr>
                   <Th label={cols.name} active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name")} />
                   <Th label={cols.extra} active={sort.key === "extra"} dir={sort.dir} onClick={() => toggleSort("extra")} />
+                  {isCert && (
+                    <Th label="Career Stage" active={sort.key === "stage"} dir={sort.dir} onClick={() => toggleSort("stage")} />
+                  )}
                   <th className="no-sort">Deep Link</th>
                   <th className="col-actions no-sort" />
                 </tr>
@@ -212,14 +234,15 @@ export function DeepLinkModal({
                 <tbody>
                   {paged.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={4}>No deep links match your search and filters.</td>
+                      <td colSpan={isCert ? 5 : 4}>No deep links match your search and filters.</td>
                     </tr>
                   ) : (
                     paged.map((r) => (
                       <tr key={r.id} onClick={() => pick(r)}>
-                        <td className="stm-col-name col-name">{r.name}</td>
-                        <td>{r.extra}</td>
-                        <td className="dlm-col-link">{r.link}</td>
+                        <td className="stm-col-name col-name">{orDash(r.name)}</td>
+                        <td>{orDash(r.extra)}</td>
+                        {isCert && <td>{orDash(r.stage)}</td>}
+                        <td className="dlm-col-link">{orDash(r.link)}</td>
                         {/* Resting chevron, and the labelled bar that replaces
                             it on hover (Hands-On's "Review Task ›"). */}
                         <td className="col-actions">
@@ -282,6 +305,9 @@ export function DeepLinkModal({
     </PrmModal>
   );
 }
+
+/** An empty cell reads "—", the app's table convention. */
+const orDash = (v?: string) => (v ? v : "—");
 
 function Th({ label, active, dir, onClick }: { label: string; active: boolean; dir: SortDir; onClick: () => void }) {
   return (
