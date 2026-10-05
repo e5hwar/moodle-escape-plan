@@ -66,7 +66,8 @@ export const FILTER_TIPS = {
 
   /** Question Bank. */
   questionBank: {
-    subCategory: "Show only questions in the chosen sub-categories.",
+    category: "Show only questions in the chosen categories and Sub-Categories.",
+    subCategory: "Show only questions in the chosen Sub-Categories.",
     type: "Show only questions of the chosen types.",
     status: "Show only Active or only Archived questions.",
   },

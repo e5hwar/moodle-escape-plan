@@ -1,10 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as seedUsers,
-  removedUserIds,
-  removeUser,
   updateUserContact,
   accessMoment,
+  subscriptionFilterStatus,
   type User,
   type UserType,
   type UserRole,
@@ -14,8 +13,9 @@ import { buildUserProfile, type ProfileFields } from "../data/userProfile";
 import { nameChangeRequests } from "../data/nameChangeRequests";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
+import { useToast } from "./useToast";
 import { EditUserModal, UserSummary, useUserPreview } from "./UserProfilePage";
-import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
+import { PreviewPanel } from "./PreviewPanel";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -28,8 +28,9 @@ import { UsersSearch } from "./UsersSearch";
 import { loginAs } from "./loginAs";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { CopyIcon, NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, RowDeleteIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuAwardIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuScholarshipIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { SubscriptionPill } from "./SubscriptionPill";
 
 const PAGE_SIZE = 50;
 
@@ -110,12 +111,9 @@ const SUB_ORDER: Record<SubscriptionStatus, number> = {
 };
 const GOAL_ORDER: Record<string, number> = { "Looking for First Trades Job": 0, "Exploring Careers in the Skilled Trades": 1, "Focussed on Advancing Career": 2, Other: 3 };
 
-/* A Subscriber with an upcoming cancellation ("Stripe · Cancels Jul 9, 2026")
-   files under Cancelled for the Subscription filter and sort, not Subscriber.
-   The raw status stays "Subscriber" — they keep access until `cancelsOn`. */
-function filterStatus(u: User): SubscriptionStatus {
-  return u.subscriptionStatus === "Subscriber" && u.cancelsOn ? "Cancelled" : u.subscriptionStatus;
-}
+/* A Subscriber with an upcoming cancellation files under Cancelled for the
+   Subscription filter and sort — shared with the Who Paid pages. */
+const filterStatus = subscriptionFilterStatus;
 
 /* Plan rank first; inside Cancelled, by cancellation date — an upcoming
    cancellation's `cancelsOn` (future) or a lapsed plan's `cancelledOn` — so
@@ -147,7 +145,7 @@ const COLS: ColMeta[] = [
   { key: "userType", label: "User Type", className: "col-u-type", width: 114, render: (u) => <TypePill type={u.userType} />, sortValue: (u) => u.userType },
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: (u) => (u.userType === "B2B" && u.companyName ? u.companyName : null), sortValue: (u) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: (u) => u.role, sortValue: (u) => ROLE_ORDER[u.role] },
-  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 240, render: (u) => subscriptionLabel(u), sortValue: subscriptionSortValue },
+  { key: "subscription", label: "Subscription", className: "col-u-sub col-status", width: 240, render: (u) => <SubscriptionPill user={u} />, sortValue: subscriptionSortValue },
   { key: "language", label: "Language", className: "col-u-lang", width: 114, render: (_u, f) => f.language, sortValue: (_u, f) => f.language },
   { key: "goal", label: "Goal", className: "col-u-stage", width: 200, render: (_u, f) => f.goal, sortValue: (_u, f) => GOAL_ORDER[f.goal] ?? 0 },
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
@@ -197,7 +195,7 @@ export function UsersPage({
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
-  const [list, setList] = useState<User[]>(() => seedUsers.filter((u) => !removedUserIds.has(u.id)));
+  const [list, setList] = useState<User[]>(() => seedUsers);
   // "S" opens Scholarships from the page 3-dot menu. Offer Codes is hidden
   // from the header for now, so it keeps no shortcut of its own.
   // The User whose row was clicked — read back in the side drawer, the way a
@@ -233,12 +231,11 @@ export function UsersPage({
   // status since access runs to the end of the billing period anyway.
   const [cancelSub, setCancelSub] = useState<User | null>(null);
   const [canceledSubs, setCanceledSubs] = useState<ReadonlySet<string>>(new Set());
-  // Remove User: row menu → danger confirm → the user leaves the list and a
-  // success toast (the shared CopiedToast chrome) acknowledges it.
-  const [removing, setRemoving] = useState<User | null>(null);
   // Edit User — the Full Profile's own modal, from the row pencil or the menu.
   const [editing, setEditing] = useState<User | null>(null);
-  const [removedToast, setRemovedToast] = useState(0);
+  /** The page's own success toast — "Profile Updated" after an Edit User
+   *  save (the user, 2026-10-04), "Subscription Canceled" after a cancel. */
+  const [toast, toastNode] = useToast();
   const drawerUser = drawerId ? list.find((u) => u.id === drawerId) : undefined;
   // A row menu opened from the preview panel's kebab: every item that opens a
   // modal or another view closes the panel first, so nothing is left under it.
@@ -313,12 +310,13 @@ export function UsersPage({
   }, [committedQuery, filters, sort, visiblePage, scrollToFirstRow]);
 
   // The landing's summary line — every user on the roster, not the filtered
-  // rows (the pagination footer counts those), and the Companies their B2B
-  // seats belong to.
+  // rows (the pagination footer counts those), and how many of them hold an
+  // ongoing subscription. A Subscriber with an upcoming cancellation isn't
+  // ongoing — they read as Cancelled everywhere else on the page too.
   const catalog = useMemo(
     () => ({
       users: list.length,
-      companies: new Set(list.flatMap((u) => (u.companyName ? [u.companyName] : []))).size,
+      subscribers: list.filter((u) => filterStatus(u) === "Subscriber").length,
     }),
     [list],
   );
@@ -376,7 +374,7 @@ export function UsersPage({
                       </button>
                     </div>
                   </header>
-                  <h1 className="tasks-title">Manage Users</h1>
+                  <h1 className="tasks-title">Users</h1>
                   {/* The landing banner's collapsed form (Figma 1268:1736): one
                       accent line under the title that opens the queue. Its count,
                       label and chevron are separate pieces so each can arrive from
@@ -401,10 +399,10 @@ export function UsersPage({
                       1356:1864 ("3210 Tasks · Across 230 Certifications"). It
                       fades as the header collapses. */}
                   <p className="tasks-subtitle clh-sub">
-                    {`${plural(catalog.users, "User", "Users")} · Across ${plural(
-                      catalog.companies,
-                      "Company",
-                      "Companies",
+                    {`${plural(catalog.users, "User", "Users")} · ${plural(
+                      catalog.subscribers,
+                      "Subscriber",
+                      "Subscribers",
                     )}`}
                   </p>
 
@@ -560,7 +558,6 @@ export function UsersPage({
               ? () => closePanelThen(() => setCancelSub(menu.user))
               : undefined
           }
-          onRemove={() => closePanelThen(() => setRemoving(menu.user))}
           onEdit={() => closePanelThen(() => setEditing(menu.user))}
         />
       )}
@@ -580,6 +577,7 @@ export function UsersPage({
           onConfirm={() => {
             setCanceledSubs((prev) => new Set(prev).add(cancelSub.id));
             setCancelSub(null);
+            toast("Subscription Canceled");
           }}
         />
       )}
@@ -592,18 +590,7 @@ export function UsersPage({
             // The roster object was updated in place; copy it so the row re-renders.
             setList((prev) => prev.map((u) => (u.id === editing.id ? { ...u } : u)));
             setEditing(null);
-          }}
-        />
-      )}
-      {removing && (
-        <RemoveUserConfirm
-          user={removing}
-          onClose={() => setRemoving(null)}
-          onConfirm={() => {
-            removeUser(removing.id);
-            setList((prev) => prev.filter((u) => u.id !== removing.id));
-            setRemoving(null);
-            setRemovedToast(Date.now());
+            toast("Profile Updated");
           }}
         />
       )}
@@ -613,21 +600,14 @@ export function UsersPage({
           user={drawerUser}
           subCanceled={canceledSubs.has(drawerUser.id)}
           onClose={() => setDrawerId(null)}
-          /* Closes the panel first, so the Edit User modal isn't left under it. */
-          onEdit={() => {
-            setDrawerId(null);
-            setEditing(drawerUser);
-          }}
           onMore={(rect) => setMenu({ user: drawerUser, rect })}
         />
-      )}
-      {removedToast > 0 && (
-        <CopiedToast key={removedToast} label="User Removed" onDone={() => setRemovedToast(0)} />
       )}
 
       {/* What a finished merge or transfer comes back to — the shared toast,
           the same one a copied payment link raises. */}
       {flash && <CopiedToast label={flash} ms={4000} onDone={() => onFlashDone?.()} />}
+      {!flash && toastNode}
     </div>
   );
 }
@@ -673,27 +653,6 @@ function SortableHeader({
 
 function TypePill({ type }: { type: UserType }) {
   return <span className={`u-pill u-type--${type.toLowerCase()}`}>{type}</span>;
-}
-
-/* Subscription reads as plain text like every other column on this table (per
-   the user 2026-09-21 — the pills came off, the wording stayed). A paying
-   Subscriber is named by the platform that bills them ("Stripe"), and a
-   cancellation still inside the paid period adds the end date. A Starter-tier
-   user — no plan of any kind — reads as the app's em dash. */
-function subscriptionLabel(user: User): string {
-  switch (user.subscriptionStatus) {
-    case "Subscriber": {
-      const platform = user.platform ?? "Stripe";
-      return user.cancelsOn ? `${platform} · Cancels ${formatDate(user.cancelsOn)}` : platform;
-    }
-    case "Free Trial":
-    case "Scholarship":
-    case "Company Plan":
-    case "Cancelled":
-      return user.subscriptionStatus;
-    case "Starter":
-      return "—";
-  }
 }
 
 function UserRow({
@@ -756,9 +715,9 @@ function UserRow({
 }
 
 /* ─── Three-dot actions menu — Figma 673:1437 "3-Dot Menu - B2C User", in that
-   node's order. (View User IDs sat last, after the destructive Remove User;
-   dropped 2026-09-22 — IDs are reached from the Full Profile's View ID button
-   and the Manage IDs table.) Fixed-positioned so it escapes the table scroll. The name/ID header this used to
+   node's order. (View User IDs dropped 2026-09-22 — IDs are reached from the
+   Full Profile's View ID button and the Manage IDs table. Remove User dropped
+   2026-10-04, user — users are not removed from here.) Fixed-positioned so it escapes the table scroll. The name/ID header this used to
    carry isn't in the component — the row the menu opened from already names
    the user. Items that don't apply to the row drop out; the rest close up. ─── */
 
@@ -771,12 +730,10 @@ function UserActionsMenu({
   onViewAllEmployees,
   onManageCompletions,
   onCancelSubscription,
-  onRemove,
   onEdit,
 }: {
   rect: DOMRect;
   onClose: () => void;
-  onRemove: () => void;
   onEdit: () => void;
   onLoginAs: () => void;
   onOpenProfile: () => void;
@@ -860,7 +817,6 @@ function UserActionsMenu({
       {onViewCompany && item(<MenuBankIcon />, "View User's Company", onViewCompany)}
       {onViewAllEmployees && item(<MenuUsersIcon />, "View All Company Employees", onViewAllEmployees)}
       {onCancelSubscription && item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription)}
-      {item(<RowDeleteIcon />, "Remove User", onRemove, true)}
     </div>
   );
 }
@@ -939,7 +895,7 @@ function PageActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {item(<MenuAwardIcon />, "Scholarships", onOpenScholarships)}
+      {item(<MenuScholarshipIcon />, "Scholarships", onOpenScholarships)}
       {item(<MenuMergeIcon />, "Merge Accounts", onMergeAccounts)}
       {item(<MenuTransferIcon />, "Transfer Subscription", onTransferSubscription)}
     </div>
@@ -1021,122 +977,40 @@ function EditUserDialog({
   );
 }
 
-/* ─── Remove User confirm — the danger PrmModal every Delete X? uses. ─── */
-
-function RemoveUserConfirm({
-  user,
-  onClose,
-  onConfirm,
-}: {
-  user: User;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <PrmModal
-      title="Remove User?"
-      confirmLabel="Remove User"
-      cancelLabel="Cancel"
-      danger
-      doubleConfirm={
-        <>
-          <strong>{user.name}</strong> will lose access to SkillCat and be removed for good.
-          This can't be undone.
-        </>
-      }
-      onCancel={onClose}
-      onConfirm={onConfirm}
-    >
-      <div className="prm-stack">
-        <p className="prm-content">
-          <strong>{user.name}</strong> ({user.email}) loses access to SkillCat and is removed
-          from Manage Users{user.userType === "B2B" && user.companyName ? <> and from the <strong>{user.companyName}</strong> roster</> : null}.
-        </p>
-        <p className="prm-content">This cannot be undone.</p>
-      </div>
-    </PrmModal>
-  );
-}
-
 /* ─── Open the full profile in a new browser tab ─── */
 /* Opens a real in-app page via URL params, rendered standalone by App. */
 
-/* The status pill tone per plan — the `co-status-pill` set. */
-const SUB_TONE: Record<SubscriptionStatus, "green" | "yellow" | "grey" | "secondary"> = {
-  Subscriber: "green",
-  "Company Plan": "green",
-  Scholarship: "secondary",
-  "Free Trial": "yellow",
-  Starter: "grey",
-  Cancelled: "grey",
-};
-
-/** A User's row preview panel ("Preview Panel 3a"): who they are and their
- *  figures, then the Full Profile's own review cards split across Details,
- *  Achievements and Billing. No learner preview — a person isn't content. */
+/** A User's row preview panel (Figma 1514:2860): the Full Profile's own
+ *  review cards as accordions, then their figures as Activity. No learner
+ *  preview to come — a person isn't content. */
 function UserDrawer({
   user,
   subCanceled,
   onClose,
-  onEdit,
   onMore,
 }: {
   user: User;
   subCanceled: boolean;
   onClose: () => void;
-  onEdit: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
   const pv = useUserPreview(user);
-  const status = subCanceled ? "Canceled" : user.subscriptionStatus;
-  const actions: PreviewAction[] = [
-    { label: "View Profile", icon: <RowExternalLinkIcon />, onClick: () => openProfile(user) },
-  ];
-  if (user.email) actions.push({ label: "Copy Email", icon: <CopyIcon />, copy: user.email });
   return (
     <PreviewPanel
+      kind="User"
       title={user.name}
       // Only one of email/phone is required — list whichever are on file.
-      description={[user.email, user.phone].filter(Boolean).join(" · ")}
-      avatar={<span className="mc-avatar prof-avatar">{pv.initials}</span>}
-      meta={[
-        <span className="pp-id">{user.id}</span>,
-        user.userType,
-        user.companyName,
-        user.role,
-        <span className={`co-status-pill co-status-pill--${subCanceled ? "grey" : SUB_TONE[user.subscriptionStatus]}`}>
-          {user.platform && !subCanceled ? `${status} · ${user.platform}` : status}
-        </span>,
-        `Last access ${pv.lastAccess}`,
-      ]}
-      onEdit={onEdit}
-      actions={actions}
+      subtitle={[user.email, user.phone].filter(Boolean).join(" · ")}
       onMore={onMore}
       stats={[
         { count: String(pv.skills), title: "Skills", sub: "Earned" },
         { count: String(pv.awards), title: "Awards", sub: "Earned" },
         { count: String(pv.purchases), title: "Purchases", sub: `${pv.spent} spent` },
       ]}
-      tabs={[
-        { key: "details", label: "Details", content: <UserSummary user={user} subCanceled={subCanceled} part="profile" /> },
-        {
-          key: "achievements",
-          label: "Achievements",
-          content: <UserSummary user={user} subCanceled={subCanceled} part="achievements" />,
-        },
-        { key: "billing", label: "Billing", content: <UserSummary user={user} subCanceled={subCanceled} part="billing" /> },
-      ]}
       onClose={onClose}
-    />
+    >
+      <UserSummary user={user} subCanceled={subCanceled} />
+    </PreviewPanel>
   );
 }
 

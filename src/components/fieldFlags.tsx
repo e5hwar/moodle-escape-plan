@@ -8,12 +8,12 @@ import { useCallback, useRef, useState, type FocusEvent } from "react";
    way the rail's red glyph does. A blocked publish still flags every gap at
    once (the rail's `flagAll`). So per field:
 
-     flagged = empty && (touched(key) || maxVisited > stepOf(key) || attempted)
+     flagged = empty && (touched(key) || movedPast(stepOf(key)) || attempted)
 
    `useTouchedKeys` keeps the touched set, `leave` turns a field group's
    `onBlur` into a "focus left this whole group" signal (React's onBlur bubbles,
-   and `relatedTarget` says where focus went), and `useMaxVisited` remembers
-   the furthest step ever opened. */
+   and `relatedTarget` says where focus went), and `useMovedPast` says whether
+   a step is behind the furthest one opened or was opened and then left. */
 
 const EMPTY: ReadonlySet<string> = new Set();
 
@@ -48,4 +48,23 @@ export function useMaxVisited(step: number): number {
   const ref = useRef(step);
   if (step > ref.current) ref.current = step;
   return ref.current;
+}
+
+/** Whether step `i` has been "moved past" — the rail's own rule
+ *  (`useWizardStepStatuses`): a later step was opened, OR the step was opened
+ *  and then left by any route, back included. `useMaxVisited` alone misses the
+ *  second: a wizard's LAST step can never have a later one, so its gaps went
+ *  red on the rail once left but never on the fields when you came back.
+ *  The returned predicate changes identity whenever either input grows. */
+export function useMovedPast(step: number): (i: number) => boolean {
+  const max = useMaxVisited(step);
+  const prev = useRef(step);
+  const left = useRef<Set<number>>(new Set());
+  if (prev.current !== step) {
+    left.current.add(prev.current);
+    prev.current = step;
+  }
+  const size = left.current.size;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useCallback((i: number) => i < max || left.current.has(i), [max, size]);
 }

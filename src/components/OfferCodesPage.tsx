@@ -27,6 +27,7 @@ import { MultiSelect } from "./NewCompanyWizard";
 import { DateField } from "./DateField";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-06-18");
@@ -152,6 +153,15 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
     );
   }
 
+  const [toast, toastNode] = useToast();
+
+  /* Raised on the click, not on the promise: a browser that refuses the write
+     would otherwise give no sign the action did anything. */
+  function copyCode(code: OfferCode) {
+    navigator.clipboard?.writeText(code.code).catch(() => {});
+    toast("Code Copied");
+  }
+
   function handleCreate(input: {
     code: string;
     plan: BillingPlan;
@@ -171,6 +181,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
     };
     setList((prev) => [newCode, ...prev]);
     setCreating(false);
+    toast("Offer Code Created");
   }
 
   function handleDelete(id: string) {
@@ -189,6 +200,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
         return { ...c, expiresOn: base.toISOString().slice(0, 10) };
       }),
     );
+    toast("Offer Code Extended");
   }
 
   const existingCodes = useMemo(
@@ -203,8 +215,8 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
           {/* This page is reached from Manage Users' header button (it no
               longer has its own sidebar entry), so the crumb is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-              Manage Users
+            <button className="rvc-crumb" onClick={onBack} title="Back to Users">
+              Users
             </button>
           </nav>
           <header className="tasks-header">
@@ -374,6 +386,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
                         code={c}
                         menuOpen={menu?.code.id === c.id}
                         onOpenMenu={(rect) => setMenu({ code: c, rect })}
+                        onCopy={() => copyCode(c)}
                         onDelete={() => setDeleting(c)}
                       />
                     ))}
@@ -431,6 +444,7 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
           code={menu.code}
           rect={menu.rect}
           onClose={() => setMenu(null)}
+          onCopy={() => copyCode(menu.code)}
           onExtend={() => handleExtend(menu.code.id)}
           onDelete={() => setDeleting(menu.code)}
         />
@@ -443,9 +457,11 @@ export function OfferCodesPage({ onBack }: { onBack?: () => void }) {
           onConfirm={() => {
             handleDelete(deleting.id);
             setDeleting(null);
+            toast("Offer Code Deleted");
           }}
         />
       )}
+      {toastNode}
     </div>
   );
 }
@@ -539,12 +555,14 @@ function OfferCodeRow({
   code,
   menuOpen,
   onOpenMenu,
+  onCopy,
   onDelete,
 }: {
   code: OfferCode;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
   onOpenMenu: (rect: DOMRect) => void;
+  onCopy: () => void;
   onDelete: () => void;
 }) {
   const status = statusOf(code);
@@ -577,7 +595,7 @@ function OfferCodeRow({
             title="Copy code"
             onClick={(e) => {
               e.stopPropagation();
-              navigator.clipboard?.writeText(code.code);
+              onCopy();
             }}
           >
             <CopyIcon />
@@ -615,12 +633,14 @@ function OfferCodeActionsMenu({
   code,
   rect,
   onClose,
+  onCopy,
   onExtend,
   onDelete,
 }: {
   code: OfferCode;
   rect: DOMRect;
   onClose: () => void;
+  onCopy: () => void;
   onExtend: () => void;
   onDelete: () => void;
 }) {
@@ -682,9 +702,7 @@ function OfferCodeActionsMenu({
           {code.id} · {status === "active" ? "Active" : "Expired"}
         </div>
       </div>
-      {item(<CopyIcon />, "Copy Code", () => {
-        navigator.clipboard?.writeText(code.code);
-      })}
+      {item(<CopyIcon />, "Copy Code", onCopy)}
       {item(<CalendarIcon />, "Extend 6 Months", onExtend)}
       {item(<RowDeleteIcon />, "Delete Offer Code", onDelete, true)}
     </div>

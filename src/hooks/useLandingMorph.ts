@@ -122,7 +122,7 @@ export function useLandingMorph(startAtTable = false, wheelGesture = true) {
       // Wheel inside an open overlay (a filter/date-range dropdown, the search
       // suggestion panel) scrolls that surface — it never drives the morph.
       const at = e.target as Element | null;
-      if (at?.closest?.(".dropdown, .usearch-panel")) return;
+      if (at?.closest?.(".dropdown, .usearch-panel, .pp-overlay")) return;
       const dy = e.deltaY;
       if (dy === 0) return;
       // A landing surface that scrolls on its own (`.lm-scroll` — the Question

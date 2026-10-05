@@ -34,7 +34,7 @@ import { CertificationsSearch } from "./CertificationsSearch";
  *
  * It used to be a 340px dropdown with its own tiny result list. It is now the
  * shared table-picker (Figma 682:2321, `.stm-*`) that Select Tasks / Select
- * Certifications / Select Questions run on, with the app's own `.tabbar` over
+ * Questions run on, with the app's own `.tabbar` over
  * the table so one modal covers both requirement kinds. Each tab keeps its own
  * search, filter, sort and page, and both share one staged selection — so a
  * single trip can add two Tasks and a Certification to the Condition Set.
@@ -45,9 +45,11 @@ import { CertificationsSearch } from "./CertificationsSearch";
  * they can't be added twice.
  *
  * Tasks only, it is also the Certification builder's "Add Existing Tasks";
- * with both tabs, Feedback Forms' "Add Trigger". The builder passes
- * `onPreviewTask`, which gives every Task row Select Questions' row-end
- * "Preview ›". */
+ * with both tabs, Feedback Forms' "Add Trigger"; Certifications only, the
+ * builder's "Import Courses" and Content Links' add-link pickers (which
+ * replaced the old graph-shaped SelectCertificationsModal and its Level /
+ * Enrolled columns, 2026-10-05). The builder passes `onPreviewTask`, which
+ * gives every Task row Select Questions' row-end "Preview ›". */
 
 const PAGE_SIZE = 50;
 
@@ -125,10 +127,14 @@ function compareCert(a: Certification, b: Certification, key: CertSortKey): numb
 
 export function SelectRequirementModal({
   existingNames,
+  preselectedNames,
+  certPool: certPoolProp,
   only,
   title = "Add Requirement",
   description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
   confirmNoun = "Requirement",
+  confirmLabel,
+  allowEmpty = false,
   lockedTip = "Already in this Condition Set",
   lockedFlag,
   allCreators,
@@ -140,6 +146,13 @@ export function SelectRequirementModal({
 }: {
   /** Names already in this Condition Set — those rows open ticked and locked. */
   existingNames: string[];
+  /** Certifications ticked when the modal opens but still clickable — so
+   *  reopening the picker doubles as "manage what's already picked" (the
+   *  Certification builder's Import Courses). Nothing on the Tasks tab. */
+  preselectedNames?: string[];
+  /** Catalog for the Certifications tab. Defaults to every Certification;
+   *  Content Links passes only the ones its graph can link. */
+  certPool?: Certification[];
   /** Restrict the modal to one kind: the tab row is hidden and only that
    *  catalog is listed. */
   only?: Tab;
@@ -147,6 +160,11 @@ export function SelectRequirementModal({
   description?: string;
   /** Singular noun in the confirm button — "Add Requirement" / "Add 3 Tasks". */
   confirmNoun?: string;
+  /** A fixed confirm label instead of the counted "Add N …" one. */
+  confirmLabel?: string;
+  /** Lets confirm go through with nothing ticked — for a picker that also
+   *  clears an existing selection. */
+  allowEmpty?: boolean;
   /** Hover line on a locked row — one sentence, or one per row name. */
   lockedTip?: string | ((name: string) => string);
   /** A locked row names what holds it in a grey flag beside its name and
@@ -173,7 +191,11 @@ export function SelectRequirementModal({
   const [taskFilters, setTaskFilters] = useState<TaskFilterState>(NO_TASK_FILTERS);
   const [certFilters, setCertFilters] = useState<CertFilterState>(NO_CERT_FILTERS);
   const [pickedTasks, setPickedTasks] = useState<string[]>([]);
-  const [pickedCerts, setPickedCerts] = useState<string[]>([]);
+  const [pickedCerts, setPickedCerts] = useState<string[]>(() =>
+    preselectedNames?.length
+      ? certifications.filter((c) => preselectedNames.includes(c.name)).map((c) => c.id)
+      : [],
+  );
   const [page, setPage] = useState(1);
   const [taskSort, setTaskSort] = useState<{ key: TaskSortKey; dir: SortDir }>({
     key: "dateModified",
@@ -230,10 +252,10 @@ export function SelectRequirementModal({
           : taskLibrary.filter(bySkillCat),
     [allCreators, allUsersOnly],
   );
-  const certPool = useMemo(
-    () => (allUsersOnly ? certifications.filter(forAllUsers) : certifications),
-    [allUsersOnly],
-  );
+  const certPool = useMemo(() => {
+    const base = certPoolProp ?? certifications;
+    return allUsersOnly ? base.filter(forAllUsers) : base;
+  }, [certPoolProp, allUsersOnly]);
 
   const q = query.trim().toLowerCase();
 
@@ -312,9 +334,10 @@ export function SelectRequirementModal({
       title={title}
       description={description}
       confirmLabel={
-        pickedCount > 1 ? `Add ${pickedCount} ${confirmNoun}s` : `Add ${confirmNoun}`
+        confirmLabel ??
+        (pickedCount > 1 ? `Add ${pickedCount} ${confirmNoun}s` : `Add ${confirmNoun}`)
       }
-      confirmDisabled={pickedCount === 0}
+      confirmDisabled={!allowEmpty && pickedCount === 0}
       pickFull
       className="srq"
       onCancel={onCancel}
@@ -659,7 +682,7 @@ function toggleSort<K extends string>(
 /* The shared width rule ([[table-conventions]], `TableCols`): every data
  * column has a content-sized base width — Name fits a long Task / Cert name
  * (and a locked row's flag, which ellipsizes first), Task Type "Hands-On
- * Task", Certifications one name + "+N", Industries "OSHA & Safety › …",
+ * Task", Certifications one name + "+N", Industries "Plumbing › Service & …",
  * Career Stage "Journeyman", Tasks the header and its caret. Their sum is the
  * floor; on a wider modal the slack spreads across the data columns in
  * proportion, so the gaps grow evenly instead of Name swallowing it all. The

@@ -33,6 +33,10 @@
      flagged control's border, the message in its label row, and a character
      counter gone negative. Distinct from the rail/icon danger red #ff1f31. */
   --field-error: #ff1f17;
+  /* Focus State (Figma 1369:1452 / 620:1352 / 327:137, 2026-10-05): the
+     field being typed in, or the dropdown being picked from, draws a solid
+     white edge; its fill and inner hairlines don't change. */
+  --field-focus: #fff;
   /* Field warning amber (Figma 1430:1474 "Character Limit Warning"): a field
      past its SUGGESTED length — the shell, its counter and the label-row
      warning. Advisory only; nothing blocks on it. */
@@ -71,8 +75,9 @@
      surface: every bar (Default 399:216, Large 1362:1945) and its expanded
      panel (21:15952 / 772:1125) is a 20% #737373 wash over #0d0d0d inside a
      10% #737373 hairline — lighter, with a fainter edge. The Filters section
-     was not re-issued, so the dropdowns keep the panel pair; the hover wash is
-     still the one --panel-row-hover (772:1164 is the same 30% #7a7a7a).
+     was not re-issued, so the dropdowns keep the panel pair and
+     --panel-row-hover. The search panel's own hovers are translucent since
+     2026-10-05: rows 10% #737373, the "Search for" strip 10% #7a7a7a.
        --search-h  43px = 12px padding either side of a 19px line, so the CSS
                    padding is 11/15 — the padding-minus-border rule.
        --search-h-lg 56px "Search Bar - Large" (1362:1945), the landing hero:
@@ -82,6 +87,11 @@
   --search-wash: rgba(115, 115, 115, 0.2);
   --search-bg: linear-gradient(var(--search-wash), var(--search-wash)), #0d0d0d;
   --search-border: rgba(115, 115, 115, 0.1);
+  /* Hover State 1521:3831 (2026-10-05): the same bar with the wash at 30%.
+     The rule is "+10 points of wash" on every flavour — Secondary 10 → 20,
+     Modal's lone wash 20 → 30. */
+  --search-wash-hover: rgba(115, 115, 115, 0.3);
+  --search-bg-hover: linear-gradient(var(--search-wash-hover), var(--search-wash-hover)), #0d0d0d;
   --panel-row-hover: #2e2e2e;
   --search-h: 43px;
   --search-h-lg: 56px;
@@ -708,9 +718,8 @@ a {
 
 /* Icon-only quiet button — the page-level 3-dot trigger next to the header's
    labelled actions. Square at the shared 32px height; the glyph tints like the
-   labels. The row preview panel's kebab takes it too. */
-.tasks-header .cta-quiet--icon,
-.pp .cta-quiet--icon {
+   labels. */
+.tasks-header .cta-quiet--icon {
   width: 32px;
   padding: 0;
 }
@@ -830,9 +839,10 @@ a {
 .search-input {
   width: 100%;
   height: var(--search-h);
-  /* 43 + the 1px border = the 44px text inset of Figma 902:3585 / 772:1110;
-     on the right, 16px of edge plus the 43px ⌘K badge, again less the border. */
-  padding: 0 58px 0 43px;
+  /* 16px edge + 16px icon + 8px gap = the 40px text inset of every 43px node
+     (399:216 / 902:3585 / 772:1110, all 8px since 2026-10-05), less the 1px
+     border; on the right, 16px of edge plus the 43px ⌘K badge, likewise. */
+  padding: 0 58px 0 39px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
@@ -850,6 +860,10 @@ a {
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
+}
+
+.search-input:hover {
+  background: var(--search-bg-hover);
 }
 
 .search-input:focus {
@@ -1093,7 +1107,7 @@ a {
 }
 
 .filter-textfield-input:focus {
-  border-color: var(--border-strong);
+  border-color: var(--field-focus);
 }
 
 .filter-textfield-input::placeholder {
@@ -2277,19 +2291,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 /* ── Certification "Who Paid" page ── */
-/* Inline-flex wrapper so a long name truncates but the Granted badge stays. */
-.cp-name-wrap {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  vertical-align: middle;
-}
-.cp-name-wrap .cp-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
 .cp-granted-badge {
   display: inline-block;
   flex: none;
@@ -2305,27 +2306,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   vertical-align: middle;
 }
 
-.cp-revoked-badge {
-  display: inline-block;
-  flex: none;
-  margin-left: 8px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 8.5pt;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #f08a8a;
-  background: rgba(240, 90, 90, 0.1);
-  border: 1px solid rgba(240, 90, 90, 0.3);
-  vertical-align: middle;
-}
-/* Revoked rows read as deactivated: the name mutes and strikes through, while
-   the Revoked badge stays vivid. */
-/* Beats the global `.table … span { color: inherit !important }` cell rule. */
-.table tbody tr.is-revoked .cp-name-wrap .cp-name {
-  color: var(--text-muted) !important;
-  text-decoration: line-through;
-}
 
 .cp-progress {
   display: inline-flex;
@@ -3288,6 +3268,33 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: #ff1f31;
 }
 
+/* ===== Field focus state (Figma 1369:1452 "Open - Focus State", rich text
+   620:1352 / 327:137) =====
+   While the user is typing in a field — or picking from a dropdown — its
+   shell's #404040 edge goes white. Composite shells (dual-language, rich text,
+   address, stepper, phone, price) whiten as one box; their inner hairlines
+   stay #404040. Triggers that open a menu go white while it is open, and on
+   keyboard focus. Declared BEFORE the error/warning block below so a flagged
+   field keeps its red/amber edge while focused (1369:1478 draws the caret
+   inside a red shell). Plain inputs whose `:focus` rule lives with their
+   component take the same token there. */
+.lang-field:focus-within,
+.rte-field:focus-within,
+.address-field:focus-within,
+.stepper:focus-within,
+.qsec-pct-input:focus,
+.deeplink-input:focus-within,
+.fb-cohort-input:focus,
+.pr-mismatch-input:focus,
+.price-input:focus-within,
+.select-field.is-open,
+.select-field:focus-visible,
+.form-select:focus-visible,
+.multiselect-field.is-open,
+.date-field-trigger:focus-visible {
+  border-color: var(--field-focus);
+}
+
 /* ===== Field error state (Figma 1369:1669 "Atomic Component - Input
    Fields") =====
    One red for every flagged control: the shell's border takes --field-error
@@ -4074,10 +4081,11 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   padding: 0 12px;
   background: transparent;
   border: none;
-  color: #fff;
+  /* 617:1181: the ± glyphs are #a8a8a8; the value between them is white. */
+  color: #a8a8a8;
   cursor: pointer;
 }
-.stepper-btn:hover:not(:disabled) { background: #1e1e20; }
+.stepper-btn:hover:not(:disabled) { background: #1e1e20; color: #fff; }
 .stepper-btn:disabled {
   color: #404040;
   cursor: not-allowed;
@@ -4179,7 +4187,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 .form-input:focus {
-  border-color: var(--border-strong);
+  border-color: var(--field-focus);
 }
 
 .form-input:disabled {
@@ -4257,6 +4265,15 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   height: 14px;
 }
 
+/* In a field's subtext the glyph is the Input Fields node's own 12px
+   (1369:1669, `InfoIcon12`; 696:1224's 16px cut was deleted 2026-10-06), 4px
+   after the text and centred on the 14px line. The 14px size above stays for
+   the other hosts (step descriptions, table headers, page subtitles). */
+.form-help .form-help-info svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* ===== Composite address field (Figma 101:337) =====
    One bordered box: Country dropdown / Line 1 / Line 2 / City|PIN split /
    State dropdown, each row split by a #404040 divider. Transparent fill,
@@ -4269,10 +4286,10 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   overflow: hidden;
 }
 
-/* Subtext + tooltip glyph (Figma 696:1224 "Input Field + Subtext Tooltip") —
-   the pattern for a field whose full explanation is too long to sit in the
-   subtext: the line stays short and the 16px glyph after it carries the rest in
-   the shared hover tooltip (451:545). One centred row at a 4px gap; the glyph
+/* Subtext + tooltip glyph (Figma 1369:1669 subtext rows) — the pattern for a
+   field whose full explanation is too long to sit in the subtext: the line
+   stays short and the 12px glyph after it carries the rest in the shared hover
+   tooltip (451:545). One centred row at a 4px gap; the glyph
    inherits the subtext's own #a8a8a8 and brightens on hover like every other
    tooltip trigger. Keep these subtexts to one line — the node only specifies
    the single-line case, and a wrapped one would centre the glyph on the block. */
@@ -4288,6 +4305,12 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   color: inherit;
 }
 
+/* The row's gap IS the 4px — the inline rule's margin would double it. */
+.form-help--tip > .form-help-info {
+  margin-left: 0;
+  vertical-align: baseline;
+}
+
 .form-help-info:hover {
   color: #fff;
 }
@@ -4297,7 +4320,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    own gap and a nudge onto the 12px text's baseline. */
 .form-help:not(.form-help--tip) > .form-help-info {
   margin-left: 4px;
-  vertical-align: -2px;
+  /* Centres the 12px box on the 14px text's 17px line. */
+  vertical-align: -1.5px;
 }
 
 /* Accent hyperlink inside helper text (e.g. Tax status → Stripe docs). */
@@ -4689,7 +4713,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   font-weight: 700;
   text-transform: uppercase;
   color: #a8a8a8;
-  letter-spacing: 0.04em;
 }
 
 /* ===== Dual-language input (Figma 49:348) =====
@@ -4912,9 +4935,14 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 /* 16px glyph in the node; the box is a hit area only and stays inside the
    31px content row. */
 .file-remove {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  /* The bare 16px glyph (776:1384): 12px in from the row's right edge and 8px
+     after the name. It was a 26px hit box, which pushed it 5px further in. */
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4928,7 +4956,6 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 .file-remove:hover {
-  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
 }
 
@@ -4983,6 +5010,32 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   width: 100%;
   min-width: 0;
   text-align: center;
+}
+
+/* A picked image in a single-file field (Figma 1529:3890 "File Upload -
+   Single File Uploaded"): the .file-card shell in place of the 160px zone, its
+   body a centred ROW — the image itself at 74×80 (cover), 20px, then the name
+   over its size. */
+.file-card--image {
+  flex: none;
+  height: 160px;
+}
+
+.file-card--image .file-card-body {
+  flex-direction: row;
+  gap: 20px;
+}
+
+.file-card-thumb {
+  width: 74px;
+  height: 80px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.file-card--image .file-card-meta {
+  width: auto;
+  min-width: 0;
 }
 
 /* Drop zone (365:6128): fixed 160px tall, dashed #7a7a7a hairline, stacked
@@ -5059,7 +5112,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .drop-slim {
   width: 100%;
   min-height: 36px;
-  padding: 8px 40px;
+  /* 776:1441 measures 8 / 40 from the outer edge, so 7 / 39 inside the 1px
+     dashed border — the padding-minus-border rule. */
+  padding: 7px 39px;
   border: 1px dashed #7a7a7a;
   border-radius: 8px;
   background: transparent;
@@ -5200,7 +5255,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 /* Toolbar strip — Figma 620:1352 / 327:137 "Focus State": a compact 38px bar
    along the field's BOTTOM edge. 4px side inset, 8px above/below the 22px
-   control row; the fill is rgba(122,122,122,0.1) over #0d0d0d and carries no
+   control row; the fill is a translucent rgba(122,122,122,0.1) and carries no
    border of its own — the fill step against the panes is the separator.
    Re-synced 2026-09-10: the vertical inset went 6px → 8px (34px → 38px tall)
    across all four nodes — 620:1352, 327:137, 405:238 and 697:1001 all draw
@@ -5213,7 +5268,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
      strip's own vertical inset. */
   row-gap: 8px;
   padding: 8px 4px;
-  background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
+  /* Only the node's top wash — the #0d0d0d under it is the preview surface,
+     so on a card the strip steps up from the card, not punched down to it. */
+  background: rgba(122, 122, 122, 0.1);
 }
 
 /* Out of focus a rich text field reads as a plain text field: the strip is
@@ -5309,7 +5366,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   white-space: nowrap;
 }
 .rte-para-menu .dropdown-list .dropdown-item.is-current { font-weight: 600; }
-.rte-para-menu .dropdown-list .dropdown-item:hover { background: #2c2c2f; }
+.rte-para-menu .dropdown-list .dropdown-item:hover { background: rgba(115, 115, 115, 0.1); }
 
 /* Text body. Standalone (single-language) areas carry the full 12px inset;
    inside a language row the row owns the horizontal half. */
@@ -5326,16 +5383,28 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   resize: none;
   overflow: hidden;
   display: block;
-  line-height: 23px;
-  min-height: 23px;
+  /* Figma's leading-normal on 16px Fira Sans: a 19px line, the same as every
+     plain field — so a one-line rich text row is the plain row's 43px
+     (1527:3846 / 620:1352) and the 2- and 4-line variants pitch at 19
+     (405:238 / 697:1001). It was 23px until 2026-10-06. */
+  line-height: 19px;
+  min-height: 19px;
 }
 
 .rte-area::placeholder {
   color: #404040;
 }
 
-.rte-field.is-disabled {
-  opacity: 0.55;
+/* A field that can't be filled in yet (Figma 1481:3600 — Combined Feedback's
+   partial row on a single-answer MCQ): no fade. The box and its #404040
+   placeholder stay as they are; only the EN / ES tags drop to #404040 — the
+   placeholder itself says why it's shut. */
+.rte-field.is-disabled .rte-lang-row .lang-tag {
+  color: #404040;
+}
+
+.rte-field.is-disabled .rte-area {
+  cursor: not-allowed;
 }
 
 .rte-field-divider {
@@ -5358,12 +5427,11 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: #a8a8a8;
   /* Match the area's own top inset + first line box so the tag sits centred on
      line one rather than on the whole (growing) textarea. */
   padding-top: 12px;
-  line-height: 23px;
+  line-height: 19px;
 }
 
 .rte-lang-row .rte-area {
@@ -5606,7 +5674,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 .inline-num:focus {
-  border-color: var(--accent);
+  border-color: var(--field-focus);
 }
 
 /* ============== Toggle ============== */
@@ -6121,7 +6189,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #7a7a7a; /* 752:2830 */
   cursor: pointer;
 }
 
@@ -6132,7 +6200,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .price-idm-add {
   flex: none;
   align-self: stretch;
-  width: 92px;
+  width: 90px; /* 752:2860 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6203,11 +6271,11 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   background: transparent;
   color: #a8a8a8;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
-  /* 19px, so a segment is 35px and the control 45px — the height every current
-     node shows (555:1803's Single-Select, 552:1127). */
-  line-height: 19px;
+  /* 14px on a 17px line, so a segment is 33px and the control 43px (359:2373 /
+     639:895, re-issued 2026-10-06 — it was 16px type and 45px tall). */
+  line-height: 17px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -6406,7 +6474,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 .ctb-start {
   width: 100%;
-  max-width: 640px;
+  max-width: 766px; /* 1508:1378 — two 371px cards + the 24px gap */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -6416,51 +6484,50 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 .ctb-start-cards {
   width: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  display: flex;
+  gap: 24px;
 }
-/* The callout as a button: top-aligned, a roomier inset, and its 16px glyph
-   set on a 36px tile of the card's own wash (orange on the accent card).
-   Doubled with `.note-card` — the callout's rules come later in this file. */
-.note-card.ctb-start-card {
-  align-items: flex-start;
-  padding: 18px;
-  text-align: left;
-  cursor: pointer;
-  transition: box-shadow 0.12s ease;
-}
-.note-card.ctb-start-card.note-card--accent {
-  --note-edge: rgba(240, 85, 35, 0.5);
-}
-.note-card.ctb-start-card:hover {
-  --note-edge: rgba(240, 85, 35, 0.4);
-}
-.note-card.ctb-start-card.note-card--accent:hover {
-  --note-edge: rgba(240, 85, 35, 0.75);
-}
-.ctb-start-card:focus-visible {
-  outline: 1px solid #404040;
-  outline-offset: 2px;
-}
-.ctb-start-card .note-card-icon {
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
+/* Figma 1508:1378 — the Review Runs card, but the pair splits the row and
+   grows with its copy: no fixed 320×70, text wraps, and the glyph is a bare
+   20px Icon Library glyph (1.667 stroke) with no tile (re-synced 2026-10-05,
+   was 32px). Tones are the node's: #7a7a7a 20% wash / 10% hairline, the
+   primary in the accent orange. The 0d0d0d layer under them in the file is
+   the preview surface, not baked in. */
+.rr-card.ctb-start-card {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  min-height: 85px;
+  box-shadow: inset 0 0 0 0.5px rgba(122, 122, 122, 0.1);
   background: rgba(122, 122, 122, 0.2);
 }
-.ctb-start-card.note-card--accent .note-card-icon {
+button.rr-card.ctb-start-card:hover {
+  background: rgba(122, 122, 122, 0.3);
+}
+.rr-card.ctb-start-card--accent {
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.1);
   background: rgba(240, 85, 35, 0.2);
-  color: #f05523;
 }
-.ctb-start-card .note-card-icon svg {
-  width: 16px;
-  height: 16px;
+button.rr-card.ctb-start-card--accent:hover {
+  background: rgba(240, 85, 35, 0.3);
 }
-.ctb-start-card .note-card-text {
-  gap: 4px;
+.ctb-start-card .rr-title,
+.ctb-start-card .rr-sub {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: break-word;
+}
+.ctb-start-icon {
+  flex: none;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  color: #fff;
+}
+.ctb-start-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* The Courses panel's Add Actions pair, pinned under the scrolling list. */
@@ -7642,8 +7709,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 /* A `date` section's submenu (Filters.tsx) holds the shared dual-calendar range
-   panel instead of a checklist: it sizes to the panel (presets rail + two 252px
-   calendars, ~710px — mirrored by SUBMENU_WIDTH_DATE, which the flip decision
+   panel instead of a checklist: it sizes to the panel (presets rail + two 224px
+   calendars, 648px — mirrored by SUBMENU_WIDTH_DATE, which the flip decision
    measures against) and drops the checklist's 440px cap, since the calendar is
    one fixed block with nothing to scroll. The submenu's own wash and border are
    the panel's chrome here — `.drp-panel` takes those from `.dropdown--cal` when
@@ -7774,6 +7841,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* List-page rhythm with no filter pills: search → 24 → content. The
+     generic `.toolbar` only brings the 12px that precedes a pill row. */
+  margin-top: 12px;
   /* No own bottom gap: the .tasks shell's 20px is the page's. */
 }
 
@@ -7929,7 +7999,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 
 .lc-strength:focus {
-  border-color: var(--border-strong);
+  border-color: var(--field-focus);
   outline: none;
 }
 
@@ -8264,8 +8334,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .qb-search-input {
   width: 100%;
   height: var(--search-h);
-  /* Same 44/58px text insets as .search-input, less the 1px border. */
-  padding: 0 58px 0 43px;
+  /* Same 40/59px text insets as .search-input, less the 1px border. */
+  padding: 0 58px 0 39px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
@@ -8278,6 +8348,10 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .qb-search-input::placeholder {
   color: #a8a8a8;
   font-weight: 500;
+}
+
+.qb-search-input:hover {
+  background: var(--search-bg-hover);
 }
 
 .qb-search-input:focus {
@@ -9806,7 +9880,7 @@ a.spc-hero-pill--link:hover {
   border-radius: 8px;
 }
 .spc-url-field:focus-within {
-  border-color: var(--border-strong);
+  border-color: var(--field-focus);
 }
 .spc-url-input {
   flex: 1;
@@ -11552,7 +11626,7 @@ a.spc-hero-pill--link:hover {
 .prm-other:focus,
 .prm-text-input:focus {
   outline: none;
-  border-color: #7a7a7a;
+  border-color: var(--field-focus);
 }
 
 /* The evidence row at the top of the reject modal (Figma 1079:1373): a
@@ -11850,15 +11924,14 @@ a.prm-cta {
   white-space: pre-line;
 }
 
-/* ===== Row preview panel ("Preview Panel 3a") =====
-   What a Certifications, Tasks, Users or Companies row opens (PreviewPanel.tsx).
-   Layout only — every surface and control is a design-system piece: the panel
-   wash (`--panel-bg` / `--panel-border`, the drawer's 15% grey) over the
-   modals' 65% scrim, the dialog head (`.prm-*`), `.cta-primary` / `.cta-quiet`,
-   Review Runs cards (`.rr-card`) for the figures, the shared `.tabbar`,
-   ConfirmCards in the body and a `.seg-control` for Phone / Web. The record
-   column is 640px; learner-facing records add a preview column — 440px for
-   Phone (1080 overall), 720px for Web (1360). Only the tab body scrolls. */
+/* ===== Row preview panel (Figma 1514:2860 "Preview Panel") =====
+   What a Certifications, Tasks, Users, Companies, Skills or Question Bank row
+   opens (PreviewPanel.tsx). On the panel surface (`--panel-bg` /
+   `--panel-border`) over the modals' 65% scrim, 1167px wide: a 68px bar
+   across the top — the record's kind as the orange eyebrow, the close glyph
+   opposite — over two columns, the 637px record column (title, subtitle,
+   kebab, then accordions; the whole column scrolls) and the 530px preview
+   column, blank until its frames land. */
 .pp-overlay {
   position: fixed;
   inset: 0;
@@ -11873,24 +11946,15 @@ a.prm-cta {
   pointer-events: none;
 }
 .pp {
-  width: 640px;
+  width: 1167px;
   max-width: 100vw;
   height: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid var(--panel-border);
   background: var(--panel-bg);
   font-family: var(--font-sans);
-  transition: width 0.2s;
   animation: pp-panel-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
-}
-.pp--preview.pp--phone {
-  width: 1080px;
-  grid-template-columns: minmax(0, 1fr) 440px;
-}
-.pp--preview.pp--web {
-  width: 1360px;
-  grid-template-columns: minmax(0, 1fr) 720px;
 }
 .pp-overlay--closing > .pp {
   animation: pp-panel-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
@@ -11918,7 +11982,6 @@ a.prm-cta {
   .pp-overlay,
   .pp {
     animation: none;
-    transition: none;
   }
 }
 /* A row menu opened from the panel's kebab, and the copy toast, float above it. */
@@ -11928,341 +11991,241 @@ body:has(.pp-overlay) .u-menu {
 body:has(.pp-overlay) .pl-copied-toast {
   z-index: 460;
 }
-
-.pp-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
+/* A toast raised while a PrmModal (400) or the ID popup (200) is open
+   ("Template Downloaded", "ID Approved") sits above its overlay, not under it. */
+body:has(.pr-confirm-overlay) .pl-copied-toast,
+body:has(.pm-overlay) .pl-copied-toast {
+  z-index: 460;
 }
-/* The drawer's 24/40 insets; head pieces stack 20px apart. */
-.pp-head {
+
+/* 1514:2855 — 24px insets; the 20px close glyph sets the 68px height, the
+   hairline drawn inside it as Figma does (hence 23px below). */
+.pp-bar {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 24px 40px 0;
-}
-.pp-ident {
-  display: flex;
   align-items: center;
-  gap: 16px;
-  min-width: 0;
+  gap: 28px;
+  padding: 24px 24px 23px;
+  border-bottom: 1px solid var(--panel-border);
 }
-.pp-ident .prm-title {
-  overflow-wrap: anywhere;
-}
-/* The close glyph centres on the 32px title's first line (38px box). */
-.pp-head .prm-close,
-.pp-side-head .prm-close {
-  margin-top: 9px;
-}
-.pp-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  row-gap: 8px;
-  font-size: 14px;
-  line-height: normal;
-  color: #a8a8a8;
-}
-.pp-meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.pp-meta-sep {
-  margin-right: 6px;
-  color: #404040;
-}
-.pp-meta .pp-id {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-.pp-meta .co-status-pill {
-  padding: 2px 8px;
-}
-.pp-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.pp-more {
-  margin-left: auto;
-}
-/* Review Runs cards as the stat strip: fluid instead of the strip's fixed
-   320px, and not clickable. */
-.pp-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
-}
-.rr-card.pp-stat {
-  width: auto;
-  min-width: 0;
-  height: 72px;
-  gap: 10px;
-  padding: 12px 14px;
-  cursor: default;
-}
-.pp-stat .rr-count {
-  padding-right: 10px;
-  font-size: 24px;
-}
-.pp-stat .rr-title {
-  font-size: 14px;
-}
-.pp-stat .rr-sub {
-  font-size: 12px;
-}
-.pp-tabs {
-  margin-bottom: 0;
-}
-.pp-tabs .tab:first-child {
-  padding-left: 0;
-}
-/* Review cards on the panel's own wash, as in the drawer before it — the
-   card's 10% grey would stack a second panel on top. */
-.pp-body .confirm-card {
-  background: transparent;
-}
-.pp-body {
+/* The rail's "EDITING <TYPE>" eyebrow, 14px Medium accent uppercase. */
+.pp-kind {
   flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #f05523;
+  text-transform: uppercase;
+}
+
+/* The record column keeps its 637px; a narrow window takes the preview
+   column first. */
+.pp-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: min(637px, 100%) minmax(0, 1fr);
+}
+.pp-main {
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 24px 40px 40px;
-}
-
-/* The preview column: the Phone / Web control with the close glyph opposite,
-   then the device frame centred on a scrolling stage. */
-.pp-side {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  border-left: 1px solid var(--panel-border);
+  gap: 28px;
+  padding: 32px;
+  border-right: 1px solid var(--panel-border);
 }
-.pp-side-head {
+/* 1517:3699 — the title block, 12px, then the 32px kebab. */
+.pp-head {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
+  gap: 12px;
+}
+.pp-ident {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 1516:3370 — 28px SemiBold white. */
+.pp-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+.pp-ident .prm-text {
+  overflow-wrap: anywhere;
+}
+/* 1517:3693 "3-Dot Menu": a bare white 16px kebab in a 32px r8 target. */
+.pp-more {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.pp-more:hover {
+  background: rgba(122, 122, 122, 0.2);
+}
+/* 1517:3809 — accordions 8px apart. The summaries' own `.confirm-cards`
+   wrappers dissolve into the stack so every accordion keeps that rhythm. */
+.pp-body {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pp-body .confirm-cards {
+  display: contents;
+}
+/* The preview column (1514:2815) — the panel surface, blank for now. */
+.pp-side {
+  min-width: 0;
+}
+
+/* ===== Accordion (Figma 1517:3788 collapsed / 1517:3792 expanded) =====
+   Accordion.tsx. A 20px SemiBold title and the 16px #a8a8a8 chevron over a
+   hairline: shut, the head is 41px (8 / 9 around the 24px line) with the rule
+   under it; open, the head grows to 48px (12 / 12), the rule moves under the
+   body and the chevron turns up. The body opens on the 0fr → 1fr track. */
+.acc {
+  min-width: 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.acc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.acc-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 24px 32px 0;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: padding 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
-.pp-side-head .prm-close {
-  margin-top: 12px;
+.acc.is-open .acc-toggle {
+  padding: 12px;
 }
-.pp-stage {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 32px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-/* ── The stand-in learner screens ── */
-.pps-phone {
-  width: 280px;
-  height: 608px;
-  flex-shrink: 0;
-  padding: 10px;
-  border-radius: 40px;
-  background: #0d0d0d;
-  border: 1px solid #404040;
-}
-.pps-screen {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  border-radius: 31px;
-  overflow: hidden;
-  background: var(--panel-bg);
-}
-.pps-status {
-  position: relative;
-  flex-shrink: 0;
-  height: 34px;
-  padding: 0 22px;
-  display: flex;
-  align-items: center;
-  font-size: 11px;
+.acc-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 20px;
   font-weight: 600;
-  color: #fff;
-}
-.pps-notch {
-  position: absolute;
-  top: 9px;
-  left: 50%;
-  width: 72px;
-  height: 18px;
-  margin-left: -36px;
-  border-radius: 10px;
-  background: #000;
-}
-.pps-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(#000 85%, transparent);
-  mask-image: linear-gradient(#000 85%, transparent);
-}
-.pps-cover {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background:
-    linear-gradient(0deg, rgba(138, 49, 20, 0.55) 0%, rgba(240, 85, 35, 0.35) 70%),
-    #0d0d0d;
-}
-.pps-cover-eyebrow {
-  position: absolute;
-  left: 14px;
-  bottom: 10px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: rgba(13, 13, 13, 0.75);
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-}
-.pps-intro {
-  padding: 14px 16px 6px;
-}
-.pps-title {
-  font-size: 18px;
   line-height: normal;
-  font-weight: 600;
   color: #fff;
 }
-.pps-meta {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #a8a8a8;
-}
-.pps-desc {
-  margin: 8px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #a8a8a8;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.cta-primary.pps-cta {
-  display: flex;
-  width: 100%;
-  margin-top: 12px;
-  font-size: 13px;
-}
-.pps-list {
-  padding: 8px 16px 16px;
-}
-.pps-list-title {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #a8a8a8;
-}
-.pps-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
-}
-.pps-kind {
-  flex-shrink: 0;
-  color: #a8a8a8;
-}
-.pps-item-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.pps-item-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pps-item-meta {
-  font-size: 11px;
-  color: #a8a8a8;
-}
-.pps-web {
-  width: 656px;
-  max-width: 100%;
-  height: 410px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #404040;
-  background: var(--panel-bg);
-}
-.pps-bar {
-  flex-shrink: 0;
-  height: 32px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #0d0d0d;
-  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
-}
-.pps-lights {
+.acc-chevron {
+  flex: none;
   display: inline-flex;
-  gap: 6px;
-}
-.pps-lights i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #404040;
-}
-.pps-url {
-  flex: 1;
-  min-width: 0;
-  height: 20px;
-  padding: 0 10px;
-  border-radius: 6px;
-  background: var(--search-bg);
-  display: flex;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
   color: #a8a8a8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
-.pps-page {
-  flex: 1;
-  min-height: 0;
+.acc-toggle:hover .acc-chevron {
+  color: #fff;
+}
+.acc.is-open .acc-chevron {
+  transform: rotate(180deg);
+}
+/* A section's own button or pencil, beside the chevron. */
+.acc-trailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 12px;
+}
+.acc-trailing .confirm-card-edit {
+  display: inline-flex;
+}
+.acc-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 8px;
-  padding: 16px;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.22s cubic-bezier(0.2, 0, 0, 1),
+    visibility 0s linear 0.22s;
+}
+.acc.is-open .acc-body {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows 0.22s cubic-bezier(0.2, 0, 0, 1),
+    visibility 0s;
+}
+/* The track clips this wrapper; the insets live on the content inside it, so
+   a shut accordion keeps none of its padding. */
+.acc-inner {
+  min-height: 0;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(#000 88%, transparent);
-  mask-image: linear-gradient(#000 88%, transparent);
 }
-.pps-page-main .pps-cover {
-  border-radius: 8px;
+.acc-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 12px 12px;
 }
-.pps-page-main .pps-intro {
-  padding: 12px 0 0;
+/* 1517:3797 — one field per line: the 180px #a8a8a8 label, 20px, the white
+   value; 16px Regular, lines 16px apart. */
+.acc-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
-.pps-page .pps-list {
-  padding: 0 0 0 8px;
+.acc-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  column-gap: 20px;
+  align-items: start;
+  font-size: 16px;
+  line-height: normal;
+}
+.acc-label {
+  color: #a8a8a8;
+}
+.acc-value {
+  margin: 0;
+  min-width: 0;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+.acc-value-sub {
+  color: #a8a8a8;
+}
+.acc-value .co-status-pill {
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: reduce) {
+  .acc-toggle,
+  .acc-chevron,
+  .acc-body,
+  .acc.is-open .acc-body {
+    transition: none;
+  }
 }
 
 /* =============================================================
@@ -12787,7 +12750,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   min-height: 110px;
 }
 .rh-feedback:focus {
-  border-color: var(--border-strong);
+  border-color: var(--field-focus);
 }
 .rh-feedback::placeholder {
   color: var(--text-faint);
@@ -14702,13 +14665,17 @@ body:has(.pp-overlay) .pl-copied-toast {
 .rail-search {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   height: var(--search-h);
   padding: 0 15px;
   margin-bottom: 24px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
+}
+
+.rail-search:hover {
+  background: var(--search-bg-hover);
 }
 
 .rail-search:focus-within {
@@ -15214,21 +15181,6 @@ body:has(.pp-overlay) .pl-copied-toast {
 /* The selected row's kebab is white like every other state — it inherits, so
    the old orange override is gone rather than restated. */
 
-/* "Hidden" tag — Figma "Tags" 320:1437: no border, tinted fill, 40px radius. */
-.ind-hidden-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 2px 12px;
-  border-radius: 40px;
-  background: rgba(115, 115, 115, 0.1);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  color: #737373;
-}
-
 /* Sub-list — Figma Tree 860:2255: the sub rows stack flush under the category
    row at the 32px pitch; no gaps, no divider.
    It opens by animating a grid track from 0fr to 1fr — the one way to
@@ -15366,8 +15318,44 @@ body:has(.pp-overlay) .pl-copied-toast {
    "Industries · 7" + a bare "+" on 2026-09-24, and the user had that removed
    the same day ("Remove that Industries header thing with the count"), moving
    the add action up to the header CTA. */
+/* Launcher / hub above, the staged-reorder save bar (`ChangesFooter`) below. */
+.ind-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+/* The shared bar bleeds -32px for the Spotlights gutter; here it spans the
+   column, as on Manage User Progress. */
+.ind-page > .sp-save-footer {
+  margin: 0;
+  padding: 20px 32px;
+}
+
 .ind-launch {
   overflow: hidden;
+}
+
+/* The untagged-Certifications banner (Figma 1424:1416 on the launcher):
+   between the header's 24px and the search, with the same 24px under it. */
+.ind-banner {
+  margin-bottom: 24px;
+}
+
+/* Assign Industries' destination row above the picker's search: the label
+   12px before a select sized to its widest option. */
+.stm-dest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stm-dest-label {
+  flex: none;
+  color: #a8a8a8;
+  font-family: var(--font-sans);
+  font-size: 14px;
 }
 
 /* Search — the Tasks bar in its SCROLLED (table) state, not the landing hero
@@ -15447,9 +15435,13 @@ body:has(.pp-overlay) .pl-copied-toast {
 
 .ind-row {
   --ind-row-rule: inset 0 -1px 0 rgba(64, 64, 64, 0.5);
+  /* The track gap; the large row's is 8px (Figma 1306:1545 re-cut
+     2026-10-03). The 24 / 40px spacings below subtract it, so they hold at
+     either size. */
+  --ind-gap: 4px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ind-gap);
   flex-shrink: 0;
   width: 100%;
   min-width: 0;
@@ -15460,7 +15452,11 @@ body:has(.pp-overlay) .pl-copied-toast {
   transition: background 0.1s ease;
 }
 .ind-row--lg {
+  --ind-gap: 8px;
   padding: 16px 8px;
+  /* 16 + 24px name + 19px meta + 16: a row with no second line (an industry
+     with no sub-industries) keeps the list's height, its name centred. */
+  min-height: 75px;
 }
 .ind-certtable .ind-row {
   --ind-row-rule: inset 0 -0.5px 0 rgba(64, 64, 64, 0.5);
@@ -15473,14 +15469,12 @@ body:has(.pp-overlay) .pl-copied-toast {
   cursor: pointer;
 }
 
+/* Hover / driven row: a flat 10% grey wash (Figma 1306:1546 re-cut
+   2026-10-03 — it was a 3% → 5% left-to-right gradient). */
 .ind-row:hover,
 .ind-row.is-active,
 .ind-row.menu-open {
-  background: linear-gradient(
-    to right,
-    rgba(217, 217, 217, 0.03),
-    rgba(115, 115, 115, 0.05)
-  );
+  background: rgba(122, 122, 122, 0.1);
 }
 /* On the launcher the fill marks the ↵ target — the row being driven, which
    hovering also sets — so a row the pointer merely rests on during an
@@ -15534,16 +15528,20 @@ body:has(.pp-overlay) .pl-copied-toast {
    bar sits in the row's track (4px gap, the row's own 4 / 8px right padding
    = the node's inset) instead of being absolutely placed over a cell, and the
    `.table tbody tr` show / menu-open rules are restated for `.ind-row`. */
+/* Always in the track (Figma 1306:1545 keeps the ⋯ at opacity 0 on a resting
+   row), so the text and the Hidden pill don't jump when it appears. */
 .ind-row .row-action-bar {
   position: static;
   transform: none;
   flex-shrink: 0;
+  display: inline-flex;
+  visibility: hidden;
 }
 .ind-row:hover .row-action-bar,
 .ind-row.is-active .row-action-bar,
 .ind-row.menu-open .row-action-bar,
 .ind-row:focus-within .row-action-bar {
-  display: inline-flex;
+  visibility: visible;
 }
 .ind-row.menu-open .row-action-bar > .row-action-btn:last-child {
   border-color: #f05523;
@@ -15561,13 +15559,31 @@ body:has(.pp-overlay) .pl-copied-toast {
   text-align: right;
 }
 
+/* An industry's icon (Figma 1306:1545, re-cut 2026-10-03): a 24px slot, 40px
+   after the index and 40px before the name — wider than the 24px a row
+   without an icon keeps. The seed SVGs carry their own #a8a8a8. */
+.ind-row-icon {
+  flex-shrink: 0;
+  display: flex;
+  width: 24px;
+  height: 24px;
+  margin-left: calc(40px - var(--ind-gap));
+}
+.ind-row-icon + .ind-row-cell {
+  margin-left: calc(40px - var(--ind-gap));
+}
+.ind-row-icon img {
+  display: block;
+  max-width: none;
+}
+
 .ind-row-cell {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  /* 4px track gap + 20px = the node's 24px between the index and the name. */
-  margin-left: 20px;
+  /* Track gap + the rest = the node's 24px between the index and the name. */
+  margin-left: calc(24px - var(--ind-gap));
 }
 
 /* Name line: the name ellipsises; a Hidden pill rides beside it. */
@@ -15582,8 +15598,10 @@ body:has(.pp-overlay) .pl-copied-toast {
   color: #e7e7e8;
 }
 .ind-row--lg .ind-row-name {
+  gap: 10px;
   font-size: 20px;
   line-height: 24px;
+  color: #fff;
 }
 .ind-row-name-text {
   min-width: 0;
@@ -15591,11 +15609,32 @@ body:has(.pp-overlay) .pl-copied-toast {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The shared pill sets no line-height, so it inherited the name's and stood
-   taller than its line — a hidden row grew past 60 / 75px. Tags 320:1437 is
-   18px: 2px padding around a 14px line. */
-.ind-row-name .ind-hidden-pill {
+/* "Hidden" (Figma 1306:1545, 1487:1410): a 22px pill 10px after the name —
+   the grey Table Pill's tint at 12px Medium, 4px 8px. */
+.ind-row-hidden {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(115, 115, 115, 0.1);
+  font-size: 12px;
+  font-weight: 500;
   line-height: 14px;
+  color: #737373;
+  white-space: nowrap;
+}
+
+/* A hidden row dims (1306:1566): name #7a7a7a, subtext #404040, and the icon
+   to the subtext's #404040 — 0.34 takes the #a8a8a8 glyph there over the
+   #0b0b0c page, and works for an uploaded icon of any colour. */
+.ind-row.is-hidden-item .ind-row-name,
+.ind-row.is-hidden-item .ind-row-parent {
+  color: #7a7a7a;
+}
+.ind-row.is-hidden-item .ind-row-meta {
+  color: #404040;
+}
+.ind-row.is-hidden-item .ind-row-icon {
+  opacity: 0.34;
 }
 /* "HVAC › " before a sub-industry hit on the launcher. */
 .ind-row-parent {
@@ -15620,14 +15659,23 @@ body:has(.pp-overlay) .pl-copied-toast {
   font-size: 16px;
   line-height: 19px;
 }
-
-/* Hidden industries / sub-industries read as the tree's hidden rows: the
-   text drops to #404040 (the pill keeps its own tone). */
-.ind-row.is-hidden-item .ind-row-index,
-.ind-row.is-hidden-item .ind-row-name,
-.ind-row.is-hidden-item .ind-row-parent,
-.ind-row.is-hidden-item .ind-row-meta {
-  color: #404040;
+/* `FitLine`'s box: the meta's full width, so it can measure how many names
+   fit; keeps the meta's ellipsis for a lone name that's still too long. */
+.ind-row-fit {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The hidden twin `FitLine` measures candidate lines on: shrink-wrapped to
+   its text, clipped by the line, never seen or hit. */
+.ind-row-fit-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* ─── Hub (4a) ──────────────────────────────────────────────────────────────
@@ -15965,7 +16013,7 @@ body:has(.pp-overlay) .pl-copied-toast {
 }
 
 /* Wide enough for the longest pill the column draws:
-   "Stripe · Cancels Aug 27, 2026". */
+   "Free Trial Ends Sep 30, 2026". */
 .table .col-u-sub {
   width: 240px;
   white-space: nowrap;
@@ -16011,8 +16059,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   color: #bdbdc2;
 }
 
-/* Subscription carries no chrome of its own — it is plain text like the rest
-   of the table's data columns; see subscriptionLabel() in UsersPage.tsx. */
+/* Subscription is a `.co-status-pill` (its cells carry `.col-status`, which
+   re-enables the pill chrome) — see subscriptionPill() in UsersPage.tsx. */
 
 /* Three-dot row actions menu (fixed-positioned) */
 /* Re-synced to Figma 670:1323 "3-Dot Menu - B2B Companies" — the shared shell
@@ -16268,13 +16316,6 @@ body:has(.pp-overlay) .pl-copied-toast {
   margin-left: 8px;
 }
 
-/* Unselect-all links under the Download All Awards checklist. */
-.prof-unselect-row {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-}
-
 /* ── Legacy pm- modal shell — still used by Merge Accounts, Manage
    Completions, Industries and Question Bank; the Full Profile moved to the
    shared PrmModal. ── */
@@ -16472,19 +16513,21 @@ body:has(.pp-overlay) .pl-copied-toast {
 .usearch-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   height: var(--search-h);
   /* Figma pads 16px from the OUTER edge and this shell has a 1px border, so
      the CSS padding is 15 — see the padding-minus-border rule. The text then
-     starts at 44px (15 + 1 + 16px icon + 12px gap), matching .search-input's
-     44px. The 12px is Text Entered 902:3585 / Filter Applied 772:1110 / Large
-     1362:1945; the re-issued Default 399:216 alone shows 8px (text at 40), and
-     one input can't put its placeholder 4px left of its own typed text without
-     a jump on the first keystroke — so every state holds 12. */
+     starts at 40px (15 + 1 + 16px icon + 8px gap), matching .search-input's
+     40px. Every 43px state is 8px since 2026-10-05 — Default 399:216, Hover
+     1521:3831, Filled 902:3585, Filter Added 772:1110 (icon → chip → text),
+     Secondary, Modal; only Large 1362:1945 keeps 12. */
   padding: 0 15px;
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
+}
+.usearch-bar:hover {
+  background: var(--search-bg-hover);
 }
 .usearch-bar.open {
   border-color: var(--text-faint);
@@ -16517,25 +16560,29 @@ body:has(.pp-overlay) .pl-copied-toast {
    over #0d0d0d (the default surface is 20%) — and an 8px icon→text gap. Only
    the bar changes; the dropdown panel keeps the search surface. */
 .usearch--secondary .usearch-bar {
-  gap: 8px;
   background: linear-gradient(rgba(115, 115, 115, 0.1), rgba(115, 115, 115, 0.1)), #0d0d0d;
+}
+.usearch--secondary .usearch-bar:hover {
+  background: linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)), #0d0d0d;
 }
 /* "Search Bar - Modal" (1473:3310): any search bar inside a modal card. The
    fill is ONLY the #737373 20% wash, translucent over whatever holds it — the
    modal's own 15% surface — never re-based on #0d0d0d the way the page bar's
    `--search-bg` is (that reads as a dark well punched into the card). Same
-   43px bar and 10% hairline; the icon → text gap is the node's 8px. The
-   dropdown PANELS under these bars keep their opaque surface. */
+   43px bar, 10% hairline and 8px icon → text gap. The dropdown PANELS under
+   these bars keep their opaque surface. */
 .prm .usearch-bar,
-.cl-modal .usearch-bar {
-  gap: 8px;
-  background: var(--search-wash);
-}
+.cl-modal .usearch-bar,
 .prm .search-input,
 .cl-modal .search-input {
-  /* 16 + 16px icon + 8 = text at 40, less the 1px border. */
-  padding-left: 39px;
   background: var(--search-wash);
+}
+/* Hover on a modal: the same lone wash, at the hover strength. */
+.prm .usearch-bar:hover,
+.cl-modal .usearch-bar:hover,
+.prm .search-input:hover,
+.cl-modal .search-input:hover {
+  background: var(--search-wash-hover);
 }
 
 .usearch-kbd {
@@ -16622,10 +16669,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   min-width: 0;
 }
 /* With no chips in it the wrapper still counted as a flex item, so the bar's
-   12px gap applied twice and pushed the placeholder to 56px from the edge —
-   Figma 11:15130 puts it at 44px (16px padding + 16px icon + 12px gap), which
-   is what every non-scoped bar (.search-input's 44px padding-left) already
-   uses. */
+   gap applied twice and pushed the placeholder 8px right of every non-scoped
+   bar's 40px (.search-input's padding-left). */
 .usearch-scopes:empty {
   display: none;
 }
@@ -16681,15 +16726,17 @@ body:has(.pp-overlay) .pl-copied-toast {
   border-radius: 8px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
   /* Figma 21:15952 / 772:1125: the panel is `p-px` — the 1px border IS the
-     whole inset, so rows and the footer run edge to edge and carry the 18px
-     text inset themselves (was a 6px panel pad + 12px row pad). */
+     whole inset. The footer and "Search for" strip run edge to edge; the head
+     and rows sit in a 4px side gutter (2026-10-05) with their text 16px in. */
   padding: 0;
   max-height: 460px;
   overflow: hidden auto;
   z-index: 50;
 }
 .usearch-head {
-  padding: 12px 18px 8px;
+  /* 21:15954: 12px all round inside the panel's 4px side gutter — the text
+     sits 16px in from the border, the first row 41px down. */
+  padding: 12px 16px;
   font-family: var(--font-sans);
   /* Every block in the panel is measured off Figma's `leading-normal`, so the
      body's 1.45 has to be turned off or each one runs ~3px tall. */
@@ -16700,7 +16747,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   text-transform: uppercase;
 }
 .usearch-empty {
-  padding: 8px 18px 14px;
+  padding: 8px 16px 14px;
   color: #7a7a7a;
   font-size: 14px;
 }
@@ -16709,14 +16756,17 @@ body:has(.pp-overlay) .pl-copied-toast {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 4px 18px;
+  /* 21:15956: rows sit in a 4px side gutter so the hover fill is an inset r8
+     pill, not an edge-to-edge band; 12px more puts the text 16px in. */
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  padding: 4px 12px;
   border-radius: 8px;
   text-align: left;
   font-family: var(--font-sans);
   line-height: normal;
 }
-.usearch-row.active { background: var(--panel-row-hover); }
+.usearch-row.active { background: rgba(115, 115, 115, 0.1); }
 
 .usearch-chip {
   flex-shrink: 0;
@@ -16727,7 +16777,7 @@ body:has(.pp-overlay) .pl-copied-toast {
      in-bar .usearch-scope token. */
   padding: 4px 8px;
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
   color: #a8a8a8;
   background: transparent;
@@ -16803,7 +16853,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   font-family: var(--font-sans);
   line-height: normal;
 }
-.usearch-searchfor.active { background: var(--panel-row-hover); }
+.usearch-searchfor.active { background: rgba(122, 122, 122, 0.1); }
 .usearch-searchfor-icon {
   display: inline-flex;
   color: #a8a8a8;
@@ -16818,8 +16868,8 @@ body:has(.pp-overlay) .pl-copied-toast {
 .usearch-searchfor-text .q { color: #f05523; }
 
 /* Keyboard hints footer — shown when the box is empty. Figma 21:15979: it sits
-   on the panel's 8px column gap behind a 0.5px hairline (20% #737373 since the
-   2026-09-28 re-issue — it was #404040), and the panel no longer pads, so it
+   on the panel's 8px column gap behind a 0.5px hairline (half-strength #404040
+   again since the 2026-10-05 update), and the panel no longer pads, so it
    spans the full width on its own. The bar is a fixed 43px with its 20px hint
    row centred on it (the node's 11.75px top offset is that centring plus the
    hairline) — reading its padding as 8.5/8 instead left the bar 37px and the
@@ -16830,8 +16880,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   gap: 16px;
   margin: 8px 0 0;
   height: 43px;
-  padding: 0 18px;
-  border-top: 0.5px solid rgba(115, 115, 115, 0.2);
+  padding: 0 16px;
+  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
   line-height: normal;
 }
 .usearch-hint {
@@ -17069,6 +17119,12 @@ body:has(.pp-overlay) .pl-copied-toast {
   white-space: nowrap;
 }
 
+/* Hands-On Media File Types Allowed reuses the table; its ALLOWED? label is
+   66px, so the switch column widens to fit it (like `.pc-col-toggle`). */
+.qsec--media .qsec-shown {
+  width: 66px;
+}
+
 /* A row whose dependency isn't met: the switch is off and unavailable, and its
    note says which setting has to come first. */
 .qsec-row.is-disabled {
@@ -17226,7 +17282,7 @@ body:has(.pp-overlay) .pl-copied-toast {
 .resource-edit-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px; /* 1218:1414: the Add Resource CTA sits 12px under the last row */
   max-width: none;
 }
 
@@ -18836,7 +18892,10 @@ body:has(.pp-overlay) .pl-copied-toast {
   /* The inherited 1.45 would make the pill 35px against Figma's 31px. */
   line-height: normal;
   border-radius: 6px;
-  background: #1e1e20;
+  /* A translucent wash (147:1147 / 1528:3854), so the pill steps up from
+     whatever holds the field — page or modal card. Solid #1e1e20 vanished on
+     a modal's #1d1d1d. */
+  background: rgba(115, 115, 115, 0.1);
   color: #fff;
   font-size: 16px;
   font-weight: 500;
@@ -18853,14 +18912,13 @@ body:has(.pp-overlay) .pl-copied-toast {
   justify-content: center;
   width: 14px;
   height: 14px;
-  color: #fff;
-  opacity: 0.7;
+  color: #a8a8a8;
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
 }
-.multiselect-tag-remove:hover { opacity: 1; }
+.multiselect-tag-remove:hover { color: #fff; }
 
 /* 16px box holding the 14px solid caret (Figma 101:278) — the address rows' `.address-chevron`
    under a name the plain fields can share. */
@@ -18873,6 +18931,21 @@ body:has(.pp-overlay) .pl-copied-toast {
   height: 16px;
   color: #fff;
   pointer-events: none;
+}
+
+/* In the single dropdown the caret box is the glyph's own 14px, to fit its
+   14px track (101:272). */
+.select-field .field-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+/* The multi-select and address carets are the 16px cut of the same wedge
+   (147:551, 1389:1694) — the single dropdown's is 14 (101:272). */
+.multiselect-field .field-chevron svg,
+.address-chevron svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Search + multiselect menu — Figma 591:1322. Reuses the shared
@@ -18899,11 +18972,12 @@ body:has(.pp-overlay) .pl-copied-toast {
   min-width: 0;
 }
 .ms-menu-empty {
-  /* Sits on the rows' own 8px inset. */
+  /* Sits on the rows' own 8px inset — 35px, like a row (934:1116). */
   padding: 8px;
   font-family: var(--font-sans);
   font-size: 16px;
-  color: var(--text-faint);
+  line-height: normal;
+  color: #a8a8a8;
 }
 
 /* ─────────────── Single-select field & menu (Figma 591:1382) ───────────────
@@ -18913,11 +18987,12 @@ body:has(.pp-overlay) .pl-copied-toast {
 .select-field {
   /* Value and sizer share one grid cell, so the control takes the width of the
      widest option — what the native select it replaces did — with the chevron
-     in a second 16px track. */
+     in a second 14px track — the caret's own width, 12px after the text
+     (101:272), so its right edge sits on the 12px inset. */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
+  grid-template-columns: minmax(0, 1fr) 14px;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   padding: 12px;
   background: transparent;
   border: 1px solid #404040;
@@ -18982,9 +19057,13 @@ body:has(.pp-overlay) .pl-copied-toast {
    half-strength one the filter panels use) and a deeper 40px-blur shadow — so
    they override `.dropdown`'s shell rather than inheriting it. */
 .ss-menu,
-.ms-menu {
+.ms-menu,
+.rte-para-menu {
   background: #0d0d0d;
   border-color: #404040;
+  /* Every select menu node draws r10 (591:1382 … 941:1115); the shared
+     `.dropdown` shell is the Filters family's r8. */
+  border-radius: 10px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
@@ -19004,7 +19083,8 @@ body:has(.pp-overlay) .pl-copied-toast {
    it is one rule for every select menu now, so the two cannot drift apart. */
 .ss-menu .dropdown-search,
 .ms-menu .dropdown-search {
-  padding: 8px 16px 9px;
+  /* 8 + a 19px line + 8 + the 1px rule = the nodes' 36px header. */
+  padding: 8px 16px;
   border-bottom: 1px solid #404040;
   /* Its own full 1px rule replaces the filter header's 0.5px inset one. */
   box-shadow: none;
@@ -19062,10 +19142,18 @@ body:has(.pp-overlay) .pl-copied-toast {
 /* The list takes focus so the arrow keys work; the row highlight is the visible
    cursor, so the UA ring around the whole panel would only be noise. */
 .ss-menu .dropdown-list:focus { outline: none; }
+/* Typed search text is white (934:1119), not the body's #e7e7e8. */
+.ss-menu .dropdown-search input,
+.ms-menu .dropdown-search input,
+.cw-price-menu .dropdown-search input {
+  color: #fff;
+}
+/* Row hover: the translucent 10% #737373 every select menu node draws (it was
+   a solid #2c2c2f; only the popup variant had the wash). */
 .ss-menu .dropdown-list .dropdown-item:hover,
 .ss-menu .dropdown-list .dropdown-item.is-active,
 .ms-menu .dropdown-list .dropdown-item:hover {
-  background: #2c2c2f;
+  background: rgba(115, 115, 115, 0.1);
 }
 
 /* Figma 668:972 "Dropdown Menu - Popups and Modals" — opened over a modal
@@ -19281,7 +19369,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   overflow: visible;
 }
 .cw-price-field.is-open {
-  border-color: var(--accent);
+  border-color: var(--field-focus);
 }
 .cw-price-field.has-error,
 .cw-price-field.has-error.is-open {
@@ -19387,8 +19475,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   position: absolute;
   top: calc(100% + 6px);
   z-index: 30;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  background: #0d0d0d;
+  border: 1px solid #404040;
   border-radius: 10px;
   box-shadow: 0 16px 20px rgba(0, 0, 0, 0.55);
   padding: 8px;
@@ -19410,7 +19498,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   right: -1px;
   display: flex;
   flex-direction: column;
-  padding: 1px;
+  /* The node's p-px IS the border — the bands start right inside it. */
+  padding: 0;
   max-height: none;
   overflow: hidden;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -19419,6 +19508,7 @@ body:has(.pp-overlay) .pl-copied-toast {
    draws its divider at a full 1px — the filter panels' 24:16116 is 0.5px — so
    it lines up with this menu's own 1px footer rule. */
 .cw-price-menu--list .dropdown-search {
+  padding: 8px 16px; /* 36px with the rule, as in the select menus */
   border-bottom: 1px solid #404040;
   box-shadow: none;
 }
@@ -19445,12 +19535,12 @@ body:has(.pp-overlay) .pl-copied-toast {
   background: transparent;
   text-align: left;
 }
-/* #2c2c2f is the HOVER fill and nothing else (Figma 619:1332 tints exactly one
+/* The 10% wash is the HOVER fill and nothing else (Figma 619:1332 tints exactly one
    row — the pointed-at one). The row that is currently chosen is marked by
    weight instead, the same way the saved-price rows do it below; giving it the
    fill too meant the open currency menu showed two lit rows at once, one under
    the cursor and one that just sat there. */
-.cw-price-opt:hover { background: #2c2c2f; }
+.cw-price-opt:hover { background: rgba(115, 115, 115, 0.1); }
 /* Saved-price rows read price-first, with the price's own name as a trailing
    note (Figma 619:1332). The row for the price currently in the field is
    SemiBold, the same way the single-select marks its current value. */
@@ -19479,10 +19569,11 @@ body:has(.pp-overlay) .pl-copied-toast {
   text-overflow: ellipsis;
 }
 .cw-price-empty {
-  padding: 6px 8px;
+  padding: 8px; /* 934:1116: a 35px muted row on the rows' inset */
   font-family: var(--font-sans);
   font-size: 16px;
-  color: var(--text-faint);
+  line-height: normal;
+  color: #a8a8a8;
 }
 /* Not in node 619:1332 — that sample is three plain rows — but the only way to
    save an unlisted price, so it sits in the list as one more row of it. */
@@ -19494,7 +19585,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   gap: 8px;
   flex: none;
   width: 100%;
-  padding: 9px 16px 8px;
+  padding: 8px 16px; /* 36px with the rule (619:1332) */
   border-top: 1px solid #404040;
   background: transparent;
   cursor: pointer;
@@ -19504,7 +19595,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   font-size: 16px;
   font-weight: 400;
 }
-.cw-price-create:hover { background: #2c2c2f; }
+.cw-price-create:hover { background: rgba(115, 115, 115, 0.1); }
 .cw-price-create-plus {
   flex: none;
   display: inline-flex;
@@ -19586,8 +19677,7 @@ body:has(.pp-overlay) .pl-copied-toast {
 }
 .date-field-trigger:hover { border-color: var(--border-strong); }
 .date-field-trigger.is-open {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(233, 114, 55, 0.14);
+  border-color: var(--field-focus);
 }
 .date-field-trigger.has-error,
 .date-field-trigger.has-error.is-open { border-color: var(--field-error); }
@@ -19836,16 +19926,13 @@ body:has(.pp-overlay) .pl-copied-toast {
   gap: 20px;
   padding: 12px;
 }
-.drp-col--end {
-  border-left: 1px solid rgba(64, 64, 64, 0.5);
-}
 
-/* Start/End fields (610:2133): label 4px over a 252px input (the grid width). */
+/* Start/End fields (610:2133): label 4px over a 224px input (the grid width). */
 .drp-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 252px;
+  width: 224px;
 }
 .drp-field-label {
   font-family: var(--font-sans);
@@ -19866,7 +19953,7 @@ body:has(.pp-overlay) .pl-copied-toast {
   outline: none;
 }
 .drp-input::placeholder { color: #404040; }
-.drp-input:focus { border-color: var(--border-strong); }
+.drp-input:focus { border-color: var(--field-focus); }
 
 .drp-cal {
   display: flex;
@@ -19960,19 +20047,20 @@ body:has(.pp-overlay) .pl-copied-toast {
    an out-of-range date. */
 .drp-my-item:disabled { color: #404040; cursor: default; }
 
-/* 36px cells, columns flush so the range band runs unbroken; 4px between rows,
-   8px under the single-letter weekday heads (606:1750). */
+/* 32px cells (606:1688, re-issued 2026-10-06 — was 36), columns flush so the
+   range band runs unbroken; 2px between rows, 4px under the single-letter
+   weekday heads (606:1750). */
 .drp-days {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .drp-weekdays,
 .drp-grid {
   display: grid;
-  grid-template-columns: repeat(7, 36px);
+  grid-template-columns: repeat(7, 32px);
 }
-.drp-grid { row-gap: 4px; }
+.drp-grid { row-gap: 2px; }
 .drp-weekdays span {
   height: 20px;
   display: flex;
@@ -19984,8 +20072,8 @@ body:has(.pp-overlay) .pl-copied-toast {
   color: #a8a8a8;
 }
 .drp-day {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20000,7 +20088,7 @@ body:has(.pp-overlay) .pl-copied-toast {
 }
 .drp-day:hover:not(:disabled):not(.in-range):not(.drp-day--empty) {
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 18px;
+  border-radius: 16px;
 }
 .drp-day--empty,
 .drp-day--empty:hover { cursor: default; background: transparent; }
@@ -20304,6 +20392,9 @@ body:has(.pp-overlay) .pl-copied-toast {
 .confirm-card-field--wide {
   grid-column: span 2;
 }
+.confirm-card-field--row {
+  grid-column: 1 / -1;
+}
 .confirm-card-label {
   margin-bottom: 4px;
   font-size: 14px;
@@ -20398,9 +20489,13 @@ body:has(.pp-overlay) .pl-copied-toast {
   color: #fff;
 }
 .pl-copied-toast-icon svg { width: 16px; height: 16px; }
-/* The review console's "Review Complete" — 40px above where its 72px footer
-   begins, the same clearance the wizard bodies give it. */
-.rvc-root .pl-copied-toast { bottom: calc(72px + 40px); }
+/* The review consoles' toasts ("Submission Passed", "Attempt Approved"…) —
+   40px above where their 72px footer begins, the same clearance the wizard
+   bodies give it. Exam Reviews raises its toast at page level, beside the
+   console's `.main` rather than inside `.rvc-root` (it has to outlive the
+   console advancing or closing), hence the sibling form. */
+.rvc-root .pl-copied-toast,
+.main:has(.rvc-root) ~ .pl-copied-toast { bottom: calc(72px + 40px); }
 /* ─────────────── Stripe invoices placeholder (standalone tab) ─────────────── */
 
 .stripe-placeholder {
@@ -21067,6 +21162,16 @@ body:has(.pp-overlay) .pl-copied-toast {
   font-weight: 500 !important;
 }
 
+/* A gain with nothing before it (Transfer's Subscription row on an account
+   with no plan) starts the cell; a replaced plan reads struck and muted. */
+.table tbody td:not(.col-actions):not(.col-checkbox) span.mgf-delta--solo {
+  margin-left: 0 !important;
+}
+.mgf-compare s.mgf-was {
+  color: #a8a8a8;
+  font-weight: 400;
+}
+
 /* Both glyphs are drawn at 16px and take the cell's colour; they must not pick
    up the strike on a `.mgf-c-gone` cell. */
 .mgf-compare td svg {
@@ -21098,29 +21203,6 @@ body:has(.pp-overlay) .pl-copied-toast {
    collapses with the table's own 24px, so it has to name the larger value. */
 .mgf-choices {
   margin-top: 32px;
-}
-
-/* ── Running state ──
-   The app's only loader. It takes .wizard-success-icon's 52px slot and 20px
-   gap (11 + 30 + 11 + 20) so the title does not jump when the running screen
-   hands over to the done screen. */
-.mgf-spinner {
-  display: block;
-  width: 30px;
-  height: 30px;
-  margin: 11px 0 31px;
-  border: 2.5px solid var(--border-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: mgfSpin 0.7s linear infinite;
-}
-@keyframes mgfSpin {
-  to { transform: rotate(360deg); }
-}
-
-/* The audit log's key/value rows run wider than the 560px success column. */
-.wizard-success-content.mgf-done {
-  max-width: 720px;
 }
 
 /* ─────────────────  Question editor leftovers  ───────────────── */
@@ -22047,9 +22129,9 @@ body:has(.pp-overlay) .pl-copied-toast {
   color: #fff;
 }
 
-/* Matches .rte-field.is-disabled, so label and field fade together. */
+/* The label greys with the field it names (Figma 1481:3619: #7a7a7a). */
 .qed-fb-label.is-disabled {
-  opacity: 0.55;
+  color: #7a7a7a;
 }
 
 /* A / B / C … down the left of each option (Figma 414:427). Replaces the
@@ -22163,19 +22245,6 @@ body:has(.pp-overlay) .pl-copied-toast {
   cursor: not-allowed;
 }
 
-/* A rich-text cell reads at rest as the node's PLAIN dual-language field
-   (1481:3500 / 1481:3600 draw "Plain Text Input - Dual Language"): Fira's 19px
-   auto leading, so each language row is 12 + 19 + 12 and the table row 114.
-   The app-wide 23px (`.rte-area`) is kept everywhere else. */
-.qed-tbl .rte-area,
-.qed-tbl .rte-lang-row .lang-tag {
-  line-height: 19px;
-}
-
-.qed-tbl .rte-area {
-  min-height: 19px;
-}
-
 .qed-tbl-hd-opt {
   flex: 1;
   min-width: 0;
@@ -22192,24 +22261,24 @@ body:has(.pp-overlay) .pl-copied-toast {
   gap: 4px;
 }
 
-/* Info glyph (Figma 814:1689 / 814:1829): a 12px Icon Library box that sits on
-   its row's own 4px gap. It used to render at the icon's natural 11px with a
-   second 4px margin on top of that gap, so it read small and adrift. */
+/* Info glyph (Figma 814:1689 / 814:1829) on its row's own 4px gap. The 14px
+   `InfoIcon14` cut, as on every page subtext (742:1061) — the 11px `InfoIcon`
+   in a 12px box read thin and undersized beside the 14px caps (2026-10-03,
+   user). Brightens on hover like the other tooltip triggers. */
 .qed-tbl-info {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex: none;
   color: #a8a8a8;
+  cursor: default;
+  transition: color 0.12s ease;
 }
 
-/* The note and its glyph are one 4px-gap row (Figma 814:1828). */
-.qed-toggle .toggle-sub {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.qed-tbl-info:hover {
+  color: #fff;
 }
 
 /* Drag handle + letter gutter: 16px "move" (751:2524) + 4px + the letter. */
@@ -22337,21 +22406,6 @@ body:has(.pp-overlay) .pl-copied-toast {
 .qed-tbl-x[aria-disabled="true"] {
   opacity: 0.3;
   cursor: not-allowed;
-}
-
-/* ─── Rail toggles ─── */
-/* The switch-first row (Figma 739:1821): 8px to the text, and the title sits
-   flush on its note rather than the 4px the stacked variant uses. */
-.qed-toggle {
-  gap: 8px;
-}
-
-.qed-toggle .toggle-text {
-  gap: 0;
-}
-
-.qed-toggle.disabled {
-  opacity: 0.45;
 }
 
 /* ─── Linear scale ─── */
@@ -24006,7 +24060,8 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   cursor: pointer;
   transition: color 0.12s ease;
 }
-.rvc-headicon:hover { color: #fff; }
+.rvc-headicon:hover,
+.rvc-headicon.is-open { color: #fff; }
 .rvc-headicon:focus-visible {
   outline: 1px solid #404040;
   outline-offset: 2px;
@@ -25093,7 +25148,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   --mc-divider: rgba(122, 122, 122, 0.5); /* DS structural rule */
   --mc-hairline: rgba(64, 64, 64, 0.5); /* DS in-card rule */
   --mc-ctl: #404040; /* DS control border */
-  --mc-card: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -25113,7 +25167,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   flex: none;
   display: flex;
   align-items: center;
-  padding: 20px 32px 0; /* was 36 — level with .mc-header */
+  padding: 24px 32px 0; /* 24 under the header (user, 2026-10-04); 32 gutter level with .mc-header */
 }
 
 /* ── the scope bar (Figma 1159:1249) ──
@@ -25130,6 +25184,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   background: var(--search-bg);
   border: 1px solid var(--search-border);
   border-radius: 8px;
+}
+
+.mc-scopebar:has(.usearch-bar:hover) {
+  background: var(--search-bg-hover);
 }
 
 .mc-scopebar > .mc-search {
@@ -25170,7 +25228,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 
 /* ── expanded panel (Figma 1162:1312 / 1162:1385 / 1162:1454) ──
-   The shell, the 18px insets and the keyboard-legend footer are the shared
+   The shell, the 16px insets and the keyboard-legend footer are the shared
    panel's already; these are the two places this one differs. */
 
 /* One muted header for the whole list, not a white heading per section. The
@@ -25195,7 +25253,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 .mc-search .usearch-row {
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 18px;
+  padding: 8px 12px;
 }
 
 .mc-opt-text {
@@ -25294,7 +25352,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-top: 20px;
+  padding-top: 24px; /* search bar → card: the page's 24px rhythm */
 }
 
 /* ── empty / half states ── */
@@ -25408,11 +25466,14 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 
 /* Card: the two text lines and the round ⋯, at the metrics of the real ones —
-   12 + 14 + 10 is the card's 36px text block, so the ghost is 68px too. */
-.mc-ghost-lines {
-  display: flex;
-  flex-direction: column;
+   12 + 14 + 10 is the card's 36px text block, so the ghost is 60px too. */
+.mc-ghost-card .note-card-text {
   gap: 14px;
+}
+
+.mc-ghost-card .note-card-title,
+.mc-ghost-card .note-card-body {
+  display: flex;
 }
 
 .mc-ghost-bar--title {
@@ -25428,6 +25489,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   flex: none;
   width: 32px;
   height: 32px;
+  margin-right: -8px; /* where the real ⋯ chip sits */
   border-radius: 50%;
   background: rgba(122, 122, 122, 0.2);
 }
@@ -25485,47 +25547,46 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   padding: 0 32px 32px; /* the app-wide 32px gutter — level with .mc-header (was 36) */
 }
 
-/* ── certification card (Figma 965:1401 / 1151:1098, on the .mc-notice shell) ──
-   Headline + task count on the left, the ⋯ holding every certification
-   action on the right.
+/* ── certification card (Figma 1151:1098 / 1153:1129 / 1157:1219) ──
+   The shared `NoteCard` — p12, 60px, 16/600 title over 14 #a8a8a8 body, grey
+   0.5px 10% edge in every state — with the ⋯ holding every certification
+   action in its trailing slot. 24px down to the task table — the page's one
+   vertical rhythm, header → search → card → table (user, 2026-10-04).
 
    The card IS the progress bar: its wash reads how far along the learner is,
-   so the three states are three fills rather than three components. Nothing
-   earned yet keeps the neutral notice wash (twice the notice's strength). */
-.mc-notice.mc-certcard {
+   so the three states are three fills rather than three components. Lone washes, no #0d0d0d base:
+   the node's black layer is the page it was drawn on. */
+.note-card.mc-certcard {
   flex: none;
-  /* Figma-padding-minus-border: the node's 16px inset is measured from the
-     frame edge and its stroke sits inside, so a real 1px CSS border has to
-     come out of the padding or the card lands 2px tall. 1 + 15 + 36 + 15 + 1
-     = the node's 68. */
-  padding: 15px;
-  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  margin-bottom: 24px;
+  /* 60px even with one line (a task In Progress has no subtext) — the card
+     holds the node's height and the title centres in it (user, 2026-10-04). */
+  min-height: 60px;
 }
 
 /* In progress (1151:1098): flat amber out to the percentage itself — the stop
    is `--mc-pct`, set on the element — then a ramp into its own shadow across
    whatever is left. The whole card fills as the learner advances. */
-.mc-certcard.is-progress {
-  background:
-    linear-gradient(90deg, rgba(255, 197, 36, 0.2) var(--mc-pct, 0%), rgba(107, 78, 0, 0.2) 100%),
-    #0d0d0d;
+.note-card.mc-certcard.is-progress {
+  background: linear-gradient(90deg, rgba(255, 197, 36, 0.2) var(--mc-pct, 0%), rgba(107, 78, 0, 0.2) 100%);
+}
+
+/* Not Started (Figma 1504:1483) — a certification at 0% or an untouched task:
+   a darker #404040 wash than NoteCard's own grey, and the title alone. */
+.note-card.mc-certcard.is-idle {
+  background: rgba(64, 64, 64, 0.2);
 }
 
 /* Certified (Figma 1153:1129): there is no "rest of the card" left to ramp
    into, so the green is flat. Its own green — rgba(41,182,115,.2) from the
    node, a shade off the status pill's #14b867 tint. */
-.mc-certcard.is-complete {
-  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+.note-card.mc-certcard.is-complete {
+  background: rgba(41, 182, 115, 0.2);
 }
 
 /* ── single-task card (`.mc-taskstate`) ──
-   One task has no percentage to fill to, so its states are SOLID washes of the
-   same three colours rather than the certification card's ramp: the base grey
-   stays for untouched, amber for in flight, green once complete. The extra
-   class is what keeps this `.is-progress` from overriding the ramp above. */
-.mc-certcard.mc-taskstate.is-progress {
-  background: linear-gradient(rgba(255, 197, 36, 0.2), rgba(255, 197, 36, 0.2)), #0d0d0d;
-}
+   Same three fills. In progress it takes the ramp above with `--mc-pct` pinned
+   at 50% (set inline) — a single task has no percentage of its own. */
 
 /* The card's ⋯ is a standalone control rather than a table row's, so its hover
    chip is ROUND (Figma 1151:1097) — the square wash `.row-action-btn:hover`
@@ -25536,29 +25597,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   height: 32px;
   padding: 0;
   border-radius: 50%;
-}
-
-/* Both lines are set solid against the node: 16/19 over 14/17 with NOTHING
-   between them (965:1403 stacks a 19px and a 17px text frame to exactly 36,
-   and the 68px card is that plus its 16px padding). The page's inherited
-   1.45 line-height and a stray 2px margin were adding 11px between them. The
-   14/17 subtext is the app-wide subtext metric anyway — see the form-subtext
-   convention. */
-.mc-certcard-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  line-height: 19px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.mc-certcard-sub {
-  font-size: 14px;
-  line-height: 17px;
-  font-weight: 400;
-  color: #a8a8a8;
+  /* The chip spills 8px into the card's padding so the 16px GLYPH sits at the
+     node's 12px inset (1151:1106), not 20px in. */
+  margin-right: -8px;
 }
 
 /* Learner header over each view: name + what is being looked at on the left,
@@ -25998,41 +26039,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 .mc-review-item svg {
   flex: none;
   color: #a8a8a8;
-}
-
-/* ── certification notice (Secondary Button shell, 73:495) ── */
-.mc-notice {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border-radius: 8px;
-  border: 0.5px solid rgba(122, 122, 122, 0.1);
-  background: var(--mc-card);
-}
-
-.mc-notice-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.mc-notice-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: #d9d9d9;
-}
-
-.mc-notice-sub {
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 400;
-  color: #a8a8a8;
-}
-
-.mc-notice .btn-publish,
-.mc-notice .btn-save-draft {
-  flex: none;
 }
 
 /* ── metrics strip ──
@@ -26529,6 +26535,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   position: relative;
   z-index: 0;
   height: var(--search-h-lg);
+  gap: 12px; /* Large 1362:1945; the collapse slides the text back to 8 */
   background: none;
   border-color: transparent;
 }
@@ -26565,6 +26572,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 .tasks.clh .clh-head[data-clh="collapsed"] .usearch-bar::after {
   border-radius: 8px;
+}
+.tasks.clh .toolbar .usearch-bar:hover::before,
+.tasks.clh .toolbar .usearch-bar:hover::after {
+  background: var(--search-bg-hover);
 }
 .tasks.clh .toolbar .usearch-bar.open::before,
 .tasks.clh .toolbar .usearch-bar.open::after {
@@ -26666,10 +26677,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   to { transform: translateY(-6.5px) scale(0.8); }
 }
 @keyframes clh-bar-shift {
-  to { transform: translate(-4px, -6.5px); } /* the 4px the icon gives up */
+  to { transform: translate(-8px, -6.5px); } /* the 4px the icon gives up + 12 → 8px gap */
 }
 @keyframes clh-bar-text {
-  to { transform: translate(-4px, -6.5px) scale(0.8); }
+  to { transform: translate(-8px, -6.5px) scale(0.8); }
 }
 @keyframes clh-bar-lift {
   to { transform: translateY(-6.5px); }
@@ -26795,10 +26806,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
     transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2 * var(--clh-p)));
   }
   .tasks.clh .toolbar .usearch-bar > .usearch-scope {
-    transform: translate(calc(-4px * var(--clh-p)), calc(-6.5px * var(--clh-p)));
+    transform: translate(calc(-8px * var(--clh-p)), calc(-6.5px * var(--clh-p)));
   }
   .tasks.clh .toolbar .usearch-input {
-    transform: translate(calc(-4px * var(--clh-p)), calc(-6.5px * var(--clh-p)))
+    transform: translate(calc(-8px * var(--clh-p)), calc(-6.5px * var(--clh-p)))
       scale(calc(1 - 0.2 * var(--clh-p)));
   }
   .tasks.clh .toolbar .usearch-clear {
@@ -26835,8 +26846,8 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    - what has no twin (the count's divider, the grey body line) fades first.
    Transform and opacity only, like the rest of the collapse. The box is the
    card's paint moved onto ::before and scaled — non-uniformly (note width /
-   card width across, 19/70 down), so its corners flatten a little as it
-   shrinks, by when they're a few px and the wash is draining. CSS owns every
+   card width across, 19/70 down), so its corners would flatten as it
+   shrinks — which is why the wash is fully drained by half-way. CSS owns every
    offset; the hook measures only the sizes text decides (--clh-nc-*; the
    fallbacks are their values at 1440 with 10 pending). Card geometry: 16.5px
    in top/bottom, 20px left/right (1268:1714's px-20), the 38px count row centred in 70px (count at 16, the text
@@ -26978,15 +26989,18 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   }
   /* The timeline and ranges after the shorthands (they reset both). Every
      path runs across the whole collapse. The divider and body line leave
-     first (by 30% / 35%), the CTA by 55%; the wash holds while the box
-     visibly shrinks, then drains over 45–100% — a trace of the box still
-     frames the chevron as the two close in together. The count and "Name
+     first (by 30% / 35%), the CTA by 30%. The card's chrome is gone by
+     half-way: the wash drains over 0–50%, while the box is still card-shaped
+     — the user, 2026-10-04: a translucent box squashing onto the note line
+     (corners flattened, CTA a tiny pill) "looks horrible" — so the second
+     half is only the words gliding into the note. The count and "Name
      Change" — the words the title and the label share — crossfade in place,
      orange in over 45–65% just ahead of white out over 50–70%, so they never
      thin out;
      the words that differ hand over instead of overlapping (the title's
      "Requests Pending" out over 30–50%, the label's "s Pending Review" in
-     over 50–70%). The chevron, at its own size, fades in over 40–80%. The
+     over 50–70%). The chevron, at its own size, fades in over 70–100%, once
+     it has nearly closed on the label — earlier it reads as trailing behind. The
      summary is gone by 48% here — the moment the box's top edge reaches it. */
   .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
   .tasks.clh.clh--banner .lm-banner-count,
@@ -27005,13 +27019,13 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
     animation-range: 0 var(--clh-d);
   }
   .tasks.clh.clh--banner .clh-banner > .lm-banner::before {
-    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.45) var(--clh-d);
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.5);
   }
   .tasks.clh.clh--banner .lm-banner-count {
     animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
   }
   .tasks.clh.clh--banner .lm-banner > .cta-quiet {
-    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.55);
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.3);
   }
   .tasks.clh.clh--banner .lm-banner-count::after {
     animation-range: 0 calc(var(--clh-d) * 0.3);
@@ -27035,7 +27049,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
     animation-range: calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
   }
   .tasks.clh.clh--banner .tasks-note > svg {
-    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.4) calc(var(--clh-d) * 0.8);
+    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.7) var(--clh-d);
   }
   .tasks.clh.clh--banner .clh-head > .clh-sub {
     animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.48);
@@ -27064,7 +27078,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
       );
   }
   .tasks.clh.clh--banner .clh-banner > .lm-banner::before {
-    opacity: clamp(0, (1 - var(--clh-p)) / 0.55, 1);
+    opacity: clamp(0, 1 - var(--clh-p) / 0.5, 1);
   }
   .tasks.clh.clh--banner .lm-banner-count,
   .tasks.clh.clh--banner .lm-banner .nc-shared {
@@ -27080,7 +27094,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
     opacity: clamp(0, 1 - var(--clh-p) / 0.35, 1);
   }
   .tasks.clh.clh--banner .lm-banner > .cta-quiet {
-    opacity: clamp(0, 1 - var(--clh-p) / 0.55, 1);
+    opacity: clamp(0, 1 - var(--clh-p) / 0.3, 1);
   }
   .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
   .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
@@ -27090,7 +27104,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
     opacity: clamp(0, (var(--clh-p) - 0.5) / 0.2, 1);
   }
   .tasks.clh.clh--banner .tasks-note > svg {
-    opacity: clamp(0, (var(--clh-p) - 0.4) / 0.4, 1);
+    opacity: clamp(0, (var(--clh-p) - 0.7) / 0.3, 1);
   }
   .tasks.clh.clh--banner .clh-head > .clh-sub {
     opacity: clamp(0, 1 - var(--clh-p) / 0.48, 1);
@@ -27263,11 +27277,15 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--lm)));
   font-size: calc(16px + 4px * (1 - var(--lm)));
 }
-/* The 12px icon→text gap and 16px edge padding hold at both sizes, so the
-   text inset grows with the icon: 44px → 48px, and the right inset with the
-   badge: 59px → 71px (16 + 26 + 3 + 26). */
+/* The 16px edge padding holds at both sizes; the icon→text gap is 8px on
+   Default and 12px on Large, so the text inset grows 40px → 48px with the
+   icon and the gap, and the right inset with the badge: 59px → 71px
+   (16 + 26 + 3 + 26). */
+.tasks.lm .toolbar .usearch-bar {
+  gap: calc(8px + 4px * (1 - var(--lm)));
+}
 .tasks.lm .toolbar .search-input {
-  padding-left: calc(43px + 4px * (1 - var(--lm)));
+  padding-left: calc(39px + 8px * (1 - var(--lm)));
   padding-right: calc(58px + 12px * (1 - var(--lm)));
 }
 /* ⌘K badge, Figma 1362:1949: 26px caps (24 until the 2026-09-28 re-issue)
@@ -28135,12 +28153,14 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 
 /* ── Select Users (Merge Accounts) ──
-   Same chrome, its own columns. Email, Company and Role all ellipsise rather
-   than wrap, so every row stays one 40px line like the node's. */
-.sum-table .sum-col-email,
-.sum-table .sum-col-company,
-.sum-table .sum-col-role,
-.sum-table .sum-col-plan {
+   Same chrome, its own columns. The data cells ellipsise rather than wrap,
+   so every row stays one 40px line like the node's — body cells only, so a
+   header label is never clipped. */
+.sum-table tbody td.sum-col-email,
+.sum-table tbody td.sum-col-phone,
+.sum-table tbody td.sum-col-company,
+.sum-table tbody td.sum-col-role,
+.sum-table tbody td.sum-col-plan {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -28181,6 +28201,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    "Subscription" when the column was narrower than its own label. Header
    truncation is owned by `.table thead th`; columns are sized to fit. */
 .gam-table tbody td.gam-col-email,
+.gam-table tbody td.gam-col-phone,
 .gam-table tbody td.gam-col-company,
 .gam-table tbody td.gam-col-role,
 .gam-table tbody td.gam-col-plan {
@@ -28241,40 +28262,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   background: transparent;
 }
 
-/* ── Select Certifications (Content Links → a section's "+") ──
-   The same chrome once more, over the Certification catalog. Name, Industry
-   and Level can all run long, so the body cells ellipsise to keep 40px rows
-   (body only — these classes sit on the th too, and truncating there would
-   clip the header label). */
-.scm-table tbody td.scm-col-name,
-.scm-table tbody td.scm-col-industry,
-.scm-table tbody td.scm-col-level {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Counts read against the header rather than the cell beside them. */
-.scm-table .scm-col-tasks,
-.scm-table .scm-col-enrolled {
-  text-align: right;
-  padding-right: 20px !important;
-}
-.scm-table th.scm-col-tasks .th-content,
-.scm-table th.scm-col-enrolled .th-content {
-  justify-content: flex-end;
-}
-
-/* Certifications already linked in this section (and the one being edited)
-   stay visible — ticked but locked — so the admin can see what's taken. */
-.scm-table tbody tr.is-locked {
-  opacity: 0.45;
-  cursor: default;
-}
-.scm-table tbody tr.is-locked:hover {
-  background: transparent;
-}
-
+/* ── The old Select Certifications picker's table rules went with it
+   (2026-10-05: Content Links and Import Courses run the Select Requirement
+   modal, Certifications only). Only its "n selected" count survives, on the
+   Industries page. ── */
 /* The pagination row is justify-end, so the count takes the left edge. */
 .scm-picked {
   margin-right: auto;
@@ -28324,7 +28315,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    off and is 70, and the cards follow the banner. The 0.5px edge is an inset
    shadow, not a border: Chrome rounds a 0.5px border up to 1px on a 1x
    screen, which would eat the 38px content box. Hover deepens the wash, the
-   banner's own hover. */
+   banner's own hover (1510:1393: #404040 at 30%). */
 .rr-card {
   display: flex;
   align-items: center;
@@ -28342,23 +28333,38 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   font-family: var(--font-sans);
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 button.rr-card:hover {
   background: rgba(64, 64, 64, 0.3);
+}
+/* The add variant (Figma 1512:2804): no fill — only a 0.5px edge, stronger
+   than the filled card's (40%, not 10%) since nothing else draws the card —
+   until hovered, when it takes the resting card's wash. Its 20px glyph sits
+   12px (the card's gap) before the title. */
+.rr-card.rr-card--add {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px rgba(64, 64, 64, 0.4);
+}
+button.rr-card.rr-card--add:hover {
+  background: rgba(64, 64, 64, 0.2);
+}
+.rr-card--add > svg {
+  flex: none;
 }
 .rr-card:focus-visible {
   outline: 1px solid #404040;
   outline-offset: 2px;
 }
-/* Selected — only where a card is a TOGGLE (the Question Bank's sub-category
-   cards; the review pages' cards open the console and never are). The file
-   has no selected variant, so this is the same surface in the accent tone —
-   the banner's own orange wash and edge. */
+/* Selected (1510:1401, 2026-10-05) — only where a card is a TOGGLE (the
+   Question Bank's sub-category cards; the review pages' cards open the console
+   and never are): #f05523 wash at 10% under a 0.5px #f05523 edge at 75%.
+   Hover doesn't change a selected card. Hover itself (1510:1393) is the 30%
+   grey wash above. */
 .rr-card.is-selected,
 .rr-card.is-selected:hover {
-  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.1);
-  background: rgba(240, 85, 35, 0.2);
+  box-shadow: inset 0 0 0 0.5px rgba(240, 85, 35, 0.75);
+  background: rgba(240, 85, 35, 0.1);
 }
 /* The count fills the card's 38px content height in its own cell, closed by
    a 0.5px hairline drawn as an inset shadow (Chrome rounds a 0.5px border up
@@ -28635,7 +28641,8 @@ button.rr-card:hover {
      balances by measured height and so both leaves trailing columns empty and
      breaks a group across a boundary once the list is long. N, the column
      width and the gap all come from `indexLayout` (2–5 columns, 260–320px
-     wide, a 32–48px gap that scales with them; 2026-10-01), set inline. The
+     wide, a 40–48px gap that scales with them; 2026-10-01, min 40 since
+     2026-10-03), set inline. The
      minmax(0, …) lets a sub-pixel rounding overshoot shrink instead of
      scrolling sideways; past 5 × 320 the slack sits on the right. */
   display: grid;
@@ -28647,7 +28654,7 @@ button.rr-card:hover {
   scrollbar-gutter: stable;
   /* No bottom fade (removed 2026-10-01 with the Bulk Upload footer): the
      index scrolls under a hard edge, its rows at full strength to the end. */
-  gap: 0 var(--qbl-gap, 32px);
+  gap: 0 var(--qbl-gap, 40px);
   /* A 12px nesting inset, so the letter groups sit INSIDE the "All
      Categories" rule rather than flush under it — the rule itself runs edge
      to edge (the 32px measure gutter went with the 1180px cap, 2026-09-29). */
@@ -28681,7 +28688,9 @@ button.rr-card:hover {
   margin-bottom: 4px;
 }
 /* Category row — the rail's tree geometry (8px inset, 8px radius) so the hover
-   fill lands on a rounded row: Regular 16 white name, Regular 14 #a8a8a8 count.
+   fill lands on a rounded row: Regular 16 white name, Regular 12 #a8a8a8 count
+   (14 until 2026-10-03, Figma 867:2472 re-cut; the 16px name still sets the
+   27px row, so the pitch is unchanged).
    The name→count gap is 12px, not the tree's 4px: these names run long enough
    to ellipsize, and 4px let a truncated name crowd its count. */
 .qbl-index-row {
@@ -28712,7 +28721,7 @@ button.rr-card:hover {
 }
 .qbl-index-count {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 400;
   color: #a8a8a8;
 }
@@ -28743,19 +28752,9 @@ button.rr-card:hover {
   visibility: hidden;
 }
 
-/* A sub-category card never has the review cards' second line (the "kind"
-   would read "Sub-Category" on every card), so its name may take BOTH lines of
-   the card's 38px content box before it truncates — 2 × 19px, the same
-   two-line clamp the tree rows had. */
-.qb-subcards .rr-title {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 19px;
-}
+/* Sub-Category cards (Figma 1494:1459, 2026-10-03): no count cell, the name
+   over "28 Questions", no chevron. The name is one line now (it had a two-line
+   clamp while the card had no second line) and tips in full when cut. */
 
 /* A sub-category card with its Edit / Delete kebab. The card is a button, so
    the kebab is a SIBLING laid over the card's chevron slot — nested it would be
@@ -28771,6 +28770,24 @@ button.rr-card:hover {
 .qb-subcard > .rr-card {
   width: 100%;
 }
+/* The strip fills (Figma 1494:1459 is fill-width; user 2026-10-03): the
+   wrapper takes the `.rr--fill` share — equal widths, never under 280px —
+   so its card stretches with the unwrapped "All Sub-Categories" one.
+   Basis 280, not `.rr--fill`'s 0: the bare All card is border-box with 40px
+   of padding, so from a 0 basis it starts 40px ahead of the padding-less
+   wrappers and ends 40px wider. From a shared 280 they grow equally.
+   Capped at 360px (user 2026-10-03) so a category with one or two subs
+   doesn't stretch them into banners; the row's slack stays at the end. */
+.qb-subcards.rr--fill .rr-row > .rr-card,
+.qb-subcards.rr--fill .qb-subcard {
+  flex: 1 1 280px;
+  width: auto;
+  min-width: 280px;
+  max-width: 360px;
+}
+.rr--fill .qb-subcard > .rr-card {
+  min-width: 0;
+}
 /* The pointer on the kebab leaves the card's own :hover (a sibling, not a
    child), so the wrapper carries the card's hover instead — no flicker. The
    card has no border (its edge is an inset shadow), so this is the deeper
@@ -28778,7 +28795,8 @@ button.rr-card:hover {
 .qb-subcard:hover > .rr-card:not(.is-selected) {
   background: rgba(64, 64, 64, 0.3);
 }
-/* A 24px hit box centred on the chevron's 16px slot (20px in from the edge). */
+/* A 24px hit box centred on the card's empty 16px end slot (20px in from the
+   edge) — hover / focus / menu-open only (user, 2026-10-03). */
 .qb-subcard-menu {
   position: absolute;
   top: 50%;
@@ -28802,16 +28820,11 @@ button.rr-card:hover {
     rgba(13, 13, 13, 0.75);
 }
 /* Hover, keyboard focus anywhere in the card, or its menu open: the kebab
-   takes the chevron's place — the reveal rule the rail's rows had. */
+   shows in the end slot — the reveal rule the rail's rows had. */
 .qb-subcard:hover .qb-subcard-menu,
 .qb-subcard:focus-within .qb-subcard-menu,
 .qb-subcard.is-menu-open .qb-subcard-menu {
   visibility: visible;
-}
-.qb-subcard:hover .rr-chevron,
-.qb-subcard:focus-within .rr-chevron,
-.qb-subcard.is-menu-open .rr-chevron {
-  visibility: hidden;
 }
 
 /* The filter pills belong to the EXPANDED table view only. HEIGHT rides
@@ -29012,7 +29025,7 @@ button.rr-card:hover {
 }
 
 .qz-pt-input:focus {
-  border-color: var(--accent);
+  border-color: var(--field-focus);
 }
 
 .qz-pt-input.invalid {
@@ -29363,6 +29376,11 @@ button.rr-card:hover {
 /* The category/sub-category kebab (Figma 1179:1129) draws its reason line in a
    narrower 143px box than the question row's 183px, so "Only empty categories
    can be deleted" wraps onto two lines instead of stretching the panel. */
+/* The title kebab's menu hangs from the icon's left edge (see CatMenuState). */
+.u-menu.qb-cat-menu--start {
+  transform: none;
+}
+
 .u-menu.qb-cat-menu .u-menu-item:disabled .u-menu-item-sub {
   width: 143px;
   max-width: none;
@@ -29575,6 +29593,24 @@ button.rr-card:hover {
 }
 
 .qbu-sum-val {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The Questions row (1195:1761, re-cut 2026-10-03): the count, then the type
+   breakdown in brackets 4px on — "214 (200 MCQs · 12 True/False · …)". The
+   node's count text carries a trailing space, so it is kept (`pre`) and the
+   two sit ~8px apart; the breakdown wraps under itself, not under the count. */
+.qbu-sum-val--pair {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.qbu-sum-val--pair .qbu-sum-lead {
+  flex: none;
+  white-space: pre;
+}
+.qbu-sum-val--pair .qbu-sum-note {
   flex: 1;
   min-width: 0;
 }

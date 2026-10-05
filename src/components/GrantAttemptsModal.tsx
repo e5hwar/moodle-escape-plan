@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "../data/users";
+import { subscriptionText, type User } from "../data/users";
 import { PrmModal } from "./PrmModal";
+import { TableCols } from "./TableCols";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { Dropdown } from "./Dropdown";
 import { Stepper } from "./Stepper";
@@ -60,6 +61,7 @@ const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 type SortKey =
   | "name"
   | "email"
+  | "phone"
   | "company"
   | "role"
   | "subscription"
@@ -294,6 +296,8 @@ function SelectGrantUsersModal({
           return a.name.localeCompare(b.name);
         case "email":
           return a.email.localeCompare(b.email);
+        case "phone":
+          return a.phone.localeCompare(b.phone);
         case "company":
           return companyOf(a).localeCompare(companyOf(b));
         case "role":
@@ -475,13 +479,11 @@ function SelectGrantUsersModal({
         </div>
 
         <div className="stm-table-wrap">
-          {/* Seven columns don't fit the 836px card, and that is fine: the
-              shared `.table-xscroll` scrolls sideways rather than crushing the
-              cells. 44 check + 180 name + 200 email + 160 company + 110 role +
-              130 plan + 110 attempts. */}
+          {/* Column-width floor, per the shared table convention — below it the
+              table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "934px" } as React.CSSProperties}
+            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table gam-table">
               <ColGroup />
@@ -502,6 +504,7 @@ function SelectGrantUsersModal({
                   </th>
                   <Th col="name" label="User Name" cls="gam-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="email" label="Email" cls="gam-col-email" sort={sort} toggle={toggleSort} />
+                  <Th col="phone" label="Phone Number" cls="gam-col-phone" sort={sort} toggle={toggleSort} />
                   <Th col="company" label="Company" cls="gam-col-company" sort={sort} toggle={toggleSort} />
                   <Th col="role" label="Role" cls="gam-col-role" sort={sort} toggle={toggleSort} />
                   <Th col="subscription" label="Subscription" cls="gam-col-plan" sort={sort} toggle={toggleSort} />
@@ -516,7 +519,7 @@ function SelectGrantUsersModal({
                 <tbody>
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={7}>No users match your search and filters.</td>
+                      <td colSpan={8}>No users match your search and filters.</td>
                     </tr>
                   ) : (
                     rows.map((u) => {
@@ -549,10 +552,11 @@ function SelectGrantUsersModal({
                               cell" rule excludes — a local colour would lose to
                               it on specificity. */}
                           <td className="gam-col-name col-name">{u.name}</td>
-                          <td className="gam-col-email">{u.email}</td>
-                          <td className="gam-col-company">{companyOf(u) || ""}</td>
+                          <td className="gam-col-email">{u.email || "—"}</td>
+                          <td className="gam-col-phone">{u.phone || "—"}</td>
+                          <td className="gam-col-company">{companyOf(u) || "—"}</td>
                           <td className="gam-col-role">{u.role}</td>
-                          <td className="gam-col-plan">{u.subscriptionStatus}</td>
+                          <td className="gam-col-plan">{subscriptionText(u)}</td>
                           <td className="gam-col-attempts">{attemptsOf(u.id)}</td>
                         </tr>
                       );
@@ -596,18 +600,15 @@ function SelectGrantUsersModal({
   );
 }
 
+/* The shared width rule (`TableCols`): content-sized base widths — name,
+   email, phone, company, role, subscription, attempts — the same user columns as
+   Select Users; slack shared in proportion, the check gutter fixed. */
+const CHECK_W = 44;
+const COL_WIDTHS = [160, 304, 156, 216, 120, 224, 112];
+const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
+
 function ColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 200 }} />
-      <col style={{ width: 160 }} />
-      <col style={{ width: 110 }} />
-      <col style={{ width: 130 }} />
-      <col style={{ width: 110 }} />
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
 }
 
 function Th({

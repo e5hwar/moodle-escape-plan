@@ -8,16 +8,7 @@ import {
   type AwardDesignTemplate,
 } from "../data/awards";
 import { formatShortDate } from "../formatDate";
-import {
-  AddIcon,
-  ImageAddIcon,
-  InfoTipIcon,
-  PlusThinIcon,
-  RowCloseIcon,
-  RowEditIcon,
-  RowExternalLinkIcon,
-  SmallXIcon,
-} from "./icons";
+import { AddIcon, ImageAddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, SmallXIcon, InfoIcon12 } from "./icons";
 import { PrmModal } from "./PrmModal";
 import { RichTextField } from "./RichTextField";
 import { Stepper } from "./Stepper";
@@ -26,6 +17,7 @@ import { AwardTemplatesSection } from "./AwardTemplatesSection";
 import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
+import { useToast } from "./useToast";
 import { CharCount, LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
@@ -771,7 +763,7 @@ function EpaCardField({
         Stripe Product ID for the EPA card. Used to create the checkout session when a learner
         purchases their EPA card.
         <span className="form-help-info" tabIndex={0} role="note" aria-label={note} data-tip={note}>
-          <InfoTipIcon />
+          <InfoIcon12 />
         </span>
       </p>
     </div>
@@ -1003,6 +995,10 @@ export function ProductConfigPage({
   const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState<Settings>(DEFAULT_SETTINGS);
+  /* One toast for the page: the save footer's "Settings Saved", and the
+     template wizard's create/edit (raised here because the wizard closes back
+     to this page as it saves) and the Award Templates delete. */
+  const [toast, toastNode] = useToast();
   const dirty = useMemo(
     () => SETTING_KEYS.some((k) => !sameValue(settings[k], saved[k])),
     [settings, saved],
@@ -1047,13 +1043,15 @@ export function ProductConfigPage({
         editingTemplate={templateWizard.kind === "edit" ? templateWizard.template : undefined}
         allTemplates={templates}
         onClose={() => setTemplateWizard(null)}
-        onSave={(t) =>
+        onSave={(t) => {
+          const existed = templates.some((x) => x.id === t.id);
           setTemplates((prev) => {
             const i = prev.findIndex((x) => x.id === t.id);
             if (i < 0) return [t, ...prev];
             const next = [...prev]; next[i] = t; return next;
-          })
-        }
+          });
+          toast(existed ? "Template Updated" : "Template Created");
+        }}
       />
     );
   }
@@ -1098,7 +1096,10 @@ export function ProductConfigPage({
             <AwardTemplatesSection
               templates={templates}
               onEdit={(template) => setTemplateWizard({ kind: "edit", template })}
-              onDelete={(id) => setTemplates((prev) => prev.filter((t) => t.id !== id))}
+              onDelete={(id) => {
+                setTemplates((prev) => prev.filter((t) => t.id !== id));
+                toast("Template Deleted");
+              }}
               onEditLinkedAward={onEditAward && ((award) => guard(() => onEditAward(award)))}
             />
           ) : (
@@ -1282,7 +1283,11 @@ export function ProductConfigPage({
                   className={`btn-publish${canSave ? "" : " is-disabled"}`}
                   aria-disabled={!canSave}
                   data-tip={blockedTip}
-                  onClick={() => { if (canSave) setSaved(settings); }}
+                  onClick={() => {
+                    if (!canSave) return;
+                    setSaved(settings);
+                    toast("Settings Saved");
+                  }}
                 >
                   Save Changes
                 </button>
@@ -1291,6 +1296,7 @@ export function ProductConfigPage({
           )}
         </div>
       </div>
+      {toastNode}
     </div>
   );
 }

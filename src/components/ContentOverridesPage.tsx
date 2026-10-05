@@ -35,14 +35,14 @@ import {
   type CertTask,
 } from "../data/certLookup";
 import { PrmModal } from "./PrmModal";
+import { NoteCard } from "./NoteCard";
 import { SearchHints } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { SkeletonOverlay } from "./SkeletonOverlay";
 import { useLeaveGuard } from "./LeaveGuard";
+import { useToast } from "./useToast";
+import { ChangesFooter, ChangesReviewList, type StagedChange } from "./ChangesFooter";
 import {
-  ChangeArrowIcon,
-  CommandIcon,
-  EnterKeyIcon,
   ErrorTriangleIcon,
   FlagIcon,
   HourglassIcon,
@@ -53,7 +53,6 @@ import {
   RowKebabIcon,
   SearchClearIcon,
   SearchIcon,
-  SmallCloseIcon,
   } from "./icons";
 
 /**
@@ -217,9 +216,9 @@ export function ContentOverridesPage({
   // pickers doesn't: staged changes are keyed by person/task and survive it.
   const guard = useLeaveGuard(staged.length > 0);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // The applied-changes toast — the shared one, held a little longer than the
+  // default since it carries the audit stamp.
+  const [toast, toastNode] = useToast(undefined, undefined, 4500);
 
   /* Scope: one employee id, and a certification or a task. */
   const [who, setWho] = useState<string | null>(() =>
@@ -263,7 +262,6 @@ export function ContentOverridesPage({
   const [grantFor, setGrantFor] = useState<TaskRef>(null);
   const [grantN, setGrantN] = useState("1");
   /** Whether the footer's "N Changes Made" is showing its hover card. */
-  const [changesOpen, setChangesOpen] = useState(false);
 
   /* selection */
   function selectWho(id: string) {
@@ -387,23 +385,13 @@ export function ContentOverridesPage({
     return `Grant +${s.n} ${s.n === 1 ? "Attempt" : "Attempts"}`;
   }
 
-  /* ⌘↵ / Ctrl+↵ opens Review & Save, the same keys the Hands-On review console
-     puts on its Submit CTA — which is why this CTA carries the keycaps too.
-     Held in a ref so the listener binds once and still sees current state, and
-     inert while a modal is up: that dialog has its own confirm. */
-  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
-  keyRef.current = (e: KeyboardEvent) => {
-    if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
-    if (dialogOpen || gradePrompt || grantFor) return;
-    if (staged.length === 0) return;
-    e.preventDefault();
-    setDialogOpen(true);
-  };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => keyRef.current(e);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  /* The staged changes as the footer card and the confirm dialog list them. */
+  const changes: StagedChange[] = staged.map((s, i) => ({
+    key: String(i),
+    subject: changeSubject(s),
+    action: changeAction(s),
+    onDrop: () => setStaged((prev) => prev.filter((x) => x !== s)),
+  }));
 
   function discardChanges() {
     setStaged([]);
@@ -427,9 +415,7 @@ export function ContentOverridesPage({
     setCertManual(m);
     setStaged([]);
     setDialogOpen(false);
-    setToast(`${n} ${n === 1 ? "change" : "changes"} applied — logged as ${ADMIN_ACTOR}, ${ADMIN_STAMP}`);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 4500);
+    toast(`${n} ${n === 1 ? "Change" : "Changes"} Applied — logged as ${ADMIN_ACTOR}, ${ADMIN_STAMP}`);
   }
 
   /* ───── derived scope ───── */
@@ -655,10 +641,11 @@ export function ContentOverridesPage({
        as Incomplete together because it draws every row a task can have — a
        real task is one or the other, so only the applicable one renders. */
     const items: MenuItem[] = [];
-    /* Viewing attempts works wherever they're kept; granting only means
-       something where they're capped — a quiz with a limit, i.e. the final
-       exam. */
-    if (tracksAttempts(t)) {
+    /* Viewing attempts works wherever they're kept — and only once there is
+       one to view (user, 2026-10-04: a 0 in the Attempts column means no
+       View All Attempts). Granting only means something where they're capped
+       — a quiz with a limit, i.e. the final exam. */
+    if (tracksAttempts(t) && (c.attempts || 0) > 0) {
       items.push({
         icon: <MenuAttemptsIcon />,
         label: "View All Attempts",
@@ -770,52 +757,56 @@ export function ContentOverridesPage({
                 {/* ── employee × certification ── */}
                 {showUserCert && certProgress && (
                   <>
-                    {/* Certification card (Figma 965:1401): progress headline,
-                        the task count, and the ⋯ that holds every
-                        certification-level action. */}
-                    <div
-                      className={`mc-notice mc-certcard${
+                    {/* Certification card (Figma 1151:1098) on the shared
+                        NoteCard: progress headline, the task count, and the ⋯
+                        that holds every certification-level action. */}
+                    <NoteCard
+                      className={`mc-certcard${
                         certProgress.certified
                           ? " is-complete"
                           : certProgress.pct > 0
                           ? " is-progress"
-                          : ""
+                          : " is-idle"
                       }`}
                       style={{ "--mc-pct": `${certProgress.pct}%` } as CSSProperties}
-                    >
-                      <div className="mc-notice-text">
-                        <div className="mc-certcard-title">
-                          {certProgress.certified ? "Certification Complete" : `${certProgress.pct}% Complete`}
-                        </div>
-                        {/* Certified reports the date and nothing else — the
-                            award no longer implies anything about the Tasks,
-                            so it stops counting them (1153:1129). A manual
-                            award names the admin who made it (1157:1219). */}
-                        <div className="mc-certcard-sub">
-                          {certProgress.certified
-                            ? `Completed on ${fmtDY(certProgress.certAt) || "—"}${
-                                certProgress.certBy
-                                  ? ` · Marked Complete by ${certProgress.certBy}`
-                                  : ""
-                              }`
-                            : `${certProgress.c} out of ${certTasks.length} Tasks in the Certification are complete`}
-                        </div>
-                      </div>
-                      <button
-                        className="row-action-btn lone-dots"
-                        aria-label="Certification actions"
-                        onClick={(e) =>
-                          setMenu({
-                            kind: "cert",
-                            uid: whoUser!.id,
-                            certId: certObj!.id,
-                            rect: e.currentTarget.getBoundingClientRect(),
-                          })
-                        }
-                      >
-                        <RowKebabIcon />
-                      </button>
-                    </div>
+                      title={
+                        certProgress.certified
+                          ? "Certification Complete"
+                          : certProgress.pct > 0
+                          ? `${certProgress.pct}% Complete`
+                          : "Not Started"
+                      }
+                      /* Certified reports the date and nothing else — the
+                         award no longer implies anything about the Tasks, so
+                         it stops counting them (1153:1129). A manual award
+                         names the admin who made it (1157:1219). */
+                      /* Nothing done yet is the title alone (1504:1483). */
+                      body={
+                        certProgress.certified
+                          ? `Completed on ${fmtDY(certProgress.certAt) || "—"}${
+                              certProgress.certBy ? ` · Marked Complete by ${certProgress.certBy}` : ""
+                            }`
+                          : certProgress.pct > 0
+                          ? `${certProgress.c} out of ${certTasks.length} Tasks in the Certification are complete`
+                          : undefined
+                      }
+                      action={
+                        <button
+                          className="row-action-btn lone-dots"
+                          aria-label="Certification actions"
+                          onClick={(e) =>
+                            setMenu({
+                              kind: "cert",
+                              uid: whoUser!.id,
+                              certId: certObj!.id,
+                              rect: e.currentTarget.getBoundingClientRect(),
+                            })
+                          }
+                        >
+                          <RowKebabIcon />
+                        </button>
+                      }
+                    />
 
                     <TaskTable uid={whoUser!.id} tasks={certTasks} ctx={rowCtx} />
                   </>
@@ -836,58 +827,15 @@ export function ContentOverridesPage({
           </main>
 
           {/* ===== staged-changes footer (Review & Save) ===== */}
-          {/* Review & Save footer — the shared `.sp-save-footer` bar the
-              Spotlights queue uses for "Order Updated". The count replaces the
-              old dot + ellipsised summary: the changes themselves are one
-              hover away, in the 1155:1140 card, where each can also be
-              dropped on its own. */}
-          {staged.length > 0 && (
-            <footer className="sp-save-footer">
-              <div
-                className="sp-save-footer-text mc-changes"
-                onMouseEnter={() => setChangesOpen(true)}
-                onMouseLeave={() => setChangesOpen(false)}
-              >
-                {staged.length} {staged.length === 1 ? "Change" : "Changes"} Made
-                {changesOpen && (
-                  /* The pop wrapper carries the gap as PADDING, so the pointer
-                     never crosses dead space on its way into the card. */
-                  <div className="mc-changes-pop">
-                  <div className="mc-changes-card">
-                    {staged.map((s, i) => (
-                      <div className="mc-change-row" key={i}>
-                        <span className="mc-change-text">
-                          <span>{changeSubject(s)}</span>
-                          <ChangeArrowIcon />
-                          <span>{changeAction(s)}</span>
-                        </span>
-                        <button
-                          className="mc-change-drop"
-                          aria-label={`Discard: ${changeSubject(s)}`}
-                          onClick={() => setStaged((prev) => prev.filter((x) => x !== s))}
-                        >
-                          <SmallCloseIcon />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                )}
-              </div>
-              <div className="sp-save-footer-actions">
-                <button className="btn-save-draft" onClick={discardChanges}>
-                  Discard
-                </button>
-                <button className="btn-publish sp-submit" onClick={() => setDialogOpen(true)}>
-                  Review &amp; Save
-                  <span className="rvc-submit-keys">
-                    <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>
-                    <span className="rvc-qkey"><EnterKeyIcon /></span>
-                  </span>
-                </button>
-              </div>
-            </footer>
-          )}
+          {/* The shared save bar (`ChangesFooter`): "N Changes Made" with the
+              1155:1140 hover card, where each change can be dropped on its
+              own, then Discard and Review & Save (⌘↵). */}
+          <ChangesFooter
+            changes={changes}
+            onDiscard={discardChanges}
+            onReview={() => setDialogOpen(true)}
+            shortcutEnabled={!(dialogOpen || gradePrompt || grantFor)}
+          />
 
           {/* ===== anchored 3-dot menu (task rows + the certification) ===== */}
           {menu && menuItems.length > 0 && (
@@ -904,15 +852,7 @@ export function ContentOverridesPage({
               onCancel={() => setDialogOpen(false)}
               onConfirm={applyChanges}
             >
-              <div className="mc-review-list">
-                {staged.map((s, i) => (
-                  <div className="mc-review-item" key={i}>
-                    {changeSubject(s)}
-                    <ChangeArrowIcon />
-                    {changeAction(s)}
-                  </div>
-                ))}
-              </div>
+              <ChangesReviewList changes={changes} />
             </PrmModal>
           )}
 
@@ -980,7 +920,7 @@ export function ContentOverridesPage({
           )}
 
           {/* applied-changes toast */}
-          {toast && <div className="rvc-toast">{toast}</div>}
+          {toastNode}
         </div>
       </div>
     </div>
@@ -1030,13 +970,12 @@ function GhostCells() {
 function ScopeGhost() {
   return (
     <div className="mc-ghost" aria-hidden="true">
-      <div className="mc-notice mc-certcard mc-ghost-card">
-        <div className="mc-notice-text mc-ghost-lines">
-          <span className="mc-ghost-bar mc-ghost-bar--title" />
-          <span className="mc-ghost-bar mc-ghost-bar--sub" />
-        </div>
-        <span className="mc-ghost-dot" />
-      </div>
+      <NoteCard
+        className="mc-certcard mc-ghost-card"
+        title={<span className="mc-ghost-bar mc-ghost-bar--title" />}
+        body={<span className="mc-ghost-bar mc-ghost-bar--sub" />}
+        action={<span className="mc-ghost-dot" />}
+      />
       <div className="mct">
         <div className="mct-hd mc-ghost-row">
           <GhostCells />
@@ -1159,6 +1098,16 @@ function ScopeSearch({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  /* Focus leaving the half closes its panel, so only one half is ever open.
+     The mousedown listener above only catches clicks; Tab, ⌘K and the empty
+     state's CTA move focus to the other half without one. Switching apps
+     (document loses focus) keeps the panel as it was. */
+  function onBlurHalf(e: React.FocusEvent<HTMLDivElement>) {
+    if (!document.hasFocus()) return;
+    if (wrapRef.current?.contains(e.relatedTarget as Node | null)) return;
+    setOpen(false);
+  }
+
   function choose(opt: ScopeOption) {
     opt.onSelect();
     setOpen(false);
@@ -1185,7 +1134,7 @@ function ScopeSearch({
   }
 
   return (
-    <div className="usearch mc-search" ref={wrapRef}>
+    <div className="usearch mc-search" ref={wrapRef} onBlur={onBlurHalf}>
       {/* A committed pick is NOT a token chip here — it reads as the field's
           own value, white, with the ✕ at the half's right edge (1160:1286).
           The input stays live underneath: type to search again, Backspace on
@@ -1198,7 +1147,6 @@ function ScopeSearch({
           ref={inputRef}
           className="usearch-input"
           placeholder={scope ?? placeholder}
-          title={scope ? `${scope} — press Backspace to clear` : undefined}
           value={query}
           onChange={(e) => {
             onQuery(e.target.value);
@@ -1233,7 +1181,9 @@ function ScopeSearch({
           both halves do suggest something now, so this only holds for a half
           whose shortlist came back empty. */}
       {open && (options.length > 0 || query.trim()) && (
-        <div className="usearch-panel">
+        /* Clicks on the panel's chrome (header, hints, scrollbar) keep the
+           caret in the input — otherwise the blur above would close it. */
+        <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
           {/* One header for the panel (1162:1312 / 1162:1385): what the list is
               — the suggestions, or the results for what has been typed. */}
           <div className="usearch-head mc-opt-head">
@@ -1390,9 +1340,11 @@ function TaskRow({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx 
 /* ───────────────────────── employee × task view ────────────────────────── */
 
 /** The single-task view's top card — the certification card's shell, reading
- *  one task's state instead of a percentage. The wash is SOLID here (there is
- *  no progress to ramp across): grey until the task is touched, amber while it
- *  is in flight, green once it is complete.
+ *  one task's state instead of a percentage: grey until the task is touched,
+ *  green once it is complete, and while it is in flight the certification
+ *  card's amber ramp pinned at 50% — one task has no real percentage, so it
+ *  reads as halfway (user, 2026-10-04). Only Complete carries a subtext —
+ *  In Progress and Not Started are the title alone.
  *
  *  Every action lives in the table row below, so this card carries no controls
  *  of its own — the row's ⋯ is the one place they live. */
@@ -1406,19 +1358,15 @@ function TaskStateCard({ cell }: { cell: Cell }) {
     ? `Completed on ${fmtDY(cell.completedAt) || "—"}${
         cell.markedBy ? ` · Marked Complete by ${cell.markedBy}` : ""
       }`
-    : cell.status === "review"
-    ? "Submitted — waiting on review"
-    : started
-    ? `${cell.attempts} ${cell.attempts === 1 ? "attempt" : "attempts"} so far`
-    : "No attempts yet";
+    : undefined;
 
   return (
-    <div className={`mc-notice mc-certcard mc-taskstate is-${state}`}>
-      <div className="mc-notice-text">
-        <div className="mc-certcard-title">{title}</div>
-        <div className="mc-certcard-sub">{sub}</div>
-      </div>
-    </div>
+    <NoteCard
+      className={`mc-certcard mc-taskstate is-${state}`}
+      style={state === "progress" ? ({ "--mc-pct": "50%" } as CSSProperties) : undefined}
+      title={title}
+      body={sub}
+    />
   );
 }
 

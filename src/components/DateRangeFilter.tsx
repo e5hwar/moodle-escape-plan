@@ -255,7 +255,7 @@ export function DateRangePill({
     <Dropdown
       width="auto"
       align={align}
-      /* An inline pill's panel is ~710px starting at the row's left, so on a
+      /* An inline pill's panel is 648px starting at the row's left, so on a
          narrow window it would run off the right edge — the in-flow panel is
          CSS-positioned and never clamped. Portalling it (as DateField's
          calendar already does) puts it under the viewport-clamping path. The

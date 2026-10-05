@@ -10,13 +10,25 @@ const DELAY = 300;
 // own slow, unstyled bubble never fires on top of it; the text stays reachable
 // for screen readers via aria-label when the element has no text of its own
 // (icon-only buttons).
+//
+// A React-controlled `title` that CHANGES is set again on the element, and is
+// adopted again on the next hover — so a `data-tip` (or aria-label) that this
+// function wrote is overwritten with the new text, never kept from the first
+// adoption. `data-tip-adopted` marks the value as ours; a `data-tip` the
+// page set itself is left alone.
 function adopt(el: HTMLElement) {
   const native = el.getAttribute("title");
   if (!native) return;
   el.removeAttribute("title");
-  if (!el.getAttribute("data-tip")) el.setAttribute("data-tip", native);
-  if (!el.getAttribute("aria-label") && !el.textContent?.trim()) {
+  const prev = el.getAttribute("data-tip");
+  if (!prev || prev === el.dataset.tipAdopted) {
+    el.setAttribute("data-tip", native);
+    el.dataset.tipAdopted = native;
+  }
+  const label = el.getAttribute("aria-label");
+  if ((!label && !el.textContent?.trim()) || (label && label === el.dataset.ariaAdopted)) {
     el.setAttribute("aria-label", native);
+    el.dataset.ariaAdopted = native;
   }
 }
 
@@ -131,6 +143,24 @@ export function HoverTooltip() {
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el || !tip) return;
+    /* Hug the text. A box that wraps stays at its max-width (320) even when
+       every line it broke into is narrower, leaving a dead strip on the right
+       ("Introduction to being an Electrician / Apprentice"). CSS has no
+       shrink-to-widest-line, so measure the laid-out line boxes and set the
+       width to the widest one. Rounded up, so no line can re-wrap. The card
+       is reused across tips, so clear the last width first. */
+    el.style.width = "";
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const rects = [...range.getClientRects()];
+    if (rects.length > 1) {
+      const cs = getComputedStyle(el);
+      const line = Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left));
+      const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const border = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      const box = cs.boxSizing === "border-box" ? pad + border : 0;
+      if (Math.ceil(line) + box < el.offsetWidth) el.style.width = `${Math.ceil(line) + box}px`;
+    }
     const h = el.offsetHeight;
     const fitsBelow = tip.below + h <= window.innerHeight - 8;
     const fitsAbove = tip.above - h >= 8;

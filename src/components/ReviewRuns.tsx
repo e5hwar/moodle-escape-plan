@@ -57,16 +57,26 @@ export function ReviewRunsStrip({
    the pending count in its own hairlined cell — capped at "99+" (1393:1875) —
    the run's name over its kind, a chevron at the end. A recent run adds
    "· Recent" to the kind (1437:1513). A run over several values titles itself
-   after the first with the table's "+N" chip and lists them all on hover. */
+   after the first with the table's "+N" chip and lists them all on hover.
+   The Question Bank's Sub-Category card (Figma 1494:1459) is the same card
+   with no count cell and no chevron: name over "28 Questions", and a kebab the
+   page lays over the end slot on hover — `count` omitted, `chevron={false}`.
+   Its strip ends on the Add Sub-Category card (Figma 1512:2804), the "add"
+   variant: no fill (just a hairline edge), a leading 20px glyph in
+   place of the count cell — no divider — and a title with no end slot. */
 export function ReviewRunCard({
   count,
   values,
   sub,
   recent,
   selected,
+  chevron = true,
+  variant,
+  icon,
   onClick,
 }: {
-  count: number;
+  /** The big number in its own cell. Omitted, the card has no count cell. */
+  count?: number;
   /** The run's name(s): one for a single-value run, several for a multi-pick. */
   values: string[];
   /** The second line — what kind of filter this is. Omitted for "All". */
@@ -78,6 +88,15 @@ export function ReviewRunCard({
    *  it draws the selected state and announces `aria-pressed`. Omitted, the
    *  card is a plain button, as on the review pages. */
   selected?: boolean;
+  /** false: no chevron, but its 16px slot stays — the page's own trailing
+   *  control (the Question Bank's hover kebab) is laid over it, so the text
+   *  never runs under it. */
+  chevron?: boolean;
+  /** "add" — the fill-less card that ends a strip with an action (Figma
+   *  1512:2804): `icon` leads it, and it has no end slot. */
+  variant?: "add";
+  /** The add variant's leading 20px glyph. */
+  icon?: ReactNode;
   onClick: () => void;
 }) {
   const extra = values.length - 1;
@@ -85,12 +104,16 @@ export function ReviewRunCard({
   return (
     <button
       type="button"
-      className={selected ? "rr-card is-selected" : "rr-card"}
+      className={`rr-card${variant === "add" ? " rr-card--add" : ""}${selected ? " is-selected" : ""}`}
       aria-pressed={selected}
       onClick={onClick}
-      data-tip={extra > 0 ? values.join("\n") : undefined}
+      /* A multi-value run lists its values; a single name shows only when the
+         card has cut it short. */
+      data-tip={extra > 0 ? values.join("\n") : values[0]}
+      data-tip-overflow={extra > 0 ? undefined : ""}
     >
-      <span className="rr-count">{count > 99 ? "99+" : count}</span>
+      {icon}
+      {count !== undefined && <span className="rr-count">{count > 99 ? "99+" : count}</span>}
       <span className="rr-text">
         <span className="rr-title">
           {values[0]}
@@ -98,9 +121,11 @@ export function ReviewRunCard({
         </span>
         {subLine && <span className="rr-sub">{subLine}</span>}
       </span>
-      <span className="rr-chevron">
-        <RowChevronIcon />
-      </span>
+      {variant !== "add" && (
+        <span className="rr-chevron" aria-hidden={chevron ? undefined : true}>
+          {chevron && <RowChevronIcon />}
+        </span>
+      )}
     </button>
   );
 }

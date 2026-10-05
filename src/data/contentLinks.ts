@@ -33,9 +33,9 @@ export const nodes: ContentNode[] = [
   { id: "n-epa2", name: "EPA 608 Type II", kind: "Certification", level: "Intermediate", tasksCount: 5, enrolled: 524, industry: "HVAC › Commercial" },
   { id: "n-nate", name: "NATE Ready-to-Work", kind: "Certification", level: "Beginner", tasksCount: 9, enrolled: 980, industry: "HVAC" },
   { id: "n-safety", name: "Refrigerant Safety Bundle", kind: "Certification", level: "Beginner", tasksCount: 7, enrolled: 410, industry: "HVAC › Residential" },
-  { id: "n-osha10", name: "OSHA 10 — General Industry", kind: "Certification", level: "Beginner", tasksCount: 6, enrolled: 2230, industry: "Safety" },
-  { id: "n-braze", name: "Brazing Fundamentals", kind: "Certification", level: "Beginner", tasksCount: 4, enrolled: 188, industry: "Welding" },
-  { id: "n-fork", name: "Forklift Operator", kind: "Certification", level: "Beginner", tasksCount: 3, enrolled: 1605, industry: "Warehouse" },
+  { id: "n-osha10", name: "OSHA 10 — General Industry", kind: "Certification", level: "Beginner", tasksCount: 6, enrolled: 2230, industry: "Electrical › Industrial" },
+  { id: "n-braze", name: "Brazing Fundamentals", kind: "Certification", level: "Beginner", tasksCount: 4, enrolled: 188, industry: "HVAC" },
+  { id: "n-fork", name: "Forklift Operator", kind: "Certification", level: "Beginner", tasksCount: 3, enrolled: 1605, industry: "HVAC › Industrial" },
 
   // The remaining catalog Certifications. Each has a node here so the Content
   // Links page can focus it (by name — see certToFocusNode in App.tsx) and so it
@@ -44,13 +44,13 @@ export const nodes: ContentNode[] = [
   { id: "n-hfs", name: "HVAC JobReady", kind: "Certification", level: "Intermediate", tasksCount: 11, enrolled: 458, industry: "HVAC" },
   { id: "n-plumb1", name: "Plumbing Apprentice Year 1", kind: "Certification", level: "Beginner", tasksCount: 18, enrolled: 214, industry: "Plumbing" },
   { id: "n-ecr", name: "Electrical Code Refresher", kind: "Certification", level: "Intermediate", tasksCount: 8, enrolled: 331, industry: "Electrical" },
-  { id: "n-solar", name: "Solar PV Installer Basics", kind: "Certification", level: "Beginner", tasksCount: 12, enrolled: 276, industry: "Solar & Renewables › Solar PV" },
-  { id: "n-wip", name: "Welding Inspector Prep", kind: "Certification", level: "Advanced", tasksCount: 10, enrolled: 129, industry: "Welding" },
+  { id: "n-solar", name: "Solar PV Installer Basics", kind: "Certification", level: "Beginner", tasksCount: 12, enrolled: 276, industry: "Electrical › Residential" },
+  { id: "n-wip", name: "Welding Inspector Prep", kind: "Certification", level: "Advanced", tasksCount: 10, enrolled: 129, industry: "Plumbing › Pipefitting" },
   { id: "n-hps", name: "Heat Pump Specialist (2026)", kind: "Certification", level: "Intermediate", tasksCount: 9, enrolled: 87, industry: "HVAC › Residential" },
   { id: "n-ars", name: "ARS Onboarding Path", kind: "Certification", level: "Beginner", tasksCount: 7, enrolled: 156, industry: "HVAC" },
   { id: "n-nextech", name: "NexTech Field Readiness", kind: "Certification", level: "Intermediate", tasksCount: 6, enrolled: 98, industry: "HVAC › Commercial" },
   { id: "n-premium", name: "Premium HVAC Install Standards", kind: "Certification", level: "Intermediate", tasksCount: 5, enrolled: 64, industry: "HVAC › Residential" },
-  { id: "n-hvacr", name: "HVACR Safety Refresher", kind: "Certification", level: "Beginner", tasksCount: 4, enrolled: 142, industry: "OSHA & Safety › General Industry" },
+  { id: "n-hvacr", name: "HVACR Safety Refresher", kind: "Certification", level: "Beginner", tasksCount: 4, enrolled: 142, industry: "HVAC" },
 ];
 
 export function nodeIdForName(name: string): string | undefined {

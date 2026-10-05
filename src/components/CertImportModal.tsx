@@ -1,6 +1,22 @@
 import { useRef, useState } from "react";
 import { UploadTrayIcon } from "./icons";
 import { PrmModal } from "./PrmModal";
+import type { Certification } from "../data/certifications";
+
+/** Read a backup written by the row menu's "Backup Certification" — the
+ *  record it carries, or an error the drop zone can show. */
+async function readBackup(file: File): Promise<Certification | string> {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const cert = parsed?.certification;
+    if (parsed?.format !== "skillcat-certification-backup" || !cert?.name) {
+      return "This file isn't a Certification backup. Export one from a row's ⋯ menu.";
+    }
+    return cert as Certification;
+  } catch {
+    return "This file couldn't be read. Upload the .cert.json file the backup downloaded.";
+  }
+}
 
 /* ── Create Certification › Upload Backup ──
    Used to be a panel on a full-page method chooser that sat between the
@@ -15,10 +31,24 @@ export function CertImportModal({
   onConfirm,
 }: {
   onClose: () => void;
-  /** Confirmed — the flow continues into the Certification wizard. */
-  onConfirm: () => void;
+  /** Confirmed — the flow continues into the Certification wizard, filled
+   *  from the backup's record. */
+  onConfirm: (cert: Certification) => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
+  // The parsed backup, or why the picked file isn't one.
+  const [restored, setRestored] = useState<Certification | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pick = (f: File | undefined) => {
+    setFileName(f?.name ?? null);
+    setRestored(null);
+    setError(null);
+    if (!f) return;
+    void readBackup(f).then((r) => {
+      if (typeof r === "string") setError(r);
+      else setRestored(r);
+    });
+  };
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -29,9 +59,9 @@ export function CertImportModal({
       title="Upload Backup"
       description="Restore from a Certification backup file exported from the ⋯ menu."
       confirmLabel="Restore & Continue"
-      confirmDisabled={!fileName}
+      confirmDisabled={!restored}
       onCancel={onClose}
-      onConfirm={onConfirm}
+      onConfirm={() => restored && onConfirm(restored)}
     >
       <div
         className={`drop-big ${dragging ? "is-active" : ""}`}
@@ -55,13 +85,15 @@ export function CertImportModal({
           e.preventDefault();
           setDragging(false);
           const f = e.dataTransfer.files?.[0];
-          if (f) setFileName(f.name);
+          if (f) pick(f);
         }}
       >
         <span className="drop-big-icon"><UploadTrayIcon /></span>
         <div className="drop-big-title">{fileName ?? "Drag and drop, or click to upload"}</div>
         <div className="drop-big-hint">
-          {fileName
+          {error
+            ? error
+            : fileName
             ? "Click to choose a different file."
             : "Accepts a .json or .cert backup · Courses, Lessons, and Tasks are restored as exported"}
         </div>
@@ -72,7 +104,7 @@ export function CertImportModal({
         accept=".json,.cert,.zip"
         hidden
         onChange={(e) => {
-          setFileName(e.target.files?.[0]?.name ?? null);
+          pick(e.target.files?.[0]);
           // Let the same file be picked again after a fix.
           e.target.value = "";
         }}

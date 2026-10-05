@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   scholarships as seedScholarships,
-  userBank,
   type Scholarship,
   type ScholarshipUser,
 } from "../data/scholarships";
+import { users } from "../data/users";
 import {
   SearchIcon,
   SortIcon,
@@ -26,6 +26,7 @@ import { DateField } from "./DateField";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
@@ -111,6 +112,13 @@ function monthsOut(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** TODAY + n days, as "YYYY-MM-DD". */
+function daysOut(n: number): string {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Everyone who has handed out a scholarship — the Assigned By filter's options. */
 const ASSIGNERS = [...new Set(seedScholarships.map((s) => s.assignedBy))].sort();
 
@@ -188,6 +196,8 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
     );
   }
 
+  const [toast, toastNode] = useToast();
+
   function handleAdd(user: ScholarshipUser, expiresOn: string) {
     const id = `SC-${String(Math.floor(Math.random() * 9000) + 1000)}`;
     const newScholarship: Scholarship = {
@@ -199,6 +209,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
     };
     setList((prev) => [newScholarship, ...prev]);
     setAdding(false);
+    toast("Scholarship Created");
   }
 
   /* Revoking does NOT delete the row — the scholarship is part of the user's
@@ -217,6 +228,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   function handleEdit(id: string, expiresOn: string) {
     setList((prev) => prev.map((s) => (s.id === id ? { ...s, expiresOn } : s)));
     setEditing(null);
+    toast("Scholarship Updated");
   }
 
   // Users already with an *active* scholarship — excluded from the picker.
@@ -235,8 +247,8 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
           {/* This page is reached from Manage Users' header button (it no
               longer has its own sidebar entry), so the crumb is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-              Manage Users
+            <button className="rvc-crumb" onClick={onBack} title="Back to Users">
+              Users
             </button>
           </nav>
           <header className="tasks-header">
@@ -483,9 +495,11 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
           onConfirm={() => {
             handleRevoke(revoking.id);
             setRevoking(null);
+            toast("Scholarship Revoked");
           }}
         />
       )}
+      {toastNode}
     </div>
   );
 }
@@ -780,12 +794,27 @@ function ScholarshipModal({
   );
 
   // SelectField works in display strings, so names are the option labels and
-  // this maps the choice back to the record. Names in the bank are unique.
-  const candidates = useMemo(
+  // this maps the choice back to the record. Names on the roster are unique.
+  // Only B2C users without a paid subscription are eligible — Subscribers
+  // already have Pro and B2B Employees get it through their company — and
+  // anyone already holding an active scholarship is left out too.
+  const candidates = useMemo<ScholarshipUser[]>(
     () =>
       scholarship
         ? [scholarship.user]
-        : userBank.filter((u) => !excludeUserIds.has(u.id)),
+        : users
+            .filter(
+              (u) =>
+                u.userType === "B2C" &&
+                u.subscriptionStatus !== "Subscriber" &&
+                !excludeUserIds.has(u.id),
+            )
+            .map((u) => ({
+              id: u.id,
+              name: u.name,
+              email: u.email || undefined,
+              phone: u.phone || undefined,
+            })),
     [scholarship, excludeUserIds],
   );
   const candidateNames = useMemo(() => candidates.map((u) => u.name), [candidates]);
@@ -825,7 +854,7 @@ function ScholarshipModal({
             options={candidateNames}
             onChange={setSelectedName}
             disabled={editing}
-            placeholder="Choose a user…"
+            placeholder="Select a User…"
             searchPlaceholder="Search Users..."
             popupMenu
             optionDetail={(name) =>
@@ -837,7 +866,7 @@ function ScholarshipModal({
           <p className="form-help">
             {editing
               ? "A scholarship can't move to another user — revoke this one and create a new one."
-              : "Users with an active scholarship are hidden from this list."}
+              : "Subscribers and B2B Employees cannot be assigned a Scholarship"}
           </p>
         </div>
 
@@ -851,14 +880,15 @@ function ScholarshipModal({
             min={TODAY_ISO}
             placeholder="Select an expiry date"
             shortcuts={[
+              { label: "1 week", value: daysOut(7) },
+              { label: "1 month", value: monthsOut(1) },
               { label: "3 months", value: monthsOut(3) },
               { label: "6 months", value: monthsOut(6) },
               { label: "1 year", value: monthsOut(12) },
             ]}
           />
           <p className="form-help">
-            The scholarship is automatically revoked after this date. The user keeps any awards
-            they've already earned.
+            The scholarship is automatically revoked after this date.
           </p>
         </div>
       </div>

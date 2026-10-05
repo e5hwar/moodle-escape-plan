@@ -25,13 +25,7 @@ import {
   type TaxStatus,
   type Tier,
 } from "../data/companies";
-import {
-  COUNTRIES,
-  DEFAULT_PHONE_COUNTRY,
-  dialCodeFor,
-  dialLabelFor,
-  findPhoneCountry,
-} from "../data/countries";
+import { COUNTRIES } from "../data/countries";
 import { NoteCard } from "./NoteCard";
 import { lookupZip } from "../data/zipcodes";
 import { zipFormatError, zipRequired } from "../data/postalCodes";
@@ -45,13 +39,15 @@ import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { Dropdown } from "./Dropdown";
 import { SelectField } from "./SelectField";
+import { PhoneField } from "./PhoneField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
-import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
+import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField } from "./DateField";
 import { PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CopiedToast } from "./CopiedToast";
+import { useToast } from "./useToast";
 import { LockedField } from "./CriteriaLock";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { CURRENCY_INFO, currencyOptionFor, codeFromCurrencyOption } from "../data/currencies";
@@ -285,6 +281,8 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   const [freeAccessEndDate, setFreeAccessEndDate] = useState(editCompany?.freeAccessEndDate ?? "");
   const [savedPrices, setSavedPrices] = useState<SavedPrice[]>(buildDefaultSavedPrices);
   const [showNewPriceModal, setShowNewPriceModal] = useState(false);
+  // "Price Created" — drawn inside `.wizard-main` so it sits above the footer.
+  const [toast, toastNode] = useToast();
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   // Three-step split-view wizard (matches the Tasks wizard shell): 0 = Company
@@ -296,7 +294,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // Fields clicked into and out of, and the furthest step opened — what lets
   // a mandatory field say "cannot be left empty" (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
-  const maxVisited = useMaxVisited(step);
+  const movedPast = useMovedPast(step);
 
   // Success / confirmation
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
@@ -572,15 +570,15 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // Company Details and Admin Account fields: clicked into and out of, or the
   // step was moved past (Address per Figma 1389:1624 — its Zipcode is the one
   // mandatory part).
-  const nameMissing = !name.trim() && (maxVisited > 0 || touched.has("name"));
+  const nameMissing = !name.trim() && (movedPast(0) || touched.has("name"));
   const zipMissing =
-    zipRequired(country) && !addrPin.trim() && (maxVisited > 0 || touched.has("zip"));
+    zipRequired(country) && !addrPin.trim() && (movedPast(0) || touched.has("zip"));
   // A Zipcode that doesn't fit the selected Country's format — shown once the
   // address was left (or the step passed), like the empty check, then live.
   const zipInvalid =
-    maxVisited > 0 || touched.has("zip") ? zipFormatError(addrPin, country) : null;
-  const holderMissing = !contactName.trim() && (maxVisited > 1 || touched.has("holder"));
-  const emailMissing = !email.trim() && (maxVisited > 1 || touched.has("email"));
+    movedPast(0) || touched.has("zip") ? zipFormatError(addrPin, country) : null;
+  const holderMissing = !contactName.trim() && (movedPast(1) || touched.has("holder"));
+  const emailMissing = !email.trim() && (movedPast(1) || touched.has("email"));
 
   // Details-only edit: patch the identity & segmentation fields onto the
   // existing company, leaving plan, billing, status, and the admin account
@@ -738,7 +736,15 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // Stripe payment link to send to the account holder. Every other finish
   // returns to the Companies list with a toast.
   if (createdCompany) {
-    return <PaymentLinkScreen company={createdCompany} autoCopied={linkAutoCopied} onClose={onClose} />;
+    // Done hands back to Companies with the same "Company Added" toast every
+    // other create path raises; a caller with no toast just closes.
+    return (
+      <PaymentLinkScreen
+        company={createdCompany}
+        autoCopied={linkAutoCopied}
+        onClose={() => finish("Company Added")}
+      />
+    );
   }
 
   if (pendingCompany) {
@@ -790,6 +796,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
         )}
 
         <div className="wizard-main">
+          {toastNode}
           <WizardGateEdges
             gate={gate}
             step={step}
@@ -934,6 +941,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
             }
             setPriceStr(nextPrice);
             setShowNewPriceModal(false);
+            toast("Price Created");
           }}
         />
       )}
@@ -1767,7 +1775,7 @@ function Step1Details({
       <div className="form-group" onBlur={leave(() => touch("zip"))}>
         <label className="form-label">
           Address<span className="req">*</span>
-          {zipMissing && <span className="form-label-error">Zipcode cannot be left empty</span>}
+          {zipMissing && <span className="form-label-error">Zip Code cannot be left empty</span>}
           {zipInvalid && <span className="form-label-error">{zipInvalid}</span>}
         </label>
         <div className={`address-field${zipMissing || zipInvalid ? " has-error" : ""}`}>
@@ -1786,20 +1794,20 @@ function Step1Details({
           />
           <input
             className="address-input"
-            placeholder="Address Line 1"
+            placeholder="Address Line 1 (Optional)"
             value={addrLine1}
             onChange={(e) => setAddrLine1(e.target.value)}
           />
           <input
             className="address-input"
-            placeholder="Address Line 2"
+            placeholder="Address Line 2 (Optional)"
             value={addrLine2}
             onChange={(e) => setAddrLine2(e.target.value)}
           />
           <div className="address-split">
             <input
               className="address-input address-cell"
-              placeholder="City"
+              placeholder="City (Optional)"
               value={addrCity}
               onChange={(e) => setAddrCity(e.target.value)}
             />
@@ -1937,76 +1945,6 @@ function Step1Details({
 
 /* ─────────────── Step 2 — Admin Account ─────────────── */
 
-// Strip everything but digits, then group as XXX-XXX-XXXX… (3-3-rest). This is
-// what the phone input shows as the user types; non-digits are simply dropped.
-function formatPhoneNumber(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
-
-// Dial-code select + auto-formatting number field. The composed value stored in
-// `phone` is "<dial> <formatted>" (e.g. "+1 555-123-4567").
-function PhoneField({ phone, setPhone }: { phone: string; setPhone: (v: string) => void }) {
-  const [country, setCountry] = useState(
-    () => findPhoneCountry(phone) ?? DEFAULT_PHONE_COUNTRY,
-  );
-  const [national, setNational] = useState(() => {
-    const match = findPhoneCountry(phone);
-    return formatPhoneNumber(match ? phone.slice(dialCodeFor(match).length) : phone);
-  });
-
-  function emit(code: string, nat: string) {
-    setPhone(nat ? `${code} ${nat}` : "");
-  }
-
-  return (
-    <div className="phone-field">
-      {/* Figma 938:961 "Dropdown Menu - Countries": a "Search Countries..."
-          header over rows that pair the country name with its dial code,
-          right-aligned and muted. Long names wrap rather than truncate, so a
-          row is 35px or taller. The collapsed control has room for the short
-          form only, so it renders its own trigger reading "US ( +1 )". */}
-      <SelectField
-        value={country}
-        options={COUNTRIES}
-        onChange={(next) => {
-          setCountry(next);
-          emit(dialCodeFor(next), national);
-        }}
-        optionDetail={(name) => dialCodeFor(name)}
-        searchPlaceholder="Search..."
-        maxVisibleOptions={5}
-        panelClass="ss-menu--countries"
-        renderTrigger={({ open, toggle }) => (
-          <button
-            type="button"
-            className={`select-field${open ? " is-open" : ""}`}
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            onClick={toggle}
-          >
-            <span className="select-field-value">{dialLabelFor(country)}</span>
-            <span className="field-chevron"><DropdownCaretIcon /></span>
-          </button>
-        )}
-      />
-      <input
-        className="form-input"
-        type="tel"
-        inputMode="numeric"
-        placeholder="Phone Number..."
-        value={national}
-        onChange={(e) => {
-          const next = formatPhoneNumber(e.target.value);
-          setNational(next);
-          emit(dialCodeFor(country), next);
-        }}
-      />
-    </div>
-  );
-}
 
 function StepAdminAccount({
   holderMissing = false,
@@ -2475,7 +2413,8 @@ function PerSeatPriceField({
             <span className={`cw-price-value${priceStr === "" ? " is-placeholder" : ""}`}>
               {priceStr === "" ? "Select a Price..." : priceStr}
             </span>
-            <span className="cw-price-unit">/seat/{unitWordLong}</span>
+            {/* Empty, the field is just its placeholder and caret (620:1418). */}
+            {priceStr !== "" && <span className="cw-price-unit">/seat/{unitWordLong}</span>}
             <span className="cw-price-caret"><DropdownCaretIcon /></span>
           </button>
           {/* Saved-price dropdown — Figma 619:1332 "Dropdown Menu - Stripe

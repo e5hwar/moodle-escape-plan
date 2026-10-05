@@ -1,4 +1,16 @@
 import type { PickedImage } from "../components/ImageUploadField";
+import hvacIcon from "../assets/industry-hvac.svg";
+import plumbingIcon from "../assets/industry-plumbing.svg";
+import electricalIcon from "../assets/industry-electrical.svg";
+
+/* The seed industries' icons (Figma 1306:1545 "Industry Certification"), as
+   if uploaded through the Industry modal's image field. */
+const seedIcon = (name: string, size: number, url: string): PickedImage => ({
+  name,
+  size,
+  ext: "svg",
+  url,
+});
 
 export type CareerStage = "Apprentice" | "Journeyman" | "Master";
 
@@ -66,6 +78,7 @@ export const industries: Industry[] = [
     key: "hvac",
     name: "HVAC",
     nameEs: "Climatización (HVAC)",
+    icon: seedIcon("hvac.svg", 3295, hvacIcon),
     displayPosition: 1,
     certIds: ["C-1001", "C-1002", "C-1003", "C-1004", "C-1005"],
     subIndustries: [
@@ -97,6 +110,7 @@ export const industries: Industry[] = [
     key: "plumbing",
     name: "Plumbing",
     nameEs: "Plomería",
+    icon: seedIcon("plumbing.svg", 961, plumbingIcon),
     displayPosition: 2,
     certIds: ["P-3001", "P-3002", "P-3003"],
     subIndustries: [
@@ -130,6 +144,7 @@ export const industries: Industry[] = [
     key: "electrical",
     name: "Electrical",
     nameEs: "Electricidad",
+    icon: seedIcon("electrical.svg", 553, electricalIcon),
     displayPosition: 3,
     certIds: ["P-4001", "P-4002"],
     subIndustries: [
@@ -152,74 +167,6 @@ export const industries: Industry[] = [
         certIds: ["P-4030", "P-4031", "P-4032"],
       },
     ],
-  },
-  {
-    key: "solar",
-    name: "Solar & Renewables",
-    displayPosition: 4,
-    certIds: ["P-5001", "P-5002"],
-    subIndustries: [
-      {
-        key: "solar-pv",
-        name: "Solar PV",
-        displayPosition: 1,
-        certIds: ["P-5010", "P-5011", "P-5012"],
-      },
-      {
-        key: "solar-wind",
-        name: "Wind",
-        displayPosition: 2,
-        certIds: ["P-5020"],
-      },
-      {
-        key: "solar-storage",
-        name: "Storage & Batteries",
-        displayPosition: 3,
-        certIds: ["P-5030", "P-5031"],
-      },
-    ],
-  },
-  {
-    key: "welding",
-    name: "Welding",
-    displayPosition: 5,
-    certIds: ["P-6001", "P-6002", "P-6003", "P-6004"],
-    subIndustries: [],
-  },
-  {
-    key: "osha",
-    name: "OSHA & Safety",
-    displayPosition: 6,
-    certIds: ["P-7001"],
-    subIndustries: [
-      {
-        key: "osha-general",
-        name: "General Industry",
-        displayPosition: 1,
-        certIds: ["P-7010", "P-7011", "P-7012", "P-7013"],
-      },
-      {
-        key: "osha-construction",
-        name: "Construction",
-        displayPosition: 2,
-        certIds: ["P-7020", "P-7021", "P-7022"],
-      },
-      {
-        key: "osha-programs",
-        name: "Safety Programs",
-        displayPosition: 3,
-        certIds: ["P-7030", "P-7031"],
-      },
-    ],
-  },
-  {
-    key: "refrigeration",
-    name: "Refrigeration",
-    displayPosition: 7,
-    // Note: shares certs with HVAC (EPA 608 Universal, Refrigerant Identification,
-    // Commercial Refrigeration Systems) so the "Also tagged in" lines render.
-    certIds: ["C-1002", "C-1005", "C-1021"],
-    subIndustries: [],
   },
 ];
 

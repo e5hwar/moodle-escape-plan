@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CopiedToast } from "./CopiedToast";
 import {
   activeLinks,
   feedbackForms as seedForms,
@@ -202,6 +203,10 @@ type Props = {
   onUpdate: (form: FeedbackForm) => void;
   onDelete: (id: string) => void;
   onBackToCerts?: () => void;
+  /** A flow's toast on arrival — "Feedback Form Created" / "…Updated" from
+   *  the wizard (`CopiedToast`). */
+  flash?: string | null;
+  onFlashDone?: () => void;
 };
 
 export function FeedbackFormsPage({
@@ -212,7 +217,20 @@ export function FeedbackFormsPage({
   onUpdate,
   onDelete,
   onBackToCerts,
+  flash,
+  onFlashDone,
 }: Props) {
+  // The page's toast: a flow's `flash` on arrival, or one raised here
+  // (Responses Downloaded, Activated / Deactivated, Deleted) — the
+  // Certifications page's pattern.
+  const [toast, setToast] = useState<string | null>(flash ?? null);
+  useEffect(() => {
+    if (flash) setToast(flash);
+  }, [flash]);
+  const onToastDone = useCallback(() => {
+    setToast(null);
+    onFlashDone?.();
+  }, [onFlashDone]);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<{ statuses: string[]; creators: string[] }>({
     statuses: [],
@@ -490,7 +508,10 @@ export function FeedbackFormsPage({
           rect={menu.rect}
           onClose={() => setMenu(null)}
           onEdit={() => onOpen(menu.form.id)}
-          onExportResponses={() => onExportResponses(menu.form.id)}
+          onExportResponses={() => {
+            onExportResponses(menu.form.id);
+            setToast("Responses Downloaded");
+          }}
           onDuplicate={() => duplicateForm(menu.form)}
           onToggleActive={() => setToggling(menu.form)}
           onDelete={() => setDeleting(menu.form)}
@@ -502,8 +523,10 @@ export function FeedbackFormsPage({
           form={toggling}
           onCancel={() => setToggling(null)}
           onConfirm={() => {
-            setStatus(toggling, toggling.status === "active" ? "disabled" : "active");
+            const deactivating = toggling.status === "active";
+            setStatus(toggling, deactivating ? "disabled" : "active");
             setToggling(null);
+            setToast(deactivating ? "Feedback Form Deactivated" : "Feedback Form Activated");
           }}
         />
       )}
@@ -515,9 +538,12 @@ export function FeedbackFormsPage({
           onConfirm={() => {
             onDelete(deleting.id);
             setDeleting(null);
+            setToast("Feedback Form Deleted");
           }}
         />
       )}
+
+      {toast && <CopiedToast label={toast} onDone={onToastDone} />}
     </div>
   );
 }

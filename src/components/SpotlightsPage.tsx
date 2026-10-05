@@ -380,6 +380,7 @@ export function SpotlightsPage() {
 
   function saveOrder() {
     setCommitted(list);
+    flash("Spotlight Order Saved");
   }
 
   function discardOrder() {

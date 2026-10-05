@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 /* The shared callout (Figma 1121:1671 "Note", 1195:1690 for the green tone):
  * a leading glyph, a 16px SemiBold title over 14px muted body copy, on the
@@ -32,6 +32,7 @@ export function NoteCard({
   mutedIcon,
   role,
   className,
+  style,
   onClick,
   clickTip,
   singleLine,
@@ -46,6 +47,8 @@ export function NoteCard({
   mutedIcon?: boolean;
   role?: string;
   className?: string;
+  /** Inline custom properties — e.g. Manage Completions' `--mc-pct`. */
+  style?: CSSProperties;
   /** The whole card opens/does this — see the header comment. */
   onClick?: () => void;
   /** Hover tip for a clickable card: what the click opens. */
@@ -61,6 +64,7 @@ export function NoteCard({
         className ? ` ${className}` : ""
       }`}
       role={role}
+      style={style}
       onClick={onClick}
       data-tip={onClick ? clickTip : undefined}
     >

@@ -7,10 +7,11 @@ import {
   type LinkKind,
 } from "../data/contentLinks";
 import { certifications, formatTimeToComplete } from "../data/certifications";
-import { SelectCertificationsModal } from "./SelectCertificationsModal";
+import { SelectRequirementModal } from "./SelectRequirementModal";
 import { SearchHints } from "./SearchPanelParts";
 import { SkeletonOverlay } from "./SkeletonOverlay";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
+import { useToast } from "./useToast";
 import {
   KeyCommandIcon,
   InfoIcon,
@@ -45,6 +46,13 @@ import {
  * the panel lists content to focus, not filter scopes to apply. */
 
 type Focus = string | null;
+
+// What one link of each kind is called — the picker's locked-row tip.
+const KIND_LABEL: Record<LinkKind, string> = {
+  prerequisite: "Pre-Requisite",
+  recommended: "Recommended Next",
+  related: "Related Certification",
+};
 
 const KIND_PLURAL: Record<LinkKind, string> = {
   prerequisite: "Pre-Requisites",
@@ -98,6 +106,13 @@ const LINK_STRENGTH_TIP =
 const TIME_BY_NAME = new Map(
   certifications.map((c) => [c.name, formatTimeToComplete(c.timeToComplete)])
 );
+
+/* The picker lists catalog Certifications, but a link needs a graph node:
+ * these map the two by name (node names match certifications.ts). */
+const NODE_ID_BY_NAME = new Map(
+  allNodes.filter((n) => n.kind === "Certification").map((n) => [n.name, n.id]),
+);
+const LINKABLE_CERTS = certifications.filter((c) => NODE_ID_BY_NAME.has(c.name));
 
 function rowMeta(n: ContentNode): string {
   return [n.industry, TIME_BY_NAME.get(n.name)].filter(Boolean).join(" · ") || "—";
@@ -227,6 +242,7 @@ export function ContentLinksPage({
   // Staged edits ask before the crumb throws them away. Switching the focused
   // Certification doesn't: `links` is the whole graph, so edits survive it.
   const guard = useLeaveGuard(changed);
+  const [toast, toastNode] = useToast();
 
   function pickFocus(id: string) {
     setFocusId(id);
@@ -237,6 +253,7 @@ export function ContentLinksPage({
   function saveChanges() {
     setBaseline(links);
     onSaveLinks?.(links);
+    toast("Content Links Saved");
   }
 
   function cancelChanges() {
@@ -282,6 +299,7 @@ export function ContentLinksPage({
 
   return (
     <div className="main">
+      {toastNode}
       <div className="workspace">
         <div className="tasks lc-page">
           {/* Reached from a Certification's 3-dot menu — the crumb is the way back. */}
@@ -391,13 +409,36 @@ export function ContentLinksPage({
         </div>
       </div>
 
+      {/* The shared Certification picker (the Select Requirement modal,
+          Certifications only) — the Certifications table's columns, pills and
+          search. Links are stored by graph node, and nodes are named after
+          catalog Certifications, so the picker lists the catalog rows the
+          graph can link and the names are mapped back to node ids on confirm. */}
       {picker && focusId && (
-        <SelectCertificationsModal
+        <SelectRequirementModal
+          only="cert"
           title={KIND_ADD_TITLE[picker.kind]}
           description={KIND_ADD_DESC[picker.kind]}
-          locked={alreadyLinkedIds(picker.kind)}
+          confirmNoun="Link"
+          certPool={LINKABLE_CERTS}
+          existingNames={Array.from(alreadyLinkedIds(picker.kind))
+            .map((id) => nodeById(id)?.name)
+            .filter((n): n is string => !!n)}
+          lockedFlag={(name) => (name === nodeById(focusId)?.name ? "This Certification" : "Already linked")}
+          lockedTip={(name) =>
+            name === nodeById(focusId)?.name
+              ? "A Certification can't link to itself"
+              : `Already a ${KIND_LABEL[picker.kind]} of this Certification`
+          }
           onCancel={() => setPicker(null)}
-          onConfirm={(ids) => addLinks(picker.kind, ids)}
+          onConfirm={(picks) =>
+            addLinks(
+              picker.kind,
+              picks
+                .map((p) => (p.kind === "cert" ? NODE_ID_BY_NAME.get(p.cert.name) : undefined))
+                .filter((id): id is string => !!id),
+            )
+          }
         />
       )}
     </div>

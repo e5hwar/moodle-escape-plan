@@ -22,7 +22,6 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import type { SortDir } from "./AwardTableParts";
 import { PrmModal } from "./PrmModal";
-import { PrmCheck } from "./ProctoringConsole";
 import { IdModal } from "./IdModal";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
@@ -38,6 +37,9 @@ import {
   SortIcon,
   } from "./icons";
 import { TableCols } from "./TableCols";
+import { PhoneField } from "./PhoneField";
+import { useToast } from "./useToast";
+import { makeZip, type ZipEntry } from "../zip";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
    itself the tier renders as plain table text like every other column. */
@@ -65,8 +67,8 @@ function initialsOf(name: string): string {
 }
 
 /* ── Download helpers — generate the Award Card / Certificate as an SVG file ── */
-function downloadFile(filename: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
+function downloadFile(filename: string, content: string | Blob, type: string) {
+  const blob = typeof content === "string" ? new Blob([content], { type }) : content;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -181,7 +183,9 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const [subCanceled, setSubCanceled] = useState(false);
   const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
-  const [downloadAllOpen, setDownloadAllOpen] = useState(false);
+  /** The page's success toast — "Profile Updated" after an edit (the user,
+   *  2026-10-04), and every other change this page applies. */
+  const [toast, toastNode] = useToast();
   /* This user's ID document, for the header's "View ID". Approve/Replace edit
      it in place the same way the Manage IDs table does. */
   const [idOpen, setIdOpen] = useState(false);
@@ -189,10 +193,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const [pageMenu, setPageMenu] = useState<DOMRect | null>(null);
   const [idRecord, setIdRecord] = useState<IdRecord>(() => idRecordForUser(seedUser));
 
-  useEscape(modal !== null || downloadAllOpen, () => {
-    setModal(null);
-    setDownloadAllOpen(false);
-  });
+  useEscape(modal !== null, () => setModal(null));
 
   const user: User = { ...seedUser, ...identity };
   const epaCard: EpaCardOrder | undefined =
@@ -219,6 +220,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
       phoneVerified: prev.phoneVerified && v.phone === prev.phone,
     }));
     setModal(null);
+    toast("Profile Updated");
   }
 
   /* Same two transitions the Manage IDs table applies: a replacement re-takes
@@ -232,15 +234,17 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
       uploadedAt: now,
       approvedAt: status === "approved" ? now : undefined,
     }));
+    toast(status === "approved" ? "ID Replaced & Approved" : "ID Replaced");
   }
 
   /* Approving leaves the popup open on the document it just decided — the
      Approve button drops out of the footer, same as on the Manage IDs table. */
   function approveId() {
     setIdRecord((r) => ({ ...r, status: "approved", approvedAt: nowIdStamp() }));
+    toast("ID Approved");
   }
 
-  /* The Public Portfolio Link field points at the standalone portfolio page, in
+  /* The Portfolio Link field points at the standalone portfolio page, in
      its own tab — the same place the Portfolio card's "Open in New Tab" button
      went before that card became this field. */
   const portfolioHref = `${window.location.origin}${window.location.pathname}?portfolio=${user.id}`;
@@ -257,8 +261,8 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
         <div className="tasks pr-page">
           {/* ── breadcrumb strip (Figma 1417:1395), then the header — identity row, actions on the right ── */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={backToUsers} title="Back to Manage Users">
-              Manage Users
+            <button className="rvc-crumb" onClick={backToUsers} title="Back to Users">
+              Users
             </button>
           </nav>
           <header className="tasks-header">
@@ -310,28 +314,30 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
             <div className="confirm-cards prof-cards">
               {/* Profile fields. No pencil of its own: editing this user is the
                   header 3-dot menu's "Edit User Details". */}
+              {/* Four equal columns, in the user's order (2026-10-04): Language
+                  · Industry · Goal · Notification / Attribution · Zip ·
+                  Joined · Last Access / Portfolio Link, which spans its whole row
+                  so a narrow card never cuts the link short. */}
               <ConfirmCard
                 title="Profile"
                 fillBlanks
+                columns={4}
                 rows={[
-                  ["Language", p.fields.language],
-                  ["Goal", p.fields.goal, true],
+                  ["Language Preference", p.fields.language],
                   ["Industry Preference", p.fields.industryPreference],
-                  ["Current Company", p.fields.currentCompany],
+                  ["Goal", p.fields.goal],
+                  ["Notification Preference", p.fields.notificationPreference],
+                  ["Attribution", p.fields.attribution],
                   [
                     "Zip Code",
                     ZIP_LOCATIONS[p.fields.zipCode]
                       ? `${p.fields.zipCode} · ${ZIP_LOCATIONS[p.fields.zipCode].city}, ${ZIP_LOCATIONS[p.fields.zipCode].state}, ${ZIP_LOCATIONS[p.fields.zipCode].country}`
                       : p.fields.zipCode,
-                    true,
                   ],
-                  ["Attribution", p.fields.attribution],
-                  ["Notification Preference", p.fields.notificationPreference],
-                  ["Role", user.role],
                   ["Joined SkillCat", formatDate(user.joinedOn)],
                   ["Last Access", formatDate(user.lastAccess)],
                   [
-                    "Public Portfolio Link",
+                    "Portfolio Link",
                     <a
                       className="rvc-headlink"
                       href={portfolioHref}
@@ -340,7 +346,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                     >
                       {p.portfolioUrl}
                     </a>,
-                    true,
+                    "row",
                   ],
                 ]}
               />
@@ -357,14 +363,18 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                    the same component Merge's Swap Roles uses. */
                 trailing={
                   p.awards.length > 0 && (
-                    <button className="btn-dialog" onClick={() => setDownloadAllOpen(true)}>
+                    <button className="btn-dialog" onClick={() => {
+                        downloadAllAwards(user.name, p.awards);
+                        toast("Awards Downloaded");
+                      }}
+                    >
                       <DownloadIcon /> Download All
                     </button>
                   )
                 }
                 tableBody
               >
-                <AwardsTable userName={user.name} awards={p.awards} />
+                <AwardsTable userName={user.name} awards={p.awards} onToast={toast} />
               </ConfirmCard>
 
               {/* Subscription */}
@@ -400,6 +410,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 epaCancelable={canCancelEpa}
                 epaCanceled={epaCanceled}
                 onCancelEpa={() => setModal("cancel-epa")}
+                onToast={toast}
               />
 
               {/* EPA Card */}
@@ -500,6 +511,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onSave={(v) => {
             setNate(v);
             setModal(null);
+            toast("Profile Updated");
           }}
         />
       )}
@@ -512,6 +524,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onConfirm={() => {
             setEpaCanceled(true);
             setModal(null);
+            toast("Order Canceled");
           }}
         >
           <p className="prm-content">
@@ -536,14 +549,8 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onConfirm={() => {
             setSubCanceled(true);
             setModal(null);
+            toast("Subscription Canceled");
           }}
-        />
-      )}
-      {downloadAllOpen && (
-        <DownloadAllAwardsModal
-          userName={user.name}
-          awards={p.awards}
-          onClose={() => setDownloadAllOpen(false)}
         />
       )}
       {idOpen && (
@@ -556,6 +563,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onApprove={() => approveId()}
         />
       )}
+      {toastNode}
     </div>
   );
 }
@@ -591,16 +599,10 @@ export function useUserPreview(user: User) {
 export function UserSummary({
   user,
   subCanceled = false,
-  part,
 }: {
   user: User;
   subCanceled?: boolean;
-  /** One tab of the preview panel: "profile" = the Profile card,
-   *  "achievements" = Skills and Awards, "billing" = Subscription, Purchases &
-   *  Bills, EPA and NATE. Omitted, all of them. */
-  part?: "profile" | "achievements" | "billing";
 }) {
-  const show = (p: "profile" | "achievements" | "billing") => !part || part === p;
   const p = useMemo(() => buildUserProfile(user), [user]);
   const zip = ZIP_LOCATIONS[p.fields.zipCode];
   // Newest first, the default order of the Full Profile's own tables.
@@ -611,176 +613,168 @@ export function UserSummary({
 
   return (
     <div className="confirm-cards">
-      {show("profile") && (
+      <ConfirmCard
+        title="Profile"
+        fillBlanks
+        rows={[
+          ["Language Preference", p.fields.language],
+          ["Industry Preference", p.fields.industryPreference],
+          ["Goal", p.fields.goal, true],
+          ["Notification Preference", p.fields.notificationPreference],
+          ["Attribution", p.fields.attribution],
+          [
+            "Zip Code",
+            zip ? `${p.fields.zipCode} · ${zip.city}, ${zip.state}, ${zip.country}` : p.fields.zipCode,
+            true,
+          ],
+          ["Joined SkillCat", formatDate(user.joinedOn)],
+          ["Last Access", formatDate(user.lastAccess)],
+          [
+            "Portfolio Link",
+            <a className="rvc-headlink" href={portfolioHref} target="_blank" rel="noreferrer">
+              {p.portfolioUrl}
+            </a>,
+            true,
+          ],
+        ]}
+      />
+
+      <>
+        <ConfirmCard title={`Skills · ${skills.length}`} tableBody={skills.length > 0}>
+          {skills.length > 0 ? (
+            <div className="ctb-tasktable">
+              {skills.map((s) => (
+                <SummaryRow
+                  key={s.name}
+                  name={s.name}
+                  meta={`${s.mastery ? "Mastery Skill" : "Skill"} · Awarded ${formatDate(s.dateAwarded)}`}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="form-help">No skills earned yet.</p>
+          )}
+        </ConfirmCard>
+
+        <ConfirmCard title={`Awards · ${awards.length}`} tableBody={awards.length > 0}>
+          {awards.length > 0 ? (
+            <div className="ctb-tasktable">
+              {awards.map((a) => (
+                <SummaryRow
+                  key={a.id}
+                  name={a.certification}
+                  meta={`${a.meritTier} · ${a.awardNumber} · Awarded ${formatDate(a.dateAwarded)}`}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="form-help">No awards yet.</p>
+          )}
+        </ConfirmCard>
+      </>
+
+      <>
         <ConfirmCard
-          title="Profile"
+          title="Subscription"
           fillBlanks
           rows={[
-            ["Role", user.role],
-            ["Language", p.fields.language],
-            ["Current Company", p.fields.currentCompany],
-            ["Industry Preference", p.fields.industryPreference],
-            ["Goal", p.fields.goal, true],
-            ["Attribution", p.fields.attribution],
-            ["Notification Preference", p.fields.notificationPreference],
             [
-              "Zip Code",
-              zip ? `${p.fields.zipCode} · ${zip.city}, ${zip.state}, ${zip.country}` : p.fields.zipCode,
-              true,
+              "Status",
+              subCanceled ? (
+                <span className="co-status-pill co-status-pill--grey">Canceled</span>
+              ) : (
+                p.subscription.status
+              ),
             ],
-            ["Joined SkillCat", formatDate(user.joinedOn)],
-            ["Last Access", formatDate(user.lastAccess)],
-            [
-              "Public Portfolio Link",
-              <a className="rvc-headlink" href={portfolioHref} target="_blank" rel="noreferrer">
-                {p.portfolioUrl}
-              </a>,
-              true,
-            ],
+            ["Platform", p.subscription.platform],
+            ["Started", formatDate(p.subscription.startedOn)],
+            [subCanceled ? "Access Until" : "Renews", formatDate(p.subscription.renewsOn)],
+            ["Offer Code", p.subscription.offerCode ?? "None"],
           ]}
         />
-      )}
 
-      {show("achievements") && (
-        <>
-          <ConfirmCard title={`Skills · ${skills.length}`} tableBody={skills.length > 0}>
-            {skills.length > 0 ? (
-              <div className="ctb-tasktable">
-                {skills.map((s) => (
-                  <SummaryRow
-                    key={s.name}
-                    name={s.name}
-                    meta={`${s.mastery ? "Mastery Skill" : "Skill"} · Awarded ${formatDate(s.dateAwarded)}`}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="form-help">No skills earned yet.</p>
-            )}
-          </ConfirmCard>
-
-          <ConfirmCard title={`Awards · ${awards.length}`} tableBody={awards.length > 0}>
-            {awards.length > 0 ? (
-              <div className="ctb-tasktable">
-                {awards.map((a) => (
-                  <SummaryRow
-                    key={a.id}
-                    name={a.certification}
-                    meta={`${a.meritTier} · ${a.awardNumber} · Awarded ${formatDate(a.dateAwarded)}`}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="form-help">No awards yet.</p>
-            )}
-          </ConfirmCard>
-        </>
-      )}
-
-      {show("billing") && (
-        <>
-          <ConfirmCard
-            title="Subscription"
-            fillBlanks
-            rows={[
-              [
-                "Status",
-                subCanceled ? (
-                  <span className="co-status-pill co-status-pill--grey">Canceled</span>
-                ) : (
-                  p.subscription.status
-                ),
-              ],
-              ["Platform", p.subscription.platform],
-              ["Started", formatDate(p.subscription.startedOn)],
-              [subCanceled ? "Access Until" : "Renews", formatDate(p.subscription.renewsOn)],
-              ["Offer Code", p.subscription.offerCode ?? "None"],
-            ]}
-          />
-
-          <ConfirmCard title={`Purchases & Bills · ${purchases.length}`} tableBody={purchases.length > 0}>
-            {purchases.length > 0 ? (
-              <div className="ctb-tasktable">
-                {purchases.map((pu, i) => (
-                  <SummaryRow
-                    key={i}
-                    name={pu.item}
-                    /* The Status column's pills ride beside the name, as a Task's
-                       state pills do in the Certifications drawer. */
-                    pill={
-                      pu.refunded
-                        ? undefined
-                        : pu.kind === "Certification"
-                          ? certStatusPill(pu)
-                          : pu.kind === "Quiz Attempt"
-                            ? attemptStatusPill(pu)
-                            : undefined
-                    }
-                    meta={[
-                      pu.kind,
-                      money(pu.amount),
-                      pu.platform,
-                      formatDate(pu.date),
-                      pu.refunded ? "Refunded" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="form-help">No purchases yet.</p>
-            )}
-          </ConfirmCard>
-
-          <ConfirmCard
-            title="EPA Card Order"
-            rows={
-              p.epaCard
-                ? [
-                    ["Card", p.epaCard.certification],
-                    [
-                      "Status",
-                      <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
-                        {p.epaCard.status}
-                      </span>,
-                    ],
-                    ["Ordered", formatDate(p.epaCard.orderedOn)],
-                    ["Recipient", p.epaCard.recipient],
-                    ["Shipping Address", p.epaCard.shippingAddress, true],
-                    p.epaCard.tracking
-                      ? [
-                          "Tracking",
-                          <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
-                            {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
-                          </a>,
-                          true,
-                        ]
-                      : ["Tracking", undefined, true],
+        <ConfirmCard title={`Purchases & Bills · ${purchases.length}`} tableBody={purchases.length > 0}>
+          {purchases.length > 0 ? (
+            <div className="ctb-tasktable">
+              {purchases.map((pu, i) => (
+                <SummaryRow
+                  key={i}
+                  name={pu.item}
+                  /* The Status column's pills ride beside the name, as a Task's
+                     state pills do in the Certifications drawer. */
+                  pill={
+                    pu.refunded
+                      ? undefined
+                      : pu.kind === "Certification"
+                        ? certStatusPill(pu)
+                        : pu.kind === "Quiz Attempt"
+                          ? attemptStatusPill(pu)
+                          : undefined
+                  }
+                  meta={[
+                    pu.kind,
+                    money(pu.amount),
+                    pu.platform,
+                    formatDate(pu.date),
+                    pu.refunded ? "Refunded" : "",
                   ]
-                : undefined
-            }
-          >
-            {!p.epaCard && <p className="form-help">No EPA card ordered.</p>}
-          </ConfirmCard>
+                    .filter(Boolean)
+                    .join(" · ")}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="form-help">No purchases yet.</p>
+          )}
+        </ConfirmCard>
 
-          <ConfirmCard
-            title="NATE Details"
-            rows={
-              p.nate
-                ? [
-                    ["First Name", p.nate.firstName],
-                    ["Last Name", p.nate.lastName],
-                    ["Email", p.nate.email],
-                    ["NATE Connect ID", p.nate.connectId],
-                  ]
-                : undefined
-            }
-          >
-            {!p.nate && <p className="form-help">No NATE registration on record.</p>}
-          </ConfirmCard>
-        </>
-      )}
+        <ConfirmCard
+          title="EPA Card Order"
+          rows={
+            p.epaCard
+              ? [
+                  ["Card", p.epaCard.certification],
+                  [
+                    "Status",
+                    <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
+                      {p.epaCard.status}
+                    </span>,
+                  ],
+                  ["Ordered", formatDate(p.epaCard.orderedOn)],
+                  ["Recipient", p.epaCard.recipient],
+                  ["Shipping Address", p.epaCard.shippingAddress, true],
+                  p.epaCard.tracking
+                    ? [
+                        "Tracking",
+                        <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
+                          {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
+                        </a>,
+                        true,
+                      ]
+                    : ["Tracking", undefined, true],
+                ]
+              : undefined
+          }
+        >
+          {!p.epaCard && <p className="form-help">No EPA card ordered.</p>}
+        </ConfirmCard>
+
+        <ConfirmCard
+          title="NATE Details"
+          rows={
+            p.nate
+              ? [
+                  ["First Name", p.nate.firstName],
+                  ["Last Name", p.nate.lastName],
+                  ["Email", p.nate.email],
+                  ["NATE Connect ID", p.nate.connectId],
+                ]
+              : undefined
+          }
+        >
+          {!p.nate && <p className="form-help">No NATE registration on record.</p>}
+        </ConfirmCard>
+      </>
     </div>
   );
 }
@@ -855,11 +849,7 @@ function SkillsTable({ skills }: { skills: SkillBadge[] }) {
     >
       <table className="table sch-table sch-table--tight">
         {/* Every column sized, the Skill one included — see SKILL_COLS. */}
-        <colgroup>
-          <col style={{ width: SKILL_COLS.skill }} />
-          <col style={{ width: SKILL_COLS.type }} />
-          <col style={{ width: SKILL_COLS.date }} />
-        </colgroup>
+        <TableCols data={[SKILL_COLS.skill, SKILL_COLS.type, SKILL_COLS.date]} />
         <thead>
           <tr>
             <th className="no-sort">Skill</th>
@@ -908,7 +898,15 @@ const TIER_RANK: Record<MeritTier, number> = { Bronze: 0, Silver: 1, Gold: 2, Pl
 const AWARD_COLS = { certification: 402, tier: 114, number: 136, date: 144, actions: 40 };
 const AWARD_TABLE_MIN = Object.values(AWARD_COLS).reduce((a, b) => a + b, 0);
 
-function AwardsTable({ userName, awards }: { userName: string; awards: AwardRecord[] }) {
+function AwardsTable({
+  userName,
+  awards,
+  onToast,
+}: {
+  userName: string;
+  awards: AwardRecord[];
+  onToast: (label: string) => void;
+}) {
   const [sort, setSort] = useState<{ key: "tier" | "date"; dir: SortDir }>({
     key: "date",
     dir: "desc",
@@ -988,12 +986,14 @@ function AwardsTable({ userName, awards }: { userName: string; awards: AwardReco
             {
               label: "Download Card",
               icon: <DownloadIcon />,
-              onPick: () =>
+              onPick: () => {
                 downloadFile(
                   `${menu.award.awardNumber}-card.svg`,
                   awardCardSvg(userName, menu.award),
                   "image/svg+xml",
-                ),
+                );
+                onToast("Card Downloaded");
+              },
             },
             {
               /* Disabled-with-a-reason rather than hidden: an Award that never
@@ -1003,12 +1003,14 @@ function AwardsTable({ userName, awards }: { userName: string; awards: AwardReco
               icon: <DownloadIcon />,
               disabled: !menu.award.hasCertificate,
               title: menu.award.hasCertificate ? undefined : "This Award has no Certificate",
-              onPick: () =>
+              onPick: () => {
                 downloadFile(
                   `${menu.award.awardNumber}-certificate.svg`,
                   awardCertSvg(userName, menu.award),
                   "image/svg+xml",
-                ),
+                );
+                onToast("Certificate Downloaded");
+              },
             },
           ]}
         />
@@ -1118,106 +1120,18 @@ function RowKebab({ onOpen }: { onOpen: (rect: DOMRect) => void }) {
   );
 }
 
-/* ── Download All Awards — every Card/Certificate as a check row, all selected ── */
-function DownloadAllAwardsModal({
-  userName,
-  awards,
-  onClose,
-}: {
-  userName: string;
-  awards: AwardRecord[];
-  onClose: () => void;
-}) {
-  const [selected, setSelected] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
-    awards.forEach((a) => {
-      init[`${a.id}-card`] = true;
-      if (a.hasCertificate) init[`${a.id}-cert`] = true;
-    });
-    return init;
-  });
-
-  function toggle(key: string) {
-    setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
+/* ── Download All Awards — one ZIP of every Card and Certificate, no picker
+   (the user, 2026-10-04). Same files the row actions download one by one. ── */
+function downloadAllAwards(userName: string, awards: AwardRecord[]) {
+  const files: ZipEntry[] = [];
+  for (const a of awards) {
+    files.push({ name: `${a.awardNumber}-card.svg`, content: awardCardSvg(userName, a) });
+    if (a.hasCertificate) {
+      files.push({ name: `${a.awardNumber}-certificate.svg`, content: awardCertSvg(userName, a) });
+    }
   }
-
-  function unselectAll(kind: "card" | "cert") {
-    setSelected((prev) => {
-      const next = { ...prev };
-      awards.forEach((a) => {
-        const key = `${a.id}-${kind}`;
-        if (key in next) next[key] = false;
-      });
-      return next;
-    });
-  }
-
-  const count = Object.values(selected).filter(Boolean).length;
-
-  function downloadSelected() {
-    awards.forEach((a) => {
-      if (selected[`${a.id}-card`]) {
-        downloadFile(`${a.awardNumber}-card.svg`, awardCardSvg(userName, a), "image/svg+xml");
-      }
-      if (a.hasCertificate && selected[`${a.id}-cert`]) {
-        downloadFile(`${a.awardNumber}-certificate.svg`, awardCertSvg(userName, a), "image/svg+xml");
-      }
-    });
-    onClose();
-  }
-
-  return (
-    <PrmModal
-      title="Download All Awards"
-      description={`Choose which Cards and Certificates to download for ${userName}.`}
-      confirmLabel={
-        <>
-          <DownloadIcon /> Download{count > 0 ? ` (${count})` : ""}
-        </>
-      }
-      confirmDisabled={count === 0}
-      onCancel={onClose}
-      onConfirm={downloadSelected}
-    >
-      <div className="prm-field">
-        <div className="prm-checklist">
-          {awards.map((a) => (
-            <div key={a.id}>
-              <CheckRow
-                on={!!selected[`${a.id}-card`]}
-                label={`${a.certification} — Card`}
-                onToggle={() => toggle(`${a.id}-card`)}
-              />
-              {a.hasCertificate && (
-                <CheckRow
-                  on={!!selected[`${a.id}-cert`]}
-                  label={`${a.certification} — Certificate`}
-                  onToggle={() => toggle(`${a.id}-cert`)}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="prof-unselect-row">
-          <button className="filter-clear-link" onClick={() => unselectAll("card")}>
-            Unselect all Cards
-          </button>
-          <button className="filter-clear-link" onClick={() => unselectAll("cert")}>
-            Unselect all Certificates
-          </button>
-        </div>
-      </div>
-    </PrmModal>
-  );
-}
-
-function CheckRow({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button className="prm-check-row" onClick={onToggle} role="checkbox" aria-checked={on}>
-      <PrmCheck on={on} />
-      <span className="prm-check-label">{label}</span>
-    </button>
-  );
+  const slug = userName.trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "user";
+  downloadFile(`${slug}-awards.zip`, makeZip(files), "application/zip");
 }
 
 /* ── Edit modals — session-local admin edits over the seeded record ── */
@@ -1336,14 +1250,20 @@ export function EditUserModal({
           error={submitted || touched.has("email") ? errors.email : undefined}
           onLeave={() => touch("email")}
         />
-        <PrmField
-          label="Phone"
-          value={form.phone}
-          required={false}
-          onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
-          error={submitted || touched.has("phone") ? errors.phone : undefined}
-          onLeave={() => touch("phone")}
-        />
+        {/* The B2B Company Create phone field: dial-code picker + number. */}
+        <div className="prm-field" onBlur={leave(() => touch("phone"))}>
+          <label className="prm-label">
+            Phone Number
+            {(submitted || touched.has("phone")) && errors.phone && (
+              <span className="form-label-error">{errors.phone}</span>
+            )}
+          </label>
+          <PhoneField
+            phone={form.phone}
+            setPhone={(v) => setForm((f) => ({ ...f, phone: v }))}
+            invalid={(submitted || touched.has("phone")) && !!errors.phone}
+          />
+        </div>
       </div>
     </PrmModal>
   );
@@ -1535,11 +1455,13 @@ function PurchasesSection({
   epaCancelable,
   epaCanceled,
   onCancelEpa,
+  onToast,
 }: {
   purchases: Purchase[];
   epaCancelable: boolean;
   epaCanceled: boolean;
   onCancelEpa: () => void;
+  onToast: (label: string) => void;
 }) {
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   // Track refunds applied in this session. Keyed by the purchase's index in the
@@ -1667,16 +1589,20 @@ function PurchasesSection({
         {/* Same chrome as the Awards table (1278:1571): the card tables take the
             base 12px cell inset, not the .sch-table shell's roomier 16px. */}
         <table className="table sch-table sch-table--tight">
-          <colgroup>
-            <col style={{ width: PURCHASE_COLS.date }} />
-            <col style={{ width: PURCHASE_COLS.item }} />
-            <col style={{ width: PURCHASE_COLS.type }} />
-            <col style={{ width: PURCHASE_COLS.status }} />
-            <col style={{ width: PURCHASE_COLS.platform }} />
-            <col style={{ width: PURCHASE_COLS.receipt }} />
-            <col style={{ width: PURCHASE_COLS.amount }} />
-            <col style={{ width: PURCHASE_COLS.actions }} />
-          </colgroup>
+          {/* The shared width rule: data columns share the slack, the 3-dot
+              gutter stays fixed. */}
+          <TableCols
+            data={[
+              PURCHASE_COLS.date,
+              PURCHASE_COLS.item,
+              PURCHASE_COLS.type,
+              PURCHASE_COLS.status,
+              PURCHASE_COLS.platform,
+              PURCHASE_COLS.receipt,
+              PURCHASE_COLS.amount,
+            ]}
+            trail={[PURCHASE_COLS.actions]}
+          />
           <thead>
             <tr>
               <th className="no-sort">Date</th>
@@ -1736,6 +1662,7 @@ function PurchasesSection({
           onConfirm={() => {
             setRefunded((r) => ({ ...r, [refundTarget.idx]: true }));
             setRefundTarget(null);
+            onToast("Purchase Refunded");
           }}
         >
           <p className="prm-content">

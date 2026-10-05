@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckBoldIcon, DownloadIcon, UploadTrayIcon } from "./icons";
 import { NoteCard } from "./NoteCard";
 import { PrmModal } from "./PrmModal";
+import { useToast } from "./useToast";
 import {
   analyzeCertImport,
   libraryLine,
@@ -56,6 +57,9 @@ export function CertBulkUploadModal({
   const [report, setReport] = useState<CertImportReport | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // "Template Downloaded" — raised over the modal (the stylesheet lifts the
+  // toast above `.pr-confirm-overlay` while one is open).
+  const [toast, toastNode] = useToast();
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
@@ -101,58 +105,62 @@ export function CertBulkUploadModal({
   /* ── 1. Pick ── */
   if (!report) {
     return (
-      <PrmModal
-        className="qbu qbu--pick"
-        title="CSV Upload"
-        description="Bulk-create Courses, Lessons, and Tasks from a CSV file."
-        hideFooter
-        onCancel={onClose}
-      >
-        <div
-          className={`drop-big drop-big--xl ${dragging ? "is-active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={pickFile}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              pickFile();
-            }
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            void read(e.dataTransfer.files?.[0]);
-          }}
+      <>
+        <PrmModal
+          className="qbu qbu--pick"
+          title="CSV Upload"
+          description="Bulk-create Courses, Lessons, and Tasks from a CSV file."
+          hideFooter
+          onCancel={onClose}
         >
-          <span className="drop-big-icon"><UploadTrayIcon /></span>
-          <div className="drop-big-title">Drag and drop, or click to upload</div>
-          <div className="drop-big-hint">
-            One row per Task · Blank Lesson columns put a Task directly under its Course ·
-            Every row is checked before importing
-          </div>
-          {/* The template is its own action inside the zone — clicking it must
-              not also open the file picker. */}
-          <button
-            className="qbu-template"
-            onClick={(e) => {
-              e.stopPropagation();
-              downloadTemplate();
+          <div
+            className={`drop-big drop-big--xl ${dragging ? "is-active" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={pickFile}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                pickFile();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              void read(e.dataTransfer.files?.[0]);
             }}
           >
-            <DownloadIcon />
-            Download Template
-          </button>
-        </div>
-        {input}
-      </PrmModal>
+            <span className="drop-big-icon"><UploadTrayIcon /></span>
+            <div className="drop-big-title">Drag and drop, or click to upload</div>
+            <div className="drop-big-hint">
+              One row per Task · Blank Lesson columns put a Task directly under its Course ·
+              Every row is checked before importing
+            </div>
+            {/* The template is its own action inside the zone — clicking it must
+                not also open the file picker. */}
+            <button
+              className="qbu-template"
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadTemplate();
+                toast("Template Downloaded");
+              }}
+            >
+              <DownloadIcon />
+              Download Template
+            </button>
+          </div>
+          {input}
+        </PrmModal>
+        {toastNode}
+      </>
     );
   }
 

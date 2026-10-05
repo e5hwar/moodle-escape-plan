@@ -53,7 +53,7 @@ export function limitClass(max: number, ...values: (string | undefined | null)[]
 
 /** The label-row message for an over-limit field (Figma copy, Spotlight's). */
 export function limitMessage(max: number): string {
-  return `Use ${max} characters or lesser`;
+  return `*Use ${max} characters or lesser`; // verbatim, 1369:1694 / 1376:1825
 }
 
 /** The label-row warning past the suggested length (1430:1479, verbatim). */

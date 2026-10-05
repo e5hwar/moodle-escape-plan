@@ -145,8 +145,8 @@ export function DeepLinkModal({
   const pick = (r: Row) => onPick(`https://${r.link}`);
 
   /* The shared width rule (`TableCols`): content-sized base widths — the
-     Certifications picker's 340px name, a nested Industry ("OSHA & Safety ›
-     General Industry", ~240px), Career Stage at the Certifications page's
+     Certifications picker's 340px name, a nested Industry ("Plumbing ›
+     Service & Repair", ~240px), Career Stage at the Certifications page's
      140 and a Certification link (~381px), plus cell padding — summed into
      the floor; wider, the slack spreads across the data columns in
      proportion. The chevron column is a fixed gutter; the "Select

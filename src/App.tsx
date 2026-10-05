@@ -35,7 +35,7 @@ import {
   type Level,
   type Link,
 } from "./data/contentLinks";
-import { QuestionBankPage } from "./components/QuestionBankPage";
+import { QuestionBankPage, type QbViewState } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
 import { questions as seedQuestions, versionText, type Question, type QuestionType } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
@@ -120,7 +120,7 @@ type View =
   | { name: "quiz-purchasers"; task: Task }
   /* `imported` is a checked CSV Upload: the wizard opens with the file's
      Courses, Lessons, and Tasks already built. */
-  | { name: "new-cert"; imported?: CertImportReport }
+  | { name: "new-cert"; imported?: CertImportReport; restored?: Certification }
   | { name: "edit-cert"; cert: Certification }
   | { name: "archive-cert"; cert: Certification }
   | { name: "cert-purchasers"; cert: Certification }
@@ -134,7 +134,9 @@ type View =
   | { name: "award-recipients"; award: Award; cert: Certification }
   /* `historyForId` opens the bank straight on one question's Version History
      page — how a version opened in the editor gets back where it came from. */
-  | { name: "question-bank"; historyForId?: string }
+  /* `openPath` opens the table on a just-created question's category;
+     `restore` puts back the exact view Create Question was pressed on. */
+  | { name: "question-bank"; historyForId?: string; openPath?: string[]; restore?: QbViewState }
   | {
       name: "new-question";
       categoryPath?: string[];
@@ -145,12 +147,14 @@ type View =
        *  Certification it was started from, if any). */
       forFormCreating?: boolean;
       forFormCertId?: string;
+      /** The bank's view when Create Question was pressed — Cancel returns to it. */
+      returnTo?: QbViewState;
     }
   /* `atVersion` means the editor was opened from Version History, on that
      version — so Cancel goes back there. An OLDER version than the question's
      current one also locks the editor: it loads that version's content and
      becomes a viewer rather than an edit. */
-  | { name: "edit-question"; question: Question; atVersion?: number }
+  | { name: "edit-question"; question: Question; atVersion?: number; returnTo?: QbViewState }
   | { name: "spotlight" }
   | { name: "proctoring"; openSubmissionId?: string }
   | { name: "manage-ids" }
@@ -269,7 +273,7 @@ const CONTENT_OVERRIDES_BACK: Record<
 > = {
   tasks: { label: "Tasks", view: { name: "tasks" } },
   certs: { label: "Certifications", view: { name: "certs" } },
-  users: { label: "Manage Users", view: { name: "users" } },
+  users: { label: "Users", view: { name: "users" } },
   companies: { label: "Companies", view: { name: "companies" } },
 };
 
@@ -607,6 +611,11 @@ function AdminApp() {
   // Set while the Content Links page is open from a Certification, once a save
   // there gave that Certification its first link(s) — the return toast's cue.
   const linksAddedRef = useRef(false);
+  // Leaving Content Links any other way (the sidebar) drops the cue, so a
+  // later visit's Back can't raise a stale "Content Links Added".
+  useEffect(() => {
+    if (view.name !== "content-links") linksAddedRef.current = false;
+  }, [view.name]);
   /* The setup banner's session state: "Set up later" hides it until the next
      create; `tracked` is every Certification seen pending this session, so
      the banner can say they are all done. Held here because the page unmounts
@@ -625,6 +634,17 @@ function AdminApp() {
   // Tasks published from the wizard this session. They sit on top of the seed
   // list; TasksPage re-seeds from this every time it mounts.
   const [createdTasks, setCreatedTasks] = useState<Task[]>([]);
+
+  /* Saved edits to seed Tasks, by id — TasksPage lays them over its list on
+     mount. An edit to a Task created this session replaces it in place. */
+  const [taskEdits, setTaskEdits] = useState<Record<string, Task>>({});
+  function saveTask(task: Task) {
+    if (createdTasks.some((t) => t.id === task.id)) {
+      setCreatedTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+    } else {
+      setTaskEdits((prev) => ({ ...prev, [task.id]: task }));
+    }
+  }
 
   function addTask(task: Omit<Task, "id">) {
     setCreatedTasks((prev) => [
@@ -883,6 +903,17 @@ function AdminApp() {
   // "New questions can be created in the Question Bank as part of this flow,
   // then linked" — the wizard hands back the question; we add it to the bank
   // and link it to the form that launched the flow.
+  /* Set by a create, read by the editor's onClose right after it: the bank
+     comes back on the new question's category / sub-category (user,
+     2026-10-03) instead of where the editor was opened from. Cancel leaves it
+     null, so it returns to the bank's landing as before. */
+  const createdPathRef = useRef<string[] | null>(null);
+
+  /* A question made inside a Quiz's Questions step (Create New Question): the
+     Quiz has already taken it as a static row; it just needs filing. No flash —
+     the admin is still mid-wizard. */
+  const fileQuizQuestion = (q: Question) => setBank((prev) => [q, ...prev]);
+
   function handleQuestionCreated(q: Question, forFormId?: string) {
     const form = forFormId ? forms.find((f) => f.id === forFormId) : undefined;
     // A question linked straight into a form goes in front of users
@@ -903,6 +934,10 @@ function AdminApp() {
         updatedAt: "2026-07-09",
       });
     }
+    // Raised on whichever page the editor hands back to — the bank or the form.
+    setFlash("Question Created");
+    // The bank reopens on the category it was filed under (onClose reads it).
+    createdPathRef.current = q.categoryPath;
   }
 
   const activeForm =
@@ -940,6 +975,9 @@ function AdminApp() {
               onOpenQuestionBank={() => navigate("question-bank")}
               onOpenSkills={() => navigate("skills")}
               extraTasks={createdTasks}
+              taskEdits={taskEdits}
+              flash={flash}
+              onFlashDone={() => setFlash(null)}
             />
           </div>
         </div>
@@ -970,6 +1008,7 @@ function AdminApp() {
           onAddFeedbackForm={addFeedbackFormFor}
           onNewCert={() => setView({ name: "new-cert" })}
           onImportCert={(imported) => setView({ name: "new-cert", imported })}
+          onRestoreCert={(restored) => setView({ name: "new-cert", restored })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
           onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
@@ -1029,7 +1068,7 @@ function AdminApp() {
               onSave={(a) => {
                 // A first Award is a setup step done — the Certifications
                 // table says so on return.
-                if (!existing) setFlash("Award Added");
+                setFlash(existing ? "Award Updated" : "Award Added");
                 setAwards((prev) => {
                   const i = prev.findIndex((x) => x.id === a.id);
                   if (i < 0) return [a, ...prev];
@@ -1042,6 +1081,7 @@ function AdminApp() {
                 existing
                   ? () => {
                       setAwards((prev) => prev.filter((x) => x.id !== existing.id));
+                      setFlash("Award Deleted");
                       navigate("certs");
                     }
                   : undefined
@@ -1063,14 +1103,18 @@ function AdminApp() {
         <QuestionBankPage
           key={bank.length}
           initialQuestions={bank}
-          onNewQuestion={(categoryPath, initialType) =>
-            setView({ name: "new-question", categoryPath, initialType })
+          onNewQuestion={(categoryPath, initialType, returnTo) =>
+            setView({ name: "new-question", categoryPath, initialType, returnTo })
           }
-          onEditQuestion={(question, atVersion) =>
-            setView({ name: "edit-question", question, atVersion })
+          onEditQuestion={(question, atVersion, returnTo) =>
+            setView({ name: "edit-question", question, atVersion, returnTo })
           }
           initialHistoryId={view.historyForId}
           onBackToTasks={() => navigate("tasks")}
+          initialPath={view.openPath}
+          restore={view.restore}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
         />
       ) : view.name === "new-question" ? (
         <NewQuestionWizard
@@ -1085,7 +1129,17 @@ function AdminApp() {
                   creating: view.forFormCreating,
                   forCertId: view.forFormCertId,
                 })
-              : setView({ name: "question-bank" })
+              : (() => {
+                  // Created → the new question's category; Cancel → wherever
+                  // Create Question was pressed.
+                  const openPath = createdPathRef.current ?? undefined;
+                  createdPathRef.current = null;
+                  setView(
+                    openPath
+                      ? { name: "question-bank", openPath }
+                      : { name: "question-bank", restore: view.returnTo },
+                  );
+                })()
           }
           crumbs={
             view.forFormId
@@ -1105,7 +1159,10 @@ function AdminApp() {
                 ]
               : [
                   { label: "Tasks", onClick: () => navigate("tasks") },
-                  { label: "Question Bank", onClick: () => setView({ name: "question-bank" }) },
+                  {
+                    label: "Question Bank",
+                    onClick: () => setView({ name: "question-bank", restore: view.returnTo }),
+                  },
                 ]
           }
         />
@@ -1130,15 +1187,29 @@ function AdminApp() {
                   : view.question
               }
               atVersion={past ? view.atVersion : undefined}
+              onSave={(q) => {
+                setBank((prev) => prev.map((x) => (x.id === q.id ? q : x)));
+                setFlash("Question Updated");
+              }}
+              /* Every way out puts the bank back as it was when Edit was
+                 pressed (`returnTo`) — the history page included, which sits
+                 over that same restored view. */
               crumbs={[
                 { label: "Tasks", onClick: () => navigate("tasks") },
-                { label: "Question Bank", onClick: () => setView({ name: "question-bank" }) },
+                {
+                  label: "Question Bank",
+                  onClick: () => setView({ name: "question-bank", restore: view.returnTo }),
+                },
                 ...(view.atVersion !== undefined
                   ? [
                       {
                         label: "Version History",
                         onClick: () =>
-                          setView({ name: "question-bank", historyForId: view.question.id }),
+                          setView({
+                            name: "question-bank",
+                            historyForId: view.question.id,
+                            restore: view.returnTo,
+                          }),
                       },
                     ]
                   : []),
@@ -1146,8 +1217,8 @@ function AdminApp() {
               onClose={() =>
                 setView(
                   view.atVersion !== undefined
-                    ? { name: "question-bank", historyForId: view.question.id }
-                    : { name: "question-bank" },
+                    ? { name: "question-bank", historyForId: view.question.id, restore: view.returnTo }
+                    : { name: "question-bank", restore: view.returnTo },
                 )
               }
             />
@@ -1307,6 +1378,8 @@ function AdminApp() {
             )
           }
           onBackToCerts={() => navigate("certs")}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
         />
       ) : view.name === "feedback-detail" && activeForm ? (
         <FeedbackFormWizard
@@ -1314,17 +1387,25 @@ function AdminApp() {
           creating={view.creating}
           allForms={forms}
           bank={bank}
-          onBack={() => {
+          onBack={(finished) => {
             // Started from a Certification's Setup card: Back is the table it
             // came from, with the toast when the form really exists (named,
             // triggered — the editor discards an unfinished one before this).
             if (view.forCertId) {
-              if (activeForm.name.trim() && activeForm.triggers.length > 0) {
-                setFlash("Feedback Form Added");
+              // The same three the editor's gate needs — a form short of any of
+              // them was discarded on the way out, so it gets no toast.
+              if (
+                activeForm.name.trim() &&
+                activeForm.triggers.length > 0 &&
+                activeForm.questions.length > 0
+              ) {
+                setFlash("Feedback Form Created");
               }
               navigate("certs");
               return;
             }
+            // Only Create / Save Changes say so — Cancel and the crumbs don't.
+            if (finished) setFlash(view.creating ? "Feedback Form Created" : "Feedback Form Updated");
             setView({ name: "feedback" });
           }}
           onBackToCerts={() => navigate("certs")}
@@ -1346,6 +1427,8 @@ function AdminApp() {
               forFormCertId: view.forCertId,
             })
           }
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
         />
       ) : view.name === "new-task" ? (
         <NewTaskWizard
@@ -1353,29 +1436,50 @@ function AdminApp() {
           onClose={() => setView({ name: "tasks" })}
           onCreate={(task) => {
             addTask(task);
+            setFlash("Task Created");
             setView({ name: "tasks" });
           }}
+          onQuestionCreated={fileQuizQuestion}
         />
       ) : view.name === "edit-task" ? (
         <NewTaskWizard
           taskType={taskTypeKey(view.task.type)}
           editingTask={view.task}
           onClose={() => setView({ name: "tasks" })}
+          onSave={(task) => {
+            saveTask(task);
+            setFlash("Task Updated");
+            setView({ name: "tasks" });
+          }}
+          onQuestionCreated={fileQuizQuestion}
         />
       ) : view.name === "edit-cert" ? (
         <NewCertificationWizard
           editingCert={view.cert}
           onClose={() => setView({ name: "certs" })}
+          onSave={(cert) => {
+            setCerts((prev) => prev.map((c) => (c.id === cert.id ? cert : c)));
+            setFlash("Certification Updated");
+          }}
+          onQuestionCreated={fileQuizQuestion}
         />
       ) : view.name === "archive-cert" ? (
         <ArchiveCertificationPage
           cert={view.cert}
           onClose={() => setView({ name: "certs" })}
-          onArchive={() => setView({ name: "certs" })}
+          onArchive={() => {
+            const id = view.cert.id;
+            setCerts((prev) =>
+              prev.map((c) => (c.id === id ? { ...c, visibility: "Archived" as const } : c)),
+            );
+            setFlash("Certification Archived");
+            setView({ name: "certs" });
+          }}
         />
       ) : (
         <NewCertificationWizard
           imported={view.name === "new-cert" ? view.imported : undefined}
+          restored={view.name === "new-cert" ? view.restored : undefined}
           onCreate={(record) => {
             setCerts((prev) => [{ id: nextCertId(prev), ...record }, ...prev]);
             setFlash("Certification Created");
@@ -1383,6 +1487,7 @@ function AdminApp() {
             setSetupBanner((prev) => ({ ...prev, dismissed: false }));
           }}
           onClose={() => setView({ name: "certs" })}
+          onQuestionCreated={fileQuizQuestion}
         />
       )}
     </div>

@@ -11,6 +11,8 @@ export type SubscriptionStatus =
   | "Free Trial"
   | "Cancelled";
 
+export type BillingCycle = "Monthly" | "Annual";
+
 /** Billing platform — only meaningful when subscriptionStatus is "Subscriber". */
 export type Platform = "Stripe" | "Apple" | "Google";
 
@@ -29,9 +31,15 @@ export type User = {
   subscriptionStatus: SubscriptionStatus;
   /** Only present when subscriptionStatus is "Subscriber". */
   platform?: Platform;
+  /** A Subscriber's billing cycle — the Subscription pill reads "Monthly · Apple".
+   *  Only present when subscriptionStatus is "Subscriber". */
+  cycle?: BillingCycle;
   /** Set on a Subscriber who has cancelled but is still inside the paid
    *  period — the table reads "Stripe · Cancels Aug 27, 2026". ISO date. */
   cancelsOn?: string;
+  /** ISO date a "Free Trial" user's trial ends — the Subscription pill reads
+   *  "Free Trial Ends Oct 9, 2026". */
+  trialEndsOn?: string;
   /** ISO date a "Cancelled" user's plan ended. Drives the Subscription
    *  column's date and its sort (most recently cancelled first when desc). */
   cancelledOn?: string;
@@ -49,7 +57,7 @@ export type User = {
  *  augmented deterministically below so we don't hand-maintain 30 rows. */
 type BaseUser = Omit<
   User,
-  "emailVerified" | "phoneVerified" | "joinedOn" | "lastAccess" | "dashboardLastAccess" | "cancelledOn"
+  "emailVerified" | "phoneVerified" | "joinedOn" | "lastAccess" | "dashboardLastAccess" | "cancelledOn" | "trialEndsOn" | "cycle"
 >;
 
 const baseUsers: BaseUser[] = [
@@ -100,6 +108,38 @@ const baseUsers: BaseUser[] = [
   { id: "U-11560", name: "Hallie Nguyen", email: "hallie.nguyen@gmail.com", phone: "+1 (360) 555-0174", userType: "B2C", role: "Self-Learner", subscriptionStatus: "Free Trial" },
 ];
 
+/** The status a user files under in Subscription filters and sorts. A
+ *  Subscriber with an upcoming cancellation ("Cancels Nov 15, 2026") counts as
+ *  Cancelled, not Subscriber — the raw status stays "Subscriber" because they
+ *  keep access until `cancelsOn`. */
+export function subscriptionFilterStatus(u: Pick<User, "subscriptionStatus" | "cancelsOn">): SubscriptionStatus {
+  return u.subscriptionStatus === "Subscriber" && u.cancelsOn ? "Cancelled" : u.subscriptionStatus;
+}
+
+/** What the Subscription column says for a user — the Users table's pill
+ *  label and the plain text every Users-table modal (Select Users, Grant Free
+ *  Attempts) shows, so the wording can't drift: "Monthly · Apple" for a
+ *  paying Subscriber, "Cancels Nov 15, 2026" once they've cancelled inside the
+ *  paid period, "Free Trial Ends Oct 10, 2026", else the status itself. */
+export function subscriptionText(
+  u: Pick<User, "subscriptionStatus" | "platform" | "cycle" | "cancelsOn" | "trialEndsOn">,
+): string {
+  const date = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+  switch (u.subscriptionStatus) {
+    case "Subscriber":
+      return u.cancelsOn ? `Cancels ${date(u.cancelsOn)}` : `${u.cycle ?? "Monthly"} · ${u.platform ?? "Stripe"}`;
+    case "Free Trial":
+      return u.trialEndsOn ? `Free Trial Ends ${date(u.trialEndsOn)}` : "Free Trial";
+    default:
+      return u.subscriptionStatus;
+  }
+}
+
 /* ── Deterministic augmentation: join date, last access, verification flags ── */
 function uhash(s: string): number {
   let h = 2166136261;
@@ -139,6 +179,10 @@ export const users: User[] = baseUsers.map((u) => {
     // Upcoming cancellations land 3–60 days out from today (the hand-written
     // seed dates went stale once dates were anchored to the real today).
     cancelsOn: u.cancelsOn ? isoDaysAgo(-(3 + (k % 58))) : undefined,
+    // Subscribers split between monthly and annual plans.
+    cycle: u.subscriptionStatus === "Subscriber" ? (k % 2 === 0 ? "Annual" : "Monthly") : undefined,
+    // Free trials end 1–14 days out.
+    trialEndsOn: u.subscriptionStatus === "Free Trial" ? isoDaysAgo(-(1 + (uhash(u.id + "|trial") % 14))) : undefined,
     // Cancelled plans ended 1–120 days ago.
     cancelledOn: u.subscriptionStatus === "Cancelled" ? isoDaysAgo(1 + (uhash(u.id + "|cancelled") % 120)) : undefined,
   };
@@ -158,15 +202,6 @@ export function accessMoment(userId: string, isoDay: string, salt: string): Date
   const at = wall + (utc.getTime() - et.getTime());
   const now = Date.now() - 5 * 60000;
   return new Date(Math.min(at, now));
-}
-
-/* Users removed from the Manage Users row menu. The mock has no server, and
-   other data modules (purchases, proctoring, ID reviews…) have already built
-   records off `users` at load, so the roster itself is left intact; the Users
-   page reads this set on mount so a removal survives navigating away. */
-export const removedUserIds = new Set<string>();
-export function removeUser(userId: string): void {
-  removedUserIds.add(userId);
 }
 
 /* The one place a user's name is changed at runtime. The mock has no server:

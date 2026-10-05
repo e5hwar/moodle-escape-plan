@@ -1,0 +1,17 @@
+Category,Sub-Category,Question Type,Question (EN),Question (ES),Correct Answer,Option 1,Grade 1 %,Match 1,Option 2,Grade 2 %,Match 2,Option 3,Grade 3 %,Match 3,Option 4,Grade 4 %,Match 4
+EPA 608,Universal,Multiple Choice,Which of these refrigerants is an HCFC?,¿Cuál de estos refrigerantes es un HCFC?,,R-22,100,,R-410A,-25,,R-134a,-25,,R-717,-25,
+EPA 608,Type II (High Pressure),Multiple Choice,Which two actions are required before opening a high-pressure appliance for service?,¿Qué dos acciones se requieren antes de abrir un equipo de alta presión?,,Recover the refrigerant,50,,Evacuate to the required level,50,,Vent the remaining charge,-50,,Add nitrogen to 500 psig,-50,
+HVAC Fundamentals,Heat Pumps,mcq,"In heating mode, which coil acts as the condenser?",,,The indoor coil,100,,The outdoor coil,0,,,,,,,
+Electrical Safety,,MCQ,"Which PPE is required when testing a live 480V panel, per NFPA 70E ""arc flash"" rules?",,,"Arc-rated clothing, face shield and voltage-rated gloves",100%,,Safety glasses only,−25%,,Leather work gloves,–25,,"A hard hat, nothing else",-25 %,
+Refrigeration Basics,Refrigerants,Multiple Select,Which of these are natural refrigerants?,¿Cuáles de estos son refrigerantes naturales?,,R-744 (CO₂),33.33,,R-717 (Ammonia),33.33,,R-290 (Propane),33.34,,R-22,-100,
+EPA 608,Universal,Multiple Choice,What is the minimum fine for knowingly venting refrigerant under the Clean Air Act?,,,"$44,539 per day, per violation",100,,$500 total,0,,A written warning,0,,,,
+EPA 608,Type I (Small Appliances),True/False,Knowingly venting refrigerant into the atmosphere is illegal.,Ventilar refrigerante a la atmósfera a sabiendas es ilegal.,True,,,,,,,,,,,,
+
+HVAC Fundamentals,Refrigeration Cycle,t/f,The compressor lowers the pressure of the refrigerant vapor.,,false,,,,,,,,,,,,
+Electricity Fundamentals,Ohm's Law,True / False,"Doubling the resistance in a circuit halves the current, if voltage stays the same.","Duplicar la resistencia reduce la corriente a la mitad, si el voltaje no cambia.",Yes,,,,,,,,,,,,
+Electrical Safety,,truefalse,A GFCI protects against overloads on a branch circuit.,,0,,,,,,,,,,,,
+Electricity Fundamentals,Grounding & Bonding,T/F,Bonding connects metal parts so they stay at the same electrical potential.,,T,,,,,,,,,,,,
+HVAC Fundamentals,Airflow & Ductwork,Match the Following,Match each tool to what it measures.,Relaciona cada herramienta con lo que mide.,,Manifold gauge,,System pressures,Micron gauge,,Vacuum level,Clamp meter,,Current draw,Anemometer,,Air velocity
+Refrigeration Basics,Cycle Components,match,Match each component to its job in the cycle.,,,Compressor,,Raises vapor pressure,Metering device,,Drops liquid pressure,,,,,,
+Solar Installation,PV Basics,Multiple Choice,What does a PV inverter do?,¿Qué hace un inversor fotovoltaico?,,Converts DC from the panels to AC,100,,Stores excess energy,-50,,Tracks the sun,-50,,,,
+Solar Installation,PV Basics,Match the Following,Match each term to its unit.,,,Power,,Watts (W),Energy,,Kilowatt-hours (kWh),Current,,Amps (A),,,

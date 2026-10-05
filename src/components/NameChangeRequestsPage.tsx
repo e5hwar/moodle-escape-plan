@@ -3,7 +3,7 @@ import {
   nameChangeRequests as seed,
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
-import { users } from "../data/users";
+import { users, updateUserContact } from "../data/users";
 import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { PrmModal } from "./PrmModal";
@@ -13,6 +13,7 @@ import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 25;
 
@@ -128,6 +129,31 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
     setReviewing(remaining[currentIndex] ?? remaining[0] ?? null);
   }
 
+  const [toast, toastNode] = useToast();
+
+  /** One confirmed decision from the review. Approve writes the (possibly
+      corrected) requested name onto the user's record before the request
+      leaves the queue; Request ID Proof leaves it in place — still pending,
+      as its confirm says — and moves on like Skip. */
+  function resolveReview(request: NameChangeRequest, decision: ReviewDecision, name: string) {
+    if (decision === "proof") {
+      skipReview(request.id);
+      toast("ID Proof Requested");
+      return;
+    }
+    if (decision === "approve") {
+      const approved = name.trim();
+      // The roster is the shared session store Users / Full Profile read from.
+      const u = users.find((x) => x.id === request.userId);
+      if (u) updateUserContact(u.id, { name: approved, email: u.email, phone: u.phone });
+      setList((prev) =>
+        prev.map((r) => (r.id === request.id ? { ...r, currentName: approved, requestedName: approved } : r)),
+      );
+    }
+    advanceReview(request.id);
+    toast(decision === "approve" ? "Name Change Approved" : "Name Change Rejected");
+  }
+
   return (
     <div className="main">
       <div className="workspace">
@@ -136,8 +162,8 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
               button (it has no sidebar entry of its own), so the crumb is the
               way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Manage Users">
-              Manage Users
+            <button className="rvc-crumb" onClick={onBack} title="Back to Users">
+              Users
             </button>
           </nav>
           <header className="tasks-header">
@@ -258,9 +284,10 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
           request={reviewing}
           onClose={() => setReviewing(null)}
           onSkip={(id) => skipReview(id)}
-          onResolved={(id) => advanceReview(id)}
+          onResolved={(decision, name) => resolveReview(reviewing, decision, name)}
         />
       )}
+      {toastNode}
     </div>
   );
 }
@@ -301,6 +328,7 @@ function SortableHeader({
 /* ───────────────── Review — single popup housing all actions ───────────────── */
 
 type ReviewMode = "main" | "approve" | "proof" | "reject";
+type ReviewDecision = Exclude<ReviewMode, "main">;
 function ReviewModal({
   request,
   onClose,
@@ -310,7 +338,8 @@ function ReviewModal({
   request: NameChangeRequest;
   onClose: () => void;
   onSkip: (id: string) => void;
-  onResolved: (id: string) => void;
+  /** The confirmed decision, with the Requested Name as edited in the review. */
+  onResolved: (decision: ReviewDecision, requestedName: string) => void;
 }) {
   const [mode, setMode] = useState<ReviewMode>("main");
   const [requestedName, setRequestedName] = useState(request.requestedName);
@@ -412,15 +441,15 @@ function ReviewModal({
 
           <div className="ncr-fields">
             <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
-              <label className="form-label">Current name</label>
+              <label className="form-label">Current Name</label>
               <input className="form-input ncr-readonly" value={request.currentName} readOnly tabIndex={-1} />
               <p className="form-help">The name currently on the account. This can't be edited.</p>
             </div>
 
             <div className="form-group" onBlur={leave(() => touch("name"))} style={{ marginBottom: 0, maxWidth: "none" }}>
               <label className="form-label">
-                Requested name<span className="req">*</span>
-                {nameMissing && <span className="form-label-error">Requested name cannot be left empty</span>}
+                Requested Name<span className="req">*</span>
+                {nameMissing && <span className="form-label-error">Requested Name cannot be left empty</span>}
                 <LimitError max={NAME_MAX} values={[requestedName]} />
               </label>
               <LimitedInput
@@ -444,8 +473,7 @@ function ReviewModal({
           onCancel={() => setMode("main")}
           confirmLabel={confirm.cta}
           danger={mode === "reject"}
-          go={mode === "approve"}
-          onConfirm={() => onResolved(request.id)}
+          onConfirm={() => mode !== "main" && onResolved(mode, requestedName)}
         >
           {/* Pop-up content (Figma 667:884), not a grey subtitle under the title. */}
           <p className="prm-content">{confirm.description}</p>

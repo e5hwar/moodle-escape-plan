@@ -71,7 +71,7 @@ import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
 import { NoteCard } from "./NoteCard";
 import { MultiSelect, RadioCard, CompanyReviewCards, planFor } from "./NewCompanyWizard";
-import { PreviewPanel, type PreviewAction } from "./PreviewPanel";
+import { PreviewPanel } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
@@ -597,16 +597,6 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           key={drawerCompany.id}
           company={drawerCompany}
           onClose={() => setDrawerId(null)}
-          /* Closes the panel first: Edit Company Details replaces the page,
-             and nothing of this panel should survive into it. */
-          onEdit={() => {
-            setDrawerId(null);
-            onEditCompany(drawerCompany);
-          }}
-          onViewEmployees={() => {
-            setDrawerId(null);
-            onViewEmployees(drawerCompany);
-          }}
           onMore={(rect) => setMenu({ company: drawerCompany, rect })}
         />
       )}
@@ -618,6 +608,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           onSave={(patch) => {
             onUpdateCompany({ ...holderModal, ...patch });
             setHolderModal(null);
+            setToast("Account Holder Updated");
           }}
         />
       )}
@@ -658,6 +649,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           onConfirm={() => {
             onDeleteCompany(deleteModal);
             setDeleteModal(null);
+            setToast("Company Deleted");
           }}
         >
           {/* One paragraph of CONTENT, so white (Figma 667:884 — only the
@@ -942,52 +934,27 @@ function reviewCompany(company: Company): Omit<Company, "id"> {
   };
 }
 
-/** A Company's row preview panel ("Preview Panel 3a"): the account at a
- *  glance — status, plan, seats, the dashboard's last visit — then the
- *  Overview card and the New Company wizard's own Review cards. No learner
- *  preview: an account isn't content. */
+/** A Company's row preview panel (Figma 1514:2860): the Overview and the
+ *  New Company wizard's own Review cards as accordions, then the seats and
+ *  the dashboard's last visit as Activity. No learner preview to come: an
+ *  account isn't content. */
 function CompanyDrawer({
   company,
   onClose,
-  onEdit,
-  onViewEmployees,
   onMore,
 }: {
   company: Company;
   onClose: () => void;
-  onEdit: () => void;
-  onViewEmployees: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
   const billing = getCompanyBilling(company);
   const free = Math.max(0, billing.seatsTotal - billing.seatsUsed);
   const lastDays = getDashboardLastAccessDays(company);
-  const actions: PreviewAction[] = [
-    { label: "View Employees", icon: <MenuUsersIcon />, onClick: onViewEmployees },
-  ];
-  if (billing.status === "Pending Payment Setup")
-    actions.push({
-      label: "Copy Payment Link",
-      icon: <CopyIcon />,
-      copy: stripePaymentLink(company.email, company.name),
-    });
-
   return (
     <PreviewPanel
+      kind="Company"
       title={company.name}
-      description={company.email}
-      meta={[
-        <span className="pp-id">{company.id}</span>,
-        company.tier ?? "No plan",
-        company.industry[0] &&
-          (company.industry.length > 1
-            ? `${company.industry[0]} +${company.industry.length - 1}`
-            : company.industry[0]),
-        <StatusPill billing={billing} />,
-        `Created ${billing.createdOn}`,
-      ]}
-      onEdit={onEdit}
-      actions={actions}
+      subtitle={company.email}
       onMore={onMore}
       stats={[
         { count: String(billing.seatsUsed), title: "Seats in Use", sub: `Of ${billing.seatsTotal}` },
@@ -998,9 +965,10 @@ function CompanyDrawer({
           sub: lastDays === null ? "Never" : lastDays === 1 ? "Day ago" : "Days ago",
         },
       ]}
-      tabs={[{ key: "details", label: "Details", content: <CompanySummary company={company} /> }]}
       onClose={onClose}
-    />
+    >
+      <CompanySummary company={company} />
+    </PreviewPanel>
   );
 }
 

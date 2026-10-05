@@ -6,8 +6,7 @@ import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
 import { PriceIdFields, PriceIdMatrix, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
 import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
-import type { PreviewScreenModel } from "./PreviewPanel";
-import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
+import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon14, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
@@ -15,12 +14,13 @@ import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
 import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
-import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
+import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { MultiSelect } from "./NewCompanyWizard";
 import { questions as QUESTION_BANK, type Question } from "../data/questionBank";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
+import { NewQuestionWizard, type Crumb } from "./NewQuestionWizard";
 import { PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CheckRow } from "./Filters";
@@ -335,7 +335,7 @@ const INITIAL_DATA: WizardData = {
   hoToolsEs: "",
   hoReviewerChecklistEn: "",
   hoReviewerChecklistEs: "",
-  hoProjectDescLimit: "500",
+  hoProjectDescLimit: "1000",
   hoMediaMax: "3",
   hoMediaTypes: { images: true, videos: true, audio: false },
   hoCompletion: "reviewer_grade",
@@ -431,7 +431,7 @@ const RESOURCE_STEPS: StepDef[] = [
 const HANDSON_STEPS: StepDef[] = [
   { id: "basics", label: "Task Details", sub: "Name, description, time, visibility", desc: "Name the Task, describe it, estimate how long it takes to complete, and set its visibility." },
   { id: "reference", label: "Reference Files", sub: "Materials, instructions, files, checklist", desc: "Give learners the materials, instructions, and files they need, and write the checklist reviewers grade against." },
-  { id: "submission", label: "Submission Fields", sub: "Description and media limits", desc: "Define what a learner submits — the project description limit and how many media files of which types they can attach." },
+  { id: "submission", label: "Submission Fields", sub: "Text and media limits", desc: "Define what a learner submits — the supporting text limit and how many media files of which types they can attach." },
   { id: "completion", label: "Completion", sub: "Attempts and passing rule", desc: "How many times a learner can submit, and what marks the Task complete." },
   { id: "discovery", label: "Discovery & Audience", sub: "Discovery, audience", desc: "Whether learners can find this Task on its own, and which companies can see it. Leave the Audience, Trade, and Partnership fields alone for public content.", tip: AUDIENCE_TIP },
 ];
@@ -464,6 +464,22 @@ type Props = {
    * field on every step is filled. Without it, publishing just closes — the
    * embedded and edit flows keep their own behaviour. */
   onCreate?: (task: Omit<Task, "id">) => void;
+  /** Save Changes on an edited Task: the Task with the wizard's fields applied
+   * over the original (its id, usage and creation stamp kept). */
+  onSave?: (task: Task) => void;
+  /** A question made with the Questions step's Create New Question — the
+   *  caller files it in the Question Bank. */
+  onQuestionCreated?: (q: Question) => void;
+};
+
+/* What the Questions step's Create New Question needs from the wizard around
+   it: the editor's breadcrumb trail (every ancestor, then this wizard) and
+   where the new question gets filed. */
+type QuestionHost = {
+  wizardLabel: string;
+  /** Ancestors above this wizard — empty when embedded in a Certification. */
+  outerCrumbs: Crumb[];
+  onQuestionCreated?: (q: Question) => void;
 };
 
 /** Pull the leading number out of a "~45 minutes" / "2 hours" style string. */
@@ -569,7 +585,7 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   };
 }
 
-export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, onCreate }: Props) {
+export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, onCreate, onSave, onQuestionCreated }: Props) {
   const isEditing = !!editingTask;
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(taskType, editingTask));
@@ -620,7 +636,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   // opened so far — with `attemptedSubmit`, the three things that let a gap
   // show (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
-  const maxVisited = useMaxVisited(step);
+  const movedPast = useMovedPast(step);
 
   const stepIndex = useCallback(
     (id: string) => Math.max(0, steps.findIndex((s) => s.id === id)),
@@ -759,10 +775,10 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const missing = useMemo(() => {
     const out = new Set<string>();
     for (const g of gaps) {
-      if (attemptedSubmit || maxVisited > g.step || touched.has(g.key)) out.add(g.key);
+      if (attemptedSubmit || movedPast(g.step) || touched.has(g.key)) out.add(g.key);
     }
     return out.size === 0 ? EMPTY_KEYS : out;
-  }, [gaps, attemptedSubmit, maxVisited, touched]);
+  }, [gaps, attemptedSubmit, movedPast, touched]);
   const showNameError = missing.has(REQUIRED_FIELD_KEYS.name);
 
   /** Steps that still hold an empty mandatory field, whatever owns it. */
@@ -831,6 +847,22 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       onCreate(buildTask(data, taskType));
       return;
     }
+    if (onSave && editingTask) {
+      const built = buildTask(data, taskType);
+      onSave({
+        ...editingTask,
+        ...built,
+        id: editingTask.id,
+        usedIn: editingTask.usedIn,
+        createdBy: editingTask.createdBy,
+        dateCreated: editingTask.dateCreated,
+        // Cleared on the form → cleared on the Task, not left at the old value.
+        description: built.description,
+        timeToComplete: built.timeToComplete,
+        paywall: built.paywall,
+      });
+      return;
+    }
     onClose();
   }
 
@@ -855,6 +887,12 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       if (!trialConfirm) handlePublish();
     },
   );
+
+  const questionHost: QuestionHost = {
+    wizardLabel: editingTask ? editingTask.name : NEW_TITLE[taskType],
+    outerCrumbs: onPrimary ? [] : [{ label: "Tasks", onClick: requestClose }],
+    onQuestionCreated,
+  };
 
   return (
     <div className="wizard">
@@ -930,7 +968,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           ) : isQuiz ? (
             step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
             step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} /> :
-            step === 2 ? <QuizQuestionsStep data={data} update={update} /> :
+            step === 2 ? <QuizQuestionsStep data={data} update={update} host={questionHost} /> :
             step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} {...gateProps} /> :
             step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} touch={touch} /> :
             step === 5 ? <QuizIntegrityStep data={data} update={update} missing={missing} touch={touch} /> :
@@ -1284,40 +1322,69 @@ function XapiCompletionStep(props: StepProps) {
   );
 }
 
-/* One Score Capture field, assembled the same way as {@link OrientationField}:
-   the old capture toggle + "Score displayed" card pair collapse into a single
-   three-card choice, since "which score is shown" only ever mattered when
-   capture was on. Still writes the same two data fields. */
+/* Score Capture as two seg-controls, the Time Limit shape: a yes/no flag, and
+   its one dependant — which score the learner sees — appears under it only
+   when capture is on. Writes the same two data fields; a switched-off capture
+   keeps its `scoreDisplayMode`, so turning it back on restores the choice. */
 function ScoreCaptureField({ data, update }: StepProps) {
-  const value = data.scoreCapture ? data.scoreDisplayMode : "off";
+  const on = data.scoreCapture;
+  const recent = data.scoreDisplayMode === "recent";
   return (
-    <div className="form-group">
-      <label className="form-label">Score Capture</label>
-      <div className="radio-card-group">
-        <RadioCard
-          selected={value === "off"}
-          onSelect={() => update({ scoreCapture: false })}
-          title="No Score Capture"
-          desc="Only completion is recorded — any score the package reports is ignored."
-        />
-        <RadioCard
-          selected={value === "highest"}
-          onSelect={() => update({ scoreCapture: true, scoreDisplayMode: "highest" })}
-          title="Capture Highest Score"
-          desc="Store the reported score and show the learner their best score across all attempts."
-        />
-        <RadioCard
-          selected={value === "recent"}
-          onSelect={() => update({ scoreCapture: true, scoreDisplayMode: "recent" })}
-          title="Capture Most Recent Score"
-          desc="Store the reported score and show the learner the score from their latest attempt."
-        />
+    <>
+      <div className="form-group">
+        <label className="form-label">Score Capture</label>
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn${!on ? " active" : ""}`}
+            aria-pressed={!on}
+            onClick={() => update({ scoreCapture: false })}
+          >
+            No: Completion Only
+          </button>
+          <button
+            type="button"
+            className={`seg-btn${on ? " active accent" : ""}`}
+            aria-pressed={on}
+            onClick={() => update({ scoreCapture: true })}
+          >
+            Yes: Capture Score
+          </button>
+        </div>
+        <p className="form-help">
+          Completion only records whether the Task was finished. Capturing also
+          stores the score the xAPI/SCORM package sends.
+        </p>
       </div>
-      <p className="form-help">
-        Completion only records whether the Task was finished. Capturing also
-        stores the score the xAPI/SCORM package sends.
-      </p>
-    </div>
+
+      {on && (
+        <div className="form-group">
+          <label className="form-label">Score Shown to Learner</label>
+          <div className="seg-control">
+            <button
+              type="button"
+              className={`seg-btn${!recent ? " active accent" : ""}`}
+              aria-pressed={!recent}
+              onClick={() => update({ scoreDisplayMode: "highest" })}
+            >
+              Highest Score
+            </button>
+            <button
+              type="button"
+              className={`seg-btn${recent ? " active accent" : ""}`}
+              aria-pressed={recent}
+              onClick={() => update({ scoreDisplayMode: "recent" })}
+            >
+              Most Recent Score
+            </button>
+          </div>
+          <p className="form-help">
+            Highest shows their best score across all attempts; Most Recent
+            shows the score from their latest attempt.
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1643,46 +1710,54 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
   const types = data.hoMediaTypes;
   const setType = (k: keyof MediaTypes, v: boolean) =>
     update({ hoMediaTypes: { ...types, [k]: v } });
-  const noneSelected = !types.images && !types.videos && !types.audio;
+  /* No media allowed → the types are moot: the table greys out the way a
+     Review Options row does when its dependency isn't met (switches read off,
+     notes say why), and the at-least-one rule stops applying. The stored
+     types are kept, so raising the count again restores them. */
+  const noMedia = data.hoMediaMax === "0";
+  const noneSelected = !noMedia && !types.images && !types.videos && !types.audio;
+
+  /* The Quiz Review Options table (`.qsec--rev`, Figma 1213:1255): a header,
+     then a row per media type with its name over a note and the switch right. */
+  const mediaRows: { key: keyof MediaTypes; label: string; sub: string }[] = [
+    { key: "images", label: "Images", sub: "Photos of the learner's work." },
+    { key: "videos", label: "Videos", sub: "Video recordings of the learner's work." },
+    { key: "audio", label: "Audio", sub: "Audio recordings, such as a spoken walkthrough." },
+  ];
 
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Project Description</label>
-        <div className="time-row">
-          <input
-            className="form-input no-spinner small"
-            inputMode="numeric"
-            value={data.hoProjectDescLimit}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "" || /^\d+$/.test(v)) update({ hoProjectDescLimit: v });
-            }}
-          />
-          <span className="form-suffix">character limit</span>
-        </div>
+        <label className="form-label">Character Limit for Supporting Text</label>
+        <input
+          className="form-input no-spinner small"
+          inputMode="numeric"
+          value={data.hoProjectDescLimit}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "" || /^\d+$/.test(v)) update({ hoProjectDescLimit: v });
+          }}
+        />
         <p className="form-help">
-          The free-text write-up a learner submits with their work.
+          Set to 0 if the user should not be allowed to enter any text
         </p>
       </div>
 
       <div className="form-group">
         <label className="form-label">Media Files</label>
-        <div className="time-row">
-          <input
-            className="form-input no-spinner small"
-            inputMode="numeric"
-            value={data.hoMediaMax}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "" || (/^\d+$/.test(v) && +v >= 0 && +v <= 10))
-                update({ hoMediaMax: v });
-            }}
-          />
-          <span className="form-suffix">files maximum (0–10)</span>
-        </div>
+        <input
+          className="form-input no-spinner small"
+          inputMode="numeric"
+          value={data.hoMediaMax}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "" || (/^\d+$/.test(v) && +v >= 0 && +v <= 10))
+              update({ hoMediaMax: v });
+          }}
+        />
         <p className="form-help">
-          How many media files a learner can attach to a submission.
+          Maximum 10. Set to 0 if the user should not be allowed to add any media
+          files
         </p>
       </div>
 
@@ -1693,28 +1768,41 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
             <span className="form-label-error">Select at least one media type.</span>
           )}
         </label>
-        <div className="review-list">
-          <Toggle
-            row
-            checked={types.images}
-            onChange={(v) => setType("images", v)}
-            label="Images"
-          />
-          <Toggle
-            row
-            checked={types.videos}
-            onChange={(v) => setType("videos", v)}
-            label="Videos"
-          />
-          <Toggle
-            row
-            checked={types.audio}
-            onChange={(v) => setType("audio", v)}
-            label="Audio"
-          />
+        <div className="qsec qsec--rev qsec--media">
+          <div className="qsec-hd">
+            <span className="qsec-revtext">MEDIA TYPE</span>
+            <span className="qsec-shown">ALLOWED?</span>
+          </div>
+          {mediaRows.map((row) => {
+            const on = !noMedia && types[row.key];
+            return (
+              <div key={row.key} className={`qsec-row${noMedia ? " is-disabled" : ""}`}>
+                <span className="qsec-revtext">
+                  <span className="qsec-revname">{row.label}</span>
+                  <span className="qsec-revsub">
+                    {noMedia ? "Requires at least 1 media file." : row.sub}
+                  </span>
+                </span>
+                <span className="qsec-shown">
+                  <button
+                    type="button"
+                    className={`toggle ${on ? "on" : ""}`}
+                    aria-label={`Allow ${row.label}`}
+                    aria-pressed={on}
+                    disabled={noMedia}
+                    onClick={() => !noMedia && setType(row.key, !types[row.key])}
+                  >
+                    <span className="toggle-knob" />
+                  </button>
+                </span>
+              </div>
+            );
+          })}
         </div>
         <p className="form-help">
-          Pick one or more. At least one type must be allowed.
+          {noMedia
+            ? "Only for Tasks that allow media files — set Media Files above 0 to use this."
+            : "Pick one or more. At least one type must be allowed."}
         </p>
       </div>
     </>
@@ -2110,7 +2198,7 @@ function QuizStructureStep({
   );
 }
 
-function QuizQuestionsStep({ data, update }: StepProps) {
+function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionHost }) {
   const sectioned = data.structure === "sectioned";
 
   const updateSection = (
@@ -2136,6 +2224,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
                 <span className="req">*</span>
               </label>
               <QuestionGroupEditor
+                host={host}
                 staticQuestions={s.staticQuestions}
                 pools={s.randomPools}
                 onChange={(patch) => updateSection(s.id, patch)}
@@ -2150,6 +2239,7 @@ function QuizQuestionsStep({ data, update }: StepProps) {
             Questions<span className="req">*</span>
           </label>
           <QuestionGroupEditor
+            host={host}
             staticQuestions={data.blockStatic}
             pools={data.blockPools}
             shortcut
@@ -2226,11 +2316,13 @@ function QuizQuestionsStep({ data, update }: StepProps) {
  * (752:2708): create a brand-new question, pick statics from the Bank, or
  * build a random set. */
 function QuestionGroupEditor({
+  host,
   staticQuestions,
   pools,
   onChange,
   shortcut = false,
 }: {
+  host: QuestionHost;
   staticQuestions: StaticQuestion[];
   pools: RandomPool[];
   onChange: (patch: {
@@ -2247,6 +2339,8 @@ function QuestionGroupEditor({
     null | { mode: "static" } | { mode: "pool"; poolId?: string }
   >(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Create New Question's full-screen editor is open over the wizard.
+  const [creating, setCreating] = useState(false);
   const addWrapRef = useRef<HTMLDivElement>(null);
 
   // Statics and pools live in separate arrays but render as one ordered list;
@@ -2279,6 +2373,19 @@ function QuestionGroupEditor({
           })),
       ],
     });
+  /* A created question is filed in the Bank either way; it joins this Quiz as
+     a static row only if it can — Quizzes take Active, graded questions alone
+     (the pickers' own rule), and the editor writes Active. */
+  const addCreatedQuestion = (q: Question) => {
+    host.onQuestionCreated?.(q);
+    if (!q.gradingEnabled) return;
+    onChange({
+      staticQuestions: [
+        ...staticQuestions,
+        { id: q.id, text: q.text, type: q.type, weight: "1", seq: nextSeq },
+      ],
+    });
+  };
   const setWeight = (id: string, weight: string) =>
     onChange({
       staticQuestions: staticQuestions.map((q) => (q.id === id ? { ...q, weight } : q)),
@@ -2376,6 +2483,10 @@ function QuestionGroupEditor({
   const rowDragClass = (key: string) =>
     `${drag === key ? " dragging" : ""}${drag && over === key && drag !== key ? " drag-over" : ""}`;
 
+  const openCreate = () => {
+    setMenuOpen(false);
+    setCreating(true);
+  };
   const openBank = () => {
     setMenuOpen(false);
     setPicker({ mode: "static" });
@@ -2387,11 +2498,11 @@ function QuestionGroupEditor({
 
   useCreateShortcut(
     () => setMenuOpen(true),
-    shortcut && !menuOpen && !picker,
+    shortcut && !menuOpen && !picker && !creating,
     "q",
   );
 
-  // While the menu is open: Q / R fire its rows, Escape and outside clicks
+  // While the menu is open: C / Q / R fire its rows, Escape and outside clicks
   // dismiss. Escape is captured so it can't also cancel the wizard.
   useEffect(() => {
     if (!menuOpen) return;
@@ -2402,6 +2513,9 @@ function QuestionGroupEditor({
         e.preventDefault();
         e.stopPropagation();
         setMenuOpen(false);
+      } else if (k === "c") {
+        e.preventDefault();
+        openCreate();
       } else if (k === "q") {
         e.preventDefault();
         openBank();
@@ -2614,6 +2728,10 @@ function QuestionGroupEditor({
         </button>
         {menuOpen && (
           <div className="u-menu qz-menu" role="menu">
+            <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
+              <span className="qz-menu-label">Create New Question</span>
+              <span className="qz-kbd">C</span>
+            </button>
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
               <span className="qz-menu-label">Add from Question Bank</span>
               <span className="qz-kbd">Q</span>
@@ -2645,6 +2763,31 @@ function QuestionGroupEditor({
           }}
           onCancel={() => setPicker(null)}
         />,
+        document.body,
+      )}
+
+      {/* Create New Question (Figma 752:2708): the full Question editor,
+          portalled over the Task wizard (`.qz-qwiz`) so the wizard — and
+          everything filled in so far — stays mounted underneath. Its crumbs
+          are the trail to here; the outer ones close it first, then leave
+          the Task wizard through its own guard. */}
+      {creating && createPortal(
+        <div className="qz-qwiz">
+          <NewQuestionWizard
+            onCreate={addCreatedQuestion}
+            onClose={() => setCreating(false)}
+            crumbs={[
+              ...host.outerCrumbs.map((c) => ({
+                label: c.label,
+                onClick: () => {
+                  setCreating(false);
+                  c.onClick();
+                },
+              })),
+              { label: host.wizardLabel, onClick: () => setCreating(false) },
+            ]}
+          />
+        </div>,
         document.body,
       )}
     </div>
@@ -2761,7 +2904,7 @@ function QuizCompletionStep(props: StepProps) {
                      a different, weaker rule. */
                   title="If the learner fails a Section marked Must Pass, no Section completion is recorded from that attempt — not even for the Sections they passed."
                 >
-                  <InfoIcon />
+                  <InfoIcon14 />
                 </span>
               </span>
             </div>
@@ -3770,12 +3913,30 @@ function PaywallStructureField({ data, update }: StepProps) {
    one column for a single price, the attempt matrix for per-attempt pricing. */
 function PaywallPriceIdsField({ touch, data, update, missing }: StepProps) {
   const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.priceIds);
+  /* Figma 1506:1342: the label row names the FIRST empty ID ("Apple Price ID
+     cannot be empty") and every empty input reddens. The matrix adds which
+     attempt column it sits in. */
+  const columns: { title?: string; ids: PriceIds }[] =
+    data.paywallMode === "per_attempt"
+      ? [
+          ...data.attemptPrices.map((r) => ({ title: `Attempt ${r.attempt}`, ids: r.priceIds })),
+          { title: "All Subsequent Attempts", ids: data.subsequentPriceIds },
+        ]
+      : [{ ids: data.commonPriceIds }];
+  let firstEmpty: string | null = null;
+  for (const col of columns) {
+    const ch = PRICE_CHANNELS.find((c) => !col.ids[c.key].trim());
+    if (ch) {
+      firstEmpty = `${ch.label.join(" ")} Price ID${col.title ? ` for ${col.title}` : ""}`;
+      break;
+    }
+  }
   return (
     <div className="form-group" onBlur={leave(() => touch?.("priceIds"))}>
       <label className="form-label">
         Product/Price IDs<span className="req">*</span>
-        {flagEmpty && (
-          <span className="form-label-error">Every channel needs an ID while the paywall is on.</span>
+        {flagEmpty && firstEmpty && (
+          <span className="form-label-error">{firstEmpty} cannot be empty</span>
         )}
       </label>
       {data.paywallMode === "per_attempt" ? (
@@ -4052,83 +4213,6 @@ function RadioCard({
         {desc && <div className="radio-card-desc">{desc}</div>}
       </div>
     </button>
-  );
-}
-
-/* Toggle — Figma 373:233 (off) / 362:2440 (on). Reads as a normal labelled
-   field: title, then the switch beside a line naming the state it's in, then the
-   recommendation. `stateOn`/`stateOff` carry that line; they default to Yes/No
-   for settings whose design doesn't author richer copy. */
-function Toggle({
-  checked,
-  onChange,
-  label,
-  sub,
-  inline,
-  row,
-  disabled,
-  stateOn = "Yes",
-  stateOff = "No",
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-  sub?: string;
-  inline?: boolean;
-  /** Switch-first row (Figma 373:233) — the shape a list of related settings
-   * uses, where one stacked label/state/sub field per setting would be six
-   * fields deep. */
-  row?: boolean;
-  disabled?: boolean;
-  stateOn?: string;
-  stateOff?: string;
-}) {
-  const control = (
-    <button
-      type="button"
-      className={`toggle ${checked ? "on" : ""}`}
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      aria-pressed={checked}
-    >
-      <span className="toggle-knob" />
-    </button>
-  );
-
-  /* Figma 373:233: the switch leads, with the title sitting flush on its note
-     beside it — no state word, since the switch itself is the answer. The same
-     row the Question editor's rail uses (739:1821). */
-  if (row) {
-    return (
-      <div className={`toggle-srow ${disabled ? "disabled" : ""}`}>
-        {control}
-        <div className="toggle-text">
-          <span className="toggle-label">{label}</span>
-          {sub && <p className="toggle-sub">{sub}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // The compact variant is a single line, so it keeps its label-then-switch read.
-  if (inline) {
-    return (
-      <div className={`toggle-row inline ${disabled ? "disabled" : ""}`}>
-        <span className="toggle-inline-label">{label}</span>
-        {control}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`toggle-field ${disabled ? "disabled" : ""}`}>
-      <span className="form-label">{label}</span>
-      <div className="toggle-switch-row">
-        {control}
-        <span className="toggle-state">{checked ? stateOn : stateOff}</span>
-      </div>
-      {sub && <p className="toggle-sub">{sub}</p>}
-    </div>
   );
 }
 
@@ -4500,36 +4584,6 @@ function priceIdLines(ids: PriceIds) {
   );
 }
 
-/** What a Task's row preview panel reads (PreviewPanel.tsx) beyond the
- *  review cards: the meta strip's labels and the learner-side screen, from the
- *  same `buildInitialData` the edit wizard and `TaskSummary` open with.
- *  `certs` = the Certifications it's in. */
-export function useTaskPreview(task: Task, certs: { name: string }[]) {
-  const type = taskTypeKey(task.type);
-  const data = useMemo(() => buildInitialData(type, task), [type, task]);
-  return useMemo(() => {
-    const time = data.timeValue ? `${data.timeValue} ${TIME_UNIT_LABEL[data.timeUnit]}` : undefined;
-    const CTA: Record<TaskTypeKey, string> = {
-      xapi: "Launch Module",
-      quiz: "Start Quiz",
-      "hands-on": "Start Task",
-      file: "Open Resource",
-    };
-    const screen: PreviewScreenModel = {
-      eyebrow: TYPE_LABEL[type],
-      title: task.name,
-      meta: [TYPE_LABEL[type], time, data.requiresSubscription ? "Subscription" : "Free Trial"]
-        .filter(Boolean)
-        .join(" · "),
-      description: task.description,
-      cta: CTA[type],
-      listTitle: certs.length > 0 ? "Part of" : undefined,
-      items: certs.map((c) => ({ key: c.name, name: c.name, meta: "Certification" })),
-    };
-    return { screen, time, typeLabel: TYPE_LABEL[type] };
-  }, [data, type, task, certs]);
-}
-
 export function TaskSummary({ task }: { task: Task }) {
   const type = taskTypeKey(task.type);
   const data = useMemo(() => buildInitialData(type, task), [type, task]);
@@ -4633,15 +4687,17 @@ export function TaskSummary({ task }: { task: Task }) {
           <ConfirmCard
             title={title("submission")}
             rows={[
-              ["Project Description", `${orDash(data.hoProjectDescLimit)} character limit`],
+              ["Character Limit for Supporting Text", orDash(data.hoProjectDescLimit)],
               ["Media Files", `${orDash(data.hoMediaMax)} files maximum`],
               [
                 "Media File Types Allowed",
                 orDash(
-                  (["images", "videos", "audio"] as const)
-                    .filter((k) => data.hoMediaTypes[k])
-                    .map((k) => k[0].toUpperCase() + k.slice(1))
-                    .join(", "),
+                  data.hoMediaMax === "0"
+                    ? ""
+                    : (["images", "videos", "audio"] as const)
+                        .filter((k) => data.hoMediaTypes[k])
+                        .map((k) => k[0].toUpperCase() + k.slice(1))
+                        .join(", "),
                 ),
                 true,
               ],

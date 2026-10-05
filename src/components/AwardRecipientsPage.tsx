@@ -13,6 +13,8 @@ import { buildAwardRecipients, type AwardRecipient } from "../data/awardRecipien
 import { UsersFilters, type UserFilterState } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
 import { ChevronLeftIcon, SortIcon, AddIcon, DownloadIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -168,6 +170,8 @@ export function AwardRecipientsPage({
   const recipients = useMemo(() => buildAwardRecipients(award), [award]);
   const hasCard = Boolean(award.cardTemplateId);
   const hasCert = Boolean(award.certificateTemplateId);
+  // Each download is acknowledged once the file is handed off.
+  const [toast, toastNode] = useToast();
 
   const rows = useMemo<Row[]>(
     () =>
@@ -274,7 +278,10 @@ export function AwardRecipientsPage({
               </div>
             </div>
             <div className="tasks-header-actions">
-              <button className="new-task" onClick={() => downloadAllCsv(award, sorted)}>
+              <button className="new-task" onClick={() => {
+                downloadAllCsv(award, sorted);
+                toast("Recipients Downloaded");
+              }}>
                 <AddIcon />
                 Download All
               </button>
@@ -348,13 +355,14 @@ export function AwardRecipientsPage({
                               {hasCard && (
                                 <button
                                   className="ar-dl-btn"
-                                  onClick={() =>
+                                  onClick={() => {
                                     downloadFile(
                                       `${row.r.uniqueNumber}-card.svg`,
                                       awardCardSvg(row.u.name, award, row.r),
                                       "image/svg+xml",
-                                    )
-                                  }
+                                    );
+                                    toast("Card Downloaded");
+                                  }}
                                 >
                                   <DownloadIcon /> Card
                                 </button>
@@ -362,13 +370,14 @@ export function AwardRecipientsPage({
                               {hasCert && (
                                 <button
                                   className="ar-dl-btn"
-                                  onClick={() =>
+                                  onClick={() => {
                                     downloadFile(
                                       `${row.r.uniqueNumber}-certificate.svg`,
                                       awardCertSvg(row.u.name, award, row.r),
                                       "image/svg+xml",
-                                    )
-                                  }
+                                    );
+                                    toast("Certificate Downloaded");
+                                  }}
                                 >
                                   <DownloadIcon /> Certificate
                                 </button>
@@ -404,20 +413,15 @@ export function AwardRecipientsPage({
           </div>
         </div>
       </div>
+      {toastNode}
     </div>
   );
 }
 
+/* The shared width rule (`TableCols`): the data columns share the slack in
+   proportion to their base widths; the Download buttons' column stays fixed. */
 function ColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 240 }} />
-      {COLS.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: DOWNLOAD_COL_WIDTH }} />
-    </colgroup>
-  );
+  return <TableCols data={[240, ...COLS.map((c) => c.width)]} trail={[DOWNLOAD_COL_WIDTH]} />;
 }
 
 function SortableHeader({

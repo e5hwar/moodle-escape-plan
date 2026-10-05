@@ -7,16 +7,9 @@ import {
   type QuestionStatus,
   type QuestionType,
 } from "../data/questionBank";
-import { QuestionHistoryModal } from "./QuestionHistoryModal";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
-import {
-  RowCloseIcon,
-  MoveIcon,
-  InfoIcon,
-  PlusThinIcon,
-  CrumbChevronIcon,
-  } from "./icons";
+import { RowCloseIcon, MoveIcon, InfoIcon14, PlusThinIcon, CrumbChevronIcon, InfoIcon12 } from "./icons";
 import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
 import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
@@ -406,9 +399,11 @@ export type Crumb = { label: string; onClick: () => void };
 
 type Props = {
   onClose: () => void;
-  // Called with the built question when "Create Question" is clicked
-  // (creation only — edits still just close, as before).
+  // Called with the built question when "Create Question" is clicked.
   onCreate?: (q: Question) => void;
+  /** Save Changes on an edit: the question with the form applied, as its
+   *  next version (id, usage and links kept). */
+  onSave?: (q: Question) => void;
   initialCategoryPath?: string[];
   /** Type picked in the Create Question menu — the editor opens on it. */
   initialType?: QuestionType;
@@ -451,6 +446,7 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
     quizzes: [],
     forms: [],
     version: 1,
+    modifiedAt: Date.now(),
     gradingEnabled: grading,
     randomise: d.randomise && (d.type === "mcq" || d.type === "match"),
     hasSpanish,
@@ -500,6 +496,7 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
 export function NewQuestionWizard({
   onClose,
   onCreate,
+  onSave,
   initialCategoryPath,
   initialType,
   editingQuestion,
@@ -514,7 +511,6 @@ export function NewQuestionWizard({
   const [data, setData] = useState<QuestionDraft>(() =>
     buildInitial(initialCategoryPath, editingQuestion, initialType),
   );
-  const [showHistory, setShowHistory] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const update = (patch: Partial<QuestionDraft>) => setData((d) => ({ ...d, ...patch }));
   /* The editor as it opened — an edit's prefilled question included. Anything
@@ -578,6 +574,15 @@ export function NewQuestionWizard({
       return;
     }
     if (!isEditing && onCreate) onCreate(questionFromDraft(data, esComplete));
+    if (isEditing && editingQuestion && onSave && dirty) {
+      onSave({
+        ...questionFromDraft(data, esComplete),
+        id: editingQuestion.id,
+        quizzes: editingQuestion.quizzes,
+        forms: editingQuestion.forms,
+        version: editingQuestion.version + 1,
+      });
+    }
     onClose();
   };
   /* Opened as a sub-wizard over the Quiz step, this editor IS the `.qz-qwiz`
@@ -600,7 +605,9 @@ export function NewQuestionWizard({
 
   /* Figma 739:1504 titles the screen by type and carries no subtext — on an
      edit either. The versioning sentence that used to sit here (and the
-     footer's "last saved · vN") is what View history is for. */
+     footer's "last saved · vN") lives on the question's Version History page
+     (the bank's row menu) — the editor's own View history button went
+     2026-10-03 (user). */
   const title = readOnly
     ? `${TYPE_TITLES[data.type]} Question · v${atVersion}`
     : `${isEditing ? "Edit" : "New"} ${TYPE_TITLES[data.type]} Question`;
@@ -685,11 +692,6 @@ export function NewQuestionWizard({
           </button>
         </div>
         <div className="wizard-actions">
-          {isEditing && !readOnly && (
-            <button className="btn-save-draft" onClick={() => setShowHistory(true)}>
-              View history
-            </button>
-          )}
           <button
             className={`btn-publish${canSave ? "" : " is-disabled"}`}
             aria-disabled={!canSave}
@@ -701,13 +703,6 @@ export function NewQuestionWizard({
           </button>
         </div>
       </footer>
-
-      {showHistory && (
-        <QuestionHistoryModal
-          question={editingQuestion!}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
     </div>
   );
 }
@@ -833,7 +828,7 @@ function SetupSection({
           <p className="form-help">Where it goes in the Question Bank</p>
         </div>
 
-        <GradingToggle
+        <GradingField
           data={data}
           update={update}
           gradable={gradable}
@@ -1029,7 +1024,7 @@ function McqSection({
                   className="qed-tbl-info"
                   title="Share of the question's mark this option earns."
                 >
-                  <InfoIcon />
+                  <InfoIcon14 />
                 </span>
               </span>
             )}
@@ -1483,10 +1478,11 @@ function ScaleLabelsSection({
   );
 }
 
-/* Grading is the third field in the Setup stack, so it is its own component —
-   it renders a bare ToggleRow into that stack rather than a `.wizard-fields`
-   block of its own. */
-function GradingToggle({
+/* Grading is the third field in the Setup stack — a single-select (Figma
+   359:2373) like every other yes/no field in the app's forms, not a switch
+   (2026-10-03, user). The subtext under it says what Grading is for, or which
+   setting is holding it where it is. */
+function GradingField({
   data,
   update,
   gradable,
@@ -1502,6 +1498,7 @@ function GradingToggle({
   // enabled while the free-text "Other" option is on.
   const lockedByQuizzes = grading && usedInQuizzes > 0;
   const lockedByOther = !grading && data.otherOption;
+  const locked = !gradable || lockedByQuizzes || lockedByOther;
   const sub = !gradable
     ? "Grading not supported"
     : lockedByQuizzes
@@ -1511,18 +1508,20 @@ function GradingToggle({
         : "Required for use in Quizzes";
 
   return (
-    <ToggleRow
-      checked={grading}
-      disabled={!gradable || lockedByQuizzes || lockedByOther}
-      onChange={(v) => update({ grading: v })}
+    <SegField
       label="Grading"
+      value={grading}
+      offLabel="Not Graded"
+      onLabel="Graded"
+      onChange={(v) => update({ grading: v })}
+      disabled={locked}
       sub={sub}
     />
   );
 }
 
-/* What's left at the foot of the rail once Grading has moved up: the switches
-   that change how the type's own options behave. Figma 739:1504 runs them as a
+/* What's left at the foot of the rail once Grading has moved up: the
+   single-selects that change how the type's own options behave. Figma 739:1504 runs them as a
    plain stack, no section heading. A type with neither renders nothing at all
    — an empty `.wizard-fields` would still take its margin. */
 function OptionTogglesSection({
@@ -1541,10 +1540,10 @@ function OptionTogglesSection({
   return (
     <div className="wizard-fields">
       {canRandomise && (
-        <ToggleRow
-          checked={data.randomise}
-          onChange={(v) => update({ randomise: v })}
+        <SegField
           label="Randomize Options"
+          value={data.randomise}
+          onChange={(v) => update({ randomise: v })}
           sub="New order on every attempt"
           info={
             data.type === "match"
@@ -1554,12 +1553,14 @@ function OptionTogglesSection({
         />
       )}
       {canOther && (
-        <ToggleRow
-          checked={data.otherOption}
+        <SegField
+          label="“Other” Free-Text Option"
+          value={data.otherOption}
           disabled={grading}
           onChange={(v) => update({ otherOption: v })}
-          label="“Other” Free-Text Option"
-          sub="User can enter an answer of their own"
+          /* Grading's own subtext names the Other option when that is what
+             holds it; this is the same courtesy the other way round. */
+          sub={grading ? "Set Grading to Not Graded to enable" : "User can enter an answer of their own"}
           info="A learner who picks it types their own answer, so the question can't be auto-graded."
         />
       )}
@@ -1607,12 +1608,17 @@ function FeedbackSection({
               onEn={(v) => update({ fbPartial: v })}
               onEs={(v) => update({ fbPartialEs: v })}
               disabled={singleAnswer}
+              /* Figma 1481:3600 copy, both languages. */
               placeholder={
                 singleAnswer
-                  ? "Only available for questions with MCQs with multiple correct answers"
+                  ? "Only Available for MCQs with Multiple Correct Answers"
                   : "Shown for a partially correct response…"
               }
-              esPlaceholder="Se muestra en una respuesta parcialmente correcta…"
+              esPlaceholder={
+                singleAnswer
+                  ? "Solo Disponible para Preguntas de Opción Múltiple con Varias Respuestas Correctas"
+                  : "Se muestra en una respuesta parcialmente correcta…"
+              }
             />
           )}
           <FeedbackRow
@@ -1666,7 +1672,7 @@ function FeedbackRow({
           placeholderEn={placeholder}
           placeholderEs={esPlaceholder}
           disabled={disabled}
-          maxLength={DESCRIPTION_MAX}
+          maxLength={disabled ? undefined : DESCRIPTION_MAX}
         />
       </div>
     </div>
@@ -1705,49 +1711,64 @@ function RadioCard({
   );
 }
 
-function ToggleRow({
-  checked,
-  onChange,
+/* An on/off setting as a Single-Select (Figma 359:2373) — every yes/no field
+   on this page is one since 2026-10-03 (user), replacing the switch rows.
+   Off leads, like the app's other pairs (Spotlight's Disabled | Enabled); the
+   "on" segment takes the accent. The subtext sits below the control and can
+   end on an info glyph carrying the longer explanation (696:1224). */
+function SegField({
   label,
+  value,
+  onChange,
+  offLabel = "Disabled",
+  onLabel = "Enabled",
   sub,
   info,
   disabled,
 }: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
   label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  offLabel?: string;
+  onLabel?: string;
   sub?: string;
-  /** Tooltip on an info glyph beside the note (Figma 814:1829). */
+  /** Tooltip on an info glyph after the subtext. */
   info?: string;
   disabled?: boolean;
 }) {
   return (
-    /* Figma 739:1821/739:1827 — the switch leads, with the title over its note
-       beside it. (The stacked `.toggle-field` variant is what the rest of the
-       app uses; this screen's rail is the switch-first row.) */
-    <div className={`toggle-row inline qed-toggle ${disabled ? "disabled" : ""}`}>
-      <button
-        type="button"
-        className={`toggle ${checked ? "on" : ""}`}
-        disabled={disabled}
-        onClick={() => !disabled && onChange(!checked)}
-        aria-pressed={checked}
-      >
-        <span className="toggle-knob" />
-      </button>
-      <div className="toggle-text">
-        <span className="toggle-label">{label}</span>
-        {sub && (
-          <p className="toggle-sub">
-            {sub}
-            {info && (
-              <span className="qed-tbl-info" title={info}>
-                <InfoIcon />
-              </span>
-            )}
-          </p>
-        )}
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <div className={`seg-control${disabled ? " is-disabled" : ""}`}>
+        <button
+          type="button"
+          className={`seg-btn${!value ? " active" : ""}`}
+          aria-pressed={!value}
+          disabled={disabled}
+          onClick={() => onChange(false)}
+        >
+          {offLabel}
+        </button>
+        <button
+          type="button"
+          className={`seg-btn${value ? " active accent" : ""}`}
+          aria-pressed={value}
+          disabled={disabled}
+          onClick={() => onChange(true)}
+        >
+          {onLabel}
+        </button>
       </div>
+      {sub && (
+        <p className={`form-help${info ? " form-help--tip" : ""}`}>
+          {sub}
+          {info && (
+            <span className="form-help-info" tabIndex={0} aria-label={`About ${label}`} title={info}>
+              <InfoIcon12 />
+            </span>
+          )}
+        </p>
+      )}
     </div>
   );
 }

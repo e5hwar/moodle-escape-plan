@@ -111,6 +111,11 @@ export type Question = {
   quizzes: string[]; // quiz tasks using it (graded usage only)
   forms: string[]; // feedback forms using it (graded or not)
   version: number; // bumped each time the question is edited
+  /* When the question was last saved, in epoch ms — set by anything that
+     writes a question during the session (Create, bulk import). The seed
+     leaves it out and its date comes from the mocked version history
+     (`questionModifiedAt`). */
+  modifiedAt?: number;
   gradingEnabled: boolean;
   randomise: boolean;
   hasSpanish: boolean; // ES translation complete
@@ -215,6 +220,9 @@ export type QuestionVersion = {
      shows this; `date` alone still feeds the list's Created / Last Modified
      columns, which have no room for a time. */
   stamp: string;
+  /* The same moment in epoch ms, for sorting (the list's default order is
+     newest-modified first). */
+  at: number;
   author: string;
   note: string;
   attempts: number; // quiz attempts + form responses pinned to this version
@@ -258,7 +266,29 @@ export function versionText(q: Question, version: number): string {
    is the creation date, the newest row is the last edit. */
 export function questionDates(q: Question): { created: string; modified: string } {
   const rows = versionHistory(q);
+  if (q.modifiedAt !== undefined) {
+    const modified = new Date(q.modifiedAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    // A question written this session at v1 was created at that same moment.
+    return { created: q.version === 1 ? modified : rows[rows.length - 1].date, modified };
+  }
   return { created: rows[rows.length - 1].date, modified: rows[0].date };
+}
+
+/** When the question was last modified, in epoch ms — the list's default sort. */
+export function questionModifiedAt(q: Question): number {
+  return q.modifiedAt ?? versionHistory(q)[0].at;
+}
+
+/** When the question was created, in epoch ms — v1's row, or the session's
+    own save for a question written this session (same rule as `questionDates`). */
+export function questionCreatedAt(q: Question): number {
+  if (q.modifiedAt !== undefined && q.version === 1) return q.modifiedAt;
+  const rows = versionHistory(q);
+  return rows[rows.length - 1].at;
 }
 
 /* Every attempt ever made on the question, across all its versions — the list's
@@ -288,9 +318,12 @@ const FORM_SHARES = [0, 0, 0.35, 1, 1, 0];
 
 /* Working-hours clock for an edit stamp — deterministic, like everything else
    here, so the same version always reads the same time. */
+function editClock(h: number, v: number): { hour24: number; minute: number } {
+  return { hour24: 8 + ((h + v * 5) % 10), minute: (h + v * 17) % 60 }; // 8am–5pm
+}
+
 function editTime(h: number, v: number): string {
-  const hour24 = 8 + ((h + v * 5) % 10); // 8am–5pm
-  const minute = (h + v * 17) % 60;
+  const { hour24, minute } = editClock(h, v);
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return `${hour12}:${String(minute).padStart(2, "0")} ${hour24 < 12 ? "AM" : "PM"}`;
 }
@@ -360,6 +393,10 @@ export function versionHistory(q: Question): QuestionVersion[] {
       date,
       text,
       stamp: `${date} · ${editTime(h, v)}`,
+      at: (() => {
+        const { hour24, minute } = editClock(h, v);
+        return new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour24, minute).getTime();
+      })(),
       quizAttempts: attempts - formResponses,
       formResponses,
       author: VERSION_AUTHORS[(h + v) % VERSION_AUTHORS.length],

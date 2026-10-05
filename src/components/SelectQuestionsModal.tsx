@@ -16,6 +16,7 @@ import {
   type Question,
 } from "../data/questionBank";
 import { PrmModal } from "./PrmModal";
+import { TableCols } from "./TableCols";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -27,6 +28,7 @@ import {
   PageNextIcon,
 } from "./icons";
 import { QuestionSearch } from "./QuestionSearch";
+import { QuestionAnswers } from "./QuestionAnswers";
 
 /* Select Questions — the Quiz wizard's Question Bank twin of SelectTasksModal
  * (Figma 682:2321): search bar, filter pills, a sortable table and
@@ -197,25 +199,40 @@ export function SelectQuestionsModal({
     [pool],
   );
 
-  /* Figma 1215:1354 — a category row leads with its own name and carries its
-     parent as the muted "· …" clause, instead of repeating the whole
-     "Parent > Child" path. Five sub-categories of one parent used to read as
-     five near-identical three-line rows. The VALUE stays the full path, so
-     filtering and search are unchanged — typing a parent still finds its
-     children. */
+  /* The Question Bank's Category pill (All Questions): one titled section per
+     category, its Sub-Categories as rows showing just the leaf, ALL / NONE in
+     the title. A category with no Sub-Categories has nothing to section, so
+     those sit as their own rows in one untitled section first — the Bank
+     leaves them out, but here they're the only way to pick their questions
+     (a category with subs never holds a question directly). Values stay full
+     paths, so the search still finds a parent's subs. */
+  const catSections = useMemo((): { label?: string; items: string[] }[] => {
+    const has = (label: string) => pool.some((q) => matchesCategoryLabel(q, label));
+    const bare: string[] = [];
+    const titled: { label: string; items: string[] }[] = [];
+    for (const c of QB_CATEGORIES) {
+      if (!c.subcategories?.length) {
+        if (has(c.label)) bare.push(c.label);
+        continue;
+      }
+      const items = c.subcategories
+        .map((sc) => `${c.label} > ${sc.label}`)
+        .filter(has);
+      if (items.length) titled.push({ label: c.label, items });
+    }
+    return bare.length ? [{ items: bare }, ...titled] : titled;
+  }, [pool]);
+  const catOptions = useMemo(() => catSections.flatMap((sec) => sec.items), [catSections]);
   const catLabels = useMemo(
-    () => Object.fromEntries(allCats.map((c) => [c, c.split(" > ").pop() ?? c])),
-    [allCats],
+    () => Object.fromEntries(catOptions.map((c) => [c, c.split(" > ").pop() ?? c])),
+    [catOptions],
   );
-  const catHints = useMemo(
-    () =>
-      Object.fromEntries(
-        allCats
-          .filter((c) => c.includes(" > "))
-          .map((c) => [c, c.split(" > ").slice(0, -1).join(" > ")]),
-      ),
-    [allCats],
-  );
+  /* The search's Category: token can hand over a bare category that has subs;
+     the pill only lists its subs, so it becomes them (as the Bank does). */
+  const setCatsFromSearch = (next: string[]) => {
+    const subsOf = new Map(catSections.filter((sec) => sec.label).map((sec) => [sec.label!, sec.items]));
+    resetPage(setCats)([...new Set(next.flatMap((c) => subsOf.get(c) ?? [c]))]);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -319,7 +336,7 @@ export function SelectQuestionsModal({
               questions={pool}
               categoryOptions={allCats}
               selection={cats}
-              onSelectionChange={resetPage(setCats)}
+              onSelectionChange={setCatsFromSearch}
               types={types}
               onTypesChange={resetPage(setTypes)}
               typeOptions={typeOptions}
@@ -339,16 +356,14 @@ export function SelectQuestionsModal({
             <FilterPill
               label="Category"
               tip={FILTER_TIPS.questionPicker.category}
-              options={allCats}
+              options={catOptions}
+              sections={catSections}
               value={cats}
               onApply={resetPage(setCats)}
-              /* The 384px a hints clause needs (same as `.cascading-sub--wide`)
-                 — at 280 every row wrapped to three lines. The Bank has
-                 hundreds of categories, so the list searches. */
-              width={384}
+              /* The Bank's 300px: leaf names only, no "· parent" clause. */
+              width={300}
               searchPlaceholder="Search Categories..."
               labels={catLabels}
-              hints={catHints}
             />
             <FilterPill
               label="Question Type"
@@ -381,12 +396,10 @@ export function SelectQuestionsModal({
 
         <div className="stm-table-wrap">
           {/* Column-width floor, per the shared table convention — below it the
-              table scrolls sideways instead of crushing the cells. 44 check +
-              260 question + 150 type + 190 category + 126 edited + 104
-              actions. */}
+              table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "874px" } as React.CSSProperties}
+            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table stm-table--preview sqm-table">
               <ColGroup />
@@ -512,9 +525,7 @@ export function SelectQuestionsModal({
 
           <div className="pagination stm-pagination">
             <span className="sqm-picked">
-              {isPool
-                ? `${picked.length} in Pool`
-                : `${picked.length} Selected`}
+              {picked.length} Selected
             </span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
@@ -569,79 +580,23 @@ function QuestionPreviewModal({
       onCancel={onClose}
       onConfirm={onClose}
     >
-      <div className="qpv">
-        <p className="qpv-text">{question.text}</p>
-        {question.options && question.options.length > 0 && (
-          <ul className="qpv-list">
-            {question.options.map((o, i) => (
-              <li key={i} className={`qpv-opt${o.grade > 0 ? " is-correct" : ""}`}>
-                <span className="qpv-opt-mark">{o.grade > 0 ? <CheckIcon /> : null}</span>
-                <span>{o.text}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {question.type === "True/False" && (
-          <ul className="qpv-list">
-            {[true, false].map((v) => (
-              <li
-                key={String(v)}
-                className={`qpv-opt${question.tfAnswer === v ? " is-correct" : ""}`}
-              >
-                <span className="qpv-opt-mark">
-                  {question.tfAnswer === v ? <CheckIcon /> : null}
-                </span>
-                <span>{v ? "True" : "False"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {question.pairs && question.pairs.length > 0 && (
-          <ul className="qpv-list">
-            {question.pairs.map((p, i) => (
-              <li key={i} className="qpv-pair">
-                <span className="qpv-pair-left">{p.left || "—"}</span>
-                <span className="qpv-pair-right">{p.right}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {question.scale && (
-          <p className="qpv-note">
-            Scale {question.scale.min}–{question.scale.max}
-            {question.scale.minLabel || question.scale.maxLabel
-              ? ` (${question.scale.minLabel ?? ""} … ${question.scale.maxLabel ?? ""})`
-              : ""}
-          </p>
-        )}
-        {question.fileRules && (
-          <p className="qpv-note">
-            Up to {question.fileRules.maxFiles} file
-            {question.fileRules.maxFiles === 1 ? "" : "s"}, {question.fileRules.maxSizeMb} MB each
-          </p>
-        )}
-        {question.type === "Short answer" && (
-          <p className="qpv-note">Free-text answer — graded by a reviewer.</p>
-        )}
-      </div>
+      <QuestionAnswers question={question} />
     </PrmModal>
   );
 }
 
+/* The shared width rule (`TableCols`): content-sized base widths — question,
+   type, category, edited — slack shared in proportion; the check gutter and
+   the Preview gutter fixed. The Preview gutter is wide enough to seat the
+   whole "Preview ›" bar: the shared 40px `col-actions` lets the bar float over
+   the previous column, which here is a date it would cut in half. */
+const CHECK_W = 44;
+const PREVIEW_W = 104;
+const COL_WIDTHS = [400, 150, 190, 126];
+const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0) + PREVIEW_W;
+
 function ColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 150 }} />
-      <col style={{ width: 190 }} />
-      <col style={{ width: 126 }} />
-      {/* Wide enough to seat the whole "Preview ›" bar. The shared 40px
-          `col-actions` lets the bar float over the previous column, which here
-          is a date it would cut in half. */}
-      <col style={{ width: 104 }} />
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} trail={[PREVIEW_W]} />;
 }
 
 function Th({
@@ -681,10 +636,13 @@ function FilterPill({
   searchPlaceholder,
   labels,
   hints,
+  sections,
 }: {
   label: string;
   tip: string;
   options: string[];
+  /** Titled groups instead of one flat list (Category: one per category). */
+  sections?: { label?: string; items: string[] }[];
   value: string[];
   onApply: (v: string[]) => void;
   /** Defaults to 220 — the hint-carrying lists pass 384. */
@@ -710,7 +668,7 @@ function FilterPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: options }]}
+          sections={sections ?? [{ items: options }]}
           value={value}
           searchable={!!searchPlaceholder}
           searchPlaceholder={searchPlaceholder}

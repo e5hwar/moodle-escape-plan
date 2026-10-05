@@ -71,18 +71,34 @@ export const CardMinusIcon = () => (
   </svg>
 );
 
-/* Stepper glyphs (Figma 618:1266 / 618:1270): a 16px box holding a 9.33px
-   stroke. The node draws its minus shorter than its plus bar; they are matched
-   here so the two ends of one control balance. */
+/* Stepper glyphs (Figma 617:1181, re-issued 2026-10-06): 16px boxes, square
+   caps. The minus is the node's own 6px bar — shorter than the plus's 9.33px
+   arms, as drawn. */
 export const StepperMinusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round">
-    <path d="M3.333 8h9.334" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M11.0013 8H5.00133" />
   </svg>
 );
 
 export const StepperPlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round">
-    <path d="M8 3.333v9.334M3.333 8h9.334" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M8 3.33333V12.6667M12.6667 8H3.33333" />
+  </svg>
+);
+
+/* tdesign:close on a removable price column (Figma 752:2830): 16px, a heavier
+   1.94 stroke than the 1.33 row ✕s, square caps. */
+/* The ✕ on a multi-select pill (Figma 147:1147): a 14px box, 5.8px glyph,
+   1.17 stroke, square caps. */
+export const PillCloseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M9.9 4.1L4.1 9.9M4.1 4.1L9.9 9.9" />
+  </svg>
+);
+
+export const ColumnCloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.93939" strokeLinecap="square">
+    <path d="M12 4L8 8M8 8L4 12M8 8L12 12M8 8L4 4" />
   </svg>
 );
 
@@ -752,6 +768,14 @@ export const TreeAddIcon = () => (
   </svg>
 );
 
+/* The 20px plus that leads an "Add" card — Question Bank's Add Sub-Category
+   card (Figma 1512:2804, its "Icon Library" glyph). */
+export const AddCardIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.66667" strokeLinecap="square" aria-hidden="true">
+    <path d="M10 4.16667V15.8333M15.8333 10H4.16667" />
+  </svg>
+);
+
 /* Folder with a plus — the category kebab's "Add Sub-Category" (Figma
    1188:1617, added 2026-09-16 when the action left the tree card for the menu).
    Drawn on the node's 14.667×12.333 art at a 1px/1.833px offset so it sits on
@@ -967,14 +991,23 @@ export const MenuIdDocIcon = () => (
   </svg>
 );
 
-/* ── Manage Users PAGE-level 3-dot menu — Figma 677:1956. The sidebar draws
-   its own off-family merge/transfer glyphs (24-unit, round caps); these are
-   the Icon Library's 16px square-cap versions. ── */
+/* ── Users PAGE-level 3-dot menu — Figma 677:1956: Scholarships, Merge
+   Accounts, Transfer Subscription, in the Icon Library's 16px square-cap
+   style. ── */
 
 /* Git-merge nodes — Merge Accounts. */
 export const MenuMergeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M12.333 10.333V9.667C12.333 9.136 12.123 8.628 11.748 8.253C11.372 7.877 10.864 7.667 10.333 7.667H5.667C5.136 7.667 4.628 7.456 4.252 7.081C3.877 6.706 3.667 6.197 3.667 5.667M12.333 10.333C11.891 10.333 11.467 10.509 11.155 10.822C10.842 11.134 10.667 11.558 10.667 12C10.667 12.442 10.842 12.866 11.155 13.179C11.467 13.491 11.891 13.667 12.333 13.667C12.775 13.667 13.199 13.491 13.512 13.179C13.824 12.866 14 12.442 14 12C14 11.558 13.824 11.134 13.512 10.822C13.199 10.509 12.775 10.333 12.333 10.333ZM3.667 5.667C4.109 5.667 4.533 5.491 4.845 5.179C5.158 4.866 5.333 4.442 5.333 4C5.333 3.558 5.158 3.134 4.845 2.821C4.533 2.509 4.109 2.333 3.667 2.333C3.225 2.333 2.801 2.509 2.488 2.821C2.176 3.134 2 3.558 2 4C2 4.442 2.176 4.866 2.488 5.179C2.801 5.491 3.225 5.667 3.667 5.667ZM3.667 6V10M5.333 12C5.333 12.442 5.158 12.866 4.845 13.179C4.533 13.491 4.109 13.667 3.667 13.667C3.225 13.667 2.801 13.491 2.488 13.179C2.176 12.866 2 12.442 2 12C2 11.558 2.176 11.134 2.488 10.822C2.801 10.509 3.225 10.333 3.667 10.333C4.109 10.333 4.533 10.509 4.845 10.822C5.158 11.134 5.333 11.558 5.333 12Z" />
+  </svg>
+);
+
+/* Mortarboard with its tassel — Scholarships (node 1521:3816). The asset's
+   15.78×14.13 group sits at (0.111, 0.538) in the 16 box; shifted into the
+   viewBox it lands on the 16px grid (board 1.333–14.667 across, 1.333–14 down). */
+export const MenuScholarshipIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M14 6.1V10M8 10L12 7.4V11.667C12 12.955 10.21 14 8 14C5.791 14 4 12.955 4 11.667V7.4L8 10ZM8 10L1.333 5.667L8 1.333L14.667 5.667L8 10Z" />
   </svg>
 );
 
@@ -1218,6 +1251,17 @@ export const InfoIcon14 = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
     <path d="M1.16667 7C1.16667 3.77825 3.77825 1.16667 7 1.16667C10.2218 1.16667 12.8333 3.77825 12.8333 7C12.8333 10.2218 10.2218 12.8333 7 12.8333C3.77825 12.8333 1.16667 10.2218 1.16667 7Z" />
     <path d="M7 9.625V6.41667M7 4.375H6.99767V4.37267H7V4.375Z" />
+  </svg>
+);
+
+/* The ⓘ that ends a field's subtext (Figma 1369:1669, every field's "User can
+   enter an answer of their own ⓘ"): a 12px box, 10px circle, 1px square-capped
+   stroke — drawn natively at 12 so the stroke lands on whole pixels, rather
+   than scaling the 11px `InfoIcon` cut (which blurred). */
+export const InfoIcon12 = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square">
+    <path d="M1 6C1 3.23858 3.23858 1 6 1C8.76142 1 11 3.23858 11 6C11 8.76142 8.76142 11 6 11C3.23858 11 1 8.76142 1 6Z" />
+    <path d="M6 8.25V5.5M6 3.75H5.998V3.748H6V3.75Z" />
   </svg>
 );
 

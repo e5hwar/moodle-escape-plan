@@ -20,11 +20,11 @@ import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CERT_BY_USEDIN } from "../data/certifications";
-import { TaskSummary, useTaskPreview } from "./NewTaskWizard";
-import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
-import { SubscriptionMark } from "./NewCertificationWizard";
+import { TaskSummary } from "./NewTaskWizard";
+import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -168,6 +168,9 @@ export function TasksPage({
   onOpenQuestionBank,
   onOpenSkills,
   extraTasks,
+  taskEdits,
+  flash,
+  onFlashDone,
 }: {
   /** Deep link from a Certification's "View All Tasks" — seeds the
    *  Certifications filter and opens straight on the table. */
@@ -182,9 +185,19 @@ export function TasksPage({
   onOpenSkills?: () => void;
   /** Tasks published from the wizard this session, newest first. */
   extraTasks?: Task[];
+  /** Saved edits to library Tasks, by id — laid over the list. */
+  taskEdits?: Record<string, Task>;
+  /** A toast handed back by a flow that finished and navigated here —
+   *  "Task Created", "Task Updated". */
+  flash?: string | null;
+  onFlashDone?: () => void;
 }) {
+  const [toast, toastNode] = useToast(flash, onFlashDone);
   // Local working copy so visibility toggles and deletes persist in-session.
-  const [taskList, setTaskList] = useState<Task[]>(() => [...(extraTasks ?? []), ...allTasks]);
+  const [taskList, setTaskList] = useState<Task[]>(() => [
+    ...(extraTasks ?? []),
+    ...allTasks.map((t) => taskEdits?.[t.id] ?? t),
+  ]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
   // Set when someone tries to edit a Task owned by a company — company Tasks are
@@ -360,9 +373,19 @@ export function TasksPage({
     );
   }
 
+  /* Hiding or unhiding is an edit: it stamps Date Modified with today (the
+     wizard's save stamp format) and drops the seed's free-text `updated` line
+     so the preview reads the new date instead of the old one. */
   function setHidden(task: Task, hidden: boolean) {
+    const dateModified = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
     setTaskList((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, hidden } : t)),
+      prev.map((t) =>
+        t.id === task.id ? { ...t, hidden, dateModified, updated: undefined } : t,
+      ),
     );
   }
 
@@ -370,6 +393,7 @@ export function TasksPage({
     // Unhiding restores the Task straight away — only hiding needs confirming.
     if (task.hidden) {
       setHidden(task, false);
+      toast("Task Visible");
       return;
     }
     // Access Restriction chains gate other content, so the Task can't be hidden
@@ -409,6 +433,7 @@ export function TasksPage({
   function confirmDelete(task: Task) {
     setTaskList((prev) => prev.filter((t) => t.id !== task.id));
     setDeleteTarget(null);
+    toast("Task Deleted");
   }
 
   return (
@@ -607,6 +632,7 @@ export function TasksPage({
           onConfirm={() => {
             setHidden(hideTarget, true);
             setHideTarget(null);
+            toast("Task Hidden");
           }}
         />
       )}
@@ -628,32 +654,25 @@ export function TasksPage({
           key={drawerTask.id}
           task={drawerTask}
           onClose={() => setDrawerId(null)}
-          /* Closes the panel first: editing opens the wizard, or — for a
-             company-owned Task — the blocked-edit modal, which would
-             otherwise sit under the panel. */
-          onEdit={() => {
-            setDrawerId(null);
-            editTask(drawerTask);
-          }}
           onMore={(rect) => setMenu({ task: drawerTask, rect })}
         />
       )}
+
+      {toastNode}
     </div>
   );
 }
 
-/** A Task's row preview panel ("Preview Panel 3a"): the record — meta,
- *  actions, its figures, then the wizard's review cards (Details) and the
- *  Certifications it's in (Used In) — beside the Task as a learner sees it. */
+/** A Task's row preview panel (Figma 1514:2860): the wizard's review cards
+ *  and the Certifications it's in, as accordions, then its figures as
+ *  Activity. */
 function TaskDrawer({
   task,
   onClose,
-  onEdit,
   onMore,
 }: {
   task: Task;
   onClose: () => void;
-  onEdit: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
   // The Certifications carrying it, by their canonical names (usedIn holds
@@ -666,7 +685,6 @@ function TaskDrawer({
       }),
     [task.usedIn],
   );
-  const pv = useTaskPreview(task, certs);
   const graded = task.type === "Quiz" || task.type === "Hands-On Task";
   const attempts = seededInt(task.id, "attempts", 90, 5200);
   const rate = seededInt(task.id, "rate", graded ? 58 : 70, graded ? 92 : 97);
@@ -687,64 +705,27 @@ function TaskDrawer({
           sub: graded ? "Of attempts" : "Of starters",
         },
       ];
-  stats.push({ count: String(certs.length), title: "Used In", sub: certs.length === 1 ? "Certification" : "Certifications" });
-  const edited = task.dateModified && `Edited ${task.dateModified}${timeAgo(task.dateModified) ? ` (${timeAgo(task.dateModified)})` : ""}`;
 
   return (
-    <PreviewPanel
-      title={task.name}
-      description={task.description}
-      meta={[
-        <span className="pp-id">{task.id}</span>,
-        pv.typeLabel,
-        pv.time,
-        task.finalExam && "Final Exam",
-        <span className={`co-status-pill co-status-pill--${task.hidden ? "grey" : "green"}`}>
-          {task.hidden ? "Hidden" : "Visible"}
-        </span>,
-        task.requiresSubscription ? (
-          <>
-            <SubscriptionMark />
-            Subscription
-          </>
+    <PreviewPanel kind="Task" title={task.name} subtitle={task.description} onMore={onMore} stats={stats} onClose={onClose}>
+      <TaskSummary task={task} />
+      <ConfirmCard title={`Certifications · ${certs.length}`} tableBody={certs.length > 0}>
+        {certs.length > 0 ? (
+          <div className="ctb-tasktable">
+            {certs.map((c) => (
+              <div key={c.name} className="cdr-task">
+                <div className="cdr-task-name-row">
+                  <span className="cdr-task-name">{c.name}</span>
+                </div>
+                {c.industry && <span className="ctb-row-meta">{c.industry}</span>}
+              </div>
+            ))}
+          </div>
         ) : (
-          "Free Trial"
-        ),
-        edited,
-      ]}
-      onEdit={onEdit}
-      onMore={onMore}
-      stats={stats}
-      tabs={[
-        { key: "details", label: "Details", content: <TaskSummary task={task} /> },
-        {
-          key: "used-in",
-          label: `Used In · ${certs.length}`,
-          content: (
-            <div className="confirm-cards">
-              <ConfirmCard title={`Certifications · ${certs.length}`} tableBody={certs.length > 0}>
-                {certs.length > 0 ? (
-                  <div className="ctb-tasktable">
-                    {certs.map((c) => (
-                      <div key={c.name} className="cdr-task">
-                        <div className="cdr-task-name-row">
-                          <span className="cdr-task-name">{c.name}</span>
-                        </div>
-                        {c.industry && <span className="ctb-row-meta">{c.industry}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="form-help">Not in any Certification yet.</p>
-                )}
-              </ConfirmCard>
-            </div>
-          ),
-        },
-      ]}
-      preview={(device) => <PreviewScreen device={device} model={pv.screen} lock={<SubscriptionMark />} />}
-      onClose={onClose}
-    />
+          <p className="form-help">Not in any Certification yet.</p>
+        )}
+      </ConfirmCard>
+    </PreviewPanel>
   );
 }
 

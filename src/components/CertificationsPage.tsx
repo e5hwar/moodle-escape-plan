@@ -14,11 +14,11 @@ import {
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { RowExternalLinkIcon, SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, CheckIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, CheckIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
 import { pickTag, pickTags, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
-import { PreviewPanel, PreviewScreen, formatCount, seededInt, timeAgo, type PreviewStat } from "./PreviewPanel";
-import { CertificationSummary, SubscriptionMark, useCertPreview } from "./NewCertificationWizard";
+import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
+import { CertificationSummary, useCertPreview } from "./NewCertificationWizard";
 import { Dropdown } from "./Dropdown";
 import { CertImportModal } from "./CertImportModal";
 import { CertBulkUploadModal } from "./CertBulkUploadModal";
@@ -216,6 +216,7 @@ export function CertificationsPage({
   onAddFeedbackForm,
   onNewCert,
   onImportCert,
+  onRestoreCert,
   onEditCert,
   onOpenCompanyDashboard,
   onViewPayers,
@@ -247,6 +248,8 @@ export function CertificationsPage({
   onNewCert: () => void;
   /** A checked CSV Upload — the wizard opens with its structure built. */
   onImportCert: (report: CertImportReport) => void;
+  /** Upload Backup — the wizard opens filled from the backup's record. */
+  onRestoreCert: (cert: Certification) => void;
   onEditCert: (cert: Certification) => void;
   onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
@@ -303,14 +306,21 @@ export function CertificationsPage({
   const [industriesFor, setIndustriesFor] = useState<{ cert: Certification; value: string[] } | null>(null);
   // The page's toast: a flow's `flash` on arrival, or one raised here
   // (Industries Added, Setup Marked as Done).
-  const [toast, setToast] = useState<string | null>(flash ?? null);
+  // Keyed by time, so a second toast straight after the first restarts the
+  // timer instead of inheriting what's left of it.
+  const [toastState, setToastState] = useState<{ label: string; at: number } | null>(null);
+  const toast = toastState?.label ?? null;
+  const setToast = useCallback(
+    (label: string | null) => setToastState(label ? { label, at: Date.now() } : null),
+    [],
+  );
   useEffect(() => {
     if (flash) setToast(flash);
-  }, [flash]);
+  }, [flash, setToast]);
   const onToastDone = useCallback(() => {
     setToast(null);
     onFlashDone?.();
-  }, [onFlashDone]);
+  }, [onFlashDone, setToast]);
 
   const setupFor = useCallback(
     (cert: Certification): SetupStatus => {
@@ -410,6 +420,7 @@ export function CertificationsPage({
     );
     setIndustriesFor(null);
     if (value.length > 0) setToast(had ? "Industries Updated" : "Industries Added");
+    else if (had) setToast("Industries Removed");
   }
 
   function closeSetup(cert: Certification) {
@@ -610,6 +621,7 @@ export function CertificationsPage({
     // confirming, as it does for a Task.
     if ((cert.visibility ?? "Visible") !== "Visible") {
       setVisibility(cert, "Visible");
+      setToast("Certification Visible");
       return;
     }
     setHideTarget(cert);
@@ -635,6 +647,7 @@ export function CertificationsPage({
   function deleteCert(cert: Certification) {
     setCertList((prev) => prev.filter((c) => c.id !== cert.id));
     setDeleting(null);
+    setToast("Certification Deleted");
   }
 
   return (
@@ -857,7 +870,10 @@ export function CertificationsPage({
           onViewAllTasks={() => closePanelThen(() => onViewAllTasks(menu.cert))}
           hasAward={!!awardForCert(menu.cert)}
           onManageAward={() => closePanelThen(() => onManageAward(menu.cert))}
-          onBackup={() => backupCertification(menu.cert)}
+          onBackup={() => {
+            backupCertification(menu.cert);
+            setToast("Backup Downloaded");
+          }}
           onManageContentLinks={() => closePanelThen(() => onManageContentLinks(menu.cert))}
           onManageProgress={() => closePanelThen(() => onManageProgress(menu.cert))}
           onArchive={() => closePanelThen(() => onArchiveCert(menu.cert))}
@@ -867,9 +883,9 @@ export function CertificationsPage({
       {importMode === "backup" && (
         <CertImportModal
           onClose={() => setImportMode(null)}
-          onConfirm={() => {
+          onConfirm={(cert) => {
             setImportMode(null);
-            onNewCert();
+            onRestoreCert(cert);
           }}
         />
       )}
@@ -928,6 +944,7 @@ export function CertificationsPage({
           onConfirm={() => {
             setVisibility(hideTarget, "Hidden");
             setHideTarget(null);
+            setToast("Certification Hidden");
           }}
         />
       )}
@@ -947,12 +964,6 @@ export function CertificationsPage({
             ) : undefined
           }
           onClose={() => setDrawerId(null)}
-          /* Closes the panel first: editing opens the wizard, or — for a
-             company-owned Certification — the blocked-edit modal. */
-          onEdit={() => {
-            setDrawerId(null);
-            editCert(drawerCert);
-          }}
           onMore={(rect) => setMenu({ cert: drawerCert, rect })}
         />
       )}
@@ -974,6 +985,7 @@ export function CertificationsPage({
           acknowledgment), 2.5 s for everything else. */}
       {toast && (
         <CopiedToast
+          key={toastState?.at}
           label={toast}
           ms={toast === "Certification Created" ? 6000 : 2500}
           onDone={onToastDone}
@@ -1217,21 +1229,19 @@ function SetupCard({
   );
 }
 
-/** A Certification's row preview panel ("Preview Panel 3a"): the record —
- *  meta, actions, its figures, then the review cards (Details) and the Task
- *  tree (Content) — beside the Certification as a learner sees it. */
+/** A Certification's row preview panel (Figma 1514:2860): the Setup card
+ *  while steps are left, then every review card — the Task tree among them —
+ *  as accordions, and its figures as Activity. */
 function CertDrawer({
   cert,
   setupCard,
   onClose,
-  onEdit,
   onMore,
 }: {
   cert: Certification;
-  /** The post-creation Setup card, first in Details while steps are left. */
+  /** The post-creation Setup card, first while steps are left. */
   setupCard?: ReactNode;
   onClose: () => void;
-  onEdit: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
   const pv = useCertPreview(cert);
@@ -1258,65 +1268,11 @@ function CertDrawer({
         { count: "—", title: "Completions", sub: "Not live yet" },
         { count: "—", title: "Active", sub: "Not live yet" },
       ];
-  const edited = cert.dateModified && `Edited ${cert.dateModified}${timeAgo(cert.dateModified) ? ` (${timeAgo(cert.dateModified)})` : ""}`;
-
   return (
-    <PreviewPanel
-      title={cert.name}
-      description={cert.description}
-      meta={[
-        <span className="pp-id">{cert.id}</span>,
-        pv.industry,
-        pv.type,
-        pv.careerStage,
-        <span className={`co-status-pill co-status-pill--${vis === "Visible" ? "green" : "grey"}`}>{vis}</span>,
-        pv.paid ? (
-          <>
-            <SubscriptionMark />
-            Paid
-          </>
-        ) : (
-          "Free"
-        ),
-        edited,
-      ]}
-      onEdit={onEdit}
-      actions={
-        pv.deepLink
-          ? [
-              { label: "Copy Link", icon: <MenuLinkIcon />, copy: `https://${pv.deepLink}` },
-              {
-                label: "Open in App",
-                icon: <RowExternalLinkIcon />,
-                onClick: () => window.open(`https://${pv.deepLink}`, "_blank", "noopener"),
-              },
-            ]
-          : []
-      }
-      onMore={onMore}
-      stats={stats}
-      tabs={[
-        {
-          key: "details",
-          label: "Details",
-          content: setupCard ? (
-            <div className="confirm-cards">
-              {setupCard}
-              <CertificationSummary cert={cert} part="details" />
-            </div>
-          ) : (
-            <CertificationSummary cert={cert} part="details" />
-          ),
-        },
-        {
-          key: "content",
-          label: `Content · ${pv.taskCount} ${pv.taskCount === 1 ? "Task" : "Tasks"}`,
-          content: <CertificationSummary cert={cert} part="content" />,
-        },
-      ]}
-      preview={(device) => <PreviewScreen device={device} model={pv.screen} lock={<SubscriptionMark />} />}
-      onClose={onClose}
-    />
+    <PreviewPanel kind="Certification" title={cert.name} subtitle={cert.description} onMore={onMore} stats={stats} onClose={onClose}>
+      {setupCard}
+      <CertificationSummary cert={cert} />
+    </PreviewPanel>
   );
 }
 

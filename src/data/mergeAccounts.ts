@@ -23,7 +23,28 @@ export type MergeSub = {
   detail: string;
   price: string;
   active: boolean;
+  /** A paid personal plan's billing cycle and where it's billed — together
+   *  they're how the Subscription row names it ("Monthly · Stripe"). */
+  cycle?: "Monthly" | "Annual";
+  platform?: string;
+  /** When a paid personal plan next renews, ISO. */
+  renewsOn?: string;
+  /** Set instead when it has been cancelled but runs to the end of its period. */
+  cancelsOn?: string;
 };
+
+/** The Renewal Date row's value — the next renewal, or the date a cancelled
+ *  plan runs out; empty for plans that don't renew. */
+export function renewalLabel(sub: MergeSub): string {
+  if (sub.cancelsOn) return `Cancels ${formatShortDate(sub.cancelsOn)}`;
+  return sub.renewsOn ? formatShortDate(sub.renewsOn) : "";
+}
+
+/** The Subscription row's value: "Monthly · Stripe" for a paid personal plan,
+ *  the plan's own name for everything else. */
+export function subLabel(sub: MergeSub): string {
+  return sub.cycle && sub.platform ? `${sub.cycle} · ${sub.platform}` : sub.plan;
+}
 
 export type MergeAddon = {
   id: string;
@@ -40,6 +61,8 @@ export type MergeUser = {
   created: string;
   initials: string;
   color: string;
+  /** How the account signs in. "Phone" accounts are named by their phone
+   *  number everywhere the flows name them; the rest by email (`loginId`). */
   login: string;
   company: string | null;
   /** The Manage-Users facets, so the Select Users picker can filter on the same
@@ -51,6 +74,11 @@ export type MergeUser = {
   addons: MergeAddon[];
   data: Record<string, number>;
 };
+
+/** The email or phone the account signs in with. */
+export function loginId(u: MergeUser): string {
+  return u.login === "Phone" ? u.phone : u.email;
+}
 
 export function userTypeOf(u: MergeUser): UserType {
   return u.company ? "B2B" : "B2C";
@@ -94,7 +122,7 @@ const baseMergeUsers: MergeUser[] = [
     role: "Self-Learner",
     subscription: "Subscriber",
     company: null,
-    sub: { plan: "Pro · Annual", detail: "Active · renews Mar 12, 2026", price: "$199/yr", active: true },
+    sub: { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true, cycle: "Annual", platform: "Stripe", renewsOn: renewalFor("Annual", 1630) },
     addons: [
       { id: "epa608t1", name: "EPA 608 Type I Certification", type: "Certification", price: "$49" },
       { id: "quizpack", name: "12 Quiz Attempts Pack", type: "Quiz attempts", price: "$19" },
@@ -148,7 +176,7 @@ const baseMergeUsers: MergeUser[] = [
     role: "Self-Learner",
     subscription: "Subscriber",
     company: null,
-    sub: { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true },
+    sub: { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true, cycle: "Monthly", platform: "Stripe", renewsOn: renewalFor("Monthly", 140) },
     addons: [{ id: "epa608u", name: "EPA 608 Universal Certification", type: "Certification", price: "$79" }],
     data: { "Task completions": 201, "Quiz attempts": 52, "Quiz-Section completions": 88, "Hands-On Task submissions": 31, Certifications: 13, Skills: 18, Awards: 9, "Path entries": 4 },
   },
@@ -195,6 +223,14 @@ const baseMergeUsers: MergeUser[] = [
    given merge fixtures deterministically — same person, same facets, no second
    list of names to keep in sync. */
 
+/** A renewal inside the plan's current cycle, counted from today so it never
+ *  reads as already past. */
+function renewalFor(cycle: "Monthly" | "Annual", k: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1 + ((k >>> 3) % (cycle === "Monthly" ? 30 : 360)));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function mhash(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -204,7 +240,16 @@ function mhash(s: string): number {
   return h >>> 0;
 }
 
-const LOGINS = ["Email + Password", "Google SSO", "Apple SSO"];
+const LOGINS = ["Email + Password", "Google SSO", "Apple SSO", "Phone"];
+
+/* Whatever the account signs in with — having both contacts on file says
+   nothing about which one that is. Only a missing contact rules one out. */
+function loginFor(email: string, phone: string, company: string | null, k: number): string {
+  if (!email) return "Phone";
+  if (!phone) return company ? "Email + Password" : LOGINS[k % 3];
+  if (company) return k % 4 === 3 ? "Phone" : "Email + Password";
+  return LOGINS[k % LOGINS.length];
+}
 const AVATAR_COLORS = ["#5b8def", "#c98b3c", "#3ecf8e", "#c678dd", "#e0a458", "#56c2c2", "#e5687a"];
 
 function initialsOf(name: string): string {
@@ -218,14 +263,22 @@ function initialsOf(name: string): string {
 
 /** The plan a Manage-Users subscription status means in billing terms. B2B
  *  Subscribers sit on a company-billed seat rather than their own plan. */
-function planFor(status: SubscriptionStatus, company: string | null, k: number): MergeSub {
+function planFor(
+  status: SubscriptionStatus,
+  company: string | null,
+  k: number,
+  platform = "Stripe",
+  cancelsOn?: string,
+  cycle: "Monthly" | "Annual" = "Monthly",
+): MergeSub {
+  const term = cancelsOn ? { cancelsOn } : { renewsOn: renewalFor(cycle, k) };
   switch (status) {
     case "Subscriber":
       return company
         ? { plan: "Team seat", detail: `Active · managed by ${company}`, price: "Company-billed", active: true }
-        : k % 2 === 0
-        ? { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true }
-        : { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true };
+        : cycle === "Annual"
+        ? { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true, cycle, platform, ...term }
+        : { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true, cycle, platform, ...term };
     case "Free Trial":
       return { plan: "Free trial", detail: `Trial · ${3 + (k % 11)} days left`, price: "", active: false };
     case "Scholarship":
@@ -249,7 +302,7 @@ const ADDON_POOL: MergeAddon[] = [
 /** Completion counts scaled off one seed, so a heavy account is heavy in every
  *  record type rather than random per row. */
 function recordsFor(k: number): Record<string, number> {
-  const scale = 0.35 + ((k >> 4) % 100) / 55;
+  const scale = 0.35 + ((k >>> 4) % 100) / 55;
   const base: Record<string, number> = {
     "Task completions": 96,
     "Quiz attempts": 26,
@@ -276,11 +329,11 @@ const derivedUsers: MergeUser[] = users.map((u) => {
     created: formatShortDate(u.joinedOn),
     initials: initialsOf(u.name),
     color: AVATAR_COLORS[k % AVATAR_COLORS.length],
-    login: company ? "Email + Password" : LOGINS[k % LOGINS.length],
+    login: loginFor(u.email, u.phone, company, k),
     company,
     role: u.role,
     subscription: u.subscriptionStatus,
-    sub: planFor(u.subscriptionStatus, company, k),
+    sub: planFor(u.subscriptionStatus, company, k, u.platform, u.cancelsOn, u.cycle),
     // Most accounts carry no one-time purchases; a deterministic third do.
     addons: k % 3 === 0 ? [ADDON_POOL[k % ADDON_POOL.length]] : [],
     data: recordsFor(k),
@@ -295,10 +348,10 @@ export const mergeUsers: MergeUser[] = [...baseMergeUsers, ...derivedUsers];
  * 142 rows, not four and an apology. */
 const RECORD_SEEDS: Record<string, RecordSample[]> = {
   "Task completions": [
-    { name: "Refrigerant Charging Procedure", meta: "T-2350 · Mar 8, 2024" },
-    { name: "Thermostat Wiring Lab", meta: "T-2165 · Feb 22, 2024" },
-    { name: "Recovery Machine Setup", meta: "T-1855 · Feb 3, 2024" },
-    { name: "Sweat Soldering Lab", meta: "T-1488 · Jan 19, 2024" },
+    { name: "Refrigerant Charging Procedure", meta: "Mar 8, 2024" },
+    { name: "Thermostat Wiring Lab", meta: "Feb 22, 2024" },
+    { name: "Recovery Machine Setup", meta: "Feb 3, 2024" },
+    { name: "Sweat Soldering Lab", meta: "Jan 19, 2024" },
   ],
   "Quiz attempts": [
     { name: "Airflow Calibration Quiz", meta: "92% · Mar 2024" },
@@ -311,14 +364,14 @@ const RECORD_SEEDS: Record<string, RecordSample[]> = {
     { name: "Leak Detection — Sec 3", meta: "Feb 2024" },
   ],
   "Hands-On Task submissions": [
-    { name: "Tankless Heater Lab", meta: "T-1321 · approved Mar 2024" },
-    { name: "PVC Pipe Joining Lab", meta: "T-1555 · approved Feb 2024" },
-    { name: "Field Visit – Brazing Joints", meta: "T-1432 · approved Jan 2024" },
+    { name: "Tankless Heater Lab", meta: "Approved Mar 2024" },
+    { name: "PVC Pipe Joining Lab", meta: "Approved Feb 2024" },
+    { name: "Field Visit – Brazing Joints", meta: "Approved Jan 2024" },
   ],
   Certifications: [
-    { name: "EPA 608 Universal", meta: "C-410 · Mar 2024" },
-    { name: "HVAC Core Fundamentals", meta: "C-288 · Feb 2024" },
-    { name: "Refrigerant Recovery", meta: "C-152 · Jan 2024" },
+    { name: "EPA 608 Universal", meta: "Mar 2024" },
+    { name: "HVAC Core Fundamentals", meta: "Feb 2024" },
+    { name: "Refrigerant Recovery", meta: "Jan 2024" },
   ],
   Skills: [
     { name: "Refrigerant Handling", meta: "Proficient" },
@@ -397,15 +450,15 @@ function recMeta(cat: string, n: number): string {
   const year = 2023 + (n % 3);
   switch (cat) {
     case "Task completions":
-      return `T-${1000 + (n % 1800)} · ${month} ${1 + (n % 28)}, ${year}`;
+      return `${month} ${1 + (n % 28)}, ${year}`;
     case "Quiz attempts":
       return `${70 + (n % 30)}% · ${month} ${year}`;
     case "Quiz-Section completions":
       return `${month} ${year}`;
     case "Hands-On Task submissions":
-      return `T-${1000 + (n % 1800)} · approved ${month} ${year}`;
+      return `Approved ${month} ${year}`;
     case "Certifications":
-      return `C-${100 + (n % 800)} · ${month} ${year}`;
+      return `${month} ${year}`;
     case "Skills":
       return REC_LEVELS[n % REC_LEVELS.length];
     case "Awards":

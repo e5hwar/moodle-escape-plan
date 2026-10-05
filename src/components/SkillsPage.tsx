@@ -32,6 +32,7 @@ import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PreviewPanel } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -190,6 +191,9 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
   const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
+  /* Raised here, not in the wizard: a save closes the wizard back onto this
+     list, which is where the toast has to be standing. */
+  const [toast, toastNode] = useToast();
   const [menu, setMenu] = useState<{ rect: DOMRect; kind: "skill" | "mastery"; id: string } | null>(null);
   // The record whose row was clicked, read back in the row preview panel. Held
   // by kind + id so the panel follows the record through an edit or archive.
@@ -258,14 +262,14 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
 
   /* ─── Menu actions ─── */
   function archiveSkill(s: Skill) {
-    if (s.status === "Archived") { setSkillStatus(s.id, "Active"); return; }
+    if (s.status === "Archived") { setSkillStatus(s.id, "Active"); toast("Skill Unarchived"); return; }
     /* A Skill still linked to a Mastery Skill can't be archived — the menu
        disables the row (1403:2071), so this guard only backs that up. */
     if (masteryUsing(s.id, mastery).length > 0) return;
     setModal({ kind: "archive-skill", skill: s });
   }
   function archiveMastery(m: MasterySkill) {
-    if (m.status === "Archived") { setMasteryStatus(m.id, "Active"); return; }
+    if (m.status === "Archived") { setMasteryStatus(m.id, "Active"); toast("Mastery Skill Unarchived"); return; }
     setModal({ kind: "archive-mastery", mastery: m });
   }
   /* ─── Certification / Task filters ─── */
@@ -457,8 +461,14 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
         allMastery={mastery}
         onClose={() => setMode({ kind: "list" })}
         onBackToTasks={onBackToTasks}
-        onSaveSkill={upsertSkill}
-        onSaveMastery={upsertMastery}
+        onSaveSkill={(s) => {
+          upsertSkill(s);
+          toast(mode.kind === "new" ? "Skill Created" : "Skill Updated");
+        }}
+        onSaveMastery={(m) => {
+          upsertMastery(m);
+          toast(mode.kind === "new" ? "Mastery Skill Created" : "Mastery Skill Updated");
+        }}
       />
     );
   }
@@ -696,11 +706,6 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
             key={recKey(rec)}
             rec={rec}
             onClose={() => setPanel(null)}
-            onEdit={() =>
-              closePanelThen(() =>
-                setMode(rec.kind === "skill" ? { kind: "edit-skill", skill: rec.skill } : { kind: "edit-mastery", mastery: rec.mastery }),
-              )
-            }
             onMore={(rect) => setMenu({ rect, kind: rec.kind, id: recOf(rec).id })}
           />
         );
@@ -719,7 +724,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
             </>
           }
           onCancel={() => setModal({ kind: "none" })}
-          onConfirm={() => { setSkillStatus(modal.skill.id, "Archived"); setModal({ kind: "none" }); }}
+          onConfirm={() => { setSkillStatus(modal.skill.id, "Archived"); setModal({ kind: "none" }); toast("Skill Archived"); }}
         >
           <p>
             Archive <strong>{modal.skill.name}</strong> ({modal.skill.id})? New users can no longer earn it and it leaves the active list. The{" "}
@@ -740,7 +745,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
             </>
           }
           onCancel={() => setModal({ kind: "none" })}
-          onConfirm={() => { setMasteryStatus(modal.mastery.id, "Archived"); setModal({ kind: "none" }); }}
+          onConfirm={() => { setMasteryStatus(modal.mastery.id, "Archived"); setModal({ kind: "none" }); toast("Mastery Skill Archived"); }}
         >
           <p>
             Archive <strong>{modal.mastery.name}</strong> ({modal.mastery.id})? New users can no longer earn it and it moves to the bottom of the list. The{" "}
@@ -762,7 +767,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
             </>
           }
           onCancel={() => setModal({ kind: "none" })}
-          onConfirm={() => { deleteSkill(modal.skill.id); setModal({ kind: "none" }); }}
+          onConfirm={() => { deleteSkill(modal.skill.id); setModal({ kind: "none" }); toast("Skill Deleted"); }}
         >
           <p>
             Delete <strong>{modal.skill.name}</strong> ({modal.skill.id})? This permanently removes it from the{" "}
@@ -784,7 +789,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
             </>
           }
           onCancel={() => setModal({ kind: "none" })}
-          onConfirm={() => { deleteMastery(modal.mastery.id); setModal({ kind: "none" }); }}
+          onConfirm={() => { deleteMastery(modal.mastery.id); setModal({ kind: "none" }); toast("Mastery Skill Deleted"); }}
         >
           <p>
             Delete <strong>{modal.mastery.name}</strong> ({modal.mastery.id})? This removes it from the{" "}
@@ -792,6 +797,8 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
           </p>
         </ConfirmModal>
       )}
+
+      {toastNode}
     </div>
   );
 }
@@ -874,27 +881,22 @@ function RecRow({
   );
 }
 
-/** A Skill's or Mastery Skill's row preview panel ("Preview Panel 3a"): the
- *  record's type, status and figures, then an Overview card (Details) and the
- *  records it links to (Linked). No learner preview — the seed has no badge
- *  artwork to show. */
+/** A Skill's or Mastery Skill's row preview panel (Figma 1514:2860): an
+ *  Overview and the records it links to, as accordions, then its holders as
+ *  Activity. */
 function SkillPanel({
   rec,
   onClose,
-  onEdit,
   onMore,
 }: {
   rec: Rec;
   onClose: () => void;
-  onEdit: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
   const r = recOf(rec);
-  const archived = r.status === "Archived";
   const isSkill = rec.kind === "skill";
   const certs = recCerts(rec);
   const tasks = isSkill ? rec.skill.taskIds.map((id) => ({ id, task: taskById(id) })) : [];
-  const linkedCount = isSkill ? tasks.length : rec.members.length;
   const row = (key: string, name: string, meta?: string) => (
     <div key={key} className="cdr-task">
       <div className="cdr-task-name-row">
@@ -911,92 +913,57 @@ function SkillPanel({
 
   return (
     <PreviewPanel
+      kind={isSkill ? "Skill" : "Mastery Skill"}
       title={r.name}
-      description={r.description}
-      meta={[
-        <span className="pp-id">{r.id}</span>,
-        <span className={`co-status-pill co-status-pill--${isSkill ? "secondary" : "yellow"}`}>
-          {isSkill ? "Skill" : "Mastery Skill"}
-        </span>,
-        <span className={`co-status-pill co-status-pill--${archived ? "grey" : "green"}`}>{r.status}</span>,
-        `Edited ${r.dateModified}`,
-      ]}
-      onEdit={onEdit}
+      subtitle={r.description}
       onMore={onMore}
-      stats={[
-        { count: fmtHolders(r.holders), title: "Holders", sub: "Have earned it" },
-        isSkill
-          ? {
-              count: String(tasks.length),
-              title: "Linked Tasks",
-              sub: tasks.length > 1 ? (rec.skill.rule === "any" ? "Any one awards it" : "All award it") : "Awards it",
-            }
-          : { count: String(rec.members.length), title: "Linked Skills", sub: "All required" },
-        { count: String(certs.length), title: "Certifications", sub: "Through its Tasks" },
-      ]}
-      tabs={[
-        {
-          key: "details",
-          label: "Details",
-          content: (
-            <div className="confirm-cards">
-              <ConfirmCard
-                title="Overview"
-                fillBlanks
-                rows={[
-                  ["Type", isSkill ? "Skill" : "Mastery Skill"],
-                  ["Status", r.status],
-                  [
-                    "Award Rule",
-                    isSkill
-                      ? rec.skill.rule === "any"
-                        ? "Any One Task is Complete"
-                        : "All Selected Tasks are Complete"
-                      : "All Linked Skills are Held",
-                  ],
-                  ["Created By", r.createdBy],
-                  ["Date Created", r.dateCreated],
-                  ["Date Modified", r.dateModified],
-                  ["Certifications", certs.join(", "), true],
-                  ["Industry", recIndustries(rec).join(", "), true],
-                ]}
-              />
-            </div>
-          ),
-        },
-        {
-          key: "linked",
-          label: `Linked · ${linkedCount + (isSkill ? rec.linkedMastery.length : 0)}`,
-          content: (
-            <div className="confirm-cards">
-              {isSkill ? (
-                <>
-                  {listCard(
-                    "Linked Tasks",
-                    tasks.map(({ id, task }) => row(id, task?.name ?? id, task?.type)),
-                    "No Tasks award this Skill yet.",
-                  )}
-                  {listCard(
-                    "Linked Mastery Skills",
-                    rec.linkedMastery.map((m) => row(m.id, m.name, m.status === "Archived" ? "Archived" : undefined)),
-                    "Not part of any Mastery Skill.",
-                  )}
-                </>
-              ) : (
-                listCard(
-                  "Linked Skills",
-                  rec.members.map((sk) =>
-                    row(sk.id, sk.name, `${sk.taskIds.length} ${sk.taskIds.length === 1 ? "Task" : "Tasks"}`),
-                  ),
-                  "No Skills linked yet.",
-                )
-              )}
-            </div>
-          ),
-        },
-      ]}
+      stats={[{ count: fmtHolders(r.holders), title: "Holders", sub: "Have earned it" }]}
       onClose={onClose}
-    />
+    >
+      <ConfirmCard
+        title="Overview"
+        fillBlanks
+        rows={[
+          ["Type", isSkill ? "Skill" : "Mastery Skill"],
+          ["Status", r.status],
+          [
+            "Award Rule",
+            isSkill
+              ? rec.skill.rule === "any"
+                ? "Any One Task is Complete"
+                : "All Selected Tasks are Complete"
+              : "All Linked Skills are Held",
+          ],
+          ["Created By", r.createdBy],
+          ["Date Created", r.dateCreated],
+          ["Date Modified", r.dateModified],
+          ["Certifications", certs.join(", "), true],
+          ["Industry", recIndustries(rec).join(", "), true],
+        ]}
+      />
+      {isSkill ? (
+        <>
+          {listCard(
+            "Linked Tasks",
+            tasks.map(({ id, task }) => row(id, task?.name ?? id, task?.type)),
+            "No Tasks award this Skill yet.",
+          )}
+          {listCard(
+            "Linked Mastery Skills",
+            rec.linkedMastery.map((m) => row(m.id, m.name, m.status === "Archived" ? "Archived" : undefined)),
+            "Not part of any Mastery Skill.",
+          )}
+        </>
+      ) : (
+        listCard(
+          "Linked Skills",
+          rec.members.map((sk) =>
+            row(sk.id, sk.name, `${sk.taskIds.length} ${sk.taskIds.length === 1 ? "Task" : "Tasks"}`),
+          ),
+          "No Skills linked yet.",
+        )
+      )}
+    </PreviewPanel>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { UploadIcon } from "./icons";
-import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
+import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
@@ -45,7 +45,7 @@ export function NewDesignTemplateWizard(props: Props) {
   const [step, setStep] = useState(0);
   // Fields clicked into and out of, and the furthest step opened (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
-  const maxVisited = useMaxVisited(step);
+  const movedPast = useMovedPast(step);
   const [data, setData] = useState<Data>(() => initialData(props));
   const update = (patch: Partial<Data>) => setData((d) => ({ ...d, ...patch }));
 
@@ -75,8 +75,8 @@ export function NewDesignTemplateWizard(props: Props) {
      the step's buttons the way an empty one does. */
   const nameOver = isOver(NAME_MAX, data.name);
   const detailsReady = nameValid && !nameOver && bgValid;
-  const nameMissing = !nameValid && (maxVisited > 0 || touched.has("name"));
-  const bgMissing = !bgValid && (maxVisited > 0 || touched.has("bg"));
+  const nameMissing = !nameValid && (movedPast(0) || touched.has("name"));
+  const bgMissing = !bgValid && (movedPast(0) || touched.has("bg"));
   // Wheel-past-the-edge step navigation, shared with every other wizard.
   const lastStep = STEPS.length - 1;
   // No canGoNext guard: the wheel walks the steps freely, as in every other

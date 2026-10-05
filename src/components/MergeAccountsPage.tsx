@@ -3,6 +3,8 @@ import {
   mergeUsers,
   categoryRecords,
   conflictDefs,
+  loginId,
+  subLabel,
   type MergeUser,
   type ConflictDef,
 } from "../data/mergeAccounts";
@@ -60,8 +62,6 @@ import { useLeaveGuard } from "./LeaveGuard";
  */
 
 type Side = "primary" | "secondary";
-/* There is no "done": the run hands off to the caller and this page goes. */
-type Phase = "idle" | "processing";
 
 /* Each step's `desc` is the one line the screen needs; `tip` is the longer
    explanation behind the ⓘ beside it — what actually happens to a learner's
@@ -78,21 +78,19 @@ const STEPS = [
   {
     id: "conflicts",
     label: "Conflicts",
-    title: "Merge learning records",
+    title: "Merge Learning Records",
     desc: "All records from the Secondary merge into the Primary. Expand any row to see what's moving. Where only one record can exist, resolve the conflict.",
     tip: "Records simply move across unless the merged account can only hold one of them — one proficiency per skill, one entry per certification path. Those are the conflicts listed here, and the record you do not keep is discarded rather than archived, so the choice is final.",
   },
   {
     id: "review",
     label: "Review",
-    title: "Review the merge",
+    title: "Review the Merge",
     desc: "A preview of everything that will happen. Nothing has changed yet — confirm on the next step to run the merge.",
     tip: "Nothing has been written yet. The merge runs only once you confirm in the dialog after this step, and it cannot be undone — the deleted account and its login are gone for good, and an audit-log entry is written naming both accounts and every decision made here.",
   },
 ];
 
-/** How long the "running…" screen is held before the result. Demo timing. */
-const RUN_MS = 1700;
 
 function getUser(id: string | null): MergeUser | null {
   return mergeUsers.find((u) => u.id === id) ?? null;
@@ -123,7 +121,7 @@ export function detailRows(u: MergeUser) {
     { k: "Phone Number", v: u.phone },
     { k: "Login Method", v: u.login },
     { k: "Account Created", v: u.created },
-    { k: "Subscription", v: u.sub.active ? u.sub.plan : "" },
+    { k: "Subscription", v: u.sub.active ? subLabel(u.sub) : "" },
     { k: "Company Details", v: u.company ?? "" },
   ];
 }
@@ -146,6 +144,9 @@ export type CompareRow = {
   flagB?: boolean;
   /** What the deleted account adds to the kept one — the green "+N ↑". */
   delta?: number;
+  /** The same green "↑" treatment for a value rather than a count — a plan
+   *  arriving on the left. A null `a` lets it stand alone in the cell. */
+  gain?: string;
 };
 
 /** Empty cell, at the app's table convention — the node draws a hyphen. */
@@ -285,6 +286,12 @@ export function CompareTable({
                   <TrendUpIcon />
                 </span>
               ) : null}
+              {r.gain ? (
+                <span className={`mgf-delta${r.a == null ? " mgf-delta--solo" : ""}`}>
+                  {r.gain}
+                  <TrendUpIcon />
+                </span>
+              ) : null}
             </td>
             <td className={r.strikeB ? "mgf-c-gone" : undefined}>
               {r.flagB ? (
@@ -390,7 +397,7 @@ export function FlowStrip({
 }: {
   /** Left: what receives. */
   to: MergeUser;
-  /** Its second line — the account's email unless the flow needs to say more. */
+  /** Its second line — the account's login (email or phone) unless the flow needs to say more. */
   toSub?: ReactNode;
   /** Right: what it comes from. */
   from: MergeUser;
@@ -402,14 +409,14 @@ export function FlowStrip({
     <div className="note-card mgf-flow">
       <span className="mgf-flow-side">
         <span className="mgf-flow-name">{to.name}</span>
-        <span className="mgf-flow-sub">{toSub ?? to.email}</span>
+        <span className="mgf-flow-sub">{toSub ?? loginId(to)}</span>
       </span>
       <span className="mgf-flow-arrow">
         <ArrowLeftLongIcon />
       </span>
       <span className={`mgf-flow-side mgf-flow-side--from${fromStruck ? " is-struck" : ""}`}>
         <span className="mgf-flow-name">{from.name}</span>
-        <span className="mgf-flow-sub">{fromSub ?? from.email}</span>
+        <span className="mgf-flow-sub">{fromSub ?? loginId(from)}</span>
       </span>
     </div>
   );
@@ -420,7 +427,7 @@ export function FlowStrip({
  * search bar standing in for the Select Users table picker (682:2321) it
  * opens. Picking an account does NOT swap the field for a card: the bar keeps
  * its chrome and its search icon, and the value reads inline as the name
- * followed by a muted "· email", with a ✕ at the far end.
+ * followed by a muted "· login" (its email or phone), with a ✕ at the far end.
  *
  * That is why both states measure the same 43px — a filled field beside an
  * empty one leaves the row level. Both admin flows use this, so the two fields
@@ -453,7 +460,7 @@ export function AccountPicker({
               <span className="mgf-usearch-name">{user.name}</span>
               {/* No whitespace between the spans — the 4px is a margin, so a
                   stray text node would add a space on top of it. */}
-              <span className="mgf-usearch-sub">· {user.email}</span>
+              <span className="mgf-usearch-sub">· {loginId(user)}</span>
             </span>
           ) : (
             <span className="mgf-usearch-placeholder">{placeholder}</span>
@@ -466,30 +473,6 @@ export function AccountPicker({
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/** The "running…" screen.
- *  Both use the same 720px column and the same footer band, so handing over
- *  from one to the other moves nothing but the words. */
-export function FlowProcessing({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="wizard">
-      <div className="wizard-body wizard-body--success">
-        <div className="wizard-content wizard-success-content mgf-done">
-          <span className="mgf-spinner" />
-          <h1 className="tasks-title">{title}</h1>
-          {/* The "don't navigate away" note lives up here with the copy it
-              belongs to, not as footer status text. */}
-          <p className="tasks-subtitle wizard-desc">{sub} This takes a moment — don't navigate away.</p>
-        </div>
-      </div>
-
-      <footer className="wizard-footer">
-        <div className="wizard-footer-left" />
-        <div className="wizard-actions" />
-      </footer>
     </div>
   );
 }
@@ -531,32 +514,10 @@ export function MergeAccountsPage({
   const [showModal, setShowModal] = useState(false);
   // Both account fields open the same Select Users picker (Figma 682:2321).
   const [showPicker, setShowPicker] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
-  // Any account picked asks before Cancel throws the setup away. Once the
-  // merge is confirmed it is running, not unsaved, so the guard stands down.
-  const guard = useLeaveGuard(phase === "idle" && !!(primId || secId));
+  // Any account picked asks before Cancel throws the setup away. A confirmed
+  // merge leaves through `onMerged`, which doesn't consult the guard.
+  const guard = useLeaveGuard(!!(primId || secId));
 
-  /* The run itself: being in "processing" is what arms the hand-off back to
-     Manage Users. Deliberately an effect keyed on the phase, NOT a timeout
-     stashed in a ref at click time. A ref'd timer is cleared by the cleanup
-     that runs on every hot reload and on StrictMode's second mount, and since
-     nothing but that timer can leave "processing" — the screen has no buttons
-     and this flow has no result screen of its own — losing it strands the
-     merge on a spinner for good. Re-running this effect re-arms it.
-     Deps are the phase alone on purpose: `onMerged` is an inline arrow from
-     App, so listing it would restart the timer on every render up there. */
-  useEffect(() => {
-    if (phase !== "processing") return;
-    const t = setTimeout(() => {
-      onMerged?.(
-        p && s
-          ? `Accounts merged — ${totalMerged} records from ${s.email} moved into ${p.email}`
-          : "Accounts merged",
-      );
-    }, RUN_MS);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
   useEffect(() => { setMaxStep((m) => Math.max(m, step)); }, [step]);
   useEscape(showModal, () => setShowModal(false));
 
@@ -684,9 +645,11 @@ export function MergeAccountsPage({
     setSecId(primId);
     setMaxStep(0);
   }
+  /* No running screen: a confirmed merge lands straight back on Manage Users
+     with its toast. */
   function confirmMerge() {
     setShowModal(false);
-    setPhase("processing");
+    onMerged?.("Accounts Merged");
   }
   /* ── derived for steps 3 & 4 ── */
   const recordRows = both && s
@@ -705,14 +668,6 @@ export function MergeAccountsPage({
     setExpanded(Object.fromEntries(recordRows.map((r) => [r.key, open])));
   }
 
-  if (phase === "processing") {
-    return (
-      <FlowProcessing
-        title="Merging accounts…"
-        sub="Moving records, applying billing decisions, removing the secondary account."
-      />
-    );
-  }
   /* The card head's own button (Figma 1285:2768) — 24px, so it sits inside the
      head row rather than growing it. */
   const swapButton = (
@@ -1117,9 +1072,9 @@ export function MergeAccountsPage({
         >
           {/* Pop-up content (Figma 667:884), not a grey subtitle under the title. */}
           <p className="prm-content">
-            Everything on <strong>{s.email}</strong> — {totalMerged} learning records, its
+            Everything on <strong>{loginId(s)}</strong> — {totalMerged} learning records, its
             certifications, skills, awards and purchases — moves into{" "}
-            <strong>{p.email}</strong>, which keeps its own login. {s.name}'s account and
+            <strong>{loginId(p)}</strong>, which keeps its own login. {s.name}'s account and
             login are then permanently deleted. This cannot be undone.
           </p>
         </PrmModal>

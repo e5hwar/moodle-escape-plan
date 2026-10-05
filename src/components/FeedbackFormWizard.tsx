@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CopiedToast } from "./CopiedToast";
 import {
   type FeedbackForm,
   type FormQuestionLink,
@@ -10,7 +11,7 @@ import { FeedbackFormEditor, FeedbackInactiveQuestions } from "./FeedbackFormEdi
 import { leave as leaveField, useTouchedKeys } from "./fieldFlags";
 import { FeedbackFormTriggers } from "./FeedbackFormTriggers";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
-import { InfoIcon14, CrumbChevronIcon } from "./icons";
+import { CrumbChevronIcon, InfoIcon12 } from "./icons";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
@@ -22,7 +23,9 @@ type Props = {
   creating?: boolean;
   allForms: FeedbackForm[];
   bank: Question[];
-  onBack: () => void;
+  /** `finished` = left through Create Feedback Form / Save Changes (the page
+   *  then toasts); Cancel and the crumbs leave without it. */
+  onBack: (finished?: boolean) => void;
   /** The trail's first step — Feedback Forms hangs off Certifications. */
   onBackToCerts: () => void;
   /** Throw the record away — only ever called on a form this page CREATED that
@@ -30,6 +33,9 @@ type Props = {
   onDiscard: () => void;
   onUpdate: (form: FeedbackForm) => void;
   onCreateQuestion: () => void;
+  /** A success handed back by the question editor ("Question Created"). */
+  flash?: string | null;
+  onFlashDone?: () => void;
 };
 
 const TODAY = "2026-07-10";
@@ -74,7 +80,17 @@ export function FeedbackFormWizard({
   onDiscard,
   onUpdate,
   onCreateQuestion,
+  flash,
+  onFlashDone,
 }: Props) {
+  const [toast, setToast] = useState<string | null>(flash ?? null);
+  useEffect(() => {
+    if (flash) setToast(flash);
+  }, [flash]);
+  const onToastDone = useCallback(() => {
+    setToast(null);
+    onFlashDone?.();
+  }, [onFlashDone]);
   // Everything saves live (the prototype holds forms in App state), so the
   // footer buttons only handle status transitions and navigation.
   function saveLinks(questions: FormQuestionLink[]) {
@@ -135,7 +151,7 @@ export function FeedbackFormWizard({
     : `To finish, ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]}.${mapped ? "" : " A form with no trigger is never shown to anyone."}`;
 
   function done() {
-    if (canFinish) onBack();
+    if (canFinish) onBack(true);
     else if (!ready) setAttempted(true);
   }
 
@@ -161,10 +177,13 @@ export function FeedbackFormWizard({
      leaving is then just navigation — and an existing form is never touched.
      `go` is where the exit lands: Feedback Forms, or a step further up the
      trail (a discard lands on Feedback Forms first; `go` then overrides it). */
-  function leave(go: () => void = onBack) {
+  function leave(go?: () => void) {
+    // An existing form's edits are already saved, so leaving one that changed
+    // says so ("Feedback Form Updated") rather than reading like a cancel.
+    const edited = !isCreating && currentKey !== pristine.current;
     guard(() => {
       if (isCreating && !ready) onDiscard();
-      go();
+      (go ?? (() => onBack(edited)))();
     });
   }
 
@@ -261,7 +280,7 @@ export function FeedbackFormWizard({
                       aria-label="When a user has to answer"
                       title={OPTIONAL_RULE}
                     >
-                      <InfoIcon14 />
+                      <InfoIcon12 />
                     </span>
                   </p>
                 </div>
@@ -307,13 +326,16 @@ export function FeedbackFormWizard({
                       aria-label="How triggers behave"
                       title={TRIGGER_RULES}
                     >
-                      <InfoIcon14 />
+                      <InfoIcon12 />
                     </span>
                   </p>
                 </div>
               </div>
             </div>
           </div>
+          {/* Back from the question editor with a new question linked in —
+              40px above the footer (`.wizard-main > .pl-copied-toast`). */}
+          {toast && <CopiedToast label={toast} onDone={onToastDone} />}
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import {
 import { SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
 import { IdModal } from "./IdModal";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
@@ -225,9 +226,8 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
   );
 }
 
-/* Column widths mirror the Proctoring queue's table: every column gets an
-   explicit width except Email, which is left auto and soaks up the leftover
-   space (.table is fixed-layout). */
+/* Column widths mirror the Proctoring queue's table: content-sized base
+   widths, slack shared in proportion (see MidColGroup). */
 /* Status is sized for the "Reupload Requested" pill (133px) plus its sort
    caret; Uploaded On matches the Proctoring table's Submitted On column, so
    neither truncates. Both include the cell's 2×20px padding. The document type
@@ -237,15 +237,13 @@ const EMAIL_MIN = 250;
 const TABLE_MIN =
   COL_WIDTHS.name + EMAIL_MIN + COL_WIDTHS.phone + COL_WIDTHS.status + COL_WIDTHS.date;
 
+/* The shared width rule (`TableCols`): every column keeps its base width and
+   shares the slack in proportion — no column soaks it all up. */
 function MidColGroup() {
   return (
-    <colgroup>
-      <col style={{ width: COL_WIDTHS.name }} />
-      <col />
-      <col style={{ width: COL_WIDTHS.phone }} />
-      <col style={{ width: COL_WIDTHS.status }} />
-      <col style={{ width: COL_WIDTHS.date }} />
-    </colgroup>
+    <TableCols
+      data={[COL_WIDTHS.name, EMAIL_MIN, COL_WIDTHS.phone, COL_WIDTHS.status, COL_WIDTHS.date]}
+    />
   );
 }
 

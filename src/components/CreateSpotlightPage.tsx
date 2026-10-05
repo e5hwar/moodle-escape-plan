@@ -8,7 +8,7 @@ import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import { formatShortDate } from "../formatDate";
 import { SPOTLIGHT_TITLE_MAX, SPOTLIGHT_DESCRIPTION_MAX, type Spotlight } from "../data/spotlights";
 import { CharCount } from "./CharCount";
-import { leave, useMaxVisited, useTouchedKeys } from "./fieldFlags";
+import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { DateField, type DateShortcut } from "./DateField";
 import { DeepLinkModal } from "./DeepLinkModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
@@ -85,7 +85,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   // Fields clicked into and out of, and the furthest step opened — what lets
   // a mandatory field say "cannot be left empty" (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
-  const maxVisited = useMaxVisited(step);
+  const movedPast = useMovedPast(step);
   const [position, setPosition] = useState(Math.min(startPosition, queue.length));
   const [headingEn, setHeadingEn] = useState(seed?.headingEn ?? "");
   const [headingEs, setHeadingEs] = useState(seed?.headingEs ?? "");
@@ -151,7 +151,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   const titleOver = Math.max(headingEn.length, headingEs.length) > SPOTLIGHT_TITLE_MAX;
   const descriptionOver =
     Math.max(descriptionEn.length, descriptionEs.length) > SPOTLIGHT_DESCRIPTION_MAX;
-  const passed = maxVisited > 0;
+  const passed = movedPast(0);
   const titleMissing = !headingEn.trim() && (passed || touched.has("title"));
   const ctaTextMissing = ctaEnabled && !ctaTextEn.trim() && (passed || touched.has("ctaText"));
   const ctaUrlMissing = ctaEnabled && !ctaUrl.trim() && (passed || touched.has("ctaUrl"));
@@ -323,7 +323,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                         Title<span className="req">*</span>
                         {titleOver ? (
                           <span className="form-label-error">
-                            Use {SPOTLIGHT_TITLE_MAX} characters or lesser
+                            *Use {SPOTLIGHT_TITLE_MAX} characters or lesser
                           </span>
                         ) : titleMissing ? (
                           <span className="form-label-error">Title cannot be left empty</span>
@@ -350,7 +350,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                         Description
                         {descriptionOver && (
                           <span className="form-label-error">
-                            Use {SPOTLIGHT_DESCRIPTION_MAX} characters or lesser
+                            *Use {SPOTLIGHT_DESCRIPTION_MAX} characters or lesser
                           </span>
                         )}
                       </label>

@@ -15,12 +15,12 @@ import {
   dateRangeIncludes,
   type DateRangeState,
 } from "./DateRangeFilter";
+import { TableCols } from "./TableCols";
 
 const PAGE_SIZE = 50;
 
-/* Column widths. Email is left out of the colgroup (it's the flexible column)
-   but still books its share of the width floor, so it can't be squeezed below
-   what a full address needs. Both date columns hold the same long form —
+/* Content-sized base widths: their sum is the width floor and the slack is
+   shared in proportion (see the TableCols below). Both date columns hold the same long form —
    "November 11th, 2025, 9:05 AM" — so they share one width. */
 const COL_WIDTHS = { name: 205, email: 296, phone: 160, quiz: 250, date: 242 };
 /** The row-end chevron column, the same 40px reserve the Exam Reviews table uses. */
@@ -215,7 +215,7 @@ export function PendingIdReuploadsPage({
 
               {/* Six columns don't fit a narrow page, so the table carries a
                   width floor and scrolls horizontally past it rather than
-                  crushing the email column — the same `--table-min` machinery
+                  crushing the columns — the same `--table-min` machinery
                   the Exam Reviews table uses. */}
               <div
                 className="table-xscroll"
@@ -227,18 +227,20 @@ export function PendingIdReuploadsPage({
                     cursor and 12px inset rather than the shell's `cursor:
                     default` and 16px. */}
                 <table className="table">
-                  <colgroup>
-                    <col style={{ width: COL_WIDTHS.name }} />
-                    {/* Email is the flexible column — it absorbs whatever slack a
-                        wide viewport leaves, and never drops below the share of
-                        TABLE_MIN reserved for it. */}
-                    <col />
-                    <col style={{ width: COL_WIDTHS.phone }} />
-                    <col style={{ width: COL_WIDTHS.quiz }} />
-                    <col style={{ width: COL_WIDTHS.date }} />
-                    <col style={{ width: COL_WIDTHS.date }} />
-                    <col style={{ width: ACTIONS_WIDTH }} />
-                  </colgroup>
+                  {/* The shared width rule: every column keeps its base width
+                      and shares the slack in proportion; the chevron gutter
+                      stays fixed. */}
+                  <TableCols
+                    data={[
+                      COL_WIDTHS.name,
+                      COL_WIDTHS.email,
+                      COL_WIDTHS.phone,
+                      COL_WIDTHS.quiz,
+                      COL_WIDTHS.date,
+                      COL_WIDTHS.date,
+                    ]}
+                    trail={[ACTIONS_WIDTH]}
+                  />
                   <thead>
                     <tr>
                       <SortableHeader col="candidate" label="User's Name" sort={sort} toggle={toggleSort} />

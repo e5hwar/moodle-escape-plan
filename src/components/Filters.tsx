@@ -604,9 +604,9 @@ function sameRange(a: DateRangeState | null, b: DateRangeState | null): boolean 
    the flip decision has to know how much room the panel will want before it
    renders, so these two must stay in step with the stylesheet. */
 const SUBMENU_WIDTH = 280;
-/* A date section's submenu holds the presets rail and two 252px calendars, so
-   it needs roughly two and a half times the width — `.cascading-sub--date`. */
-const SUBMENU_WIDTH_DATE = 710;
+/* A date section's submenu holds the presets rail and two 224px calendars
+   (606:1688: 648px) — `.cascading-sub--date`. */
+const SUBMENU_WIDTH_DATE = 648;
 /* A checklist whose rows carry a `hints` clause needs the node's own width or
    "None · Not used in any Quiz Task" wraps onto a second line (Figma 1201:2151
    is 384px). Mirrored by .cascading-sub--wide. */

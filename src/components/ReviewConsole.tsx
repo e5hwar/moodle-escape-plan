@@ -159,7 +159,8 @@ export function ReviewConsole({
   /* Submit & Next asks before the verdict goes out. */
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   /* The console's one toast — the shared green `CopiedToast` (Figma 1046:1141):
-     "Review Complete", "Skipped…", "Nothing else pending". `n` keys it, so a
+     "Submission Passed/Rejected", "Skipped…", "Nothing else pending",
+     "Name Updated", "Download Started". `n` keys it, so a
      second toast restarts the timer instead of being cut short. */
   const [toast, setToast] = useState<{ msg: string; n: number } | null>(null);
   const hideToast = useCallback(() => setToast(null), []);
@@ -302,8 +303,9 @@ export function ReviewConsole({
     if (!reviewable || draft.score == null) return;
     const next = { ...submitted, [sub.id]: { score: draft.score, feedback: draft.feedback } };
     setSubmitted(next);
-    // One acknowledgment for a pass and a reject alike (user, 2026-10-02).
-    showToast("Review Complete");
+    // The toast names the verdict that was just sent — the same 5+ split the
+    // score scale and the confirm use.
+    showToast(draft.score >= PASS_MIN ? "Submission Passed" : "Submission Rejected");
     const nid = nextUnsubmitted(next);
     if (nid) goto(nid);
   }
@@ -473,7 +475,15 @@ export function ReviewConsole({
                   <UserDetailsHover
                     user={sub}
                     onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
-                    onRenameUser={onRenameUser}
+                    // Left undefined when the queue can't rename — that's what
+                    // hides the card's pencil.
+                    onRenameUser={
+                      onRenameUser &&
+                      ((userId, name) => {
+                        onRenameUser(userId, name);
+                        showToast("Name Updated");
+                      })
+                    }
                   >
                     <button
                       className="rvc-headlink"
@@ -630,12 +640,13 @@ export function ReviewConsole({
                 )}
                 <button
                   className="rvc-stage-chip rvc-stage-download"
-                  onClick={() =>
+                  onClick={() => {
                     downloadMedia(
                       mediaUrl(main.seed, 1600, 1200),
                       `${slug(sub.userName)}-${slug(sub.taskName)}-${mi + 1}.jpg`,
-                    )
-                  }
+                    );
+                    showToast("Download Started");
+                  }}
                 >
                   <DownloadIcon12 /> Download
                 </button>

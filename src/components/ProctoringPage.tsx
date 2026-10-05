@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { renameUser } from "../data/users";
 import {
   submissions as seedSubmissions,
+  hasProctoringFootage,
   matchesQuery,
   type ProctoringKind,
   type ProctoringStatus,
@@ -21,6 +22,7 @@ import { ProctoringSearch } from "./ProctoringSearch";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -171,6 +173,11 @@ export function ProctoringPage({
   originLabel?: string;
 }) {
   const [list, setList] = useState<Submission[]>(seedSubmissions);
+  /* Raised here, not in the console: a decision advances the console to the
+     next submission (or closes it on the last), and the toast has to outlive
+     both. Both branches below render it as the fragment's second child, so
+     the console → table switch keeps it mounted mid-timer. */
+  const [toast, toastNode] = useToast();
   // The Review Type pill's applied kinds, as labels — empty means every kind.
   const [reviewTypeFilter, setReviewTypeFilter] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -433,6 +440,7 @@ export function ProctoringPage({
 
   if (active) {
     return (
+      <>
       <ProctoringConsole
         submission={active}
         queue={sorted}
@@ -443,16 +451,34 @@ export function ProctoringPage({
         // this page's queue, the crumb has to follow them (see `returnToOrigin`).
         originLabel={returnToOrigin ? originLabel : undefined}
         onExitToSection={exitToSection}
-        onAccept={() => decide(active.id, "accepted")}
-        onReject={(details) => decide(active.id, "rejected", details?.reasons)}
-        onRequestId={() => requestReupload(active.id)}
+        onAccept={() => {
+          decide(active.id, "accepted");
+          // Same split as the confirm's copy: an exam attempt vs an ID alone.
+          toast(hasProctoringFootage(active) ? "Attempt Approved" : "ID Approved");
+        }}
+        onReject={(details) => {
+          decide(active.id, "rejected", details?.reasons);
+          toast("Attempt Rejected");
+        }}
+        onRequestId={() => {
+          requestReupload(active.id);
+          toast("Re-Upload Requested");
+        }}
+        // Approve's implicit rename — the approve toast already covers it.
         onUpdateName={(name) => renameCandidate(active.userId, name)}
-        onRenameUser={renameCandidate}
+        // The hover card's pencil: a rename on its own, so it gets its own toast.
+        onRenameUser={(userId, name) => {
+          renameCandidate(userId, name);
+          toast("Name Updated");
+        }}
       />
+      {toastNode}
+      </>
     );
   }
 
   return (
+    <>
     <div className="main">
       <div className="workspace">
         <div className="tasks pr-page">
@@ -631,6 +657,8 @@ export function ProctoringPage({
         </div>
       </div>
     </div>
+    {toastNode}
+    </>
   );
 }
 

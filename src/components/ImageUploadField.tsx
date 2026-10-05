@@ -7,8 +7,8 @@ export type PickedImage = { name: string; size: number; ext: string; url?: strin
 
 /* File Upload - Single Language (Figma 678:2012): the same .drop-big zone as
    the dual-language columns, minus the bordered shell and language tag, at full
-   width. One image only, so a picked file swaps the zone for its row rather
-   than stacking an "add more" strip.
+   width. One image only, so a picked file swaps the zone for a same-height
+   card (1529:3890) rather than stacking an "add more" strip.
 
    Shared by the Skill wizard's badge image and the Certification wizard's
    thumbnail — both are single, optional images with the same accepted types. */
@@ -40,20 +40,26 @@ export function ImageUploadField({
     });
   }
 
+  /* Picked (Figma 1529:3890): the zone gives way to a card of the same 160px
+     — the image itself beside its name and size, ✕ top-right. */
   if (value) {
     return (
-      <div className="file-list">
-        <div className="file-row">
-          <span className="file-icon"><DocumentIcon /></span>
-          <div className="file-meta">
+      <div className="file-card file-card--image">
+        <button className="file-card-remove" onClick={() => onChange(null)} aria-label="Remove file">
+          <SmallXIcon />
+        </button>
+        <div className="file-card-body">
+          {value.url ? (
+            <img className="file-card-thumb" src={value.url} alt="" />
+          ) : (
+            <span className="file-icon"><DocumentIcon /></span>
+          )}
+          <div className="file-card-meta">
             <FileNameLink name={value.name} url={value.url} />
             <div className="file-sub">
               {value.ext} · {(value.size / 1024 / 1024).toFixed(1)} MB
             </div>
           </div>
-          <button className="file-remove" onClick={() => onChange(null)} aria-label="Remove file">
-            <SmallXIcon />
-          </button>
         </div>
       </div>
     );

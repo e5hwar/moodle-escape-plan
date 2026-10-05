@@ -258,6 +258,15 @@ function certFinished(uid: string, certId: string): boolean {
   return hash(uid + "|" + certId + "|finished") % 2 === 0;
 }
 
+/** Has this learner not touched this certification at all? Drawn only from
+ *  the pairs `certFinished` leaves unfinished — about a third of those, so
+ *  roughly one pair in six. Every task lands on "notstarted" and the
+ *  certification card reads Not Started (Figma 1504:1483) instead of 0%.
+ *  A separate salt, so the finished half is exactly what it was. */
+function certUntouched(uid: string, certId: string): boolean {
+  return !certFinished(uid, certId) && hash(uid + "|" + certId + "|untouched") % 3 === 0;
+}
+
 /** The slot's scenario, promoted so the task reads as done. A manual
  *  completion stays manual (it IS complete, and the flag is worth keeping in
  *  the demo); everything else lands on the finished state its type earns —
@@ -511,12 +520,16 @@ export function buildData(): CertData {
      certification, so every combination read ~40% and a completed one could
      only be reached by marking it by hand. `certFinished` flips a coin per
      pair (deterministic, like everything else here) and the slot's scenario
-     is promoted to its finished equivalent. */
+     is promoted to its finished equivalent. About a sixth more are untouched
+     (`certUntouched`): every task not started, so the 0% Not Started card has
+     real records to show. */
   const cells: CellMap = {};
   employees.forEach((e) => {
     tasks.forEach((t) => {
       const scenario = certFinished(e.id, t.certId)
         ? finishedScenario(t, scenarioOf[t.id])
+        : certUntouched(e.id, t.certId)
+        ? "notstarted"
         : scenarioOf[t.id];
       cells[e.id + "_" + t.id] = genCell(e.id, t, scenario);
     });

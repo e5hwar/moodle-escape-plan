@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { SmallXIcon, StepperPlusIcon } from "./icons";
+import { ColumnCloseIcon, StepperPlusIcon } from "./icons";
 
 // Paywall pricing is configured by Price ID, never a raw USD amount. Every paid
 // paywall entry — a Certification, or a single Quiz attempt — maps to four
@@ -104,7 +104,7 @@ export function PriceIdMatrix({
                   aria-label={`Remove ${col.title} prices`}
                   onClick={col.onRemove}
                 >
-                  <SmallXIcon />
+                  <ColumnCloseIcon />
                 </button>
               )}
             </div>

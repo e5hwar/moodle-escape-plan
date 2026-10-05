@@ -19,6 +19,7 @@ import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -164,6 +165,7 @@ export function AttemptsPage({
   /** Pre-fills the Status filter — used to land straight on rejected attempts. */
   initialStatusFilter?: AttemptStatus;
 }) {
+  const [toast, toastNode] = useToast();
   const [list, setList] = useState<Attempt[]>(() => [...(extraAttempts ?? []), ...seed]);
   const [filters, setFilters] = useState<Filters>({
     quizzes: [quizName],
@@ -302,6 +304,7 @@ export function AttemptsPage({
   function deleteAttempt(a: Attempt) {
     setList((prev) => prev.filter((x) => x.id !== a.id));
     setDeleting(null);
+    toast("Attempt Deleted");
   }
 
   const moreCount =
@@ -499,6 +502,8 @@ export function AttemptsPage({
           </p>
         </PrmModal>
       )}
+
+      {toastNode}
     </div>
   );
 }

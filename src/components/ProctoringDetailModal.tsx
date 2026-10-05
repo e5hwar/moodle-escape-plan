@@ -189,7 +189,7 @@ export function ProctoringDetailModal({
               <button
                 className="pr-modal-edit"
                 aria-label="View full profile"
-                title="Open full profile in Manage Users"
+                title="Open full profile in Users"
                 onClick={() => openUserProfile(submission.userId)}
               >
                 <ExternalLinkIcon />

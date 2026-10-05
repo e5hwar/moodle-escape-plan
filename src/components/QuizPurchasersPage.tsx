@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
+  subscriptionFilterStatus,
   type User,
   type UserRole,
   type SubscriptionStatus,
@@ -26,6 +27,8 @@ import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIc
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
 import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
+import { SubscriptionPill } from "./SubscriptionPill";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -143,7 +146,7 @@ const COLS: ColMeta[] = [
   { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : ""), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
-  { key: "subscription", label: "Subscription", className: "col-u-sub", width: 195, render: ({ u }) => u.subscriptionStatus, sortValue: ({ u }) => SUB_ORDER[u.subscriptionStatus] },
+  { key: "subscription", label: "Subscription", className: "col-u-sub col-status", width: 240, render: ({ u }) => <SubscriptionPill user={u} />, sortValue: ({ u }) => SUB_ORDER[subscriptionFilterStatus(u)] },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
 
@@ -169,6 +172,7 @@ export function QuizPurchasersPage({
   task: Task;
   onBack: () => void;
 }) {
+  const [toast, toastNode] = useToast();
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
   /* The Task this page was opened from may sit outside the seeded paid-Quiz
@@ -261,7 +265,7 @@ export function QuizPurchasersPage({
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
-      if (filters.subscriptions.length && !filters.subscriptions.includes(u.subscriptionStatus)) return false;
+      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterStatus(u))) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (!q) return true;
       return (
@@ -332,6 +336,7 @@ export function QuizPurchasersPage({
       return [...additions, ...prev];
     });
     setGranting(false);
+    toast("Free Attempts Granted");
   }
 
   /* A purchased/comped attempt can be revoked only before it's started. The
@@ -348,6 +353,7 @@ export function QuizPurchasersPage({
       ),
     );
     setRevoking(null);
+    toast("Access Revoked");
   }
 
   return (
@@ -534,6 +540,8 @@ export function QuizPurchasersPage({
           </p>
         </PrmModal>
       )}
+
+      {toastNode}
     </div>
   );
 }
@@ -556,16 +564,15 @@ function PurchaserRow({
 }) {
   const { u, p } = row;
   return (
-    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "is-revoked" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
+    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
       {/* Plain name. "Granted" used to sit here as a badge, but the plain-text
           column convention strips it to bare text, where it read as part of
           the name — and the Access column already says Free vs Paid. Revoked
-          keeps its marker: nothing else on the row carries it. */}
+          keeps its marker: nothing else on the row carries it, and the row
+          reads exactly as a Hidden Task (`.task-dim` + grey name flag). */}
       <td className="col-name" data-tip={p.revokedDate ? `Attempt revoked ${formatDate(p.revokedDate)}` : u.name}>
-        <span className="cp-name-wrap">
-          <span className="cp-name">{u.name}</span>
-          {p.revokedDate && <span className="cp-revoked-badge">Revoked</span>}
-        </span>
+        <span className="tsk-name">{u.name}</span>
+        {p.revokedDate && <span className="pr-name-flag pr-name-flag--grey">Revoked</span>}
       </td>
       {cols.map((c) => (
         <td

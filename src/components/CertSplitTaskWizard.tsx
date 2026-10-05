@@ -1,6 +1,7 @@
 import { NewTaskWizard } from "./NewTaskWizard";
 import { formatTaskDuration } from "../data/tasks";
 import type { TaskTypeKey } from "./Footer";
+import type { Question } from "../data/questionBank";
 import type { CertTask, TaskKind } from "./NewCertificationWizard";
 
 // The cert tree's CertTask.kind is a TaskKind, keyed off Footer's TaskTypeKey.
@@ -15,6 +16,7 @@ type Props = {
   taskType: TaskTypeKey;
   onClose: () => void;
   onAdd: (task: CertTask) => void;
+  onQuestionCreated?: (q: Question) => void;
 };
 
 /* Creating a Task from inside the Certification builder: the real Task
@@ -22,7 +24,7 @@ type Props = {
    column that echoed the Certification's Course tree with the new Task
    highlighted — removed on request; the wizard's own close returns to the
    builder, where the Task lands at the spot it was added from. */
-export function CertSplitTaskWizard({ taskType, onClose, onAdd }: Props) {
+export function CertSplitTaskWizard({ taskType, onClose, onAdd, onQuestionCreated }: Props) {
   const kind = TYPE_KEY_TO_KIND[taskType];
 
   return (
@@ -30,6 +32,7 @@ export function CertSplitTaskWizard({ taskType, onClose, onAdd }: Props) {
       <NewTaskWizard
         taskType={taskType}
         onClose={onClose}
+        onQuestionCreated={onQuestionCreated}
         primaryLabel="Add to Certification"
         onPrimary={(taskName, requiresSubscription, timeToComplete) =>
           onAdd({

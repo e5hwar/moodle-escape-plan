@@ -6,7 +6,7 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  * a single line (Figma 620:1352 / 327:137 "Focus State"), grows a line at a
  * time up to `maxRows` (697:1001, the 4-line variant), then holds that height
  * and scrolls its own content. Both bounds are measured off the element's
- * computed line-height, so they follow `.rte-area`'s 23px instead of
+ * computed line-height, so they follow `.rte-area`'s 19px instead of
  * hard-coding pixels.
  *
  * Every RTE consumer imports this one — don't re-declare a local copy.

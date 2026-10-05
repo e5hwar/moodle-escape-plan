@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { mergeUsers, userTypeOf, type MergeUser } from "../data/mergeAccounts";
+import { users as rosterUsers, subscriptionText } from "../data/users";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
-import {
-  CheckIcon,
-  SearchIcon,
-  SortIcon,
-  PagePrevIcon,
-  PageNextIcon,
-} from "./icons";
-import { SearchTrailing } from "./SearchPanelParts";
+import { CheckIcon, SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { EntitySearch, type SearchScope } from "./UsersSearch";
+import { TableCols } from "./TableCols";
 
 /* Select Users — the Merge Accounts twin of SelectTasksModal (Figma 682:2321).
  * Clicking either account field on step 1 opens this table picker: search bar,
@@ -36,11 +32,26 @@ const USER_TYPES = ["B2C", "B2B"];
 const SUBSCRIPTIONS = ["Starter", "Subscriber", "Scholarship", "Free Trial"];
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 
-type SortKey = "name" | "email" | "company" | "role" | "subscription";
+type SortKey = "name" | "email" | "phone" | "company" | "role" | "subscription";
 type SortDir = "asc" | "desc";
 
 function companyOf(u: MergeUser) {
   return u.company ?? "";
+}
+
+/* The Users table's Subscription wording ("Monthly · Apple", "Free Trial
+   Ends …"). Accounts lifted from the Users roster read their own record; the
+   hand-authored merge fixtures fall back to their plan fields. */
+const ROSTER = new Map(rosterUsers.map((u) => [u.id, u] as const));
+function planText(u: MergeUser): string {
+  const roster = ROSTER.get(u.id);
+  if (roster) return subscriptionText(roster);
+  return subscriptionText({
+    subscriptionStatus: u.subscription,
+    platform: u.sub.platform as "Stripe" | "Apple" | "Google" | undefined,
+    cycle: u.sub.cycle,
+    cancelsOn: u.sub.cancelsOn,
+  });
 }
 
 function compare(a: MergeUser, b: MergeUser, key: SortKey): number {
@@ -49,6 +60,8 @@ function compare(a: MergeUser, b: MergeUser, key: SortKey): number {
       return a.name.localeCompare(b.name) || a.email.localeCompare(b.email);
     case "email":
       return a.email.localeCompare(b.email);
+    case "phone":
+      return a.phone.localeCompare(b.phone);
     case "company":
       return companyOf(a).localeCompare(companyOf(b));
     case "role":
@@ -78,7 +91,8 @@ export function SelectUsersModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
-  const [query, setQuery] = useState("");
+  // The Users page's search: commit-on-Enter, so only the applied query filters.
+  const [committedQuery, setCommittedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
   const [subs, setSubs] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
@@ -90,32 +104,56 @@ export function SelectUsersModal({
     dir: "asc",
   });
 
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  // PrmModal has no key handling of its own, so the owner closes on Escape —
+  // except inside the search bar, where Escape abandons the bar's own edit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      if ((e.target as Element | null)?.closest?.(".usearch")) return;
+      onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const allCompanies = useMemo(
-    () =>
-      Array.from(
-        new Set(mergeUsers.map((u) => u.company).filter((c): c is string => !!c)),
-      ).sort(),
-    [],
-  );
+  /* Company names + how many accounts each has — the pill's options and the
+     search bar's `Company:` scope share both. */
+  const companyOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const u of mergeUsers) {
+      if (u.company) counts.set(u.company, (counts.get(u.company) ?? 0) + 1);
+    }
+    return { names: [...counts.keys()].sort(), counts };
+  }, []);
+  const allCompanies = companyOptions.names;
+
+  /* One scope, exactly as on the Users page: picking a company in the bar is a
+     pending draft until Enter, which moves it into the Company pill below. */
+  const scopes: SearchScope[] = [
+    {
+      token: "Company",
+      options: companyOptions.names,
+      applied: companies,
+      onAppliedChange: (v) => {
+        setCompanies(v);
+        setPage(1);
+      },
+      optionsLabel: "Companies",
+      example: "Company: Acme Inc.",
+      hint: "Filter by Company",
+      describe: (name) => `${companyOptions.counts.get(name)} users`,
+    },
+  ];
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = committedQuery.trim().toLowerCase();
     return mergeUsers.filter((u) => {
       if (
         q &&
         !(
           u.name.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
-          u.id.toLowerCase().includes(q)
+          u.phone.toLowerCase().includes(q)
         )
       )
         return false;
@@ -125,7 +163,7 @@ export function SelectUsersModal({
       if (roles.length && !roles.includes(u.role)) return false;
       return true;
     });
-  }, [query, types, subs, companies, roles]);
+  }, [committedQuery, types, subs, companies, roles]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -178,27 +216,15 @@ export function SelectUsersModal({
     >
       <div className="stm">
         <div className="stm-toolbar">
-          <div className="search-wrap stm-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              className="search-input"
-              placeholder="Search Users..."
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchTrailing
-              active={!!query}
-              onClear={() => {
-                setQuery("");
-                setPage(1);
-              }}
-            />
-          </div>
+          <EntitySearch
+            scopes={scopes}
+            placeholder="Search Users by Name, Email, or Phone..."
+            query={committedQuery}
+            onCommit={(q) => {
+              setCommittedQuery(q);
+              setPage(1);
+            }}
+          />
 
           <div className="filters stm-filters">
             <Dropdown
@@ -305,11 +331,10 @@ export function SelectUsersModal({
 
         <div className="stm-table-wrap">
           {/* Column-width floor, per the shared table convention — below it the
-              table scrolls sideways instead of crushing the cells. 44 check +
-              180 name + 210 email + 170 company + 110 role + 120 plan. */}
+              table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": "834px" } as React.CSSProperties}
+            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table sum-table">
               <ColGroup />
@@ -319,6 +344,7 @@ export function SelectUsersModal({
                   <th className="stm-col-check no-sort" />
                   <Th col="name" label="User Name" cls="sum-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="email" label="Email" cls="sum-col-email" sort={sort} toggle={toggleSort} />
+                  <Th col="phone" label="Phone Number" cls="sum-col-phone" sort={sort} toggle={toggleSort} />
                   <Th col="company" label="Company" cls="sum-col-company" sort={sort} toggle={toggleSort} />
                   <Th col="role" label="Role" cls="sum-col-role" sort={sort} toggle={toggleSort} />
                   <Th col="subscription" label="Subscription" cls="sum-col-plan" sort={sort} toggle={toggleSort} />
@@ -332,7 +358,7 @@ export function SelectUsersModal({
                 <tbody>
                   {rows.length === 0 ? (
                     <tr className="stm-empty-row">
-                      <td colSpan={6}>No accounts match your search and filters.</td>
+                      <td colSpan={7}>No accounts match your search and filters.</td>
                     </tr>
                   ) : (
                     rows.map((u) => {
@@ -369,10 +395,11 @@ export function SelectUsersModal({
                               cell" rule excludes — a local colour would lose to
                               it on specificity. */}
                           <td className="sum-col-name col-name">{u.name}</td>
-                          <td className="sum-col-email">{u.email}</td>
-                          <td className="sum-col-company">{u.company ?? ""}</td>
+                          <td className="sum-col-email">{u.email || "—"}</td>
+                          <td className="sum-col-phone">{u.phone || "—"}</td>
+                          <td className="sum-col-company">{u.company || "—"}</td>
                           <td className="sum-col-role">{u.role}</td>
-                          <td className="sum-col-plan">{u.subscription}</td>
+                          <td className="sum-col-plan">{planText(u)}</td>
                         </tr>
                       );
                     })
@@ -384,7 +411,7 @@ export function SelectUsersModal({
 
           <div className="pagination stm-pagination">
             <span className="sum-picked">
-              {picked.length} of {MAX_PICKED} accounts selected
+              {picked.length} of {MAX_PICKED} Accounts Selected
             </span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
@@ -415,17 +442,15 @@ export function SelectUsersModal({
   );
 }
 
+/* The shared width rule (`TableCols`): content-sized base widths — name,
+   email, phone, company, role, subscription — fitting the longest roster value plus
+   the 24px of cell insets, slack shared in proportion; the check gutter fixed. */
+const CHECK_W = 44;
+const COL_WIDTHS = [160, 304, 156, 216, 120, 224];
+const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
+
 function ColGroup() {
-  return (
-    <colgroup>
-      <col style={{ width: 44 }} />
-      <col />
-      <col style={{ width: 210 }} />
-      <col style={{ width: 170 }} />
-      <col style={{ width: 110 }} />
-      <col style={{ width: 120 }} />
-    </colgroup>
-  );
+  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
 }
 
 function Th({

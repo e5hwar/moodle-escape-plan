@@ -281,7 +281,7 @@ export const companies: Company[] = [
       state: "Oregon",
     },
     contactName: "Marisol Vega",
-    phone: "+1 503 555 0142",
+    phone: "+1 (503) 555-0142",
     createdAt: todayStamp(),
     status: "Pending Payment Setup",
     billingCycle: "Monthly",
@@ -1231,7 +1231,7 @@ export function companyCreatedDate(c: Company): Date {
   const hc = hash(c.id + "age");
   const bucket = hc % 4;
   const daysBack =
-    bucket <= 1 ? (hc >> 3) % 30 : bucket === 2 ? 30 + ((hc >> 3) % 60) : 90 + ((hc >> 3) % 1000);
+    bucket <= 1 ? (hc >>> 3) % 30 : bucket === 2 ? 30 + ((hc >>> 3) % 60) : 90 + ((hc >>> 3) % 1000);
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack);
 }

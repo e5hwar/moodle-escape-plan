@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckBoldIcon, DownloadIcon, UploadTrayIcon } from "./icons";
 import { NoteCard } from "./NoteCard";
 import { PrmModal } from "./PrmModal";
+import { useToast } from "./useToast";
 import {
   analyzeImport,
   categoryLine,
@@ -56,6 +57,11 @@ export function BulkUploadModal({
   onImport: (report: ImportReport) => void;
 }) {
   const [report, setReport] = useState<ImportReport | null>(null);
+  /* "Template Downloaded" — raised and rendered INSIDE the modal: the card's
+     `.pr-confirm-overlay` (z 400) is its own stacking context, so a page-level
+     toast (z 9) would sit under the scrim. Fixed-positioned in here it still
+     lands 40px off the window's bottom-right, above the card. */
+  const [toast, toastNode] = useToast();
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -148,6 +154,7 @@ export function BulkUploadModal({
             onClick={(e) => {
               e.stopPropagation();
               downloadTemplate();
+              toast("Template Downloaded");
             }}
           >
             <DownloadIcon />
@@ -155,6 +162,7 @@ export function BulkUploadModal({
           </button>
         </div>
         {input}
+        {toastNode}
       </PrmModal>
     );
   }
@@ -225,7 +233,7 @@ export function BulkUploadModal({
     <PrmModal
       className="qbu qbu--ready"
       title={`Add ${n} ${n === 1 ? "Question" : "Questions"}`}
-      description="Here's what this file adds to the bank. Categories and sub-categories that don't exist yet are created on import."
+      description="Here's what this file adds to the bank. Categories and Sub-Categories that don't exist yet are created on import."
       confirmLabel={`Import ${n} ${n === 1 ? "Question" : "Questions"}`}
       onCancel={onClose}
       onConfirm={() => onImport(report)}
@@ -240,9 +248,9 @@ export function BulkUploadModal({
       <div className="qbu-sum">
         <div className="qbu-sum-row">
           <span className="qbu-sum-label">Questions</span>
-          <span className="qbu-sum-val">
-            <span className="qbu-sum-lead">{n} ·</span>
-            <span className="qbu-sum-note"> {typeBreakdown(report.counts)}</span>
+          <span className="qbu-sum-val qbu-sum-val--pair">
+            <span className="qbu-sum-lead">{`${n} `}</span>
+            <span className="qbu-sum-note">({typeBreakdown(report.counts)})</span>
           </span>
         </div>
         <div className="qbu-sum-row">

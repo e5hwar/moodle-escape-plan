@@ -11,6 +11,8 @@ import {
   NO_QUIZ,
   NO_QUIZ_HINT,
   questionDates,
+  questionCreatedAt,
+  questionModifiedAt,
   shortQuestionType,
   QUESTION_TYPE_OPTIONS,
   supportsGrading,
@@ -20,20 +22,24 @@ import {
   type QuestionType,
   type Subcategory,
 } from "../data/questionBank";
-import { MenuArchiveOffIcon, MenuHistoryIcon, MenuPreviewIcon, RowEditIcon, RowKebabIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, RowDeleteIcon, CrumbChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { AddCardIcon, MenuArchiveOffIcon, MenuHistoryIcon, RowEditIcon, RowKebabIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, RowDeleteIcon, CrumbChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
-import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, useColumnOrder, orderedColumns } from "./Filters";
+import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, orderedColumns } from "./Filters";
 import { PrmModal } from "./PrmModal";
+import { TableCols } from "./TableCols";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { BulkUploadModal } from "./BulkUploadModal";
-import { CopiedToast } from "./CopiedToast";
+import { useToast } from "./useToast";
 import { questionsFromImport, type ImportReport } from "../data/questionImport";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionVersionsPage } from "./QuestionVersionsPage";
+import { QuestionAnswers } from "./QuestionAnswers";
+import { ConfirmCard } from "./ConfirmCard";
+import { PreviewPanel } from "./PreviewPanel";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 
@@ -42,6 +48,8 @@ const PAGE_SIZE = 50;
 /* The seed set is a sample of a much larger bank, so the landing's counts are
    the mock figures the category counts add up to — not `questions.length`. */
 const formatCount = (n: number) => n.toLocaleString("en-US");
+/* A Sub-Category card's second line (Figma 1494:1459) — "28 Questions". */
+const questionsLine = (n: number) => `${formatCount(n)} ${n === 1 ? "Question" : "Questions"}`;
 
 /* Category labels are paths — "EPA 608" or "EPA 608 > Universal"
    (flattenCategories). The parent of a bare category is itself. */
@@ -83,44 +91,35 @@ type QbColumn =
 
 type QbColumnState = Record<QbColumn, boolean>;
 
+/* Everything that makes up "where you were" on the bank — handed to the
+   editor by Create Question and given back on Cancel, so leaving the editor
+   without saving lands on the same screen, scope, filters, sort, page and
+   scroll (user, 2026-10-03). The page unmounts while the editor is open, so
+   this is the only way any of it survives the trip. */
+export type QbViewState = {
+  atTable: boolean;
+  selection: string[];
+  subFilter: string[];
+  query: string;
+  typeFilter: string[];
+  statusFilter: string[];
+  gradingFilter: string[];
+  quizFilter: string[];
+  formFilter: string[];
+  columns: QbColumnState;
+  order: QbColumn[];
+  page: number;
+  sort: { key: QSortKey; dir: SortDir };
+  recent: string[];
+  scroll: { index: number; table: number };
+};
+
 const QB_FIXED_COLUMNS = [{ label: "Question" }];
 
-// Roomy, because the question text is allowed to run to a second line.
-const QUESTION_COL_WIDTH = 420;
+// Roomy, because the question text is allowed to run to a second line
+// (640 floor per the user, 2026-10-05).
+const QUESTION_COL_WIDTH = 640;
 const ACTIONS_COL_WIDTH = 40;
-
-function escapeHtml(s: string): string {
-  return s.replace(/[<>&'"]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!),
-  );
-}
-
-/* "Preview as Learner" — a PLACEHOLDER tab for now (per the user 2026-09-10):
-   the learner player lives outside this prototype, so the row menu opens the
-   destination it will eventually be, naming the question it was asked for.
-   Same `window.open` + `document.write` stand-in the Users page's "Login As"
-   uses, so the two fake sessions look like siblings. */
-function previewAsLearner(q: Question) {
-  /* No "noopener": with that feature set, window.open returns NULL in Chrome
-     and Safari, and there would be no handle left to write the page into. The
-     usual reason for it doesn't apply here — the tab loads no external
-     document, only the markup below. */
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
-<title>Preview — ${escapeHtml(q.id)}</title>
-<style>:root{color-scheme:dark}body{margin:0;background:#0b0b0c;color:#e7e7e8;font-family:"Fira Sans",-apple-system,system-ui,sans-serif}
-.bar{background:#7a3a18;color:#ffd9c2;padding:10px 20px;font-size:14px;font-weight:600}
-.wrap{max-width:640px;margin:0 auto;padding:60px 24px}
-.meta{font-size:14px;color:#7a7a7a;margin:0 0 10px}
-h1{font-size:22px;line-height:1.45;margin:0 0 24px;font-weight:500}
-p{color:#9a9aa0;line-height:1.6}</style></head>
-<body><div class="bar">Learner preview — placeholder</div>
-<div class="wrap"><p class="meta">${escapeHtml(q.id)} · ${escapeHtml(longQuestionType(q.type))} · v${q.version}</p>
-<h1>${escapeHtml(q.text)}</h1>
-<p>This is where the question renders the way a learner meets it inside a Quiz or a Feedback Form. The learner player isn't wired into this prototype yet.</p></div></body></html>`);
-  win.document.close();
-}
 
 function isGraded(q: Question): boolean {
   return q.gradingEnabled && supportsGrading(q.type);
@@ -134,7 +133,9 @@ type QSortKey =
   | "version"
   | "status"
   | "category"
-  | "usage";
+  | "usage"
+  | "createdOn"
+  | "lastModified";
 type SortDir = "asc" | "desc";
 
 const STATUS_ORDER: Record<QuestionStatus, number> = {
@@ -142,8 +143,17 @@ const STATUS_ORDER: Record<QuestionStatus, number> = {
   Archived: 1,
 };
 
-function compareQuestions(a: Question, b: Question, key: QSortKey): number {
+function compareQuestions(
+  a: Question,
+  b: Question,
+  key: QSortKey,
+  times: Map<string, { created: number; modified: number }>,
+): number {
   switch (key) {
+    case "createdOn":
+      return (times.get(a.id)?.created ?? 0) - (times.get(b.id)?.created ?? 0);
+    case "lastModified":
+      return (times.get(a.id)?.modified ?? 0) - (times.get(b.id)?.modified ?? 0);
     case "question":
       return a.text.localeCompare(b.text);
     case "id":
@@ -170,7 +180,10 @@ type CatTarget =
   | { kind: "category"; categoryKey: string }
   | { kind: "subcategory"; categoryKey: string; subKey: string };
 
-type CatMenuState = { target: CatTarget; x: number; y: number } | null;
+/* `start`: the menu hangs from its trigger's LEFT edge instead of the right —
+   the title's kebab sits just after the category name, where a right-aligned
+   menu would run back over the side nav on a short name. */
+type CatMenuState = { target: CatTarget; x: number; y: number; start?: boolean } | null;
 
 /* Rename and delete run in the shared modal; creating a category or a
    sub-category runs in `NewCategoryModal` (`subModal` / `catModalOpen`). */
@@ -209,18 +222,19 @@ function buildIndex(cats: Category[]): IndexGroup[] {
 
 /* Responsive index columns (2026-10-01 rule set). Measured on the index's
    content box (A, inside its 12px padding):
-   - N = as many columns as fit at 260px + a 32px gap, held to 2…5
-     (2 below A 844, 3 from 844, 4 from 1136, 5 from 1428).
-   - The gap scales with the column: 32px at 260 wide → 48px at 320 wide,
-     G = 32 + 0.267 × (W − 260); columns + gaps fill A exactly.
+   - N = as many columns as fit at 260px + a 40px gap, held to 2…5
+     (2 below A 860, 3 from 860, 4 from 1160, 5 from 1460).
+   - The gap scales with the column: 40px at 260 wide → 48px at 320 wide,
+     G = 40 + 0.133 × (W − 260); columns + gaps fill A exactly.
    - Past 320 the gap stops at 48. Below 5 columns the columns keep growing
-     until the next one fits (widest ≈ 398 at 2 columns, ≈ 346 at 3), so the
+     until the next one fits (widest ≈ 405 at 2 columns, ≈ 354 at 3), so the
      index always fills A; only at 5 columns (A ≥ 1792) do they stop at 320
      and the slack sits on the right.
-   - Under 260 (2 columns, A < 552) the gap stays 32 and the columns shrink;
+   - Under 260 (2 columns, A < 560) the gap stays 40 and the columns shrink;
      names ellipsize, the index never scrolls sideways.
-   Minimums raised from 220 / 24 / 3 columns the same day (user). */
-const INDEX_COL = { minW: 260, maxW: 320, minG: 32, maxG: 48, minN: 2, maxN: 5 };
+   Minimums raised from 220 / 24 / 3 columns the same day (user); the minimum
+   gap went 32 → 40 on 2026-10-03 (user). */
+const INDEX_COL = { minW: 260, maxW: 320, minG: 40, maxG: 48, minN: 2, maxN: 5 };
 const INDEX_SLOPE = (INDEX_COL.maxG - INDEX_COL.minG) / (INDEX_COL.maxW - INDEX_COL.minW);
 
 function indexLayout(avail: number): { n: number; w: number; g: number } {
@@ -357,8 +371,11 @@ const QB_COLS: QbColMeta[] = [
     key: "forms", label: "Feedback Forms", className: "qb-col-forms", width: 190, sortable: false,
     render: (q) => <UsageNames items={q.forms} />,
   },
-  { key: "createdOn", label: "Created On", className: "qb-col-date", width: 130, sortable: false, render: (_q, d) => d.created },
-  { key: "lastModified", label: "Last Modified", className: "qb-col-date", width: 130, sortable: false, render: (_q, d) => d.modified },
+  /* Both date columns sort (2026-10-03, user), opening newest first; Last
+     Modified is also the list's DEFAULT sort, whether or not the column is
+     shown. 150 = the longer header + its chevron, matched so the pair line up. */
+  { key: "createdOn", label: "Created On", className: "qb-col-date", width: 150, render: (_q, d) => d.created },
+  { key: "lastModified", label: "Last Modified", className: "qb-col-date", width: 150, render: (_q, d) => d.modified },
 ];
 
 export function QuestionBankPage({
@@ -367,15 +384,28 @@ export function QuestionBankPage({
   onBackToTasks,
   initialQuestions,
   initialHistoryId,
+  initialPath,
+  restore,
+  flash,
+  onFlashDone,
 }: {
-  onNewQuestion?: (categoryPath?: string[], type?: QuestionType) => void;
+  /** `from` is the bank's current view, for the editor's Cancel to restore. */
+  onNewQuestion?: (categoryPath?: string[], type?: QuestionType, from?: QbViewState) => void;
   /* `atVersion` is set when the editor is opened from the Version History
      page. The question's own current version opens as a normal edit; any
      older one opens loaded with that version's content and locked. Either
      way the editor's way back out is the history page. */
-  onEditQuestion?: (question: Question, atVersion?: number) => void;
+  onEditQuestion?: (question: Question, atVersion?: number, from?: QbViewState) => void;
   onBackToTasks: () => void;
   initialQuestions?: Question[];
+  /** Open straight on the table, scoped to this category path — [category] or
+   *  [category, sub-category]. Set when the editor hands back a new question. */
+  initialPath?: string[];
+  /** Reopen exactly as it was — Cancel out of an editor this page opened. */
+  restore?: QbViewState;
+  /** A success handed back by the editor ("Question Created"), toasted on arrival. */
+  flash?: string | null;
+  onFlashDone?: () => void;
   /** Opens straight onto one question's Version History page (the way back
    *  from a version opened in the editor). */
   initialHistoryId?: string;
@@ -383,11 +413,20 @@ export function QuestionBankPage({
   const [categories, setCategories] = useState<Category[]>(seedCategories);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions ?? allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
+  // The question whose row was clicked, read back in the row preview panel —
+  // held by id so the panel follows the question through an archive.
+  const [panelId, setPanelId] = useState<string | null>(null);
+  // A row menu opened from the panel's kebab: every item closes the panel
+  // first, so the editor, page or confirm it opens isn't left under it.
+  function closePanelThen(run: () => void) {
+    setPanelId(null);
+    run();
+  }
   /* Row-menu target: the question whose Version History page is open. It is
      held by ID, not as a snapshot — restoring a version bumps the question's
      own `version`, and the page has to see that land. */
   const [historyId, setHistoryId] = useState<string | null>(initialHistoryId ?? null);
-  // Row-menu target: the delete confirm. (Preview opens its own tab.)
+  // Row-menu target: the delete confirm.
   const [deleteQ, setDeleteQ] = useState<Question | null>(null);
   /* Row-menu target: the ARCHIVE confirm. Only the archiving direction stops to
      ask (per the user 2026-09-16) — unarchiving puts a question back in
@@ -397,17 +436,31 @@ export function QuestionBankPage({
      more. BARE category labels only; a sub-category is the Sub-Category
      filter's business (`subFilter`), never the scope's — `applyScope` splits
      any mixed list. Empty = all questions. */
-  const [selection, setSelection] = useState<string[]>([]);
+  const [selection, setSelection] = useState<string[]>(() =>
+    restore ? restore.selection : initialPath?.length ? [initialPath[0]] : [],
+  );
   /* Sub-Category filter — "Parent > Sub" paths, so two categories' same-named
      subs ("Heat Pumps") stay distinct. Set by the Sub-Category pill and by the
      sub-category cards over the table; counted by Clear Filters. See
      `filtered` for how it narrows. */
-  const [subFilter, setSubFilter] = useState<string[]>([]);
+  const [subFilter, setSubFilter] = useState<string[]>(() =>
+    restore
+      ? restore.subFilter
+      : initialPath && initialPath.length > 1
+        ? [initialPath.slice(0, 2).join(" > ")]
+        : [],
+  );
   // The row kebab's Edit / Delete menu and the modals it opens.
   const [catMenu, setCatMenu] = useState<CatMenuState>(null);
   const [catModal, setCatModal] = useState<CatModalState>({ kind: "none" });
   // The last few categories opened — the landing's RECENT row.
-  const [recent, setRecent] = useState<string[]>(SEED_RECENT);
+  const [recent, setRecent] = useState<string[]>(() => {
+    if (restore) return restore.recent;
+    // Arriving on a category counts as opening it, like `openCategory`.
+    if (!initialPath?.length) return SEED_RECENT;
+    const label = initialPath.slice(0, 2).join(" > ");
+    return [label, ...SEED_RECENT.filter((l) => l !== label)].slice(0, RECENT_MAX);
+  });
   /* Category being given a new Sub-Category (its key). The kebab's Add
      Sub-Category opens the SAME shell New Category uses (2026-09-16) — the
      inline editor that used to sit in the tree card is gone: the two halves of
@@ -425,22 +478,23 @@ export function QuestionBankPage({
   // NO wheel gesture here (unlike the other landing pages): the index is a
   // long scrolling list people read, so the wheel has to stay its own — an
   // accidental morph at the foot of the A→Z would be a page they didn't ask for.
-  const morph = useLandingMorph(false, false);
+  const morph = useLandingMorph(restore ? restore.atTable : !!initialPath?.length, false);
   const atTable = morph.atTable;
 
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [query, setQuery] = useState(restore?.query ?? "");
+  const [typeFilter, setTypeFilter] = useState<string[]>(restore?.typeFilter ?? []);
   // Archived questions are hidden until the author asks for them.
-  const [statusFilter, setStatusFilter] = useState<string[]>(["Active"]);
-  const [gradingFilter, setGradingFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(restore?.statusFilter ?? ["Active"]);
+  const [gradingFilter, setGradingFilter] = useState<string[]>(restore?.gradingFilter ?? []);
   // Quizzes/Feedback Forms are also set from the search box's Quizzes: /
   // Feedback Form: tokens.
-  const [quizFilter, setQuizFilter] = useState<string[]>([]);
-  const [formFilter, setFormFilter] = useState<string[]>([]);
+  const [quizFilter, setQuizFilter] = useState<string[]>(restore?.quizFilter ?? []);
+  const [formFilter, setFormFilter] = useState<string[]>(restore?.formFilter ?? []);
 
-  // Question (fixed) + Type is the whole default row — everything else,
-  // Attempts included, is opt-in from Edit Columns.
-  const [columns, setColumns] = useState<QbColumnState>({
+  // Question (fixed) + Type + Last Modified is the default row (Last Modified
+  // on since 2026-10-03, user — it is the default sort, so its column shows
+  // the order). Everything else, Attempts included, is opt-in.
+  const [columns, setColumns] = useState<QbColumnState>(restore?.columns ?? {
     id: false,
     type: true,
     attempts: false,
@@ -451,17 +505,21 @@ export function QuestionBankPage({
     quizzes: false,
     forms: false,
     createdOn: false,
-    lastModified: false,
+    lastModified: true,
   });
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(QB_COLS);
+  const [order, setOrder] = useState<QbColumn[]>(
+    () => restore?.order ?? QB_COLS.map((d) => d.key),
+  );
   const visibleCols = useMemo(() => orderedColumns(QB_COLS, order, columns), [columns, order]);
 
-  const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<{ key: QSortKey; dir: SortDir }>({
-    key: "question",
-    dir: "asc",
-  });
+  const [page, setPage] = useState(restore?.page ?? 1);
+  /* Default order: most recently modified first, even with the Last Modified
+     column hidden (2026-10-03, user) — so a question just created or imported
+     sits at the top of whatever scope it lands in. */
+  const [sort, setSort] = useState<{ key: QSortKey; dir: SortDir }>(
+    restore?.sort ?? { key: "lastModified", dir: "desc" },
+  );
 
   // Every category and subcategory, as "Parent" / "Parent > Sub" labels.
   const categoryLabels = useMemo(
@@ -548,10 +606,23 @@ export function QuestionBankPage({
     );
   }, [preSub, subFilter, selection]);
 
+  // Created / modified times, worked out once per question rather than per
+  // comparison (the seed's come from its mocked version history).
+  const times = useMemo(
+    () =>
+      new Map(
+        questions.map((q) => [
+          q.id,
+          { created: questionCreatedAt(q), modified: questionModifiedAt(q) },
+        ]),
+      ),
+    [questions],
+  );
+
   const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => compareQuestions(a, b, sort.key));
+    const arr = [...filtered].sort((a, b) => compareQuestions(a, b, sort.key, times));
     return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort]);
+  }, [filtered, sort, times]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
@@ -567,19 +638,46 @@ export function QuestionBankPage({
     setSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
+        : // A date column opens newest-first; everything else A→Z / low→high.
+          { key, dir: key === "lastModified" || key === "createdOn" ? "desc" : "asc" },
     );
   }
 
   function startCreate(type: QuestionType) {
     // A new question lands where you are: the open category, or the one
-    // sub-category its cards / pill have narrowed it to.
+    // sub-category its cards / pill have narrowed it to. From the landing it
+    // starts with no category — the crumb back there keeps the last scope in
+    // state, so only the table may hand it over.
     let path: string[] | undefined;
-    if (selection.length === 1) {
-      const subs = subFilter.filter((l) => parentOf(l) === selection[0]);
-      path = subs.length === 1 ? subs[0].split(" > ") : [selection[0]];
+    if (atTable && selection.length <= 1) {
+      const subs = subFilter.filter(
+        (l) => selection.length === 0 || parentOf(l) === selection[0],
+      );
+      if (subs.length === 1) path = subs[0].split(" > ");
+      else if (selection.length === 1) path = [selection[0]];
     }
-    onNewQuestion?.(path, type);
+    onNewQuestion?.(path, type, currentView());
+  }
+
+  // The view the editor's Cancel brings back — see `QbViewState`.
+  function currentView(): QbViewState {
+    return {
+      atTable,
+      selection,
+      subFilter,
+      query,
+      typeFilter,
+      statusFilter,
+      gradingFilter,
+      quizFilter,
+      formFilter,
+      columns,
+      order,
+      page,
+      sort,
+      recent,
+      scroll: { index: indexEl?.scrollTop ?? 0, table: tableScrollRef.current?.scrollTop ?? 0 },
+    };
   }
 
   /* "All Questions" — the landing's "Categories · n" heading: drop the scope
@@ -605,7 +703,7 @@ export function QuestionBankPage({
     morph.showTable();
   }
 
-  /* The search box's Category: token and the bulk import hand over a mixed
+  /* The search box's Category: token hands over a mixed
      list of labels. Split it: every label's parent joins the scope (a sub
      arriving alone still opens its category, so the title never reads "All
      Questions" over one category's rows) and the subs become the Sub-Category
@@ -639,6 +737,7 @@ export function QuestionBankPage({
     !catModalOpen &&
     !deleteQ &&
     !archiveQ &&
+    !panelId &&
     subModal == null;
 
   // "C" opens the editor (Multiple Choice) on every screen; "A" opens the New
@@ -787,15 +886,33 @@ export function QuestionBankPage({
     );
   }
 
-  function openCatMenu(e: React.MouseEvent, target: CatTarget) {
+  function openCatMenu(e: React.MouseEvent, target: CatTarget, start = false) {
     e.stopPropagation();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setCatMenu({ target, x: r.right, y: r.bottom });
+    setCatMenu({ target, x: start ? r.left : r.right, y: r.bottom, start });
   }
 
   // The landing's A→Z index of every category, in as many columns as its
   // own width takes (measured, not the window — the side nav counts).
   const [indexEl, setIndexEl] = useState<HTMLDivElement | null>(null);
+  // The table's own scroller — read into the Cancel snapshot, put back below.
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  // Put a restored view's scroll back once both scrollers exist (first layout).
+  const scrollRestored = useRef(false);
+  useLayoutEffect(() => {
+    if (!restore || scrollRestored.current || !indexEl) return;
+    scrollRestored.current = true;
+    const put = () => {
+      indexEl.scrollTop = restore.scroll.index;
+      if (tableScrollRef.current) tableScrollRef.current.scrollTop = restore.scroll.table;
+    };
+    put();
+    // Again once the index has re-flowed to its measured column count, which
+    // can change its height — set only now, the scroll would come back short.
+    // (Not cancelled on cleanup: StrictMode's re-run returns early on the
+    // guard, so cancelling here would drop the second pass.)
+    requestAnimationFrame(put);
+  }, [restore, indexEl]);
   const [indexWidth, setIndexWidth] = useState(1082);
   useLayoutEffect(() => {
     if (!indexEl) return;
@@ -869,7 +986,10 @@ export function QuestionBankPage({
      page only applies a confirmed import. */
   const [dropActive, setDropActive] = useState(false);
   const [bulk, setBulk] = useState<{ file: File | null } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  /* The page's toast: the import's count, a row or category action landing,
+     or a `flash` from the editor. The shared hook restarts the timer on every
+     call, so a second action straight after the first isn't cut short. */
+  const [setToast, toastNode] = useToast(flash, onFlashDone);
   const draggingFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
   /* Confirmed import: create whatever categories the file names (counts
@@ -905,10 +1025,9 @@ export function QuestionBankPage({
     });
 
     setQuestions((prev) => [...created, ...prev]);
-    applyScope(report.rows.map((r) => r.category));
-    setPage(1);
     setBulk(null);
-    morph.showTable();
+    /* The import always leaves the user on the landing (2026-10-03, user) —
+       the index's updated counts show where the questions went. */
     setToast(`${created.length} ${created.length === 1 ? "Question" : "Questions"} Imported`);
   }
 
@@ -922,7 +1041,7 @@ export function QuestionBankPage({
         question={historyQ}
         onBack={() => setHistoryId(null)}
         onBackToTasks={onBackToTasks}
-        onView={(version) => onEditQuestion?.(historyQ, version)}
+        onView={(version) => onEditQuestion?.(historyQ, version, currentView())}
       />
     );
   }
@@ -984,7 +1103,24 @@ export function QuestionBankPage({
             </nav>
             <header className="tasks-header">
               <div className="rvc-pagehead">
-                <h1 className="tasks-title">{pageTitle}</h1>
+                {/* Page Header + Button (Figma 1441:1859, 2026-10-03): the open
+                    category's menu — Edit, Add Sub-Category, Delete — is a 16px
+                    kebab 8px after its name (the Hands-On console's
+                    open-in-new-tab slot), not a header button. Only the icon
+                    hovers: #a8a8a8 → white, and white while its menu is open. */}
+                <h1 className="tasks-title rvc-headtitle">
+                  {pageTitle}
+                  {atTable && openCat && (
+                    <button
+                      type="button"
+                      className={`rvc-headicon ${catMenu?.target.kind === "category" && catMenu.target.categoryKey === openCat.key ? "is-open" : ""}`}
+                      aria-label="Category options"
+                      onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: openCat.key }, true)}
+                    >
+                      <RowKebabIcon />
+                    </button>
+                  )}
+                </h1>
               </div>
               <div className="tasks-header-actions">
                 {/* Landing only — bulk import lives here, not on the working
@@ -992,18 +1128,6 @@ export function QuestionBankPage({
                 <button className="cta-quiet qb-import" onClick={() => setBulk({ file: null })}>
                   Import CSV
                 </button>
-                {/* The open category's own menu — Edit, Add Sub-Category, Delete
-                    — which lived on its rail row until the rail went. The same
-                    quiet icon button the Industries hub puts its menu on. */}
-                {atTable && openCat && (
-                  <button
-                    className={`cta-quiet cta-quiet--icon ${catMenu?.target.kind === "category" && catMenu.target.categoryKey === openCat.key ? "is-open" : ""}`}
-                    aria-label="Category options"
-                    onClick={(e) => openCatMenu(e, { kind: "category", categoryKey: openCat.key })}
-                  >
-                    <RowKebabIcon />
-                  </button>
-                )}
                 {/* Straight into the editor as a Multiple Choice question —
                     no type menu (2026-09-29); the editor's Type select still
                     switches it before the first save. */}
@@ -1016,16 +1140,18 @@ export function QuestionBankPage({
 
             {/* Sub-categories — the Hands-On page's Review Runs cards (Figma
                 1393:1794), one per sub-category of the open category after an
-                "All Sub-Categories" card, each counting the rows its click
-                shows under the other filters. A card is a toggle over the
+                "All Questions" card, each counting the rows its click shows
+                under the other filters ("Sub-Category · 25 Questions"). A card is a toggle over the
                 Sub-Category pill: it makes that sub the only pick, and clicking
                 it again (or All) clears it. Table chrome — it unfolds with the
-                morph. A category without sub-categories has no strip. */}
+                morph. The strip ends on the Add Sub-Category card (Figma
+                1512:2804). A category without sub-categories has no strip. */}
             {openCat?.subcategories?.length ? (
-              <ReviewRunsStrip label={`Sub-Categories in ${openCat.label}`} className="qb-subcards">
+              <ReviewRunsStrip label={`Sub-Categories in ${openCat.label}`} className="qb-subcards rr--fill">
                   <ReviewRunCard
-                    count={preSub.length}
-                    values={["All Sub-Categories"]}
+                    values={["All Questions"]}
+                    sub={questionsLine(preSub.length)}
+                    chevron={false}
                     selected={subFilter.length === 0}
                     onClick={() => setSubFilter([])}
                   />
@@ -1039,8 +1165,9 @@ export function QuestionBankPage({
                          in it — shown on hover or focus, as the rail rows did. */
                       <div key={sc.key} className={`qb-subcard ${menuOpen ? "is-menu-open" : ""}`}>
                         <ReviewRunCard
-                          count={subCounts.get(path) ?? 0}
                           values={[sc.label]}
+                          sub={`Sub-Category · ${questionsLine(subCounts.get(path) ?? 0)}`}
+                          chevron={false}
                           selected={subFilter.includes(path)}
                           onClick={() => pickSubCard(path)}
                         />
@@ -1061,6 +1188,12 @@ export function QuestionBankPage({
                       </div>
                     );
                   })}
+                  <ReviewRunCard
+                    variant="add"
+                    icon={<AddCardIcon />}
+                    values={["Add Sub-Category"]}
+                    onClick={() => setSubModal(openCat.key)}
+                  />
               </ReviewRunsStrip>
             ) : null}
 
@@ -1118,9 +1251,14 @@ export function QuestionBankPage({
                     a filter — the title and the crumb carry it. Its
                     sub-categories ARE one (with the cards above as shortcuts);
                     no pill when nothing in scope has any. */}
+                {/* Named for what it spans (2026-10-03, user): across
+                    categories (All Questions) it is grouped one section per
+                    category, so it reads "Category"; inside one category it
+                    only holds that category's subs — "Sub-Category", like the
+                    cards above it. */}
                 {subOptions.length > 0 && (
                   <MultiSelectPill
-                    label="Sub-Category"
+                    label={subSections.length > 1 ? "Category" : "Sub-Category"}
                     options={subOptions}
                     sections={subSections.length > 1 ? subSections : undefined}
                     labels={subLeaves}
@@ -1130,9 +1268,17 @@ export function QuestionBankPage({
                     value={subFilter}
                     onApply={setSubFilter}
                     searchPlaceholder={
-                      subOptions.length > 8 ? "Search Sub-Categories..." : undefined
+                      subOptions.length > 8
+                        ? subSections.length > 1
+                          ? "Search Categories..."
+                          : "Search Sub-Categories..."
+                        : undefined
                     }
-                    tip={FILTER_TIPS.questionBank.subCategory}
+                    tip={
+                      subSections.length > 1
+                        ? FILTER_TIPS.questionBank.category
+                        : FILTER_TIPS.questionBank.subCategory
+                    }
                   />
                 )}
                 <MultiSelectPill
@@ -1243,7 +1389,11 @@ export function QuestionBankPage({
 
               {/* ─── Table ─── */}
               <div className="lm-table">
-              <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
+              <div
+                className="table-xscroll"
+                ref={tableScrollRef}
+                style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
+              >
               <table className="table table-head qb-q-table">
                 <QbColGroup cols={visibleCols} />
                 <thead>
@@ -1287,8 +1437,9 @@ export function QuestionBankPage({
                         key={q.id}
                         q={q}
                         cols={visibleCols}
-                        onEdit={() => onEditQuestion?.(q)}
+                        onEdit={() => onEditQuestion?.(q, undefined, currentView())}
                         onOpenMenu={(rect) => setRowMenu({ q, rect })}
+                        onOpen={() => setPanelId(q.id)}
                         menuOpen={rowMenu?.q.id === q.id}
                       />
                     ))}
@@ -1333,17 +1484,33 @@ export function QuestionBankPage({
           q={rowMenu.q}
           rect={rowMenu.rect}
           onClose={() => setRowMenu(null)}
-          onEdit={() => onEditQuestion?.(rowMenu.q)}
-          onPreview={() => previewAsLearner(rowMenu.q)}
+          onEdit={() => closePanelThen(() => onEditQuestion?.(rowMenu.q, undefined, currentView()))}
           onArchive={() => {
-            /* Archiving warns first; unarchiving is immediate. */
-            if (rowMenu.q.status === "Archived") toggleArchive(rowMenu.q.id);
-            else setArchiveQ(rowMenu.q);
+            /* Archiving warns first; unarchiving is immediate — and stays in
+               the panel, which follows the question to Archived. */
+            if (rowMenu.q.status === "Archived") {
+              toggleArchive(rowMenu.q.id);
+              setToast("Question Unarchived");
+            } else closePanelThen(() => setArchiveQ(rowMenu.q));
           }}
-          onVersionHistory={() => setHistoryId(rowMenu.q.id)}
-          onDelete={() => setDeleteQ(rowMenu.q)}
+          onVersionHistory={() => closePanelThen(() => setHistoryId(rowMenu.q.id))}
+          onDelete={() => closePanelThen(() => setDeleteQ(rowMenu.q))}
         />
       )}
+
+      {/* ─── Row preview panel ─── */}
+      {(() => {
+        const pq = panelId ? questions.find((q) => q.id === panelId) : undefined;
+        if (!pq) return null;
+        return (
+          <QuestionPanel
+            key={pq.id}
+            q={pq}
+            onClose={() => setPanelId(null)}
+            onMore={(rect) => setRowMenu({ q: pq, rect })}
+          />
+        );
+      })()}
 
       {/* ─── Archive question confirm ─── */}
       {archiveQ && (
@@ -1352,6 +1519,7 @@ export function QuestionBankPage({
           onConfirm={() => {
             toggleArchive(archiveQ.id);
             setArchiveQ(null);
+            setToast("Question Archived");
           }}
           onCancel={() => setArchiveQ(null)}
         />
@@ -1364,6 +1532,7 @@ export function QuestionBankPage({
           onConfirm={() => {
             deleteQuestion(deleteQ.id);
             setDeleteQ(null);
+            setToast("Question Deleted");
           }}
           onCancel={() => setDeleteQ(null)}
         />
@@ -1397,7 +1566,7 @@ export function QuestionBankPage({
           <>
             <div className="ind-menu-backdrop" onClick={() => setCatMenu(null)} />
             <div
-              className="u-menu ind-row-menu qb-cat-menu"
+              className={`u-menu ind-row-menu qb-cat-menu${catMenu.start ? " qb-cat-menu--start" : ""}`}
               style={{ top: catMenu.y + 6, left: catMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1465,7 +1634,7 @@ export function QuestionBankPage({
         return (
           <CatNameModal
             title="Rename Category"
-            description="Renaming keeps every question and sub-category inside it."
+            description="Renaming keeps every question and Sub-Category inside it."
             submitLabel="Save Category"
             duplicateMessage="A category with this name already exists."
             defaultValue={cat.label}
@@ -1475,6 +1644,7 @@ export function QuestionBankPage({
             onSubmit={(label) => {
               renameCategory(catModal.categoryKey, label);
               setCatModal({ kind: "none" });
+              setToast("Category Updated");
             }}
             onCancel={() => setCatModal({ kind: "none" })}
           />
@@ -1490,7 +1660,7 @@ export function QuestionBankPage({
             title="Rename Sub-Category"
             description={`In ${parent.label}. Renaming keeps every question inside it.`}
             submitLabel="Save Sub-Category"
-            duplicateMessage="A sub-category with this name already exists."
+            duplicateMessage="A Sub-Category with this name already exists."
             defaultValue={sub.label}
             existingNames={(parent.subcategories ?? [])
               .filter((s) => s.key !== catModal.subKey)
@@ -1498,6 +1668,7 @@ export function QuestionBankPage({
             onSubmit={(label) => {
               renameSubcategory(catModal.categoryKey, catModal.subKey, label);
               setCatModal({ kind: "none" });
+              setToast("Sub-Category Updated");
             }}
             onCancel={() => setCatModal({ kind: "none" })}
           />
@@ -1523,6 +1694,7 @@ export function QuestionBankPage({
                 deleteSubcategory(target.categoryKey, target.subKey);
               }
               setCatModal({ kind: "none" });
+              setToast(target.kind === "category" ? "Category Deleted" : "Sub-Category Deleted");
             }}
             onCancel={() => setCatModal({ kind: "none" })}
           />
@@ -1536,6 +1708,10 @@ export function QuestionBankPage({
           onCreate={(label) => {
             addCategory(label);
             setCatModalOpen(false);
+            setToast("Category Created");
+            // A new category opens straight away (2026-10-03, user), ready
+            // for its first question or Sub-Category.
+            openCategory(label);
           }}
           onCancel={() => setCatModalOpen(false)}
         />
@@ -1552,6 +1728,7 @@ export function QuestionBankPage({
             onCreate={(label) => {
               addSubcategory(parent.key, label);
               setSubModal(null);
+              setToast("Sub-Category Created");
             }}
             onCancel={() => setSubModal(null)}
           />
@@ -1567,7 +1744,7 @@ export function QuestionBankPage({
           onImport={applyImport}
         />
       )}
-      {toast && <CopiedToast label={toast} onDone={() => setToast(null)} />}
+      {toastNode}
 
     </div>
   );
@@ -1643,10 +1820,13 @@ function NewCategoryModal({
                   : "A category with this name already exists."}
               </span>
             )}
-            <LimitError max={NAME_MAX} values={[name]} />
+            {/* Admin-only name — learners never see it, so no "will get
+                truncated" tier: red past 128 only (2026-10-03, user). */}
+            <LimitError max={NAME_MAX} values={[name]} warn={false} />
           </span>
           <LimitedInput
             max={NAME_MAX}
+            warn={false}
             autoFocus
             className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={name}
@@ -1719,10 +1899,13 @@ function CatNameModal({
           <span className="prm-label">
             Name<span className="prm-req">*</span>
             {isDuplicate && <span className="form-label-error">{duplicateMessage}</span>}
-            <LimitError max={NAME_MAX} values={[value]} />
+            {/* Admin-only name — learners never see it, so no "will get
+                truncated" tier: red past 128 only (2026-10-03, user). */}
+            <LimitError max={NAME_MAX} values={[value]} warn={false} />
           </span>
           <LimitedInput
             max={NAME_MAX}
+            warn={false}
             autoFocus
             className={`form-input${isDuplicate ? " has-error" : ""}`}
             value={value}
@@ -1865,20 +2048,15 @@ function CatDeleteConfirm({
   );
 }
 
+/* The shared width rule (`TableCols`): Question and every visible column keep
+   their content-sized base widths (summed into --table-min) and share the
+   slack in proportion; only the 3-dot gutter stays fixed. */
 function QbColGroup({ cols }: { cols: QbColMeta[] }) {
   return (
-    <colgroup>
-      {/* Auto, not a fixed width: in a fixed-layout table the auto column
-          soaks up ALL the slack, so Question stretches on a wide page instead
-          of every column growing proportionally (which used to leave Type far
-          wider than its longest value). QUESTION_COL_WIDTH still floors it
-          through --table-min. */}
-      <col style={{ width: "auto" }} />
-      {cols.map((c) => (
-        <col key={c.key} style={{ width: c.width }} />
-      ))}
-      <col style={{ width: ACTIONS_COL_WIDTH }} />
-    </colgroup>
+    <TableCols
+      data={[QUESTION_COL_WIDTH, ...cols.map((c) => c.width)]}
+      trail={[ACTIONS_COL_WIDTH]}
+    />
   );
 }
 
@@ -1935,6 +2113,7 @@ function QuestionRow({
   cols,
   onEdit,
   onOpenMenu,
+  onOpen,
   menuOpen,
 }: {
   q: Question;
@@ -1942,13 +2121,15 @@ function QuestionRow({
   cols: QbColMeta[];
   onEdit: () => void;
   onOpenMenu: (rect: DOMRect) => void;
+  /** Row click — opens the question's preview panel. Row buttons stop propagation. */
+  onOpen: () => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
   const isArchived = q.status === "Archived";
   const dates = questionDates(q);
   return (
-    <tr className={`qb-row ${isArchived ? "is-archived" : ""} ${menuOpen ? "menu-open" : ""}`}>
+    <tr className={`qb-row ${isArchived ? "is-archived" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onOpen}>
       <td className="qb-col-question">
         <div className="qb-q-text">{q.text}</div>
       </td>
@@ -1993,13 +2174,83 @@ function QuestionRow({
   );
 }
 
+/** A question's row preview panel (Figma 1514:2860, drawn from a question):
+ *  Overview, Answers and the Quizzes and Feedback Forms using it, as
+ *  accordions, then its attempts as Activity. The blank preview column is
+ *  where the old "Preview as Learner" went. */
+function QuestionPanel({
+  q,
+  onClose,
+  onMore,
+}: {
+  q: Question;
+  onClose: () => void;
+  onMore: (rect: DOMRect) => void;
+}) {
+  const dates = questionDates(q);
+  const attempts = attemptCount(q);
+  const [category, ...subs] = q.categoryPath;
+  const listCard = (title: string, names: string[], empty: string) => (
+    <ConfirmCard title={`${title} · ${names.length}`} tableBody={names.length > 0}>
+      {names.length > 0 ? (
+        <div className="ctb-tasktable">
+          {names.map((n) => (
+            <div key={n} className="cdr-task">
+              <div className="cdr-task-name-row">
+                <span className="cdr-task-name">{n}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="form-help">{empty}</p>
+      )}
+    </ConfirmCard>
+  );
+
+  return (
+    <PreviewPanel
+      kind="Question"
+      title={q.text}
+      subtitle={longQuestionType(q.type)}
+      onMore={onMore}
+      stats={[{ count: formatCount(attempts), title: "Attempts", sub: "Across all versions" }]}
+      onClose={onClose}
+    >
+      <ConfirmCard
+        title="Overview"
+        fillBlanks
+        rows={[
+          ["Question Type", longQuestionType(q.type)],
+          ["Status", q.status],
+          ["Category", category],
+          ["Sub-Category", subs.join(" > ")],
+          ["Grading", isGraded(q) ? "Graded" : "Ungraded"],
+          // Only types with an order to shuffle carry the setting at all.
+          ...(q.options?.length || q.pairs?.length
+            ? [["Randomize Options", q.randomise ? "On" : "Off"] as [string, string]]
+            : []),
+          ["Spanish Translation", q.hasSpanish ? "Complete" : "Missing"],
+          ["Version", `v${q.version}`],
+          ["Created On", dates.created],
+          ["Last Modified", dates.modified],
+        ]}
+      />
+      <ConfirmCard title="Answers">
+        <QuestionAnswers question={q} hideText />
+      </ConfirmCard>
+      {listCard("Quizzes", q.quizzes, "Not used in any Quiz Task.")}
+      {listCard("Feedback Forms", q.forms, "Not used in any Feedback Form.")}
+    </PreviewPanel>
+  );
+}
+
 /* Tasks-style fixed-position row actions menu for a question. */
 function QuestionActionsMenu({
   q,
   rect,
   onClose,
   onEdit,
-  onPreview,
   onArchive,
   onVersionHistory,
   onDelete,
@@ -2008,7 +2259,6 @@ function QuestionActionsMenu({
   rect: DOMRect;
   onClose: () => void;
   onEdit: () => void;
-  onPreview: () => void;
   onArchive: () => void;
   onVersionHistory: () => void;
   onDelete: () => void;
@@ -2125,7 +2375,6 @@ function QuestionActionsMenu({
           both states of one row. No heading and no dividers; the open row is
           identified by its held hover state. */}
       {item(<RowEditIcon />, "Edit", onEdit)}
-      {item(<MenuPreviewIcon />, "Preview as Learner", onPreview)}
       {/* Nothing to show at v1 — there is no earlier version to compare to. */}
       {q.version > 1 && item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
       {showArchive &&

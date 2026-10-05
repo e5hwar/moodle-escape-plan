@@ -453,8 +453,10 @@ export function questionsFromImport(
     return id;
   };
 
+  const now = Date.now();
   return rows.map((row) => ({
     id: nextId(),
+    modifiedAt: now,
     type: row.type,
     text: row.text,
     status: "Active" as const,

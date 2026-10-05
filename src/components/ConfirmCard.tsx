@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useContext, type CSSProperties, type ReactNode } from "react";
+import { Accordion, AccordionRows, AccordionScope } from "./Accordion";
 import { RowEditIcon } from "./icons";
 
 /* One review card (Figma 1046:1147, "Review Company Details"): a 20px title
@@ -12,8 +13,10 @@ import { RowEditIcon } from "./icons";
  * row of pills — passed as children. */
 
 /** One field on a confirm card: label over value. `wide` spans two of the
- *  card's four grid columns, for long values like an address or email. */
-export type ConfirmField = [label: string, value: ReactNode, wide?: boolean];
+ *  card's four grid columns, for long values like an address or email;
+ *  `"row"` takes the whole row, for a long value alone on its line (the Full
+ *  Profile's Portfolio Link) so a narrow card never cuts it short. */
+export type ConfirmField = [label: string, value: ReactNode, wide?: boolean | "row"];
 
 export function ConfirmCard({
   title,
@@ -46,26 +49,36 @@ export function ConfirmCard({
   /** A body that isn't the field grid: a table, pills, a tab bar. */
   children?: ReactNode;
 }) {
+  const asAccordion = useContext(AccordionScope);
+  const blank = (value: ReactNode) => value === "" || value == null || value === false;
   const shown: ConfirmField[] = !rows
     ? []
     : fillBlanks
-      ? rows.map(([label, value, wide]) => [label, value === "" || value == null ? "—" : value, wide])
-      : rows.filter(([, value]) => value !== "" && value != null);
+      ? rows.map(([label, value, wide]) => [label, blank(value) ? "—" : value, wide])
+      : rows.filter(([, value]) => !blank(value));
+  const edit = trailing ??
+    (onEdit && (
+      <button type="button" className="confirm-card-edit" aria-label={`Edit ${title}`} onClick={onEdit}>
+        <RowEditIcon />
+      </button>
+    ));
+
+  // In the row preview panel every card is an Accordion — the same title,
+  // its fields as label/value lines, anything else as the open body.
+  if (asAccordion) {
+    return (
+      <Accordion title={title} trailing={edit || undefined}>
+        {rows && <AccordionRows rows={shown.map(([label, value]) => [label, value])} />}
+        {children}
+      </Accordion>
+    );
+  }
+
   return (
     <section className={`confirm-card${tableBody ? " confirm-card--table" : ""}`}>
       <header className="confirm-card-head">
         <h2 className="confirm-card-title">{title}</h2>
-        {trailing ??
-          (onEdit && (
-            <button
-              type="button"
-              className="confirm-card-edit"
-              aria-label={`Edit ${title}`}
-              onClick={onEdit}
-            >
-              <RowEditIcon />
-            </button>
-          ))}
+        {edit}
       </header>
       {/* Confirm Details 6B — fields sit in a four-column grid (the first column
           a little wider for the card's lead field) with the label above the
@@ -76,7 +89,12 @@ export function ConfirmCard({
           style={columns ? ({ "--cc-cols": columns } as CSSProperties) : undefined}
         >
           {shown.map(([label, value, wide]) => (
-            <div className={`confirm-card-field${wide ? " confirm-card-field--wide" : ""}`} key={label}>
+            <div
+              className={`confirm-card-field${
+                wide === "row" ? " confirm-card-field--row" : wide ? " confirm-card-field--wide" : ""
+              }`}
+              key={label}
+            >
               <div className="confirm-card-label">{label}</div>
               <div className="confirm-card-value">{value}</div>
             </div>
