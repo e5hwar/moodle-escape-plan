@@ -8,6 +8,7 @@ import { FILTER_TIPS } from "../data/filterTips";
 import { CheckIcon, SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 /* Select Users — the Merge Accounts twin of SelectTasksModal (Figma 682:2321).
  * Clicking either account field on step 1 opens this table picker: search bar,
@@ -356,31 +357,29 @@ export function SelectUsersModal({
               <table className="table table-body stm-table sum-table">
                 <ColGroup />
                 <tbody>
-                  {rows.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={7}>No accounts match your search and filters.</td>
-                    </tr>
-                  ) : (
-                    rows.map((u) => {
-                      const on = picked.includes(u.id);
-                      const reason = ineligible?.(u);
-                      const locked = !!reason || (full && !on);
-                      return (
-                        <tr
-                          key={u.id}
-                          className={`${on ? "selected" : ""}${locked ? " is-locked" : ""}`}
-                          data-tip={reason}
-                          onClick={() => toggle(u)}
-                        >
-                          <td className="stm-col-check">
-                            {/* A <button>, not a <span> — the shared table reset
-                                strips chrome from span/div in data cells, which
-                                would leave a bare tick with no box. */}
+                  {rows.map((u) => {
+                    const on = picked.includes(u.id);
+                    const reason = ineligible?.(u);
+                    /* Locked (Figma 682:2593): an account this flow can't
+                       take, or — once both are picked — any other one. No
+                       checkbox; the reason, where there is one, is the tip. */
+                    const locked = !!reason || (full && !on);
+                    return (
+                      <tr
+                        key={u.id}
+                        className={locked ? "task-dim is-locked" : on ? "selected" : ""}
+                        data-tip={reason}
+                        onClick={() => toggle(u)}
+                      >
+                        <td className="stm-col-check">
+                          {!locked && (
+                            /* A <button>, not a <span> — the shared table reset
+                               strips chrome from span/div in data cells, which
+                               would leave a bare tick with no box. */
                             <button
                               className={`checkbox ${on ? "checked" : ""}`}
                               aria-label={on ? "Deselect" : "Select"}
                               aria-pressed={on}
-                              disabled={locked}
                               tabIndex={-1}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -389,30 +388,31 @@ export function SelectUsersModal({
                             >
                               {on && <CheckIcon />}
                             </button>
-                          </td>
-                          {/* `col-name` carries the #FFFFFF emphasis and is one
-                              of the classes the app-wide "mute every non-Name
-                              cell" rule excludes — a local colour would lose to
-                              it on specificity. */}
-                          <td className="sum-col-name col-name">{u.name}</td>
-                          <td className="sum-col-email">{u.email || "—"}</td>
-                          <td className="sum-col-phone">{u.phone || "—"}</td>
-                          <td className="sum-col-company">{u.company || "—"}</td>
-                          <td className="sum-col-role">{u.role}</td>
-                          <td className="sum-col-plan">{planText(u)}</td>
-                        </tr>
-                      );
-                    })
-                  )}
+                          )}
+                        </td>
+                        {/* `col-name` carries the #FFFFFF emphasis and is one
+                            of the classes the app-wide "mute every non-Name
+                            cell" rule excludes — a local colour would lose to
+                            it on specificity. */}
+                        <td className="sum-col-name col-name">
+                          {locked ? <span className="tsk-name">{u.name}</span> : u.name}
+                        </td>
+                        <td className="sum-col-email">{u.email || "—"}</td>
+                        <td className="sum-col-phone">{u.phone || "—"}</td>
+                        <td className="sum-col-company">{u.company || "—"}</td>
+                        <td className="sum-col-role">{u.role}</td>
+                        <td className="sum-col-plan">{planText(u)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {rows.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination stm-pagination">
-            <span className="sum-picked">
-              {picked.length} of {MAX_PICKED} Accounts Selected
-            </span>
+            <span className="stm-picked">{picked.length} Selected</span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
               {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}

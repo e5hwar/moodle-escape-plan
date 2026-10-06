@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
 
 /** The Industries launcher bar — the same `.usearch` combobox shell Tasks,
  *  Certifications, Companies and Users run, and commit-on-Enter like them: the
  *  list below only ever shows results for the APPLIED query, never the draft.
  *
- *  One difference: this page has no Filters row, so there are no scope tokens
- *  and nothing to suggest on an empty bar. The panel therefore opens only while
- *  an edit is pending (typed text ≠ applied query), and while it is closed
- *  ↑ ↓ ↵ Esc fall through to the launcher's own list navigation — the handlers
- *  here `preventDefault()` whatever they consume, and the launcher's document
+ *  One difference: this page has no Filters row, so there is never anything
+ *  to suggest — and with nothing to suggest a bar shows no panel at all (user
+ *  rule, 2026-10-06): type, then ↵ searches. While an edit is pending (typed
+ *  text ≠ applied query) ↵ / Esc are the bar's; otherwise ↑ ↓ ↵ Esc fall
+ *  through to the launcher's own list navigation — the handlers here
+ *  `preventDefault()` whatever they consume, and the launcher's document
  *  listener skips anything already handled. */
 export function IndustriesSearch({
   query,
@@ -70,8 +70,8 @@ export function IndustriesSearch({
       e.preventDefault();
       revert();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      // The panel's one row is always the ↵ target — nothing to walk, and the
-      // list it covers shouldn't move underneath it.
+      // Mid-edit ↵ searches the text, so the list mustn't move a selection
+      // that ↵ would then ignore.
       e.preventDefault();
     }
   }
@@ -112,16 +112,6 @@ export function IndustriesSearch({
         )}
       </div>
 
-      {pending && (
-        <div className="usearch-panel">
-          {text.trim() ? (
-            <SearchForRow query={text.trim()} scope="Industries" onClick={commit} />
-          ) : (
-            // Erasing an applied search: ↵ commits the empty bar.
-            <SearchHints />
-          )}
-        </div>
-      )}
     </div>
   );
 }

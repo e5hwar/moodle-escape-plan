@@ -6,7 +6,7 @@ import {
 } from "../data/questionBank";
 
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 8;
 const CATEGORY_PREFIX = "Category:";
@@ -61,13 +61,20 @@ type Opt =
   | { kind: "type-filter" }
   | { kind: "quiz-filter" }
   | { kind: "form-filter" }
-  | { kind: "search" }
   | { kind: "pick"; token: Token };
 
 /* The "Suggested filters" rows, in render order. Category and Type are always
    offered; Quizzes / Feedback Form only when the caller wires that filter (a
    picker that has no such pill must not apply one it can't show). */
 type SuggestKind = "category" | "type" | "quiz" | "form";
+
+/** A typed suggestion's label → the pending token it becomes. */
+const SUGGESTION_TOKEN: Record<string, Token["kind"]> = {
+  Category: "category",
+  "Question Type": "type",
+  Quiz: "quiz",
+  "Feedback Form": "form",
+};
 
 export function QuestionSearch({
   categoryOptions,
@@ -212,17 +219,30 @@ export function QuestionSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formQuery, formCounts, draft, forms]);
 
-  // Free text also matches categories ("Find a Question or Category…"): the
-  // hits sit between the suggested filters and the "Search for" row, and pick
-  // like a Category: token.
-  const freeCategoryResults = useMemo(() => {
-    const q = freeQuery.trim().toLowerCase();
-    if (!q) return [];
-    return categoryOptions
-      .filter((l) => !selection.includes(l) && l.toLowerCase().includes(q))
-      .slice(0, 5);
-  }, [freeQuery, categoryOptions, selection]);
-  const searchRow = FILTER_ROWS + freeCategoryResults.length;
+  /* Free text: every filter value it matches — Categories, Types, then
+     Quizzes / Feedback Forms where wired (1542:2130). None → no panel; Enter
+     searches the text as typed. A pick becomes that kind's pending token. */
+  const suggestions = useMemo(() => {
+    if (!hasQuery) return [];
+    const not = (kind: Token["kind"], applied: readonly string[]) =>
+      [...applied, ...(drafted(kind) ? [drafted(kind)!] : [])];
+    return suggestFilters(
+      freeQuery,
+      [
+        { kind: "Category", chip: CATEGORY_PREFIX, values: categoryOptions, exclude: not("category", selection) },
+        { kind: "Question Type", chip: TYPE_PREFIX, values: typeOptions ?? QUESTION_TYPE_OPTIONS, exclude: not("type", types) },
+        ...(onQuizzesChange
+          ? [{ kind: "Quiz", chip: QUIZ_PREFIX, values: [...quizCounts.keys()].sort((a, b) => a.localeCompare(b)), exclude: not("quiz", quizList) }]
+          : []),
+        ...(onFormsChange
+          ? [{ kind: "Feedback Form", chip: FORM_PREFIX, values: [...formCounts.keys()].sort((a, b) => a.localeCompare(b)), exclude: not("form", formList) }]
+          : []),
+      ],
+      MAX_RESULTS,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasQuery, freeQuery, categoryOptions, typeOptions, quizCounts, formCounts, selection, types, quizzes, forms, draft]);
+  const showPanel = open && !(!inMode && hasQuery && suggestions.length === 0);
 
   // Options available to keyboard navigation, in render order.
   const optionCount = inCategoryMode
@@ -233,7 +253,9 @@ export function QuestionSearch({
         ? quizResults.length
         : inFormMode
           ? formResults.length
-          : searchRow + (hasQuery ? 1 : 0);
+          : hasQuery
+            ? suggestions.length
+            : FILTER_ROWS;
 
   function optionAt(i: number): Opt | null {
     if (inCategoryMode) {
@@ -252,17 +274,18 @@ export function QuestionSearch({
       const n = formResults[i];
       return n ? { kind: "pick", token: { kind: "form", name: n } } : null;
     }
+    if (hasQuery) {
+      const sg = suggestions[i];
+      return sg ? { kind: "pick", token: { kind: SUGGESTION_TOKEN[sg.kind], name: sg.name } } : null;
+    }
     if (i < FILTER_ROWS) return { kind: `${suggest[i]}-filter` } as Opt;
-    const cat = freeCategoryResults[i - FILTER_ROWS];
-    if (cat) return { kind: "pick", token: { kind: "category", name: cat } };
-    if (i === searchRow && hasQuery) return { kind: "search" };
     return null;
   }
 
-  // Preselect the "Search for…" row when free text is entered so Enter searches.
+  // Typing puts the caret back in the bar — Enter there searches the text.
   useEffect(() => {
-    setActive(!inMode && hasQuery ? searchRow : -1);
-  }, [text, draft.length, inMode, hasQuery, searchRow]);
+    setActive(-1);
+  }, [text, draft.length, inMode, hasQuery]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
      query, so a bar left showing half-typed text would be lying about what the
@@ -343,8 +366,6 @@ export function QuestionSearch({
         return startMode(FORM_PREFIX);
       case "pick":
         return addToken(opt.token);
-      case "search":
-        return commit();
     }
   }
 
@@ -352,10 +373,10 @@ export function QuestionSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -433,9 +454,24 @@ export function QuestionSearch({
         )}
       </div>
 
-      {open && (
+      {showPanel && (
         <div className="usearch-panel">
-          {!inMode && (
+          {!inMode && hasQuery && (
+            <>
+              <div className="usearch-head">Suggested filters</div>
+              {suggestions.map((sg, i) => (
+                <SuggestionRow
+                  key={sg.kind + sg.name}
+                  suggestion={sg}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => activate(optionAt(i)!)}
+                />
+              ))}
+            </>
+          )}
+
+          {!inMode && !hasQuery && (
             <>
               <div className="usearch-head">Suggested filters</div>
               {suggest.map((kind, i) => (
@@ -455,11 +491,7 @@ export function QuestionSearch({
             <>
               <div className="usearch-head">Category</div>
               {categoryResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {categoryQuery.trim()
-                    ? `No categories match “${categoryQuery.trim()}”.`
-                    : "Start typing a category name…"}
-                </div>
+                <>{categoryQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a category name…"}</div>}</>
               ) : (
                 categoryResults.map((label, i) => (
                   <OptionRow
@@ -480,11 +512,7 @@ export function QuestionSearch({
             <>
               <div className="usearch-head">Question type</div>
               {typeResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {typeQuery.trim()
-                    ? `No question types match “${typeQuery.trim()}”.`
-                    : "Start typing a question type…"}
-                </div>
+                <>{typeQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a question type…"}</div>}</>
               ) : (
                 typeResults.map((name, i) => (
                   <OptionRow
@@ -506,11 +534,7 @@ export function QuestionSearch({
             <>
               <div className="usearch-head">Quizzes</div>
               {quizResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {quizQuery.trim()
-                    ? `No quizzes match “${quizQuery.trim()}”.`
-                    : "Start typing a quiz name…"}
-                </div>
+                <>{quizQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a quiz name…"}</div>}</>
               ) : (
                 quizResults.map((name, i) => (
                   <OptionRow
@@ -532,11 +556,7 @@ export function QuestionSearch({
             <>
               <div className="usearch-head">Feedback Forms</div>
               {formResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {formQuery.trim()
-                    ? `No feedback forms match “${formQuery.trim()}”.`
-                    : "Start typing a feedback form name…"}
-                </div>
+                <>{formQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a feedback form name…"}</div>}</>
               ) : (
                 formResults.map((name, i) => (
                   <OptionRow
@@ -554,34 +574,7 @@ export function QuestionSearch({
             </>
           )}
 
-          {!inMode && freeCategoryResults.length > 0 && (
-            <>
-              <div className="usearch-head">Categories</div>
-              {freeCategoryResults.map((label, i) => (
-                <OptionRow
-                  key={label}
-                  active={active === FILTER_ROWS + i}
-                  onHover={() => setActive(FILTER_ROWS + i)}
-                  onClick={() => addToken({ kind: "category", name: label })}
-                >
-                  <span className="usearch-chip">Category:</span>
-                  <span className="usearch-row-ex">{label}</span>
-                </OptionRow>
-              ))}
-            </>
-          )}
-
-          {!inMode && hasQuery ? (
-            <SearchForRow
-              query={freeQuery.trim()}
-              scope="Question Bank"
-              active={active === searchRow}
-              onHover={() => setActive(searchRow)}
-              onClick={commit}
-            />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

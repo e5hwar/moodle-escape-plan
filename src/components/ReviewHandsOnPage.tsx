@@ -9,9 +9,7 @@ import {
 import { ReviewSearch } from "./ReviewSearch";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { ReviewConsole } from "./ReviewConsole";
-import type { QueueFilter } from "./ReviewQueueFilters";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
-import { CREATED_BY_IN_HOUSE, CREATED_BY_B2B } from "../data/filters";
 import {
   useColumnOrder,
   orderedColumns,
@@ -20,9 +18,10 @@ import {
   PillTrigger,
 } from "./Filters";
 import { Dropdown } from "./Dropdown";
-import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
+import { FILTER_TIPS } from "../data/filterTips";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -32,9 +31,6 @@ const PAGE_SIZE = 50;
    then the two outcomes, then the rows that were never theirs to action. */
 const STATUS_OPTIONS: string[] = ["Review Pending", "Completed", "Rejected", NO_ACTION_STATUS];
 
-// Same creator options as the Tasks/Certifications pages: SkillCat (in-house)
-// plus the B2B customers.
-const CREATOR_OPTIONS = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
 
 /* ── Columns: Task is fixed (always first, never in the menu). Certifications /
    Status / Submitted On / User's Name are the toggleable columns shown by
@@ -176,7 +172,7 @@ const COLS: ColMeta[] = [
         <>
           {s.certifications[0]}
           {s.certifications.length > 1 && (
-            <span className="used-extra">+{s.certifications.length - 1}</span>
+            <>{" "}<span className="used-extra">+{s.certifications.length - 1}</span></>
           )}
         </>
       ),
@@ -393,7 +389,6 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 2; // task + cols + actions
   // Natural table width (task col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
   const tableMin = TASK_WIDTH + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
@@ -413,86 +408,15 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
     setCerts([]);
   }
 
-  // The table's filters, handed to the review console so its queue popover can
-  // edit them in place — they drive this page's state, so the queue re-filters
-  // live. The popover's row is one line: `primary` marks the two pills shown
-  // when nothing is applied (Status, Created By); applied filters take
-  // precedence and the rest fall into its "More Filters".
-  const queueFilters: QueueFilter[] = [
-    {
-      label: "Status",
-      all: STATUS_OPTIONS,
-      value: statuses,
-      onApply: setStatuses,
-      primary: true,
-      tip: FILTER_TIPS.handsOn.status,
-    },
-    {
-      label: "Created By",
-      all: CREATOR_OPTIONS,
-      // Same two subsections as the Created By pill everywhere else.
-      sections: [
-        { label: "Made in house", items: [...CREATED_BY_IN_HOUSE] },
-        { label: "B2B customers", items: [...CREATED_BY_B2B].sort() },
-      ],
-      value: creators,
-      onApply: setCreators,
-      searchable: true,
-      searchPlaceholder: "Search Creators...",
-      primary: true,
-      tip: CREATED_BY_TIP,
-    },
-    {
-      label: "Task",
-      all: taskNames,
-      value: tasks,
-      onApply: setTasks,
-      searchable: true,
-      searchPlaceholder: "Search Tasks...",
-      tip: FILTER_TIPS.handsOn.task,
-    },
-    {
-      label: "Parent Certification",
-      all: certNames,
-      value: certs,
-      onApply: setCerts,
-      searchable: true,
-      searchPlaceholder: "Search Certifications...",
-      tip: FILTER_TIPS.handsOn.parentCertification,
-    },
-    {
-      label: "User Type",
-      all: ["B2C", "B2B"],
-      value: types,
-      onApply: setTypes,
-      tip: FILTER_TIPS.handsOn.userType,
-    },
-    {
-      label: "User's Company",
-      all: companyNames,
-      value: companies,
-      onApply: setCompanies,
-      searchable: true,
-      searchPlaceholder: "Search Companies...",
-      tip: FILTER_TIPS.handsOn.userCompany,
-    },
-  ];
 
   // Clicking a row opens the review console with the table's current
   // filtered+sorted list as the queue. Reviews submitted in the console come
   // back on exit, and reviewed submissions leave the pending list.
-  // The console stays mounted for as long as a row is open — even when a filter
-  // edited from its queue popover drops that submission out of `sorted`. It keeps
-  // showing what's being reviewed and moves the queue highlight instead of
-  // bouncing the reviewer back to the table.
   if (openId) {
     return (
       <ReviewConsole
         queue={sorted}
         initialId={openId}
-        queueFilters={queueFilters}
-        sort={sort}
-        onSort={(key) => toggleSort(key as SortKey)}
         onExit={(reviewed) => {
           const ids = Object.keys(reviewed);
           if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));
@@ -656,18 +580,10 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
                         </td>
                       </tr>
                     ))}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={colSpan} className="u-empty">
-                          {committedQuery.trim()
-                            ? `No submissions match "${committedQuery.trim()}".`
-                            : "No submissions match these filters."}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">

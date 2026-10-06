@@ -1,3 +1,4 @@
+import { UserAvatar } from "./UserAvatar";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   mergeUsers,
@@ -100,16 +101,9 @@ function getUser(id: string | null): MergeUser | null {
    These are shared with the Transfer Subscription flow, which runs on the same
    fixtures and the same design-system parts. */
 
-/** The app's avatar (.mc-avatar), sized by prop. */
-export function Avatar({ user, size = 32 }: { user: MergeUser; size?: number }) {
-  return (
-    <span
-      className="mc-avatar"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.34) }}
-    >
-      {user.initials}
-    </span>
-  );
+/** The app's avatar — the no-photo UserAvatar (1571:3660), sized by prop. */
+export function Avatar({ size = 32 }: { user: MergeUser; size?: number }) {
+  return <UserAvatar size={size} />;
 }
 
 /** The account-details rows, at the node's labels (1282:2418). Subscription

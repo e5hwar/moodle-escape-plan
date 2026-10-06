@@ -53,7 +53,7 @@ const FOOTERS = ".pagination, .wizard-footer, .sp-save-footer";
    small form modal's menus and date pickers hang past the card on purpose —
    and only the modal's own bars (a picker's pagination) are off-limits, not
    the page's underneath it. */
-const MODAL = ".pr-confirm-overlay, .pm-overlay, .pr-modal-overlay, .ncr-fs-overlay, .cl-modal-overlay";
+const MODAL = ".pr-confirm-overlay, .pm-overlay, .pr-modal-overlay, .ncr-fs-overlay";
 
 /** Rect every panel must stay inside (the user, 2026-10-04: Edit Columns and
  *  the filter panels ran over the side nav and the pagination footer).

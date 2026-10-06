@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChangeArrowIcon, CommandIcon, EnterKeyIcon, SmallCloseIcon } from "./icons";
+import { ChangeArrowIcon, SmallCloseIcon } from "./icons";
+import { WizardKeyHint } from "./wizardKeys";
 
 /* The staged-changes save bar, shared by every page that holds edits until a
    confirm: Manage User Progress (its origin — Figma 1155:1140) and the
@@ -91,12 +92,9 @@ export function ChangesFooter({
         <button className="btn-save-draft" onClick={onDiscard}>
           Discard
         </button>
-        <button className="btn-publish sp-submit" onClick={onReview}>
+        <button className="btn-publish" onClick={onReview}>
           Review &amp; Save
-          <span className="rvc-submit-keys">
-            <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>
-            <span className="rvc-qkey"><EnterKeyIcon /></span>
-          </span>
+          <WizardKeyHint />
         </button>
       </div>
     </footer>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { LockedField } from "./CriteriaLock";
 import {
   nameChangeRequests as seed,
   type NameChangeRequest,
@@ -14,6 +15,7 @@ import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from
 import { SearchTrailing } from "./SearchPanelParts";
 import { TableCols } from "./TableCols";
 import { useToast } from "./useToast";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 25;
 
@@ -198,7 +200,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                 style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
               >
               <div className="tasks-scroll">
-                <table className="table sch-table sch-table--tight ncr-table">
+                <table className="table sch-table ncr-table">
                   <TableCols
                     data={[COL_WIDTHS.name, COL_WIDTHS.name, COL_WIDTHS.email, COL_WIDTHS.phone, COL_WIDTHS.date]}
                     trail={[ACTIONS_WIDTH]}
@@ -251,18 +253,10 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                       </tr>
                       );
                     })}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="sch-empty">
-                          {query.trim()
-                            ? `No requests match "${query.trim()}".`
-                            : "No pending name change requests."}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">
@@ -442,8 +436,11 @@ function ReviewModal({
           <div className="ncr-fields">
             <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
               <label className="form-label">Current Name</label>
-              <input className="form-input ncr-readonly" value={request.currentName} readOnly tabIndex={-1} />
-              <p className="form-help">The name currently on the account. This can't be edited.</p>
+              {/* The shared Locked Field (Figma 1360:1883): the banner says
+                  why, the control under it is disabled. */}
+              <LockedField locked sub="The name currently on the account. This can't be edited.">
+                <input className="form-input" value={request.currentName} readOnly aria-label="Current Name" />
+              </LockedField>
             </div>
 
             <div className="form-group" onBlur={leave(() => touch("name"))} style={{ marginBottom: 0, maxWidth: "none" }}>

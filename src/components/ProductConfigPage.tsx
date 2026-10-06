@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SYSTEM_DEEP_LINKS, type SystemDeepLink } from "../data/deepLinks";
 import { CANCELLATION_REASONS } from "../data/companies";
 import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
@@ -8,8 +8,9 @@ import {
   type AwardDesignTemplate,
 } from "../data/awards";
 import { formatShortDate } from "../formatDate";
-import { AddIcon, ImageAddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, SmallXIcon, InfoIcon12 } from "./icons";
+import { AddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
 import { PrmModal } from "./PrmModal";
+import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
 import { Stepper } from "./Stepper";
 import { PermissionsSection } from "./PermissionsPage";
@@ -60,7 +61,8 @@ type TabRow = {
   nameEs: string;
   visible: boolean;
   url: string;
-  icon: string | null;
+  /** The tab's icon — the shared single-image upload's pick. */
+  icon: PickedImage | null;
 };
 
 type SupportLink = { id: string; label: string; url: string };
@@ -365,7 +367,7 @@ function ForceAppUpdateField({
 
         {history.length === 0 && (
           <div className="qsec-row">
-            <span className="qsec-empty">No force updates configured.</span>
+            <span className="qsec-empty">No Force Updates Configured Yet</span>
           </div>
         )}
 
@@ -564,63 +566,13 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
 
 /* ─── Display Settings ─── */
 
-/* A tab's icon: a 45px upload tile — the height of every control on the form.
-   Dashed while empty, the picked image filling it once set, with a ✕ on its
-   corner to clear it. */
-function IconTile({
-  icon,
-  name,
-  onChange,
-}: {
-  icon: string | null;
-  name: string;
-  onChange: (v: string | null) => void;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-
-  function pick(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => onChange(reader.result as string);
-    reader.readAsDataURL(file);
-  }
-
-  return (
-    <div className="pc-col-icon pc-icon">
-      <input
-        ref={ref}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) pick(f);
-          e.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        className={`pc-icon-btn${icon ? " has-icon" : ""}`}
-        onClick={() => ref.current?.click()}
-        title={icon ? "Replace Icon" : "Upload Icon"}
-        aria-label={icon ? `Replace the ${name} icon` : `Upload an icon for ${name}`}
-      >
-        {icon ? <img src={icon} alt="" /> : <ImageAddIcon />}
-      </button>
-      {icon && (
-        <button
-          type="button"
-          className="pc-icon-x"
-          onClick={() => onChange(null)}
-          title="Remove Icon"
-          aria-label={`Remove the ${name} icon`}
-        >
-          <SmallXIcon />
-        </button>
-      )}
-    </div>
-  );
-}
-
+/* App / Dashboard tabs — the page's OptionListField pattern (user,
+   2026-10-06: "This table should just show the name and URL, not as an input
+   field. Edit icon opens the editor"): plain `.qsec` rows — the EN name, the
+   URL ("—" when blank) and the visibility switch — with an edit pencil. The
+   tabs are a fixed set, so there is no remove ✕ and no Add row. The pencil
+   opens TabEditModal, where the name, URL and icon are edited; it writes back
+   to the page draft, so Save Changes saves it like every other setting. */
 function TabsField({
   label,
   help,
@@ -630,55 +582,28 @@ function TabsField({
   label: string;
   help: string;
   rows: TabRow[];
-  /** Takes an updater, not a value: an icon lands after its FileReader
-   *  finishes, and must not write back a copy of the rows from before an
-   *  edit made in the meantime. */
   onUpdate: (fn: (rows: TabRow[]) => TabRow[]) => void;
 }) {
+  const [editing, setEditing] = useState<TabRow | null>(null);
   const setRow = (id: string, patch: Partial<TabRow>) =>
     onUpdate((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   return (
     <div className="form-group">
-      <label className="form-label">
-        {label}
-        {/* One label row for the whole table: it names the worst tab name. */}
-        <LimitError max={NAME_MAX} values={rows.flatMap((r) => [r.nameEn, r.nameEs])} />
-      </label>
+      <label className="form-label">{label}</label>
       <div className="qsec">
         <div className="qsec-hd">
-          <span className="pc-col-icon">ICON</span>
           <span className="pc-col-grow">TAB NAME</span>
           <span className="pc-col-grow">URL</span>
           <span className="pc-col-toggle">VISIBLE?</span>
+          <span className="pc-col-edit" aria-hidden />
         </div>
         {rows.map((row) => {
           const name = row.nameEn.trim() || "this tab";
           return (
             <div className="qsec-row" key={row.id}>
-              <IconTile icon={row.icon} name={name} onChange={(icon) => setRow(row.id, { icon })} />
-              <div className="pc-col-grow">
-                <LangField
-                  en={row.nameEn}
-                  es={row.nameEs}
-                  onChangeEn={(v) => setRow(row.id, { nameEn: v })}
-                  onChangeEs={(v) => setRow(row.id, { nameEs: v })}
-                  placeholderEn="Tab Name..."
-                  placeholderEs="Nombre de la Pestaña..."
-                  ariaLabel="Tab name"
-                  maxLength={NAME_MAX}
-                />
-              </div>
-              <div className="pc-col-grow">
-                <input
-                  className="form-input"
-                  value={row.url}
-                  onChange={(e) => setRow(row.id, { url: e.target.value })}
-                  placeholder="URL..."
-                  aria-label={`URL for ${name}`}
-                  spellCheck={false}
-                />
-              </div>
+              <span className="pc-col-grow pc-strong">{row.nameEn}</span>
+              <span className="pc-col-grow pc-muted">{row.url.trim() || "—"}</span>
               <span className="pc-col-toggle">
                 <button
                   type="button"
@@ -690,12 +615,99 @@ function TabsField({
                   <span className="toggle-knob" />
                 </button>
               </span>
+              <span className="pc-col-edit">
+                <button
+                  className="qsec-x"
+                  title="Edit"
+                  aria-label={`Edit ${name}`}
+                  onClick={() => setEditing(row)}
+                >
+                  <RowEditIcon />
+                </button>
+              </span>
             </div>
           );
         })}
       </div>
       <p className="form-help">{help}</p>
+
+      {editing && (
+        <TabEditModal
+          row={editing}
+          onCancel={() => setEditing(null)}
+          onSave={(patch) => {
+            setRow(editing.id, patch);
+            setEditing(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* Edit one tab — the shared modal shell (Figma 667:884), OptionNameModal's
+   shape: Tab Name (dual-language, required, the 128 soft limit named in its
+   label row), URL, and the Icon on the shared single-image upload (678:2012 /
+   1529:3890). */
+function TabEditModal({
+  row,
+  onCancel,
+  onSave,
+}: {
+  row: TabRow;
+  onCancel: () => void;
+  onSave: (patch: Pick<TabRow, "nameEn" | "nameEs" | "url" | "icon">) => void;
+}) {
+  const [nameEn, setNameEn] = useState(row.nameEn);
+  const [nameEs, setNameEs] = useState(row.nameEs);
+  const [url, setUrl] = useState(row.url);
+  const [icon, setIcon] = useState<PickedImage | null>(row.icon);
+  const isValid = !!nameEn.trim() && !isOver(NAME_MAX, nameEn, nameEs);
+
+  useEscape(onCancel);
+
+  return (
+    <PrmModal
+      title="Edit Tab"
+      confirmLabel="Save Tab"
+      confirmDisabled={!isValid}
+      onCancel={onCancel}
+      onConfirm={() =>
+        isValid && onSave({ nameEn: nameEn.trim(), nameEs: nameEs.trim(), url: url.trim(), icon })
+      }
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            Tab Name<span className="prm-req">*</span>
+            <LimitError max={NAME_MAX} values={[nameEn, nameEs]} />
+          </span>
+          <LangField
+            en={nameEn}
+            es={nameEs}
+            onChangeEn={setNameEn}
+            onChangeEs={setNameEs}
+            placeholderEn="Tab Name..."
+            placeholderEs="Nombre de la Pestaña..."
+            maxLength={NAME_MAX}
+          />
+        </div>
+        <div className="prm-field">
+          <span className="prm-label">URL</span>
+          <input
+            className="form-input"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="URL..."
+            spellCheck={false}
+          />
+        </div>
+        <div className="prm-field">
+          <span className="prm-label">Icon</span>
+          <ImageUploadField value={icon} onChange={setIcon} />
+        </div>
+      </div>
+    </PrmModal>
   );
 }
 
@@ -1210,7 +1222,7 @@ export function ProductConfigPage({
                         noun="Partnership"
                         fieldLabel="Name"
                         modalDesc="A partner affiliation that can be assigned to B2B companies."
-                        emptyLabel="No partnerships configured."
+                        emptyLabel="No Partnerships Configured Yet"
                         options={settings.partnerships}
                         onChange={set("partnerships")}
                       />
@@ -1221,7 +1233,7 @@ export function ProductConfigPage({
                         noun="Trade"
                         fieldLabel="Name"
                         modalDesc="A trade category used to classify B2B companies and tailor their content."
-                        emptyLabel="No trades configured."
+                        emptyLabel="No Trades Configured Yet"
                         options={settings.trades}
                         onChange={set("trades")}
                       />
@@ -1237,7 +1249,7 @@ export function ProductConfigPage({
                         noun="Reason"
                         fieldLabel="Reason"
                         modalDesc="An option admins can pick when they cancel a B2B subscription."
-                        emptyLabel="No cancellation reasons configured."
+                        emptyLabel="No Cancellation Reasons Configured Yet"
                         options={settings.cancelReasons}
                         onChange={set("cancelReasons")}
                       />

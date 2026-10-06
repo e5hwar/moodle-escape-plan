@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { UserAvatar } from "./UserAvatar";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   buildUserProfile,
   PROFILE_TODAY,
@@ -22,6 +23,7 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import type { SortDir } from "./AwardTableParts";
 import { PrmModal } from "./PrmModal";
+import { RowKebab, RowMenu, type RowMenuItem } from "./RowMenu";
 import { IdModal } from "./IdModal";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
@@ -39,6 +41,7 @@ import {
 import { TableCols } from "./TableCols";
 import { PhoneField } from "./PhoneField";
 import { useToast } from "./useToast";
+import { TableEmpty } from "./TableEmpty";
 import { makeZip, type ZipEntry } from "../zip";
 
 /* Award-tier colors survive only in the generated SVG downloads — on the page
@@ -141,20 +144,6 @@ function useEscape(active: boolean, onClose: () => void) {
     return () => document.removeEventListener("keydown", onKey);
   }, [active, onClose]);
 }
-
-/* The Manage Users table's verified check (u-verified). */
-const VerifiedIcon = () => (
-  <svg className="u-verified-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-  </svg>
-);
-
-const Verified = () => (
-  <span className="u-verified" title="Verified">
-    <VerifiedIcon />
-  </span>
-);
 
 /* Companies-pill tone (Figma 109:1237) per physical-card status. */
 const EPA_TONE: Record<EpaStatus, string> = {
@@ -268,7 +257,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           <header className="tasks-header">
             <div className="rvc-pagehead">
               <div className="prof-headrow">
-                <span className="mc-avatar prof-avatar">{initialsOf(user.name)}</span>
+                <UserAvatar size={48} />
                 <div className="rvc-pagehead-id">
                   <h1 className="tasks-title">{user.name}</h1>
                   <div className="tasks-subtitle">
@@ -276,14 +265,12 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                     {user.email && (
                       <span className="prof-contact">
                         {user.email}
-                        {user.emailVerified && <Verified />}
                       </span>
                     )}
                     {user.email && user.phone && <span className="tasks-subtitle-dot" />}
                     {user.phone && (
                       <span className="prof-contact">
                         {user.phone}
-                        {user.phoneVerified && <Verified />}
                       </span>
                     )}
                   </div>
@@ -351,18 +338,21 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 ]}
               />
 
-              {/* Skills */}
-              <ConfirmCard title={`Skills · ${p.skills.length}`} tableBody>
-                <SkillsTable skills={p.skills} />
-              </ConfirmCard>
+              {/* Skills — no card at all for a user with none (user,
+                  2026-10-06), rather than an empty table. */}
+              {p.skills.length > 0 && (
+                <ConfirmCard title={`Skills · ${p.skills.length}`} tableBody>
+                  <SkillsTable skills={p.skills} />
+                </ConfirmCard>
+              )}
 
-              {/* Awards */}
-              <ConfirmCard
-                title={`Awards · ${p.awards.length}`}
-                /* Figma 1278:1574 — the card head's own 24px "Button dialog",
-                   the same component Merge's Swap Roles uses. */
-                trailing={
-                  p.awards.length > 0 && (
+              {/* Awards — likewise hidden when there are none. */}
+              {p.awards.length > 0 && (
+                <ConfirmCard
+                  title={`Awards · ${p.awards.length}`}
+                  /* Figma 1278:1574 — the card head's own 24px "Button dialog",
+                     the same component Merge's Swap Roles uses. */
+                  trailing={
                     <button className="btn-dialog" onClick={() => {
                         downloadAllAwards(user.name, p.awards);
                         toast("Awards Downloaded");
@@ -370,12 +360,12 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                     >
                       <DownloadIcon /> Download All
                     </button>
-                  )
-                }
-                tableBody
-              >
-                <AwardsTable userName={user.name} awards={p.awards} onToast={toast} />
-              </ConfirmCard>
+                  }
+                  tableBody
+                >
+                  <AwardsTable userName={user.name} awards={p.awards} onToast={toast} />
+                </ConfirmCard>
+              )}
 
               {/* Subscription */}
               <ConfirmCard
@@ -847,7 +837,7 @@ function SkillsTable({ skills }: { skills: SkillBadge[] }) {
       className="confirm-card-xscroll"
       style={{ "--table-min": `${SKILL_TABLE_MIN}px` } as CSSProperties}
     >
-      <table className="table sch-table sch-table--tight">
+      <table className="table sch-table">
         {/* Every column sized, the Skill one included — see SKILL_COLS. */}
         <TableCols data={[SKILL_COLS.skill, SKILL_COLS.type, SKILL_COLS.date]} />
         <thead>
@@ -865,11 +855,6 @@ function SkillsTable({ skills }: { skills: SkillBadge[] }) {
               <td className="col-date">{formatDate(s.dateAwarded)}</td>
             </tr>
           ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={3} className="sch-empty">No skills earned yet.</td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>
@@ -946,7 +931,7 @@ function AwardsTable({
       className="confirm-card-xscroll"
       style={{ "--table-min": `${AWARD_TABLE_MIN}px` } as CSSProperties}
     >
-      <table className="table sch-table sch-table--tight">
+      <table className="table sch-table">
         <TableCols
           data={[AWARD_COLS.certification, AWARD_COLS.tier, AWARD_COLS.number, AWARD_COLS.date]}
           trail={[AWARD_COLS.actions]}
@@ -970,11 +955,6 @@ function AwardsTable({
               <RowKebab onOpen={(rect) => setMenu({ award: a, rect })} />
             </tr>
           ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={5} className="sch-empty">No awards yet.</td>
-            </tr>
-          )}
         </tbody>
       </table>
 
@@ -1019,106 +999,6 @@ function AwardsTable({
   );
 }
 
-/* The row menu behind a card table's kebab — the shared `.u-menu` chrome,
-   fixed-positioned and right-anchored to the glyph, closing on outside click /
-   scroll / Escape like every other row menu. */
-type RowMenuItem = {
-  label: string;
-  icon?: ReactNode;
-  disabled?: boolean;
-  /** Why it is disabled — the shared tooltip adopts it. */
-  title?: string;
-  onPick: () => void;
-};
-
-function RowMenu({
-  rect, items, onClose,
-}: {
-  rect: DOMRect;
-  items: RowMenuItem[];
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
-    setPos({ top });
-  }, [rect]);
-
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) onClose();
-    }
-    function onScroll() { onClose(); }
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      ref={ref}
-      className="u-menu"
-      style={{
-        top: pos ? pos.top : rect.bottom + 6,
-        right: window.innerWidth - rect.right,
-        visibility: pos ? "visible" : "hidden",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((it) => (
-        <button
-          key={it.label}
-          className="u-menu-item"
-          disabled={it.disabled}
-          title={it.title}
-          onClick={() => {
-            it.onPick();
-            onClose();
-          }}
-        >
-          {it.icon && <span className="u-menu-item-icon">{it.icon}</span>}
-          {it.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* The kebab at the end of every row: the node's resting glyph, swapped on hover
-   for the shared `.row-action-bar` pill (Figma 386:269) exactly as every list
-   table does it — one cell here, since the menu holds the actions. Without the
-   bar the bare glyph kept the button's own hover wash, which read as a grey box
-   dropped on the row. */
-function RowKebab({ onOpen }: { onOpen: (rect: DOMRect) => void }) {
-  const open = (e: ReactMouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    onOpen(e.currentTarget.getBoundingClientRect());
-  };
-  return (
-    <td className="col-actions">
-      <button className="row-action-btn lone-dots" aria-label="More" onClick={open}>
-        <RowKebabIcon />
-      </button>
-      <div className="row-action-bar">
-        <button className="row-action-btn" aria-label="More" onClick={open}>
-          <RowKebabIcon />
-        </button>
-      </div>
-    </td>
-  );
-}
 
 /* ── Download All Awards — one ZIP of every Card and Certificate, no picker
    (the user, 2026-10-04). Same files the row actions download one by one. ── */
@@ -1586,9 +1466,8 @@ function PurchasesSection({
         className="confirm-card-xscroll"
         style={{ "--table-min": `${PURCHASE_TABLE_MIN}px` } as CSSProperties}
       >
-        {/* Same chrome as the Awards table (1278:1571): the card tables take the
-            base 12px cell inset, not the .sch-table shell's roomier 16px. */}
-        <table className="table sch-table sch-table--tight">
+        {/* Same chrome as the Awards table (1278:1571). */}
+        <table className="table sch-table">
           {/* The shared width rule: data columns share the slack, the 3-dot
               gutter stays fixed. */}
           <TableCols
@@ -1632,17 +1511,9 @@ function PurchasesSection({
                 )}
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={8} className="sch-empty">
-                  {typeFilter.length > 0
-                    ? "No purchases of this type on record."
-                    : "No purchases on record."}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+        {rows.length === 0 && <TableEmpty />}
       </div>
 
       {rowMenu &&

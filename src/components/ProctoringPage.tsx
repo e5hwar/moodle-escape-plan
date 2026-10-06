@@ -22,6 +22,7 @@ import { ProctoringSearch } from "./ProctoringSearch";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
@@ -629,18 +630,10 @@ export function ProctoringPage({
                           </td>
                         </tr>
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="u-empty">
-                            {query.trim()
-                              ? `No submissions match "${query.trim()}".`
-                              : "No submissions match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">

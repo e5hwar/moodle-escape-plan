@@ -203,8 +203,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
 
         {actives.length === 0 && (
           <div className="qz-empty">
-            No questions yet — Add Questions below creates one or picks from
-            the Bank.
+            No Questions Added Yet
           </div>
         )}
 
@@ -278,11 +277,11 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
             <div className="u-menu qz-menu" role="menu">
               <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
                 <span className="qz-menu-label">Create New Question</span>
-                <span className="qz-kbd">C</span>
+                <span className="cta-kbd">C</span>
               </button>
               <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
                 <span className="qz-menu-label">Add from Question Bank</span>
-                <span className="qz-kbd">Q</span>
+                <span className="cta-kbd">Q</span>
               </button>
             </div>
           )}

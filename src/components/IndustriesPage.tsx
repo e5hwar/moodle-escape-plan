@@ -4,35 +4,26 @@ import {
   allCertsById,
   type Industry,
   type SubIndustry,
-  type CareerStage,
   type IndustryCert,
 } from "../data/industries";
 import {
-  SearchIcon,
   DragHandleIcon,
-  CheckIcon,
   TreeAddIcon,
   RowKebabIcon,
   RowEditIcon,
   RowEyeIcon,
   RowEyeOffIcon,
   RowDeleteIcon,
-  SortIcon,
-  PagePrevIcon,
-  PageNextIcon,
   CrumbChevronIcon,
   InfoIcon14,
   RowCloseIcon,
 } from "./icons";
-import { SearchTrailing } from "./SearchPanelParts";
 import { IndustriesSearch } from "./IndustriesSearch";
-import { Dropdown } from "./Dropdown";
-import { CheckRow, PillTrigger } from "./Filters";
 import { useToast } from "./useToast";
-import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
+import { SelectRequirementModal } from "./SelectRequirementModal";
+import type { Certification } from "../data/certifications";
 import { SelectField } from "./SelectField";
-import { TableCols } from "./TableCols";
 import { CharCount, LimitError } from "./CharCount";
 import { NAME_MAX, isOver, limitClass } from "../data/fieldLimits";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
@@ -167,8 +158,6 @@ type LaunchItem =
   | { kind: "industry"; key: string; industry: Industry; position: number }
   | { kind: "sub"; key: string; industry: Industry; sub: SubIndustry }
   | { kind: "cert"; key: string; cert: IndustryCert; scope: Scope; where: string };
-
-const CAREER_STAGES: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
 
 // The hub subtext's counts, title-cased like the rest of the app's subtext
 // ("3 Sub-Industries · 29 Certifications" — the user, 2026-10-03).
@@ -1427,7 +1416,7 @@ function Hub({
     <div className="tasks ind-hub">
       <div className="ind-hub-col">
         {/* The shared page header, exactly as the other breadcrumbed pages run
-            it (Feedback Forms, Who Paid, Offer Codes): crumbs, 28px title,
+            it (Feedback Forms, Who Paid): crumbs, 28px title,
             the 16px subtext 2px under it with dot separators, and the header
             actions top-right. */}
         {/* The app's breadcrumb atom (.rvc-crumbs / .rvc-crumb), the same
@@ -1488,8 +1477,13 @@ function Hub({
               onAdd={onNewSub}
             />
             {orderedSubs.length === 0 ? (
-              <div className="ind-sec-empty">
-                No sub-industries yet — every certification here is shown to every {industry.name} learner.
+              /* The same empty state as the Certifications list below
+                 (user, 2026-10-06). */
+              <div className="ind-empty">
+                <div className="ind-empty-title">No sub-industries yet</div>
+                <div className="ind-empty-sub">
+                  Every certification here is shown to every {industry.name} learner.
+                </div>
               </div>
             ) : (
               /* Figma 1306:1393 — the Large Table row, the same one the
@@ -1595,9 +1589,9 @@ function CertList({
 
   if (certIds.length === 0) {
     return (
-      <div className="u-empty ind-cert-empty">
-        <div className="ind-cert-empty-title">No certifications tagged here yet</div>
-        <div className="ind-cert-empty-sub">
+      <div className="ind-empty">
+        <div className="ind-empty-title">No certifications tagged here yet</div>
+        <div className="ind-empty-sub">
           Use <strong>Add Certification</strong> to attach existing certifications.
         </div>
       </div>
@@ -1998,25 +1992,20 @@ function RemoveCertConfirm({
 
 /* ─── Add certifications modal ────────────────────────────────────────────── */
 
-/* The shared table picker (Figma 682:2321, `.stm-*`) that Select Tasks /
-   Select Users / Select Questions / Select Certifications already run on, here
-   over the Certification catalog with the Industries page's own columns.
-   It ran on a bespoke `.ind-addcerts` card of scrolling large-table rows until
-   2026-09-18 — same job, different chrome.
-   Certifications already tagged at this scope stay visible as ticked + locked
-   (the shared picker's rule) rather than disappearing, so the admin can see
-   what's taken. Selection is staged: the modal owns `picked` and only hands it
-   back on confirm, in the order it was picked. */
-
-const ADD_CERTS_PAGE_SIZE = 50;
-
-type CertSortKey = "name" | "stage" | "hours" | "tags";
-type SortDir = "asc" | "desc";
-
+/* The shared Certifications picker (SelectRequirementModal `only="cert"`, Figma
+   682:2321) — the same one Content Links and Import Courses use (user,
+   2026-10-06; it replaced this page's own copy with Hours / Tagged / Time
+   filters). The page's tagging pool is adapted into the picker's rows: name,
+   the Industries it is already tagged under, and its career stage.
+   Add Certifications: Certifications already at this scope stay listed but
+   locked, flagged with where they are. Assign Industries (the launcher
+   banner): no scope yet — an "Add to" destination select sits above the
+   search, the list is the untagged Certifications, and the chosen scope comes
+   back with the picks. Selection is staged until confirm. */
 function AddCertsModal({
   industryName,
   subName,
-  alreadyAtScope: alreadyProp,
+  alreadyAtScope,
   pickScope,
   tagsForCert,
   onAdd,
@@ -2025,10 +2014,6 @@ function AddCertsModal({
   industryName?: string;
   subName?: string;
   alreadyAtScope?: Set<string>;
-  /** Assign Industries (the launcher banner): no scope yet — the modal opens
-   *  with a destination select over the current Industries and Sub-Industries,
-   *  the list filtered to the untagged Certifications, and hands the chosen
-   *  scope back with the picks. */
   pickScope?: Industry[];
   tagsForCert: (id: string) => { industryName: string; subName?: string }[];
   onAdd: (ids: string[], scope?: Scope) => void;
@@ -2050,136 +2035,52 @@ function AddCertsModal({
   }, [pickScope]);
   const [destLabel, setDestLabel] = useState("");
   const dest = destOptions.find((o) => o.label === destLabel) ?? null;
-  const alreadyAtScope = useMemo(() => {
-    if (!pickScope) return alreadyProp ?? new Set<string>();
-    if (!dest) return new Set<string>();
-    const sc = dest.scope;
-    const ind = pickScope.find((i) => i.key === sc.industryKey);
-    const ids =
-      sc.kind === "industry"
-        ? ind?.certIds
-        : ind?.subIndustries.find((s) => s.key === sc.subKey)?.certIds;
-    return new Set(ids ?? []);
-  }, [pickScope, alreadyProp, dest]);
 
-  const [query, setQuery] = useState("");
-  const [stageFilter, setStageFilter] = useState<CareerStage | "All">("All");
-  const [tagFilter, setTagFilter] = useState<"All" | "Untagged" | "Tagged">(
-    pickScope ? "Untagged" : "All",
+  const scopeLabel = subName ? `${industryName} › ${subName}` : `${industryName ?? ""} (Industry-level)`;
+
+  /* The page's certifications as the picker's rows. Assign Industries lists
+     only the untagged ones — that banner exists to tag them. */
+  const pool = useMemo<Certification[]>(
+    () =>
+      Object.values(allCertsById)
+        .filter((c) => !c.name.startsWith("Placeholder Cert"))
+        .filter((c) => !pickScope || tagsForCert(c.id).length === 0)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          industry: tagsForCert(c.id)
+            .map((t) => (t.subName ? `${t.industryName} › ${t.subName}` : t.industryName))
+            .join(", "),
+          ceus: "",
+          tasks: 0,
+          createdBy: "SkillCat",
+          careerStage: c.stage,
+        })),
+    [pickScope, tagsForCert],
   );
-  const [timeFilter, setTimeFilter] = useState<"Any" | "Short" | "Medium" | "Long">("Any");
-  /** Staged picks, in the order they were ticked — that's the order they land
-   *  in at the scope. */
-  const [picked, setPicked] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<{ key: CertSortKey; dir: SortDir }>({
-    key: "name",
-    dir: "asc",
-  });
-
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const scopeLabel = subName
-    ? `${industryName} › ${subName}`
-    : `${industryName ?? ""} (Industry-level)`;
-
-  // Build the cert universe — names from data/industries.ts certPool
-  const universe = useMemo(() => {
-    return Object.values(allCertsById)
-      .filter((c) => !c.name.startsWith("Placeholder Cert"))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return universe.filter((c) => {
-      if (q && !c.name.toLowerCase().includes(q)) return false;
-      if (stageFilter !== "All" && c.stage !== stageFilter) return false;
-      const tags = tagsForCert(c.id);
-      if (tagFilter === "Tagged" && tags.length === 0) return false;
-      if (tagFilter === "Untagged" && tags.length > 0) return false;
-      if (timeFilter === "Short" && c.hours > 4) return false;
-      if (timeFilter === "Medium" && (c.hours <= 4 || c.hours > 10)) return false;
-      if (timeFilter === "Long" && c.hours <= 10) return false;
-      return true;
-    });
-  }, [universe, query, stageFilter, tagFilter, timeFilter, tagsForCert]);
-
-  const sorted = useMemo(() => {
-    const arr = [...filtered].sort((a, b) => {
-      switch (sort.key) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "stage":
-          return CAREER_STAGES.indexOf(a.stage) - CAREER_STAGES.indexOf(b.stage);
-        case "hours":
-          return a.hours - b.hours;
-        case "tags":
-          return tagsForCert(a.id).length - tagsForCert(b.id).length;
-      }
-    });
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort, tagsForCert]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / ADD_CERTS_PAGE_SIZE));
-  const visiblePage = Math.min(page, totalPages);
-  const start = (visiblePage - 1) * ADD_CERTS_PAGE_SIZE;
-  const rows = sorted.slice(start, start + ADD_CERTS_PAGE_SIZE);
-
-  function toggleSelect(id: string) {
-    if (alreadyAtScope.has(id)) return;
-    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  }
-
-  function toggleSort(key: CertSortKey) {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
-    );
-  }
-
-  /** Any filter change can shrink the list under the current page. */
-  function resetPage<T>(set: (v: T) => void) {
-    return (v: T) => {
-      set(v);
-      setPage(1);
-    };
-  }
-
-  const selectedCount = picked.length;
-  const hasFilters =
-    stageFilter !== "All" || tagFilter !== "All" || timeFilter !== "Any";
+  const lockedNames = useMemo(
+    () => pool.filter((c) => alreadyAtScope?.has(c.id)).map((c) => c.name),
+    [pool, alreadyAtScope],
+  );
 
   return (
-    <PrmModal
+    <SelectRequirementModal
+      only="cert"
+      certPool={pool}
+      existingNames={lockedNames}
       title={pickScope ? "Assign Industries" : "Add Certifications"}
       description={
-        pickScope ? (
-          "Pick the Industry or Sub-Industry these Certifications are listed under."
-        ) : (
-          <>
-            Adding to <strong>{scopeLabel}</strong>
-          </>
-        )
+        pickScope
+          ? "Pick the Industry or Sub-Industry these Certifications are listed under."
+          : `Adding to ${scopeLabel}`
       }
-      confirmLabel={`${pickScope ? "Assign" : "Add"} ${selectedCount > 0 ? selectedCount : ""} Certification${
-        selectedCount === 1 ? "" : "s"
-      }`}
-      confirmDisabled={selectedCount === 0 || (!!pickScope && !dest)}
-      pickFull
-      onCancel={onClose}
-      onConfirm={() => onAdd(picked, dest?.scope)}
-    >
-      <div className="stm">
-        {pickScope && (
+      confirmNoun="Certification"
+      confirmVerb={pickScope ? "Assign" : "Add"}
+      confirmBlocked={!!pickScope && !dest}
+      lockedTip="Already added here"
+      lockedFlag={() => `In ${scopeLabel}`}
+      header={
+        pickScope && (
           <div className="stm-dest">
             <span className="stm-dest-label">Add to</span>
             <SelectField
@@ -2191,283 +2092,16 @@ function AddCertsModal({
               popupMenu
             />
           </div>
-        )}
-        <div className="stm-toolbar">
-          <div className="search-wrap stm-search">
-            <span className="search-icon"><SearchIcon /></span>
-            <input
-              autoFocus
-              className="search-input"
-              placeholder="Search Certifications..."
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchTrailing
-              active={!!query}
-              onClear={() => {
-                setQuery("");
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="filters stm-filters">
-            <SelectPill
-              label="Career Stage"
-              value={stageFilter}
-              blank="All"
-              options={["All", ...CAREER_STAGES]}
-              onChange={resetPage((v: string) => setStageFilter(v as CareerStage | "All"))}
-              tip={FILTER_TIPS.industries.careerStage}
-            />
-            <SelectPill
-              label="Industry Tag"
-              value={tagFilter}
-              blank="All"
-              options={["All", "Tagged", "Untagged"]}
-              onChange={resetPage((v: string) =>
-                setTagFilter(v as "All" | "Untagged" | "Tagged"),
-              )}
-              tip={FILTER_TIPS.industries.industryTag}
-            />
-            <SelectPill
-              label="Time"
-              value={timeFilter}
-              blank="Any"
-              options={["Any", "Short", "Medium", "Long"]}
-              onChange={resetPage((v: string) =>
-                setTimeFilter(v as "Any" | "Short" | "Medium" | "Long"),
-              )}
-              tip={FILTER_TIPS.industries.time}
-            />
-            {hasFilters && (
-              <button
-                className="filter-clear-link"
-                onClick={() => {
-                  setStageFilter("All");
-                  setTagFilter("All");
-                  setTimeFilter("Any");
-                  setPage(1);
-                }}
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="stm-table-wrap">
-          {/* Column-width floor, per the shared table convention — below it the
-              table scrolls sideways instead of crushing the cells. */}
-          <div
-            className="table-xscroll"
-            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
-          >
-            <table className="table table-head stm-table acm-table">
-              <ColGroup />
-              <thead>
-                <tr>
-                  {/* Spacer only — the node's header holds the column, it is
-                      not a select-all control. */}
-                  <th className="stm-col-check no-sort" />
-                  <Th col="name" label="Certification" cls="acm-col-name" sort={sort} toggle={toggleSort} />
-                  <Th col="stage" label="Career Stage" cls="acm-col-stage" sort={sort} toggle={toggleSort} />
-                  <Th col="hours" label="Hours" cls="acm-col-hours" sort={sort} toggle={toggleSort} />
-                  <Th col="tags" label="Industry Tags" cls="acm-col-tags" sort={sort} toggle={toggleSort} />
-                </tr>
-              </thead>
-            </table>
-
-            <div className="tasks-scroll">
-              <table className="table table-body stm-table acm-table">
-                <ColGroup />
-                <tbody>
-                  {rows.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={5}>
-                        No Certifications match your search and filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((cert) => {
-                      const isLocked = alreadyAtScope.has(cert.id);
-                      const on = isLocked || picked.includes(cert.id);
-                      const tags = tagsForCert(cert.id).map((t) =>
-                        t.subName ? `${t.industryName} › ${t.subName}` : t.industryName,
-                      );
-                      return (
-                        <tr
-                          key={cert.id}
-                          className={`${on ? "selected" : ""}${isLocked ? " is-locked" : ""}`}
-                          title={isLocked ? "Already added here" : undefined}
-                          onClick={() => toggleSelect(cert.id)}
-                        >
-                          <td className="stm-col-check">
-                            {/* A <button>, not a <span> — the shared table reset
-                                strips chrome from span/div in data cells, which
-                                would leave a bare tick with no box. */}
-                            <button
-                              className={`checkbox ${on ? "checked" : ""}`}
-                              aria-label={on ? "Deselect" : "Select"}
-                              aria-pressed={on}
-                              disabled={isLocked}
-                              tabIndex={-1}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSelect(cert.id);
-                              }}
-                            >
-                              {on && <CheckIcon />}
-                            </button>
-                          </td>
-                          {/* `col-name` is the shared Name-column class — it
-                              carries the #FFFFFF emphasis and is excluded from
-                              the app-wide "mute every non-Name cell" rule. */}
-                          <td className="acm-col-name col-name">{cert.name}</td>
-                          <td className="acm-col-stage">{cert.stage}</td>
-                          <td className="acm-col-hours">{cert.hours}</td>
-                          <td className="acm-col-tags">
-                            <MultiCell values={tags} />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="pagination stm-pagination">
-            <span className="scm-picked">{selectedCount} selected</span>
-            <span>
-              Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
-              {Math.min(start + ADD_CERTS_PAGE_SIZE, sorted.length)} of {sorted.length}
-            </span>
-            <div className="pagination-controls">
-              <button
-                className="page-btn"
-                disabled={visiblePage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                aria-label="Previous page"
-              >
-                <PagePrevIcon />
-              </button>
-              <button
-                className="page-btn"
-                disabled={visiblePage === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                aria-label="Next page"
-              >
-                <PageNextIcon />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </PrmModal>
-  );
-}
-
-/* The shared width rule (`TableCols`): content-sized base widths — name,
-   career stage, hours, industry tags — slack shared in proportion, the check
-   gutter fixed. */
-const CHECK_W = 44;
-const COL_WIDTHS = [340, 150, 90, 260];
-const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
-
-function ColGroup() {
-  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
-}
-
-function Th({
-  col,
-  label,
-  cls,
-  sort,
-  toggle,
-}: {
-  col: CertSortKey;
-  label: string;
-  cls: string;
-  sort: { key: CertSortKey; dir: SortDir };
-  toggle: (k: CertSortKey) => void;
-}) {
-  const active = sort.key === col;
-  return (
-    <th className={cls} onClick={() => toggle(col)}>
-      <span className="th-content">
-        {label}
-        <SortIcon active={active} dir={active ? sort.dir : undefined} />
-      </span>
-    </th>
-  );
-}
-
-/* The shared picker's multi-value cell: first value + "+N", full list on hover. */
-function MultiCell({ values }: { values: string[] }) {
-  if (values.length === 0) return <>—</>;
-  return (
-    <span className="stm-multi" title={values.join(", ")}>
-      <span className="stm-multi-first">{values[0]}</span>
-      {values.length > 1 && <span className="stm-multi-more">+{values.length - 1}</span>}
-    </span>
-  );
-}
-
-/* Single-select filter pill on the shared Dropdown + PillTrigger chrome.
-   `blank` is the value that counts as "no filter applied". */
-function SelectPill({
-  label,
-  value,
-  blank,
-  options,
-  onChange,
-  tip,
-}: {
-  label: string;
-  value: string;
-  blank: string;
-  options: string[];
-  onChange: (v: string) => void;
-  /** Hover line saying what this filter does — see `PillTrigger`. */
-  tip?: string;
-}) {
-  return (
-    <Dropdown
-      width={220}
-      trigger={({ open, toggle }) => (
-        <PillTrigger
-          label={label}
-          value={value === blank ? null : value}
-          open={open}
-          toggle={toggle}
-          onClear={() => onChange(blank)}
-          tip={tip}
-        />
-      )}
-    >
-      {({ close }) => (
-        <div className="dropdown-list">
-          {/* The shared checklist row, so this menu keeps the filter family's
-              32px rows, 12px checkbox gap and wrapping (Figma 772:1108). */}
-          {options.map((o) => (
-            <CheckRow
-              key={o}
-              label={o}
-              checked={o === value}
-              onChange={() => {
-                onChange(o);
-                close();
-              }}
-            />
-          ))}
-        </div>
-      )}
-    </Dropdown>
+        )
+      }
+      onCancel={onClose}
+      onConfirm={(picks) =>
+        onAdd(
+          picks.flatMap((p) => (p.kind === "cert" ? [p.cert.id] : [])),
+          dest?.scope,
+        )
+      }
+    />
   );
 }
 

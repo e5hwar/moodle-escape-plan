@@ -7,6 +7,7 @@ import { CertificationsSearch } from "./CertificationsSearch";
 import { RowChevronIcon, SearchIcon, SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 /* "Need help finding a Deep Link?" — Create Spotlight's reference for the
    Button Destination field. The shared PrmModal shell (no footer) with the
@@ -232,49 +233,44 @@ export function DeepLinkModal({
               <table className="table table-body stm-table stm-table--preview">
                 {colGroup}
                 <tbody>
-                  {paged.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={isCert ? 5 : 4}>No deep links match your search and filters.</td>
-                    </tr>
-                  ) : (
-                    paged.map((r) => (
-                      <tr key={r.id} onClick={() => pick(r)}>
-                        <td className="stm-col-name col-name">{orDash(r.name)}</td>
-                        <td>{orDash(r.extra)}</td>
-                        {isCert && <td>{orDash(r.stage)}</td>}
-                        <td className="dlm-col-link">{orDash(r.link)}</td>
-                        {/* Resting chevron, and the labelled bar that replaces
-                            it on hover (Hands-On's "Review Task ›"). */}
-                        <td className="col-actions">
+                  {paged.map((r) => (
+                    <tr key={r.id} onClick={() => pick(r)}>
+                      <td className="stm-col-name col-name">{orDash(r.name)}</td>
+                      <td>{orDash(r.extra)}</td>
+                      {isCert && <td>{orDash(r.stage)}</td>}
+                      <td className="dlm-col-link">{orDash(r.link)}</td>
+                      {/* Resting chevron, and the labelled bar that replaces
+                          it on hover (Hands-On's "Review Task ›"). */}
+                      <td className="col-actions">
+                        <button
+                          className="row-action-btn lone-dots row-chevron"
+                          aria-label={`Select ${r.name}'s deep link`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            pick(r);
+                          }}
+                        >
+                          <RowChevronIcon />
+                        </button>
+                        <div className="row-action-bar">
                           <button
-                            className="row-action-btn lone-dots row-chevron"
-                            aria-label={`Select ${r.name}'s deep link`}
+                            className="row-action-btn row-action-btn--label"
                             onClick={(e) => {
                               e.stopPropagation();
                               pick(r);
                             }}
                           >
+                            Select Deep Link
                             <RowChevronIcon />
                           </button>
-                          <div className="row-action-bar">
-                            <button
-                              className="row-action-btn row-action-btn--label"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                pick(r);
-                              }}
-                            >
-                              Select Deep Link
-                              <RowChevronIcon />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
+            {paged.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination stm-pagination">

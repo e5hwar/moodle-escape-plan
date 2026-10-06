@@ -19,6 +19,7 @@ import { formatShortDate } from "../formatDate";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 type DisplayStatus = "active" | "pending" | "ended" | "rejected";
 
@@ -527,15 +528,7 @@ export function SpotlightsPage() {
             <table className="sp-table table-body">
               <SpColGroup />
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr className="sp-empty-row">
-                    <td colSpan={SP_COL_WIDTHS.length}>
-                      No Spotlights match. Try a different filter or search term.
-                    </td>
-                  </tr>
-                ) : (
-                  renderRows(live)
-                )}
+                {renderRows(live)}
 
                 {/* Past (ended / rejected) Spotlights live behind this row
                     at the foot of the table (564:2244). */}
@@ -579,6 +572,7 @@ export function SpotlightsPage() {
               </div>
             )}
             </div>
+            {filtered.length === 0 && <TableEmpty />}
           </div>
 
           {/* In flow at the bottom of the page column, not fixed to the viewport,
@@ -593,7 +587,7 @@ export function SpotlightsPage() {
                   Discard
                 </button>
                 <button
-                  className="btn-publish sp-submit"
+                  className="btn-publish"
                   onClick={saveOrder}
                 >
                   Save Changes

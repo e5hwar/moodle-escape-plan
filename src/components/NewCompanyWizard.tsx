@@ -29,7 +29,7 @@ import { COUNTRIES } from "../data/countries";
 import { NoteCard } from "./NoteCard";
 import { lookupZip } from "../data/zipcodes";
 import { zipFormatError, zipRequired } from "../data/postalCodes";
-import { CheckIcon, CopyIcon, DropdownCaretIcon, ArrowUpRightIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
+import { CheckIcon, CopyIcon, DropdownCaretIcon, TreeAddIcon, RemoveRowIcon } from "./icons";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { DropdownSearch } from "./SearchPanelParts";
@@ -43,7 +43,7 @@ import { PhoneField } from "./PhoneField";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
-import { DateField } from "./DateField";
+import { DateField, type DateShortcut } from "./DateField";
 import { PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CopiedToast } from "./CopiedToast";
@@ -874,11 +874,20 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
             </button>
           )}
           {step === 0 ? (
+            /* `aria-disabled`, not `disabled`: a disabled button fires no
+               mouse events, so the shared tooltip couldn't name what's
+               missing. The click guards itself instead. */
             <button
-              className={`btn-publish${detailsOnly ? "" : " wizard-gate-btn"}${ctaTooltip ? " has-cta-tooltip" : ""}`}
-              disabled={!companyValid || detailsUnchanged}
-              data-tooltip={ctaTooltip}
-              onClick={detailsOnly ? handleSaveDetails : () => gate.goStep(1)}
+              className={`btn-publish${detailsOnly ? "" : " wizard-gate-btn"}${
+                !companyValid || detailsUnchanged ? " is-disabled" : ""
+              }`}
+              aria-disabled={!companyValid || detailsUnchanged}
+              data-tip={ctaTooltip || undefined}
+              onClick={() => {
+                if (!companyValid || detailsUnchanged) return;
+                if (detailsOnly) handleSaveDetails();
+                else gate.goStep(1);
+              }}
             >
               {!detailsOnly && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
               <span className="wizard-gate-btn-inner">
@@ -888,10 +897,10 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
             </button>
           ) : step === 1 ? (
             <button
-              className={`btn-publish wizard-gate-btn${ctaTooltip ? " has-cta-tooltip" : ""}`}
-              disabled={!adminValid}
-              data-tooltip={ctaTooltip}
-              onClick={() => gate.goStep(2)}
+              className={`btn-publish wizard-gate-btn${adminValid ? "" : " is-disabled"}`}
+              aria-disabled={!adminValid}
+              data-tip={ctaTooltip || undefined}
+              onClick={() => adminValid && gate.goStep(2)}
             >
               <span className="wizard-gate-fill" ref={gate.nextFillRef} />
               <span className="wizard-gate-btn-inner">
@@ -901,10 +910,14 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
             </button>
           ) : (
             <button
-              className={`btn-publish${ctaTooltip ? " has-cta-tooltip" : ""}`}
-              disabled={!canSave}
-              data-tooltip={ctaTooltip}
-              onClick={isEdit ? () => setShowSaveConfirm(true) : handleCreate}
+              className={`btn-publish${canSave ? "" : " is-disabled"}`}
+              aria-disabled={!canSave}
+              data-tip={ctaTooltip || undefined}
+              onClick={() => {
+                if (!canSave) return;
+                if (isEdit) setShowSaveConfirm(true);
+                else handleCreate();
+              }}
             >
               {saveCta}
               <WizardKeyHint />
@@ -957,6 +970,21 @@ const MONTH_IDX: Record<string, number> = {
 };
 // The admin tool's notion of "today" (matches the session date used elsewhere).
 const APP_TODAY = new Date(2026, 5, 24);
+
+/* Complimentary Free Access › Access End Date shortcuts (user, 2026-10-06) —
+   the Scholarship set, counted from APP_TODAY. Local YYYY-MM-DD, never
+   toISOString (UTC can land on the previous day). */
+function isoAfter(days: number, months = 0): string {
+  const d = new Date(APP_TODAY.getFullYear(), APP_TODAY.getMonth() + months, APP_TODAY.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const FREE_ACCESS_END_SHORTCUTS: DateShortcut[] = [
+  { label: "1 week", value: isoAfter(7) },
+  { label: "1 month", value: isoAfter(0, 1) },
+  { label: "3 months", value: isoAfter(0, 3) },
+  { label: "6 months", value: isoAfter(0, 6) },
+  { label: "1 year", value: isoAfter(0, 12) },
+];
 // Mirrors the default "Free Trial Length" configured in Product Config → B2B Management.
 const TRIAL_DAYS = 14;
 
@@ -1744,6 +1772,10 @@ function Step1Details({
   partnerships: string[]; setPartnerships: (v: string[]) => void;
   onNavigateToProductConfig?: () => void;
 }) {
+  // Either address menu open whitens the whole shell (1550:2709) — the menus
+  // are portaled and take focus, so :focus-within alone would drop the edge.
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
   return (
     <>
       <h1 className="tasks-title">Company Details</h1>
@@ -1778,11 +1810,16 @@ function Step1Details({
           {zipMissing && <span className="form-label-error">Zip Code cannot be left empty</span>}
           {zipInvalid && <span className="form-label-error">{zipInvalid}</span>}
         </label>
-        <div className={`address-field${zipMissing || zipInvalid ? " has-error" : ""}`}>
+        <div
+          className={`address-field${countryOpen || stateOpen ? " is-open" : ""}${
+            zipMissing || zipInvalid ? " has-error" : ""
+          }`}
+        >
           <SelectField
             value={country}
             options={COUNTRY_OPTIONS}
             onChange={setCountry}
+            onOpenChange={setCountryOpen}
             searchPlaceholder="Search Countries..."
             maxVisibleOptions={5}
             renderTrigger={({ toggle, label }) => (
@@ -1835,6 +1872,7 @@ function Step1Details({
             value={addrState}
             options={US_STATES}
             onChange={setAddrState}
+            onOpenChange={setStateOpen}
             placeholder="State"
             searchPlaceholder="Search States..."
             maxVisibleOptions={5}
@@ -1862,7 +1900,7 @@ function Step1Details({
             href="https://docs.stripe.com/tax/zero-tax"
             target="_blank"
             rel="noopener noreferrer"
-            className="form-help-link"
+            className="text-link"
           >
             Stripe's Documentation
           </a>{" "}
@@ -1890,7 +1928,7 @@ function Step1Details({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config <ArrowUpRightIcon />
+              Product Config
             </a>
           </p>
         </div>
@@ -1913,7 +1951,7 @@ function Step1Details({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config <ArrowUpRightIcon />
+              Product Config
             </a>
           </p>
         </div>
@@ -2266,6 +2304,7 @@ function Step2Plan({
             onChange={setFreeAccessEndDate}
             placeholder="Select Date..."
             hasError={endDateMissing}
+            shortcuts={FREE_ACCESS_END_SHORTCUTS}
           />
         </div>
       )}
@@ -2296,32 +2335,9 @@ function PerSeatPriceField({
   noteRate: number;
   noteSym: string;
 }) {
+  // Both halves are SelectFields; these only light the shared shell's open edge.
   const [priceOpen, setPriceOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
-  const [priceSearch, setPriceSearch] = useState("");
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const priceSearchRef = useRef<HTMLInputElement | null>(null);
-
-  /* Figma 619:1332 opens with "Search Prices..." active, so the menu takes the
-     caret as soon as it appears and the list filters from there — the field's
-     own amount is no longer what narrows it. Reset between openings so a stale
-     query never hides the list. */
-  useEffect(() => {
-    if (priceOpen) priceSearchRef.current?.focus();
-    else setPriceSearch("");
-  }, [priceOpen]);
-
-  // Close both menus on any outside click.
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) {
-        setPriceOpen(false);
-        setCurrencyOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
 
   const rateOf = (p: SavedPrice) => p.rates[currency] ?? 0;
   const entered = parseFloat(priceStr);
@@ -2329,34 +2345,32 @@ function PerSeatPriceField({
 
   /* Saved prices on the selected Billing Cycle and available in the chosen
      currency — a Monthly subscription never offers an Annual price, and vice
-     versa — narrowed by the menu's own search. It matches the amount OR the
-     price's name, since the row shows both and either is a reasonable thing to
-     type. */
-  const query = priceSearch.trim().toLowerCase();
+     versa. The menu's search matches the row's text: the amount and the
+     price's name, since the row shows both. */
   const cyclePrices = useMemo(
     () => savedPrices.filter((p) => p.cycle === billingCycle),
     [savedPrices, billingCycle],
   );
-  const matches = useMemo(() => {
-    const pool = cyclePrices.filter((p) => rateOf(p) > 0);
-    if (!query) return pool;
-    return pool.filter(
-      (p) =>
-        String(rateOf(p)).startsWith(query) ||
-        (p.label ?? "").toLowerCase().includes(query),
-    );
-  }, [cyclePrices, currency, query]);
+  /* One option string per row — the rate, plus the price's name when it has
+     one. Picking a price only sets its rate, so two saved prices that read the
+     same are the same pick and collapse into one row. */
+  const priceOptionOf = (p: SavedPrice) =>
+    `${sym}${rateOf(p)} ${currency}${p.label ? ` · ${p.label}` : ""}`;
+  const priceByOption = useMemo(() => {
+    const m = new Map<string, SavedPrice>();
+    for (const p of cyclePrices) {
+      if (rateOf(p) <= 0) continue;
+      const o = priceOptionOf(p);
+      if (!m.has(o)) m.set(o, p);
+    }
+    return m;
+  }, [cyclePrices, currency, sym]);
 
   const exact = cyclePrices.find((p) => rateOf(p) === entered) ?? null;
   const unitWordLong = billingCycle === "Annual" ? "year" : "month";
 
-  function pick(p: SavedPrice) {
-    setPriceStr(String(rateOf(p)));
-    setPriceOpen(false);
-  }
-
   return (
-    <div className="cw-price" ref={wrapRef}>
+    <div className="cw-price">
       <div className={`cw-price-field${priceOpen || currencyOpen ? " is-open" : ""}${missing || (hasEntered && !exact) ? " has-error" : ""}`}>
         {/* Each half of the shell is its own positioning context, so a menu sizes
             to the cell that opens it — the currency list to the currency cell,
@@ -2369,10 +2383,7 @@ function PerSeatPriceField({
           value={currencyOptionFor(currency)}
           options={CURRENCY_INFO.map((c) => currencyOptionFor(c.code))}
           searchPlaceholder="Search..."
-          onChange={(next) => {
-            setCurrency(codeFromCurrencyOption(next) as Currency);
-            setPriceOpen(false);
-          }}
+          onChange={(next) => setCurrency(codeFromCurrencyOption(next) as Currency)}
           maxVisibleOptions={5}
           panelClass="ss-menu--currency"
           onOpenChange={setCurrencyOpen}
@@ -2382,7 +2393,7 @@ function PerSeatPriceField({
               className="cw-price-cur"
               aria-haspopup="listbox"
               aria-expanded={open}
-              onClick={() => { toggle(); setPriceOpen(false); }}
+              onClick={toggle}
             >
               <span className="cw-price-cur-code">{currency}</span>
               <span className="cw-price-caret"><DropdownCaretIcon /></span>
@@ -2393,85 +2404,65 @@ function PerSeatPriceField({
         <div className="cw-price-seg cw-price-seg--grow">
           {/* One cell: the value, the unit, and the menu caret — the node draws no
               divider between them, only between currency and price. The price is
-              picked from the menu, never typed, so this is a button rather than
-              an input; the menu's own "Search Prices..." box is the only place
-              anything is typed. */}
-          <button
-            type="button"
-            className="cw-price-cell"
-            aria-haspopup="listbox"
-            aria-expanded={priceOpen}
-            onClick={() => {
-              setPriceOpen((o) => !o);
-              setCurrencyOpen(false);
+              picked from the menu, never typed, so the trigger is a button; the
+              menu's own "Search Prices..." box is the only place anything is
+              typed. The menu is the shared Single-Select (Figma 619:1332
+              "Dropdown Menu - Stripe Prices" = 668:943 With Search): rate on the
+              left, the price's Stripe name as the row's muted detail, the current
+              price SemiBold, and the "Add New Price" band (620:1446) as its
+              footer. */}
+          <SelectField
+            value={exact ? priceOptionOf(exact) : ""}
+            options={[...priceByOption.keys()]}
+            onChange={(o) => {
+              const p = priceByOption.get(o);
+              if (p) setPriceStr(String(rateOf(p)));
             }}
-          >
-            {/* The prefix belongs to an amount. With the field empty it would
-                sit in front of the placeholder ("AED Select a Price..."), so it
-                only appears once there is a number to prefix. */}
-            {priceStr !== "" && <span className="cw-price-sym">{sym}</span>}
-            <span className={`cw-price-value${priceStr === "" ? " is-placeholder" : ""}`}>
-              {priceStr === "" ? "Select a Price..." : priceStr}
-            </span>
-            {/* Empty, the field is just its placeholder and caret (620:1418). */}
-            {priceStr !== "" && <span className="cw-price-unit">/seat/{unitWordLong}</span>}
-            <span className="cw-price-caret"><DropdownCaretIcon /></span>
-          </button>
-          {/* Saved-price dropdown — Figma 619:1332 "Dropdown Menu - Stripe
-              Prices": a search header, the price rows, and an "Add New Price"
-              footer, each divided by a #404040 hairline. */}
-          {priceOpen && (
-            <div className="cw-price-menu cw-price-menu--list">
-              <DropdownSearch
-                inputRef={priceSearchRef}
-                placeholder="Search Prices..."
-                value={priceSearch}
-                onChange={setPriceSearch}
-              />
-  
-              <div className="cw-price-list">
-              {matches.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  /* Marked against `exact`, not the rate — two saved prices can
-                     share one rate, and `exact` is the one the note below the
-                     field names as the current price. */
-                  className={`cw-price-opt cw-price-opt--saved${p === exact ? " is-current" : ""}`}
-                  onMouseDown={(e) => { e.preventDefault(); pick(p); }}
-                >
-                  {/* The list only holds prices on the field's cycle, so the
-                      field's own "/seat/<unit>" already states it; the row
-                      carries the rate and currency. */}
-                  <span className="cw-price-opt-rate">
-                    {sym}{rateOf(p)} {currency}
-                  </span>
-                  {p.label && <span className="cw-price-opt-label">{p.label}</span>}
-                </button>
-              ))}
-  
-              {matches.length === 0 && (
-                <div className="cw-price-empty">
-                  {query ? `No matches for “${priceSearch.trim()}”` : `No saved ${billingCycle === "Annual" ? "annual" : "monthly"} prices in this currency.`}
-                </div>
-              )}
-              </div>
-  
-              {/* Figma 620:1446 — always available, not gated on having typed an
-                  unsaved amount. */}
+            searchPlaceholder="Search Prices..."
+            optionPrimary={(o) => {
+              const p = priceByOption.get(o);
+              return p ? `${sym}${rateOf(p)} ${currency}` : o;
+            }}
+            optionDetail={(o) => priceByOption.get(o)?.label ?? null}
+            maxVisibleOptions={4}
+            panelClass="ss-menu--prices"
+            emptyText={`No saved ${billingCycle === "Annual" ? "annual" : "monthly"} prices in this currency.`}
+            onOpenChange={setPriceOpen}
+            footer={(close) => (
               <button
                 type="button"
-                className="cw-price-create"
-                onMouseDown={(e) => { e.preventDefault(); setPriceOpen(false); onCreatePrice(); }}
+                className="ss-menu-foot"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { close(); onCreatePrice(); }}
               >
                 {/* Figma 620:1453 is the Icon Library plus — the same glyph
                     TreeAddIcon already carries (16px, 1.333 stroke, square
                     caps), not a typed "+". */}
-                <span className="cw-price-create-plus"><TreeAddIcon /></span>
+                <span className="ss-menu-foot-icon"><TreeAddIcon /></span>
                 Add New Price
               </button>
-            </div>
-          )}
+            )}
+            renderTrigger={({ open, toggle }) => (
+              <button
+                type="button"
+                className="cw-price-cell"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                onClick={toggle}
+              >
+                {/* The prefix belongs to an amount. With the field empty it would
+                    sit in front of the placeholder ("AED Select a Price..."), so it
+                    only appears once there is a number to prefix. */}
+                {priceStr !== "" && <span className="cw-price-sym">{sym}</span>}
+                <span className={`cw-price-value${priceStr === "" ? " is-placeholder" : ""}`}>
+                  {priceStr === "" ? "Select a Price..." : priceStr}
+                </span>
+                {/* Empty, the field is just its placeholder and caret (620:1418). */}
+                {priceStr !== "" && <span className="cw-price-unit">/seat/{unitWordLong}</span>}
+                <span className="cw-price-caret"><DropdownCaretIcon /></span>
+              </button>
+            )}
+          />
         </div>
       </div>
 

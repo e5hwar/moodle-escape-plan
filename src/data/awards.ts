@@ -210,6 +210,7 @@ export function fmtHolders(n: number): string {
 
 // ─── Award Template table column config ──────────────────────────────────────────────────────
 export type TemplateColKey =
+  | "background"
   | "id"
   | "usage"
   | "createdBy"
@@ -217,6 +218,7 @@ export type TemplateColKey =
   | "dateModified";
 
 export const TEMPLATE_COLS: { key: TemplateColKey; label: string }[] = [
+  { key: "background", label: "Background Image" },
   { key: "id", label: "ID" },
   { key: "usage", label: "Used By" },
   { key: "createdBy", label: "Created By" },

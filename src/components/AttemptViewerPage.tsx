@@ -1,3 +1,4 @@
+import { UserAvatar } from "./UserAvatar";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeftIcon } from "./icons";
 import {
@@ -122,7 +123,7 @@ function Header({ model }: { model: AttemptDetailModel }) {
   return (
     <div style={page.headRow}>
       <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
-        <div style={page.avatar}>{user.initials}</div>
+        <UserAvatar size={42} />
         <div>
           <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>{user.name}</div>
           <div style={{ color: C.dim, fontSize: 12.5, marginTop: 1 }}>
@@ -779,19 +780,6 @@ const page: Record<string, CSSProperties> = {
     gap: 18,
     flexWrap: "wrap",
     marginBottom: 7,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 11,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 600,
-    fontSize: 14,
-    color: "#b3b3b7",
-    background: "#161618",
-    border: "1px solid #2e2e33",
   },
   kicker: {
     fontSize: 11,

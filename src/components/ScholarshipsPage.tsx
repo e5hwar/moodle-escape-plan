@@ -27,6 +27,7 @@ import { UserDetailsHover } from "./UserDetailsHover";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCols } from "./TableCols";
 import { useToast } from "./useToast";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date("2026-05-15");
@@ -297,7 +298,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
 
               <div className="filters">
                 {/* The shared filter pills (Filters.tsx) — same menu chrome as
-                    Tasks / Certifications / Companies / Offer Codes. */}
+                    Tasks / Certifications / Companies. */}
                 <Dropdown
                   width={220}
                   trigger={({ open, toggle }) => (
@@ -423,20 +424,10 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                         menuOpen={menu?.scholarship.id === s.id}
                       />
                     ))}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="sch-empty">
-                          {query.trim()
-                            ? `No scholarships match "${query.trim()}".`
-                            : hasFilters
-                            ? "No scholarships match these filters."
-                            : 'No scholarships yet. Click "Create Scholarship" to assign one.'}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">
@@ -562,7 +553,7 @@ function StatusPill({ scholarship }: { scholarship: Scholarship }) {
   if (days <= EXPIRING_SOON_DAYS) {
     return (
       <span className="co-status-pill co-status-pill--yellow">
-        {days === 0 ? "Expires Today" : `Expires in ${days} Days`}
+        {days === 0 ? "Expires Today" : `Expires in ${days} ${days === 1 ? "Day" : "Days"}`}
       </span>
     );
   }

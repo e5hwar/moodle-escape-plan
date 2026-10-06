@@ -19,6 +19,7 @@ import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
@@ -443,18 +444,10 @@ export function AttemptsPage({
                           menuOpen={menu?.attempt.id === a.id}
                         />
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={COLS.length + 1} className="u-empty">
-                            {hasFilters || search.trim()
-                              ? "No attempts match these filters."
-                              : "No attempts yet."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">
@@ -597,34 +590,11 @@ function MoreFiltersBody({
   );
 }
 
-/* The note View Attempt shows until the learner-facing attempt page exists. */
-const ATTEMPT_PLACEHOLDER =
-  "View Attempt will open the same attempt page that users see. That page isn\u2019t wired up in this prototype yet.";
-
-/* A tab of its own, painted from the app's own tokens so it reads as part of
-   the product rather than a browser dialog. Written directly into the new
-   window: there is no route to give it, and inventing one would outlive the
-   placeholder. A blocked popup falls back to the alert. */
+/* View Attempt opens the learner-facing attempt page in its own tab — a
+   placeholder page until it is specced (Figma list item 86; App.tsx
+   `?viewAttempt=`). */
 function openAttemptPlaceholder() {
-  const tab = window.open("", "_blank");
-  if (!tab) {
-    window.alert(ATTEMPT_PLACEHOLDER);
-    return;
-  }
-  tab.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>View Attempt</title>` +
-      `<style>
-         html,body{height:100%;margin:0}
-         body{display:flex;align-items:center;justify-content:center;padding:40px;
-              background:#0b0b0c;color:#e7e7e8;
-              font:14px/1.6 "Fira Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-         p{max-width:440px;margin:0;text-align:center;color:#8b8b8f}
-       </style></head><body><p></p></body></html>`,
-  );
-  tab.document.close();
-  // Text, not markup — the note goes in as a value, never as HTML.
-  const p = tab.document.querySelector("p");
-  if (p) p.textContent = ATTEMPT_PLACEHOLDER;
+  window.open(`${window.location.origin}${window.location.pathname}?viewAttempt=1`, "_blank", "noopener");
 }
 
 function ColGroup() {

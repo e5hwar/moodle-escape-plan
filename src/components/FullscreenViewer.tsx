@@ -555,8 +555,9 @@ export function FullscreenViewer({
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   /* A set of one (or a lone image) passes neither handler and gets no arrows;
-     at either end of a longer set exactly one of them is undefined, which is
-     what disables that button rather than hiding the pair. */
+     at either end of a longer set exactly one of them is undefined, which
+     HIDES that button (user, 2026-10-06: no disabled arrow). It keeps its
+     slot, so stepping never slides the other arrow under the pointer. */
   const nav = onPrev !== undefined || onNext !== undefined;
   /* The grab cursor follows the same rule as the drag: only while the content
      overflows the screen (re-read on every render — zoom, resize and rotation
@@ -596,14 +597,13 @@ export function FullscreenViewer({
 
       {controls && (
       <div className="idfs-toolbar" onClick={stop}>
-        {/* Only when the caller gave the viewer a set to step through. Both
-            buttons show together; the one at the end of the run is disabled,
-            since a wrapping run gives no sense of where the set ends. */}
+        {/* Only when the caller gave the viewer a set to step through. The
+            run doesn't wrap; the arrow past either end is hidden in place. */}
         {nav && (
           <div className="idfs-nav">
             <ShortcutHint label="Previous" keyLabel="←">
               <button
-                className="idfs-btn"
+                className={`idfs-btn${onPrev ? "" : " is-end"}`}
                 onClick={onPrev}
                 disabled={!onPrev}
                 aria-label="Previous image"
@@ -613,7 +613,7 @@ export function FullscreenViewer({
             </ShortcutHint>
             <ShortcutHint label="Next" keyLabel="→">
               <button
-                className="idfs-btn"
+                className={`idfs-btn${onNext ? "" : " is-end"}`}
                 onClick={onNext}
                 disabled={!onNext}
                 aria-label="Next image"

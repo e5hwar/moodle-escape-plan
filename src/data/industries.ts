@@ -174,18 +174,20 @@ export const industries: Industry[] = [
 export const placeholderPool: IndustryCert[] = (() => {
   const out: IndustryCert[] = [];
   const stages: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
-  let n = 2001;
   const families = ["P-2", "P-3", "P-4", "P-5", "P-6", "P-7"];
   for (const fam of families) {
+    /* Each family numbers its own 001–050 (P-3001 … P-3050). A counter shared
+       across families started P-3 at 3051 and P-4 at 4101, so the P-3xxx /
+       P-4xxx ids Plumbing and Electrical tag above never existed and their
+       lists rendered blank. */
     for (let i = 0; i < 50; i++) {
-      const id = `${fam}${String(n).padStart(3, "0").slice(-3)}`;
+      const id = `${fam}${String(i + 1).padStart(3, "0")}`;
       out.push({
         id,
         name: `Placeholder Cert ${id}`,
         stage: stages[i % 3],
         hours: 2 + (i % 10),
       });
-      n++;
     }
   }
   return out;

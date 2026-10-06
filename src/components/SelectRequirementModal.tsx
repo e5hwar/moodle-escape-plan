@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { tasks as taskLibrary, subscriptionLabel, type Task } from "../data/tasks";
 import { certifications, CERT_VISIBILITIES, type Certification } from "../data/certifications";
 import { AUDIENCE_ALL_USERS, SUBSCRIPTION_OPTIONS, VISIBILITIES, audienceOf } from "../data/filters";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import {
@@ -133,6 +134,9 @@ export function SelectRequirementModal({
   title = "Add Requirement",
   description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
   confirmNoun = "Requirement",
+  confirmVerb = "Add",
+  confirmBlocked = false,
+  header,
   confirmLabel,
   allowEmpty = false,
   lockedTip = "Already in this Condition Set",
@@ -160,6 +164,13 @@ export function SelectRequirementModal({
   description?: string;
   /** Singular noun in the confirm button — "Add Requirement" / "Add 3 Tasks". */
   confirmNoun?: string;
+  /** The confirm button's verb — "Assign 3 Certifications" (Industries). */
+  confirmVerb?: string;
+  /** Holds the confirm back for a reason of the caller's (Assign Industries:
+   *  no destination chosen yet). */
+  confirmBlocked?: boolean;
+  /** A row above the search bar — Assign Industries' "Add to" destination. */
+  header?: ReactNode;
   /** A fixed confirm label instead of the counted "Add N …" one. */
   confirmLabel?: string;
   /** Lets confirm go through with nothing ticked — for a picker that also
@@ -335,15 +346,18 @@ export function SelectRequirementModal({
       description={description}
       confirmLabel={
         confirmLabel ??
-        (pickedCount > 1 ? `Add ${pickedCount} ${confirmNoun}s` : `Add ${confirmNoun}`)
+        (pickedCount > 1
+          ? `${confirmVerb} ${pickedCount} ${confirmNoun}s`
+          : `${confirmVerb} ${confirmNoun}`)
       }
-      confirmDisabled={!allowEmpty && pickedCount === 0}
+      confirmDisabled={(!allowEmpty && pickedCount === 0) || confirmBlocked}
       pickFull
       className="srq"
       onCancel={onCancel}
       onConfirm={confirm}
     >
       <div className="stm">
+        {header}
         {/* The shared tab row (Figma 659:896) — full-bleed inside the card, so
             its hairline reads as a divider rather than a floating rule. A
             single-kind modal has nothing to switch between, so it has none. */}
@@ -491,87 +505,82 @@ export function SelectRequirementModal({
                   <table className={`table table-body stm-table${preview ? " stm-table--preview" : ""}`}>
                     <TaskColGroup preview={preview} />
                     <tbody>
-                      {pagedTasks.length === 0 ? (
-                        <tr className="stm-empty-row">
-                          <td colSpan={preview ? 6 : 5}>No Tasks match your search and filters.</td>
-                        </tr>
-                      ) : (
-                        pagedTasks.map((t) => {
-                          const locked = taken.has(t.name);
-                          const on = locked || pickedTasks.includes(t.id);
-                          return (
-                            <tr
-                              key={t.id}
-                              className={rowClass(locked, on)}
-                              data-tip={locked ? tipFor(t.name) : undefined}
-                              onClick={() => !locked && toggleTask(t.id)}
-                            >
-                              {/* A locked row has no checkbox at all — a
-                                  filled one read as "already picked". Its
-                                  flag and tip say why it can't be added. */}
-                              <td className="stm-col-check">
-                                {!locked && (
+                      {pagedTasks.map((t) => {
+                        const locked = taken.has(t.name);
+                        const on = locked || pickedTasks.includes(t.id);
+                        return (
+                          <tr
+                            key={t.id}
+                            className={rowClass(locked, on)}
+                            data-tip={locked ? tipFor(t.name) : undefined}
+                            onClick={() => !locked && toggleTask(t.id)}
+                          >
+                            {/* A locked row has no checkbox at all — a
+                                filled one read as "already picked". Its
+                                flag and tip say why it can't be added. */}
+                            <td className="stm-col-check">
+                              {!locked && (
+                                <button
+                                  className={`checkbox ${on ? "checked" : ""}`}
+                                  aria-label={on ? "Deselect" : "Select"}
+                                  aria-pressed={on}
+                                  tabIndex={-1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleTask(t.id);
+                                  }}
+                                >
+                                  {on && <CheckIcon />}
+                                </button>
+                              )}
+                            </td>
+                            {/* `col-name` is the shared Name-column class —
+                                without it the app-wide "mute every non-Name
+                                cell" rule wins and the name greys out. */}
+                            <td className="stm-col-name col-name">{nameCell(t.name, locked)}</td>
+                            <td className="stm-col-type">{t.type}</td>
+                            <td className="stm-col-certs">
+                              <MultiCell values={t.usedIn} />
+                            </td>
+                            <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
+                            {/* Row-end Preview, the same two layers as
+                                Select Questions': a resting chevron that
+                                hides on hover and a labelled bar in its
+                                place. Both stop the click — the row itself
+                                ticks the checkbox. */}
+                            {onPreviewTask && (
+                              <td className="col-actions">
+                                <button
+                                  className="row-action-btn lone-dots row-chevron"
+                                  aria-label={`Preview ${t.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPreviewTask(t);
+                                  }}
+                                >
+                                  <RowChevronIcon />
+                                </button>
+                                <div className="row-action-bar">
                                   <button
-                                    className={`checkbox ${on ? "checked" : ""}`}
-                                    aria-label={on ? "Deselect" : "Select"}
-                                    aria-pressed={on}
-                                    tabIndex={-1}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleTask(t.id);
-                                    }}
-                                  >
-                                    {on && <CheckIcon />}
-                                  </button>
-                                )}
-                              </td>
-                              {/* `col-name` is the shared Name-column class —
-                                  without it the app-wide "mute every non-Name
-                                  cell" rule wins and the name greys out. */}
-                              <td className="stm-col-name col-name">{nameCell(t.name, locked)}</td>
-                              <td className="stm-col-type">{t.type}</td>
-                              <td className="stm-col-certs">
-                                <MultiCell values={t.usedIn} />
-                              </td>
-                              <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
-                              {/* Row-end Preview, the same two layers as
-                                  Select Questions': a resting chevron that
-                                  hides on hover and a labelled bar in its
-                                  place. Both stop the click — the row itself
-                                  ticks the checkbox. */}
-                              {onPreviewTask && (
-                                <td className="col-actions">
-                                  <button
-                                    className="row-action-btn lone-dots row-chevron"
-                                    aria-label={`Preview ${t.name}`}
+                                    className="row-action-btn row-action-btn--label"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onPreviewTask(t);
                                     }}
                                   >
+                                    Preview
                                     <RowChevronIcon />
                                   </button>
-                                  <div className="row-action-bar">
-                                    <button
-                                      className="row-action-btn row-action-btn--label"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onPreviewTask(t);
-                                      }}
-                                    >
-                                      Preview
-                                      <RowChevronIcon />
-                                    </button>
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })
-                      )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                {pagedTasks.length === 0 && <TableEmpty />}
               </>
             ) : (
               <>
@@ -592,56 +601,52 @@ export function SelectRequirementModal({
                   <table className="table table-body stm-table">
                     <CertColGroup />
                     <tbody>
-                      {pagedCerts.length === 0 ? (
-                        <tr className="stm-empty-row">
-                          <td colSpan={5}>No Certifications match your search and filters.</td>
-                        </tr>
-                      ) : (
-                        pagedCerts.map((c) => {
-                          const locked = taken.has(c.name);
-                          const on = locked || pickedCerts.includes(c.id);
-                          return (
-                            <tr
-                              key={c.id}
-                              className={rowClass(locked, on)}
-                              data-tip={locked ? tipFor(c.name) : undefined}
-                              onClick={() => !locked && toggleCert(c.id)}
-                            >
-                              {/* A locked row has no checkbox at all — a
-                                  filled one read as "already picked". Its
-                                  flag and tip say why it can't be added. */}
-                              <td className="stm-col-check">
-                                {!locked && (
-                                  <button
-                                    className={`checkbox ${on ? "checked" : ""}`}
-                                    aria-label={on ? "Deselect" : "Select"}
-                                    aria-pressed={on}
-                                    tabIndex={-1}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleCert(c.id);
-                                    }}
-                                  >
-                                    {on && <CheckIcon />}
-                                  </button>
-                                )}
-                              </td>
-                              <td className="stm-col-name col-name">{nameCell(c.name, locked)}</td>
-                              <td className="stm-col-certs">{c.industry}</td>
-                              <td className="stm-col-type">{c.careerStage ?? "—"}</td>
-                              <td className="stm-col-edited">{c.dateModified ?? "—"}</td>
-                            </tr>
-                          );
-                        })
-                      )}
+                      {pagedCerts.map((c) => {
+                        const locked = taken.has(c.name);
+                        const on = locked || pickedCerts.includes(c.id);
+                        return (
+                          <tr
+                            key={c.id}
+                            className={rowClass(locked, on)}
+                            data-tip={locked ? tipFor(c.name) : undefined}
+                            onClick={() => !locked && toggleCert(c.id)}
+                          >
+                            {/* A locked row has no checkbox at all — a
+                                filled one read as "already picked". Its
+                                flag and tip say why it can't be added. */}
+                            <td className="stm-col-check">
+                              {!locked && (
+                                <button
+                                  className={`checkbox ${on ? "checked" : ""}`}
+                                  aria-label={on ? "Deselect" : "Select"}
+                                  aria-pressed={on}
+                                  tabIndex={-1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleCert(c.id);
+                                  }}
+                                >
+                                  {on && <CheckIcon />}
+                                </button>
+                              )}
+                            </td>
+                            <td className="stm-col-name col-name">{nameCell(c.name, locked)}</td>
+                            <td className="stm-col-certs">{c.industry || "—"}</td>
+                            <td className="stm-col-type">{c.careerStage ?? "—"}</td>
+                            <td className="stm-col-edited">{c.dateModified ?? "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                {pagedCerts.length === 0 && <TableEmpty />}
               </>
             )}
           </div>
 
           <div className="pagination stm-pagination">
+            <span className="stm-picked">{pickedCount} Selected</span>
             <span>
               Showing {total === 0 ? 0 : start + 1} - {Math.min(start + PAGE_SIZE, total)} of {total}
             </span>
@@ -708,9 +713,9 @@ function CertColGroup() {
 function MultiCell({ values }: { values: string[] }) {
   if (values.length === 0) return <>—</>;
   return (
-    <span className="stm-multi" title={values.join(", ")}>
-      <span className="stm-multi-first">{values[0]}</span>
-      {values.length > 1 && <span className="stm-multi-more">+{values.length - 1}</span>}
+    <span title={values.join(", ")}>
+      {values[0]}
+      {values.length > 1 && <>{" "}<span className="used-extra">+{values.length - 1}</span></>}
     </span>
   );
 }

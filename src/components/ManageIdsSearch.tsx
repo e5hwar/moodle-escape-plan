@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type IdRecord } from "../data/manageIds";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, SuggestionRow, suggestFilters } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-/** Status suggestions offered in "Suggested filters". */
-const MAX_SUGGESTED_PER_KIND = 2;
 
 type Opt = { kind: "status-filter" } | { kind: "status"; name: string };
 
@@ -53,6 +51,7 @@ export function ManageIdsSearch({
   const inStatusMode = statusMatch != null;
   const statusQuery = statusMatch ? statusMatch[1] : "";
   const freeQuery = inStatusMode ? "" : text;
+  const hasFree = freeQuery.trim() !== "";
 
   const scopedStatuses = useMemo(
     () => Array.from(new Set([...appliedStatuses, ...draftStatuses])),
@@ -68,10 +67,10 @@ export function ManageIdsSearch({
   const suggestions = useMemo<Opt[]>(() => {
     const q = freeQuery.trim().toLowerCase();
     if (!q) return [{ kind: "status-filter" }];
-    return allStatuses.names
-      .filter((n) => !scopedStatuses.includes(n) && n.toLowerCase().includes(q))
-      .slice(0, MAX_SUGGESTED_PER_KIND)
-      .map((name) => ({ kind: "status", name }) as Opt);
+    // The same shared matcher (and 6-row cap) as every other bar.
+    return suggestFilters(q, [{ kind: "status", values: allStatuses.names, exclude: scopedStatuses }], MAX_RESULTS).map(
+      (sg) => ({ kind: "status", name: sg.name }) as Opt,
+    );
   }, [freeQuery, allStatuses, scopedStatuses]);
 
   const optionCount = inStatusMode ? statusResults.length : suggestions.length;
@@ -146,10 +145,10 @@ export function ManageIdsSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -226,12 +225,25 @@ export function ManageIdsSearch({
         )}
       </div>
 
-      {open && (
+      {/* Typed text with nothing to suggest: no panel — Enter searches it. */}
+      {open && !(hasFree && suggestions.length === 0) && (
         <div className="usearch-panel">
           {!inStatusMode && (
             <>
               {suggestions.length > 0 && <div className="usearch-head">Suggested filters</div>}
               {suggestions.map((opt, i) => {
+                /* Typed: the matching value + what it is (1542:2130). */
+                if (hasFree && opt.kind === "status") {
+                  return (
+                    <SuggestionRow
+                      key={opt.name}
+                      suggestion={{ name: opt.name, kind: "ID Status", chip: "Status:" }}
+                      active={active === i}
+                      onHover={() => setActive(i)}
+                      onClick={() => activate(opt)}
+                    />
+                  );
+                }
                 const row = suggestionRow(opt, allStatuses);
                 if (!row) return null;
                 return (
@@ -255,11 +267,7 @@ export function ManageIdsSearch({
             <>
               <div className="usearch-head">ID Statuses</div>
               {statusResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {statusQuery.trim()
-                    ? `No statuses match “${statusQuery.trim()}”.`
-                    : "Start typing a status…"}
-                </div>
+                <>{statusQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a status…"}</div>}</>
               ) : (
                 statusResults.map((name, i) => (
                   <OptionRow
@@ -277,11 +285,7 @@ export function ManageIdsSearch({
             </>
           )}
 
-          {freeQuery.trim() ? (
-            <SearchForRow query={freeQuery.trim()} scope="IDs" onClick={commit} />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

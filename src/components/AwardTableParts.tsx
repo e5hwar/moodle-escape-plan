@@ -3,10 +3,8 @@
    two tabs until the Templates tab moved to Product Config; these parts are
    what both sides kept using. */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Dropdown } from "./Dropdown";
-import { CheckRow } from "./Filters";
 import { PrmModal } from "./PrmModal";
-import { SortIcon, EditColumnsIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
+import { SortIcon, RowEditIcon, RowKebabIcon, MenuArchiveIcon, RowDeleteIcon, MenuPlaceholderIcon } from "./icons";
 
 export type SortDir = "asc" | "desc";
 
@@ -69,11 +67,9 @@ export function SortableHeader({
 /* ─────────────── Actions menu (fixed-positioned) ─────────────── */
 
 export function ActionsMenu({
-  rect, title, subtitle, archived, archiveLabel, onClose, onArchive, onEdit, onDelete, onViewRecipients,
+  rect, archived, archiveLabel, onClose, onArchive, onEdit, onDelete, onViewRecipients,
 }: {
   rect: DOMRect;
-  title: string;
-  subtitle: string;
   archived?: boolean;
   archiveLabel: string;
   onClose: () => void;
@@ -129,10 +125,6 @@ export function ActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="u-menu-head">
-        <div className="u-menu-head-name">{title}</div>
-        <div className="u-menu-head-id">{subtitle}</div>
-      </div>
       {onViewRecipients && item(<MenuPlaceholderIcon />, "View recipients", onViewRecipients)}
       {onArchive &&
         (archived
@@ -169,68 +161,5 @@ export function ConfirmModal({
     >
       <div className="prm-content">{children}</div>
     </PrmModal>
-  );
-}
-
-/* ─────────────── Columns editor ─────────────── */
-
-export function ColumnsMenu({
-  optional, fixed, value, onChange,
-}: {
-  optional: { key: string; label: string }[];
-  fixed: string;
-  value: Record<string, boolean>;
-  onChange: (v: Record<string, boolean>) => void;
-}) {
-  // Available columns read alphabetically — it is a lookup list, not an
-  // ordering (see ColumnsBody in Filters.tsx).
-  const active = optional.filter((c) => value[c.key]);
-  const available = optional
-    .filter((c) => !value[c.key])
-    .sort((a, b) => a.label.localeCompare(b.label));
-  return (
-    <Dropdown
-      width={240}
-      align="right"
-      trigger={({ toggle }) => (
-        <button
-          className="edit-columns-btn"
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
-          aria-label="Edit columns"
-          data-tooltip="Edit Columns"
-        >
-          <EditColumnsIcon />
-        </button>
-      )}
-    >
-      {() => (
-        <div className="dropdown-list cols-menu">
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Fixed columns</div>
-            <div className="cols-fixed-row">{fixed}</div>
-          </div>
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Active columns</div>
-            {active.length === 0 ? (
-              <div className="cols-empty">-</div>
-            ) : (
-              active.map((c) => (
-                <CheckRow key={c.key} label={c.label} checked draggable onChange={() => onChange({ ...value, [c.key]: false })} />
-              ))
-            )}
-          </div>
-          <div className="dropdown-section">
-            <div className="dropdown-section-label">Available columns</div>
-            {available.length === 0 ? (
-              <div className="cols-empty">-</div>
-            ) : (
-              available.map((c) => (
-                <CheckRow key={c.key} label={c.label} checked={false} onChange={() => onChange({ ...value, [c.key]: true })} />
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </Dropdown>
   );
 }

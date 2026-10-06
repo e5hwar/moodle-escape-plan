@@ -3,7 +3,7 @@
    Product Config now, since a template is platform configuration rather than a
    piece of content. The Awards page still *reads* templates (the Award wizard
    picks one), it just no longer manages them. */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   awards as seedAwards,
   awardsUsingTemplate,
@@ -16,26 +16,19 @@ import {
 } from "../data/awards";
 import {
   ActionsMenu,
-  ColumnsMenu,
   ConfirmModal,
   RowActions,
   SortableHeader,
   type SortDir,
 } from "./AwardTableParts";
-import { SearchIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { SearchIcon, PagePrevIcon, PageNextIcon, WarnTriangleIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { SearchTrailing } from "./SearchPanelParts";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
+import { EditColumnsButton, orderedColumns, useColumnOrder } from "./Filters";
 
 const PAGE_SIZE = 50;
-
-/* Award Templates' delete gate: a template in use can't be deleted, and the
-   warning names the Awards holding it. */
-const WarnIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
 
 type Modal =
   | { kind: "none" }
@@ -62,8 +55,10 @@ export function AwardTemplatesSection({
   const [menu, setMenu] = useState<{ rect: DOMRect; id: string } | null>(null);
   const [modal, setModal] = useState<Modal>({ kind: "none" });
   const [cols, setCols] = useState<Record<TemplateColKey, boolean>>({
-    id: true, usage: true, createdBy: true, dateCreated: false, dateModified: true,
+    background: true, id: true, usage: true, createdBy: true, dateCreated: false, dateModified: true,
   });
+  const [order, setOrder] = useColumnOrder(TEMPLATE_COLS);
+  const shown = orderedColumns(TPL_COL_DEFS, order, cols);
 
   useEffect(() => setPage(1), [query, sort]);
 
@@ -94,10 +89,7 @@ export function AwardTemplatesSection({
     else setModal({ kind: "delete", template: t });
   }
 
-  const tableMin =
-    72 /* thumb */ + 240 + 40 +
-    (cols.id ? 100 : 0) + (cols.usage ? 130 : 0) + (cols.createdBy ? 150 : 0) +
-    (cols.dateCreated ? 130 : 0) + (cols.dateModified ? 130 : 0);
+  const tableMin = THUMB_W + NAME_W + 40 + shown.reduce((n, c) => n + c.width, 0);
 
   return (
     <div className="pc-table-body">
@@ -118,18 +110,33 @@ export function AwardTemplatesSection({
         <div className="co-table-col">
           <div className="table-xscroll" style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}>
             <table className="table table-head">
-              <TemplateColGroup cols={cols} />
+              <TemplateColGroup shown={shown} />
               <thead>
                 <tr>
                   <th className="aw-col-thumb" />
                   <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                  {cols.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                  {cols.usage && <SortableHeader col="usage" label="Used By" className="col-used" sort={sort} toggle={toggleSort} />}
-                  {cols.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
-                  {cols.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
-                  {cols.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
+                  {shown.map((c) => (
+                    <SortableHeader
+                      key={c.key}
+                      col={c.key}
+                      label={c.label}
+                      className={c.className}
+                      sort={sort}
+                      toggle={toggleSort}
+                      sortable={c.sortable !== false}
+                    />
+                  ))}
                   <th className="col-actions">
-                    <ColumnsMenu optional={TEMPLATE_COLS} fixed="Name" value={cols} onChange={(v) => setCols(v as Record<TemplateColKey, boolean>)} />
+                    {/* The shared Edit Columns menu (28:16625): All / None and
+                        drag-to-reorder, like every other list table. */}
+                    <EditColumnsButton
+                      columns={cols}
+                      setColumns={setCols}
+                      optional={TEMPLATE_COLS}
+                      fixed={[{ label: "Name" }]}
+                      order={order}
+                      onOrderChange={setOrder}
+                    />
                   </th>
                 </tr>
               </thead>
@@ -137,13 +144,13 @@ export function AwardTemplatesSection({
 
             <div className="tasks-scroll">
               <table className="table table-body">
-                <TemplateColGroup cols={cols} />
+                <TemplateColGroup shown={shown} />
                 <tbody>
                   {paged.map((t) => (
                     <TemplateRow
                       key={t.id}
                       template={t}
-                      cols={cols}
+                      shown={shown}
                       usage={templateUsageCount(t.id, seedAwards)}
                       selected={t.id === selectedId}
                       onClick={() => setSelectedId(t.id === selectedId ? null : t.id)}
@@ -155,6 +162,7 @@ export function AwardTemplatesSection({
                 </tbody>
               </table>
             </div>
+            {paged.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination">
@@ -172,12 +180,9 @@ export function AwardTemplatesSection({
       {menu && (() => {
         const t = templates.find((x) => x.id === menu.id);
         if (!t) return null;
-        const usage = templateUsageCount(t.id, seedAwards);
         return (
           <ActionsMenu
             rect={menu.rect}
-            title={t.name}
-            subtitle={`${t.id} · ${usage} use${usage === 1 ? "" : "s"}`}
             archiveLabel="Template"
             onClose={() => setMenu(null)}
             onEdit={() => onEdit(t)}
@@ -197,19 +202,25 @@ export function AwardTemplatesSection({
             onEditLinkedAward?.(first);
           }}
         >
-          <div className="form-warning" style={{ marginBottom: 0 }}>
-            <span className="form-warning-icon"><WarnIcon /></span>
-            <div>
-              <strong>{modal.template.name}</strong> is used by {modal.linked.length} Award
-              {modal.linked.length === 1 ? "" : "s"} and can’t be deleted. Unlink it from each
-              Award’s Card or Certificate design first, then delete it.
-              <div className="sk-warn-chips">
-                {modal.linked.map((a) => (
-                  <span key={a.id} className="sk-chip">{certName(a)}</span>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* Award Templates' delete gate: a template in use can't be
+              deleted, and the warning names the Awards holding it. */}
+          <NoteCard
+            tone="danger"
+            icon={<WarnTriangleIcon />}
+            title={`${modal.template.name} is used by ${modal.linked.length} Award${
+              modal.linked.length === 1 ? "" : "s"
+            } and can’t be deleted.`}
+            body={
+              <>
+                Unlink it from each Award’s Card or Certificate design first, then delete it.
+                <span className="sk-warn-chips">
+                  {modal.linked.map((a) => (
+                    <span key={a.id} className="sk-chip">{certName(a)}</span>
+                  ))}
+                </span>
+              </>
+            }
+          />
         </ConfirmModal>
       )}
 
@@ -244,6 +255,7 @@ export function AwardTemplatesSection({
 function compareTemplate(a: AwardDesignTemplate, b: AwardDesignTemplate, key: string): number {
   switch (key) {
     case "name": return a.name.localeCompare(b.name);
+    case "background": return a.background.localeCompare(b.background);
     case "id": return a.id.localeCompare(b.id);
     case "usage": return templateUsageCount(a.id, seedAwards) - templateUsageCount(b.id, seedAwards);
     case "createdBy": return a.createdBy.localeCompare(b.createdBy);
@@ -253,28 +265,43 @@ function compareTemplate(a: AwardDesignTemplate, b: AwardDesignTemplate, key: st
   }
 }
 
-function TemplateColGroup({ cols }: { cols: Record<TemplateColKey, boolean> }) {
-  return (
-    <TableCols
-        data={[
-          72,
-          240,
-          cols.id && 100,
-          cols.usage && 130,
-          cols.createdBy && 150,
-          cols.dateCreated && 130,
-          cols.dateModified && 130,
-        ]}
-        trail={[40]}
-      />
-  );
+/* The optional columns, in TEMPLATE_COLS order; Edit Columns reorders them.
+   One datum per column (the plain-text cell rule): the background image's file
+   name is its own column rather than a second line under the template name. */
+type TplCol = {
+  key: TemplateColKey;
+  label: string;
+  className: string;
+  width: number;
+  sortable?: boolean;
+  render: (t: AwardDesignTemplate, usage: number) => ReactNode;
+};
+const THUMB_W = 72;
+const NAME_W = 240;
+const TPL_COL_DEFS: TplCol[] = [
+  { key: "background", label: "Background Image", className: "aw-col-bg", width: 220, render: (t) => t.background },
+  { key: "id", label: "ID", className: "col-id", width: 100, render: (t) => t.id },
+  {
+    key: "usage",
+    label: "Used By",
+    className: "col-used",
+    width: 130,
+    render: (_t, usage) => (usage === 0 ? "Unused" : `${usage} Award${usage === 1 ? "" : "s"}`),
+  },
+  { key: "createdBy", label: "Created By", className: "col-creator", width: 150, sortable: false, render: (t) => t.createdBy },
+  { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated },
+  { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified },
+];
+
+function TemplateColGroup({ shown }: { shown: TplCol[] }) {
+  return <TableCols data={[THUMB_W, NAME_W, ...shown.map((c) => c.width)]} trail={[40]} />;
 }
 
 function TemplateRow({
-  template, cols, usage, selected, onClick, onEdit, onMenu, menuOpen,
+  template, shown, usage, selected, onClick, onEdit, onMenu, menuOpen,
 }: {
   template: AwardDesignTemplate;
-  cols: Record<TemplateColKey, boolean>;
+  shown: TplCol[];
   usage: number;
   selected: boolean;
   onClick: () => void;
@@ -286,17 +313,17 @@ function TemplateRow({
   return (
     <tr className={`${selected ? "selected" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
       <td className="aw-col-thumb">
-        <span className="aw-row-thumb" style={{ background: template.swatch }} />
+        {/* The colour rides a custom property: the plain-text cell rule
+            clears `background` with !important, and its exception for this
+            cell paints `var(--swatch)` back. */}
+        <span className="aw-row-thumb" style={{ "--swatch": template.swatch } as CSSProperties} />
       </td>
-      <td className="col-name">
-        {template.name}
-        <span className="aw-cert-industry">{template.background}</span>
-      </td>
-      {cols.id && <td className="col-id">{template.id}</td>}
-      {cols.usage && <td className="col-used">{usage === 0 ? "Unused" : `${usage} Award${usage === 1 ? "" : "s"}`}</td>}
-      {cols.createdBy && <td className="col-creator">{template.createdBy}</td>}
-      {cols.dateCreated && <td className="col-date">{template.dateCreated}</td>}
-      {cols.dateModified && <td className="col-date">{template.dateModified}</td>}
+      <td className="col-name">{template.name}</td>
+      {shown.map((c) => (
+        <td key={c.key} className={c.className}>
+          {c.render(template, usage)}
+        </td>
+      ))}
       <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Template" />
     </tr>
   );

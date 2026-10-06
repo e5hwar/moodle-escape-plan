@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "../data/tasks";
 import { CERTIFICATIONS, TASK_TYPES } from "../data/filters";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 const CERT_PREFIX = "Certification:";
@@ -11,7 +11,6 @@ const TYPE_PREFIX = "Type:";
 type Opt =
   | { kind: "cert-filter" }
   | { kind: "type-filter" }
-  | { kind: "search" }
   | { kind: "cert"; name: string }
   | { kind: "type"; name: string };
 
@@ -88,26 +87,45 @@ export function TasksSearch({
     ).slice(0, MAX_RESULTS);
   }, [typeQuery, appliedTypes]);
 
+  /* Free text: every filter value it matches, Certifications then Types
+     (1542:2130). None → no panel; Enter searches the text as typed. */
+  const suggestions = useMemo(
+    () =>
+      inMode
+        ? []
+        : suggestFilters(taskQuery, [
+            { kind: "Certification", chip: CERT_PREFIX, values: CERTIFICATIONS, exclude: [...draft, ...applied] },
+            { kind: "Task Type", chip: TYPE_PREFIX, values: TASK_TYPES, exclude: appliedTypes },
+          ], MAX_RESULTS),
+    [inMode, taskQuery, draft, applied, appliedTypes],
+  );
+  const showPanel = open && !(!inMode && hasQuery && suggestions.length === 0);
+
   // Options available to keyboard navigation, in render order.
   const optionCount = inCertMode
     ? certResults.length
     : inTypeMode
       ? typeResults.length
-      : 2 + (hasQuery ? 1 : 0);
+      : hasQuery
+        ? suggestions.length
+        : 2;
 
   function optionAt(i: number): Opt | null {
     if (inCertMode) return certResults[i] ? { kind: "cert", name: certResults[i] } : null;
     if (inTypeMode) return typeResults[i] ? { kind: "type", name: typeResults[i] } : null;
+    if (hasQuery) {
+      const sg = suggestions[i];
+      if (!sg) return null;
+      return sg.kind === "Certification" ? { kind: "cert", name: sg.name } : { kind: "type", name: sg.name };
+    }
     if (i === 0) return { kind: "cert-filter" };
     if (i === 1) return { kind: "type-filter" };
-    if (i === 2 && hasQuery) return { kind: "search" };
     return null;
   }
 
-  // When the user has typed free text, preselect the "Search for…" row (the last
-  // option) so pressing Enter searches immediately; arrowing moves the highlight off it.
+  // Typing puts the caret back in the bar — Enter there searches the text.
   useEffect(() => {
-    setActive(!inMode && hasQuery ? 2 : -1);
+    setActive(-1);
   }, [text, draft.length, inMode, hasQuery]);
 
   /* Abandon an uncommitted edit. The table only ever filters on the APPLIED
@@ -190,10 +208,10 @@ export function TasksSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -258,9 +276,9 @@ export function TasksSearch({
         )}
       </div>
 
-      {open && (
+      {showPanel && (
         <div className="usearch-panel">
-          {!inMode && (
+          {!inMode && !hasQuery && (
             <>
               <div className="usearch-head">Suggested filters</div>
               <OptionRow active={active === 0} onHover={() => setActive(0)} onClick={() => activate({ kind: "cert-filter" })}>
@@ -280,9 +298,7 @@ export function TasksSearch({
             <>
               <div className="usearch-head">Certifications</div>
               {certResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {certQuery.trim() ? `No certifications match “${certQuery.trim()}”.` : "Start typing a certification name…"}
-                </div>
+                <>{certQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a certification name…"}</div>}</>
               ) : (
                 certResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "cert", name })}>
@@ -299,9 +315,7 @@ export function TasksSearch({
             <>
               <div className="usearch-head">Task type</div>
               {typeResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {typeQuery.trim() ? `No types match “${typeQuery.trim()}”.` : "All task types are already applied."}
-                </div>
+                <>{typeQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"All task types are already applied."}</div>}</>
               ) : (
                 typeResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "type", name })}>
@@ -314,17 +328,22 @@ export function TasksSearch({
             </>
           )}
 
-          {!inMode && hasQuery ? (
-            <SearchForRow
-              query={taskQuery.trim()}
-              scope="Tasks"
-              active={active === 2}
-              onHover={() => setActive(2)}
-              onClick={() => commitSearch(taskQuery)}
-            />
-          ) : (
-            <SearchHints />
+          {!inMode && hasQuery && (
+            <>
+              <div className="usearch-head">Suggested filters</div>
+              {suggestions.map((sg, i) => (
+                <SuggestionRow
+                  key={sg.kind + sg.name}
+                  suggestion={sg}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => activate(optionAt(i)!)}
+                />
+              ))}
+            </>
           )}
+
+          <SearchHints />
         </div>
       )}
     </div>

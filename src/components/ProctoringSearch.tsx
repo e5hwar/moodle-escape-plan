@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Submission } from "../data/proctoring";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, SuggestionRow, suggestFilters } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-/** Per scope kind in "Suggested filters" (Quiz is the only one). */
-const MAX_SUGGESTED_PER_KIND = 2;
 
 type Opt = { kind: "exam-filter" } | { kind: "exam"; name: string };
 
@@ -59,6 +57,7 @@ export function ProctoringSearch({
   const inExamMode = examMatch != null;
   const examQuery = examMatch ? examMatch[1] : "";
   const freeQuery = inExamMode ? "" : text;
+  const hasFree = freeQuery.trim() !== "";
 
   // Everything currently narrowing the bar — applied scopes plus this session's drafts.
   const scopedExams = useMemo(
@@ -79,10 +78,10 @@ export function ProctoringSearch({
   const suggestions = useMemo<Opt[]>(() => {
     const q = freeQuery.trim().toLowerCase();
     if (!q) return [{ kind: "exam-filter" }];
-    return allExams.names
-      .filter((n) => !scopedExams.includes(n) && n.toLowerCase().includes(q))
-      .slice(0, MAX_SUGGESTED_PER_KIND)
-      .map((name) => ({ kind: "exam", name }) as Opt);
+    // The same shared matcher (and 6-row cap) as every other bar.
+    return suggestFilters(q, [{ kind: "exam", values: allExams.names, exclude: scopedExams }], MAX_RESULTS).map(
+      (sg) => ({ kind: "exam", name: sg.name }) as Opt,
+    );
   }, [freeQuery, allExams, scopedExams]);
 
   const optionCount = inExamMode ? examResults.length : suggestions.length;
@@ -165,10 +164,10 @@ export function ProctoringSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -249,12 +248,25 @@ export function ProctoringSearch({
         )}
       </div>
 
-      {open && (
+      {/* Typed text with nothing to suggest: no panel — Enter searches it. */}
+      {open && !(hasFree && suggestions.length === 0) && (
         <div className="usearch-panel">
           {!inExamMode && (
             <>
               {suggestions.length > 0 && <div className="usearch-head">Suggested filters</div>}
               {suggestions.map((opt, i) => {
+                /* Typed: the matching value + what it is (1542:2130). */
+                if (hasFree && opt.kind === "exam") {
+                  return (
+                    <SuggestionRow
+                      key={opt.name}
+                      suggestion={{ name: opt.name, kind: "Quiz", chip: "Quiz:" }}
+                      active={active === i}
+                      onHover={() => setActive(i)}
+                      onClick={() => activate(opt)}
+                    />
+                  );
+                }
                 const row = suggestionRow(opt, { allExams });
                 if (!row) return null;
                 return (
@@ -278,9 +290,7 @@ export function ProctoringSearch({
             <>
               <div className="usearch-head">Quizzes</div>
               {examResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {examQuery.trim() ? `No quizzes match “${examQuery.trim()}”.` : "Start typing a quiz name…"}
-                </div>
+                <>{examQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a quiz name…"}</div>}</>
               ) : (
                 examResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "exam", name })}>
@@ -293,11 +303,7 @@ export function ProctoringSearch({
             </>
           )}
 
-          {freeQuery.trim() ? (
-            <SearchForRow query={freeQuery.trim()} scope="Submissions" onClick={commit} />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

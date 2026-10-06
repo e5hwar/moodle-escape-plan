@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  ArrowUpRightIcon,
   DropdownCaretIcon,
   } from "./icons";
 import { leave, useTouchedKeys } from "./fieldFlags";
@@ -175,7 +174,7 @@ export function NewAwardWizard(props: Props) {
                           if (go) guard(go);
                         }}
                       >
-                        View Recipients <ArrowUpRightIcon />
+                        View Recipients
                       </a>
                       .
                     </>
@@ -235,11 +234,11 @@ export function NewAwardWizard(props: Props) {
           <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
           {/* Deleting the Award is the only way to give the Certification its
               "Add Award" entry back, and the Awards table that used to carry
-              the action is gone — so it sits here, quiet and far from the
-              primary button, in the `.wizard-cancel` type at danger red. */}
+              the action is gone — so it sits here, on the footer's left, far
+              from Save: the destructive CTA (Figma 495:2247), double-confirmed. */}
           {isEditing && props.onDelete && (
             <button
-              className="wizard-cancel wizard-cancel--danger"
+              className="btn-publish btn-publish--danger"
               onClick={() => setConfirmDelete(true)}
             >
               Delete Award

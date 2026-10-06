@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
-import { CheckRow, ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger } from "./Filters";
+import { CheckRow, ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger, FilterNoResults, useUnfilteredHeight } from "./Filters";
 import { EditColumnsIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
 import { companies } from "../data/companies";
@@ -199,7 +199,7 @@ export function UsersEditColumns<T extends Record<string, boolean>>({
             toggle();
           }}
           aria-label="Edit columns"
-          data-tooltip="Edit Columns"
+          data-tip="Edit Columns"
         >
           <EditColumnsIcon />
         </button>
@@ -345,6 +345,7 @@ function SimpleMultiSelect({
 }) {
   const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
+  const [listRef, listHeight] = useUnfilteredHeight(!!query.trim());
 
   useEffect(() => setDraft(value), [value]);
 
@@ -368,13 +369,17 @@ function SimpleMultiSelect({
           onChange={setQuery}
         />
       )}
-      <div className="dropdown-list">
-        <div className="dropdown-section">
-          {filtered.map((item) => (
-            <CheckRow key={item} label={item} checked={draft.includes(item)} onChange={() => toggle(item)} />
-          ))}
+      {query.trim() && filtered.length === 0 ? (
+        <FilterNoResults height={listHeight.current} />
+      ) : (
+        <div className="dropdown-list" ref={listRef}>
+          <div className="dropdown-section">
+            {filtered.map((item) => (
+              <CheckRow key={item} label={item} checked={draft.includes(item)} onChange={() => toggle(item)} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="dropdown-footer">
         <button
           className="btn-apply"

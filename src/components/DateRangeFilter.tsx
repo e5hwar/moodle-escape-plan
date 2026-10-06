@@ -359,7 +359,6 @@ export function DateRangePanel({
     <div className="drp" onClick={() => setMyMenu(null)}>
       <div className="drp-body">
         <div className="drp-presets">
-          <div className="drp-presets-title">Presets</div>
           <div className="drp-presets-list">
             {presets.map((p) => (
               <button
@@ -414,10 +413,22 @@ export function DateRangePanel({
         })}
       </div>
 
-      {/* Apply alone — no Clear. The range always has a value, so "clear" only
-          ever meant "reset to the default", which the presets list already
-          offers by name and says more clearly. */}
+      {/* Clear + Apply (606:1688 / 607:1955, user 2026-10-06). Clear empties
+          the DRAFT — no start, no end, no preset, both inputs back to their
+          placeholder — so Apply, which needs both dates, can't save an empty
+          range. Clicking outside still closes without saving: the applied
+          range stays. */}
       <div className="dropdown-footer drp-footer">
+        <button
+          className="btn-save-draft"
+          disabled={!draft.start && !draft.end && !draft.preset}
+          onClick={() => {
+            setDraft({ preset: null, start: "", end: "" });
+            setHoverISO("");
+          }}
+        >
+          Clear
+        </button>
         <button
           className="btn-apply"
           disabled={
@@ -580,26 +591,31 @@ function RangeCalendar({
             <ChevronDownSquareIcon />
           </button>
           {(menuOpen("month") || menuOpen("year")) && (
+            /* The Reduced Size menu (640:1005), shared with DateField. A month
+               after today's is unpickable — the range can't start in the future. */
             <div className="drp-my-menu" onClick={(e) => e.stopPropagation()}>
-              {menuOpen("month")
-                ? MONTHS.map((name, i) => (
-                    <button
-                      key={name}
-                      className={`drp-my-item${i === m ? " is-active" : ""}`}
-                      onClick={() => onPickMonth(i)}
-                    >
-                      {name}
-                    </button>
-                  ))
-                : years.map((y) => (
-                    <button
-                      key={y}
-                      className={`drp-my-item${y === year ? " is-active" : ""}`}
-                      onClick={() => onPickYear(y)}
-                    >
-                      {y}
-                    </button>
-                  ))}
+              <div className="dropdown-list">
+                {menuOpen("month")
+                  ? MONTHS.map((name, i) => (
+                      <button
+                        key={name}
+                        className={`dropdown-item${i === m ? " is-current" : ""}`}
+                        disabled={toISO(new Date(year, i, 1)) > todayISO}
+                        onClick={() => onPickMonth(i)}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  : years.map((y) => (
+                      <button
+                        key={y}
+                        className={`dropdown-item${y === year ? " is-current" : ""}`}
+                        onClick={() => onPickYear(y)}
+                      >
+                        {y}
+                      </button>
+                    ))}
+              </div>
             </div>
           )}
         </div>

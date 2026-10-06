@@ -25,12 +25,13 @@ import {
 import { useColumnOrder, orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
-import { SearchTrailing } from "./SearchPanelParts";
+import { SelectGrantUsersModal } from "./GrantAttemptsModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, AddIcon, SearchIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { SubscriptionPill } from "./SubscriptionPill";
 import { useToast } from "./useToast";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -289,7 +290,6 @@ export function CertPurchasersPage({
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 2; // name + cols + actions
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
@@ -470,18 +470,10 @@ export function CertPurchasersPage({
                           }
                         />
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={colSpan} className="u-empty">
-                            {committedQuery.trim()
-                              ? `No purchasers match "${committedQuery.trim()}".`
-                              : "No purchasers match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">
@@ -753,7 +745,12 @@ function PurchaserActionsMenu({
   );
 }
 
-/* ─────────────── Grant Access flow (search → confirm) ─────────────── */
+/* ─────────────── Grant Access flow (pick → confirm) ───────────────
+   The same comp flow as the Quiz Who Paid's Grant Free Attempts: the shared
+   table picker (Figma 682:2321) first, then a PrmModal confirm. A Certification
+   is granted to one user at a time, so the picker is single-pick and carries no
+   Attempts column. Cancel on the confirm goes back to the picker; ✕, the scrim
+   and Escape close the flow. */
 
 function GrantAccessModal({
   cert,
@@ -766,112 +763,51 @@ function GrantAccessModal({
   onGrant: (u: User) => void;
   onClose: () => void;
 }) {
-  const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<User | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Cancel on the confirm returns to the picker with the pick still ticked.
+  const [confirming, setConfirming] = useState(false);
 
+  // PrmModal has no key handling of its own; while the picker is up it owns
+  // the key, so this only closes the confirm.
   useEffect(() => {
-    inputRef.current?.focus();
+    if (!confirming) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, confirming]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = q
-      ? candidates.filter(
-          (u) =>
-            u.name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.phone.toLowerCase().includes(q) ||
-            (u.companyName ?? "").toLowerCase().includes(q),
-        )
-      : candidates;
-    return base.slice(0, 40);
-  }, [candidates, query]);
+  if (!confirming || !picked) {
+    return (
+      <SelectGrantUsersModal
+        title={`Grant access to “${cert.name}”`}
+        description="Give a user access to this Certification without a purchase. Choose who to comp."
+        candidates={candidates}
+        single
+        value={picked ? [picked.id] : []}
+        onCancel={onClose}
+        onConfirm={([id]) => {
+          setPicked(candidates.find((u) => u.id === id) ?? null);
+          setConfirming(true);
+        }}
+      />
+    );
+  }
 
   return (
-    <div className="cl-modal-overlay" onMouseDown={onClose}>
-      <div
-        className="cl-modal"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {!picked ? (
-          <>
-            <div className="cl-modal-head">
-              <div className="cl-modal-eyebrow">Grant access · no payment</div>
-              <h2 className="cl-modal-title">Grant access to “{cert.name}”</h2>
-              <p className="cl-modal-sub">
-                Give a user access to this Certification without a purchase. Choose who to comp.
-              </p>
-            </div>
-            <div className="cl-modal-search">
-              <div className="search-wrap">
-                <span className="search-icon"><SearchIcon /></span>
-                <input
-                  ref={inputRef}
-                  className="search-input"
-                  placeholder="Search Users by Name, Email, Phone, or Company..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <SearchTrailing active={!!query} onClear={() => setQuery("")} />
-              </div>
-            </div>
-            <div className="cl-modal-list">
-              {results.length === 0 ? (
-                <div className="cl-modal-empty">
-                  {query.trim()
-                    ? `No users without access match “${query.trim()}”.`
-                    : "Every user already has access to this Certification."}
-                </div>
-              ) : (
-                results.map((u) => (
-                  <button key={u.id} className="cl-modal-item" onClick={() => setPicked(u)}>
-                    <span className="cp-modal-avatar">{u.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>
-                    <span className="cl-modal-item-text">
-                      <span className="cl-modal-item-name">{u.name}</span>
-                      <span className="cl-modal-item-meta">
-                        {u.email} · {u.userType === "B2B" && u.companyName ? u.companyName : "B2C"}
-                      </span>
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="cl-modal-head">
-              <button className="cl-modal-back" onClick={() => setPicked(null)}>‹ Back</button>
-              <h2 className="cl-modal-title">Confirm grant</h2>
-            </div>
-            <div className="cp-confirm-body">
-              <div className="cp-confirm-user">
-                <span className="cp-modal-avatar lg">{picked.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>
-                <div>
-                  <div className="cl-modal-item-name">{picked.name}</div>
-                  <div className="cl-modal-item-meta">{picked.email} · {picked.id}</div>
-                </div>
-              </div>
-              <p className="cp-confirm-text">
-                <strong>{picked.name}</strong> will get full access to <strong>{cert.name}</strong> at
-                no charge. They start at 0% progress and the purchase is recorded as an
-                admin grant{isConsumableCert(cert) ? " (a consumable access window opens immediately)" : ""}.
-              </p>
-            </div>
-            <div className="cl-modal-foot cp-confirm-foot">
-              <button className="btn-secondary" onClick={() => setPicked(null)}>Cancel</button>
-              <button className="btn-publish" onClick={() => onGrant(picked)}>Grant access</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <PrmModal
+      title="Confirm grant"
+      confirmLabel="Grant access"
+      onCancelButton={() => setConfirming(false)}
+      onCancel={onClose}
+      onConfirm={() => onGrant(picked)}
+    >
+      <p className="prm-content">
+        <strong>{picked.name}</strong> will get full access to <strong>{cert.name}</strong> at
+        no charge. They start at 0% progress and the purchase is recorded as an
+        admin grant{isConsumableCert(cert) ? " (a consumable access window opens immediately)" : ""}.
+      </p>
+    </PrmModal>
   );
 }

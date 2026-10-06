@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type TaskSubmission } from "../data/reviewSubmissions";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, SuggestionRow, suggestFilters } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
-/** Per scope kind (Task / Certification / Company) in "Suggested filters". */
-const MAX_SUGGESTED_PER_KIND = 2;
+/** A typed suggestion's right-hand label, and its filter chip. */
+const KIND_LABEL = { task: "Task", certification: "Certification", company: "Company" } as const;
 
 type Opt =
   | { kind: "company-filter" }
@@ -93,6 +93,7 @@ export function ReviewSearch({
   const taskQuery = taskMatch ? taskMatch[1] : "";
   const certQuery = certMatch ? certMatch[1] : "";
   const freeQuery = inScopeMode ? "" : text;
+  const hasFree = freeQuery.trim() !== "";
 
   const companyResults = useMemo(() => {
     const q = companyQuery.trim().toLowerCase();
@@ -124,21 +125,16 @@ export function ReviewSearch({
     if (!q) {
       return [{ kind: "task-filter" }, { kind: "certification-filter" }, { kind: "company-filter" }];
     }
-    const pick = (names: string[], draft: string[], applied: string[]) =>
-      names
-        .filter((n) => !draft.includes(n) && !applied.includes(n) && n.toLowerCase().includes(q))
-        .slice(0, MAX_SUGGESTED_PER_KIND);
-    return [
-      ...pick(allTasks.names, draftTasks, appliedTasks).map(
-        (name) => ({ kind: "task", name }) as Opt,
-      ),
-      ...pick(allCerts.names, draftCerts, appliedCerts).map(
-        (name) => ({ kind: "certification", name }) as Opt,
-      ),
-      ...pick(allCompanies.names, draftCompanies, appliedCompanies).map(
-        (name) => ({ kind: "company", name }) as Opt,
-      ),
-    ];
+    // The same shared matcher (and 6-row cap) as every other bar.
+    return suggestFilters(
+      q,
+      [
+        { kind: "task", values: allTasks.names, exclude: [...draftTasks, ...appliedTasks] },
+        { kind: "certification", values: allCerts.names, exclude: [...draftCerts, ...appliedCerts] },
+        { kind: "company", values: allCompanies.names, exclude: [...draftCompanies, ...appliedCompanies] },
+      ],
+      MAX_RESULTS,
+    ).map((sg) => ({ kind: sg.kind, name: sg.name }) as Opt);
   }, [
     freeQuery,
     allTasks, allCerts, allCompanies,
@@ -259,10 +255,10 @@ export function ReviewSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -360,12 +356,25 @@ export function ReviewSearch({
         )}
       </div>
 
-      {open && (
+      {/* Typed text with nothing to suggest: no panel — Enter searches it. */}
+      {open && !(hasFree && suggestions.length === 0) && (
         <div className="usearch-panel">
           {!inScopeMode && (
             <>
               {suggestions.length > 0 && <div className="usearch-head">Suggested filters</div>}
               {suggestions.map((opt, i) => {
+                /* Typed: the matching value + what it is (1542:2130). */
+                if (hasFree && "name" in opt) {
+                  return (
+                    <SuggestionRow
+                      key={opt.kind + opt.name}
+                      suggestion={{ name: opt.name, kind: KIND_LABEL[opt.kind], chip: `${KIND_LABEL[opt.kind]}:` }}
+                      active={active === i}
+                      onHover={() => setActive(i)}
+                      onClick={() => activate(opt)}
+                    />
+                  );
+                }
                 const row = suggestionRow(opt, { allTasks, allCerts, allCompanies });
                 if (!row) return null;
                 return (
@@ -389,9 +398,7 @@ export function ReviewSearch({
             <>
               <div className="usearch-head">Companies</div>
               {companyResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {companyQuery.trim() ? `No companies match “${companyQuery.trim()}”.` : "Start typing a company name…"}
-                </div>
+                <>{companyQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a company name…"}</div>}</>
               ) : (
                 companyResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
@@ -408,9 +415,7 @@ export function ReviewSearch({
             <>
               <div className="usearch-head">Tasks</div>
               {taskResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {taskQuery.trim() ? `No tasks match “${taskQuery.trim()}”.` : "Start typing a task name…"}
-                </div>
+                <>{taskQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a task name…"}</div>}</>
               ) : (
                 taskResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "task", name })}>
@@ -427,9 +432,7 @@ export function ReviewSearch({
             <>
               <div className="usearch-head">Certifications</div>
               {certResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {certQuery.trim() ? `No certifications match “${certQuery.trim()}”.` : "Start typing a certification name…"}
-                </div>
+                <>{certQuery.trim() ? <SearchNoResults /> : <div className="usearch-empty">{"Start typing a certification name…"}</div>}</>
               ) : (
                 certResults.map((name, i) => (
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "certification", name })}>
@@ -442,11 +445,7 @@ export function ReviewSearch({
             </>
           )}
 
-          {freeQuery.trim() ? (
-            <SearchForRow query={freeQuery.trim()} scope="Submissions" onClick={commit} />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

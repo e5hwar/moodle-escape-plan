@@ -116,7 +116,7 @@ type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; ba
 type NavSection = { label?: string; items: LinkItem[] };
 
 // Question Bank and Skills are deliberately absent — Figma 633:1865 moved them
-// into the Tasks page header (same move Offer Codes / Scholarships made).
+// into the Tasks page header (same move Scholarships made).
 // Industries, Awards, and Feedback made the same move onto the Certifications
 // page header; the crumb on each page is the way back.
 // Manage Completions is absent too: it is only ever reached scoped, from a

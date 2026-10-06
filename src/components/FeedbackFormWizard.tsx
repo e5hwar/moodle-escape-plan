@@ -96,7 +96,16 @@ export function FeedbackFormWizard({
   function saveLinks(questions: FormQuestionLink[]) {
     onUpdate({ ...form, questions, updatedAt: TODAY });
   }
+  /* Removing the last trigger flags the field at once with why (Figma list
+     item 36) — not "cannot be left empty", which is for one never filled. */
+  const [droppedLast, setDroppedLast] = useState(false);
   function saveTriggers(triggers: FormTrigger[]) {
+    if (triggers.length === 0 && form.triggers.length > 0) {
+      setDroppedLast(true);
+      touch("triggers");
+    } else if (triggers.length > 0) {
+      setDroppedLast(false);
+    }
     onUpdate({ ...form, triggers, updatedAt: TODAY });
   }
   function rename(name: string) {
@@ -305,13 +314,16 @@ export function FeedbackFormWizard({
                   <label className="form-label">
                     Triggers<span className="req">*</span>
                     {triggersMissing && (
-                      <span className="form-label-error">Triggers cannot be left empty</span>
+                      <span className="form-label-error">
+                        {droppedLast ? "A form needs at least one trigger" : "Triggers cannot be left empty"}
+                      </span>
                     )}
                   </label>
                   <FeedbackFormTriggers
                     form={form}
                     allForms={allForms}
                     onSave={saveTriggers}
+                    invalid={triggersMissing}
                   />
                   {/* Subtext always sits BELOW the control
                       ([[form-subtext-pattern]]), and the "How triggers behave"

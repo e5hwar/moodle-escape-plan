@@ -43,6 +43,7 @@ import {
 } from "./DateRangeFilter";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -134,7 +135,7 @@ const FB_COLS: FbColMeta[] = [
       ) : (
         <>
           {f.triggers[0].refName}
-          {f.triggers.length > 1 && <span className="used-extra">+{f.triggers.length - 1}</span>}
+          {f.triggers.length > 1 && <>{" "}<span className="used-extra">+{f.triggers.length - 1}</span></>}
         </>
       ),
   },
@@ -462,28 +463,21 @@ export function FeedbackFormsPage({
                       <table className="table table-body">
                         <FbColGroup cols={visibleCols} />
                         <tbody>
-                          {paged.length === 0 ? (
-                            <tr>
-                              <td colSpan={visibleCols.length + 2} className="u-empty">
-                                No Feedback Forms match. Try a different filter or search term.
-                              </td>
-                            </tr>
-                          ) : (
-                            paged.map((f) => (
-                              <FormRow
-                                key={f.id}
-                                form={f}
-                                cols={visibleCols}
-                                range={dateRange}
-                                onEdit={() => onOpen(f.id)}
-                                onOpenMenu={(rect) => setMenu({ form: f, rect })}
-                                menuOpen={menu?.form.id === f.id}
-                              />
-                            ))
-                          )}
+                          {paged.map((f) => (
+                            <FormRow
+                              key={f.id}
+                              form={f}
+                              cols={visibleCols}
+                              range={dateRange}
+                              onEdit={() => onOpen(f.id)}
+                              onOpenMenu={(rect) => setMenu({ form: f, rect })}
+                              menuOpen={menu?.form.id === f.id}
+                            />
+                          ))}
                         </tbody>
                       </table>
                     </div>
+                    {paged.length === 0 && <TableEmpty />}
                   </div>
 
                   <div className="pagination">

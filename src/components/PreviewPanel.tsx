@@ -105,7 +105,7 @@ export function PreviewPanel({
               </div>
               {onMore && (
                 <button
-                  className="pp-more"
+                  className="cta-quiet cta-quiet--icon"
                   aria-label="More actions"
                   data-tip="More actions"
                   onClick={(e) => onMore(e.currentTarget.getBoundingClientRect())}

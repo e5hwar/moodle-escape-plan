@@ -14,7 +14,7 @@
  */
 
 const SELECTOR = ".tasks-scroll, .table-xscroll";
-const THICKNESS = 6; // px — track/thumb size on the cross axis
+const THICKNESS = 8; // px — the standard bar (index.css "Scrollbars")
 const INSET = 2; // px — gap from the container edge
 const MIN_THUMB = 28; // px — smallest thumb so it stays grabbable
 // Tables no longer show a vertical scrollbar — only the horizontal one is drawn.
@@ -141,6 +141,25 @@ function clipRect(el: HTMLElement) {
   return { left, top, right, bottom, width: right - left, height: bottom - top };
 }
 
+/** The bars live in <body>, so they stack against the container's outermost
+ *  layer, not the container. A table inside a picker modal (z-index 400) would
+ *  otherwise draw its bar at the default 50, hidden under the modal. Returns
+ *  the highest z-index on the container's ancestors, or 0. */
+function stackLevel(el: HTMLElement): number {
+  let level = 0;
+  for (let n: HTMLElement | null = el; n && n !== document.body; n = n.parentElement) {
+    const z = parseInt(getComputedStyle(n).zIndex, 10);
+    if (!Number.isNaN(z)) level = Math.max(level, z);
+  }
+  return level;
+}
+
+function setStack(track: HTMLDivElement, thumb: HTMLDivElement, level: number) {
+  // Page tables keep the stylesheet's 50/51; only a higher layer lifts them.
+  track.style.zIndex = level >= 50 ? String(level + 1) : "";
+  thumb.style.zIndex = level >= 50 ? String(level + 2) : "";
+}
+
 function layout(el: HTMLElement, bars: Bars) {
   const c = clipRect(el);
   const visible = c.width > 0 && c.height > 0;
@@ -172,6 +191,7 @@ function layout(el: HTMLElement, bars: Bars) {
     const pos = maxScroll > 0 ? (el.scrollLeft / maxScroll) * (hLen - thumbLen) : 0;
     bars.hTrackLen = hLen;
     bars.hThumbLen = thumbLen;
+    setStack(bars.hTrack, bars.hThumb, stackLevel(el));
     Object.assign(bars.hTrack.style, { top, left: `${left}px`, width: `${hLen}px`, height: `${THICKNESS}px` });
     Object.assign(bars.hThumb.style, { top, left: `${left + pos}px`, width: `${thumbLen}px`, height: `${THICKNESS}px` });
   }
@@ -188,6 +208,7 @@ function layout(el: HTMLElement, bars: Bars) {
     const pos = maxScroll > 0 ? (el.scrollTop / maxScroll) * (vLen - thumbLen) : 0;
     bars.vTrackLen = vLen;
     bars.vThumbLen = thumbLen;
+    setStack(bars.vTrack, bars.vThumb, stackLevel(el));
     Object.assign(bars.vTrack.style, { left, top: `${top}px`, width: `${THICKNESS}px`, height: `${vLen}px` });
     Object.assign(bars.vThumb.style, { left, top: `${top + pos}px`, width: `${THICKNESS}px`, height: `${thumbLen}px` });
   }

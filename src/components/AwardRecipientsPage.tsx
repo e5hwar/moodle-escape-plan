@@ -8,12 +8,15 @@ import {
   fmtHolders,
   MERIT_HEX,
   type Award,
+  type MeritTier,
 } from "../data/awards";
 import { buildAwardRecipients, type AwardRecipient } from "../data/awardRecipients";
 import { UsersFilters, type UserFilterState } from "./UsersFilters";
 import { UsersSearch } from "./UsersSearch";
-import { ChevronLeftIcon, SortIcon, AddIcon, DownloadIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { CrumbChevronIcon, SortIcon, AddIcon, DownloadIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { RowKebab, RowMenu, type RowMenuItem } from "./RowMenu";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
@@ -80,7 +83,16 @@ const COLS: ColMeta[] = [
 ];
 
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
-const DOWNLOAD_COL_WIDTH = 190;
+const ACTIONS_WIDTH = 40;
+
+/* Merit Tier on the shared Table Pills (107:1132 family), nearest hue to each
+   tier's medal colour (MERIT_HEX). */
+const TIER_PILL: Record<MeritTier, string> = {
+  Platinum: "purple",
+  Gold: "yellow",
+  Silver: "secondary",
+  Bronze: "accent",
+};
 
 function compareRows(a: Row, b: Row, key: SortKey): number {
   if (key === "name") return a.u.name.localeCompare(b.u.name);
@@ -157,9 +169,12 @@ function downloadAllCsv(award: Award, rows: Row[]) {
 export function AwardRecipientsPage({
   award,
   onBack,
+  onOpenCertifications,
 }: {
   award: Award;
+  /** Back to the Award's own page (the "Manage Award" crumb). */
   onBack: () => void;
+  onOpenCertifications: () => void;
 }) {
   const cert = certForAward(award);
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
@@ -172,6 +187,8 @@ export function AwardRecipientsPage({
   const hasCert = Boolean(award.certificateTemplateId);
   // Each download is acknowledged once the file is handed off.
   const [toast, toastNode] = useToast();
+  // A row's download menu (the Full Profile Awards table's pattern, 1278:1571).
+  const [menu, setMenu] = useState<{ row: Row; rect: DOMRect } | null>(null);
 
   const rows = useMemo<Row[]>(
     () =>
@@ -223,7 +240,7 @@ export function AwardRecipientsPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  const tableMin = 240 + COLS.reduce((s, c) => s + c.width, 0) + DOWNLOAD_COL_WIDTH;
+  const tableMin = 240 + COLS.reduce((s, c) => s + c.width, 0) + ACTIONS_WIDTH;
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -236,8 +253,7 @@ export function AwardRecipientsPage({
     {
       label: "Merit Tier",
       value: (
-        <span className="aw-tier-pill" style={{ "--tier": MERIT_HEX[award.meritTier] } as React.CSSProperties}>
-          <span className="aw-tier-pill-dot" />
+        <span className={`co-status-pill co-status-pill--${TIER_PILL[award.meritTier]}`}>
           {award.meritTier}
         </span>
       ),
@@ -245,7 +261,11 @@ export function AwardRecipientsPage({
     { label: "Appearances", value: appearanceSummary(award) },
     {
       label: "Status",
-      value: <span className={`sk-status sk-status--${award.status.toLowerCase()}`}>{award.status}</span>,
+      value: (
+        <span className={`co-status-pill co-status-pill--${award.status === "Active" ? "green" : "grey"}`}>
+          {award.status}
+        </span>
+      ),
     },
     { label: "Total Issued", value: fmtHolders(award.holders) },
     { label: "Created By", value: award.createdBy },
@@ -256,14 +276,20 @@ export function AwardRecipientsPage({
     <div className="main">
       <div className="workspace">
         <div className="tasks">
+          {/* The full ancestor chain, every crumb a button (1415:1354): the
+              Award's own page is reached off its Certification's menu, so
+              Certifications › Manage Award. */}
+          <nav className="rvc-crumbs" aria-label="Breadcrumb">
+            <button className="rvc-crumb" onClick={onOpenCertifications} title="Back to Certifications">
+              Certifications
+            </button>
+            <CrumbChevronIcon />
+            <button className="rvc-crumb" onClick={onBack} title="Back to the Award">
+              Manage Award
+            </button>
+          </nav>
           <header className="tasks-header">
-            <div>
-              {/* The Awards list this used to return to is gone — the way in
-                  is now the Award's own page, off its Certification's menu. */}
-              <button className="attempts-back" onClick={onBack}>
-                <ChevronLeftIcon />
-                Manage Award
-              </button>
+            <div className="rvc-pagehead">
               <h1 className="tasks-title">Award Recipients</h1>
               <div className="tasks-subtitle">
                 <span>{certName(award)}</span>
@@ -331,9 +357,7 @@ export function AwardRecipientsPage({
                           sortable={c.sortable}
                         />
                       ))}
-                      <th className="col-download no-sort">
-                        <span className="th-content">Download</span>
-                      </th>
+                      <th className="col-actions" aria-label="Actions" />
                     </tr>
                   </thead>
                 </table>
@@ -343,61 +367,20 @@ export function AwardRecipientsPage({
                     <ColGroup />
                     <tbody>
                       {paged.map((row) => (
-                        <tr key={row.u.id}>
+                        <tr key={row.u.id} className={menu?.row.u.id === row.u.id ? "menu-open" : undefined}>
                           <td className="col-name">{row.u.name}</td>
                           {COLS.map((c) => (
                             <td key={c.key} className={c.className}>
                               {c.render(row)}
                             </td>
                           ))}
-                          <td className="col-download">
-                            <div className="ar-dl-cell">
-                              {hasCard && (
-                                <button
-                                  className="ar-dl-btn"
-                                  onClick={() => {
-                                    downloadFile(
-                                      `${row.r.uniqueNumber}-card.svg`,
-                                      awardCardSvg(row.u.name, award, row.r),
-                                      "image/svg+xml",
-                                    );
-                                    toast("Card Downloaded");
-                                  }}
-                                >
-                                  <DownloadIcon /> Card
-                                </button>
-                              )}
-                              {hasCert && (
-                                <button
-                                  className="ar-dl-btn"
-                                  onClick={() => {
-                                    downloadFile(
-                                      `${row.r.uniqueNumber}-certificate.svg`,
-                                      awardCertSvg(row.u.name, award, row.r),
-                                      "image/svg+xml",
-                                    );
-                                    toast("Certificate Downloaded");
-                                  }}
-                                >
-                                  <DownloadIcon /> Certificate
-                                </button>
-                              )}
-                            </div>
-                          </td>
+                          <RowKebab onOpen={(rect) => setMenu({ row, rect })} />
                         </tr>
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={COLS.length + 2} className="u-empty">
-                            {committedQuery.trim()
-                              ? `No recipients match "${committedQuery.trim()}".`
-                              : "No recipients match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">
@@ -413,15 +396,46 @@ export function AwardRecipientsPage({
           </div>
         </div>
       </div>
+      {menu && (
+        <RowMenu
+          rect={menu.rect}
+          onClose={() => setMenu(null)}
+          items={downloadItems(menu.row)}
+        />
+      )}
       {toastNode}
     </div>
   );
+
+  /* The Award's own appearances — a Card, a Certificate, or both. */
+  function downloadItems({ u, r }: Row): RowMenuItem[] {
+    const items: RowMenuItem[] = [];
+    if (hasCard)
+      items.push({
+        label: "Download Card",
+        icon: <DownloadIcon />,
+        onPick: () => {
+          downloadFile(`${r.uniqueNumber}-card.svg`, awardCardSvg(u.name, award, r), "image/svg+xml");
+          toast("Card Downloaded");
+        },
+      });
+    if (hasCert)
+      items.push({
+        label: "Download Certificate",
+        icon: <DownloadIcon />,
+        onPick: () => {
+          downloadFile(`${r.uniqueNumber}-certificate.svg`, awardCertSvg(u.name, award, r), "image/svg+xml");
+          toast("Certificate Downloaded");
+        },
+      });
+    return items;
+  }
 }
 
 /* The shared width rule (`TableCols`): the data columns share the slack in
-   proportion to their base widths; the Download buttons' column stays fixed. */
+   proportion to their base widths; the 40px actions gutter stays fixed. */
 function ColGroup() {
-  return <TableCols data={[240, ...COLS.map((c) => c.width)]} trail={[DOWNLOAD_COL_WIDTH]} />;
+  return <TableCols data={[240, ...COLS.map((c) => c.width)]} trail={[ACTIONS_WIDTH]} />;
 }
 
 function SortableHeader({

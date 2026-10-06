@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon } from "./icons";
+import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon, WarnTriangleIcon } from "./icons";
 import { NoteCard } from "./NoteCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { MultiSelectTags } from "./MultiSelectTags";
@@ -551,13 +551,12 @@ function LinkedSkillsStep({
       </div>
 
       {archivedChosen.length > 0 && (
-        <div className="form-warning">
-          <span className="form-warning-icon"><WarnIcon /></span>
-          <div>
-            <strong>This Mastery Skill includes {archivedChosen.length} archived Skill{archivedChosen.length === 1 ? "" : "s"}.</strong>{" "}
-            New users can’t earn an archived Skill, so they won’t be able to earn this Mastery Skill. Existing holders are unaffected.
-          </div>
-        </div>
+        <NoteCard
+          tone="danger"
+          icon={<WarnTriangleIcon />}
+          title={`This Mastery Skill includes ${archivedChosen.length} archived Skill${archivedChosen.length === 1 ? "" : "s"}.`}
+          body="New users can’t earn an archived Skill, so they won’t be able to earn this Mastery Skill. Existing holders are unaffected."
+        />
       )}
 
       <RetroNote noun="Mastery Skill" />
@@ -578,13 +577,6 @@ function RetroNote({ noun }: { noun: string }) {
     />
   );
 }
-
-const WarnIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
 
 function LangField({
   en,

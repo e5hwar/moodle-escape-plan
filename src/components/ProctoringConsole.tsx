@@ -378,19 +378,21 @@ export function ProctoringConsole({
                  CTAs on the right ── */}
           <div className="wizard-footer rvc-footer prc-footer">
             <div className="wizard-footer-left prc-footer-left">
-              <button
-                className="prc-skip"
-                onClick={() => gotoIndex(index + 1)}
-                disabled={!hasNext}
-                title="Move to the next submission without deciding this one"
-              >
-                Skip
-              </button>
+              {/* Hidden, not disabled, once there is nothing left to skip to. */}
+              {hasNext && (
+                <button
+                  className="wizard-cancel"
+                  onClick={() => gotoIndex(index + 1)}
+                  title="Move to the next submission without deciding this one"
+                >
+                  Skip
+                </button>
+              )}
             </div>
 
             <div className="prc-footer-right">
               <button
-                className="prc-cta prc-cta--secondary"
+                className="btn-save-draft"
                 onClick={() => setConfirmKind("request")}
                 disabled={idAlreadyRequested}
                 title={
@@ -400,28 +402,28 @@ export function ProctoringConsole({
                 }
               >
                 Request ID Re-Upload
-                <span className="prc-key">I</span>
+                <span className="cta-kbd">I</span>
               </button>
               {/* ID-only submissions (ID reviews and re-uploads) can't be
                   rejected — there's no exam attempt to throw out, only an ID to
                   accept or ask again for. Reject is proctored-exam-only. */}
               {hasFootage && (
                 <button
-                  className="prc-cta prc-cta--danger"
+                  className="btn-publish btn-publish--danger"
                   onClick={() => setConfirmKind("reject")}
                 >
                   Reject
-                  <span className="prc-key">R</span>
+                  <span className="cta-kbd">R</span>
                 </button>
               )}
               <button
-                className="prc-cta prc-cta--ok"
+                className="btn-publish btn-publish--go"
                 onClick={() => setConfirmKind("accept")}
                 disabled={nameOver}
                 title={nameOver ? limitLabel("Name on SkillCat Profile", NAME_MAX) : undefined}
               >
                 Approve
-                <span className="prc-key">A</span>
+                <span className="cta-kbd">A</span>
               </button>
             </div>
           </div>
@@ -704,7 +706,7 @@ function RejectModal({
                     <div className="prm-other-wrap">
                       <LimitedInput
                         max={NAME_MAX}
-                        className="prm-other"
+                        className="form-input"
                         placeholder="Enter your reason here..."
                         value={otherText}
                         onChange={(e) => setOtherText(e.target.value)}
@@ -728,7 +730,7 @@ function RejectModal({
           </span>
           <LimitedInput
             max={DESCRIPTION_MAX}
-            className="prm-text-input"
+            className="form-input"
             placeholder="Add a note for future reviewers..."
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -1049,7 +1051,7 @@ const ReuploadAlertIcon = () => (
  *  It says the reviewer is looking at a second attempt, not the original. */
 function ReuploadedIdPill() {
   return (
-    <span className="prc-pill prc-pill--warn">
+    <span className="co-status-pill co-status-pill--sm co-status-pill--yellow">
       <ReuploadAlertIcon />
       Re-Uploaded ID
     </span>
@@ -1060,7 +1062,7 @@ function ReuploadedIdPill() {
  *  document was already accepted on an earlier submission (Figma 1006:1378). */
 function VerifiedPill() {
   return (
-    <span className="prc-pill prc-pill--ok">
+    <span className="co-status-pill co-status-pill--sm co-status-pill--green">
       <VerifiedCheckIcon />
       Verified
     </span>

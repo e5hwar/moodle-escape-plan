@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { TimeField } from "./TimeField";
 import { createPortal } from "react-dom";
 import type { TaskTypeKey } from "./Footer";
 import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
@@ -12,6 +13,8 @@ import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
+import { Stepper } from "./Stepper";
+import { useRowDrag } from "../hooks/useRowDrag";
 import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
 import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
@@ -1729,12 +1732,11 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
     <>
       <div className="form-group">
         <label className="form-label">Character Limit for Supporting Text</label>
-        <input
-          className="form-input no-spinner small"
-          inputMode="numeric"
+        <Stepper
           value={data.hoProjectDescLimit}
-          onChange={(e) => {
-            const v = e.target.value;
+          min={0}
+          ariaLabel="Character Limit for Supporting Text"
+          onChange={(v) => {
             if (v === "" || /^\d+$/.test(v)) update({ hoProjectDescLimit: v });
           }}
         />
@@ -1745,12 +1747,12 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
 
       <div className="form-group">
         <label className="form-label">Media Files</label>
-        <input
-          className="form-input no-spinner small"
-          inputMode="numeric"
+        <Stepper
           value={data.hoMediaMax}
-          onChange={(e) => {
-            const v = e.target.value;
+          min={0}
+          max={10}
+          ariaLabel="Media Files"
+          onChange={(v) => {
             if (v === "" || (/^\d+$/.test(v) && +v >= 0 && +v <= 10))
               update({ hoMediaMax: v });
           }}
@@ -1852,12 +1854,12 @@ function HandsOnCompletionStep(props: StepProps) {
         <CompletionCriteriaGate {...gateOf(props)} banner={false}>
           <div className="form-group">
             <label className="form-label">Passing Grade</label>
-            <input
-              className="form-input no-spinner small"
-              inputMode="numeric"
+            <Stepper
               value={data.hoPassingGrade}
-              onChange={(e) => {
-                const v = e.target.value;
+              min={1}
+              max={10}
+              ariaLabel="Passing Grade"
+              onChange={(v) => {
                 if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
                   update({ hoPassingGrade: v });
               }}
@@ -2052,10 +2054,15 @@ function QuizStructureStep({
 
   const addSection = () => update({ sections: [...data.sections, blankSection()] });
 
-  const atFloor = data.sections.length <= MIN_SECTIONS;
+  /* Two is the floor. Removing still works below it (Figma list item 36,
+     1570:3366): the card goes red and the label row says why, at once. */
+  const belowFloor = data.sections.length < MIN_SECTIONS;
+  // Order is structural too: an existing Quiz's Sections can't be reordered
+  // under past attempts, so the grips go inert with add/remove.
+  const drag = useRowDrag(data.sections, (sections) => update({ sections }), ".qsec-row");
 
   const removeSection = (id: string) => {
-    if (atFloor) return;
+    if (locked) return;
     update({ sections: data.sections.filter((s) => s.id !== id) });
   };
 
@@ -2115,17 +2122,26 @@ function QuizStructureStep({
           <div className="form-group" onBlur={leave(() => { touch?.("sections"); touch?.("sectionName"); })}>
             <label className="form-label">
               Sections<span className="req">*</span>
-              <LimitError
-                max={NAME_MAX}
-                values={data.sections.flatMap((sec) => [sec.name, sec.nameEs])}
-              />
+              {belowFloor ? (
+                <span className="form-label-error">
+                  A sectioned Quiz needs at least {MIN_SECTIONS} Sections
+                </span>
+              ) : missing?.has(REQUIRED_FIELD_KEYS.sectionName) &&
+              data.sections.some((sec) => !sec.name.trim()) ? (
+                <span className="form-label-error">Section Names cannot be left empty</span>
+              ) : (
+                <LimitError
+                  max={NAME_MAX}
+                  values={data.sections.flatMap((sec) => [sec.name, sec.nameEs])}
+                />
+              )}
             </label>
             {/* Figma 1097:1205 "Quiz Sections" — one boxed table: an
                 ORDER / SECTION NAME (/ % TO PASS / MUST PASS) header, a row per
                 Section, and an Add Section row closing the card. The two
                 grading columns only exist under section-level grading; under
                 quiz-level the Sections are display-only groupings. */}
-            <div className="qsec">
+            <div className={`qsec${belowFloor ? " has-error" : ""}`}>
               <div className="qsec-hd">
                 <span className="qsec-ord">
                   {/* The grip column keeps its 16px in the header, but with no
@@ -2137,10 +2153,15 @@ function QuizStructureStep({
                 <span className="qsec-x" aria-hidden />
               </div>
 
-              {data.sections.map((sec, i) => (
-                <div className="qsec-row" key={sec.id}>
+              {data.sections.map((sec, i) => {
+                const { className: dragClass, ...rowDrag } = drag.rowProps(sec.id);
+                return (
+                <div className={`qsec-row${dragClass}`} key={sec.id} {...(locked ? {} : rowDrag)}>
                   <span className="qsec-ord">
-                    <span className="qsec-grip" title="Drag to reorder">
+                    <span
+                      className={`qsec-grip${locked ? " is-disabled" : ""}`}
+                      {...(locked ? { "aria-disabled": true } : drag.gripProps(sec.id))}
+                    >
                       <MoveIcon />
                     </span>
                     <span className="qsec-num">{i + 1}</span>
@@ -2157,29 +2178,20 @@ function QuizStructureStep({
                       maxLength={NAME_MAX}
                     />
                   </div>
-                  {/* Two ways to be unavailable, deliberately spelled
-                      differently. `locked` uses the real `disabled` attribute —
-                      the step's lock card already explains it. The floor uses
-                      `aria-disabled` + `.is-disabled`, because a `disabled`
-                      button fires no mouse events and so could never show the
-                      tooltip that says why it won't budge. `removeSection`
-                      guards the click either way. */}
+                  {/* Unavailable only on an existing Quiz (`locked` — the
+                      step's lock card explains it). Below the two-Section
+                      floor it still removes; the label row flags it. */}
                   <button
-                    className={`qsec-x${atFloor ? " is-disabled" : ""}`}
+                    className="qsec-x"
                     aria-label="Remove Section"
                     disabled={locked}
-                    aria-disabled={atFloor || undefined}
-                    title={
-                      atFloor
-                        ? `A sectioned Quiz needs at least ${MIN_SECTIONS} Sections. Add another before removing this one.`
-                        : undefined
-                    }
                     onClick={() => removeSection(sec.id)}
                   >
                     <RowCloseIcon />
                   </button>
                 </div>
-              ))}
+                );
+              })}
 
               <div className="qsec-foot">
                 <button className="qsec-add" onClick={addSection} disabled={locked}>
@@ -2222,6 +2234,7 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
               <label className="form-label">
                 {`Section ${i + 1}: ${s.name || "Untitled"}`}
                 <span className="req">*</span>
+                <OverDrawError pools={s.randomPools} />
               </label>
               <QuestionGroupEditor
                 host={host}
@@ -2237,6 +2250,7 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
         <div className="form-group">
           <label className="form-label">
             Questions<span className="req">*</span>
+            <OverDrawError pools={data.blockPools} />
           </label>
           <QuestionGroupEditor
             host={host}
@@ -2315,6 +2329,18 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
  * per-question points value. New rows come from the Add Question menu
  * (752:2708): create a brand-new question, pick statics from the Bank, or
  * build a random set. */
+/* A random set drawing more questions than its pool holds. The pool's Pick box
+   goes red (`.qz-pt-input.invalid`); the message sits in the field's label row
+   like every other field error (Figma 1369:1669), naming the first such pool. */
+function OverDrawError({ pools }: { pools: RandomPool[] }) {
+  const over = pools.find((p) => (parseInt(p.draw, 10) || 0) > p.questionIds.length);
+  return over ? (
+    <span className="form-label-error">
+      Draw can't exceed the pool size ({over.questionIds.length}).
+    </span>
+  ) : null;
+}
+
 function QuestionGroupEditor({
   host,
   staticQuestions,
@@ -2567,8 +2593,7 @@ function QuestionGroupEditor({
 
       {items.length === 0 && (
         <div className="qz-empty">
-          No questions yet — Add Questions below creates one, picks from the
-          Bank, or builds a random set.
+          No Questions Added Yet
         </div>
       )}
 
@@ -2684,11 +2709,6 @@ function QuestionGroupEditor({
                 <RowCloseIcon />
               </button>
             </div>
-            {overDrawn && (
-              <div className="qz-pool-warn">
-                Draw can't exceed the pool size ({size}).
-              </div>
-            )}
             {members.length > 0 && (
               <div className="qz-pool-list">
                 {members.map((q) => (
@@ -2730,15 +2750,15 @@ function QuestionGroupEditor({
           <div className="u-menu qz-menu" role="menu">
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
               <span className="qz-menu-label">Create New Question</span>
-              <span className="qz-kbd">C</span>
+              <span className="cta-kbd">C</span>
             </button>
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
               <span className="qz-menu-label">Add from Question Bank</span>
-              <span className="qz-kbd">Q</span>
+              <span className="cta-kbd">Q</span>
             </button>
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openRandomSet}>
               <span className="qz-menu-label">Add Random Set</span>
-              <span className="qz-kbd">R</span>
+              <span className="cta-kbd">R</span>
             </button>
           </div>
         )}
@@ -2888,6 +2908,10 @@ function QuizCompletionStep(props: StepProps) {
         <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
             Section Pass Marks<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.passingPct) &&
+              data.sections.some((sec) => !sec.passingPct.trim()) && (
+                <span className="form-label-error">Section Pass Marks cannot be left empty</span>
+              )}
           </label>
           <div className="qsec qsec--pass">
             <div className="qsec-hd">
@@ -2973,6 +2997,9 @@ function QuizCompletionStep(props: StepProps) {
         <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
             Quiz Passing Percentage<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.passingPct) && (
+              <span className="form-label-error">Quiz Passing Percentage cannot be left empty</span>
+            )}
           </label>
           {/* No "% to pass" beside the box — the label names the unit and the
               subtext gives the range. */}
@@ -3040,15 +3067,16 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
         <div className="form-group" onBlur={leave(() => touch?.("cooldown"))}>
           <label className="form-label">
             Set Cooldown in Minutes<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.cooldown) && (
+              <span className="form-label-error">Cooldown in Minutes cannot be left empty</span>
+            )}
           </label>
-          <input
-            className={`form-input no-spinner small${
-              missing?.has(REQUIRED_FIELD_KEYS.cooldown) ? " has-error" : ""
-            }`}
-            inputMode="numeric"
+          <Stepper
             value={data.cooldownMinutes}
-            onChange={(e) => {
-              const v = e.target.value;
+            min={0}
+            ariaLabel="Set Cooldown in Minutes"
+            hasError={missing?.has(REQUIRED_FIELD_KEYS.cooldown)}
+            onChange={(v) => {
               if (v === "" || /^\d+$/.test(v)) update({ cooldownMinutes: v });
             }}
           />
@@ -3107,7 +3135,7 @@ function VariableCooldownEditor({ data, update }: StepProps) {
       {rows.length === 0 && (
         <div className="qsec-row">
           <span className="qsec-empty">
-            No pairs yet — every attempt uses the uniform cooldown.
+            No Cooldown Pairs Added Yet
           </span>
         </div>
       )}
@@ -3204,15 +3232,16 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
         <div className="form-group" onBlur={leave(() => touch?.("autoAttempts"))}>
           <label className="form-label">
             Attempts to Unlock<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.autoAttempts) && (
+              <span className="form-label-error">Attempts to Unlock cannot be left empty</span>
+            )}
           </label>
-          <input
-            className={`form-input no-spinner small${
-              missing?.has(REQUIRED_FIELD_KEYS.autoAttempts) ? " has-error" : ""
-            }`}
-            inputMode="numeric"
+          <Stepper
             value={data.autoAttemptsCount}
-            onChange={(e) => {
-              const v = e.target.value;
+            min={0}
+            ariaLabel="Attempts to Unlock"
+            hasError={missing?.has(REQUIRED_FIELD_KEYS.autoAttempts)}
+            onChange={(v) => {
               if (v === "" || /^\d+$/.test(v)) update({ autoAttemptsCount: v });
             }}
           />
@@ -3282,15 +3311,16 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
         <div className="form-group" onBlur={leave(() => touch?.("timeLimit"))}>
           <label className="form-label">
             Set Time in Minutes<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.timeLimit) && (
+              <span className="form-label-error">Time in Minutes cannot be left empty</span>
+            )}
           </label>
-          <input
-            className={`form-input no-spinner small${
-              missing?.has(REQUIRED_FIELD_KEYS.timeLimit) ? " has-error" : ""
-            }`}
-            inputMode="numeric"
+          <Stepper
             value={data.timeLimitMinutes}
-            onChange={(e) => {
-              const v = e.target.value;
+            min={0}
+            ariaLabel="Set Time in Minutes"
+            hasError={missing?.has(REQUIRED_FIELD_KEYS.timeLimit)}
+            onChange={(v) => {
               if (v === "" || /^\d+$/.test(v)) update({ timeLimitMinutes: v });
             }}
           />
@@ -3711,7 +3741,7 @@ function QuizReviewStep({ data, update }: StepProps) {
         ? "Requires Attempt review."
         : sectioned
           ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
-          : "Only available when the Quiz is sectioned.",
+          : "Only available for Quizzes with Sections", // 1213:1343
       on: r.attempt && sectioned && r.perSectionResults,
       disabled: !r.attempt || !sectioned,
       toggle: (v) => setR({ perSectionResults: v }),
@@ -4050,23 +4080,13 @@ function TimeToCompleteField({ data, update }: StepProps) {
   return (
     <div className="form-group">
       <label className="form-label">Time to Complete</label>
-      <div className="time-row">
-        <input
-          className="form-input no-spinner small"
-          type="text"
-          inputMode="numeric"
-          value={data.timeValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "" || /^\d+$/.test(v)) update({ timeValue: v });
-          }}
-        />
-        <SelectField
-          value={TIME_UNIT_LABEL[data.timeUnit]}
-          options={TIME_UNIT_OPTIONS}
-          onChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
-        />
-      </div>
+      <TimeField
+        value={data.timeValue}
+        unit={TIME_UNIT_LABEL[data.timeUnit]}
+        units={TIME_UNIT_OPTIONS}
+        onValueChange={(v) => update({ timeValue: v })}
+        onUnitChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
+      />
       <p className="form-help">
         Estimated time required for the user to complete the Task
       </p>
@@ -4599,7 +4619,14 @@ export function TaskSummary({ task }: { task: Task }) {
     ["Type", TYPE_LABEL[type]],
     [
       "Time to Complete",
-      data.timeValue ? `${data.timeValue} ${TIME_UNIT_LABEL[data.timeUnit]}` : "—",
+      data.timeValue
+        ? `${data.timeValue} ${
+            // "1 Minute", not "1 Minutes": the unit labels are plural.
+            Number(data.timeValue) === 1
+              ? TIME_UNIT_LABEL[data.timeUnit].slice(0, -1)
+              : TIME_UNIT_LABEL[data.timeUnit]
+          }`
+        : "—",
     ],
     // The record's own state, as the table shows it.
     ["Visibility", task.hidden ? "Hidden" : "Visible"],

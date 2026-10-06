@@ -116,7 +116,7 @@ export function useTipWhileClosed(tip: string | undefined, open: boolean) {
    window would otherwise run off it. */
 type TipState = {
   text: string;
-  /** `data-tip-head` — an optional SemiBold first line above the tip text, for
+  /** `data-tip-head` — an optional Medium first line above the tip text, for
       a tip that needs a label before its list ("Any of" over the Tasks a Skill
       is linked to). Plain text; the body stays plain text too. */
   head: string | null;
@@ -255,8 +255,37 @@ export function HoverTooltip() {
         [tip.align]: tip.anchor,
       }}
     >
-      {tip.head && <span className="hover-tip-head">{tip.head}</span>}
-      {tip.text}
+      <TipBody head={tip.head} text={tip.text} />
     </div>
+  );
+}
+
+/* Figma 1567:3206 "Heading + Subtext": an optional Medium head, then the body.
+   A body written as a lead line then "• " items — the disabled CTAs'
+   missing-fields tips ("Fill in every required field to publish:" + one
+   "• Name — Task Details" per gap) — renders the lead as the head and the
+   items as a real bulleted list, so every such tip reads the same without
+   each caller building markup. */
+function TipBody({ head, text }: { head: string | null; text: string }) {
+  const lines = text.split("\n");
+  const first = lines.findIndex((l) => l.startsWith("• "));
+  if (first >= 0 && lines.slice(first).every((l) => l.startsWith("• "))) {
+    const lead = [head, lines.slice(0, first).join("\n")].filter(Boolean).join("\n");
+    return (
+      <>
+        {lead && <span className="hover-tip-head">{lead}</span>}
+        <ul className="hover-tip-list">
+          {lines.slice(first).map((l, i) => (
+            <li key={i}>{l.slice(2)}</li>
+          ))}
+        </ul>
+      </>
+    );
+  }
+  return (
+    <>
+      {head && <span className="hover-tip-head">{head}</span>}
+      {text}
+    </>
   );
 }

@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from "react";
+import { useRowDrag } from "../hooks/useRowDrag";
 import {
   categories as seedCategories,
   flattenCategories,
@@ -408,13 +409,10 @@ type Props = {
   /** Type picked in the Create Question menu — the editor opens on it. */
   initialType?: QuestionType;
   editingQuestion?: Question;
-  /* Set when the editor was opened on a PAST version from Version History.
-     `editingQuestion` already carries that version's content; this locks the
-     form, so the screen is a viewer with a dead Save Changes button. */
-  atVersion?: number;
   /** The full trail above the editor (Figma 1417:1395), outermost first —
-   *  it depends on where the editor was opened (the Question Bank, Version
-   *  History, a Feedback Form). The last step is where `onClose` goes. */
+   *  it depends on where the editor was opened (the Question Bank, a Feedback
+   *  Form). The last step is where `onClose` goes. Past versions never open
+   *  here — Version History shows them in the row preview panel. */
   crumbs: Crumb[];
 };
 
@@ -500,14 +498,9 @@ export function NewQuestionWizard({
   initialCategoryPath,
   initialType,
   editingQuestion,
-  atVersion,
   crumbs,
 }: Props) {
   const isEditing = !!editingQuestion;
-  /* A past version is a record, not a draft: every control is disabled and the
-     primary action stays dead, so nothing here can be saved over the
-     question's current content. */
-  const readOnly = atVersion !== undefined;
   const [data, setData] = useState<QuestionDraft>(() =>
     buildInitial(initialCategoryPath, editingQuestion, initialType),
   );
@@ -539,7 +532,7 @@ export function NewQuestionWizard({
      next attempt. An edit runs the same check — a saved question can still have
      its question text emptied. */
   const gaps = useMemo(() => collectMissing(data), [data]);
-  const canSave = gaps.length === 0 && !readOnly;
+  const canSave = gaps.length === 0;
 
   /* Set on a blocked click: the gaps that attempt found, so the fields
      themselves turn red rather than only the tooltip naming them. Filtered
@@ -557,12 +550,10 @@ export function NewQuestionWizard({
      author what is left (the Task wizard's `blockedTip`). */
   const blockedTip = canSave
     ? undefined
-    : readOnly
-      ? `v${atVersion} is a past version — open for reference only. Edit the current version to make changes.`
-      : [
-          `Finish these to ${isEditing ? "save" : "create"} this question:`,
-          ...gaps.map((k) => `• ${REQUIRED_FIELD_LABELS[k] ?? k}`),
-        ].join("\n");
+    : [
+        `Finish these to ${isEditing ? "save" : "create"} this question:`,
+        ...gaps.map((k) => `• ${REQUIRED_FIELD_LABELS[k] ?? k}`),
+      ].join("\n");
 
   /* The footer's primary action, shared by the button and its ⌘+Enter
      shortcut — the shortcut carries the same gate a click does. The button
@@ -608,9 +599,7 @@ export function NewQuestionWizard({
      footer's "last saved · vN") lives on the question's Version History page
      (the bank's row menu) — the editor's own View history button went
      2026-10-03 (user). */
-  const title = readOnly
-    ? `${TYPE_TITLES[data.type]} Question · v${atVersion}`
-    : `${isEditing ? "Edit" : "New"} ${TYPE_TITLES[data.type]} Question`;
+  const title = `${isEditing ? "Edit" : "New"} ${TYPE_TITLES[data.type]} Question`;
 
   /* The Task wizard's shell with no rail: one column, every type
      (2026-09-29 — the settings rail on the right was folded in). */
@@ -636,50 +625,44 @@ export function NewQuestionWizard({
               <h1 className="tasks-title qed-title-solo">{title}</h1>
             </div>
 
-            {/* A disabled <fieldset> is what makes the past-version view
-                read-only: the attribute propagates to every input, textarea
-                and button inside it, so no control needs to know. The crumb
-                and the footer sit outside it and stay live. */}
-            <Lock on={readOnly}>
-              {/* One column for every type (2026-09-29) — the settings rail
-                  folded in. Type, Category and Grading lead: the type is what
-                  the rest of the screen is. Then the question, its answers,
-                  the type's own settings, and Feedback last. */}
-              <SetupSection
-                data={data}
-                update={update}
-                isEditing={isEditing}
-                catOptions={catOptions}
-                missing={missing} touch={touch}
-                gradable={gradable}
-                usedInQuizzes={usedInQuizzes}
-              />
+            {/* One column for every type (2026-09-29) — the settings rail
+                folded in. Type, Category and Grading lead: the type is what
+                the rest of the screen is. Then the question, its answers,
+                the type's own settings, and Feedback last. */}
+            <SetupSection
+              data={data}
+              update={update}
+              isEditing={isEditing}
+              catOptions={catOptions}
+              missing={missing} touch={touch}
+              gradable={gradable}
+              usedInQuizzes={usedInQuizzes}
+            />
 
-              <QuestionTextSection data={data} update={update} missing={missing} touch={touch} />
+            <QuestionTextSection data={data} update={update} missing={missing} touch={touch} />
 
-              {data.type === "mcq" && (
-                <McqSection data={data} update={update} grading={grading} missing={missing} touch={touch} />
-              )}
-              {data.type === "true-false" && (
-                <TrueFalseSection data={data} update={update} grading={grading} />
-              )}
-              {data.type === "match" && (
-                <MatchSection data={data} update={update} missing={missing} touch={touch} />
-              )}
-              {data.type === "file" && <FileRulesSection data={data} update={update} />}
-              {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
-              {data.type === "scale" && (
-                <ScaleLabelsSection data={data} update={update} missing={missing} touch={touch} />
-              )}
+            {data.type === "mcq" && (
+              <McqSection data={data} update={update} grading={grading} missing={missing} touch={touch} />
+            )}
+            {data.type === "true-false" && (
+              <TrueFalseSection data={data} update={update} grading={grading} />
+            )}
+            {data.type === "match" && (
+              <MatchSection data={data} update={update} missing={missing} touch={touch} />
+            )}
+            {data.type === "file" && <FileRulesSection data={data} update={update} />}
+            {data.type === "scale" && <ScaleRangeSection data={data} update={update} />}
+            {data.type === "scale" && (
+              <ScaleLabelsSection data={data} update={update} missing={missing} touch={touch} />
+            )}
 
-              <OptionTogglesSection data={data} update={update} grading={grading} />
+            <OptionTogglesSection data={data} update={update} grading={grading} />
 
-              {data.type === "match" && grading && (
-                <MatchScoringSection data={data} update={update} />
-              )}
+            {data.type === "match" && grading && (
+              <MatchScoringSection data={data} update={update} />
+            )}
 
-              {grading && <FeedbackSection data={data} update={update} />}
-            </Lock>
+            {grading && <FeedbackSection data={data} update={update} />}
           </div>
         </div>
       </div>
@@ -704,20 +687,6 @@ export function NewQuestionWizard({
         </div>
       </footer>
     </div>
-  );
-}
-
-/* Read-only wrapper for the past-version view. The fieldset only exists when
-   the lock is on, so the ordinary editor's DOM — and every `>` selector that
-   walks it — is untouched; `display: contents` keeps the locked one out of the
-   box tree, and the CSS re-says the few child-combinator rules it does sit
-   inside (see `.qed-lock` in index.css). */
-function Lock({ on, children }: { on: boolean; children: React.ReactNode }) {
-  if (!on) return <>{children}</>;
-  return (
-    <fieldset className="qed-lock" disabled>
-      {children}
-    </fieldset>
   );
 }
 
@@ -878,78 +847,6 @@ function QuestionTextSection({
   );
 }
 
-/* Drag-to-reorder for the Options table (Figma 814:1679 draws a grip on every
-   row). HTML5 drag, the same mechanic the Spotlights queue and the Edit Columns
-   menu use — but the drag SOURCE is the grip, not the row: a draggable row
-   swallows the caret and text selection inside the option's own inputs. The
-   row is still the drop target, and the whole row is used as the drag image so
-   what follows the cursor is the option, not the 16px handle. `dragRef`
-   mirrors the dragged id so a drop landing in the same render tick reads it. */
-function useRowDrag<T extends { id: string }>(
-  rows: T[],
-  onReorder: (next: T[]) => void,
-) {
-  const dragRef = useRef<string | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-
-  const end = () => {
-    dragRef.current = null;
-    setDragId(null);
-    setOverId(null);
-  };
-
-  const drop = (targetId: string) => {
-    const from = dragRef.current;
-    if (from && from !== targetId) {
-      const next = [...rows];
-      const fromIdx = next.findIndex((r) => r.id === from);
-      const toIdx = next.findIndex((r) => r.id === targetId);
-      if (fromIdx !== -1 && toIdx !== -1) {
-        const [moved] = next.splice(fromIdx, 1);
-        next.splice(toIdx, 0, moved);
-        onReorder(next);
-      }
-    }
-    end();
-  };
-
-  return {
-    /* Spread on the row — the drop target. */
-    rowProps: (id: string) => ({
-      onDragEnter: () => {
-        if (dragRef.current) setOverId(id);
-      },
-      onDragOver: (e: React.DragEvent) => {
-        // Without this the drop never fires: the default is "no drop here".
-        if (dragRef.current) e.preventDefault();
-      },
-      onDrop: (e: React.DragEvent) => {
-        e.preventDefault();
-        drop(id);
-      },
-      className: `${dragId === id ? " is-dragging" : ""}${
-        overId === id && dragId !== id ? " is-drop-target" : ""
-      }`,
-    }),
-    /* Spread on the grip — the drag source. */
-    gripProps: (id: string) => ({
-      draggable: true,
-      onDragStart: (e: React.DragEvent<HTMLElement>) => {
-        // Firefox refuses to start a drag with no payload.
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", id);
-        const row = e.currentTarget.closest(".qed-tbl-row");
-        if (row) e.dataTransfer.setDragImage(row, 24, row.clientHeight / 2);
-        dragRef.current = id;
-        setDragId(id);
-      },
-      onDragEnd: end,
-      title: "Drag to reorder",
-    }),
-  };
-}
-
 function McqSection({
   touch,
   data,
@@ -974,20 +871,18 @@ function McqSection({
   };
 
   const removeChoice = (id: string) => {
-    if (choices.length <= 2) return;
     update({ choices: choices.filter((c) => c.id !== id) });
   };
 
   /* Two is the floor — a one-option question has nothing to choose between.
-     The ✕ on the last two rows says so rather than sitting dim and silent
-     (`aria-disabled`, not `disabled`: a disabled button swallows the hover the
-     tooltip listens for). */
-  const atFloor = choices.length <= 2;
-  const floorTip = "A question needs at least two options.";
+     Removing still works below it (user, 2026-10-06 — Figma list item 36):
+     the card goes red and the label row says why, at once, the way Figma
+     1570:3366 "Error - Card Table" draws it. */
+  const belowFloor = choices.length < 2;
 
   /* The grade travels with the option it belongs to — the letters are just
      positional labels, so moving an option re-letters the list around it. */
-  const drag = useRowDrag(choices, (next) => update({ choices: next }));
+  const drag = useRowDrag(choices, (next) => update({ choices: next }), ".qed-tbl-row");
 
   /* Figma 814:1679 "Create Question - MCQ" — one boxed table: an
      OPTION / GRADE header, a row per option (drag handle, letter, dual-language
@@ -997,7 +892,9 @@ function McqSection({
       <div className="form-group" onBlur={leave(() => { touch("options"); touch("answer"); })}>
         <label className="form-label">
           Options<span className="req">*</span>
-          {missing.has("options") ? (
+          {belowFloor ? (
+            <span className="form-label-error">A MCQ must have at least 2 options</span>
+          ) : missing.has("options") ? (
             <span className="form-label-error">
               Fill in at least two options to create this question.
             </span>
@@ -1011,7 +908,7 @@ function McqSection({
 
         <div
           className={`qed-tbl${
-            missing.has("options") || missing.has("answer") ? " has-error" : ""
+            belowFloor || missing.has("options") || missing.has("answer") ? " has-error" : ""
           }`}
         >
           <div className="qed-tbl-hd">
@@ -1062,8 +959,6 @@ function McqSection({
               <button
                 className="qed-tbl-x"
                 aria-label="Remove option"
-                aria-disabled={atFloor}
-                data-tip={atFloor ? floorTip : undefined}
                 onClick={() => removeChoice(c.id)}
               >
                 <RowCloseIcon />
@@ -1175,18 +1070,16 @@ function MatchSection({
     update({ pairs: [...pairs, blankPair()] });
   };
   const removePair = (id: string) => {
-    if (pairs.length <= MIN_PAIRS) return;
     update({ pairs: pairs.filter((p) => p.id !== id) });
   };
 
-  const drag = useRowDrag(pairs, (next) => update({ pairs: next }));
+  const drag = useRowDrag(pairs, (next) => update({ pairs: next }), ".qed-tbl-row");
 
   /* Three rows is the floor, not two: the field's own rule needs two complete
-     pairs AND a third answer, so a two-row match could never be saved. The ✕
-     says so rather than sitting dim (`aria-disabled`, not `disabled` — a
-     disabled button swallows the hover the tooltip listens for). */
-  const atFloor = pairs.length <= MIN_PAIRS;
-  const floorTip = "A match needs at least three rows.";
+     pairs AND a third answer, so a two-row match could never be saved.
+     Removing still works below it (Figma list item 36, 1570:3366): the card
+     goes red and the label row says why, at once. */
+  const belowFloor = pairs.length < MIN_PAIRS;
 
   /* Figma 1198:1934 — the same boxed table as the MCQ options: a
      QUESTION / ANSWER header, a row per pair (grip, number, the two
@@ -1199,11 +1092,13 @@ function MatchSection({
       <div className="form-group" onBlur={leave(() => touch("pairs"))}>
         <label className="form-label">
           Questions &amp; Answers<span className="req">*</span>
-          {flagged && (
+          {belowFloor ? (
+            <span className="form-label-error">A match needs at least three rows</span>
+          ) : flagged ? (
             <span className="form-label-error">
               Add at least two questions and three answers to create this question.
             </span>
-          )}
+          ) : null}
           <LimitError
             max={NAME_MAX}
             values={pairs.flatMap((p) => [p.right, p.rightEs])}
@@ -1211,7 +1106,7 @@ function MatchSection({
           />
         </label>
 
-        <div className={`qed-tbl qed-tbl--pairs${flagged ? " has-error" : ""}`}>
+        <div className={`qed-tbl qed-tbl--pairs${belowFloor || flagged ? " has-error" : ""}`}>
           <div className="qed-tbl-hd">
             <span className="qed-tbl-ord" aria-hidden />
             <span className="qed-tbl-hd-opt">QUESTION</span>
@@ -1260,8 +1155,6 @@ function MatchSection({
                 <button
                   className="qed-tbl-x"
                   aria-label="Remove pair"
-                  aria-disabled={atFloor}
-                  data-tip={atFloor ? floorTip : undefined}
                   onClick={() => removePair(p.id)}
                 >
                   <RowCloseIcon />

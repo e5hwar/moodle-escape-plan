@@ -5,13 +5,16 @@ import {
   type FormTrigger,
 } from "../data/feedbackForms";
 import { tasks as taskLibrary } from "../data/tasks";
-import { RowCloseIcon, TreeAddIcon } from "./icons";
+import { InfoIcon14, RowCloseIcon, TreeAddIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 
 type Props = {
   form: FeedbackForm;
   allForms: FeedbackForm[];
   onSave: (triggers: FormTrigger[]) => void;
+  /** The field is flagged — the card takes the error outline (1570:3366). */
+  invalid?: boolean;
 };
 
 const TODAY = "2026-07-09";
@@ -23,7 +26,7 @@ function taskKindLabel(type: string) {
   return type.endsWith("Task") ? type : `${type} Task`;
 }
 
-export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
+export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false }: Props) {
   const [picking, setPicking] = useState(false);
 
   const isDisabled = form.status === "disabled";
@@ -84,42 +87,39 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
     onSave(next);
   }
 
-  /* One is the floor — a form with no trigger never fires, so it is not a form
-     ([[feedback-forms-architecture]]). The ✕ on a lone trigger says so rather
-     than sitting dim and silent (`aria-disabled`, not `disabled`: a disabled
-     button swallows the hover the tooltip listens for). */
-  const atFloor = form.triggers.length <= 1;
-  const floorTip =
-    "A form needs at least one trigger — map another one before removing this.";
-
+  /* One is the floor — a form with no trigger never fires. The last one can
+     still be removed (Figma list item 36): the wizard flags the field at once
+     ("A form needs at least one trigger") and the card goes red. */
   function removeTrigger(id: string) {
-    if (atFloor) return;
     onSave(form.triggers.filter((t) => t.id !== id));
   }
 
   return (
     <>
+      {/* An inactive form keeps its mappings but they don't fire — the shared
+          callout above the table rather than a line inside it. */}
+      {isDisabled && (
+        <NoteCard
+          className="fb-inactive-note"
+          mutedIcon
+          icon={<InfoIcon14 />}
+          title="This form is inactive"
+          body="Its trigger mappings are preserved but don't fire. Activate the form to resume firing them."
+        />
+      )}
       {/* Figma 1236:1161 — the Questions table's twin: one `.qz` card whose
           header names the column, one row per mapped item ("Name · Quiz Task")
           and an in-table "+ Add Trigger" last row. The old kind chip, the
           `refId · mapped <date>` subline and the separate picker panel are
           gone; picking now happens in the shared table-picker modal. */}
-      <div className="qz">
+      <div className={`qz${invalid ? " has-error" : ""}`}>
         <div className="qz-hd">
           <span className="qz-hd-q">TASKS &amp; CERTIFICATIONS</span>
         </div>
 
-        {isDisabled && (
-          <div className="fb-archived-note">
-            This form is inactive — its trigger mappings are preserved but don't
-            fire. Activate the form to resume firing them.
-          </div>
-        )}
-
         {form.triggers.length === 0 && (
           <div className="qz-empty">
-            No triggers yet — Add Trigger below maps this form to a Task or
-            Certification.
+            No Triggers Added Yet
           </div>
         )}
 
@@ -130,13 +130,12 @@ export function FeedbackFormTriggers({ form, allForms, onSave }: Props) {
               <span className="fb-trigger-kindtext">· {kindLabel(t)}</span>
             </div>
             {isDisabled ? (
-              <span className="fb-link-chip">Inactive</span>
+              <span className="co-status-pill co-status-pill--grey">Inactive</span>
             ) : (
               <button
                 className="qz-x"
                 aria-label="Remove trigger"
-                aria-disabled={atFloor}
-                data-tip={atFloor ? floorTip : "Remove trigger"}
+                data-tip="Remove trigger"
                 onClick={() => removeTrigger(t.id)}
               >
                 <RowCloseIcon />

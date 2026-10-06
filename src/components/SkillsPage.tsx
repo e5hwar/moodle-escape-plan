@@ -32,6 +32,7 @@ import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PreviewPanel } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
@@ -103,7 +104,7 @@ type Col = ColumnDef<ColKey> & {
   /** Hover text for the cell — the FULL list behind a truncated "+N", one per
       line, as Tasks and Certifications do. */
   tip?: (r: Rec) => string | undefined;
-  /** SemiBold label line above that text (`data-tip-head`). */
+  /** Medium label line above that text (`data-tip-head`). */
   tipHead?: (r: Rec) => string | undefined;
   render: (r: Rec) => React.ReactNode;
 };
@@ -139,7 +140,7 @@ const COLS: Col[] = [
     tip: (r) => listTip(recTasks(r)),
     /* More than one linked Task means completing any of them awards the Skill,
        so the list needs saying so before it reads as "all of these". */
-    tipHead: (r) => (recTasks(r).length > 1 ? "Any of" : undefined),
+    tipHead: (r) => (recTasks(r).length > 1 ? "Any of:" : undefined), // 1567:3206's "All of:" shape
     render: (r) => <NamesCell names={recTasks(r)} />,
   },
   {
@@ -533,7 +534,6 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
                 <EntitySearch
                   scopes={scopes}
                   placeholder="Search Skills and Mastery Skills..."
-                  searchForScope="Skills"
                   query={query}
                   onCommit={setQuery}
                 />
@@ -632,6 +632,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
                         </tbody>
                       </table>
                     </div>
+                    {paged.length === 0 && <TableEmpty />}
                   </div>
 
                   <div className="pagination">
@@ -845,7 +846,7 @@ function NamesCell({ names }: { names: string[] }) {
   return (
     <>
       {names[0]}
-      {names.length > 1 && <span className="used-extra">+{names.length - 1}</span>}
+      {names.length > 1 && <>{" "}<span className="used-extra">+{names.length - 1}</span></>}
     </>
   );
 }

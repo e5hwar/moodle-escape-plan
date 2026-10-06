@@ -10,6 +10,7 @@ import { SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
 import { IdModal } from "./IdModal";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -186,18 +187,10 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                           <td className="pr-col-date">{r.uploadedAt}</td>
                         </tr>
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="u-empty">
-                            {query.trim()
-                              ? `No users match "${query.trim()}".`
-                              : "No users match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">

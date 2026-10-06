@@ -8,12 +8,13 @@ import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
-  SearchIcon,
+  CheckboxDashIcon,
   SortIcon,
   PagePrevIcon,
   PageNextIcon,
 } from "./icons";
-import { SearchTrailing } from "./SearchPanelParts";
+import { TasksSearch } from "./TasksSearch";
+import { TableEmpty } from "./TableEmpty";
 
 /* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
  * inside the shared PrmModal shell: search bar, filter pills, a table carrying
@@ -109,10 +110,13 @@ export function SelectTasksModal({
     dir: "desc",
   });
 
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
+  // PrmModal has no key handling of its own, so the owner closes on Escape —
+  // except inside the search bar, where Escape abandons the bar's own edit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key !== "Escape") return;
+      if ((e.target as Element | null)?.closest?.(".usearch")) return;
+      onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -222,26 +226,19 @@ export function SelectTasksModal({
     >
       <div className="stm">
         <div className="stm-toolbar">
-          <div className="search-wrap stm-search">
-            <span className="search-icon">
-              <SearchIcon />
-            </span>
-            {/* The picker opens ready to type — searching is the first thing
-                anyone does here, and nothing else on the card wants focus. */}
-            <input
-              className="search-input"
-              placeholder="Search Tasks..."
-              autoFocus
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchTrailing
-              active={!!query}
-              onClear={() => {
-                setQuery("");
+          {/* The Tasks page's own search bar (as Add Requirement uses it):
+              Enter applies the query, and a picked Certification / Type
+              suggestion lands on the pill below. */}
+          <div className="toolbar">
+            <TasksSearch
+              tasks={pool}
+              certifications={certs}
+              onCertificationsChange={resetPage(setCerts)}
+              types={types}
+              onTypesChange={resetPage(setTypes)}
+              query={query}
+              onCommit={(v) => {
+                setQuery(v);
                 setPage(1);
               }}
             />
@@ -375,7 +372,7 @@ export function SelectTasksModal({
                       disabled={sorted.length === 0}
                       onClick={toggleAll}
                     >
-                      {allOn ? <CheckIcon /> : someOn ? <span className="checkbox-dash" /> : null}
+                      {allOn ? <CheckIcon /> : someOn ? <CheckboxDashIcon /> : null}
                     </button>
                   </th>
                   <Th col="name" label="Task Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
@@ -390,62 +387,58 @@ export function SelectTasksModal({
               <table className="table table-body stm-table">
                 <ColGroup />
                 <tbody>
-                  {rows.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={5}>No Tasks match your search and filters.</td>
-                    </tr>
-                  ) : (
-                    rows.map((t) => {
-                      const on = picked.includes(t.id);
-                      return (
-                        <tr
-                          key={t.id}
-                          className={`${on ? "selected" : ""} ${t.hidden ? "task-dim" : ""}`}
-                          onClick={() => toggle(t.id)}
-                        >
-                          <td className="stm-col-check">
-                            {/* A <button>, not a <span> — the shared table reset
-                                strips chrome from span/div in data cells, which
-                                would leave a bare tick with no box. */}
-                            <button
-                              className={`checkbox ${on ? "checked" : ""}`}
-                              aria-label={on ? "Deselect" : "Select"}
-                              aria-pressed={on}
-                              tabIndex={-1}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggle(t.id);
-                              }}
-                            >
-                              {on && <CheckIcon />}
-                            </button>
-                          </td>
-                          {/* `col-name` is the shared Name-column class: it
-                              carries the #FFFFFF emphasis this node wants, and
-                              it is one of the classes the app-wide "mute every
-                              non-Name cell" rule excludes. Without it that rule
-                              (five :not()s deep) silently wins. */}
-                          <td className="stm-col-name col-name">
-                            <span className="tsk-name">{t.name}</span>
-                            {/* The Tasks table's Hidden treatment (`.task-dim`):
-                                grey pill, muted name, dimmed cells. */}
-                            {t.hidden && <span className="pr-name-flag pr-name-flag--grey">Hidden</span>}
-                          </td>
-                          <td className="stm-col-type">{t.type}</td>
-                          <td className="stm-col-certs">
-                            <MultiCell values={certsOf(t)} />
-                          </td>
-                          <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
-                        </tr>
-                      );
-                    })
-                  )}
+                  {rows.map((t) => {
+                    const on = picked.includes(t.id);
+                    return (
+                      <tr
+                        key={t.id}
+                        className={`${on ? "selected" : ""} ${t.hidden ? "task-dim" : ""}`}
+                        onClick={() => toggle(t.id)}
+                      >
+                        <td className="stm-col-check">
+                          {/* A <button>, not a <span> — the shared table reset
+                              strips chrome from span/div in data cells, which
+                              would leave a bare tick with no box. */}
+                          <button
+                            className={`checkbox ${on ? "checked" : ""}`}
+                            aria-label={on ? "Deselect" : "Select"}
+                            aria-pressed={on}
+                            tabIndex={-1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(t.id);
+                            }}
+                          >
+                            {on && <CheckIcon />}
+                          </button>
+                        </td>
+                        {/* `col-name` is the shared Name-column class: it
+                            carries the #FFFFFF emphasis this node wants, and
+                            it is one of the classes the app-wide "mute every
+                            non-Name cell" rule excludes. Without it that rule
+                            (five :not()s deep) silently wins. */}
+                        <td className="stm-col-name col-name">
+                          <span className="tsk-name">{t.name}</span>
+                          {/* The Tasks table's Hidden treatment (`.task-dim`):
+                              grey pill, muted name, dimmed cells. */}
+                          {t.hidden && <span className="pr-name-flag pr-name-flag--grey">Hidden</span>}
+                        </td>
+                        <td className="stm-col-type">{t.type}</td>
+                        <td className="stm-col-certs">
+                          <MultiCell values={certsOf(t)} />
+                        </td>
+                        <td className="stm-col-edited">{t.dateModified ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {rows.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination stm-pagination">
+            <span className="stm-picked">{picked.length} Selected</span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
               {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
@@ -498,11 +491,9 @@ function ColGroup() {
 function MultiCell({ values }: { values: string[] }) {
   if (values.length === 0) return <>—</>;
   return (
-    <span className="stm-multi" title={values.join(", ")}>
-      <span className="stm-multi-first">{values[0]}</span>
-      {values.length > 1 && (
-        <span className="stm-multi-more">+{values.length - 1}</span>
-      )}
+    <span title={values.join(", ")}>
+      {values[0]}
+      {values.length > 1 && <>{" "}<span className="used-extra">+{values.length - 1}</span></>}
     </span>
   );
 }

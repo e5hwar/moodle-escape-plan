@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { idDocOf, idTimelineOf, type IdRecord, type IdStatus } from "../data/manageIds";
-import { SmallXIcon } from "./icons";
+import { PrmModal } from "./PrmModal";
 import { STATUS_LABEL } from "./ManageIdsSearch";
 import { ZoomableIdCard, type IdCardData } from "./IdCard";
 import { IdDetailsHover } from "./UserDetailsHover";
@@ -89,143 +89,105 @@ export function IdModal({
 
   return (
     <>
-      <div className="pm-overlay" onClick={onClose}>
-        <div
-          className="pm-modal mid-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${record.name}'s ID`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Figma 460:1792 (Approved), 460:2445 (Review Pending), 460:2546
-              (Reupload Requested) — one layout for all three: the name over an
-              "ID Status: …" line, the document, and a footer whose Approve
-              button is the only per-state difference. The document type and
-              upload stamp are gone; both read off the ID itself. */}
-          <div className="mid-head">
-            <div className="mid-head-left">
-              <h2 className="tasks-title mid-title">
-                {/* The name opens the full profile in a new tab. It carries no
-                    hover card of its own — the user-details peek belongs to the
-                    Users page, and this popup is about the document. */}
-                <button
-                  className="rvc-headlink"
-                  onClick={() => openInNewTab(`profile=${record.id}`)}
-                >
-                  {record.name}
-                </button>
-              </h2>
-              {/* Hovering the status alone gives the timeline on its own
-                  (Figma 679:2039) — which stamps show depends on what has
-                  happened to the document. */}
-              <div className="mid-head-sub">
-                ID Status:{" "}
-                <IdDetailsHover timeline={timeline}>
-                  <span className="mid-head-status">{STATUS_LABEL[record.status]}</span>
-                </IdDetailsHover>
-              </div>
-            </div>
-            <button className="mid-close" aria-label="Close" onClick={onClose}>
-              <SmallXIcon />
-            </button>
-          </div>
+      {/* Figma 460:1792 (Approved), 460:2445 (Review Pending), 460:2546
+          (Reupload Requested) — one layout for all three on the shared modal
+          shell (PrmModal, 667:884): the name over an "ID Status: …" line, the
+          document, and a footer whose Approve button is the only per-state
+          difference. The document type and upload stamp are gone; both read off
+          the ID itself. */}
+      <PrmModal
+        className="mid-modal"
+        ariaLabel={`${record.name}'s ID`}
+        title={
+          /* The name opens the full profile in a new tab. It carries no hover
+             card of its own — the user-details peek belongs to the Users page,
+             and this popup is about the document. */
+          <button className="rvc-headlink" onClick={() => openInNewTab(`profile=${record.id}`)}>
+            {record.name}
+          </button>
+        }
+        description={
+          /* Hovering the status alone gives the timeline on its own (Figma
+             679:2039) — which stamps show depends on what has happened to the
+             document. */
+          <>
+            ID Status:{" "}
+            <IdDetailsHover timeline={timeline}>
+              <span className="mid-head-status">{STATUS_LABEL[record.status]}</span>
+            </IdDetailsHover>
+          </>
+        }
+        hideCancel
+        footerExtra={
+          <button className="prm-quiet" onClick={() => setUploadOpen(true)}>
+            Replace ID
+          </button>
+        }
+        /* Only an ID that still needs a decision offers Approve. */
+        confirmLabel={record.status !== "approved" ? "Approve" : undefined}
+        onConfirm={onApprove}
+        onCancel={onClose}
+      >
+        {/* The design shows the document alone — no full-view/rotate row under
+            it and no hover magnifier (the card still opens full view on click). */}
+        <ZoomableIdCard
+          data={idCardOf(record)}
+          onFullViewChange={setIdFullView}
+          hideTools
+          noMagnify
+          caption
+        />
+      </PrmModal>
 
-          {/* The design shows the document alone — no full-view/rotate row under
-              it and no hover magnifier (the card still opens full view on
-              click). */}
-          <div className="mid-body">
+      {uploadOpen && (
+        /* Figma 467:673 / 467:950 — a narrower dialog (its document is 420px
+           where the ID view's is 640), stacked over the ID rather than
+           replacing it. The drop zone fills the body until a file is chosen,
+           then the document itself takes its place. */
+        <PrmModal
+          className="mid-modal--upload"
+          title="Upload ID"
+          ariaLabel={`Upload a new ID for ${record.name}`}
+          hideCancel
+          footerExtra={
+            <button className="prm-quiet" disabled={!fileName} onClick={() => decide("in-review")}>
+              Upload Without Approval
+            </button>
+          }
+          confirmLabel="Upload & Approve"
+          confirmDisabled={!fileName}
+          onConfirm={() => decide("approved")}
+          onCancel={closeUpload}
+        >
+          {fileName ? (
+            /* Stand-in for the file just chosen: the prototype has no real
+               upload, so the record's own document stands in for it. */
             <ZoomableIdCard
               data={idCardOf(record)}
               onFullViewChange={setIdFullView}
               hideTools
               noMagnify
-              caption
             />
-          </div>
-          <div className="mid-foot">
-            <button className="btn-save-draft" onClick={() => setUploadOpen(true)}>
-              Replace ID
-            </button>
-            {/* Only an ID that still needs a decision offers Approve. */}
-            {record.status !== "approved" && (
-              <button className="btn-primary" onClick={onApprove}>
-                Approve
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {uploadOpen && (
-        /* Figma 467:673 / 467:950 — a narrower dialog (its document is 420px
-           where the ID view's is 640), layered over the ID rather than
-           replacing it. The drop zone fills the body until a file is chosen,
-           then the document itself takes its place. */
-        <div className="pm-overlay mid-upload-overlay" onClick={closeUpload}>
-          <div
-            className="pm-modal mid-modal mid-modal--upload"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Upload a new ID for ${record.name}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mid-head">
-              <div className="mid-head-left">
-                <h2 className="tasks-title mid-title">Upload ID</h2>
-              </div>
-              <button className="mid-close" aria-label="Close" onClick={closeUpload}>
-                <SmallXIcon />
-              </button>
-            </div>
-
-            <div className="mid-body mid-body--upload">
-              {fileName ? (
-                /* Stand-in for the file just chosen: the prototype has no real
-                   upload, so the record's own document stands in for it. */
-                <ZoomableIdCard
-                  data={idCardOf(record)}
-                  onFullViewChange={setIdFullView}
-                  hideTools
-                  noMagnify
-                />
-              ) : (
-                <label className="mid-drop">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/heic,image/heif,image/webp"
-                    className="mid-drop-input"
-                    onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-                  />
-                  <span className="mid-drop-icon">
-                    <UploadIcon />
-                  </span>
-                  <span className="mid-drop-title">Drag and drop, or click to upload</span>
-                  <span className="mid-drop-hint">
-                    Accepted File Types: PNG, JPG, HEIC, HEIF, WebP
-                    <br />
-                    Maximum File Size: 100MB
-                  </span>
-                </label>
-              )}
-            </div>
-            <div className="mid-foot">
-              <button
-                className="btn-save-draft"
-                disabled={!fileName}
-                onClick={() => decide("in-review")}
-              >
-                Upload Without Approval
-              </button>
-              <button
-                className="btn-primary"
-                disabled={!fileName}
-                onClick={() => decide("approved")}
-              >
-                Upload &amp; Approve
-              </button>
-            </div>
-          </div>
-        </div>
+          ) : (
+            <label className="mid-drop">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/heic,image/heif,image/webp"
+                className="mid-drop-input"
+                onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+              />
+              <span className="mid-drop-icon">
+                <UploadIcon />
+              </span>
+              <span className="mid-drop-title">Drag and drop, or click to upload</span>
+              <span className="mid-drop-hint">
+                Accepted File Types: PNG, JPG, HEIC, HEIF, WebP
+                <br />
+                Maximum File Size: 100MB
+              </span>
+            </label>
+          )}
+        </PrmModal>
       )}
     </>
   );

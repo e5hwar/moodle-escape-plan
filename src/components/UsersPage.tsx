@@ -30,6 +30,7 @@ import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuScholarshipIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { SubscriptionPill } from "./SubscriptionPill";
 
 const PAGE_SIZE = 50;
@@ -172,8 +173,6 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
 export function UsersPage({
   onViewCompany,
   onManageCompletions,
-  /* Offer Codes is hidden from the header — App still passes the handler so
-     the page can bring the button back without rewiring. */
   onOpenScholarships,
   onOpenNameChanges,
   onOpenMergeAccounts,
@@ -184,7 +183,6 @@ export function UsersPage({
 }: {
   onViewCompany?: (companyName: string) => void;
   onManageCompletions: (userId: string) => void;
-  onOpenOfferCodes?: () => void;
   onOpenScholarships?: () => void;
   onOpenNameChanges?: () => void;
   onOpenMergeAccounts?: () => void;
@@ -196,8 +194,7 @@ export function UsersPage({
   onFlashDone?: () => void;
 }) {
   const [list, setList] = useState<User[]>(() => seedUsers);
-  // "S" opens Scholarships from the page 3-dot menu. Offer Codes is hidden
-  // from the header for now, so it keeps no shortcut of its own.
+  // "S" opens Scholarships from the page 3-dot menu.
   // The User whose row was clicked — read back in the side drawer, the way a
   // Task or Certification row opens its own. Held by id so the drawer follows
   // an edit made from it.
@@ -291,7 +288,6 @@ export function UsersPage({
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 2; // name + cols + actions
   // Natural table width (name col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
@@ -360,9 +356,9 @@ export function UsersPage({
                       keeps a `.tasks-header` of its own for its button style. */}
                   {/* Name Changes used to be a labelled header button here; the
                       pending count is the banner / title note now (1268:1714 →
-                      1268:1736), so the header keeps only the 3-dot menu. Offer Codes
-                      is hidden for now; Scholarships sits in that menu beside Merge /
-                      Transfer, keeping its S shortcut. */}
+                      1268:1736), so the header keeps only the 3-dot menu. Scholarships
+                      sits in that menu beside Merge / Transfer, keeping its S
+                      shortcut. */}
                   <header className="tasks-header clh-actions">
                     <div className="tasks-header-actions">
                       <button
@@ -499,18 +495,10 @@ export function UsersPage({
                           menuOpen={menu?.user.id === row.u.id}
                         />
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={colSpan} className="u-empty">
-                            {committedQuery.trim()
-                              ? `No users match "${committedQuery.trim()}".`
-                              : "No users match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
             </div>
 

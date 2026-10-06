@@ -127,6 +127,15 @@ export const CheckIcon = () => (
   </svg>
 );
 
+/* The select-all's "some ticked" dash (Figma 1537:1530, "Icon Library") —
+   exported verbatim: an 11.2px glyph like the check above, a 4.2px stroke at
+   0.93px with square caps, centred in the box. */
+export const CheckboxDashIcon = () => (
+  <svg width="11.2" height="11.2" viewBox="0 0 11.2 11.2" fill="none" stroke="currentColor" strokeWidth="0.933333" strokeLinecap="square">
+    <path d="M7.70093 5.6H3.50093" />
+  </svg>
+);
+
 export const SortIcon = ({ active, dir }: { active?: boolean; dir?: "asc" | "desc" }) => {
   if (!active) {
     // Sortable but not currently sorted — tdesign/material "unfold-more" double chevron.
@@ -270,16 +279,8 @@ export const CloseXIcon = () => (
   </svg>
 );
 
-export const ArrowUpRightIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M7 17L17 7" />
-    <path d="M8 7h9v9" />
-  </svg>
-);
-
 /* "arrow-right-up" from the File Upload - Primary component (378:257) — a
-   16px square-capped glyph, distinct from the rounded 12px ArrowUpRightIcon
-   above that the breadcrumb/link rows use. */
+   16px square-capped glyph. */
 export const ArrowRightUpIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M5.5146 5.33332L10.7001 5.33332V10.5188M10.1137 5.91963L5.34961 10.6838" />
@@ -339,23 +340,9 @@ export const UploadTrayIcon = () => (
   </svg>
 );
 
-/* Keycap arrows — the ↑ ↓ hints in the review queue footer (Figma 263:1618). */
-export const ArrowUpIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 19V5M6 11l6-6 6 6" />
-  </svg>
-);
-
-export const ArrowDownIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 5v14M6 13l6 6 6-6" />
-  </svg>
-);
-
 /* Reorder arrows for the review-run cards (Figma 714:1496 down / 714:1502 up).
    Transcribed from the exported assets — a 16px box, 1.33333 stroke, SQUARE
-   caps. Deliberately NOT the ArrowUp/ArrowDownIcon pair above, which is a
-   rounded 12px keycap glyph on a 24px viewBox.
+   caps. Deliberately NOT the KeyArrowUp/KeyArrowDownIcon keycap glyphs.
 
    The Companies table's Seat Changes cell (Figma 927:950) exports this exact
    same pair — identical path, box, stroke and caps — so it reuses these rather
@@ -411,14 +398,6 @@ export const EditOffIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M6.70289 6.70296L3.19149 10.2144L2.66523 13.3333L5.78422 12.8071L9.29562 9.29569M8.40612 5L11.4413 1.96484L14.0341 4.55757L10.9988 7.59272M11.9962 6.59565L9.40352 4.00293" />
     <path d="M2.6668 2.6668L6.70315 6.70315L9.29588 9.29588L13.3335 13.3335" />
-  </svg>
-);
-
-/* ⌘ — the command keycap on the primary CTA (Figma 267:2013). Drawn rather
-   than typed so it doesn't depend on the font carrying U+2318. */
-export const CommandIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
   </svg>
 );
 
@@ -502,7 +481,7 @@ export const AlertTriangleIcon = () => (
 
 /* Traced from Figma's own exports for the Merge comparison tables
    (1282:2333 / 1282:2418), not approximated: both are square-capped 1.33px
-   strokes, which is why neither reuses `ArrowUpIcon` or `AlertTriangleIcon`
+   strokes, which is why neither reuses `KeyArrowUpIcon` or `AlertTriangleIcon`
    (rounded joins, different geometry). Both take the cell's colour. */
 
 /** The green "+N ↑" delta's arrow (1282:2471). */
@@ -676,13 +655,6 @@ export const VideoIcon = () => (
     <path d="M16 10l5-3v10l-5-3z" />
   </svg>
 );
-export const EnterKeyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 7v4a3 3 0 0 1-3 3H5" />
-    <path d="M9 10l-4 4 4 4" />
-  </svg>
-);
-
 export const AudioIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 18V5l11-2v13" />
@@ -1428,5 +1400,13 @@ export const AlertCircleFilledIcon = () => (
       d="M8 0.666667C12.05 0.666667 15.3333 3.95 15.3333 8C15.3333 12.05 12.05 15.3333 8 15.3333C3.95 15.3333 0.666667 12.05 0.666667 8C0.666667 3.95 3.95 0.666667 8 0.666667ZM7.33333 9.33333H8.66667V4.33333H7.33333V9.33333ZM8.66933 10.3333H7.33333V11.6693H8.66933V10.3333Z"
       fill="currentColor"
     />
+  </svg>
+);
+
+/* tdesign:user-1-filled — the person glyph of the no-photo avatar (Figma
+   1571:3662), transcribed from the 47px export; takes currentColor. */
+export const UserFilledIcon = () => (
+  <svg viewBox="0 0 47 47" fill="currentColor" aria-hidden="true">
+    <path d="M13.708 13.7091C13.708 11.1122 14.7396 8.62164 16.5759 6.78535C18.4122 4.94905 20.9027 3.91743 23.4996 3.91743C26.0965 3.91743 28.5871 4.94905 30.4234 6.78535C32.2597 8.62164 33.2913 11.1122 33.2913 13.7091C33.2913 16.306 32.2597 18.7966 30.4234 20.6329C28.5871 22.4691 26.0965 23.5008 23.4996 23.5008C20.9027 23.5008 18.4122 22.4691 16.5759 20.6329C14.7396 18.7966 13.708 16.306 13.708 13.7091ZM6.85379 37.2091C6.85379 34.6122 7.8854 32.1216 9.7217 30.2853C11.558 28.4491 14.0485 27.4174 16.6455 27.4174H30.3538C31.6397 27.4174 32.9129 27.6707 34.1009 28.1628C35.2889 28.6549 36.3683 29.3761 37.2775 30.2853C38.1868 31.1946 38.908 32.274 39.4001 33.462C39.8922 34.65 40.1455 35.9232 40.1455 37.2091V41.1258H6.85379V37.2091Z" />
   </svg>
 );

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  isReadOnly,
   mediaUrl,
   pastReviewOf,
   pastVersionOf,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
-import { ArrowDownIcon, ArrowUpIcon, CaretDownIcon, ChevronLeftIcon, ChevronRightIcon, CommandIcon, DownloadIcon12, EditOffIcon, EnterKeyIcon, InfoIcon14, KeyArrowLeftIcon, KeyArrowRightIcon, RowExternalLinkIcon, SortIcon } from "./icons";
+import { CaretDownIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon12, EditOffIcon, InfoIcon14, KeyArrowDownIcon, KeyArrowLeftIcon, KeyArrowRightIcon, KeyArrowUpIcon, KeyEnterIcon, RowExternalLinkIcon } from "./icons";
+import { WizardKeyHint } from "./wizardKeys";
 import { tasks } from "../data/tasks";
-import { QueueFilters, type QueueFilter } from "./ReviewQueueFilters";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { ShortcutHint } from "./ShortcutHint";
 import { PrmModal } from "./PrmModal";
@@ -60,15 +61,6 @@ function longDate(iso: string): string {
   return `${day}${suffix} ${d.toLocaleDateString("en-US", { month: "long" })} ${d.getFullYear()}`;
 }
 
-/* Queue table columns (Figma 263:1904) — the first column is the queue position
-   and carries no header label. `sortKey` maps onto the table page's sort. */
-const QUEUE_COLS: { cls: string; label: string; sortKey?: string }[] = [
-  { cls: "idx", label: "" },
-  { cls: "user", label: "User", sortKey: "name" },
-  { cls: "task", label: "Task Name", sortKey: "task" },
-  { cls: "att", label: "Att", sortKey: "attempt" },
-  { cls: "date", label: "Submitted", sortKey: "submittedOn" },
-];
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -122,21 +114,12 @@ const PlayGlyph = () => (
 export function ReviewConsole({
   queue,
   initialId,
-  queueFilters = [],
-  sort,
-  onSort,
   onExit,
   onRenameUser,
 }: {
   /** The table's filtered + sorted submissions — becomes the review queue. */
   queue: TaskSubmission[];
   initialId: string;
-  /** The table's filters, live-editable from the queue popover (Figma 263:1664).
-   * They drive the table's own state, so the queue re-filters as they change. */
-  queueFilters?: QueueFilter[];
-  /** The table's sort, so the queue's column headers can reorder the queue. */
-  sort?: { key: string; dir: "asc" | "desc" };
-  onSort?: (key: string) => void;
   /** Back to the table. Reviewed ids + results are handed up so the table can
    * drop them from the pending list. */
   onExit: (reviewed: Record<string, Reviewed>) => void;
@@ -145,11 +128,6 @@ export function ReviewConsole({
   onRenameUser?: (userId: string, name: string) => void;
 }) {
   const [currentId, setCurrentId] = useState(initialId);
-  const [queueOpen, setQueueOpen] = useState(false);
-  /* The queue popover highlights a row before committing to it — arrows move the
-     highlight, Q/⏎ switches the submission being reviewed (Esc discards). */
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const queueWrapRef = useRef<HTMLDivElement>(null);
   const [viewAttempt, setViewAttempt] = useState<number | null>(null); // 0-based chip; null = current
   /* Attempts dropdown (Figma 1169:1598 trigger / 1169:2024 panel). `attHi` is
      the keyboard-highlighted row, counted in steps back from the current
@@ -159,8 +137,7 @@ export function ReviewConsole({
   /* Submit & Next asks before the verdict goes out. */
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   /* The console's one toast — the shared green `CopiedToast` (Figma 1046:1141):
-     "Submission Passed/Rejected", "Skipped…", "Nothing else pending",
-     "Name Updated", "Download Started". `n` keys it, so a
+     "Submission Passed/Rejected", "Name Updated", "Download Started". `n` keys it, so a
      second toast restarts the timer instead of being cut short. */
   const [toast, setToast] = useState<{ msg: string; n: number } | null>(null);
   const hideToast = useCallback(() => setToast(null), []);
@@ -255,31 +232,18 @@ export function ReviewConsole({
     setMediaIndex(0);
   }
 
+  /* The queue only moves forward (user, 2026-10-07): "next" is the first
+     submission AFTER this one that still waits on a review here — SkillCat's
+     own Task, status Review Pending, not reviewed this session. It never wraps,
+     so a skipped submission is behind you and leaves the count. */
+  const awaitsReview = (x: TaskSubmission, map: Record<string, Reviewed>) =>
+    !isReadOnly(x) && x.status === "Review Pending" && !map[x.id];
+  function pendingAfter(map: Record<string, Reviewed>): TaskSubmission[] {
+    const i = queue.findIndex((x) => x.id === sub.id);
+    return queue.slice(i + 1).filter((x) => awaitsReview(x, map));
+  }
   function nextUnsubmitted(map: Record<string, Reviewed>): string | null {
-    const ids = queue.map((x) => x.id);
-    if (!ids.length) return null;
-    const i = ids.indexOf(sub.id);
-    for (let k = 1; k <= ids.length; k++) {
-      const id = ids[(i + k) % ids.length];
-      if (!map[id] && id !== sub.id) return id;
-    }
-    return null;
-  }
-
-  /* ── queue popover navigation ──
-     Arrows only move the highlight; the submission on screen changes when the
-     selection is committed with Q or ⏎ (Esc closes and discards it). */
-  function moveQueue(d: number) {
-    if (!queue.length) return;
-    const from = highlightId ?? sub.id;
-    const i = Math.max(0, queue.findIndex((x) => x.id === from));
-    const next = Math.min(queue.length - 1, Math.max(0, i + d));
-    setHighlightId(queue[next].id);
-  }
-
-  function commitQueue() {
-    if (highlightId && highlightId !== sub.id) goto(highlightId);
-    setQueueOpen(false);
+    return pendingAfter(map)[0]?.id ?? null;
   }
 
   /* Clamped, not wrapping — the stage's nav buttons hide at each end. */
@@ -310,12 +274,10 @@ export function ReviewConsole({
     if (nid) goto(nid);
   }
 
+  /* No toast (user, 2026-10-07) — the screen changing is the feedback. */
   function doSkip() {
     const nid = nextUnsubmitted(submitted);
-    if (nid) {
-      goto(nid);
-      showToast("Skipped — it stays in the queue");
-    } else showToast("Nothing else pending");
+    if (nid) goto(nid);
   }
 
   /* ── keyboard shortcuts (latest-state via ref so the listener binds once) ── */
@@ -349,23 +311,12 @@ export function ReviewConsole({
       if (e.key === "ArrowUp") { e.preventDefault(); setAttHi((i) => Math.max(1, i - 1)); return; }
       return;
     }
-    /* While the queue popover is open it owns the keyboard, per its own footer
-       legend (Figma 263:1607): ↑↓ navigate, ⏎ selects, Esc closes, Q saves and
-       closes. The score keys stay inert until it's dismissed. */
-    if (queueOpen) {
-      if (e.key === "Escape") { setQueueOpen(false); return; }
-      if (e.key === "Enter" || e.key === "q" || e.key === "Q") { commitQueue(); return; }
-      if (e.key === "ArrowDown") { e.preventDefault(); moveQueue(1); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); moveQueue(-1); return; }
-      if (e.key >= "0" && e.key <= "9") return;
-    }
     if (e.key >= "1" && e.key <= "9") { if (reviewable) toggleScore(+e.key); }
     else if (e.key === "0") { if (reviewable) toggleScore(10); }
     else if (e.key === "ArrowLeft") stepMedia(-1);
     else if (e.key === "ArrowRight") stepMedia(1);
     else if (e.key === "Enter") doSubmit();
     else if (e.key === "n" || e.key === "N") doSkip();
-    else if (e.key === "q" || e.key === "Q") setQueueOpen((v) => !v);
     /* Esc only steps back from a past attempt (its button carries the key).
        It no longer leaves the console — Back is a click (user, 2026-10-02). */
     else if (e.key === "Escape" && isPast) { setViewAttempt(null); setMediaIndex(0); }
@@ -375,24 +326,6 @@ export function ReviewConsole({
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
-
-  /* Opening the popover highlights whatever is on screen. */
-  useEffect(() => {
-    setHighlightId(queueOpen ? sub.id : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queueOpen]);
-
-  /* Changing a filter (or sort) keeps the reviewer on this submission but moves
-     the highlight to the first row matching the new criteria — confirming is
-     what actually switches. */
-  const queueKey = queue.map((q) => q.id).join(",");
-  const seenQueueKey = useRef(queueKey);
-  useEffect(() => {
-    if (seenQueueKey.current === queueKey) return;
-    seenQueueKey.current = queueKey;
-    if (queueOpen) setHighlightId(queue[0]?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queueKey]);
 
   /* Opening the dropdown highlights the past attempt on screen, or the most
      recent past one when the current attempt is showing (it isn't listed). */
@@ -411,19 +344,12 @@ export function ReviewConsole({
     return () => document.removeEventListener("mousedown", onDown);
   }, [attOpen]);
 
-  /* Click outside the queue popover closes it. */
-  useEffect(() => {
-    if (!queueOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (!queueWrapRef.current?.contains(e.target as Node)) setQueueOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [queueOpen]);
-
   /* ── derived display bits ── */
-  const submittedCount = Object.keys(submitted).length;
-  const pendingCount = queue.length - submittedCount;
+  /* "· n Pending" counts what still waits on a review AFTER this one — not the
+     queue's length, and not this submission. Skip hides at 0, and the primary
+     drops "& Next" (nothing to go to). */
+  const pendingCount = pendingAfter(submitted).length;
+  const submitLabel = pendingCount > 0 ? "Submit & Next" : "Submit";
   // The CTA dims until a score is picked and the feedback fits its limit; its
   // tip names whatever is still in the way.
   const feedbackOver = isOver(DESCRIPTION_MAX, draft.feedback);
@@ -569,18 +495,18 @@ export function ReviewConsole({
                     <div className="rvc-qpanel-foot">
                       <div className="rvc-qhints">
                         <span className="rvc-qhint">
-                          <span className="rvc-qkeypair">
-                            <span className="rvc-qkey"><ArrowUpIcon /></span>
-                            <span className="rvc-qkey"><ArrowDownIcon /></span>
+                          <span className="cta-kbd-group">
+                            <span className="cta-kbd cta-kbd--hint"><KeyArrowUpIcon /></span>
+                            <span className="cta-kbd cta-kbd--hint"><KeyArrowDownIcon /></span>
                           </span>
                           To navigate
                         </span>
                         <span className="rvc-qhint">
-                          <span className="rvc-qkey"><EnterKeyIcon /></span>
+                          <span className="cta-kbd cta-kbd--hint"><KeyEnterIcon /></span>
                           To select
                         </span>
                         <span className="rvc-qhint">
-                          <span className="rvc-qkey rvc-qkey--text">Esc</span>
+                          <span className="cta-kbd cta-kbd--hint">Esc</span>
                           To close
                         </span>
                       </div>
@@ -811,107 +737,28 @@ export function ReviewConsole({
 
           {/* ── footer (Figma 1164:1509) — a page-wide bar under BOTH columns
               again (it used to sit inside the rail): "Back" out to the table on
-              the left, then Skip and the primary CTA 16px apart. This design
-              drops the View Queue button; the popover it used to open still
-              hangs here and is reached with Q. ── */}
+              the left, then Skip and the primary CTA 16px apart. The queue
+              popover (and its Q key) is gone — user, 2026-10-07. ── */}
           <div className="wizard-footer rvc-footer">
             <button className="wizard-cancel" onClick={() => onExit(submitted)}>
               Back
             </button>
-            {/* Zero-size anchor — the popover keeps its right-aligned,
-                opens-upward placement now that it has no trigger of its own. */}
-            <div className="rvc-queue-wrap" ref={queueWrapRef}>
-              {queueOpen && (
-                  <div className="rvc-qpanel" role="dialog" aria-label="Review queue">
-                    <div className="rvc-qpanel-head">
-                      <span className="rvc-qcount">{pendingCount} Pending</span>
-                      <div className="rvc-qpanel-filters">
-                        <QueueFilters filters={queueFilters} />
-                      </div>
-                    </div>
-
-                    <div className="rvc-qhead">
-                      {QUEUE_COLS.map((c) => {
-                        const active = !!c.sortKey && sort?.key === c.sortKey;
-                        if (!c.sortKey || !onSort) {
-                          return <span key={c.cls} className={`rvc-qc rvc-qc--${c.cls}`}>{c.label}</span>;
-                        }
-                        return (
-                          <button
-                            key={c.cls}
-                            className={`rvc-qc rvc-qc--${c.cls} rvc-qc--sortable`}
-                            onClick={() => onSort(c.sortKey!)}
-                          >
-                            {c.label}
-                            <SortIcon active={active} dir={active ? sort?.dir : undefined} />
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="rvc-qlist">
-                      {queue.map((q, i) => {
-                        const sel = q.id === (highlightId ?? sub.id);
-                        const done = !!submitted[q.id];
-                        return (
-                          <button
-                            key={q.id}
-                            className={`rvc-qrow ${sel ? "is-selected" : ""} ${done ? "is-done" : ""}`}
-                            onClick={() => {
-                              if (q.id !== sub.id) goto(q.id);
-                              setQueueOpen(false);
-                            }}
-                          >
-                            <span className="rvc-qc rvc-qc--idx">{i + 1}</span>
-                            <span className="rvc-qc rvc-qc--user">{q.userName}</span>
-                            <span className="rvc-qc rvc-qc--task">{q.taskName}</span>
-                            <span className="rvc-qc rvc-qc--att">{q.versions.length}</span>
-                            <span className="rvc-qc rvc-qc--date">
-                              {done ? `Reviewed · ${submitted[q.id].score}/10` : longDate(q.submittedOn)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {queue.length === 0 && (
-                        <div className="rvc-qempty">No submissions match these filters.</div>
-                      )}
-                    </div>
-
-                    <div className="rvc-qpanel-foot">
-                      <div className="rvc-qhints">
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkeypair">
-                            <span className="rvc-qkey"><ArrowUpIcon /></span>
-                            <span className="rvc-qkey"><ArrowDownIcon /></span>
-                          </span>
-                          To navigate
-                        </span>
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkey"><EnterKeyIcon /></span>
-                          To select
-                        </span>
-                        <span className="rvc-qhint">
-                          <span className="rvc-qkey rvc-qkey--text">Esc</span>
-                          To close
-                        </span>
-                      </div>
-                      <span className="rvc-qhint">
-                        <span className="rvc-qkey rvc-qkey--text">Q</span>
-                        Save &amp; update queue
-                      </span>
-                    </div>
-                  </div>
-              )}
-            </div>
             <div className="rvc-foot-actions">
               {/* Skip prints its own N keycap now (756:3836), so it no longer
-                  needs the hover hint that used to name the shortcut. */}
-              <button className="btn-save-draft rvc-skip" onClick={doSkip}>
+                  needs the hover hint that used to name the shortcut. With
+                  nothing pending after this one it stays, disabled (user,
+                  2026-10-07) — on a company Task's read-only screen it is the
+                  footer's only button. */}
+              <button
+                className="btn-save-draft rvc-skip"
+                onClick={doSkip}
+                disabled={pendingCount === 0}
+              >
                 <span className="rvc-skip-label">
                   Skip to Next{" "}
                   <span className="rvc-skip-count">· {pendingCount} Pending</span>
                 </span>
-                <span className="kbd-letter">N</span>
+                <span className="cta-kbd">N</span>
               </button>
               {isPast ? (
                 <button
@@ -919,7 +766,7 @@ export function ReviewConsole({
                   onClick={() => { setViewAttempt(null); setMediaIndex(0); }}
                 >
                   Back To Current Attempt
-                  <span className="kbd-letter">Esc</span>
+                  <span className="cta-kbd">Esc</span>
                 </button>
               ) : reviewable ? (
                 /* `aria-disabled`, not `disabled`: a disabled button fires no
@@ -930,11 +777,8 @@ export function ReviewConsole({
                   data-tip={submitBlockedTip}
                   onClick={doSubmit}
                 >
-                  Submit &amp; Next
-                  <span className="rvc-submit-keys">
-                    <span className="rvc-qkey rvc-qkey--cmd"><CommandIcon /></span>
-                    <span className="rvc-qkey"><EnterKeyIcon /></span>
-                  </span>
+                  {submitLabel}
+                  <WizardKeyHint />
                 </button>
               ) : isDone ? (
                 <span className="rvc-footer-note">
@@ -951,7 +795,7 @@ export function ReviewConsole({
       {confirmSubmit && draft.score != null && (
         <PrmModal
           title="Submit Review?"
-          confirmLabel="Submit & Next"
+          confirmLabel={submitLabel}
           onCancel={() => setConfirmSubmit(false)}
           onConfirm={commitSubmit}
         >

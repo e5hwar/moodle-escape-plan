@@ -30,6 +30,7 @@ import { ConfirmCard } from "./ConfirmCard";
 import { CopiedToast } from "./CopiedToast";
 import { usePersisted } from "../hooks/usePersisted";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -720,7 +721,7 @@ export function CertificationsPage({
                                 }}
                               >
                                 <span className="ct-menu-label">{label}</span>
-                                <span className="ct-menu-kbd">{shortcut}</span>
+                                <span className="cta-kbd">{shortcut}</span>
                               </button>
                             ))}
                           </>
@@ -842,6 +843,7 @@ export function CertificationsPage({
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
             </div>
 
@@ -1334,7 +1336,7 @@ function TagCell({ tags }: { tags: string[] }) {
       ) : (
         <>
           {tags[0]}
-          {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
+          {tags.length > 1 && <>{" "}<span className="used-extra">+{tags.length - 1}</span></>}
         </>
       )}
     </td>

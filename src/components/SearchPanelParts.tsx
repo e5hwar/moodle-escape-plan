@@ -7,31 +7,33 @@ import {
   SearchClearIcon,
 } from "./icons";
 
-// Shared dropdown footer + "search for" action used by the Tasks / Users / Review
-// search combobox panels. Matches the Figma "Expanded Search" components.
+// Shared parts of the search combobox panels (Tasks, Users, Review, Question,
+// Companies, Manage IDs, Proctoring, Content Links, Manage Completions):
+// footer, suggestion rows, no-results block. Figma "Search" section 772:1109.
 
-/** Keyboard hints footer — shown when the search box is empty (Figma 21:15979).
+/** Keyboard hints footer — the foot of every open panel (Figma 21:15979 /
+ *  1542:2150); the "Search for …" row it used to give way to is gone.
  *  The ↵ is the wizard footer's 14px `KeyEnterIcon` drawn at 12px, which is
  *  exactly the node's 12px `enter` export (the 1.1667 stroke scales to 1). */
 export function SearchHints() {
   return (
     <div className="usearch-foot">
       <span className="usearch-hint">
-        <span className="usearch-keycap">
+        <span className="cta-kbd cta-kbd--hint">
           <KeyEnterIcon />
         </span>
         <span className="usearch-hint-label">To select</span>
       </span>
       <span className="usearch-hint">
-        <span className="usearch-keycap usearch-keycap--text">ESC</span>
+        <span className="cta-kbd cta-kbd--hint">ESC</span>
         <span className="usearch-hint-label">To close</span>
       </span>
       <span className="usearch-hint">
-        <span className="usearch-keycap-group">
-          <span className="usearch-keycap">
+        <span className="cta-kbd-group">
+          <span className="cta-kbd cta-kbd--hint">
             <KeyArrowUpIcon />
           </span>
-          <span className="usearch-keycap">
+          <span className="cta-kbd cta-kbd--hint">
             <KeyArrowDownIcon />
           </span>
         </span>
@@ -41,36 +43,115 @@ export function SearchHints() {
   );
 }
 
-/** "Search for "<query>" in <scope>" action row — shown when text is entered. */
-export function SearchForRow({
-  query,
-  scope,
+/** A search panel whose typed text matched nothing — Figma 1565:3111. The
+ *  panel holds only this: a centred 16px Medium title over a 14px #a8a8a8 line,
+ *  in a fixed 127px block — the height of the panel with its heading, one
+ *  result, the 8px gap and the key-hints footer — so going from one result to
+ *  none doesn't resize it. The head, hints and "Search for" row are hidden by
+ *  CSS whenever this is in the panel. Filter-mode and "Showing Results for"
+ *  panels alike (list items 13 and 14). */
+export function SearchNoResults() {
+  return (
+    <div className="usearch-noresults" role="status">
+      <div className="usearch-noresults-title">No Results Found :(</div>
+      <div className="usearch-noresults-sub">Check for spelling mistakes or try a different search term</div>
+    </div>
+  );
+}
+
+/** One value a typed query could filter by, offered under "Suggested filters":
+ *  laid out like the filter rows — the filter's chip ("Certification:") and the
+ *  value on the left, what it is in #a8a8a8 on the right (user, 2026-10-06).
+ *  `chip` defaults to "<kind>:". */
+export type FilterSuggestion = { kind: string; name: string; chip?: string };
+
+/** Typed text → the filter values it matches, scope by scope in the bar's own
+ *  order (user rule, 2026-10-06: type "HVAC" and every filter is searched —
+ *  an Industry or a Certification named HVAC shows up; with no match anywhere
+ *  the panel goes away and Enter just searches the text). Values already
+ *  applied or pending are left out. */
+export function suggestFilters(
+  query: string,
+  groups: { kind: string; chip?: string; values: readonly string[]; exclude?: readonly string[] }[],
+  max = 6,
+): FilterSuggestion[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out: FilterSuggestion[] = [];
+  for (const g of groups) {
+    for (const name of g.values) {
+      if (g.exclude?.includes(name)) continue;
+      if (!name.toLowerCase().includes(q)) continue;
+      out.push({ kind: g.kind, name, chip: g.chip });
+      if (out.length >= max) return out;
+    }
+  }
+  return out;
+}
+
+/** A suggested filter row: the filter rows' 35px layout (21:15956) — chip,
+ *  value, and the kind right-aligned at 14px #a8a8a8. */
+export function SuggestionRow({
+  suggestion,
   active,
   onHover,
   onClick,
 }: {
-  query: string;
-  scope: string;
-  active?: boolean;
-  onHover?: () => void;
+  suggestion: FilterSuggestion;
+  active: boolean;
+  onHover: () => void;
   onClick: () => void;
 }) {
-  // Default-selected when no explicit active state is provided, so Enter runs the search.
-  const on = active === undefined ? true : active;
   return (
     <button
-      className={`usearch-searchfor ${on ? "active" : ""}`}
+      className={`usearch-row ${active ? "active" : ""}`}
       onMouseEnter={onHover}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
     >
-      <span className="usearch-searchfor-icon">
-        <SearchIcon />
-      </span>
-      <span className="usearch-searchfor-text">
-        Search for <span className="q">“{query}”</span> in {scope}
-      </span>
+      <span className="usearch-chip">{suggestion.chip ?? `${suggestion.kind}:`}</span>
+      <span className="usearch-row-ex">{suggestion.name}</span>
+      <span className="usearch-row-desc">{suggestion.kind}</span>
     </button>
+  );
+}
+
+/** One arrow-key step through a panel's rows (2026-10-06). The search bar is
+ *  the resting stop (-1): ↓ past the last row returns to the bar — Enter there
+ *  searches exactly what was typed — and ↑ from the bar wraps to the last row.
+ *  The "Search for …" row is never a stop; it is a mouse target only. */
+export function stepActive(a: number, count: number, dir: 1 | -1): number {
+  if (count <= 0) return -1;
+  if (dir === 1) return a >= count - 1 ? -1 : a + 1;
+  return a <= -1 ? count - 1 : a - 1;
+}
+
+/** A result panel's header (Figma 1542:2130 / 1542:2188): the blank-state
+ *  label in white, or — once something is typed — "Showing Results for “q”"
+ *  in #a8a8a8 with the query in orange. */
+export function ResultsHead({ query, label }: { query: string; label: string }) {
+  const q = query.trim();
+  return q ? (
+    <div className="usearch-head is-results">
+      Showing Results for “<span className="usearch-head-q">{q}</span>”
+    </div>
+  ) : (
+    <div className="usearch-head">{label}</div>
+  );
+}
+
+/** A result's name with the typed text set in Medium (1542:2195 / 1542:2278);
+ *  the first case-insensitive match only. */
+export function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <span className="usearch-match">{text.slice(i, i + q.length)}</span>
+      {text.slice(i + q.length)}
+    </>
   );
 }
 

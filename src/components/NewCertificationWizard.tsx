@@ -1,8 +1,10 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { TimeField } from "./TimeField";
 import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, slugify } from "../data/deepLinks";
 import { createPortal } from "react-dom";
 import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
-import { InfoTipIcon, RowCloseIcon, InfoIcon12 } from "./icons";
+import { InfoTipIcon, RowCloseIcon, InfoIcon12, WarnTriangleIcon } from "./icons";
+import { NoteCard } from "./NoteCard";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
@@ -1393,24 +1395,13 @@ function DetailsStep({
 
       <div className="form-group">
         <label className="form-label">Time to Complete</label>
-        <div className="time-row">
-          <input
-            className="form-input no-spinner small"
-            type="text"
-            inputMode="numeric"
-            placeholder="0"
-            value={data.timeValue}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "" || /^\d+$/.test(v)) update({ timeValue: v });
-            }}
-          />
-          <SelectField
-            value={TIME_UNIT_LABEL[data.timeUnit]}
-            options={TIME_UNIT_OPTIONS}
-            onChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
-          />
-        </div>
+        <TimeField
+          value={data.timeValue}
+          unit={TIME_UNIT_LABEL[data.timeUnit]}
+          units={TIME_UNIT_OPTIONS}
+          onValueChange={(v) => update({ timeValue: v })}
+          onUnitChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
+        />
         <p className="form-help">
           Estimated time required for the user to complete the Task
         </p>
@@ -2415,7 +2406,7 @@ function CoursePane({
           <div className="ctb-eyebrow">Course {index}</div>
           <div className="ctb-course-name-row">
             <h2 className="ctb-course-name">{course.nameEn || "Untitled Course"}</h2>
-            {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
+            {course.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
           </div>
           {course.descEn && <p className="ctb-course-desc">{course.descEn}</p>}
         </div>
@@ -2541,7 +2532,7 @@ function LessonCard({
           <div className="ctb-lesson-eyebrow">Lesson {num}</div>
           <div className="ctb-lesson-name-row">
             <span className="ctb-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
-            {lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+            {lesson.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
           </div>
           {lesson.descEn && <div className="ctb-lesson-desc">{lesson.descEn}</div>}
         </div>
@@ -2638,7 +2629,7 @@ function CourseMoreButton({
   const hint = useTipWhileClosed(label, open);
   return (
     <button
-      className="ctb-more"
+      className="cta-quiet cta-quiet--icon"
       aria-label={label}
       data-tip={hint}
       onClick={(e) => { e.stopPropagation(); toggle(); }}
@@ -2798,7 +2789,7 @@ function TaskRow({
       {/* Restriction switched on but no prerequisite picked yet — the gate has
           nothing to name, so flag the half-configured state instead. */}
       {restricted && prereqs.length === 0 && (
-        <span className="cert-restricted-pill">Restricted</span>
+        <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
       )}
     </>
   );
@@ -3132,7 +3123,7 @@ function AddTaskMenuContent({
       {typesTop !== null && (
         <div
           ref={subRef}
-          className={`ctb-menu-sub${flip ? " is-left" : ""}`}
+          className={`cascading-sub cascading-sub--menu${flip ? " is-left" : ""}`}
           role="menu"
           /* −8.5: the panel's own 8px padding + its 0.5px hairline, so the
              first type sits level with the row that opened it. */
@@ -3267,7 +3258,7 @@ function CompletionStep({
             {!criteriaLocked && (
               <button
                 type="button"
-                className={`cc-add-set${missing && sets.length === 0 ? " has-error" : ""}`}
+                className="cc-add-set"
                 onClick={addConditionSet}
                 disabled={atCap}
               >
@@ -3740,7 +3731,7 @@ function CourseTreeSummary({
             <span className="ctb-eyebrow">Course {i + 1}</span>
             <div className="cdr-course-name-row">
               <span className="cdr-course-name">{course.nameEn || "Untitled Course"}</span>
-              {course.hidden && <span className="cert-hidden-pill">Hidden</span>}
+              {course.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
             </div>
             {course.descEn && <p className="cdr-course-desc">{course.descEn}</p>}
           </div>
@@ -3756,7 +3747,7 @@ function CourseTreeSummary({
                   <div className="ctb-lesson-eyebrow">Lesson {g.num}</div>
                   <div className="ctb-lesson-name-row">
                     <span className="ctb-lesson-name">{g.lesson.nameEn || "Untitled Lesson"}</span>
-                    {g.lesson.hidden && <span className="cert-hidden-pill">Hidden</span>}
+                    {g.lesson.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
                   </div>
                   {g.lesson.descEn && <div className="ctb-lesson-desc">{g.lesson.descEn}</div>}
                 </div>
@@ -3798,7 +3789,7 @@ function TaskSummaryRow({
         <span className="cdr-task-name">{task.name}</span>
         {task.requiresSubscription && <SubscriptionMark />}
         {task.restriction?.enabled && prereqs.length === 0 && (
-          <span className="cert-restricted-pill">Restricted</span>
+          <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
         )}
       </div>
       <span className="ctb-row-meta">{taskMeta(task)}</span>
@@ -3808,13 +3799,6 @@ function TaskSummaryRow({
 }
 
 /* ─────────────────  Archive & Replace (full page)  ───────────────── */
-
-const WarnIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.3 3.86 1.82 18a1.5 1.5 0 0 0 1.28 2.25h16.8A1.5 1.5 0 0 0 21.18 18L12.7 3.86a1.5 1.5 0 0 0-2.6 0z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-);
 
 /* The Archive & Replace page's long explanation — the ⓘ on its description. */
 const ARCHIVE_CERT_TIP =
@@ -3888,14 +3872,12 @@ export function ArchiveCertificationPage({
               </p>
 
               <div className="form-group">
-                <div className="form-warning">
-                  <span className="form-warning-icon"><WarnIcon /></span>
-                  <div>
-                    <strong>Archiving is permanent.</strong> Once archived, this Certification is
-                    retired from the catalog and can't be un-archived. Enrolled learners keep their
-                    completion record and are pointed to the replacement Certification(s) below.
-                  </div>
-                </div>
+                <NoteCard
+                  tone="danger"
+                  icon={<WarnTriangleIcon />}
+                  title="Archiving is permanent."
+                  body="Once archived, this Certification is retired from the catalog and can't be un-archived. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below."
+                />
               </div>
 
               <div className="form-group">
@@ -4033,8 +4015,10 @@ function LangField({
    *  step Enter belongs to the footer's own shortcut). */
   onEnter?: () => void;
   /** A value worth offering (the first Course takes the Certification's
-   *  name): it replaces the placeholders, and Tab in an empty row fills every
-   *  empty row with it — the Spanish row with `es`, falling back to `en`. */
+   *  name): it replaces the placeholders, and Tab or → in an empty row fills
+   *  every empty row with it — the Spanish row with `es`, falling back to
+   *  `en`. No keycap names the key (user, 2026-10-06): the grey suggestion is
+   *  the only UI. */
   suggestion?: { en: string; es: string };
   /** A SOFT limit per language: each row shows the characters left and the
    *  shell flags amber past the suggested length, red past the limit — the
@@ -4058,12 +4042,13 @@ function LangField({
       e.preventDefault();
       onEnter();
     } else if (
-      e.key === "Tab" &&
+      (e.key === "Tab" || e.key === "ArrowRight") &&
       suggestEn &&
       !rowValue &&
       !(e.shiftKey || e.metaKey || e.ctrlKey || e.altKey)
     ) {
-      // Accept the suggestion; the caret stays put, so a second Tab moves on.
+      // Accept the suggestion; the caret stays put, so a second Tab moves on
+      // and → goes back to moving the caret once the row has text.
       e.preventDefault();
       if (!en) onChangeEn(suggestEn);
       if (!es) onChangeEs(suggestEs);
@@ -4085,13 +4070,6 @@ function LangField({
             onChange={(e) => onChangeEn(e.target.value)}
             onKeyDown={keyDown(en)}
           />
-          {/* The search bar's keycap (⌘K badge), naming the key that takes
-              the suggestion. Gone once the row has a value. */}
-          {suggestEn && !en && (
-            <span className="search-kbd lang-field-kbd" aria-hidden="true">
-              <span className="kbd-letter">Tab</span>
-            </span>
-          )}
           {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
         </div>
         <div className="lang-field-divider" />

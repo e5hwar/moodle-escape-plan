@@ -29,6 +29,7 @@ import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
 import { SubscriptionPill } from "./SubscriptionPill";
 import { useToast } from "./useToast";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -293,7 +294,6 @@ export function QuizPurchasersPage({
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
-  const colSpan = visibleCols.length + 2; // name + cols + actions
   const tableMin = 200 + visibleCols.reduce((s, c) => s + c.width, 0) + 40;
 
   function toggleSort(key: SortKey) {
@@ -467,18 +467,10 @@ export function QuizPurchasersPage({
                           }
                         />
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={colSpan} className="u-empty">
-                            {committedQuery.trim()
-                              ? `No purchasers match "${committedQuery.trim()}".`
-                              : "No purchasers match these filters."}
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">

@@ -37,6 +37,8 @@ export function SelectField<T extends string>({
   menuWidth,
   panelClass,
   onOpenChange,
+  emptyText,
+  footer,
 }: {
   value: T | "";
   options: readonly T[];
@@ -83,6 +85,12 @@ export function SelectField<T extends string>({
   /** Notified as the panel opens and closes, for a caller that styles the
    *  surrounding control while its menu is up. */
   onOpenChange?: (open: boolean) => void;
+  /** The muted row shown when there are no options at all (a search that
+   *  matches nothing still says "No matches for …"). */
+  emptyText?: string;
+  /** A band under the list, past a hairline — the "Add New …" row of Figma
+   *  620:1446 (`.ss-menu-foot`). Gets the menu's `close`. */
+  footer?: (close: () => void) => ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
@@ -152,6 +160,8 @@ export function SelectField<T extends string>({
             optionSecondary={optionSecondary}
             optionSearchText={optionSearchText}
             maxVisibleOptions={maxVisibleOptions}
+            emptyText={emptyText}
+            footer={footer}
             // Hand the keyboard back to the trigger, the way a native select does.
             close={() => {
               close();
@@ -175,11 +185,15 @@ function SelectMenu<T extends string>({
   optionSecondary,
   optionSearchText,
   maxVisibleOptions,
+  emptyText,
+  footer,
 }: {
   value: T | "";
   options: readonly T[];
   onChange: (v: T) => void;
   close: () => void;
+  emptyText?: string;
+  footer?: (close: () => void) => ReactNode;
   searchPlaceholder?: string;
   optionDetail?: (option: T) => ReactNode;
   optionPrimary?: (option: T) => ReactNode;
@@ -324,27 +338,28 @@ function SelectMenu<T extends string>({
       })}
       {shown.length === 0 && (
         <div className="ms-menu-empty">
-          {query.trim() ? `No matches for “${query.trim()}”` : "No matches"}
+          {query.trim() ? `No matches for “${query.trim()}”` : emptyText ?? "No matches"}
         </div>
       )}
     </div>
   );
 
-  if (!searchPlaceholder) return list;
-
   return (
     <>
-      <DropdownSearch
-        inputRef={searchRef}
-        placeholder={searchPlaceholder}
-        value={query}
-        onChange={(v: string) => {
-          setQuery(v);
-          setActive(-1);
-        }}
-        onKeyDown={onKeyDown}
-      />
+      {searchPlaceholder && (
+        <DropdownSearch
+          inputRef={searchRef}
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(v: string) => {
+            setQuery(v);
+            setActive(-1);
+          }}
+          onKeyDown={onKeyDown}
+        />
+      )}
       {list}
+      {footer?.(close)}
     </>
   );
 }

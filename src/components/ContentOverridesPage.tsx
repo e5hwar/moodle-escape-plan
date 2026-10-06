@@ -24,6 +24,7 @@ import {
   fmtMins,
   gradeLabel,
   gradeScale,
+  passMark,
   formatGrade,
   passMarkLabel,
   tracksAttempts,
@@ -36,7 +37,7 @@ import {
 } from "../data/certLookup";
 import { PrmModal } from "./PrmModal";
 import { NoteCard } from "./NoteCard";
-import { SearchHints } from "./SearchPanelParts";
+import { SearchHints, stepActive, ResultsHead, HighlightMatch, SearchNoResults } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
 import { SkeletonOverlay } from "./SkeletonOverlay";
 import { useLeaveGuard } from "./LeaveGuard";
@@ -172,8 +173,9 @@ type Staged =
 
 type What = { kind: "cert" | "task"; id: string } | null;
 /** `max` is the scale the admin types in — 100 for a Quiz, the Task's own
- *  max score for a Hands-On Task (see {@link gradeScale}). */
-type GradePrompt = { uid: string; tid: string; taskName: string; type: string; max: number } | null;
+ *  max score for a Hands-On Task (see {@link gradeScale}); `pass` is the
+ *  lowest grade on that scale that passes it (see {@link passMark}). */
+type GradePrompt = { uid: string; tid: string; taskName: string; type: string; max: number; pass: number } | null;
 type TaskRef = { uid: string; tid: string } | null;
 type MenuState =
   | { kind: "task"; uid: string; tid: string; rect: DOMRect }
@@ -256,6 +258,9 @@ export function ContentOverridesPage({
 
   const [gradePrompt, setGradePrompt] = useState<GradePrompt>(null);
   const [gradeInput, setGradeInput] = useState("");
+  /** Set once the admin leaves the grade input or tries to continue; the
+   *  under-pass error waits for it so typing "8" on the way to "80" never flashes. */
+  const [gradeTried, setGradeTried] = useState(false);
 
   /* Modals + anchored menus. */
   const [menu, setMenu] = useState<MenuState>(null);
@@ -316,15 +321,35 @@ export function ContentOverridesPage({
     }
     const t = data.tasksById[tid];
     if (t && needsGradePrompt(t)) {
-      setGradePrompt({ uid, tid, taskName: t.name, type: t.type, max: gradeScale(t) });
+      setGradePrompt({ uid, tid, taskName: t.name, type: t.type, max: gradeScale(t), pass: passMark(t) });
       setGradeInput("");
+      setGradeTried(false);
     } else {
       setStaged((prev) => [...prev, { kind: "complete", uid, tid, grade: null }]);
     }
   }
 
+  /* A grade outside the task's pass mark and its scale can't be staged.
+     Above the scale ("120" on /100) flags at once; below the pass mark (which
+     catches negatives too) flags once the admin leaves the input or tries to
+     continue. While either shows, Continue is disabled. */
+  const gradeNum = gradeInput.trim() === "" ? null : Number(gradeInput);
+  const gradeOverMax = !!gradePrompt && gradeNum != null && gradeNum > gradePrompt.max;
+  const gradeUnderPass = !!gradePrompt && gradeNum != null && gradeNum < gradePrompt.pass;
+  const gradeError = !gradePrompt
+    ? null
+    : gradeOverMax
+      ? `Grade can't exceed ${gradePrompt.max}`
+      : gradeUnderPass && gradeTried
+        ? `Grade must be ${gradePrompt.pass} or higher`
+        : null;
+
   function confirmGrade() {
     if (!gradePrompt) return;
+    if (gradeOverMax || gradeUnderPass) {
+      setGradeTried(true);
+      return;
+    }
     const raw = gradeInput.trim();
     /* Typed on the task's own scale; stored as a percentage (see formatGrade). */
     const grade = raw === "" ? null : Number(raw) * (100 / gradePrompt.max);
@@ -711,8 +736,7 @@ export function ContentOverridesPage({
                 onQuery={setWhoQ}
                 onClearScope={clearWho}
                 options={whoOptions}
-                emptyText="No users match."
-                suggestLabel="Recently Active Users:"
+                suggestLabel="Recently Active Users"
                 openOnMount={openHalf === "who"}
                 onOpenChange={(o) => setPanelOpen((p) => ({ ...p, who: o }))}
                 handleRef={whoHandle}
@@ -724,7 +748,6 @@ export function ContentOverridesPage({
                 onQuery={setWhatQ}
                 onClearScope={clearWhat}
                 options={whatOptions}
-                emptyText="No certifications or tasks match."
                 openOnMount={openHalf === "what"}
                 onOpenChange={(o) => setPanelOpen((p) => ({ ...p, what: o }))}
                 handleRef={whatHandle}
@@ -891,26 +914,32 @@ export function ContentOverridesPage({
                 setGradeInput("");
               }}
               onConfirm={confirmGrade}
+              confirmDisabled={gradeError != null}
             >
               <div className="prm-field">
                 <label className="prm-label" htmlFor="mc-grade">
                   Grade
+                  {gradeError && <span className="form-label-error">{gradeError}</span>}
                 </label>
-                <div className="mc-gradefield">
+                {/* Figma 1554:2972 "Input + Suffix": one input shell, the
+                    scale ("/100", "/10"…) riding inside it at the right. */}
+                <div className={`mc-gradefield${gradeError ? " has-error" : ""}`}>
                   <input
                     id="mc-grade"
-                    className="form-input"
+                    className="mc-gradefield-input"
                     type="number"
+                    placeholder="Grade..."
                     min={0}
                     max={gradePrompt.max}
                     autoFocus
                     value={gradeInput}
                     onChange={(e) => setGradeInput(e.target.value)}
+                    onBlur={() => setGradeTried(true)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") confirmGrade();
                     }}
                   />
-                  <span className="mc-gradefield-suffix">/ {gradePrompt.max}</span>
+                  <span className="mc-gradefield-suffix">/{gradePrompt.max}</span>
                 </div>
                 <p className="prm-help">
                   Optional. Enter a score, or leave blank to mark complete without one
@@ -1026,8 +1055,7 @@ function ScopeSearch({
   onQuery,
   onClearScope,
   options,
-  emptyText,
-  suggestLabel = "Suggested Searches:",
+  suggestLabel = "Suggested filters", // verbatim, 1542:2133
   openOnMount = false,
   onOpenChange,
   handleRef,
@@ -1039,7 +1067,6 @@ function ScopeSearch({
   onQuery: (v: string) => void;
   onClearScope: () => void;
   options: ScopeOption[];
-  emptyText: string;
   /** Panel header over the blank-state list — what this half is offering. */
   suggestLabel?: string;
   /** Open (and focus) this half as soon as the page is drawn — the half the
@@ -1118,10 +1145,10 @@ function ScopeSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(options.length - 1, a + 1));
+      setActive((a) => stepActive(a, options.length, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, options.length, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const opt = options[active >= 0 ? active : 0];
@@ -1186,17 +1213,9 @@ function ScopeSearch({
         <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
           {/* One header for the panel (1162:1312 / 1162:1385): what the list is
               — the suggestions, or the results for what has been typed. */}
-          <div className="usearch-head mc-opt-head">
-            {query.trim() ? (
-              <>
-                Showing Results for “<span className="mc-opt-q">{query.trim()}</span>”
-              </>
-            ) : (
-              suggestLabel
-            )}
-          </div>
+          <ResultsHead query={query} label={suggestLabel} />
           {options.length === 0 ? (
-            <div className="usearch-empty">{emptyText}</div>
+            <SearchNoResults />
           ) : (
             options.map((opt, i) => (
               <button
@@ -1207,7 +1226,7 @@ function ScopeSearch({
                 onClick={() => choose(opt)}
               >
                 <span className="mc-opt-text">
-                  <span className="mc-opt-name">{opt.name}</span>
+                  <span className="mc-opt-name"><HighlightMatch text={opt.name} query={query} /></span>
                   {opt.sub && <span className="mc-opt-sub">{opt.sub}</span>}
                 </span>
                 {opt.kind && <span className="mc-opt-kind">{opt.kind}</span>}

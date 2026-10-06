@@ -103,18 +103,12 @@ export const FILTER_TIPS = {
     access: "Show only what was paid for, or only what was granted free.",
   },
 
-  /** Offer Codes. */
-  offerCodes: {
-    plan: "Show only codes for the monthly plan, or only for the annual one.",
-    regions: "Show only codes that can be used in the chosen countries or regions.",
-  },
-
-  /** Scholarships. */
   /** The Full Profile's Purchases & Bills card. */
   profile: {
     purchaseType: "Show only subscription charges, certification purchases, quiz attempts or physical products.",
   },
 
+  /** Scholarships. */
   scholarships: {
     status: "Show only Active or only Expired scholarships.",
     assignedBy: "Show only scholarships the chosen admins assigned.",
@@ -139,13 +133,6 @@ export const FILTER_TIPS = {
     reuploadRequested: "Show only re-uploads requested inside the chosen dates.",
   },
 
-  /** The "Add Certifications" picker on an Industry. */
-  industries: {
-    careerStage: "Narrow the list to Certifications aimed at the chosen career stage.",
-    industryTag:
-      "Narrow the list to Certifications already tagged to an Industry, or to untagged ones.",
-    time: "Narrow the list to Certifications of the chosen length.",
-  },
 
   /* ── Picker modals: these narrow the list you are choosing FROM. ── */
 

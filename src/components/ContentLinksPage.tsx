@@ -8,7 +8,7 @@ import {
 } from "../data/contentLinks";
 import { certifications, formatTimeToComplete } from "../data/certifications";
 import { SelectRequirementModal } from "./SelectRequirementModal";
-import { SearchHints } from "./SearchPanelParts";
+import { SearchHints, stepActive, ResultsHead, HighlightMatch, SearchNoResults } from "./SearchPanelParts";
 import { SkeletonOverlay } from "./SkeletonOverlay";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { useToast } from "./useToast";
@@ -65,6 +65,14 @@ const KIND_ADD_ROW: Record<LinkKind, string> = {
   prerequisite: "Add Pre-Requisite",
   recommended: "Add Recommended Next",
   related: "Add Related Certification",
+};
+
+// Nothing linked yet — the card-table empty row (Figma 1570:3518, list item
+// 39), worded like Product Config's "No Force Updates Configured Yet".
+const KIND_EMPTY: Record<LinkKind, string> = {
+  prerequisite: "No Pre-Requisites Added Yet",
+  recommended: "No Recommended Next Added Yet",
+  related: "No Related Certifications Added Yet",
 };
 
 // The picker adds several at once, so its title is plural.
@@ -508,10 +516,10 @@ function SearchField({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       onFocus();
-      setActive((i) => Math.min(results.length - 1, i + 1));
+      setActive((i) => stepActive(i, results.length, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((i) => Math.max(-1, i - 1));
+      setActive((i) => stepActive(i, results.length, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const pick = results[active >= 0 ? active : 0];
@@ -561,11 +569,9 @@ function SearchField({
 
       {open && (
         <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
-          <div className="usearch-head">
-            {query.trim() ? "Results" : "All content"}
-          </div>
+          <ResultsHead query={query} label="All content" />
           {results.length === 0 ? (
-            <div className="usearch-empty">No matches for “{query.trim()}”.</div>
+            <SearchNoResults />
           ) : (
             results.map((n, i) => (
               <button
@@ -577,7 +583,7 @@ function SearchField({
                   onPick(n.id);
                 }}
               >
-                <span className="usearch-row-ex">{n.name}</span>
+                <span className="usearch-row-name"><HighlightMatch text={n.name} query={query} /></span>
                 <span className="usearch-row-desc">
                   {n.kind} · {n.level}
                 </span>
@@ -672,20 +678,19 @@ function LinkSection({
       <h2 className="lc-sec-title">{KIND_PLURAL[kind]}</h2>
 
       {/* Figma 801:2099 — the DS wash panel: header row, one row per link, then
-          the Add row. With nothing linked the Add row stands alone — a column
-          header over no rows says nothing. */}
+          the Add row. With nothing linked it is the card-table empty state
+          (1570:3518): the header, one #404040 line, then the Add row. */}
       <div className="lc-panel">
-        {items.length > 0 && (
-          <div className="lc-row lc-row-head">
-            <div className="lc-hcell">CERTIFICATION</div>
-            <div className="lc-hcell lc-hcell-str">
-              LINK STRENGTH
-              <span className="lc-info" data-tip={LINK_STRENGTH_TIP} role="note">
-                <InfoIcon />
-              </span>
-            </div>
+        <div className="lc-row lc-row-head">
+          <div className="lc-hcell">CERTIFICATION</div>
+          <div className="lc-hcell lc-hcell-str">
+            LINK STRENGTH
+            <span className="lc-info" data-tip={LINK_STRENGTH_TIP} role="note">
+              <InfoIcon />
+            </span>
           </div>
-        )}
+        </div>
+        {items.length === 0 && <div className="qz-empty">{KIND_EMPTY[kind]}</div>}
         {items.map(({ other, strength, edge }) => {
           const n = nodeById(other);
           if (!n) return null;

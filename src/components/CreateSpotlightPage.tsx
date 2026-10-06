@@ -52,13 +52,13 @@ const TODAY = startOfToday();
 const MIN_END = toISO(addDays(TODAY, 1));
 const MAX_END = toISO(addMonths(TODAY, 6));
 
-/* Duration presets in the picker's Shortcuts panel (Figma 552:1520), each
+/* Duration shortcuts on the date picker's left rail (Figma 1554:2735), each
    resolved from today. */
 const END_DATE_SHORTCUTS: DateShortcut[] = [
-  { label: "1 Week", value: toISO(addDays(TODAY, 7)) },
-  { label: "2 Weeks", value: toISO(addDays(TODAY, 14)) },
-  { label: "1 Month", value: toISO(addMonths(TODAY, 1)) },
-  { label: "3 Months", value: toISO(addMonths(TODAY, 3)) },
+  { label: "1 week", value: toISO(addDays(TODAY, 7)) },
+  { label: "2 weeks", value: toISO(addDays(TODAY, 14)) },
+  { label: "1 month", value: toISO(addMonths(TODAY, 1)) },
+  { label: "3 months", value: toISO(addMonths(TODAY, 3)) },
 ];
 
 /* The uploaded background, kept as an object URL so the preview shows the real
@@ -461,29 +461,36 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                               <span className="form-label-error">Button Destination cannot be left empty</span>
                             )}
                           </label>
-                          <div className={`spc-url-field${ctaUrlMissing ? " has-error" : ""}`}>
-                            <input
-                              className="spc-url-input"
-                              placeholder="Add URL or DeepLink"
-                              value={ctaUrl}
-                              onChange={(e) => setCtaUrl(e.target.value)}
-                            />
-                            <button
-                              type="button"
-                              className="spc-url-test"
-                              disabled={!ctaUrl.trim()}
-                              onClick={() =>
-                                window.open(ctaUrl.trim(), "_blank", "noopener,noreferrer")
-                              }
-                            >
-                              Test It Out
-                            </button>
+                          {/* The Deep Link field's shell (Figma 699:1071) without
+                              its host prefix: the URL and a "Test It Out" link
+                              riding inside the one cell, as the cert wizard's
+                              slug carries "Copy". */}
+                          <div className={`deeplink-input${ctaUrlMissing ? " invalid" : ""}`}>
+                            <div className="deeplink-cell">
+                              <input
+                                className="deeplink-slug"
+                                placeholder="Add URL or DeepLink"
+                                value={ctaUrl}
+                                aria-invalid={ctaUrlMissing || undefined}
+                                onChange={(e) => setCtaUrl(e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="deeplink-copy"
+                                disabled={!ctaUrl.trim()}
+                                onClick={() =>
+                                  window.open(ctaUrl.trim(), "_blank", "noopener,noreferrer")
+                                }
+                              >
+                                Test It Out
+                              </button>
+                            </div>
                           </div>
                           <p className="form-help">
                             Need help finding a Deep Link?{" "}
                             <button
                               type="button"
-                              className="form-help-link"
+                              className="text-link"
                               onClick={() => setDeepLinksOpen(true)}
                             >
                               Click Here

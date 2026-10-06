@@ -1028,6 +1028,12 @@ export function gradeScale(task: CertTask): number {
   return task.handsOn?.graded ? task.handsOn.maxScore : 100;
 }
 
+/** The lowest grade, on {@link gradeScale}, that passes this task: the
+ *  Hands-On task's own pass score, or the Quiz pass percentage. */
+export function passMark(task: CertTask): number {
+  return task.handsOn?.graded ? task.handsOn.passScore : QUIZ_PASS_PCT;
+}
+
 /* ──────────────────── mutations (return new state) ───────────────────── */
 
 /** The admin every manual change is logged as, and the fixed-clock stamp the

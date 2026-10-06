@@ -10,7 +10,7 @@ import {
   type Company,
 } from "../data/companies";
 import { KeyCommandIcon, SearchClearIcon, SearchIcon } from "./icons";
-import { SearchHints, SearchForRow } from "./SearchPanelParts";
+import { SearchHints, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 
@@ -22,6 +22,8 @@ const MAX_RESULTS = 6;
 type Facet = {
   /** Label on the chip, the panel heading, and the "<label>:" typed prefix. */
   label: string;
+  /** What one value is, on a typed suggestion's right ("Industry"). */
+  kind: string;
   /** Sample value shown on the suggested-filter row ("Tier: Growth"). */
   example: string;
   desc: string;
@@ -37,8 +39,7 @@ type Facet = {
 
 type Opt =
   | { kind: "facet"; facet: Facet }
-  | { kind: "value"; facet: Facet; name: string }
-  | { kind: "search" };
+  | { kind: "value"; facet: Facet; name: string };
 
 export function CompaniesSearch({
   companies,
@@ -108,6 +109,7 @@ export function CompaniesSearch({
   const facets: Facet[] = [
     {
       label: "Tier",
+      kind: "Tier",
       example: "Growth",
       desc: "Filter Companies by Tier",
       plural: "tiers",
@@ -119,6 +121,7 @@ export function CompaniesSearch({
     },
     {
       label: "Status",
+      kind: "Status",
       example: "Active",
       desc: "Filter by Subscription Status",
       plural: "statuses",
@@ -130,6 +133,7 @@ export function CompaniesSearch({
     },
     {
       label: "Industries",
+      kind: "Industry",
       example: "HVAC",
       desc: "Filter by Industries",
       plural: "industries",
@@ -141,6 +145,7 @@ export function CompaniesSearch({
     },
     {
       label: "Partnership",
+      kind: "Partnership",
       example: "Preferred Partner",
       desc: "Filter by Partnership",
       plural: "partnerships",
@@ -174,20 +179,34 @@ export function CompaniesSearch({
         .slice(0, MAX_RESULTS)
     : [];
 
+  /* Free text: every facet's values it matches, in facet order (1542:2130).
+     None → no panel; Enter searches the text as typed. */
+  const suggestions = mode
+    ? []
+    : suggestFilters(
+        companyQuery,
+        facets.map((f) => ({ kind: f.kind, chip: `${f.label}:`, values: f.values, exclude: f.applied })),
+        MAX_RESULTS,
+      );
+  const facetOfKind = (kind: string) => facets.find((f) => f.kind === kind)!;
+  const showPanel = open && !(!mode && hasQuery && suggestions.length === 0);
+
   // Options available to keyboard navigation, in render order.
-  const optionCount = mode ? results.length : facets.length + (hasQuery ? 1 : 0);
+  const optionCount = mode ? results.length : hasQuery ? suggestions.length : facets.length;
 
   function optionAt(i: number): Opt | null {
     if (mode) return results[i] ? { kind: "value", facet: mode.facet, name: results[i] } : null;
+    if (hasQuery) {
+      const sg = suggestions[i];
+      return sg ? { kind: "value", facet: facetOfKind(sg.kind), name: sg.name } : null;
+    }
     if (i < facets.length) return { kind: "facet", facet: facets[i] };
-    if (i === facets.length && hasQuery) return { kind: "search" };
     return null;
   }
 
-  // When the user has typed free text, preselect the "Search for…" row (the last
-  // option) so pressing Enter searches immediately; arrowing moves the highlight off it.
+  // Typing puts the caret back in the bar — Enter there searches the text.
   useEffect(() => {
-    setActive(!inMode && hasQuery ? facets.length : -1);
+    setActive(-1);
   }, [text, inMode, hasQuery, facets.length]);
 
   useEffect(() => {
@@ -231,10 +250,8 @@ export function CompaniesSearch({
       setText(`${opt.facet.label}:`);
       setActive(-1);
       inputRef.current?.focus();
-    } else if (opt.kind === "value") {
-      addValue(opt.facet, opt.name);
     } else {
-      commitSearch(companyQuery);
+      addValue(opt.facet, opt.name);
     }
   }
 
@@ -242,10 +259,10 @@ export function CompaniesSearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
@@ -302,9 +319,24 @@ export function CompaniesSearch({
         )}
       </div>
 
-      {open && (
+      {showPanel && (
         <div className="usearch-panel">
-          {!mode && (
+          {!mode && hasQuery && (
+            <>
+              <div className="usearch-head">Suggested filters</div>
+              {suggestions.map((sg, i) => (
+                <SuggestionRow
+                  key={sg.kind + sg.name}
+                  suggestion={sg}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => addValue(facetOfKind(sg.kind), sg.name)}
+                />
+              ))}
+            </>
+          )}
+
+          {!mode && !hasQuery && (
             <>
               <div className="usearch-head">Suggested filters</div>
               {facets.map((facet, i) => (
@@ -326,11 +358,7 @@ export function CompaniesSearch({
             <>
               <div className="usearch-head">{mode.facet.label}</div>
               {results.length === 0 ? (
-                <div className="usearch-empty">
-                  {mode.query.trim()
-                    ? `No ${mode.facet.plural} match “${mode.query.trim()}”.`
-                    : mode.facet.emptyHint}
-                </div>
+                <>{mode.query.trim() ? <SearchNoResults /> : <div className="usearch-empty">{mode.facet.emptyHint}</div>}</>
               ) : (
                 results.map((name, i) => (
                   <OptionRow
@@ -350,17 +378,7 @@ export function CompaniesSearch({
             </>
           )}
 
-          {!mode && hasQuery ? (
-            <SearchForRow
-              query={companyQuery.trim()}
-              scope="Companies"
-              active={active === facets.length}
-              onHover={() => setActive(facets.length)}
-              onClick={() => commitSearch(companyQuery)}
-            />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

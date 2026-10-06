@@ -18,6 +18,7 @@ export const ModalCloseIcon = () => (
  *  and the Companies page's manage-company pop-ups. */
 export function PrmModal({
   title,
+  ariaLabel,
   description,
   confirmLabel,
   confirmDisabled,
@@ -38,11 +39,16 @@ export function PrmModal({
   onConfirm,
   children,
 }: {
-  title: string;
+  /** Usually a string; a node when the heading is itself a control (the ID
+   *  popup's name opens the profile) — then pass `ariaLabel`. */
+  title: ReactNode;
+  /** The dialog's accessible name when `title` isn't a plain string. */
+  ariaLabel?: string;
   /** Optional description directly under the title (Figma 667:884 groups them
    *  at a 2px gap, tighter than the body's item spacing). */
   description?: ReactNode;
-  /** Required unless `hideFooter` — a footerless modal has nothing to confirm. */
+  /** The CTA. Omit it for a footer of `footerExtra` actions only (the ID
+   *  popup once its ID is approved: Replace ID and nothing to confirm). */
   confirmLabel?: ReactNode;
   confirmDisabled?: boolean;
   /** Renders the CTA as an external link (new tab) instead of a button. */
@@ -122,7 +128,7 @@ export function PrmModal({
           }${className ? ` ${className}` : ""}`}
           role="dialog"
           aria-modal="true"
-          aria-label={title}
+          aria-label={typeof title === "string" ? title : ariaLabel}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="prm-body">
@@ -146,7 +152,7 @@ export function PrmModal({
               )}
               <div className="prm-foot-end">
                 {footerExtra}
-                {confirmHref ? (
+                {confirmLabel === undefined ? null : confirmHref ? (
                   <a
                     className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
                     href={confirmHref}

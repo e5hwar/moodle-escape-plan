@@ -24,6 +24,7 @@ import { TaskSummary } from "./NewTaskWizard";
 import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
 import { ConfirmCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -118,7 +119,7 @@ const TASK_COLS: TaskColMeta[] = [
       ) : (
         <>
           {t.usedIn[0]}
-          {t.usedIn.length > 1 && <span className="used-extra">+{t.usedIn.length - 1}</span>}
+          {t.usedIn.length > 1 && <>{" "}<span className="used-extra">+{t.usedIn.length - 1}</span></>}
         </>
       ),
   },
@@ -152,7 +153,7 @@ function TagText({ tags }: { tags: string[] }) {
   return (
     <>
       {tags[0]}
-      {tags.length > 1 && <span className="used-extra">+{tags.length - 1}</span>}
+      {tags.length > 1 && <>{" "}<span className="used-extra">+{tags.length - 1}</span></>}
     </>
   );
 }
@@ -496,7 +497,7 @@ export function TasksPage({
                             }}
                           >
                             <span className="ct-menu-label">{label}</span>
-                            <span className="ct-menu-kbd">{shortcut}</span>
+                            <span className="cta-kbd">{shortcut}</span>
                           </button>
                         ))}
                       </>
@@ -578,6 +579,7 @@ export function TasksPage({
                 </tbody>
               </table>
             </div>
+            {paged.length === 0 && <TableEmpty />}
           </div>
         </div>
 

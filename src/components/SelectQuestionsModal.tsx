@@ -17,11 +17,13 @@ import {
 } from "../data/questionBank";
 import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
   CheckIcon,
+  CheckboxDashIcon,
   RowChevronIcon,
   SortIcon,
   PagePrevIcon,
@@ -128,7 +130,7 @@ export function SelectQuestionsModal({
   mode: "static" | "pool";
   /** Pool mode only: editing an existing pool rather than building a new one. */
   editingPool?: boolean;
-  /** Static mode only: questions already on the Quiz — shown ticked but locked. */
+  /** Static mode only: questions already on the Quiz — shown as locked rows. */
   excludeIds?: string[];
   /** Question ids already chosen — the modal opens pre-ticked. */
   value: string[];
@@ -413,7 +415,7 @@ export function SelectQuestionsModal({
                       disabled={selectable.length === 0}
                       onClick={toggleAll}
                     >
-                      {allOn ? <CheckIcon /> : someOn ? <span className="checkbox-dash" /> : null}
+                      {allOn ? <CheckIcon /> : someOn ? <CheckboxDashIcon /> : null}
                     </button>
                   </th>
                   <Th col="question" label="Question" cls="sqm-col-question" sort={sort} toggle={toggleSort} />
@@ -429,39 +431,26 @@ export function SelectQuestionsModal({
               <table className="table table-body stm-table stm-table--preview sqm-table">
                 <ColGroup />
                 <tbody>
-                  {rows.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={6}>
-                        {gradedOnly
-                          ? "No graded questions match your search and filters."
-                          : "No questions match your search and filters."}
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((question) => {
-                      const inQuiz = locked.has(question.id);
-                      const on = inQuiz || picked.includes(question.id);
-                      return (
-                        <tr
-                          key={question.id}
-                          className={`${on ? "selected" : ""}${inQuiz ? " is-locked" : ""}`}
-                          onClick={() => toggle(question.id)}
-                        >
-                          <td className="stm-col-check">
-                            {/* A <button>, not a <span> — the shared table reset
-                                strips chrome from span/div in data cells, which
-                                would leave a bare tick with no box. */}
+                  {rows.map((question) => {
+                    const inQuiz = locked.has(question.id);
+                    const on = picked.includes(question.id);
+                    return (
+                      <tr
+                        key={question.id}
+                        className={inQuiz ? "task-dim is-locked" : on ? "selected" : ""}
+                        onClick={() => toggle(question.id)}
+                      >
+                        {/* A locked row (Figma 682:2593) has no checkbox at
+                            all. */}
+                        <td className="stm-col-check">
+                          {!inQuiz && (
+                            /* A <button>, not a <span> — the shared table reset
+                               strips chrome from span/div in data cells, which
+                               would leave a bare tick with no box. */
                             <button
                               className={`checkbox ${on ? "checked" : ""}`}
-                              aria-label={
-                                inQuiz
-                                  ? "Already on the Quiz"
-                                  : on
-                                    ? "Deselect"
-                                    : "Select"
-                              }
+                              aria-label={on ? "Deselect" : "Select"}
                               aria-pressed={on}
-                              disabled={inQuiz}
                               tabIndex={-1}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -470,63 +459,62 @@ export function SelectQuestionsModal({
                             >
                               {on && <CheckIcon />}
                             </button>
-                          </td>
-                          {/* `col-name` carries the #FFFFFF emphasis and is one
-                              of the classes the app-wide "mute every non-Name
-                              cell" rule excludes — a local colour would lose to
-                              it on specificity. */}
-                          <td className="sqm-col-question col-name" title={question.text}>
-                            {question.text}
-                          </td>
-                          {/* The Bank's long name, so the column reads the same
-                              as the filter that narrows it. */}
-                          <td className="sqm-col-type">{longQuestionType(question.type)}</td>
-                          <td className="sqm-col-cat" title={categoryOf(question)}>
-                            {categoryOf(question)}
-                          </td>
-                          <td className="sqm-col-edited">{modifiedOf(question)}</td>
-                          {/* Row-end affordance, the same two-layer machinery as
-                              Hands-On's "Review Task ›": a resting chevron that
-                              hides on hover, and a labelled bar that takes its
-                              place. `stopPropagation` matters here — the row
-                              itself ticks the checkbox. */}
-                          <td className="col-actions">
+                          )}
+                        </td>
+                        {/* `col-name` carries the #FFFFFF emphasis and is one
+                            of the classes the app-wide "mute every non-Name
+                            cell" rule excludes — a local colour would lose to
+                            it on specificity. */}
+                        <td className="sqm-col-question col-name" title={question.text}>
+                          {inQuiz ? <span className="tsk-name">{question.text}</span> : question.text}
+                        </td>
+                        {/* The Bank's long name, so the column reads the same
+                            as the filter that narrows it. */}
+                        <td className="sqm-col-type">{longQuestionType(question.type)}</td>
+                        <td className="sqm-col-cat" title={categoryOf(question)}>
+                          {categoryOf(question)}
+                        </td>
+                        <td className="sqm-col-edited">{modifiedOf(question)}</td>
+                        {/* Row-end affordance, the same two-layer machinery as
+                            Hands-On's "Review Task ›": a resting chevron that
+                            hides on hover, and a labelled bar that takes its
+                            place. `stopPropagation` matters here — the row
+                            itself ticks the checkbox. */}
+                        <td className="col-actions">
+                          <button
+                            className="row-action-btn lone-dots row-chevron"
+                            aria-label={`Preview ${question.text}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreview(question);
+                            }}
+                          >
+                            <RowChevronIcon />
+                          </button>
+                          <div className="row-action-bar">
                             <button
-                              className="row-action-btn lone-dots row-chevron"
-                              aria-label={`Preview ${question.text}`}
+                              className="row-action-btn row-action-btn--label"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setPreview(question);
                               }}
                             >
+                              Preview
                               <RowChevronIcon />
                             </button>
-                            <div className="row-action-bar">
-                              <button
-                                className="row-action-btn row-action-btn--label"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPreview(question);
-                                }}
-                              >
-                                Preview
-                                <RowChevronIcon />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {rows.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination stm-pagination">
-            <span className="sqm-picked">
-              {picked.length} Selected
-            </span>
+            <span className="stm-picked">{picked.length} Selected</span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
               {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}

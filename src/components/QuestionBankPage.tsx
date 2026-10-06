@@ -21,6 +21,7 @@ import {
   type QuestionStatus,
   type QuestionType,
   type Subcategory,
+  versionHistory,
 } from "../data/questionBank";
 import { AddCardIcon, MenuArchiveOffIcon, MenuHistoryIcon, RowEditIcon, RowKebabIcon, SortIcon, TreeAddIcon, TreeAddSubIcon, RowDeleteIcon, CrumbChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { Dropdown } from "./Dropdown";
@@ -40,6 +41,7 @@ import { QuestionVersionsPage } from "./QuestionVersionsPage";
 import { QuestionAnswers } from "./QuestionAnswers";
 import { ConfirmCard } from "./ConfirmCard";
 import { PreviewPanel } from "./PreviewPanel";
+import { TableEmpty } from "./TableEmpty";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLandingMorph } from "../hooks/useLandingMorph";
 
@@ -391,11 +393,7 @@ export function QuestionBankPage({
 }: {
   /** `from` is the bank's current view, for the editor's Cancel to restore. */
   onNewQuestion?: (categoryPath?: string[], type?: QuestionType, from?: QbViewState) => void;
-  /* `atVersion` is set when the editor is opened from the Version History
-     page. The question's own current version opens as a normal edit; any
-     older one opens loaded with that version's content and locked. Either
-     way the editor's way back out is the history page. */
-  onEditQuestion?: (question: Question, atVersion?: number, from?: QbViewState) => void;
+  onEditQuestion?: (question: Question, from?: QbViewState) => void;
   onBackToTasks: () => void;
   initialQuestions?: Question[];
   /** Open straight on the table, scoped to this category path — [category] or
@@ -426,6 +424,8 @@ export function QuestionBankPage({
      held by ID, not as a snapshot — restoring a version bumps the question's
      own `version`, and the page has to see that land. */
   const [historyId, setHistoryId] = useState<string | null>(initialHistoryId ?? null);
+  /* Version History's open row: that version, in the row preview panel. */
+  const [versionPanel, setVersionPanel] = useState<number | null>(null);
   // Row-menu target: the delete confirm.
   const [deleteQ, setDeleteQ] = useState<Question | null>(null);
   /* Row-menu target: the ARCHIVE confirm. Only the archiving direction stops to
@@ -564,7 +564,6 @@ export function QuestionBankPage({
     QUESTION_COL_WIDTH +
     ACTIONS_COL_WIDTH +
     visibleCols.reduce((sum, c) => sum + c.width, 0);
-  const visibleColCount = visibleCols.length + 2; // Question + actions
 
   // The open category's questions (every question at All Questions).
   const inCategory = useMemo(() => {
@@ -1036,13 +1035,40 @@ export function QuestionBankPage({
      imported out from under it drops the page back to the list. */
   const historyQ = historyId ? questions.find((q) => q.id === historyId) : undefined;
   if (historyId && historyQ) {
+    /* View opens that version in the row preview panel — read-only by nature,
+       so a past version needs no locked editor or "can't edit" notice (user,
+       2026-10-06). A version differs from the current question in its text. */
+    const history = versionHistory(historyQ);
+    const versionRow = versionPanel !== null ? history.find((v) => v.version === versionPanel) : undefined;
+    const versionQ = versionRow
+      ? { ...historyQ, text: versionRow.text, version: versionRow.version }
+      : null;
+    /* The Overview's dates read off the history itself: created = v1's row,
+       last modified = when THIS version was saved. */
+    const versionDates = versionRow
+      ? { created: history[history.length - 1].date, modified: versionRow.date }
+      : undefined;
     return (
-      <QuestionVersionsPage
-        question={historyQ}
-        onBack={() => setHistoryId(null)}
-        onBackToTasks={onBackToTasks}
-        onView={(version) => onEditQuestion?.(historyQ, version, currentView())}
-      />
+      <>
+        <QuestionVersionsPage
+          question={historyQ}
+          onBack={() => {
+            setVersionPanel(null);
+            setHistoryId(null);
+          }}
+          onBackToTasks={onBackToTasks}
+          onView={setVersionPanel}
+          panelOpen={versionQ !== null}
+        />
+        {versionQ && (
+          <QuestionPanel
+            key={`${versionQ.id}-v${versionQ.version}`}
+            q={versionQ}
+            dates={versionDates}
+            onClose={() => setVersionPanel(null)}
+          />
+        )}
+      </>
     );
   }
 
@@ -1437,22 +1463,16 @@ export function QuestionBankPage({
                         key={q.id}
                         q={q}
                         cols={visibleCols}
-                        onEdit={() => onEditQuestion?.(q, undefined, currentView())}
+                        onEdit={() => onEditQuestion?.(q, currentView())}
                         onOpenMenu={(rect) => setRowMenu({ q, rect })}
                         onOpen={() => setPanelId(q.id)}
                         menuOpen={rowMenu?.q.id === q.id}
                       />
                     ))}
-                    {paged.length === 0 && (
-                      <tr className="qb-empty-row">
-                        <td colSpan={visibleColCount}>
-                          <div className="qb-empty">No questions match the current filters.</div>
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination qb-pagination">
@@ -1484,7 +1504,7 @@ export function QuestionBankPage({
           q={rowMenu.q}
           rect={rowMenu.rect}
           onClose={() => setRowMenu(null)}
-          onEdit={() => closePanelThen(() => onEditQuestion?.(rowMenu.q, undefined, currentView()))}
+          onEdit={() => closePanelThen(() => onEditQuestion?.(rowMenu.q, currentView()))}
           onArchive={() => {
             /* Archiving warns first; unarchiving is immediate — and stays in
                the panel, which follows the question to Archived. */
@@ -2102,7 +2122,7 @@ function UsageNames({ items }: { items: string[] }) {
     <span className="qb-usage-main" title={items.join(", ")}>
       {first}
       {rest.length > 0 && (
-        <span className="qb-usage-extra"> +{rest.length} more</span>
+        <>{" "}<span className="used-extra">+{rest.length}</span></>
       )}
     </span>
   );
@@ -2129,9 +2149,12 @@ function QuestionRow({
   const isArchived = q.status === "Archived";
   const dates = questionDates(q);
   return (
-    <tr className={`qb-row ${isArchived ? "is-archived" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onOpen}>
+    <tr className={`qb-row ${isArchived ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onOpen}>
       <td className="qb-col-question">
-        <div className="qb-q-text">{q.text}</div>
+        <div className="qb-q-cell">
+          <div className="qb-q-text">{q.text}</div>
+          {isArchived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
+        </div>
       </td>
       {cols.map((c) => (
         <td key={c.key} className={c.className}>
@@ -2180,14 +2203,20 @@ function QuestionRow({
  *  where the old "Preview as Learner" went. */
 function QuestionPanel({
   q,
+  dates: datesProp,
   onClose,
   onMore,
 }: {
   q: Question;
+  /** Created / Last Modified, when the caller knows better than `q` does — a
+   *  past version shown from Version History. */
+  dates?: { created: string; modified: string };
   onClose: () => void;
-  onMore: (rect: DOMRect) => void;
+  /** The row menu. A past version (Version History) has none — Edit, Archive
+   *  and Delete act on the current question. */
+  onMore?: (rect: DOMRect) => void;
 }) {
-  const dates = questionDates(q);
+  const dates = datesProp ?? questionDates(q);
   const attempts = attemptCount(q);
   const [category, ...subs] = q.categoryPath;
   const listCard = (title: string, names: string[], empty: string) => (

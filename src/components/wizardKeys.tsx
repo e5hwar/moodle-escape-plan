@@ -6,16 +6,16 @@ import { KeyCommandIcon, KeyShiftIcon, KeyEnterIcon } from "./icons";
    ⌘+Shift+Enter on a create button that sits beside it. */
 export function WizardKeyHint({ shift = false }: { shift?: boolean }) {
   return (
-    <span className="wz-kbd">
-      <span className="wz-key">
+    <span className="cta-kbd-group">
+      <span className="cta-kbd">
         <KeyCommandIcon />
       </span>
       {shift && (
-        <span className="wz-key">
+        <span className="cta-kbd">
           <KeyShiftIcon />
         </span>
       )}
-      <span className="wz-key">
+      <span className="cta-kbd">
         <KeyEnterIcon />
       </span>
     </span>

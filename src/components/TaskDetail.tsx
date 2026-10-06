@@ -40,7 +40,7 @@ export function TaskDetail({ task, onClose }: Props) {
             <>
               {task.usedIn.slice(0, 2).join(", ")}
               {task.usedIn.length > 2 && (
-                <span className="used-extra">+{task.usedIn.length - 2}</span>
+                <>{" "}<span className="used-extra">+{task.usedIn.length - 2}</span></>
               )}
             </>
           )}

@@ -8,8 +8,10 @@ import { Stepper } from "./Stepper";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
+import { TableEmpty } from "./TableEmpty";
 import {
   CheckIcon,
+  CheckboxDashIcon,
   DropdownCaretIcon,
   SortIcon,
   PagePrevIcon,
@@ -180,7 +182,7 @@ export function GrantAttemptsModal({
 
       {picking && (
         <SelectGrantUsersModal
-          quizName={quizName}
+          description={`Choose who to comp on “${quizName}”. You can grant to as many users as you like in one go.`}
           candidates={candidates}
           attemptsOf={attemptsOf}
           value={picked}
@@ -196,19 +198,29 @@ export function GrantAttemptsModal({
   );
 }
 
-/* ─────────── The picker (Figma 682:2321, `.stm-*` chrome) ─────────── */
+/* ─────────── The picker (Figma 682:2321, `.stm-*` chrome) ───────────
+   Shared by both Who Paid pages' comp flows: Grant Free Attempts here (many
+   users, with each one's Attempts on the Quiz) and the Certification's Grant
+   Access (one user, no Attempts column). */
 
-function SelectGrantUsersModal({
-  quizName,
+export function SelectGrantUsersModal({
+  title = "Select Users",
+  description,
   candidates,
   attemptsOf,
+  single,
   value,
   onCancel,
   onConfirm,
 }: {
-  quizName: string;
+  title?: string;
+  description: string;
   candidates: User[];
-  attemptsOf: (userId: string) => number;
+  /** Attempts the user already has — shown as the last column when given. */
+  attemptsOf?: (userId: string) => number;
+  /** One user at a time: a tick replaces the last one and there's no
+   *  select-all. */
+  single?: boolean;
   /** Users already on the field — the picker opens pre-ticked. */
   value: string[];
   onCancel: () => void;
@@ -305,7 +317,7 @@ function SelectGrantUsersModal({
         case "subscription":
           return a.subscriptionStatus.localeCompare(b.subscriptionStatus);
         case "attempts":
-          return attemptsOf(a.id) - attemptsOf(b.id);
+          return attemptsOf ? attemptsOf(a.id) - attemptsOf(b.id) : 0;
       }
     });
     return sort.dir === "desc" ? arr.reverse() : arr;
@@ -334,7 +346,9 @@ function SelectGrantUsersModal({
   }
 
   function toggle(id: string) {
-    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+    setPicked((p) =>
+      p.includes(id) ? p.filter((x) => x !== id) : single ? [id] : [...p, id],
+    );
   }
 
   function toggleSort(key: SortKey) {
@@ -355,8 +369,8 @@ function SelectGrantUsersModal({
 
   return (
     <PrmModal
-      title="Select Users"
-      description={`Choose who to comp on “${quizName}”. You can grant to as many users as you like in one go.`}
+      title={title}
+      description={description}
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
       pickFull
@@ -483,15 +497,17 @@ function SelectGrantUsersModal({
               table scrolls sideways instead of crushing the cells. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
+            style={{ "--table-min": `${tableMin(!!attemptsOf)}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table gam-table">
-              <ColGroup />
+              <ColGroup attempts={!!attemptsOf} />
               <thead>
                 <tr>
                   <th className="stm-col-check no-sort">
                     {/* Unlike the capped pickers this one HAS a select-all —
-                        it covers every row the filters currently match. */}
+                        it covers every row the filters currently match. A
+                        single-pick grant has none. */}
+                    {!single && (
                     <button
                       className={`checkbox ${allOn ? "checked" : someOn ? "partial" : ""}`}
                       aria-label={allOn ? "Deselect all" : "Select all"}
@@ -499,8 +515,9 @@ function SelectGrantUsersModal({
                       disabled={sorted.length === 0}
                       onClick={toggleAll}
                     >
-                      {allOn ? <CheckIcon /> : someOn ? <span className="checkbox-dash" /> : null}
+                      {allOn ? <CheckIcon /> : someOn ? <CheckboxDashIcon /> : null}
                     </button>
+                    )}
                   </th>
                   <Th col="name" label="User Name" cls="gam-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="email" label="Email" cls="gam-col-email" sort={sort} toggle={toggleSort} />
@@ -508,69 +525,64 @@ function SelectGrantUsersModal({
                   <Th col="company" label="Company" cls="gam-col-company" sort={sort} toggle={toggleSort} />
                   <Th col="role" label="Role" cls="gam-col-role" sort={sort} toggle={toggleSort} />
                   <Th col="subscription" label="Subscription" cls="gam-col-plan" sort={sort} toggle={toggleSort} />
-                  <Th col="attempts" label="Attempts" cls="gam-col-attempts" sort={sort} toggle={toggleSort} />
+                  {attemptsOf && (
+                    <Th col="attempts" label="Attempts" cls="gam-col-attempts" sort={sort} toggle={toggleSort} />
+                  )}
                 </tr>
               </thead>
             </table>
 
             <div className="tasks-scroll">
               <table className="table table-body stm-table gam-table">
-                <ColGroup />
+                <ColGroup attempts={!!attemptsOf} />
                 <tbody>
-                  {rows.length === 0 ? (
-                    <tr className="stm-empty-row">
-                      <td colSpan={8}>No users match your search and filters.</td>
-                    </tr>
-                  ) : (
-                    rows.map((u) => {
-                      const on = pickedSet.has(u.id);
-                      return (
-                        <tr
-                          key={u.id}
-                          className={on ? "selected" : ""}
-                          onClick={() => toggle(u.id)}
-                        >
-                          <td className="stm-col-check">
-                            {/* A <button>, not a <span> — the shared table reset
-                                strips chrome from span/div in data cells, which
-                                would leave a bare tick with no box. */}
-                            <button
-                              className={`checkbox ${on ? "checked" : ""}`}
-                              aria-label={on ? "Deselect" : "Select"}
-                              aria-pressed={on}
-                              tabIndex={-1}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggle(u.id);
-                              }}
-                            >
-                              {on && <CheckIcon />}
-                            </button>
-                          </td>
-                          {/* `col-name` carries the #FFFFFF emphasis and is one
-                              of the classes the app-wide "mute every non-Name
-                              cell" rule excludes — a local colour would lose to
-                              it on specificity. */}
-                          <td className="gam-col-name col-name">{u.name}</td>
-                          <td className="gam-col-email">{u.email || "—"}</td>
-                          <td className="gam-col-phone">{u.phone || "—"}</td>
-                          <td className="gam-col-company">{companyOf(u) || "—"}</td>
-                          <td className="gam-col-role">{u.role}</td>
-                          <td className="gam-col-plan">{subscriptionText(u)}</td>
-                          <td className="gam-col-attempts">{attemptsOf(u.id)}</td>
-                        </tr>
-                      );
-                    })
-                  )}
+                  {rows.map((u) => {
+                    const on = pickedSet.has(u.id);
+                    return (
+                      <tr
+                        key={u.id}
+                        className={on ? "selected" : ""}
+                        onClick={() => toggle(u.id)}
+                      >
+                        <td className="stm-col-check">
+                          {/* A <button>, not a <span> — the shared table reset
+                              strips chrome from span/div in data cells, which
+                              would leave a bare tick with no box. */}
+                          <button
+                            className={`checkbox ${on ? "checked" : ""}`}
+                            aria-label={on ? "Deselect" : "Select"}
+                            aria-pressed={on}
+                            tabIndex={-1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(u.id);
+                            }}
+                          >
+                            {on && <CheckIcon />}
+                          </button>
+                        </td>
+                        {/* `col-name` carries the #FFFFFF emphasis and is one
+                            of the classes the app-wide "mute every non-Name
+                            cell" rule excludes — a local colour would lose to
+                            it on specificity. */}
+                        <td className="gam-col-name col-name">{u.name}</td>
+                        <td className="gam-col-email">{u.email || "—"}</td>
+                        <td className="gam-col-phone">{u.phone || "—"}</td>
+                        <td className="gam-col-company">{companyOf(u) || "—"}</td>
+                        <td className="gam-col-role">{u.role}</td>
+                        <td className="gam-col-plan">{subscriptionText(u)}</td>
+                        {attemptsOf && <td className="gam-col-attempts">{attemptsOf(u.id)}</td>}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {rows.length === 0 && <TableEmpty />}
           </div>
 
           <div className="pagination stm-pagination">
-            <span className="gam-picked">
-              {picked.length} {picked.length === 1 ? "user" : "users"} selected
-            </span>
+            <span className="stm-picked">{picked.length} Selected</span>
             <span>
               Showing {sorted.length === 0 ? 0 : start + 1} -{" "}
               {Math.min(start + PAGE_SIZE, sorted.length)} of {sorted.length}
@@ -604,11 +616,14 @@ function SelectGrantUsersModal({
    email, phone, company, role, subscription, attempts — the same user columns as
    Select Users; slack shared in proportion, the check gutter fixed. */
 const CHECK_W = 44;
-const COL_WIDTHS = [160, 304, 156, 216, 120, 224, 112];
-const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
+const COL_WIDTHS = [160, 304, 156, 216, 120, 224];
+const ATTEMPTS_W = 112;
+const colWidths = (attempts: boolean) => (attempts ? [...COL_WIDTHS, ATTEMPTS_W] : COL_WIDTHS);
+const tableMin = (attempts: boolean) =>
+  CHECK_W + colWidths(attempts).reduce((n, w) => n + w, 0);
 
-function ColGroup() {
-  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
+function ColGroup({ attempts }: { attempts: boolean }) {
+  return <TableCols lead={[CHECK_W]} data={colWidths(attempts)} />;
 }
 
 function Th({

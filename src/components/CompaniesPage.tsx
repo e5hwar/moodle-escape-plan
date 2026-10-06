@@ -51,7 +51,6 @@ import {
   RunMoveUpIcon,
   RunMoveDownIcon,
   AlertCircleFilledIcon,
-  ArrowUpRightIcon,
   PagePrevIcon,
   PageNextIcon,
 } from "./icons";
@@ -76,6 +75,7 @@ import { ConfirmCard } from "./ConfirmCard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -552,6 +552,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                     </tbody>
                   </table>
                 </div>
+                {paged.length === 0 && <TableEmpty />}
               </div>
             </div>
 
@@ -733,7 +734,7 @@ function TagCell({ values }: { values: string[] }) {
   return (
     <>
       {values[0]}
-      {values.length > 1 && <span className="used-extra">+{values.length - 1}</span>}
+      {values.length > 1 && <>{" "}<span className="used-extra">+{values.length - 1}</span></>}
     </>
   );
 }
@@ -1114,39 +1115,14 @@ function CompanyActionsMenu({
   );
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
-}
-
-function escapeXml(s: string): string {
-  return s.replace(/[<>&'"]/g, (c) =>
-    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!),
-  );
-}
-
-// Opens the company's dashboard in a simulated impersonation session — same
-// "Login As" mechanism used for B2C users, but logged in as the company's
-// Account Holder and framed as the B2B dashboard rather than the learner app.
+// Opens the company's B2B dashboard in its own tab — a placeholder page until
+// it is specced (Figma list item 85; App.tsx `?companyDashboard=`).
 function viewDashboard(company: Company) {
-  const holder = currentHolder(company);
-  const win = window.open("", "_blank", "noopener");
-  if (!win) return;
-  win.document.title = `Dashboard — ${company.name}`;
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
-<title>${escapeXml(company.name)} Dashboard</title>
-<style>:root{color-scheme:dark}body{margin:0;background:#0b0b0c;color:#e7e7e8;font-family:"Fira Sans",-apple-system,system-ui,sans-serif}
-.bar{background:#7a3a18;color:#ffd9c2;padding:10px 20px;font-size:14px;font-weight:600;display:flex;gap:10px;align-items:center}
-.wrap{max-width:640px;margin:0 auto;padding:60px 24px;text-align:center}
-.av{width:80px;height:80px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;background:radial-gradient(70% 70% at 50% 40%,#e97237,#8a3114)}
-h1{font-size:24px;margin:0 0 6px}p{color:#9a9aa0}
-.tag{display:inline-block;margin-top:20px;padding:6px 14px;border-radius:999px;background:#1c1c1f;border:1px solid #2e2e31;font-size:12px;color:#a8a8a8}</style></head>
-<body><div class="bar">⚠ Admin impersonation session — you are viewing the B2B dashboard as this Account Holder. Your own session is unaffected.</div>
-<div class="wrap"><div class="av">${escapeXml(initials(holder.name))}</div>
-<h1>${escapeXml(holder.name)}</h1><p>${escapeXml(holder.email)} · Account Holder for ${escapeXml(company.name)}</p>
-<p style="margin-top:24px">The company dashboard will be displayed here.</p>
-<span class="tag">${escapeXml(company.name)} — B2B Dashboard placeholder</span></div></body></html>`);
-  win.document.close();
+  window.open(
+    `${window.location.origin}${window.location.pathname}?companyDashboard=${encodeURIComponent(company.id)}`,
+    "_blank",
+    "noopener",
+  );
 }
 
 /* ─────────────── Change Account Holder modal ─────────────── */
@@ -1463,7 +1439,7 @@ function CancelSubscriptionModal({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config <ArrowUpRightIcon />
+              Product Config
             </a>
           </p>
         </div>

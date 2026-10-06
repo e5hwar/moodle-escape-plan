@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "../data/users";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
-import { SearchHints, SearchForRow, SearchScopeChip } from "./SearchPanelParts";
+import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
 
@@ -31,20 +31,23 @@ export type SearchScope = {
   describe?: (name: string) => string | undefined;
 };
 
+/** What a suggested value is, as the row's right-hand label: the scope's noun
+ *  in title case ("industry" ⇒ "Industry"), else its token. */
+function kindOf(scope: SearchScope): string {
+  return scope.noun ? scope.noun.replace(/\b\w/g, (c) => c.toUpperCase()) : scope.token;
+}
+
 /** The shared page search: a combobox bar with a suggested-filters panel, used
  *  by Users, Who Paid (quiz + certification) and Quiz Attempts. Commit-on-Enter
  *  — the table only ever filters on the applied query. */
 export function EntitySearch({
   scopes,
   placeholder,
-  searchForScope = "Users",
   query,
   onCommit,
 }: {
   scopes: SearchScope[];
   placeholder: string;
-  /** The noun on the "Search for … in X" row. */
-  searchForScope?: string;
   query: string;
   onCommit: (q: string) => void;
 }) {
@@ -93,7 +96,29 @@ export function EntitySearch({
       .slice(0, MAX_RESULTS);
   }, [mode, draft]);
 
-  const optionCount = mode ? scopeResults.length : scopes.length;
+  /* Free text: every scope's values it matches, in scope order (1542:2130).
+     None → no panel; Enter searches the text as typed. */
+  const hasQuery = !mode && userQuery.trim() !== "";
+  const suggestions = useMemo(
+    () =>
+      hasQuery
+        ? suggestFilters(
+            userQuery,
+            scopes.map((sc) => ({
+              kind: kindOf(sc),
+              chip: `${sc.token}:`,
+              values: sc.options,
+              exclude: [...sc.applied, ...(draft[sc.token] ?? [])],
+            })),
+            MAX_RESULTS,
+          )
+        : [],
+    [hasQuery, userQuery, scopes, draft],
+  );
+  const scopeOfKind = (kind: string) => scopes.find((sc) => kindOf(sc) === kind)!;
+  const showPanel = open && !(hasQuery && suggestions.length === 0);
+
+  const optionCount = mode ? scopeResults.length : hasQuery ? suggestions.length : scopes.length;
 
   useEffect(() => setActive(-1), [text, drafted.length]);
 
@@ -163,16 +188,19 @@ export function EntitySearch({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(optionCount - 1, a + 1));
+      setActive((a) => stepActive(a, optionCount, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(-1, a - 1));
+      setActive((a) => stepActive(a, optionCount, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0) {
         if (mode) {
           const name = scopeResults[active];
           if (name) return addValue(mode.scope, name);
+        } else if (hasQuery) {
+          const sg = suggestions[active];
+          if (sg) return addValue(scopeOfKind(sg.kind), sg.name);
         } else if (scopes[active]) {
           return enterScope(scopes[active]);
         }
@@ -238,9 +266,24 @@ export function EntitySearch({
         )}
       </div>
 
-      {open && (
+      {showPanel && (
         <div className="usearch-panel">
-          {!mode && (
+          {hasQuery && (
+            <>
+              <div className="usearch-head">Suggested filters</div>
+              {suggestions.map((sg, i) => (
+                <SuggestionRow
+                  key={sg.kind + sg.name}
+                  suggestion={sg}
+                  active={active === i}
+                  onHover={() => setActive(i)}
+                  onClick={() => addValue(scopeOfKind(sg.kind), sg.name)}
+                />
+              ))}
+            </>
+          )}
+
+          {!mode && !hasQuery && (
             <>
               <div className="usearch-head">Suggested filters</div>
               {scopes.map((s, i) => (
@@ -262,11 +305,7 @@ export function EntitySearch({
             <>
               <div className="usearch-head">{mode.scope.optionsLabel}</div>
               {scopeResults.length === 0 ? (
-                <div className="usearch-empty">
-                  {mode.query.trim()
-                    ? `No ${mode.scope.optionsLabel.toLowerCase()} match “${mode.query.trim()}”.`
-                    : `Start typing ${/^[aeiou]/i.test(mode.scope.noun ?? mode.scope.token) ? "an" : "a"} ${mode.scope.noun ?? mode.scope.token.toLowerCase()} name…`}
-                </div>
+                <>{mode.query.trim() ? <SearchNoResults /> : <div className="usearch-empty">{`Start typing ${/^[aeiou]/i.test(mode.scope.noun ?? mode.scope.token) ? "an" : "a"} ${mode.scope.noun ?? mode.scope.token.toLowerCase()} name…`}</div>}</>
               ) : (
                 scopeResults.map((name, i) => (
                   <OptionRow
@@ -284,11 +323,7 @@ export function EntitySearch({
             </>
           )}
 
-          {userQuery.trim() ? (
-            <SearchForRow query={userQuery.trim()} scope={searchForScope} onClick={commit} />
-          ) : (
-            <SearchHints />
-          )}
+          <SearchHints />
         </div>
       )}
     </div>

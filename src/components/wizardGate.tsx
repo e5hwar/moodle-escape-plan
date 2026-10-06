@@ -6,6 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { KeyArrowDownIcon, KeyArrowUpIcon } from "./icons";
 
 /* ─────────────────  Edge Line Gate (Wizard 6)  ─────────────────
  * Wheel-past-the-edge step navigation. Scrolling beyond the top/bottom of a
@@ -63,10 +64,8 @@ const GATE_TAIL_MAX_PX = 20;
  * the wizard scroller. Add a new popup's class here if it doesn't use Dropdown. */
 const GATE_BLOCKING_SELECTOR = [
   ".dropdown", // shared Dropdown / SelectField / MultiSelect panels
-  ".cw-price-menu", // Company wizard's hand-rolled currency + saved-price menus
   ".u-menu", // hand-rolled action menus (Add Question, row menus)
   ".fb-modal-scrim", // inline modals (trigger-task picker)
-  ".cl-modal-overlay", // inline modals (content list pickers)
 ].join(", ");
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -311,8 +310,9 @@ export function useEdgeLineGate({
   };
 }
 
-/** The two edge overlays — a 2px orange line per edge plus the mono caption
- * naming the adjacent step. Drop this as the first child of `.wizard-main`. */
+/** The two edge overlays — a 2px orange line per edge plus the caption naming
+ * the adjacent step (Figma 1564:3011 next / 1564:3012 previous: a 12px arrow,
+ * then the label). Drop this as the first child of `.wizard-main`. */
 export function WizardGateEdges({
   gate,
   step,
@@ -330,7 +330,8 @@ export function WizardGateEdges({
         <>
           <span className="wizard-gate-line is-top" ref={gate.prevLineRef} />
           <span className="wizard-gate-cap is-top" ref={gate.prevCapRef}>
-            ↑ BACK TO STEP {pad2(step)} · {labels[step - 1]?.toUpperCase()}
+            <KeyArrowUpIcon />
+            PREVIOUS · STEP {pad2(step)} · {labels[step - 1]?.toUpperCase()}
           </span>
         </>
       )}
@@ -338,7 +339,8 @@ export function WizardGateEdges({
         <>
           <span className="wizard-gate-line is-bottom" ref={gate.nextLineRef} />
           <span className="wizard-gate-cap is-bottom" ref={gate.nextCapRef}>
-            ↓ NEXT · STEP {pad2(step + 2)} · {labels[step + 1]?.toUpperCase()}
+            <KeyArrowDownIcon />
+            NEXT · STEP {pad2(step + 2)} · {labels[step + 1]?.toUpperCase()}
           </span>
         </>
       )}

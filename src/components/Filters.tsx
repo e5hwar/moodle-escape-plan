@@ -463,7 +463,7 @@ export function EditColumnsButton<C extends Record<string, boolean>>({
             toggle();
           }}
           aria-label="Edit columns"
-          data-tooltip="Edit Columns"
+          data-tip="Edit Columns"
         >
           <EditColumnsIcon />
         </button>
@@ -484,6 +484,32 @@ export function EditColumnsButton<C extends Record<string, boolean>>({
 }
 
 /* ────────────  Multi-select bodies ──────────── */
+
+/* "No Results" inside a filter dropdown — Figma 1565:3023 "Filters Dropdown -
+   Search - No Results". The search header and the (disabled) Apply footer stay;
+   between them a centred 16px Medium title over a 14px #a8a8a8 line. It holds
+   the list's own height from before the search, so the panel doesn't jump when
+   the last match goes (the rule the search panels follow, 1565:3111). Used by
+   every filter-family dropdown with a search box: the pill checklists and the
+   More Filters submenus. */
+export function FilterNoResults({ height }: { height?: number }) {
+  return (
+    <div className="filter-noresults" role="status" style={height ? { height } : undefined}>
+      <div className="filter-noresults-title">No Results Found :(</div>
+      <div className="filter-noresults-sub">Try changing your search or filters</div>
+    </div>
+  );
+}
+
+/** The list's height while nothing is typed, kept for {@link FilterNoResults}. */
+export function useUnfilteredHeight(searching: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const height = useRef(0);
+  useLayoutEffect(() => {
+    if (!searching && ref.current) height.current = ref.current.offsetHeight;
+  });
+  return [ref, height] as const;
+}
 
 export function SectionedMultiSelect({
   sections,
@@ -512,6 +538,7 @@ export function SectionedMultiSelect({
 }) {
   const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
+  const [listRef, listHeight] = useUnfilteredHeight(!!query.trim());
 
   useEffect(() => setDraft(value), [value]);
 
@@ -550,7 +577,10 @@ export function SectionedMultiSelect({
           onChange={setQuery}
         />
       )}
-      <div className="dropdown-list">
+      {query.trim() && filteredSections.length === 0 ? (
+        <FilterNoResults height={listHeight.current} />
+      ) : (
+      <div className="dropdown-list" ref={listRef}>
         {filteredSections.map((s, i) => (
           <div key={s.label ?? i} className={subsectionStyle ? "dropdown-subsection" : "dropdown-section"}>
             {s.label && (
@@ -576,6 +606,7 @@ export function SectionedMultiSelect({
           </div>
         ))}
       </div>
+      )}
       <div className="dropdown-footer">
         <button
           className="btn-apply"
@@ -671,6 +702,7 @@ export function CascadingMultiSelect({
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredTop, setHoveredTop] = useState(0);
   const [query, setQuery] = useState("");
+  const [subListRef, subListHeight] = useUnfilteredHeight(!!query.trim());
   // The submenu opens alongside the root panel — to its right by default, and
   // to its LEFT when the pill sits close enough to the window edge that the
   // right side would overflow. Without the flip an off-screen submenu widens
@@ -826,11 +858,12 @@ export function CascadingMultiSelect({
                   onChange={setQuery}
                 />
               )}
-              <div className="dropdown-list">
+              {q && groups.length === 0 ? (
+                <FilterNoResults height={subListHeight.current} />
+              ) : (
+              <div className="dropdown-list" ref={subListRef}>
                 {groups.length === 0 ? (
-                  <div className="cols-empty">
-                    {q ? `No matches for "${query.trim()}".` : "Nothing to filter by yet"}
-                  </div>
+                  <div className="cols-empty">Nothing to filter by yet</div>
                 ) : (
                   groups.map((group, i) => (
                     <div
@@ -853,6 +886,7 @@ export function CascadingMultiSelect({
                   ))
                 )}
               </div>
+              )}
               </>
             )}
             {!openSection.date && (

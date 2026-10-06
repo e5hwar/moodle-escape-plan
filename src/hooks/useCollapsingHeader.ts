@@ -119,6 +119,8 @@ export function useCollapsingHeader(startCollapsed = false) {
       if (w !== width) {
         width = w;
         header!.style.setProperty("--clh-vw", `${w}px`);
+        // The table's empty state (`.table-empty`) holds still the same way.
+        sc!.style.setProperty("--clh-vw", `${w}px`);
       }
       measureMorph();
     }

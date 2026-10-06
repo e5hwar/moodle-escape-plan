@@ -7,7 +7,7 @@ import { useEffect } from "react";
  * form field, or `enabled` is false (e.g. the create flow is already open).
  *
  * `key` overrides the letter for pages whose badge isn't a C — the quiet
- * header buttons (e.g. Offer Codes "O", Scholarships "S").
+ * header buttons (e.g. Scholarships "S").
  */
 export function useCreateShortcut(onCreate: () => void, enabled = true, key = "c") {
   useEffect(() => {

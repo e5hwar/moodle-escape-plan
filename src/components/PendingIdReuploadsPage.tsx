@@ -16,6 +16,7 @@ import {
   type DateRangeState,
 } from "./DateRangeFilter";
 import { TableCols } from "./TableCols";
+import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
 
@@ -224,8 +225,7 @@ export function PendingIdReuploadsPage({
               <div className="tasks-scroll">
                 {/* Plain `.table`, not the `.sch-table` shell: the rows open the
                     review console now, so this wants the base table's pointer
-                    cursor and 12px inset rather than the shell's `cursor:
-                    default` and 16px. */}
+                    cursor rather than the shell's `cursor: default`. */}
                 <table className="table">
                   {/* The shared width rule: every column keeps its base width
                       and shares the slack in proportion; the chevron gutter
@@ -291,18 +291,10 @@ export function PendingIdReuploadsPage({
                         </td>
                       </tr>
                     ))}
-                    {paged.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="sch-empty">
-                          {query.trim()
-                            ? `No users match "${query.trim()}".`
-                            : "No ID re-uploads are outstanding."}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {paged.length === 0 && <TableEmpty />}
               </div>
 
               <div className="pagination">

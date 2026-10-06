@@ -270,26 +270,10 @@ function DetailsStep({
   );
 }
 
-/* ─────────────── Step 2 — Field positioning (not built yet) ─────────────── */
+/* ─────────────── Step 2 — Field positioning (not built yet) ───────────────
+   Not specced yet: an empty step (user, 2026-10-06 — Figma list item 50; the
+   "Field positioning isn't built yet" card it used to show is gone). */
 
 function PositioningStep() {
-  return (
-    <div className="co-empty-state" style={{ minHeight: 360 }}>
-      <div className="co-empty-glyph">
-        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M3 9h18" />
-          <rect x="6.5" y="12" width="6" height="2.4" rx="0.6" />
-          <rect x="6.5" y="16" width="9" height="1.6" rx="0.6" />
-          <circle cx="17.5" cy="15.5" r="2.2" />
-        </svg>
-      </div>
-      <div className="co-empty-title">Field positioning isn’t built yet</div>
-      <div className="co-empty-sub" style={{ maxWidth: 460 }}>
-        This is where you’ll place the dynamic fields — User’s Name, Certification Name, Date,
-        Unique Award Number, and QR Code — on top of the background. The editor approach is still
-        being decided. You can save the template now and position fields later.
-      </div>
-    </div>
-  );
+  return null;
 }

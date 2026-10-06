@@ -117,7 +117,7 @@ export function ReviewRunCard({
       <span className="rr-text">
         <span className="rr-title">
           {values[0]}
-          {extra > 0 && <span className="used-extra">+{extra}</span>}
+          {extra > 0 && <>{" "}<span className="used-extra">+{extra}</span></>}
         </span>
         {subLine && <span className="rr-sub">{subLine}</span>}
       </span>

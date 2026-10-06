@@ -37,7 +37,7 @@ import {
 } from "./data/contentLinks";
 import { QuestionBankPage, type QbViewState } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
-import { questions as seedQuestions, versionText, type Question, type QuestionType } from "./data/questionBank";
+import { questions as seedQuestions, type Question, type QuestionType } from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
@@ -51,16 +51,14 @@ import { UsersPage } from "./components/UsersPage";
 import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
 import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
 import { PendingIdReuploadsPage } from "./components/PendingIdReuploadsPage";
-import { OfferCodesPage } from "./components/OfferCodesPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
 import { buildData, attemptsForTask } from "./data/certLookup";
 import { ProductConfigPage } from "./components/ProductConfigPage";
 import { MergeAccountsPage } from "./components/MergeAccountsPage";
 import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
-import { PortfolioPage } from "./components/PortfolioPage";
-import { StripeInvoicesPage } from "./components/StripeInvoicesPage";
-import { users as allUsers, type User } from "./data/users";
+import { PlaceholderPage } from "./components/PlaceholderPage";
+import { users as allUsers } from "./data/users";
 import { submissionForLearner, type TaskSubmission } from "./data/reviewSubmissions";
 import {
   activeLinks,
@@ -69,7 +67,7 @@ import {
   inactiveLinks,
   type FeedbackForm,
 } from "./data/feedbackForms";
-import { buildRows, exportFormCsv } from "./components/FeedbackFormResponses";
+import { buildRows, exportFormCsv } from "./data/feedbackExport";
 import { LeaveGuardHost, confirmLeave, hasUnsavedChanges } from "./components/LeaveGuard";
 import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
 
@@ -150,11 +148,7 @@ type View =
       /** The bank's view when Create Question was pressed — Cancel returns to it. */
       returnTo?: QbViewState;
     }
-  /* `atVersion` means the editor was opened from Version History, on that
-     version — so Cancel goes back there. An OLDER version than the question's
-     current one also locks the editor: it loads that version's content and
-     becomes a viewer rather than an edit. */
-  | { name: "edit-question"; question: Question; atVersion?: number; returnTo?: QbViewState }
+  | { name: "edit-question"; question: Question; returnTo?: QbViewState }
   | { name: "spotlight" }
   | { name: "proctoring"; openSubmissionId?: string }
   | { name: "manage-ids" }
@@ -170,7 +164,6 @@ type View =
   | { name: "edit-company"; company: Company }
   | { name: "manage-subscription"; company: Company }
   | { name: "users"; companyFilter?: string }
-  | { name: "offer-codes" }
   /* `taskFilter` deep-links the page with one Task pre-selected — a Hands-On
      Task's "View All Attempts" lands here (its attempts ARE submissions),
      where a Quiz/xAPI lands on Quiz Attempts. */
@@ -223,7 +216,6 @@ const VIEW_SLUGS: Record<string, string> = {
   "transfer-subscription": "transfer-subscription",
   users: "users",
   scholarship: "scholarship",
-  "offer-codes": "offer-codes",
   companies: "companies",
   spotlight: "spotlight",
   "product-config": "product-config",
@@ -251,7 +243,6 @@ const NAV_KEY_TO_VIEW: Record<string, View> = {
   industries: { name: "industries" },
   "manage-companies": { name: "companies" },
   "manage-users": { name: "users" },
-  "offer-codes": { name: "offer-codes" },
   "review-hands-on": { name: "review-hands-on" },
   "name-change-requests": { name: "name-change-requests" },
   "product-config": { name: "product-config" },
@@ -311,11 +302,11 @@ export default function App() {
   const taskPreviewId = params.get("taskPreview");
   if (taskPreviewId) {
     const t = tasks.find((x) => x.id === taskPreviewId);
-    return <TaskPreviewPlaceholder name={t?.name ?? taskPreviewId} />;
+    return t ? <PlaceholderPage name="Task Preview" /> : <StandaloneNotFound />;
   }
   if (taskBriefId) {
     const t = tasks.find((x) => x.id === taskBriefId);
-    return <TaskBriefPlaceholder name={t?.name ?? taskBriefId} />;
+    return t ? <PlaceholderPage name="Task Brief" /> : <StandaloneNotFound />;
   }
   // Task editor in its own tab — opened from the Hands-On review screen.
   if (editTaskId) {
@@ -327,7 +318,7 @@ export default function App() {
         onClose={() => window.close()}
       />
     ) : (
-      <StandaloneNotFound id={editTaskId} />
+      <StandaloneNotFound />
     );
   }
   if (profileId) {
@@ -338,23 +329,32 @@ export default function App() {
     // left rail stays with it even in its own tab.
     return (
       <StandaloneShell active="manage-users">
-        {u ? <UserProfilePage user={u} /> : <StandaloneNotFound id={profileId} />}
+        {u ? <UserProfilePage user={u} /> : <StandaloneNotFound />}
       </StandaloneShell>
     );
   }
   if (portfolioId) {
-    const u = allUsers.find((x) => x.id === portfolioId);
-    return u ? <PortfolioPage user={u} /> : <StandaloneNotFound id={portfolioId} />;
+    const u = allUsers.find((x) => x.id === portfolioId) ?? findCompanyUserProfile(portfolioId);
+    return u ? <PlaceholderPage name="Public Portfolio" /> : <StandaloneNotFound />;
   }
   if (stripeCustomerId) {
-    return <StripeInvoicesPage customerId={stripeCustomerId} />;
+    return <PlaceholderPage name="Stripe Invoices" />;
   }
   if (loginAsCompany) {
-    return <LoginAsLibraryPage company={loginAsCompany} />;
+    return <PlaceholderPage name="Login As (Company Library)" />;
   }
   if (loginAsUserId) {
     const u = allUsers.find((x) => x.id === loginAsUserId) ?? findCompanyUserProfile(loginAsUserId);
-    return u ? <LoginAsUserPage user={u} /> : <StandaloneNotFound id={loginAsUserId} />;
+    return u ? <PlaceholderPage name="Login As (Learner)" /> : <StandaloneNotFound />;
+  }
+  /* Own-tab placeholders with nothing to look up: the company's B2B dashboard
+     (Companies › View Company Dashboard) and a learner's attempt page (Quiz
+     Attempts › View Attempt). */
+  if (params.has("companyDashboard")) {
+    return <PlaceholderPage name="Company Dashboard" />;
+  }
+  if (params.has("viewAttempt")) {
+    return <PlaceholderPage name="View Attempt" />;
   }
 
   return <AdminApp />;
@@ -466,89 +466,6 @@ function certTaskType(taskId: string): TaskType | null {
   return buildData().tasksById[taskId]?.type ?? null;
 }
 
-/* Placeholder shown when an admin clicks "Open Company Dashboard" on a
- * company-owned Task/Certification. Opened in a new tab via ?loginAs=. */
-function LoginAsLibraryPage({ company }: { company: string }) {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        padding: 48,
-        textAlign: "center",
-        fontFamily: "var(--font-sans)",
-        color: "#e7e7e8",
-        background: "#151517",
-      }}
-    >
-      <div style={{ fontSize: 13, letterSpacing: 1, textTransform: "uppercase", color: "#8a8a90" }}>
-        Login As
-      </div>
-      <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0 }}>{company}</h1>
-      <p style={{ fontSize: 15, color: "#a8a8a8", maxWidth: 460, margin: 0 }}>
-        This is the Login As view for the <strong>Library</strong> page of {company}.
-      </p>
-    </div>
-  );
-}
-
-/* Placeholder shown when an admin clicks "Login As" on a user — the row menu
- * on Manage Users and the button on the Full Profile. The learner app isn't
- * part of this prototype, so the new tab names the session it stands for.
- * Opened via ?loginAsUser=; see components/loginAs.ts. */
-function LoginAsUserPage({ user }: { user: User }) {
-  const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-  return (
-    <div style={{ minHeight: "100vh", background: "#0b0b0c", fontFamily: "var(--font-sans)" }}>
-      <div
-        style={{
-          background: "#7a3a18",
-          color: "#ffd9c2",
-          padding: "10px 20px",
-          fontSize: 14,
-          fontWeight: 600,
-        }}
-      >
-        ⚠ Admin impersonation session — you are viewing SkillCat as this user. Your own session is
-        unaffected.
-      </div>
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
-        <div
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: "50%",
-            margin: "0 auto 18px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 28,
-            fontWeight: 800,
-            color: "#fff",
-            background: "radial-gradient(70% 70% at 50% 40%, #e97237, #8a3114)",
-          }}
-        >
-          {initials}
-        </div>
-        <h1 style={{ fontSize: 24, margin: "0 0 6px", color: "#e7e7e8" }}>{user.name}</h1>
-        <p style={{ color: "#9a9aa0", margin: 0 }}>{user.email}</p>
-        <p style={{ color: "#7a7a7a", fontSize: 14, margin: "4px 0 0" }}>
-          {user.id}
-          {user.companyName ? ` · ${user.companyName}` : ""}
-        </p>
-        <p style={{ color: "#9a9aa0", lineHeight: 1.6, marginTop: 24 }}>
-          This is a placeholder for the learner session an admin lands in. The SkillCat app isn't
-          wired into this prototype yet.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /** Opens the "Login As" Library placeholder for a company in a new tab. */
 function openLoginAsLibrary(company: string) {
   window.open(
@@ -558,38 +475,9 @@ function openLoginAsLibrary(company: string) {
   );
 }
 
-/* Placeholder for the Task brief a reviewer opens from the review screen —
-   Instructions, Materials Required and the uploaded Reference Files. */
-function TaskBriefPlaceholder({ name }: { name: string }) {
-  return (
-    <div style={{ padding: 48, fontFamily: "var(--font-sans)" }}>
-      <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, color: "#fff" }}>{name}</h1>
-      <p style={{ marginTop: 12, fontSize: 16, color: "#a8a8a8" }}>
-        Instructions, Materials Required and Reference Files for this Task will appear here.
-      </p>
-    </div>
-  );
-}
-
-/* Placeholder for a Task preview opened from the Certification builder's
-   Add Existing Tasks picker. */
-function TaskPreviewPlaceholder({ name }: { name: string }) {
-  return (
-    <div style={{ padding: 48, fontFamily: "var(--font-sans)" }}>
-      <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, color: "#fff" }}>{name}</h1>
-      <p style={{ marginTop: 12, fontSize: 16, color: "#a8a8a8" }}>
-        A preview of this Task, as a learner will see it, will appear here.
-      </p>
-    </div>
-  );
-}
-
-function StandaloneNotFound({ id }: { id: string }) {
-  return (
-    <div style={{ padding: 48, color: "#9a9aa0", fontFamily: "var(--font-sans)" }}>
-      No user found for “{id}”.
-    </div>
-  );
+/* An id that resolves to nothing — a stale or hand-edited link. */
+function StandaloneNotFound() {
+  return <PlaceholderPage name="Not Found Page" />;
 }
 
 function AdminApp() {
@@ -768,8 +656,6 @@ function AdminApp() {
       : view.name === "companies" || view.name === "new-company" || view.name === "edit-company" || view.name === "manage-subscription"
       ? "manage-companies"
       : view.name === "users"
-      ? "manage-users"
-      : view.name === "offer-codes"
       ? "manage-users"
       : view.name === "review-hands-on"
       ? "review-hands-on"
@@ -1098,6 +984,7 @@ function AdminApp() {
         <AwardRecipientsPage
           award={view.award}
           onBack={() => setView({ name: "cert-award", cert: view.cert })}
+          onOpenCertifications={() => navigate("certs")}
         />
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
@@ -1106,8 +993,8 @@ function AdminApp() {
           onNewQuestion={(categoryPath, initialType, returnTo) =>
             setView({ name: "new-question", categoryPath, initialType, returnTo })
           }
-          onEditQuestion={(question, atVersion, returnTo) =>
-            setView({ name: "edit-question", question, atVersion, returnTo })
+          onEditQuestion={(question, returnTo) =>
+            setView({ name: "edit-question", question, returnTo })
           }
           initialHistoryId={view.historyForId}
           onBackToTasks={() => navigate("tasks")}
@@ -1168,59 +1055,26 @@ function AdminApp() {
         />
       ) : view.name === "edit-question" ? (
         (() => {
-          /* Anything but the question's own current version is a record: the
-             editor loads that version's text and locks. Opened from Version
-             History at all — current version included — Cancel and the crumb
-             go back there rather than to the bank's list. */
-          const past =
-            view.atVersion !== undefined && view.atVersion !== view.question.version;
+          /* Past versions open in the Version History page's preview panel,
+             never here — the editor only ever edits the current question. */
           return (
             <NewQuestionWizard
-              key={`${view.question.id}-${view.atVersion ?? "current"}`}
-              editingQuestion={
-                past
-                  ? {
-                      ...view.question,
-                      version: view.atVersion!,
-                      text: versionText(view.question, view.atVersion!),
-                    }
-                  : view.question
-              }
-              atVersion={past ? view.atVersion : undefined}
+              key={view.question.id}
+              editingQuestion={view.question}
               onSave={(q) => {
                 setBank((prev) => prev.map((x) => (x.id === q.id ? q : x)));
                 setFlash("Question Updated");
               }}
               /* Every way out puts the bank back as it was when Edit was
-                 pressed (`returnTo`) — the history page included, which sits
-                 over that same restored view. */
+                 pressed (`returnTo`). */
               crumbs={[
                 { label: "Tasks", onClick: () => navigate("tasks") },
                 {
                   label: "Question Bank",
                   onClick: () => setView({ name: "question-bank", restore: view.returnTo }),
                 },
-                ...(view.atVersion !== undefined
-                  ? [
-                      {
-                        label: "Version History",
-                        onClick: () =>
-                          setView({
-                            name: "question-bank",
-                            historyForId: view.question.id,
-                            restore: view.returnTo,
-                          }),
-                      },
-                    ]
-                  : []),
               ]}
-              onClose={() =>
-                setView(
-                  view.atVersion !== undefined
-                    ? { name: "question-bank", historyForId: view.question.id, restore: view.returnTo }
-                    : { name: "question-bank", restore: view.returnTo },
-                )
-              }
+              onClose={() => setView({ name: "question-bank", restore: view.returnTo })}
             />
           );
         })()
@@ -1296,7 +1150,6 @@ function AdminApp() {
           onManageCompletions={(userId) =>
             setView({ name: "content-overrides", userId, origin: "users" })
           }
-          onOpenOfferCodes={() => navigate("offer-codes")}
           onOpenScholarships={() => navigate("scholarship")}
           onOpenNameChanges={() => navigate("name-change-requests")}
           onOpenMergeAccounts={() => navigate("merge-accounts")}
@@ -1305,8 +1158,6 @@ function AdminApp() {
           flash={flash}
           onFlashDone={() => setFlash(null)}
         />
-      ) : view.name === "offer-codes" ? (
-        <OfferCodesPage onBack={() => navigate("manage-users")} />
       ) : view.name === "review-hands-on" ? (
         <ReviewHandsOnPage
           initialTaskFilter={view.taskFilter}

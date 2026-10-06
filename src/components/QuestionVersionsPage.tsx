@@ -26,9 +26,9 @@ import { TableCols } from "./TableCols";
    filter-pill row: those pages list thousands of rows, a question's history is
    two to five, and a "Clear Filters" link over four rows would be theatre.
 
-   The page is a record, so its only action is View — it opens the question
-   editor loaded with that version, locked unless the version is the current
-   one.
+   The page is a record, so its only action is View — it opens that version
+   in the row preview panel (user, 2026-10-06), read-only by nature, rather
+   than a locked editor.
    ───────────────────────────────────────────────────────────────────────────*/
 
 const PAGE_SIZE = 50;
@@ -107,14 +107,17 @@ export function QuestionVersionsPage({
   onBack,
   onBackToTasks,
   onView,
+  panelOpen = false,
 }: {
   question: Question;
   /** Back to the Question Bank list — the breadcrumb and Escape. */
   onBack: () => void;
   /** The trail's first step: the Question Bank hangs off Tasks. */
   onBackToTasks: () => void;
-  /** Opens the question editor on that version — locked unless it's current. */
+  /** Opens that version in the row preview panel. */
   onView: (version: number) => void;
+  /** The preview panel is up and owns Escape. */
+  panelOpen?: boolean;
 }) {
   const versions = useMemo(() => versionHistory(question), [question]);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "version", dir: "desc" });
@@ -124,11 +127,11 @@ export function QuestionVersionsPage({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       // The open row menu owns Escape while it is up.
-      if (e.key === "Escape" && !menu) onBack();
+      if (e.key === "Escape" && !menu && !panelOpen) onBack();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onBack, menu]);
+  }, [onBack, menu, panelOpen]);
 
   const sorted = useMemo(() => {
     const arr = [...versions].sort((a, b) => compareRows(a, b, sort.key));
@@ -207,13 +210,6 @@ export function QuestionVersionsPage({
                           menuOpen={menu?.version === v.version}
                         />
                       ))}
-                      {paged.length === 0 && (
-                        <tr>
-                          <td colSpan={COLS.length + 2} className="u-empty">
-                            No versions yet — this question hasn't been saved.
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>

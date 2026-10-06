@@ -6,8 +6,8 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-/* Two-letter weekday heads, per Figma 552:1520. */
-const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+/* Single-letter weekday heads — the range picker's (Figma 1554:2735). */
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 // Local (not UTC) YYYY-MM-DD parse/format — a plain `new Date("2026-03-01")`
 // parses as UTC midnight, which can render as the previous day in negative
@@ -21,13 +21,12 @@ function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 /* Short month — the trigger's selected value (Figma 900:3576 "Sep 17, 2026",
-   which re-specced it down from the full month name 552:1175 used) and the
-   shortcut parenthetical (552:1507 "(Oct 7, 2026)") both read this way. */
+   which re-specced it down from the full month name 552:1175 used). */
 function fmtShort(d: Date): string {
   return `${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-/** A one-click duration in the picker's Shortcuts panel. `value` is "YYYY-MM-DD". */
+/** A one-click duration on the picker's left rail. `value` is "YYYY-MM-DD". */
 export type DateShortcut = { label: string; value: string };
 
 /** Calendar-dropdown date picker. Value/onChange use plain "YYYY-MM-DD" strings,
@@ -49,7 +48,7 @@ export function DateField({
   min?: string;
   /** Latest selectable date, "YYYY-MM-DD". Days after it are dimmed. */
   max?: string;
-  /** Optional right-hand Shortcuts panel (Figma 552:1520). */
+  /** Optional shortcut rail on the panel's left (Figma 1554:2735). */
   shortcuts?: DateShortcut[];
 }) {
   const selected = value ? parseISO(value) : null;
@@ -61,13 +60,14 @@ export function DateField({
 
   return (
     <Dropdown
-      /* The panel sizes to its content: the calendar column is exactly 305px
-         (280px grid + 12px padding + the divider) and the Shortcuts column
-         keeps its 12px padding around whatever dates it resolves to — Figma
-         552:1520's 491px total is that sum for its own mock dates. */
+      /* Figma 1554:2735 "Single Date Selection": the date-range picker's panel
+         minus its Start/End inputs and footer — the same shell, shortcut rail
+         and 32px calendar (`.drp-*`), so there is one calendar style in the
+         app. Sizes to its content: the rail hugs its labels, the calendar
+         column is 248px (224px grid + 12px insets). */
       width="auto"
       overlay
-      panelClass="dropdown--cal"
+      panelClass="dropdown--cal drp-panel"
       trigger={({ open, toggle }) => (
         <button
           type="button"
@@ -100,47 +100,45 @@ export function DateField({
       )}
     >
       {({ close }) => (
-        <div className="date-picker" onClick={() => setMyMenu(null)}>
-          <CalendarBody
-            myMenu={myMenu}
-            setMyMenu={setMyMenu}
-            viewMonth={viewMonth}
-            setViewMonth={setViewMonth}
-            selected={selected}
-            min={min}
-            max={max}
-            divided={hasShortcuts}
-            onPick={(d) => {
-              onChange(toISO(d));
-              close();
-            }}
-          />
-          {hasShortcuts && (
-            <div className="date-shortcuts">
-              <div className="date-shortcuts-title">Shortcuts</div>
-              <div className="date-shortcuts-list">
-                {shortcuts!.map((s) => {
-                  const d = parseISO(s.value);
-                  return (
+        <div className="drp" onClick={() => setMyMenu(null)}>
+          <div className="drp-body">
+            {/* The shortcuts rail (the range picker's presets, untitled): the
+                one matching the picked date is the SemiBold orange row. */}
+            {hasShortcuts && (
+              <div className="drp-presets">
+                <div className="drp-presets-list">
+                  {shortcuts!.map((s) => (
                     <button
                       key={s.label}
                       type="button"
-                      className="date-shortcut"
+                      className={`drp-preset${s.value === value ? " is-active" : ""}`}
                       onClick={() => {
                         onChange(s.value);
                         close();
                       }}
                     >
-                      <span className="date-shortcut-label">{s.label}</span>
-                      {d && (
-                        <span className="date-shortcut-date">({fmtShort(d)})</span>
-                      )}
+                      {s.label}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
+            )}
+            <div className="drp-col">
+              <CalendarBody
+                myMenu={myMenu}
+                setMyMenu={setMyMenu}
+                viewMonth={viewMonth}
+                setViewMonth={setViewMonth}
+                selected={selected}
+                min={min}
+                max={max}
+                onPick={(d) => {
+                  onChange(toISO(d));
+                  close();
+                }}
+              />
             </div>
-          )}
+          </div>
         </div>
       )}
     </Dropdown>
@@ -153,7 +151,6 @@ function CalendarBody({
   selected,
   min,
   max,
-  divided,
   myMenu,
   setMyMenu,
   onPick,
@@ -163,8 +160,6 @@ function CalendarBody({
   selected: Date | null;
   min?: string;
   max?: string;
-  /** Draw the hairline that separates the calendar from the Shortcuts panel. */
-  divided?: boolean;
   /** The open caption dropdown, if any. */
   myMenu: "month" | "year" | null;
   setMyMenu: (m: "month" | "year" | null) => void;
@@ -219,21 +214,19 @@ function CalendarBody({
   }
 
   return (
-    <div className={`date-cal${divided ? " date-cal--divided" : ""}`}>
-      <div className="date-cal-head">
+    <div className="drp-cal">
+      <div className="drp-monthrow">
         <button
           type="button"
-          className="date-cal-nav"
+          className="drp-nav"
           aria-label="Previous month"
           disabled={prevDisabled}
           onClick={() => setViewMonth(new Date(year, month - 1, 1))}
         >
           <ChevronLeftIcon />
         </button>
-        {/* Figma 606:1746 — month and year are each their own dropdown; the
-            arrows still page one month at a time either side of them. Shares
-            the date-range picker's `.drp-my*` control so the two calendars
-            stay one control, not two lookalikes. */}
+        {/* Month and year are each their own dropdown (the range picker's
+            `.drp-my` control); their lists are the Reduced Size menu 640:1005. */}
         <div className="drp-my">
           <button
             type="button"
@@ -261,37 +254,40 @@ function CalendarBody({
           </button>
           {myMenu && (
             <div className="drp-my-menu" onClick={(e) => e.stopPropagation()}>
-              {myMenu === "month"
-                ? MONTHS.map((name, i) => (
-                    <button
-                      type="button"
-                      key={name}
-                      className={`drp-my-item${i === month ? " is-active" : ""}`}
-                      disabled={!monthInRange(year, i)}
-                      onClick={() => {
-                        setViewMonth(new Date(year, i, 1));
-                        setMyMenu(null);
-                      }}
-                    >
-                      {name}
-                    </button>
-                  ))
-                : years.map((y) => (
-                    <button
-                      type="button"
-                      key={y}
-                      className={`drp-my-item${y === year ? " is-active" : ""}`}
-                      onClick={() => goToYear(y)}
-                    >
-                      {y}
-                    </button>
-                  ))}
+              <div className="dropdown-list">
+                {myMenu === "month"
+                  ? MONTHS.map((name, i) => (
+                      <button
+                        type="button"
+                        key={name}
+                        className={`dropdown-item${i === month ? " is-current" : ""}`}
+                        disabled={!monthInRange(year, i)}
+                        onClick={() => {
+                          setViewMonth(new Date(year, i, 1));
+                          setMyMenu(null);
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  : years.map((y) => (
+                      <button
+                        type="button"
+                        key={y}
+                        className={`dropdown-item${y === year ? " is-current" : ""}`}
+                        disabled={![...Array(12).keys()].some((i) => monthInRange(y, i))}
+                        onClick={() => goToYear(y)}
+                      >
+                        {y}
+                      </button>
+                    ))}
+              </div>
             </div>
           )}
         </div>
         <button
           type="button"
-          className="date-cal-nav"
+          className="drp-nav"
           aria-label="Next month"
           disabled={nextDisabled}
           onClick={() => setViewMonth(new Date(year, month + 1, 1))}
@@ -299,27 +295,29 @@ function CalendarBody({
           <ChevronRightIcon />
         </button>
       </div>
-      <div className="date-cal-weekdays">
-        {WEEKDAYS.map((w, i) => (
-          <span key={i}>{w}</span>
-        ))}
-      </div>
-      <div className="date-cal-grid">
-        {cells.map((d, i) =>
-          d ? (
-            <button
-              type="button"
-              key={i}
-              className={`date-cal-day${selected && isSameDay(d, selected) ? " is-selected" : ""}`}
-              disabled={outOfRange(d)}
-              onClick={() => onPick(d)}
-            >
-              {d.getDate()}
-            </button>
-          ) : (
-            <span key={i} className="date-cal-day date-cal-day--empty" />
-          ),
-        )}
+      <div className="drp-days">
+        <div className="drp-weekdays">
+          {WEEKDAYS.map((w, i) => (
+            <span key={i}>{w}</span>
+          ))}
+        </div>
+        <div className="drp-grid">
+          {cells.map((d, i) =>
+            d ? (
+              <button
+                type="button"
+                key={i}
+                className={`drp-day${selected && isSameDay(d, selected) ? " is-selected" : ""}`}
+                disabled={outOfRange(d)}
+                onClick={() => onPick(d)}
+              >
+                {d.getDate()}
+              </button>
+            ) : (
+              <span key={i} className="drp-day drp-day--empty" />
+            ),
+          )}
+        </div>
       </div>
     </div>
   );
