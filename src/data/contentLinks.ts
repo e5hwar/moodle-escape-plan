@@ -57,6 +57,30 @@ export function nodeIdForName(name: string): string | undefined {
   return nodes.find((n) => n.name === name)?.id;
 }
 
+/** A Certification's own links, by name, strongest first — the same reading
+ *  as the Content Links page: Pre-Requisites point at it, Recommended Next
+ *  lead on from it, Related go either way. Empty when it has no graph node. */
+export function contentLinksFor(
+  certName: string,
+  all: Link[],
+): { prereqs: string[]; recommended: string[]; related: string[] } {
+  const id = nodeIdForName(certName);
+  const out = { prereqs: [] as Link[], recommended: [] as Link[], related: [] as Link[] };
+  if (id) {
+    for (const e of all) {
+      if (e.kind === "prerequisite" && e.to === id) out.prereqs.push(e);
+      else if (e.kind === "recommended" && e.from === id) out.recommended.push(e);
+      else if (e.kind === "related" && (e.from === id || e.to === id)) out.related.push(e);
+    }
+  }
+  const names = (list: Link[]) =>
+    [...list]
+      .sort((a, b) => b.strength - a.strength)
+      .map((e) => nodes.find((n) => n.id === (e.from === id ? e.to : e.from))?.name)
+      .filter((n): n is string => !!n);
+  return { prereqs: names(out.prereqs), recommended: names(out.recommended), related: names(out.related) };
+}
+
 export const links: Link[] = [
   // Domestic Refrigerators Basics
   { from: "n-tm", to: "n-drb", kind: "prerequisite", strength: 80 },

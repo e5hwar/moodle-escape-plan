@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   skills as seedSkills,
   masterySkills as seedMastery,
@@ -30,7 +30,7 @@ import { PrmModal } from "./PrmModal";
 import { SortIcon, AddIcon, RowEditIcon, RowKebabIcon, MenuArchiveOffIcon, RowDeleteIcon, InfoIcon14, PagePrevIcon, PageNextIcon } from "./icons";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { PreviewPanel } from "./PreviewPanel";
-import { ConfirmCard } from "./ConfirmCard";
+import { ConfirmCard, ListCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
@@ -898,23 +898,8 @@ function SkillPanel({
   const isSkill = rec.kind === "skill";
   const certs = recCerts(rec);
   const tasks = isSkill ? rec.skill.taskIds.map((id) => ({ id, task: taskById(id) })) : [];
-  const row = (key: string, name: string, meta?: string) => (
-    <div key={key} className="cdr-task">
-      <div className="cdr-task-name-row">
-        <span className="cdr-task-name">{name}</span>
-      </div>
-      {meta && <span className="ctb-row-meta">{meta}</span>}
-    </div>
-  );
-  const listCard = (title: string, rows: ReactNode[], empty: string) => (
-    <ConfirmCard title={`${title} · ${rows.length}`} tableBody={rows.length > 0}>
-      {rows.length > 0 ? <div className="ctb-tasktable">{rows}</div> : <p className="form-help">{empty}</p>}
-    </ConfirmCard>
-  );
-
   return (
     <PreviewPanel
-      kind={isSkill ? "Skill" : "Mastery Skill"}
       title={r.name}
       subtitle={r.description}
       onMore={onMore}
@@ -944,25 +929,28 @@ function SkillPanel({
       />
       {isSkill ? (
         <>
-          {listCard(
-            "Linked Tasks",
-            tasks.map(({ id, task }) => row(id, task?.name ?? id, task?.type)),
-            "No Tasks award this Skill yet.",
-          )}
-          {listCard(
-            "Linked Mastery Skills",
-            rec.linkedMastery.map((m) => row(m.id, m.name, m.status === "Archived" ? "Archived" : undefined)),
-            "Not part of any Mastery Skill.",
-          )}
+          <ListCard
+            title="Linked Tasks"
+            items={tasks.map(({ id, task }) => ({ key: id, name: task?.name ?? id, meta: task?.type }))}
+          />
+          <ListCard
+            title="Linked Mastery Skills"
+            items={rec.linkedMastery.map((m) => ({
+              key: m.id,
+              name: m.name,
+              meta: m.status === "Archived" ? "Archived" : undefined,
+            }))}
+          />
         </>
       ) : (
-        listCard(
-          "Linked Skills",
-          rec.members.map((sk) =>
-            row(sk.id, sk.name, `${sk.taskIds.length} ${sk.taskIds.length === 1 ? "Task" : "Tasks"}`),
-          ),
-          "No Skills linked yet.",
-        )
+        <ListCard
+          title="Linked Skills"
+          items={rec.members.map((sk) => ({
+            key: sk.id,
+            name: sk.name,
+            meta: `${sk.taskIds.length} ${sk.taskIds.length === 1 ? "Task" : "Tasks"}`,
+          }))}
+        />
       )}
     </PreviewPanel>
   );

@@ -1861,6 +1861,11 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   cursor: pointer;
   transition: background 0.1s ease;
 }
+/* A row that opens nothing itself (Users — no preview panel): hover still
+   shows its actions, but the pointer stays an arrow. */
+.table tbody tr.is-static {
+  cursor: default;
+}
 
 /* Row-region wash (Figma 79:446 header / 435:516 row): a ~50px ramp to 2% grey
    completing just before the kebab region. It lives on `.col-actions::before`
@@ -1868,7 +1873,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    edge in every scroll state) — NOT here on the tr, where a second copy at the
    row's true right edge would stack with it whenever the table fits the
    viewport and read ~3× as strong as the atom. Tables without a col-actions
-   cell (Proctoring, Manage IDs, Award Recipients, Name Change Requests)
+   cell (Proctoring, Manage IDs, Name Change Requests)
    deliberately carry no wash: the ramp belongs to
    the kebab-gutter atoms, and the minimal row atom (600:1461) has none. */
 
@@ -3340,10 +3345,12 @@ tbody td[data-copyable][data-copy][data-copied]::after {
    plain-input selectors carry their focused twin; the later `:focus` rule
    would otherwise win at equal specificity. */
 .lang-field.has-error,
-/* The Section pass-marks table's % input is its own 51px control, not a
-   `.form-input`, so it has to be named here to get the flagged border. */
+/* Inputs inside a flagged card table (1570:3366): the card is outlined AND
+   the field at fault goes red — a Section's % to pass, a random set's Pick. */
 .qsec-pct-input.has-error,
 .qsec-pct-input.has-error:focus,
+.qz-pt-input.has-error,
+.qz-pt-input.has-error:focus,
 /* Single-language plain input (1389:1548) — same red edge as the dual one. */
 .form-input.has-error,
 .form-input.has-error:focus {
@@ -3370,19 +3377,14 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   border-color: var(--field-error);
 }
 
-/* A required answer table with too few rows to be answerable: the card has no
-   border of its own, so the flag draws one rather than recolouring one. */
+/* Every card table flags the same way (Figma 1570:3366): the message in the
+   label row and a red outline on the CARD — never on the fields inside it.
+   The card has no border of its own, so the flag draws one. */
 .qed-tbl.has-error,
 .qz.has-error,
-.qsec.has-error {
+.qsec.has-error,
+.cc-panel.has-error {
   box-shadow: inset 0 0 0 1px var(--field-error);
-}
-
-/* The QUESTION column is a rich-text field and the ANSWER column a plain one,
-   so the flag has to name both shells. */
-.qed-tbl--pairs.has-error .lang-field,
-.qed-tbl--pairs.has-error .rte-field {
-  border-color: var(--field-error);
 }
 
 /* The dual-language upload shell (1376:1694): the outer card reddens, the
@@ -6608,7 +6610,7 @@ button.rr-card.ctb-start-card--accent:hover {
    Lesson's .10 grey wash, r12, 12px top/bottom, a TASK eyebrow over the name,
    then the meta and the 32px More tile at a 24px right inset (8px gaps).
    Hovering lifts the wash to .15, as a Lesson header does, instead of the
-   in-table row wash. Also the drawer's read-only tree (`.cdr-task` inside). */
+   in-table row wash. */
 .ctb-course-task {
   padding: 12px 0;
   border-radius: 12px;
@@ -6649,9 +6651,6 @@ button.rr-card.ctb-start-card--accent:hover {
 }
 .ctb-course-task .ctb-task-gate {
   margin: 8px 24px 0;
-}
-.ctb-course-task > .cdr-task {
-  padding: 0 16px;
 }
 
 /* ── Lesson block (Figma 1244:2344 "Lesson - Default") ──
@@ -11471,82 +11470,119 @@ a.prm-cta {
   background: rgba(122, 122, 122, 0.3);
 }
 
-/* The Certifications drawer's Tasks card: the Add Tasks tree read back without
-   its controls. It borrows the builder's containers — the tinted Lesson block,
-   the inset Task table, the bordered card for loose Tasks — plus its eyebrows
-   and pills; the rows are its own, since the builder's carry a drag gutter and
-   hover washes. Every inset is the drawer card's 16px, not the builder's 24. */
-.cdr-courses {
+/* The read-only Course tree (Figma 1600:3476 "Courses, Lessons & Tasks") —
+   the Add Tasks tree read back in the preview panel and the Review step.
+   Courses are 10% grey cards 20px apart, 12px top and bottom and 12px between
+   their parts: the head (20px name, 14px description) over a rule on 16px
+   insets, then Lessons and loose Tasks on 24px insets. A Lesson's Tasks sit
+   in a darker inset list, 12/24 rows split by rules; every Task line is the
+   name (16 Medium) with its marks, then its meta on the right. */
+.rot {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
-.cdr-course {
+.rot-course {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.cdr-course-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.cdr-course.hidden .cdr-course-head {
-  opacity: 0.55;
-}
-.cdr-course-name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.cdr-course-name {
+  padding: 12px 0;
+  border-radius: 12px;
+  background: rgba(122, 122, 122, 0.1);
+  overflow: clip;
   font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
   line-height: normal;
+}
+.rot-course-head {
+  padding: 0 16px 12px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+.rot-course-name {
+  font-size: 20px;
+  font-weight: 500;
   color: #fff;
 }
-.cdr-course-desc {
+.rot-desc {
   margin: 0;
-  font-family: var(--font-sans);
   font-size: 14px;
-  line-height: normal;
   color: #a8a8a8;
 }
-.cdr-lesson-head,
-.cdr-lesson-body {
-  padding: 0 16px;
+.rot-lesson-head,
+.rot-list-wrap,
+.rot-loose {
+  padding: 0 24px;
 }
-/* Name over meta, not beside it: the drawer's column is too narrow to seat a
-   long Task name and "Hands-On Task · 30 mins" on one line. */
-.cdr-task {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 16px;
+.rot-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #f05523;
+  text-transform: uppercase;
 }
-.cdr-task-name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-}
-.cdr-task-name {
+.rot-lesson-name,
+.rot-task-name {
   min-width: 0;
-  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 500;
-  line-height: normal;
   color: #fff;
 }
-/* The pills' own 4px lead is for the builder's row; the name row's gap spaces
-   them here. */
-.cdr-task .cert-restricted-pill {
-  margin-left: 0;
+.rot-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
-.cdr-task .ctb-task-gate {
-  margin: 8px 0 0;
+.rot-name-row .cert-hidden-pill,
+.rot-name-row .cert-restricted-pill {
+  margin-left: 4px;
+}
+.rot-list {
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: clip;
+}
+.rot-task {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 24px;
+}
+.rot-task + .rot-task {
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+}
+.rot-loose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rot-task-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rot-task-row > .rot-name-row,
+.rot-loose-main {
+  flex: 1;
+  min-width: 0;
+}
+.rot-loose .rot-task-row {
+  gap: 8px;
+}
+.rot-meta {
+  flex: none;
+  font-size: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+/* The builder's gate banner, read back at the node's 14px white (1600:3235). */
+.rot .ctb-task-gate {
+  height: auto;
+  margin: 0;
+}
+.rot .ctb-task-gate-text {
+  font-size: 14px;
+  color: #fff;
 }
 
 /* The Tasks drawer's review cards: multi-line values (instructions, a
@@ -11558,11 +11594,12 @@ a.prm-cta {
 /* ===== Row preview panel (Figma 1514:2860 "Preview Panel") =====
    What a Certifications, Tasks, Users, Companies, Skills or Question Bank row
    opens (PreviewPanel.tsx). On the panel surface (`--panel-bg` /
-   `--panel-border`) over the modals' 65% scrim, 1167px wide: a 68px bar
-   across the top — the record's kind as the orange eyebrow, the close glyph
-   opposite — over two columns, the 637px record column (title, subtitle,
-   kebab, then accordions; the whole column scrolls) and the 530px preview
-   column, blank until its frames land. */
+   `--panel-border`) over the modals' 65% scrim, 1266px wide, two columns
+   side by side with no rule between them (1582:1452): the 790px record
+   column on the flat `#0d0d0d` (thumbnail, title, subtitle, kebab, then
+   accordions; the whole column scrolls) and the 476px preview column on a
+   10% grey wash, the close glyph at its top right over a fixed 332×720
+   empty phone until its frames land. */
 .pp-overlay {
   position: fixed;
   inset: 0;
@@ -11577,13 +11614,14 @@ a.prm-cta {
   pointer-events: none;
 }
 .pp {
-  width: 1167px;
+  width: 1267px; /* 1266 + the 1px left edge against the scrim */
   max-width: 100vw;
   height: 100%;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--panel-border);
-  background: var(--panel-bg);
+  /* 1582:1452 — both columns sit on the flat dark, no grey wash. */
+  background: #0d0d0d;
   font-family: var(--font-sans);
   animation: pp-panel-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
 }
@@ -11629,34 +11667,13 @@ body:has(.pm-overlay) .pl-copied-toast {
   z-index: 460;
 }
 
-/* 1514:2855 — 24px insets; the 20px close glyph sets the 68px height, the
-   hairline drawn inside it as Figma does (hence 23px below). */
-.pp-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 24px 24px 23px;
-  border-bottom: 1px solid var(--panel-border);
-}
-/* The rail's "EDITING <TYPE>" eyebrow, 14px Medium accent uppercase. */
-.pp-kind {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: normal;
-  color: #f05523;
-  text-transform: uppercase;
-}
-
-/* The record column keeps its 637px; a narrow window takes the preview
-   column first. */
+/* The record column keeps its 790px; a narrow window takes the preview
+   column first, which then scrolls rather than shrinking the phone. */
 .pp-cols {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: min(637px, 100%) minmax(0, 1fr);
+  grid-template-columns: min(790px, 100%) minmax(0, 1fr);
 }
 .pp-main {
   min-width: 0;
@@ -11667,14 +11684,27 @@ body:has(.pm-overlay) .pl-copied-toast {
   flex-direction: column;
   gap: 28px;
   padding: 32px;
-  border-right: 1px solid var(--panel-border);
 }
-/* 1517:3699 — the title block, 12px, then the 32px kebab. */
+/* 1582:1454 — the 120px thumbnail (when the record has one), 12px, the title
+   block, 12px, then the 32px kebab, all top-aligned. */
 .pp-head {
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  /* 1582:1454 (2026-10-07 re-cut): 16px under the head, on top of the
+     column's 28px gap. */
+  padding-bottom: 16px;
+}
+/* 1585:1620 — 120px square at r8; the node crops the picture to its left. */
+.pp-thumb {
+  flex: none;
+  display: block;
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: 5% 50%;
 }
 .pp-ident {
   flex: 1;
@@ -11692,33 +11722,125 @@ body:has(.pm-overlay) .pl-copied-toast {
   color: #fff;
   overflow-wrap: anywhere;
 }
+/* 1582:1458 — a long description stops at four lines (76px), which keeps
+   the title block inside the thumbnail's 120px. */
 .pp-ident .prm-text {
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
-/* 1517:3693 "3-Dot Menu": a bare white 16px kebab in a 32px r8 target. */
-/* 1517:3809 — accordions 8px apart. The summaries' own `.confirm-cards`
-   wrappers dissolve into the stack so every accordion keeps that rhythm. */
+/* 1582:1459 "3-Dot Menu": a bare white 16px kebab in a 32px r8 target. */
+.pp-more {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.pp-more:hover {
+  background: rgba(122, 122, 122, 0.3);
+}
+.pp-more:focus-visible {
+  outline: 1px solid #f05523;
+  outline-offset: 0;
+}
+/* 1582:1464 — the accordions stack flush, each carrying its own 12px above
+   and below; only the last drops its rule. The summaries' own
+   `.confirm-cards` wrappers dissolve into the stack so every accordion keeps
+   that rhythm. Anything else in the stack keeps 8px under it (the Cert Setup
+   card now sits outside it, as the panel's `lead`). */
 .pp-body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .pp-body .confirm-cards {
   display: contents;
 }
-/* The preview column (1514:2815) — the panel surface, blank for now. */
+.pp-body > :not(.acc):not(.confirm-cards),
+.pp-body > .confirm-cards > :not(.acc) {
+  margin-bottom: 8px;
+}
+.pp-body > .acc:last-child,
+.pp-body > .confirm-cards:last-child > .acc:last-child {
+  border-bottom: 0;
+}
+/* The preview column (1582:1483) — a 10% grey wash over `#0d0d0d`, 32px
+   insets, 28px gap: the 20px close glyph alone on its top row, then the
+   stage, centred across and sitting right under it. The phone keeps its
+   size; a window too short (or narrow) for it scrolls this column instead. */
 .pp-side {
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 32px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+}
+.pp-side-bar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+/* 1582:1486 — 40px round the phone. Auto margins centre it without
+   clipping its left edge once the column is narrower than it. */
+.pp-stage {
+  flex: none;
+  width: max-content;
+  margin-inline: auto;
+  padding: 40px;
+}
+/* 1582:1487 "Quiz - Multiple Choice" — the empty phone, at its largest and
+   only size: 332×720 at r45 in a 5px #5b5b5b outline, a 10% grey glow
+   (202×437 at 166,168) over the flat dark. */
+.pp-phone {
+  box-sizing: border-box;
+  width: 332px;
+  height: 720px;
+  border: 5px solid #5b5b5b;
+  border-radius: 45px;
+  background:
+    radial-gradient(
+      202px 437px at 166px 168px,
+      rgba(217, 217, 217, 0.1) 0%,
+      rgba(163, 163, 163, 0.1) 25%,
+      rgba(136, 136, 136, 0.1) 37.5%,
+      rgba(109, 109, 109, 0.1) 50%,
+      rgba(81, 81, 81, 0.1) 62.5%,
+      rgba(54, 54, 54, 0.1) 75%,
+      rgba(41, 41, 41, 0.1) 81.25%,
+      rgba(27, 27, 27, 0.1) 87.5%,
+      rgba(14, 14, 14, 0.1) 93.75%,
+      rgba(7, 7, 7, 0.1) 96.875%,
+      rgba(0, 0, 0, 0.1) 100%
+    ),
+    #0d0d0d;
 }
 
-/* ===== Accordion (Figma 1517:3788 collapsed / 1517:3792 expanded) =====
-   Accordion.tsx. A 20px SemiBold title and the 16px #a8a8a8 chevron over a
-   hairline: shut, the head is 41px (8 / 9 around the 24px line) with the rule
-   under it; open, the head grows to 48px (12 / 12), the rule moves under the
-   body and the chevron turns up. The body opens on the 0fr → 1fr track. */
+/* ===== Accordion (Figma 1586:1622 open / 1586:1669 shut) =====
+   Accordion.tsx. 12px above and below a 32px head (a 20px SemiBold title and
+   the 16px #a8a8a8 chevron, 4px / 12px insets), over a hairline — 57px shut.
+   Open, the body sits between head and rule and the chevron turns up; the
+   head itself never moves. The body opens on the 0fr → 1fr track. */
 .acc {
   min-width: 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--panel-border);
 }
 .acc-head {
@@ -11733,17 +11855,13 @@ body:has(.pm-overlay) .pl-copied-toast {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 4px 12px;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: padding 0.2s cubic-bezier(0.2, 0, 0, 1);
-}
-.acc.is-open .acc-toggle {
-  padding: 12px;
 }
 .acc-title {
   margin: 0;
@@ -11796,13 +11914,14 @@ body:has(.pm-overlay) .pl-copied-toast {
   min-height: 0;
   overflow: hidden;
 }
+/* 1586:1626 — 8px / 12px round the lines. */
 .acc-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 0 12px 12px;
+  padding: 8px 12px;
 }
-/* 1517:3797 — one field per line: the 180px #a8a8a8 label, 20px, the white
+/* 1586:1627 — one field per line: the 180px #a8a8a8 label, 20px, the white
    value; 16px Regular, lines 16px apart. */
 .acc-rows {
   margin: 0;
@@ -11830,11 +11949,38 @@ body:has(.pm-overlay) .pl-copied-toast {
 .acc-value-sub {
   color: #a8a8a8;
 }
+/* 1586:1632 — a field left blank: "-" in #404040. */
+.acc-value-empty {
+  color: #404040;
+}
+/* An empty list card's body is the same blank "-", standing alone. */
+.acc-content > .acc-value-empty {
+  font-size: 16px;
+  line-height: normal;
+}
+/* Completion Criteria read back (1586:1700): each requirement's kind in
+   14px grey after its name, and the any-one / all note under the sets. */
+.cc-sum-meta,
+.acc-meta {
+  font-size: 14px;
+  color: #a8a8a8;
+}
+.cc-sum-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.cc-sum-note strong {
+  font-weight: 600;
+}
+.cc-sum-note .cc-sum-all {
+  font-weight: 500;
+}
 .acc-value .co-status-pill {
   vertical-align: middle;
 }
 @media (prefers-reduced-motion: reduce) {
-  .acc-toggle,
   .acc-chevron,
   .acc-body,
   .acc.is-open .acc-body {
@@ -14072,8 +14218,13 @@ body:has(.pm-overlay) .pl-copied-toast {
 }
 
 /* The untagged-Certifications banner (Figma 1424:1416 on the launcher):
-   between the header's 24px and the search, with the same 24px under it. */
-.ind-banner {
+   between the header's 24px and the search, with the same 24px under it.
+   It isn't inside a `.tasks.lm` landing, so it restates that row's 40px gap —
+   `.cs-close` takes back 28px of it to sit 12px after the CTA; on the
+   note-card's own 12px gap the ✕ landed on top of Assign Industries.
+   (`.note-card` is declared later, hence the doubled class.) */
+.note-card.ind-banner {
+  gap: 40px;
   margin-bottom: 24px;
 }
 
@@ -14133,12 +14284,10 @@ body:has(.pm-overlay) .pl-copied-toast {
   flex-direction: column;
 }
 
-/* "Nothing matches “x”" — alone in the list when a query finds nothing. */
-.ind-launch-empty {
-  padding: 14px 12px 6px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: #7a7a7a;
+/* A query's results page: its section heads sit 24px under the bar, the
+   hub's own drop from header to first section. */
+.ind-launch-list--results {
+  margin-top: 24px;
 }
 
 /* ─── Large Table row — Figma "Atomic - Complete Row - Large Table" ─────────
@@ -14318,6 +14467,14 @@ body:has(.pm-overlay) .pl-copied-toast {
   flex-direction: column;
   /* Track gap + the rest = the node's 24px between the index and the name. */
   margin-left: calc(24px - var(--ind-gap));
+}
+/* A row with no position (search results, Figma 1600:3579): the index slot
+   goes and the name sits 8px after the handle's slot — x 28 in the node. */
+.ind-row--bare .ind-row-index {
+  display: none;
+}
+.ind-row--bare .ind-row-cell {
+  margin-left: calc(8px - var(--ind-gap));
 }
 
 /* Name line: the name ellipsises; a Hidden pill rides beside it. */
@@ -14501,30 +14658,14 @@ body:has(.pm-overlay) .pl-copied-toast {
   color: var(--accent);
 }
 
-/* An empty hub list — Sub-Industries and Certifications share it (user,
-   2026-10-06): a centred title over a muted line, 48px clear above and below. */
-.ind-empty {
-  padding: 48px 0;
-  text-align: center;
-}
-
-.ind-empty-title {
+/* An empty hub list (Figma 1600:3477) — Sub-Industries and Certifications
+   alike: one 16px grey line, 8px under the head (the head's own margin). */
+.ind-empty-line {
+  margin: 0;
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 500;
-  color: #e7e7e8;
-  margin-bottom: 4px;
-}
-
-.ind-empty-sub {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: #7a7a7a;
-}
-
-.ind-empty-sub strong {
+  font-size: 16px;
+  line-height: normal;
   color: #a8a8a8;
-  font-weight: 500;
 }
 
 /* "Hidden" tag — Figma "Tags" 320:1437: no border, tinted fill, 40px radius.
@@ -19713,90 +19854,96 @@ body:has(.pm-overlay) .pl-copied-toast {
 
 /* ─────────────── Awards (spec §12) ─────────────── */
 
-/* Merit Tier pill in the table. */
-.aw-tier-pill {
-  display: inline-flex;
+/* Dummy artwork — a plain black box with a line saying what goes there
+   (user, 2026-10-07): the Award preview's Card / Certificate, the Award
+   Templates thumbnail, the template picker's tiles and the Design Template
+   background. One look; each use sets its own size. */
+.art-ph {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 3px 10px 3px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--tier) 38%, transparent);
-  background: color-mix(in srgb, var(--tier) 12%, transparent);
-  color: color-mix(in srgb, var(--tier) 78%, #ffffff 22%);
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: #000;
+  font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 600;
+  line-height: normal;
+  color: #7a7a7a;
+  text-align: center;
 }
-.aw-tier-pill-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--tier);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--tier) 60%, transparent);
-}
-
-/* Template thumbnails in the table — the background's swatch. The cell is
-   artwork, not text, so it is an exception to the plain-text cell rule (which
-   strips background/border/radius with !important); the colour comes in on
-   `--swatch` because that rule also wipes an inline `background`. */
+/* The Award Templates thumbnail. Table cells strip background/border/radius
+   with !important (the plain-text cell rule), so the box restates them. */
 .aw-col-thumb { width: 72px; padding-left: 16px; }
 .table tbody td.aw-col-thumb:not(.col-actions) .aw-row-thumb {
-  display: block !important;
+  display: flex !important;
   width: 44px;
   height: 30px;
+  padding: 0;
+  border: 1px solid #404040 !important;
   border-radius: 5px !important;
-  border: 1px solid var(--border-strong) !important;
-  background: var(--swatch) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
+  background: #000 !important;
+  font-size: 10px;
+}
+/* Card / Certificate Design picker (TemplatePickerModal) — the 682:2321
+   node's 1050px width, not the full-screen picker shell. The height is fixed
+   like every picker's (searching down to one row must not make the card jump)
+   and the row area flex-fills it, scrolling under the sticky header. */
+.prm.tpm {
+  max-width: min(1050px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 96px));
+}
+.prm.tpm .stm,
+.prm.tpm .stm-table-wrap {
+  flex: 1;
+  min-height: 0;
+}
+.prm.tpm .stm-table-wrap > .table-xscroll {
+  flex: 1 1 200px;
+  min-height: 200px;
 }
 
-/* ── Award form — Design Template thumbnail ──
-   A Design Template is a picture, so the Single-Select shows it: the row leads
-   with the artwork the way the Countries menu (938:961) leads with a flag, and
-   the collapsed control repeats it, because a visual choice has to stay visible
-   once it is made. "None" is the dashed box. 19px tall — the height of the
-   field's own line box — so a thumbnail leaves the 45px control at 45px and a
-   menu row at 35px. (`.aw-swatch` is taken: it is the Design Template wizard's
-   colour chip.) */
-.aw-tpl-thumb {
-  width: 28px;
-  height: 19px;
-  flex: none;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+/* Card / Certificate Design picker (TemplatePickerModal) — Spotlight-style
+   rows (558:2046): the 144×76 artwork tile + 12px top/bottom = a 100px row,
+   16px text, name white over the #a8a8a8 data columns. The tile is the
+   Spotlights `.sp-thumb` box filled with the template's swatch; like the
+   Award Templates thumbnail it is artwork, so it is an exception to the
+   plain-text cell rule (colour on `--swatch`, which that rule can't wipe). */
+.tpm .stm-table tbody td {
+  height: 100px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #a8a8a8;
 }
-.aw-tpl-thumb--none {
-  border-style: dashed;
-  box-shadow: none;
+.tpm .stm-table tbody td.col-name {
+  color: #fff;
+  font-weight: 500;
 }
-/* The default trigger is a grid that reinstates a native select's width from a
-   hidden sizer; this one is full-width with a leading thumbnail, so it is a
-   plain row instead. */
-.aw-tpl-field {
-  display: flex;
-  align-items: center;
-  gap: 11px;
+.table tbody td.tpm-col-thumb:not(.col-actions) .tpm-thumb {
+  display: flex !important;
+  width: 144px;
+  height: 76px;
+  border: 1px solid #404040 !important;
+  border-radius: 8px !important;
+  background: #000 !important;
+  font-size: 12px;
 }
-.aw-tpl-field .select-field-value { flex: 1; }
-.ss-menu--tpl .dropdown-item-name {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  overflow: visible;
-}
-.ss-menu--tpl .aw-tpl-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* "No Card" / "No Certificate": the field's dashed empty box at tile size. */
+.table tbody td.tpm-col-thumb:not(.col-actions) .tpm-thumb--none {
+  background: transparent !important;
+  border: 1px dashed var(--border-strong) !important;
 }
 
 /* ── Award form — preview rail ──
    The same right-hand rail the company wizard's billing preview runs in
-   (`.cw-impact`, Figma 616:969): 380px, 32px gutter, a 0.1 grey wash over
-   #0d0d0d. It renders whatever Design Templates are picked, so the artwork a
-   dropdown row can only name is actually on screen. */
+   (`.cw-impact`, Figma 616:969): 32px gutter, a 0.1 grey wash over #0d0d0d.
+   480px, Manage Subscription's width rather than the create wizard's 380
+   (user, 2026-10-07) — it is a single-step page, and the artwork needs the
+   room. It renders whatever Design Templates are picked, so the artwork is
+   actually on screen. */
 .aw-preview {
-  width: 380px;
+  width: 480px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -19815,12 +19962,16 @@ body:has(.pm-overlay) .pl-copied-toast {
   line-height: normal;
   color: #fff;
 }
-.aw-preview-slot {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* Each appearance reads as a form field (`.form-group`): the shared label,
+   the artwork in the control's place, the template's name as subtext. The
+   rail's 24px gap spaces it, plus 8 more between two fields (the forms'
+   32px rhythm). */
+.aw-preview-slot.form-group {
+  margin: 0;
 }
-.aw-preview-slot .section-heading { margin: 0; }
+.aw-preview-slot + .aw-preview-slot {
+  margin-top: 8px;
+}
 .aw-preview-empty {
   padding: 28px 16px;
   border: 1px dashed #404040;
@@ -19829,105 +19980,15 @@ body:has(.pm-overlay) .pl-copied-toast {
   font-size: 14px;
   color: #7a7a7a;
 }
-/* The template's own name, under the artwork it drew. */
-.aw-preview-cap {
-  margin: 0;
-  font-size: 12px;
-  color: #a8a8a8;
-}
-.aw-preview-note {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #7a7a7a;
-}
 
-/* Both appearances sit on the template's artwork, so every value on top is
-   white with a shadow rather than a token colour — the artwork underneath is
-   arbitrary. */
-.aw-card,
-.aw-cert {
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-}
-.aw-card {
+/* The Award preview's placeholders (`.art-ph`) at each appearance's shape. */
+.aw-art--card {
   /* 8:5, the Portfolio card's shape. */
   aspect-ratio: 8 / 5;
 }
-.aw-cert {
+.aw-art--cert {
   /* Landscape document, the shape a diploma prints at. */
   aspect-ratio: 1.41 / 1;
-  align-items: center;
-  text-align: center;
-  justify-content: center;
-  gap: 5px;
-}
-.aw-card-tier { align-self: flex-start; }
-.aw-card-body { margin-top: auto; }
-.aw-card-cert {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-.aw-card-holder {
-  margin-top: 2px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
-}
-.aw-card-foot,
-.aw-cert-foot {
-  margin-top: 12px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-.aw-card-num {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.85);
-}
-.aw-card-date {
-  margin-top: 2px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
-}
-.aw-cert-kicker {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
-}
-.aw-cert-holder {
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.15;
-}
-.aw-cert-line {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.65);
-}
-.aw-cert-name {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-.aw-cert-foot { margin-top: 14px; text-align: left; }
-.aw-qr {
-  width: 38px;
-  height: 38px;
-  flex: none;
-  border-radius: 3px;
-  box-shadow: 0 0 0 2px #fff;
 }
 
 /* ── Design Template wizard — background picker ── */
@@ -19941,12 +20002,6 @@ body:has(.pm-overlay) .pl-copied-toast {
   width: 280px;
   height: 176px;
   flex: none;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .aw-bg-filename {
   font-family: var(--font-mono);
@@ -19958,18 +20013,6 @@ body:has(.pm-overlay) .pl-copied-toast {
 }
 .aw-bg-empty { color: rgba(255, 255, 255, 0.4); font-size: 14px; }
 .aw-bg-side { flex: 1; }
-.aw-swatch-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-.aw-swatch {
-  width: 38px;
-  height: 26px;
-  border-radius: 6px;
-  border: 2px solid var(--border);
-  cursor: pointer;
-  padding: 0;
-  transition: border-color 0.12s;
-}
-.aw-swatch:hover { border-color: var(--border-strong); }
-.aw-swatch.is-active { border-color: var(--accent); }
 
 /* ============== Manage IDs page ============== */
 /* The table is the shared `.table` system (same columns/paging chrome as the
@@ -21161,41 +21204,6 @@ body:has(.pm-overlay) .pl-copied-toast {
   color: #a8a8a8;
 }
 
-/* ─────────────── Award recipients page ─────────────── */
-.ar-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 1px;
-  margin: 4px 0 18px;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.ar-detail {
-  background: var(--bg-panel);
-  padding: 11px 14px;
-}
-.ar-detail-label {
-  font-size: 9.5pt;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
-  margin-bottom: 5px;
-}
-.ar-detail-value {
-  font-size: 14px;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  min-height: 22px;
-}
-.ar-mono {
-  font-family: var(--font-mono);
-  font-size: 10pt;
-  color: var(--text-muted);
-}
-
 .fb-picker-row.is-selected {
   background: rgba(233, 114, 55, 0.08);
 }
@@ -21970,7 +21978,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    so the count reads as a phrase, not a second control. */
 .rvc-skip-label { white-space: nowrap; }
 .rvc-skip-count { color: #a8a8a8; }
-.rvc-footer-note { font-family: var(--font-sans); font-size: 14px; color: #7a7a7a; }
 
 /* ── toast — no design system component yet (see handoff note) ── */
 @keyframes rvcToastIn {
@@ -24081,7 +24088,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   transform-origin: 100% 50%;
   --nc-dx: calc(var(--clh-nc-note-w, 262px) - var(--clh-nc-card-w, 1276px) + 20px);
   --nc-dy: calc(-25.5px - var(--clh-nc-drop));
-  --nc-kx: 0.5; /* the 32px button closes onto the 16px chevron */
+  --nc-kx: 0.5; /* the 32px button closes onto the 14px chevron */
   --nc-ky: 0.5;
 }
 .tasks.clh.clh--banner .tasks-note > svg {
@@ -24301,8 +24308,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
    `.tasks-title`). An earlier version grew it 4px at the landing, which read as
    the header shrinking as the page morphed. */
 
-/* The banner's collapsed form (Figma 1268:1736): one accent line under the
-   page title, 16px Medium with the 16px chevron hard against it. The two are
+/* The banner's collapsed form — "Page Subtext" (Figma 1597:2681, was
+   1268:1736): one accent line under the page title, 16px Medium, then 4px and
+   the 14px chevron. The two are
    the same statement at two sizes, so exactly one shows — this line fades in
    (and takes its height) only as the page reaches the table. */
 .tasks-note {
@@ -24320,6 +24328,12 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 .tasks-note:hover {
   text-decoration: underline;
+}
+/* The 4px sits before the chevron only — the count and its words are one
+   phrase (the count carries its own no-break space). */
+.tasks-note > svg {
+  flex: none;
+  margin-left: 4px;
 }
 .tasks.lm .tasks-note {
   overflow: hidden;
@@ -26117,11 +26131,6 @@ button.rr-card.rr-card--add:hover {
   border-color: var(--field-focus);
 }
 
-/* Over-drawn random set — the field-error red; the message is in the label row. */
-.qz-pt-input.invalid {
-  border-color: var(--field-error);
-}
-
 .qz-pt-suffix {
   font-size: 16px;
   color: #a8a8a8;
@@ -26821,25 +26830,6 @@ button.rr-card.rr-card--add:hover {
   text-overflow: ellipsis;
 }
 
-/* A bare text action: "Mark as Done" / "Dismiss" in the Setup card's head.
-   14px Medium muted, white on hover. */
-.cs-text-btn {
-  flex: none;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: normal;
-  color: #a8a8a8;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.cs-text-btn:hover {
-  color: #fff;
-}
-
 /* Figma 1424:1416 "Certification Setup Pending": the Manage Users card at
    20px a side (16 top and bottom), with a 16px ✕ 12px after Continue Setup.
    The two buttons sit straight in the card's 40px-gap row (the morph moves
@@ -26898,73 +26888,54 @@ button.rr-card.rr-card--add:hover {
   }
 }
 
-/* The done banner: the green tone, with no orange on hover (the card is not a
-   button any more — only Dismiss acts). The morph paints the card on
-   `::before`, so the tone is restated there. */
-.lm-banner--ok {
-  cursor: default;
-}
-.lm-banner--ok:hover {
-  background: rgba(41, 182, 115, 0.2);
-}
-.tasks.clh.clh--banner .clh-banner > .lm-banner--ok::before,
-.tasks.clh.clh--banner .clh-banner > .lm-banner--ok:hover::before {
-  border-color: rgba(41, 182, 115, 0.1);
-  background: rgba(41, 182, 115, 0.2);
-}
-/* In the count's spot: a 32px disc holding the 14px check. It closes onto the
-   note's 16px check exactly as a count closes onto its twin (32 → 16). */
-.lm-banner-count--ok {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-right: 0;
-  border-radius: 50%;
-  background: rgba(41, 182, 115, 0.18);
-  color: #fff;
-}
-.lm-banner-count--ok svg {
-  width: 14px;
-  height: 14px;
-}
-.tasks.clh.clh--banner .lm-banner-count--ok {
-  padding-right: 0;
-}
-.tasks.clh.clh--banner .lm-banner-count--ok::after {
-  display: none;
-}
-.tasks-note-count--ok {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
-}
-
-/* ── The Setup card (ConfirmCard, first in the panel's Details) ── */
+/* ── The Setup card (Figma 1592:2588) — its own block between the panel's
+   head and its accordions. A 10% grey card, r12: the head (20px title +
+   "Button dialog"), the 4-step bar and the intro, 16px apart on 12/16
+   insets; then the steps on a darker inset list, 16px in and 12px up from
+   the card's bottom. ── */
 .cs-card {
+  flex-shrink: 0;
+  background: rgba(122, 122, 122, 0.1);
+  border-radius: 12px;
+  overflow: clip;
+}
+.cs-top {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  padding: 12px 16px;
 }
-/* Four flat segments, one per step. */
+.cs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cs-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+/* Progress Bar "4 Step" (1592:1768): four round-capped 4.66px bars, orange
+   once their step is done, #7a7a7a until then. */
+/* The node is 0px tall with its stroke spilling 2.33px each way, so the bar
+   takes no room in the 16px rhythm either. */
 .cs-progress {
   display: flex;
-  gap: 4px;
+  gap: 12px;
+  margin: -2.33px 0;
 }
 .cs-seg {
   flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(122, 122, 122, 0.3);
+  height: 4.66px;
+  border-radius: 999px;
+  background: #7a7a7a;
 }
 .cs-seg--done {
-  background: #29b673;
+  background: #f05523;
 }
 .cs-help {
   margin: 0;
@@ -26973,51 +26944,95 @@ button.rr-card.rr-card--add:hover {
   line-height: normal;
   color: #a8a8a8;
 }
+.cs-list {
+  padding: 0 16px 12px;
+}
 .cs-rows {
   display: flex;
   flex-direction: column;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 10px;
 }
+/* "Atomic Component - Minimal State - Content Row": 12px insets, 24px to the
+   trailing control, a half-pixel rule between rows. */
 .cs-row {
   display: flex;
   align-items: center;
+  gap: 24px;
+  padding: 12px;
+  border-bottom: 0.5px solid rgba(64, 64, 64, 0.5);
+}
+.cs-row:not(:last-child) {
+  /* Padding minus the rule, so every row is the node's 62px. */
+  padding-bottom: 11.5px;
+}
+.cs-row:last-child {
+  border-bottom: 0;
+}
+.cs-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  border-top: 0.5px solid rgba(64, 64, 64, 0.5);
 }
 .cs-row-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
   width: 16px;
   height: 16px;
-  color: #fff;
-}
-.cs-row-icon--done {
-  color: #29b673;
-}
-.cs-row-icon--done svg {
-  width: 14px;
-  height: 14px;
+  color: #a8a8a8;
 }
 .cs-row-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-.cs-row-title {
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: 500;
   line-height: normal;
+}
+.cs-row-title {
+  font-weight: 500;
   color: #fff;
 }
 .cs-row-body {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: normal;
   color: #a8a8a8;
+}
+/* A done step recedes: title to #a8a8a8, detail to #7a7a7a — and the whole
+   row reopens its step, with the tables' 5% hover wash (1537:1441). */
+.cs-row.is-done {
+  cursor: pointer;
+}
+.cs-row.is-done:hover {
+  background: rgba(122, 122, 122, 0.05);
+}
+.cs-row.is-done:first-child {
+  border-radius: 9px 9px 0 0;
+}
+.cs-row.is-done:last-child {
+  border-radius: 0 0 9px 9px;
+}
+.cs-row.is-done .cs-row-title {
+  color: #a8a8a8;
+}
+.cs-row.is-done .cs-row-body {
+  color: #7a7a7a;
+}
+/* "Icon Filled" (1046:1066): a 24px disc, 10% orange inside a 0.4px 75%
+   orange ring, white 12px check. */
+.cs-done-disc {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(240, 85, 35, 0.1);
+  border: 0.4px solid rgba(240, 85, 35, 0.75);
+  color: #fff;
 }
 
 /* SelectRequirementModal's locked-row flag ("Mapped to <form>") — a form name

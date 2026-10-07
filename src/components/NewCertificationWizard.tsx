@@ -352,6 +352,15 @@ function buildSampleStructure(editing: Certification): {
   const certTasks = associated.map(libraryTaskToCertTask);
   const lessonTasks = certTasks.slice(0, Math.min(3, certTasks.length));
   const looseTasks = certTasks.slice(lessonTasks.length);
+  // Sample data shows a gated Task too: with two or more in the Lesson, the
+  // last one opens only once the first is completed ("Not Available Unless").
+  if (lessonTasks.length >= 2) {
+    const last = lessonTasks.length - 1;
+    lessonTasks[last] = {
+      ...lessonTasks[last],
+      restriction: { enabled: true, mode: "all", taskIds: [lessonTasks[0].id] },
+    };
+  }
 
   const course: CertCourse = {
     id: nodeId("co"),
@@ -409,6 +418,15 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
   const certTasks = associated.map(libraryTaskToCertTask);
   const lessonTasks = certTasks.slice(0, Math.min(3, certTasks.length));
   const looseTasks = certTasks.slice(lessonTasks.length);
+  // Sample data shows a gated Task too: with two or more in the Lesson, the
+  // last one opens only once the first is completed ("Not Available Unless").
+  if (lessonTasks.length >= 2) {
+    const last = lessonTasks.length - 1;
+    lessonTasks[last] = {
+      ...lessonTasks[last],
+      restriction: { enabled: true, mode: "all", taskIds: [lessonTasks[0].id] },
+    };
+  }
 
   const course: CertCourse = {
     id: nodeId("co"),
@@ -702,6 +720,16 @@ function toCertRecord(d: WizardData): Omit<Certification, "id"> {
 // When editing, prefill the fields the Certification record actually carries.
 // Structural data (courses, completion) isn't stored on the list record, so for
 // existing Certifications we populate plausible sample data instead.
+/** A saved image URL as the upload field's picked file: the file name off
+ *  the URL (a bundled asset carries a hash, dropped here). The seed keeps no
+ *  byte size, so that reads 0. */
+function savedImage(url: string): PickedImage {
+  const file = url.split("/").pop()?.split("?")[0] ?? "thumbnail";
+  const ext = file.includes(".") ? file.split(".").pop()!.toLowerCase() : "";
+  const name = file.replace(/-[A-Za-z0-9_-]{8}(\.[a-z0-9]+)$/i, "$1");
+  return { name, size: 0, ext, url };
+}
+
 function buildInitialData(editing?: Certification): WizardData {
   // A new Certification opens on zero Courses — the Add Tasks step greets it
   // with "Create your first Course" rather than a pre-made "Untitled Course".
@@ -725,6 +753,9 @@ function buildInitialData(editing?: Certification): WizardData {
       : "",
     type: editing.type ? (editing.type.toLowerCase() as CertType) : "",
     keywordsEn: (editing.keywords ?? []).join(", "),
+    // The record's saved Thumbnail, so Edit and the preview panel's Overview
+    // both see the picture its head shows.
+    thumbnail: editing.thumbnail ? savedImage(editing.thumbnail) : null,
     // An existing Certification already has a live, persisted Deep Link slug.
     slug: slugify(editing.name),
     slugCustom: true,
@@ -3244,6 +3275,7 @@ function CompletionStep({
                     <ConditionSetCard
                       set={set}
                       index={idx + 1}
+                      flagged={missing && set.items.length === 0}
                       onRemove={criteriaLocked ? undefined : () => removeConditionSet(set.id)}
                       onAddItems={criteriaLocked ? undefined : (items) => addItems(set.id, items)}
                       onRemoveItem={
@@ -3306,12 +3338,16 @@ function itemMeta(item: CompletionItem): string {
 function ConditionSetCard({
   set,
   index,
+  flagged = false,
   onRemove,
   onAddItems,
   onRemoveItem,
 }: {
   set: ConditionSet;
   index: number;
+  /** An empty set after a blocked publish: the card-table error outline
+   *  (1570:3366); the message is in the field's label row. */
+  flagged?: boolean;
   onRemove?: () => void;
   onAddItems?: (items: CompletionItem[]) => void;
   onRemoveItem?: (itemId: string) => void;
@@ -3322,7 +3358,7 @@ function ConditionSetCard({
 
   return (
     <>
-    <div className="cc-panel">
+    <div className={`cc-panel${flagged ? " has-error" : ""}`}>
       <div className="cc-row cc-row-head">
         <div className="cc-head-text">
           <span>CONDITION SET {index}</span>
@@ -3593,7 +3629,17 @@ function AudienceStep({
    Certification with — so the drawer and the editor can't disagree. The first
    card keeps the drawer node's "Overview" title; the rest take their step's
    name. The bilingual fields show their English half only. */
-export function CertificationSummary({ cert }: { cert: Certification }) {
+export function CertificationSummary({
+  cert,
+  contentLinks,
+}: {
+  cert: Certification;
+  /** The record's Content Links (the preview panel's, Figma 1586:1696) —
+   *  left out on the wizard's Review step, which has no such step. */
+  contentLinks?: { prereqs: string[]; recommended: string[]; related: string[] };
+}) {
+  const lines = (names: string[]) =>
+    names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
   // Once per Certification: the sample structure mints fresh node ids.
   const data = useMemo(() => buildInitialData(cert), [cert]);
   const allTasks = flattenTasks(data.courses);
@@ -3605,8 +3651,10 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
       .map((t) => t.value)
       .join(", ");
   const paid = data.accessType !== "open";
+  const criteriaSets = data.conditionSets.filter((set) => set.items.length > 0);
+  const singleRequirement = criteriaSets.length === 1 && criteriaSets[0].items.length === 1;
   const tasksCard = (
-    <ConfirmCard title={`Tasks · ${allTasks.length}`}>
+    <ConfirmCard title="Courses, Lessons & Tasks">
       <CourseTreeSummary courses={data.courses} allTasks={allTasks} />
     </ConfirmCard>
   );
@@ -3658,22 +3706,48 @@ export function CertificationSummary({ cert }: { cert: Certification }) {
 
       {tasksCard}
 
-      <ConfirmCard title="Completion Criteria">
-        <div className="cc-sets">
-          {data.conditionSets.map((set, idx) => (
-            <Fragment key={set.id}>
-              {idx > 0 && (
-                <div className="cc-or">
-                  <div className="cc-or-lead">
-                    <span>OR</span>
+
+      {/* Figma 1582:1452 (1586:1700) — read back as label/value lines, not
+          the builder's tables: one line per Condition Set, its requirements one
+          per line with their kind in grey. A lone requirement is labelled
+          "Required", and the any-one / all note only shows once there is more
+          than one requirement to combine (user, 2026-10-07). */}
+      <ConfirmCard
+        title="Completion Criteria"
+        fillBlanks
+        rows={
+          criteriaSets.length === 0
+            ? [["Required", false]]
+            : criteriaSets.map((set, i): ConfirmField => [
+                singleRequirement ? "Required" : `Condition Set ${i + 1}`,
+                set.items.map((item) => (
+                  <div key={item.id}>
+                    {item.name} <span className="cc-sum-meta">· {itemMeta(item)}</span>
                   </div>
-                </div>
-              )}
-              <ConditionSetCard set={set} index={idx + 1} />
-            </Fragment>
-          ))}
-        </div>
+                )),
+              ])
+        }
+      >
+        {criteriaSets.length > 0 && !singleRequirement && (
+          <p className="cc-sum-note">
+            The Certification is complete when the user meets the criteria of{" "}
+            <strong>any one</strong> Condition Set. Within a Condition Set, they must
+            meet <strong className="cc-sum-all">all</strong> criteria.
+          </p>
+        )}
       </ConfirmCard>
+
+      {contentLinks && (
+        <ConfirmCard
+          title="Content Links"
+          fillBlanks
+          rows={[
+            ["Pre-Requisites", lines(contentLinks.prereqs)],
+            ["Recommended Next", lines(contentLinks.recommended)],
+            ["Related", lines(contentLinks.related)],
+          ]}
+        />
+      )}
 
       {/* Product IDs and repurchase behaviour only exist for the paywalls
           they apply to, as on the step, so no blanks are filled here. */}
@@ -3712,10 +3786,12 @@ export function useCertPreview(cert: Certification) {
   return useMemo(() => ({ taskCount: flattenTasks(data.courses).length }), [data]);
 }
 
-/* The Add Tasks tree, read back without its controls: each Course's eyebrow,
-   name and description, then its Lessons (the builder's tinted block around an
-   inset Task table) and loose Tasks (each a tinted block of its own, as in the
-   builder), in tree order. */
+/* The Add Tasks tree, read back without its controls (Figma 1600:3476
+   "Courses, Lessons & Tasks"): one 10% grey card per Course — its name and
+   description over a rule — then each Lesson's orange eyebrow, name and
+   description over a darker inset list of its Tasks, and loose Tasks with a
+   TASK eyebrow, in tree order. A Task line is name (+ marks) and its meta;
+   a gated Task carries the builder's "Not Available Unless" banner. */
 function CourseTreeSummary({
   courses,
   allTasks,
@@ -3723,42 +3799,42 @@ function CourseTreeSummary({
   courses: CertCourse[];
   allTasks: CertTask[];
 }) {
+  const hiddenPill = <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>;
   return (
-    <div className="cdr-courses">
-      {courses.map((course, i) => (
-        <section key={course.id} className={`cdr-course${course.hidden ? " hidden" : ""}`}>
-          <div className="cdr-course-head">
-            <span className="ctb-eyebrow">Course {i + 1}</span>
-            <div className="cdr-course-name-row">
-              <span className="cdr-course-name">{course.nameEn || "Untitled Course"}</span>
-              {course.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
+    <div className="rot">
+      {courses.map((course) => (
+        <section key={course.id} className="rot-course">
+          <div className="rot-course-head">
+            <div className="rot-name-row">
+              <span className="rot-course-name">{course.nameEn || "Untitled Course"}</span>
+              {course.hidden && hiddenPill}
             </div>
-            {course.descEn && <p className="cdr-course-desc">{course.descEn}</p>}
+            {course.descEn && <p className="rot-desc">{course.descEn}</p>}
           </div>
 
           {groupChildren(course.children).map((g) =>
             g.kind === "task" ? (
-              <div key={g.key} className="ctb-course-task">
-                <TaskSummaryRow task={g.task} allTasks={allTasks} inCourse />
-              </div>
+              <TaskSummaryRow key={g.key} task={g.task} allTasks={allTasks} inCourse />
             ) : (
-              <div key={g.key} className={`ctb-lesson${g.lesson.hidden ? " hidden" : ""}`}>
-                <div className="ctb-lesson-titles cdr-lesson-head">
-                  <div className="ctb-lesson-eyebrow">Lesson {g.num}</div>
-                  <div className="ctb-lesson-name-row">
-                    <span className="ctb-lesson-name">{g.lesson.nameEn || "Untitled Lesson"}</span>
-                    {g.lesson.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
+              <Fragment key={g.key}>
+                <div className="rot-lesson-head">
+                  <span className="rot-eyebrow">Lesson {g.num}</span>
+                  <div className="rot-name-row">
+                    <span className="rot-lesson-name">{g.lesson.nameEn || "Untitled Lesson"}</span>
+                    {g.lesson.hidden && hiddenPill}
                   </div>
-                  {g.lesson.descEn && <div className="ctb-lesson-desc">{g.lesson.descEn}</div>}
+                  {g.lesson.descEn && <p className="rot-desc">{g.lesson.descEn}</p>}
                 </div>
-                <div className="cdr-lesson-body">
-                  <div className="ctb-tasktable">
-                    {g.lesson.tasks.map((t) => (
-                      <TaskSummaryRow key={t.id} task={t} allTasks={allTasks} />
-                    ))}
+                {g.lesson.tasks.length > 0 && (
+                  <div className="rot-list-wrap">
+                    <div className="rot-list">
+                      {g.lesson.tasks.map((t) => (
+                        <TaskSummaryRow key={t.id} task={t} allTasks={allTasks} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
+              </Fragment>
             ),
           )}
         </section>
@@ -3767,10 +3843,10 @@ function CourseTreeSummary({
   );
 }
 
-/* A Task in the read-only tree: its name and state pills over the builder's
-   meta ("Quiz · 15 mins"), then the restriction banner if it has one.
-   Stacked rather than side by side, so a long name isn't cut short in the
-   drawer's narrow column. */
+/* One Task in the read-only tree: name and its marks, the builder's meta
+   ("Quiz · 15 mins") on the right, and the restriction banner under them.
+   A Task directly in a Course (`inCourse`) sits on the card itself under a
+   TASK eyebrow; one in a Lesson is a row of the Lesson's inset list. */
 function TaskSummaryRow({
   task,
   allTasks,
@@ -3778,21 +3854,31 @@ function TaskSummaryRow({
 }: {
   task: CertTask;
   allTasks: CertTask[];
-  /** A Task directly in a Course carries the builder's TASK eyebrow. */
   inCourse?: boolean;
 }) {
   const prereqs = gatePrereqs(task, allTasks);
+  const name = (
+    <div className="rot-name-row">
+      <span className="rot-task-name">{task.name}</span>
+      {task.requiresSubscription && <SubscriptionMark />}
+      {task.restriction?.enabled && prereqs.length === 0 && (
+        <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
+      )}
+    </div>
+  );
   return (
-    <div className="cdr-task">
-      {inCourse && <span className="ctb-lesson-eyebrow">Task</span>}
-      <div className="cdr-task-name-row">
-        <span className="cdr-task-name">{task.name}</span>
-        {task.requiresSubscription && <SubscriptionMark />}
-        {task.restriction?.enabled && prereqs.length === 0 && (
-          <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
+    <div className={inCourse ? "rot-loose" : "rot-task"}>
+      <div className="rot-task-row">
+        {inCourse ? (
+          <div className="rot-loose-main">
+            <span className="rot-eyebrow">Task</span>
+            {name}
+          </div>
+        ) : (
+          name
         )}
+        <span className="rot-meta">{taskMeta(task)}</span>
       </div>
-      <span className="ctb-row-meta">{taskMeta(task)}</span>
       <TaskGate names={prereqs} mode={task.restriction?.mode ?? "all"} />
     </div>
   );

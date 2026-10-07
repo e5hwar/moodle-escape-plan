@@ -9,7 +9,7 @@ import {
 import { RowKebabIcon } from "./icons";
 
 /* Row actions for a table whose actions all live in a menu — the Full
-   Profile's card tables (Figma 1278:1571) and Award Recipients' downloads. */
+   Profile's card tables (Figma 1278:1571). */
 
 /* The row menu behind a card table's kebab — the shared `.u-menu` chrome,
    fixed-positioned and right-anchored to the glyph, closing on outside click /

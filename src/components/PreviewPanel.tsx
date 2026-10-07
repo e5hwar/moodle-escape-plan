@@ -13,32 +13,40 @@ const prefersReducedMotion = () =>
  *  the title as the label, the count and its grey sub-line as the value. */
 export type PreviewStat = { count: string; title: string; sub?: string };
 
-/** The row preview panel (Figma 1514:2860 "Preview Panel"): a full-height
- *  panel on the app's panel surface over the modals' scrim. A bar across the
- *  top names the kind of record (orange eyebrow) with the close glyph
- *  opposite; beneath it, the record column — title, grey subtitle and the row
- *  menu's kebab, then nothing but accordions (every `ConfirmCard` in
- *  `children` draws as one, and `stats` adds an Activity accordion last) — and
- *  the preview column, left blank for now (the learner frames come later).
+/** The row preview panel (Figma 1582:1452 "Preview Panel - Certification"):
+ *  a full-height 1266px panel over the modals' scrim, two columns side by
+ *  side. The 790px record column — the record's thumbnail when it has one,
+ *  title, grey subtitle and the row menu's bare kebab, then nothing but
+ *  accordions (every `ConfirmCard` in `children` draws as one, and `stats`
+ *  adds an Activity accordion last) — and the 476px preview column on a
+ *  lighter wash: the close glyph at its top right over a fixed-size empty
+ *  phone shell, where the learner frames will land. That column scrolls on
+ *  its own when the window is too short for the phone; the phone never
+ *  shrinks.
  *
  *  `role="dialog"` sits on the panel, not the fixed overlay: App.tsx finds the
  *  open modal for ⌘K by `offsetParent`, which is null on a fixed element. */
 export function PreviewPanel({
-  kind,
+  image,
   title,
   subtitle,
   onMore,
   stats,
+  lead,
   children,
   onClose,
 }: {
-  /** The eyebrow — "Question", "Certification", … (drawn uppercase). */
-  kind: string;
+  /** The record's own thumbnail (a Certification's), 120px square at the
+   *  head's left. Left out, the title starts at the column's edge. */
+  image?: string;
   title: string;
   subtitle?: ReactNode;
   /** The kebab: hands back its rect so the page can open its own row menu. */
   onMore?: (rect: DOMRect) => void;
   stats?: PreviewStat[];
+  /** A block of its own between the head and the accordions, 28px from each
+   *  (the Certification Setup card, Figma 1592:2588). */
+  lead?: ReactNode;
   /** The record's sections — ConfirmCards, each drawn as an accordion. */
   children: ReactNode;
   onClose: () => void;
@@ -89,23 +97,18 @@ export function PreviewPanel({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="pp-bar">
-          <span className="pp-kind">{kind}</span>
-          <button className="prm-close" onClick={requestClose} aria-label="Close">
-            <ModalCloseIcon />
-          </button>
-        </div>
-
         <div className="pp-cols">
           <div className="pp-main">
             <div className="pp-head">
+              {image && <img className="pp-thumb" src={image} alt="" />}
               <div className="pp-ident">
                 <h2 className="pp-title">{title}</h2>
                 {subtitle && <p className="prm-text">{subtitle}</p>}
               </div>
               {onMore && (
                 <button
-                  className="cta-quiet cta-quiet--icon"
+                  type="button"
+                  className="pp-more"
                   aria-label="More actions"
                   data-tip="More actions"
                   onClick={(e) => onMore(e.currentTarget.getBoundingClientRect())}
@@ -114,6 +117,8 @@ export function PreviewPanel({
                 </button>
               )}
             </div>
+
+            {lead}
 
             <div className="pp-body acc-stack">
               <AccordionScope.Provider value={true}>{children}</AccordionScope.Provider>
@@ -133,8 +138,17 @@ export function PreviewPanel({
             </div>
           </div>
 
-          {/* The learner preview's place — blank until its frames land. */}
-          <div className="pp-side" aria-hidden="true" />
+          <div className="pp-side">
+            <div className="pp-side-bar">
+              <button className="prm-close" onClick={requestClose} aria-label="Close">
+                <ModalCloseIcon />
+              </button>
+            </div>
+            {/* The learner preview's place — an empty phone until its frames land. */}
+            <div className="pp-stage">
+              <div className="pp-phone" aria-hidden="true" />
+            </div>
+          </div>
         </div>
       </div>
     </div>

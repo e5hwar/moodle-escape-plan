@@ -453,7 +453,7 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
     q.options = d.choices
       .filter((c) => c.text.trim() !== "")
       .map((c) => ({ text: c.text, grade: grading ? c.grade : 0 }));
-    if (!grading && d.otherOption) q.otherOption = true;
+    if (d.otherOption) q.otherOption = true;
   }
   if (d.type === "true-false") q.tfAnswer = d.tfAnswer;
   if (d.type === "match") {
@@ -733,7 +733,7 @@ function SetupSection({
     const isRandomisable = t === "mcq" || t === "match";
     update({
       type: t,
-      grading: gradable && !data.otherOption,
+      grading: gradable,
       // Keep the user's choice while moving between randomisable types;
       // otherwise fall back to that type's default (on for MCQ, off for Match,
       // whose answers already shuffle).
@@ -967,7 +967,7 @@ function McqSection({
             );
           })}
 
-          {!grading && data.otherOption && (
+          {data.otherOption && (
             /* Figma 1094:1183 — the "Other" row is a 44px caption line, not an
                option: "Other" over the 955:976 name-plus-qualifier pattern. No
                letter, no grade and no remove ✕ — the rail's toggle is what
@@ -1387,18 +1387,16 @@ function GradingField({
   usedInQuizzes: number;
 }) {
   const grading = data.grading && gradable;
-  // Grading can't be disabled while the question is in a quiz, and can't be
-  // enabled while the free-text "Other" option is on.
+  // Grading can't be disabled while the question is in a quiz. The "Other"
+  // option no longer holds it either way — on a graded question a typed-in
+  // answer simply scores 0% (Figma 1481:3500 draws Other beside GRADE).
   const lockedByQuizzes = grading && usedInQuizzes > 0;
-  const lockedByOther = !grading && data.otherOption;
-  const locked = !gradable || lockedByQuizzes || lockedByOther;
+  const locked = !gradable || lockedByQuizzes;
   const sub = !gradable
     ? "Grading not supported"
     : lockedByQuizzes
       ? `Used in ${usedInQuizzes} quiz${usedInQuizzes === 1 ? "" : "zes"} — remove it from them first`
-      : lockedByOther
-        ? "Remove the “Other” option to enable"
-        : "Required for use in Quizzes";
+      : "Required for use in Quizzes";
 
   return (
     <SegField
@@ -1449,12 +1447,15 @@ function OptionTogglesSection({
         <SegField
           label="“Other” Free-Text Option"
           value={data.otherOption}
-          disabled={grading}
           onChange={(v) => update({ otherOption: v })}
-          /* Grading's own subtext names the Other option when that is what
-             holds it; this is the same courtesy the other way round. */
-          sub={grading ? "Set Grading to Not Graded to enable" : "User can enter an answer of their own"}
-          info="A learner who picks it types their own answer, so the question can't be auto-graded."
+          /* Available graded or not (1570:3366's subtext). On a graded
+             question a typed answer matches no option, so it scores 0%. */
+          sub="User can enter an answer of their own"
+          info={
+            grading
+              ? "A learner who picks it types their own answer. On a graded question that answer scores 0%."
+              : "A learner who picks it types their own answer."
+          }
         />
       )}
     </div>
@@ -1593,7 +1594,9 @@ function RadioCard({
       className={`radio-card ${selected ? "selected" : ""}`}
       onClick={onSelect}
       aria-pressed={selected}
-      aria-disabled={disabled || undefined}
+      /* A real `disabled`, so the shared Not Editable look (1374:1352) applies
+         — `aria-disabled` alone left the cards looking live. */
+      disabled={disabled}
     >
       <span className="radio-dot" />
       <div className="radio-card-text">

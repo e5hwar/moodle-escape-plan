@@ -1,3 +1,5 @@
+import certThumbSample from "../assets/cert-thumb-sample.jpg";
+
 export type CareerStage = "Pre-Apprentice" | "Apprentice" | "Journeyman" | "Master";
 export type CertType = "Unit" | "Credential" | "Program" | "Bundle";
 export type CertVisibility = "Visible" | "Hidden" | "Archived";
@@ -42,6 +44,10 @@ export type Certification = {
      every long-established Certification, which an admin settled long ago,
      so only the recently created ones read as still being set up. */
   setupClosed?: boolean;
+  /* The Details step's Thumbnail, as a URL. Only one seed Certification has
+     one (the sample from Figma 1585:1620), so the preview panel's head is
+     seen both with and without it. */
+  thumbnail?: string;
 };
 
 /* The Details step's long-form fields, kept apart from the seed rows below so
@@ -197,7 +203,7 @@ export const certifications: Certification[] = [
   C("C-0398", "HVAC JobReady", "HVAC", "2.0", 11, "SkillCat", "Jan 08, 2024", "Mar 30, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["hvac", "jobready", "field", "skills"], tags: ["B2B Companies Only", "Commercial HVAC"] }),
   C("C-0376", "Brazing Fundamentals", "HVAC", "0.6", 4, "SkillCat", "Nov 14, 2023", "Feb 22, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["brazing", "welding", "fundamentals"] }),
   C("C-0341", "OSHA 10 — General Industry", "Electrical › Industrial", "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B Companies Only"] }),
-  C("C-0322", "Plumbing Apprentice Year 1", "Plumbing", "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], tags: ["Residential Plumbing"] }),
+  C("C-0322", "Plumbing Apprentice Year 1", "Plumbing", "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], tags: ["Residential Plumbing"], thumbnail: certThumbSample }),
   C("C-0298", "Electrical Code Refresher", "Electrical", "1.4", 8, "SkillCat", "May 30, 2023", "Nov 18, 2025", { careerStage: "Journeyman", type: "Unit", visibility: "Hidden", keywords: ["electrical", "code", "nec", "refresher"] }),
   // Blank career stage — exercises the "No Career Stage" filter. Archived too.
   C("C-0265", "Forklift Operator", "HVAC › Industrial", "0.5", 3, "SkillCat", "Mar 12, 2023", "Oct 08, 2025", { type: "Credential", visibility: "Archived", keywords: ["forklift", "operator", "warehouse", "safety"] }),

@@ -121,8 +121,9 @@ export function ReviewConsole({
   queue: TaskSubmission[];
   initialId: string;
   /** Back to the table. Reviewed ids + results are handed up so the table can
-   * drop them from the pending list. */
-  onExit: (reviewed: Record<string, Reviewed>) => void;
+   * drop them from the pending list; `toast` is the verdict toast when the exit
+   * IS the last submit, for the table to show on arrival. */
+  onExit: (reviewed: Record<string, Reviewed>, toast?: string) => void;
   /** Renamed from the submitter's user-details card — the queue owns the list,
    * so the new name comes back down through `queue`. */
   onRenameUser?: (userId: string, name: string) => void;
@@ -269,9 +270,13 @@ export function ReviewConsole({
     setSubmitted(next);
     // The toast names the verdict that was just sent — the same 5+ split the
     // score scale and the confirm use.
-    showToast(draft.score >= PASS_MIN ? "Submission Passed" : "Submission Rejected");
+    const verdict = draft.score >= PASS_MIN ? "Submission Passed" : "Submission Rejected";
     const nid = nextUnsubmitted(next);
-    if (nid) goto(nid);
+    // Nothing pending after this one: the last Submit goes back to the table
+    // (user, 2026-10-07), which shows the toast.
+    if (!nid) { onExit(next, verdict); return; }
+    showToast(verdict);
+    goto(nid);
   }
 
   /* No toast (user, 2026-10-07) — the screen changing is the feedback. */
@@ -780,10 +785,6 @@ export function ReviewConsole({
                   {submitLabel}
                   <WizardKeyHint />
                 </button>
-              ) : isDone ? (
-                <span className="rvc-footer-note">
-                  Reviewed — {submitted[sub.id].score}/10
-                </span>
               ) : null}
             </div>
           </div>

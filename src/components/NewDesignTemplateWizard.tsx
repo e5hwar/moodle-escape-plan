@@ -233,7 +233,8 @@ function DetailsStep({
           {bgMissing && <span className="form-label-error">Background image cannot be left empty</span>}
         </label>
         <div className={`aw-bg-picker${bgMissing ? " has-error" : ""}`}>
-          <div className="aw-bg-preview" style={{ background: data.swatch }}>
+          {/* A plain black placeholder with the file's name (user, 2026-10-07). */}
+          <div className="art-ph aw-bg-preview">
             {data.background ? (
               <span className="aw-bg-filename">{data.background}</span>
             ) : (
@@ -248,17 +249,6 @@ function DetailsStep({
               <UploadIcon /> Upload image
             </button>
             <p className="form-help">JPEG or PNG. This is the visual base of the Card or Certificate.</p>
-            <div className="aw-swatch-row">
-              {SWATCHES.map((sw) => (
-                <button
-                  key={sw}
-                  className={`aw-swatch ${data.swatch === sw ? "is-active" : ""}`}
-                  style={{ background: sw }}
-                  onClick={() => update({ swatch: sw })}
-                  aria-label="Pick background"
-                />
-              ))}
-            </div>
           </div>
         </div>
         <p className="form-help">

@@ -273,6 +273,7 @@ export function FeedbackFormWizard({
                     )}
                   </label>
                   <FeedbackFormEditor
+                    flagged={questionsMissing}
                     form={form}
                     bank={bank}
                     onUpdate={saveLinks}

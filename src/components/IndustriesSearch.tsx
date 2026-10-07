@@ -85,7 +85,7 @@ export function IndustriesSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Industries, Certifications..."
+          placeholder="Search Certifications..."
           value={text}
           onChange={(e) => {
             setText(e.target.value);

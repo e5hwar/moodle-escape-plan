@@ -18,7 +18,6 @@ import { SkillsPage } from "./components/SkillsPage";
 import { NewAwardWizard } from "./components/NewAwardWizard";
 import { nextFormId } from "./data/feedbackForms";
 import type { SetupBannerState, SetupSteps } from "./components/CertificationsPage";
-import { AwardRecipientsPage } from "./components/AwardRecipientsPage";
 import { certifications as seedCerts, type Certification } from "./data/certifications";
 import { type CertImportReport } from "./data/certImport";
 import {
@@ -129,7 +128,6 @@ type View =
      Config's Award Templates tab sends you here too, on the Certification
      whose Award still holds a template you tried to delete. */
   | { name: "cert-award"; cert: Certification }
-  | { name: "award-recipients"; award: Award; cert: Certification }
   /* `historyForId` opens the bank straight on one question's Version History
      page — how a version opened in the editor gets back where it came from. */
   /* `openPath` opens the table on a just-created question's category;
@@ -505,10 +503,9 @@ function AdminApp() {
     if (view.name !== "content-links") linksAddedRef.current = false;
   }, [view.name]);
   /* The setup banner's session state: "Set up later" hides it until the next
-     create; `tracked` is every Certification seen pending this session, so
-     the banner can say they are all done. Held here because the page unmounts
-     on every trip through a flow. */
-  const [setupBanner, setSetupBanner] = useState<SetupBannerState>({ dismissed: false, tracked: [] });
+     create. Held here because the page unmounts on every trip through a
+     flow. */
+  const [setupBanner, setSetupBanner] = useState<SetupBannerState>({ dismissed: false });
   // Question Bank + questions created from the Feedback Form flow.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
   /* Awards used to live on the Awards page's own state. That page is gone, so
@@ -632,7 +629,7 @@ function AdminApp() {
       : // Industries and Feedback are reached from the Certifications header
         // (their sidebar entries are gone), and an Award from a Certification
         // row's menu — so Certifications stays lit for all of them.
-      view.name === "cert-award" || view.name === "award-recipients"
+      view.name === "cert-award"
       ? "certs"
       : view.name === "new-question" && view.forFormId
       ? "certs"
@@ -885,6 +882,7 @@ function AdminApp() {
       ) : view.name === "certs" ? (
         <CertificationsPage
           certs={certs}
+          contentLinks={contentLinks}
           setCerts={setCerts}
           setupStepsFor={setupStepsFor}
           setupBanner={setupBanner}
@@ -972,20 +970,9 @@ function AdminApp() {
                     }
                   : undefined
               }
-              onViewRecipients={
-                existing
-                  ? () => setView({ name: "award-recipients", award: existing, cert: view.cert })
-                  : undefined
-              }
             />
           );
         })()
-      ) : view.name === "award-recipients" ? (
-        <AwardRecipientsPage
-          award={view.award}
-          onBack={() => setView({ name: "cert-award", cert: view.cert })}
-          onOpenCertifications={() => navigate("certs")}
-        />
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
           key={bank.length}

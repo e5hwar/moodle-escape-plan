@@ -1,18 +1,17 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DropdownCaretIcon,
   } from "./icons";
-import { leave, useTouchedKeys } from "./fieldFlags";
-import { SelectField } from "./SelectField";
+import { useTouchedKeys } from "./fieldFlags";
+import { TemplatePickerModal } from "./TemplatePickerModal";
 import { RadioCard } from "./NewCompanyWizard";
-import { SectionHeading } from "./SectionHeading";
 import { ConfirmModal } from "./AwardTableParts";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { type Certification } from "../data/certifications";
 import {
   MERIT_TIERS,
-  MERIT_HEX,
   MERIT_INTENT,
   fmtHolders,
   type Award,
@@ -34,8 +33,6 @@ type Props = {
   onSave: (award: Award) => void;
   /** Removes the Award from its Certification. Absent while adding one. */
   onDelete?: () => void;
-  /** Opens the per-Award recipients report. Absent while adding one. */
-  onViewRecipients?: () => void;
 };
 
 type Data = {
@@ -159,26 +156,8 @@ export function NewAwardWizard(props: Props) {
                   <h1 className="tasks-title">{title}</h1>
                 </div>
                 <p className="tasks-subtitle wizard-desc">
-                  Completing <strong>{cert.name}</strong> issues this Award. Set its Merit Tier and
+                  Completing {cert.name} issues this Award. Set its Merit Tier and
                   choose how it appears in the user’s Portfolio.
-                  {isEditing && props.editingAward && props.onViewRecipients && (
-                    <>
-                      {" "}Held by {fmtHolders(props.editingAward.holders)} user
-                      {props.editingAward.holders === 1 ? "" : "s"} —{" "}
-                      <a
-                        href="#"
-                        className="text-link"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          const go = props.onViewRecipients;
-                          if (go) guard(go);
-                        }}
-                      >
-                        View Recipients
-                      </a>
-                      .
-                    </>
-                  )}
                 </p>
 
                 <MeritTierField data={data} update={update} />
@@ -201,6 +180,9 @@ export function NewAwardWizard(props: Props) {
                   selectedId={data.cardTemplateId}
                   onSelect={(id) => update({ cardTemplateId: id })}
                   emptyLabel="No Card"
+                  pickerTitle="Select Card Design"
+                  pickerDescription="Pick the Design Template for this Award’s Card on the user’s Portfolio."
+                  awards={props.allAwards}
                   help="Compact visual shown on the user’s Portfolio. Recommended for every Award."
                 />
                 <TemplateField
@@ -212,6 +194,9 @@ export function NewAwardWizard(props: Props) {
                   selectedId={data.certificateTemplateId}
                   onSelect={(id) => update({ certificateTemplateId: id })}
                   emptyLabel="No Certificate"
+                  pickerTitle="Select Certificate Design"
+                  pickerDescription="Pick the Design Template for this Award’s Certificate."
+                  awards={props.allAwards}
                   help="Detailed document for printing, PDF export, and formal verification — Trade School diplomas, for example."
                 />
 
@@ -221,11 +206,8 @@ export function NewAwardWizard(props: Props) {
         </div>
 
         <AwardPreview
-          cert={cert}
-          tier={data.meritTier}
           card={props.templates.find((t) => t.id === data.cardTemplateId)}
           certificate={props.templates.find((t) => t.id === data.certificateTemplateId)}
-          awardId={props.editingAward?.id}
         />
       </div>
 
@@ -373,18 +355,21 @@ function StatusField({
 
 /* ─────────────── Card / Certificate appearance ─────────────── */
 
-/* An appearance is a Design Template, picked from the searchable Single-Select.
-   The row leads with the template's artwork the way the Countries menu
-   (938:961) leads with a flag, and the collapsed control repeats it — a visual
-   choice has to stay visible once it is made. "None" is the first option rather
-   than a clear button, because no appearance is a real answer for the
-   Certificate. */
+/* An appearance is a Design Template, picked in the template picker (Figma
+   682:2321, run single-pick like Find a Deep Link). The field is a plain
+   Single-Select shell — name and caret, no artwork; the picker's rows and the
+   preview rail show the picture. "No Card" / "No Certificate" is a row in the
+   picker rather than a clear button, because no appearance is a real answer
+   for the Certificate. */
 function TemplateField({
   label,
   help,
   required = false,
   emptyLabel,
+  pickerTitle,
+  pickerDescription,
   templates,
+  awards,
   selectedId,
   onSelect,
   error = false,
@@ -394,109 +379,85 @@ function TemplateField({
   help: string;
   required?: boolean;
   /** No appearance chosen yet, and this picker has been opened and closed
-   *  (or a save was blocked): the dropdown's red edge (Figma 1376:1618). */
+   *  (or a save was blocked): the field's red edge (Figma 1376:1618). */
   error?: boolean;
-  /** Focus left the field group (fieldFlags.tsx). */
+  /** The picker was opened and closed (fieldFlags.tsx). */
   onLeave?: () => void;
   /** The "no template" row's label, e.g. "No Certificate". */
   emptyLabel: string;
+  pickerTitle: string;
+  pickerDescription: string;
   templates: AwardDesignTemplate[];
+  awards: Award[];
   selectedId?: string;
   onSelect: (id: string | undefined) => void;
 }) {
-  const byName = useMemo(
-    () => new Map(templates.map((t) => [t.name, t])),
-    [templates],
-  );
-  const options = useMemo(
-    () => [emptyLabel, ...templates.map((t) => t.name)],
-    [templates, emptyLabel],
-  );
-
+  const [open, setOpen] = useState(false);
   const selected = selectedId ? templates.find((t) => t.id === selectedId) : undefined;
   const value = selected?.name ?? emptyLabel;
 
-  const swatch = (t?: AwardDesignTemplate) => (
-    <span
-      className={`aw-tpl-thumb${t ? "" : " aw-tpl-thumb--none"}`}
-      style={t ? { background: t.swatch } : undefined}
-      aria-hidden
-    />
-  );
+  const close = () => {
+    setOpen(false);
+    onLeave?.();
+  };
 
   return (
-    <div className="form-group" onBlur={onLeave ? leave(onLeave) : undefined}>
+    <div className="form-group">
       <label className="form-label">
         {label}{required && <span className="req">*</span>}
         {error && (
           <span className="form-label-error">Choose a Card or a Certificate design</span>
         )}
       </label>
-      <SelectField
-        value={value}
-        options={options}
-        onChange={(name) => onSelect(byName.get(name)?.id)}
-        searchPlaceholder="Search Design Templates..."
-        panelClass="ss-menu--tpl"
-        optionPrimary={(name) => (
-          <>
-            {swatch(byName.get(name))}
-            <span className="aw-tpl-name">{name}</span>
-          </>
-        )}
-        optionDetail={(name) => byName.get(name)?.background}
-        optionSearchText={(name) => byName.get(name)?.background ?? ""}
-        maxVisibleOptions={6}
-        renderTrigger={({ open, toggle }) => (
-          <button
-            type="button"
-            className={`select-field select-field--full aw-tpl-field${open ? " is-open" : ""}${error ? " has-error" : ""}`}
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            onClick={toggle}
-          >
-            {swatch(selected)}
-            <span className="select-field-value">{value}</span>
-            <span className="field-chevron"><DropdownCaretIcon /></span>
-          </button>
-        )}
-      />
+      <button
+        type="button"
+        className={`select-field select-field--full${open ? " is-open" : ""}${error ? " has-error" : ""}`}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
+        <span className="select-field-value">{value}</span>
+        <span className="field-chevron"><DropdownCaretIcon /></span>
+      </button>
       {/* Templates themselves are managed on Product Config › Award Templates —
           this field only picks one. */}
       <p className="form-help">{help}</p>
+      {/* Portalled: `.wizard-pane` carries a transform, which would turn the
+          overlay's `position: fixed` into a box inside the pane. */}
+      {open && createPortal(
+        <TemplatePickerModal
+          title={pickerTitle}
+          description={pickerDescription}
+          emptyLabel={emptyLabel}
+          templates={templates}
+          awards={awards}
+          selectedId={selectedId}
+          onCancel={close}
+          onPick={(id) => {
+            onSelect(id);
+            close();
+          }}
+        />,
+        document.body,
+      )}
     </div>
   );
 }
 
 /* ─────────────── Preview rail ─────────────── */
 
-/* A live stand-in for what the Award will look like, in the same right-hand
-   rail the company wizard puts its billing preview in (`.cw-impact`, 380px).
-   It redraws whenever a Design Template changes, because a template is
-   artwork and a dropdown row showing its name can only say so much.
- *
- * The field POSITIONS are invented: a template carries positioned dynamic
- * fields, and that editor isn't built (see NewDesignTemplateWizard's
- * positioning step), so this lays the same five fields out in a fixed
- * arrangement over the template's artwork and says so underneath. The values
- * are sample data — the real ones are minted per user on issuance.
- */
+/* What the Award will look like, in the same right-hand rail the company
+   wizard puts its billing preview in (`.cw-impact`), at Manage Subscription's
+   480px. The artwork itself is a placeholder (user, 2026-10-07): a plain
+   black box at the Card's 8:5 / the Certificate's landscape shape, whatever
+   template is picked — the real render needs the template's positioned
+   dynamic fields, which aren't built. */
 function AwardPreview({
-  cert,
-  tier,
   card,
   certificate,
-  awardId,
 }: {
-  cert: Certification;
-  tier: MeritTier;
   card?: AwardDesignTemplate;
   certificate?: AwardDesignTemplate;
-  /** Real Award id when managing one; the sample number is built from it. */
-  awardId?: string;
 }) {
-  const number = `${awardId ?? "AW-000"}-0001`;
-
   return (
     <aside className="aw-preview">
       <h2 className="aw-preview-title">Preview</h2>
@@ -508,99 +469,29 @@ function AwardPreview({
       ) : (
         <>
           {card && (
-            <div className="aw-preview-slot">
-              <SectionHeading label="Card" />
-              <div className="aw-card" style={{ background: card.swatch }}>
-                <span
-                  className="aw-tier-pill aw-card-tier"
-                  style={{ "--tier": MERIT_HEX[tier] } as React.CSSProperties}
-                >
-                  <span className="aw-tier-pill-dot" />
-                  {tier}
-                </span>
-                <div className="aw-card-body">
-                  <div className="aw-card-cert">{cert.name}</div>
-                  <div className="aw-card-holder">{SAMPLE_HOLDER}</div>
-                </div>
-                <div className="aw-card-foot">
-                  <div>
-                    <div className="aw-card-num">{number}</div>
-                    <div className="aw-card-date">Issued {SAMPLE_DATE}</div>
-                  </div>
-                  <QrGlyph />
-                </div>
+            /* Laid out like a form field (user, 2026-10-07 — Figma list
+               item 75): label, the artwork where the control would be, and
+               the picked template's name as the subtext. */
+            <div className="form-group aw-preview-slot">
+              <div className="form-label">Card</div>
+              <div className="art-ph aw-art aw-art--card">
+                The Card must show here with the Viewer's data used for the dynamic fields
               </div>
-              <p className="aw-preview-cap">{card.name}</p>
+              <p className="form-help">{card.name}</p>
             </div>
           )}
 
           {certificate && (
-            <div className="aw-preview-slot">
-              <SectionHeading label="Certificate" />
-              <div className="aw-cert" style={{ background: certificate.swatch }}>
-                <div className="aw-cert-kicker">Certificate of Completion</div>
-                <div className="aw-cert-holder">{SAMPLE_HOLDER}</div>
-                <div className="aw-cert-line">has completed</div>
-                <div className="aw-cert-name">{cert.name}</div>
-                <div className="aw-cert-foot">
-                  <div>
-                    <div className="aw-card-num">{number}</div>
-                    <div className="aw-card-date">{SAMPLE_DATE}</div>
-                  </div>
-                  <QrGlyph />
-                </div>
+            <div className="form-group aw-preview-slot">
+              <div className="form-label">Certificate</div>
+              <div className="art-ph aw-art aw-art--cert">
+                The Certificate must show here with the Viewer's data used for the dynamic fields
               </div>
-              <p className="aw-preview-cap">{certificate.name}</p>
+              <p className="form-help">{certificate.name}</p>
             </div>
           )}
         </>
       )}
-
-      <p className="aw-preview-note">
-        Sample data. The holder’s name, date, Unique Award Number and QR code are minted per user
-        on issuance, and where they sit on the artwork is set on the Design Template.
-      </p>
     </aside>
   );
 }
-
-const SAMPLE_HOLDER = "Maria Delgado";
-const SAMPLE_DATE = "Apr 28, 2026";
-
-/* A stand-in for the per-user QR code — a fixed pattern, not a real code. */
-function QrGlyph() {
-  return (
-    <svg className="aw-qr" viewBox="0 0 21 21" shapeRendering="crispEdges" aria-hidden>
-      <rect width="21" height="21" fill="#fff" />
-      <g fill="#000">
-        {/* Three finder squares. */}
-        {[[0, 0], [14, 0], [0, 14]].map(([x, y]) => (
-          <g key={`${x}-${y}`}>
-            <rect x={x} y={y} width="7" height="7" />
-            <rect x={x + 1} y={y + 1} width="5" height="5" fill="#fff" />
-            <rect x={x + 2} y={y + 2} width="3" height="3" />
-          </g>
-        ))}
-        {/* Filler modules — a fixed pseudo-random mask, so the glyph never
-            re-shuffles between renders. */}
-        {QR_MODULES.map(([x, y]) => (
-          <rect key={`${x}.${y}`} x={x} y={y} width="1" height="1" />
-        ))}
-      </g>
-    </svg>
-  );
-}
-
-const QR_MODULES: [number, number][] = (() => {
-  const out: [number, number][] = [];
-  for (let y = 0; y < 21; y++) {
-    for (let x = 0; x < 21; x++) {
-      const inFinder =
-        (x < 8 && y < 8) || (x > 12 && y < 8) || (x < 8 && y > 12);
-      if (inFinder) continue;
-      // Deterministic hash — looks like data, is not.
-      if (((x * 7 + y * 13 + x * y * 3) % 5) < 2) out.push([x, y]);
-    }
-  }
-  return out;
-})();

@@ -953,7 +953,6 @@ function CompanyDrawer({
   const lastDays = getDashboardLastAccessDays(company);
   return (
     <PreviewPanel
-      kind="Company"
       title={company.name}
       subtitle={company.email}
       onMore={onMore}

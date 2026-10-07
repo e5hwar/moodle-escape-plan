@@ -382,12 +382,12 @@ export const MoreFiltersIcon = () => (
   </svg>
 );
 
-/* 16px right chevron closing the page header's pending-count note (Figma
-   1268:1741 "Icon Library") — traced from the export: square caps, 1.33333
-   stroke on a 16 box. Takes currentColor so it follows the accent label. */
+/* 14px right chevron closing the page header's action line ("Page Subtext",
+   Figma 1597:2690) — the export verbatim: square caps, 1.16667 stroke on a 14
+   box. Takes currentColor so it follows the accent label. */
 export const NoteChevronIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
-    <path d="M6.33333 11.6667L10 8L6.33333 4.33333" />
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667" strokeLinecap="square">
+    <path d="M5.54167 10.2083L8.75 7L5.54167 3.79167" />
   </svg>
 );
 
@@ -1110,6 +1110,35 @@ export const MenuLinkIcon = () => (
 export const MenuArchiveReplaceIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
     <path d="M9.133 6.047L10.468 5.533L9.955 6.868M5.255 1.923C6.118 1.534 7.054 1.333 8 1.333C11.682 1.333 14.667 4.318 14.667 8C14.667 8.978 14.456 9.907 14.077 10.744M3.287 3.287C2.667 3.905 2.175 4.64 1.84 5.448C1.505 6.257 1.332 7.124 1.333 8C1.333 11.682 4.318 14.667 8 14.667C8.876 14.668 9.743 14.496 10.552 14.161C11.361 13.826 12.096 13.334 12.714 12.714M2 2L14 14M8.339 11.067L7.439 8.563L4.933 7.662L6.905 6.903L9.097 9.096L8.339 11.067Z" />
+  </svg>
+);
+
+/* Stacked layers — the Setup card's Industries step (1592:2601). The export's
+   group sits at an inset, so a translate places it; path verbatim. */
+export const SetupIndustriesIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333">
+    <g transform="translate(1.2667 1.2777)">
+      <path d="M0.733333 6.38889L6.73333 8.97356L12.7333 6.38956M12.7333 10.3896L6.73333 12.9736L0.733333 10.3896M1.73333 2.80556L6.73333 0.722222L11.7333 2.80556L6.73333 4.88889L1.73333 2.80556Z" />
+    </g>
+  </svg>
+);
+
+/* Card with a ribbon — the Setup card's Awards step (1592:2621). Path
+   verbatim, placed by the export's inset. */
+export const SetupAwardIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <g transform="translate(0.6667 2)">
+      <path d="M3.33333 6H6M3.33333 8.66667H11.3333M8.66667 0.666667H11.3333V4.33333L10 3.33333L8.66667 4.33333V0.666667Z" />
+      <path d="M14 0.666667V11.3333H0.666667V0.666667H14Z" />
+    </g>
+  </svg>
+);
+
+/* tdesign:check on a 12px box (1046:1067 inside "Icon Filled", and 1592:2593
+   at 14px — the viewBox scales the 1.6 stroke with it). */
+export const SetupCheckIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square">
+    <path d="M9.63361 3.75015L4.83466 8.55015L2.25008 5.96557" />
   </svg>
 );
 

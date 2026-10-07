@@ -68,7 +68,15 @@ export function ConfirmCard({
   if (asAccordion) {
     return (
       <Accordion title={title} trailing={edit || undefined}>
-        {rows && <AccordionRows rows={shown.map(([label, value]) => [label, value])} />}
+        {rows && (
+          <AccordionRows
+            rows={shown.map(([label, value]) => [
+              label,
+              // Figma 1586:1632 — a blank field is a #404040 "-" in the panel.
+              value === "—" ? <span className="acc-value-empty">-</span> : value,
+            ])}
+          />
+        )}
         {children}
       </Accordion>
     );
@@ -88,12 +96,12 @@ export function ConfirmCard({
           className={`confirm-card-body${columns ? " confirm-card-body--fixed" : ""}`}
           style={columns ? ({ "--cc-cols": columns } as CSSProperties) : undefined}
         >
-          {shown.map(([label, value, wide]) => (
+          {shown.map(([label, value, wide], i) => (
             <div
               className={`confirm-card-field${
                 wide === "row" ? " confirm-card-field--row" : wide ? " confirm-card-field--wide" : ""
               }`}
-              key={label}
+              key={`${i}:${label}`}
             >
               <div className="confirm-card-label">{label}</div>
               <div className="confirm-card-value">{value}</div>
@@ -103,5 +111,37 @@ export function ConfirmCard({
       )}
       {children && <div className="confirm-card-slot">{children}</div>}
     </section>
+  );
+}
+
+/** A preview-panel list of linked records (Tasks › Certifications, Skills ›
+ *  Linked Tasks, Question Bank › Quizzes…) in the Overview's plain layout: the
+ *  accordion "{title} · n" holding one label/value line — the same title as
+ *  the label, then one record per line with its meta in grey after a "·".
+ *  Empty, the value is the panel's blank "-". */
+export function ListCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: { key: string; name: string; meta?: string }[];
+}) {
+  return (
+    <ConfirmCard
+      title={`${title} · ${items.length}`}
+      fillBlanks
+      rows={[
+        [
+          title,
+          items.length > 0 &&
+            items.map((it) => (
+              <div key={it.key}>
+                {it.name}
+                {it.meta && <span className="acc-meta"> · {it.meta}</span>}
+              </div>
+            )),
+        ],
+      ]}
+    />
   );
 }

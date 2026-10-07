@@ -22,6 +22,7 @@ import { FILTER_TIPS } from "../data/filterTips";
 import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -228,6 +229,7 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
     extraSubmissions?.length ? [...extraSubmissions, ...seed] : seed,
   );
   const [columns, setColumns] = useState<ColState>(DEFAULT_COLUMNS);
+  const [toast, toastNode] = useToast();
   const [statuses, setStatuses] = useState<string[]>(initialTaskFilter ? [] : ["Review Pending"]);
   const [types, setTypes] = useState<string[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
@@ -417,10 +419,11 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
       <ReviewConsole
         queue={sorted}
         initialId={openId}
-        onExit={(reviewed) => {
+        onExit={(reviewed, verdict) => {
           const ids = Object.keys(reviewed);
           if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));
           setOpenId(null);
+          if (verdict) toast(verdict);
         }}
         onRenameUser={(userId, userName) =>
           setList((prev) => prev.map((s) => (s.userId === userId ? { ...s, userName } : s)))
@@ -599,6 +602,7 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
           </div>
         </div>
       </div>
+      {toastNode}
     </div>
   );
 }

@@ -121,7 +121,7 @@ export type Question = {
   hasSpanish: boolean; // ES translation complete
   // Type-specific answer data (drives the preview panel).
   options?: QuestionOption[]; // MCQ / Multiple select / ungraded MCQ
-  otherOption?: boolean; // MCQ "Other" free-text option (grading off only)
+  otherOption?: boolean; // MCQ "Other" free-text option (a typed answer scores 0% when graded)
   tfAnswer?: boolean; // True/False correct value
   pairs?: MatchPair[]; // Match the following
   matchGrading?: MatchGradingMode;

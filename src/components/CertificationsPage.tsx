@@ -1,3 +1,7 @@
+/* Every Certification's panel shows a thumbnail: its own, else this sample
+   (Figma 1585:1620) as a placeholder until the seed carries real ones. */
+import certThumbPlaceholder from "../assets/cert-thumb-sample.jpg";
+import { contentLinksFor, type Link } from "../data/contentLinks";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   CERT_OPTIONAL_COLUMNS,
@@ -14,7 +18,7 @@ import {
   type CertColumnState,
 } from "./CertFilters";
 import { EditColumnsButton } from "./Filters";
-import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, CheckIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
+import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, SetupIndustriesIcon, SetupAwardIcon, SetupCheckIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
 import { pickTag, pickTags, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
 import { PrmModal } from "./PrmModal";
 import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
@@ -26,7 +30,6 @@ import type { CertImportReport } from "../data/certImport";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CertificationsSearch } from "./CertificationsSearch";
 import { CertIndustriesModal } from "./CertIndustriesModal";
-import { ConfirmCard } from "./ConfirmCard";
 import { CopiedToast } from "./CopiedToast";
 import { usePersisted } from "../hooks/usePersisted";
 import { TableCols } from "./TableCols";
@@ -56,7 +59,7 @@ export type SetupSteps = Record<SetupStepKey, SetupStep>;
  *  through a flow: "Set up later" (cleared by the next create), and the
  *  Certifications seen pending this session — once they are all done, the
  *  banner says so (in its green tone) instead of vanishing. */
-export type SetupBannerState = { dismissed: boolean; tracked: string[] };
+export type SetupBannerState = { dismissed: boolean };
 
 type SetupStatus = {
   steps: SetupSteps;
@@ -77,40 +80,41 @@ const SETUP_STEPS: {
   kbd: string;
   icon: JSX.Element;
 }[] = [
+  /* Labels, bodies and "Industries Added" are Figma 1592:2588's copy; the
+     other three done titles follow that pattern (not drawn yet). */
   {
     key: "industries",
     short: "Industries",
-    label: "Add Industries",
+    label: "Industries",
     body: "Tag the Industries and Sub-Industries learners browse it under.",
-    doneTitle: "Industries added",
+    doneTitle: "Industries Added",
     kbd: "1",
-    // Industries has no glyph of its own in icons.tsx; the folder stands in.
-    icon: <MenuAllTasksIcon />,
+    icon: <SetupIndustriesIcon />,
   },
   {
     key: "links",
     short: "Content Links",
-    label: "Add Content Links",
+    label: "Content Link",
     body: "Link the prerequisite, recommended and related content.",
-    doneTitle: "Content Links added",
+    doneTitle: "Content Links Added",
     kbd: "2",
     icon: <MenuLinkIcon />,
   },
   {
     key: "award",
     short: "Award",
-    label: "Add Award",
+    label: "Awards",
     body: "The card or certificate learners earn on completion.",
-    doneTitle: "Award added",
+    doneTitle: "Award Added",
     kbd: "3",
-    icon: <MenuAwardIcon />,
+    icon: <SetupAwardIcon />,
   },
   {
     key: "feedback",
     short: "Feedback Form",
-    label: "Add Feedback Form",
+    label: "Feedback Form",
     body: "Ask learners for feedback once they complete it.",
-    doneTitle: "Feedback Form added",
+    doneTitle: "Feedback Form Added",
     kbd: "4",
     icon: <MenuResponsesIcon />,
   },
@@ -229,10 +233,13 @@ export function CertificationsPage({
   awardForCert,
   onOpenIndustries,
   onOpenFeedback,
+  contentLinks = [],
 }: {
   /** The list, owned by App.tsx: the wizard's Create appends to it, and the
    *  setup flows read it. Visibility / archive / delete edit it in place. */
   certs: Certification[];
+  /** The Content Links graph (App.tsx), for the preview panel's accordion. */
+  contentLinks?: Link[];
   setCerts: Dispatch<SetStateAction<Certification[]>>;
   /** Each Certification's four setup steps, derived from the data their
    *  flows write (App.tsx). */
@@ -352,26 +359,13 @@ export function CertificationsPage({
     [certList, setupFor],
   );
 
-  // Remember every Certification seen pending this session: when the last of
-  // them is finished the banner can say so rather than just disappear.
-  useEffect(() => {
-    const fresh = pendingCerts.map((c) => c.id).filter((id) => !setupBanner.tracked.includes(id));
-    if (fresh.length) setSetupBanner((prev) => ({ ...prev, tracked: [...prev.tracked, ...fresh] }));
-  }, [pendingCerts, setupBanner.tracked, setSetupBanner]);
-
-  const trackedCerts = useMemo(
-    () =>
-      setupBanner.tracked
-        .map((id) => certList.find((c) => c.id === id))
-        .filter((c): c is Certification => !!c),
-    [setupBanner.tracked, certList],
-  );
   // The banner stays while the Setup filter is on — clicking it applies the
   // filter, and it shouldn't vanish under the reader's pointer (the user,
   // 2026-10-01). Only its ✕ / Dismiss takes it away.
+  // Once nothing is pending the banner (and its note) simply goes — there is
+  // no "all set up" state (user, 2026-10-07).
   const showPendingBanner = !setupBanner.dismissed && pendingCerts.length > 0;
-  const showDoneBanner = !setupBanner.dismissed && pendingCerts.length === 0 && trackedCerts.length > 0;
-  const bannerOn = showPendingBanner || showDoneBanner;
+  const bannerOn = showPendingBanner;
   const dismissBanner = () => setSetupBanner((prev) => ({ ...prev, dismissed: true }));
 
   /* Continue Setup — the banner, its button, the title note and S all run
@@ -509,11 +503,9 @@ export function CertificationsPage({
   // With the panel open on a Certification mid-setup, 1–4 start that step —
   // the same as its Add / Manage button. Esc is the panel's own.
   const drawerSetup = drawerCert ? setupFor(drawerCert) : null;
-  const drawerSetupCard =
-    !!drawerCert &&
-    !!drawerSetup &&
-    (drawerSetup.pending ||
-      (drawerSetup.left === 0 && !drawerSetup.closed && setupBanner.tracked.includes(drawerCert.id)));
+  // Only while steps are left — a fully set-up Certification has no card
+  // (user, 2026-10-07).
+  const drawerSetupCard = !!drawerCert && !!drawerSetup && drawerSetup.pending;
   useEffect(() => {
     if (!drawerCert || !drawerSetupCard || menu || industriesFor) return;
     function onKey(e: KeyboardEvent) {
@@ -736,14 +728,7 @@ export function CertificationsPage({
                       whatever sits before the shared words ("3 ", "4 steps
                       left · ") and the text span holds only the words the
                       card's title shares. */}
-                  {bannerOn && (
-                    <SetupNote
-                      pending={pendingCerts}
-                      tracked={trackedCerts}
-                      setupFor={setupFor}
-                      onClick={showPendingBanner ? continueSetup : dismissBanner}
-                    />
-                  )}
+                  {bannerOn && <SetupNote pending={pendingCerts} onClick={continueSetup} />}
                   {/* The landing's catalog summary, in the shape of the Tasks
                       line in Figma 1356:1864 ("3210 Tasks · Across 230
                       Certifications"). It fades as the header collapses. */}
@@ -762,13 +747,6 @@ export function CertificationsPage({
                   {showPendingBanner && (
                     <div className="clh-banner">
                       <SetupBanner pending={pendingCerts} onContinue={continueSetup} onLater={dismissBanner} />
-                    </div>
-                  )}
-                  {/* Every tracked Certification finished (or closed): the
-                      green tone, until dismissed. */}
-                  {showDoneBanner && (
-                    <div className="clh-banner">
-                      <SetupDoneBanner tracked={trackedCerts} setupFor={setupFor} onDismiss={dismissBanner} />
                     </div>
                   )}
 
@@ -955,6 +933,7 @@ export function CertificationsPage({
         <CertDrawer
           key={drawerCert.id}
           cert={drawerCert}
+          contentLinks={contentLinksFor(drawerCert.name, contentLinks)}
           setupCard={
             drawerSetupCard && drawerSetup ? (
               <SetupCard
@@ -1008,26 +987,6 @@ function setupTitle(pending: Certification[]): string {
 
 function stepsLeftLabel(left: number): string {
   return `${left} setup step${left === 1 ? "" : "s"} left`;
-}
-
-/** The done banner's title / body for the Certifications tracked this
- *  session: all finished, or some closed with steps left. */
-function doneCopy(tracked: Certification[], setupFor: (c: Certification) => SetupStatus) {
-  const allComplete = tracked.every((c) => setupFor(c).left === 0);
-  const one = tracked.length === 1 ? tracked[0] : null;
-  return {
-    allComplete,
-    title: one
-      ? allComplete
-        ? `“${one.name}” is set up`
-        : `Setup closed for “${one.name}”`
-      : allComplete
-        ? `All ${tracked.length} Certifications are set up`
-        : "Nothing left to set up",
-    body: allComplete
-      ? "Industries, Content Links, Awards and Feedback Forms are in place."
-      : "Steps marked as done can still be added from the row menu.",
-  };
 }
 
 /* The landing banner (Figma 1424:1416 "Certification Setup Pending"): the
@@ -1095,64 +1054,15 @@ function SetupBanner({
   );
 }
 
-function SetupDoneBanner({
-  tracked,
-  setupFor,
-  onDismiss,
-}: {
-  tracked: Certification[];
-  setupFor: (c: Certification) => SetupStatus;
-  onDismiss: () => void;
-}) {
-  const copy = doneCopy(tracked, setupFor);
-  return (
-    <div className="note-card note-card--ok lm-banner lm-banner--ok">
-      <div className="lm-banner-main">
-        {/* The count's spot: a disc with the check, which closes onto the
-            note's 16px check the same way a count closes onto its twin. */}
-        <div className="lm-banner-count lm-banner-count--ok" aria-hidden="true">
-          <CheckIcon />
-        </div>
-        <div className="note-card-text">
-          <p className="note-card-title cs-ellipsis">
-            <span className="nc-shared">{copy.title}</span>
-          </p>
-          <p className="note-card-body cs-ellipsis">{copy.body}</p>
-        </div>
-      </div>
-      <button className="cta-quiet" onClick={onDismiss}>
-        Dismiss
-      </button>
-    </div>
-  );
-}
-
-/** The banner's collapsed form under the title (see SetupBanner). */
+/** The banner's collapsed form under the title (see SetupBanner) — the
+ *  "Page Subtext" action line, Figma 1597:2681. */
 function SetupNote({
   pending,
-  tracked,
-  setupFor,
   onClick,
 }: {
   pending: Certification[];
-  tracked: Certification[];
-  setupFor: (c: Certification) => SetupStatus;
   onClick: () => void;
 }) {
-  if (pending.length === 0) {
-    const copy = doneCopy(tracked, setupFor);
-    return (
-      <button className="tasks-note" aria-label={copy.title} onClick={onClick}>
-        <span className="tasks-note-count tasks-note-count--ok" aria-hidden="true">
-          <CheckIcon />
-        </span>
-        <span className="tasks-note-text">
-          <span className="nc-shared">{copy.title}</span>
-        </span>
-        <NoteChevronIcon />
-      </button>
-    );
-  }
   // The no-break space: a flex item drops a trailing space (the Users note
   // does the same).
   const lead = `${pending.length}\u00a0`;
@@ -1168,8 +1078,10 @@ function SetupNote({
   );
 }
 
-/** The Setup card at the top of the row panel's Details: progress, the four
- *  steps with Add / Manage and their 1–4 keycaps, and Mark as Done. */
+/** The Setup card (Figma 1592:2588), its own block between the panel's head
+ *  and its accordions: title + Mark As Done, the 4-step progress bar, the
+ *  intro, then the steps on a darker inset list. A step left to do offers
+ *  Add with its keycap; a done one greys out and shows the orange check. */
 function SetupCard({
   cert,
   status,
@@ -1181,17 +1093,16 @@ function SetupCard({
   onRun: (key: SetupStepKey) => void;
   onClose: () => void;
 }) {
-  const complete = status.left === 0;
   return (
-    <ConfirmCard
-      title={complete ? "Setup · Complete" : `Setup · ${status.done} of ${SETUP_STEPS.length}`}
-      trailing={
-        <button className="cs-text-btn" onClick={onClose}>
-          {complete ? "Dismiss" : "Mark as Done"}
-        </button>
-      }
-    >
-      <div className="cs-card">
+    <section className="cs-card" aria-label="Setup">
+      <div className="cs-top">
+        <div className="cs-head">
+          <h3 className="cs-title">Setup Pending</h3>
+          <button className="btn-dialog" onClick={onClose}>
+            <SetupCheckIcon size={14} />
+            Mark As Done
+          </button>
+        </div>
         <div className="cs-progress" aria-hidden="true">
           {SETUP_STEPS.map((s) => (
             <span key={s.key} className={`cs-seg${status.steps[s.key].done ? " cs-seg--done" : ""}`} />
@@ -1199,35 +1110,60 @@ function SetupCard({
         </div>
         <p className="cs-help">
           Optional, but most Certifications need all four before learners can find and finish
-          them. Press 1–4 to start a step; each one comes back here.
+          them.
         </p>
+      </div>
+      <div className="cs-list">
         <div className="cs-rows">
           {SETUP_STEPS.map((s) => {
             const step = status.steps[s.key];
             const detail = s.key === "industries" ? cert.industry : step.detail;
             return (
-              <div key={s.key} className="cs-row">
-                <span className={`cs-row-icon${step.done ? " cs-row-icon--done" : ""}`} aria-hidden="true">
-                  {step.done ? <CheckIcon /> : s.icon}
-                </span>
-                <div className="cs-row-text">
-                  <span className="cs-row-title">{step.done ? s.doneTitle : s.label}</span>
-                  <span className="cs-row-body">{step.done ? detail || "Added" : s.body}</span>
+              <div
+                key={s.key}
+                className={`cs-row${step.done ? " is-done" : ""}`}
+                {...(step.done && {
+                  role: "button",
+                  tabIndex: 0,
+                  title: `Manage ${s.short} — press ${s.kbd}`,
+                  onClick: () => onRun(s.key),
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onRun(s.key);
+                    }
+                  },
+                })}
+              >
+                <div className="cs-row-main">
+                  <span className="cs-row-icon" aria-hidden="true">{s.icon}</span>
+                  <div className="cs-row-text">
+                    <span className="cs-row-title">{step.done ? s.doneTitle : s.label}</span>
+                    <span className="cs-row-body">{step.done ? detail || "Added" : s.body}</span>
+                  </div>
                 </div>
-                <button
-                  className="cta-quiet"
-                  title={`${step.done ? "Manage" : "Add"} ${s.short} — press ${s.kbd}`}
-                  onClick={() => onRun(s.key)}
-                >
-                  {step.done ? "Manage" : "Add"}
-                  <span className="cta-kbd">{s.kbd}</span>
-                </button>
+                {step.done ? (
+                  /* "Icon Filled" (1046:1066). The whole done row reopens its
+                     step (user, 2026-10-07) — see the row's onClick. */
+                  <span className="cs-done-disc" aria-hidden="true">
+                    <SetupCheckIcon />
+                  </span>
+                ) : (
+                  <button
+                    className="cta-quiet"
+                    title={`Add ${s.short} — press ${s.kbd}`}
+                    onClick={() => onRun(s.key)}
+                  >
+                    Add
+                    <span className="cta-kbd">{s.kbd}</span>
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       </div>
-    </ConfirmCard>
+    </section>
   );
 }
 
@@ -1236,11 +1172,13 @@ function SetupCard({
  *  as accordions, and its figures as Activity. */
 function CertDrawer({
   cert,
+  contentLinks,
   setupCard,
   onClose,
   onMore,
 }: {
   cert: Certification;
+  contentLinks: ReturnType<typeof contentLinksFor>;
   /** The post-creation Setup card, first while steps are left. */
   setupCard?: ReactNode;
   onClose: () => void;
@@ -1271,9 +1209,8 @@ function CertDrawer({
         { count: "—", title: "Active", sub: "Not live yet" },
       ];
   return (
-    <PreviewPanel kind="Certification" title={cert.name} subtitle={cert.description} onMore={onMore} stats={stats} onClose={onClose}>
-      {setupCard}
-      <CertificationSummary cert={cert} />
+    <PreviewPanel image={cert.thumbnail ?? certThumbPlaceholder} title={cert.name} subtitle={cert.description} onMore={onMore} stats={stats} lead={setupCard} onClose={onClose}>
+      <CertificationSummary cert={cert} contentLinks={contentLinks} />
     </PreviewPanel>
   );
 }

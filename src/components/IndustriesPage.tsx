@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { TableEmpty } from "./TableEmpty";
 import {
   industries as seedIndustries,
   allCertsById,
+  rowIcon,
   type Industry,
   type SubIndustry,
   type IndustryCert,
@@ -14,6 +16,7 @@ import {
   RowEyeIcon,
   RowEyeOffIcon,
   RowDeleteIcon,
+  RowChevronIcon,
   CrumbChevronIcon,
   InfoIcon14,
   RowCloseIcon,
@@ -149,14 +152,14 @@ function replayMoves(base: Industry[], moves: Move[]): { view: Industry[]; steps
   return { view, steps };
 }
 
-/* One row of the launcher list. Without a query it is an industry; with one,
-   sub-industries ("HVAC › Residential") and certifications join the results,
-   each opening the scope it lives in. An industry carries its 1-based browse
-   position, which it prints even when a query has thinned the list. */
+/* One row of the launcher list. Without a query it is an industry. With one
+   the list is search results — Certifications only, matched by name, with
+   no position, one row per place it's tagged in (the user, 2026-10-07;
+   Figma 1600:3579). An industry carries its 1-based browse position
+   (0 = hidden, printed blank). */
 type LaunchItem =
-  /** `position` 0 = hidden, printed blank. */
   | { kind: "industry"; key: string; industry: Industry; position: number }
-  | { kind: "sub"; key: string; industry: Industry; sub: SubIndustry }
+  /** One per place it's tagged in; `where` = "Industry" or "Industry > Sub-Industry". */
   | { kind: "cert"; key: string; cert: IndustryCert; scope: Scope; where: string };
 
 // The hub subtext's counts, title-cased like the rest of the app's subtext
@@ -365,8 +368,11 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
     [industries],
   );
   const [bannerHiddenFor, setBannerHiddenFor] = useState<string[]>([]);
+  // Not on a results page — that's about the query, not the setup gap.
   const showBanner =
-    scope === null && untagged.length > 0 && untagged.some((c) => !bannerHiddenFor.includes(c.id));
+    scope === null &&
+    !search.trim() &&
+    untagged.length > 0 && untagged.some((c) => !bannerHiddenFor.includes(c.id));
   // "A" on the launcher is the banner's Assign Industries (its keycap).
   useCreateShortcut(
     () => setModal({ kind: "assign-industries" }),
@@ -391,42 +397,31 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
       );
       return out;
     }
-    const hit = (s?: string) => !!s && s.toLowerCase().includes(q);
+    /* Certifications only, by name (the user, 2026-10-07). A Certification
+       tagged in several places is one result per place, in browse order,
+       each opening its own place. */
+    const consider = (id: string, sc: Scope, where: string) => {
+      const cert = allCertsById[id];
+      if (!cert || !cert.name.toLowerCase().includes(q)) return;
+      out.push({ kind: "cert", key: `cert-${id}-${scopeKey(sc)}`, cert, scope: sc, where });
+    };
     orderedIndustries.forEach((industry) => {
-      if (hit(industry.name) || hit(industry.nameEs)) {
-        out.push({ kind: "industry", key: industry.key, industry, position: position(industry) });
-      }
-    });
-    orderedIndustries.forEach((industry) =>
-      [...industry.subIndustries]
-        .sort((a, b) => a.displayPosition - b.displayPosition)
-        .forEach((sub) => {
-          if (hit(sub.name) || hit(sub.nameEs)) out.push({ kind: "sub", key: sub.key, industry, sub });
-        }),
-    );
-    // A certification opens the first scope it is tagged in.
-    const seen = new Set<string>();
-    orderedIndustries.forEach((industry) => {
-      const consider = (id: string, sc: Scope, where: string) => {
-        const cert = allCertsById[id];
-        if (!cert || seen.has(id) || !hit(cert.name)) return;
-        seen.add(id);
-        out.push({ kind: "cert", key: `cert-${id}`, cert, scope: sc, where });
-      };
       industry.certIds.forEach((id) =>
         consider(id, { kind: "industry", industryKey: industry.key }, industry.name),
       );
-      industry.subIndustries.forEach((sub) =>
-        sub.certIds.forEach((id) =>
-          consider(
-            id,
-            { kind: "sub", industryKey: industry.key, subKey: sub.key },
-            `${industry.name} › ${sub.name}`,
+      [...industry.subIndustries]
+        .sort((a, b) => a.displayPosition - b.displayPosition)
+        .forEach((sub) =>
+          sub.certIds.forEach((id) =>
+            consider(
+              id,
+              { kind: "sub", industryKey: industry.key, subKey: sub.key },
+              `${industry.name} > ${sub.name}`,
+            ),
           ),
-        ),
-      );
+        );
     });
-    return out.slice(0, 40);
+    return out;
   }, [orderedIndustries, search]);
 
   // The highlight goes back to the top on every new query, which also drops
@@ -457,11 +452,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
 
   function openItem(item: LaunchItem) {
     const next: Scope =
-      item.kind === "industry"
-        ? { kind: "industry", industryKey: item.industry.key }
-        : item.kind === "sub"
-          ? { kind: "sub", industryKey: item.industry.key, subKey: item.sub.key }
-          : item.scope;
+      item.kind === "industry" ? { kind: "industry", industryKey: item.industry.key } : item.scope;
     setSearch("");
     setScope(next);
   }
@@ -1231,12 +1222,16 @@ function Launcher({
             </span>
           </div>
         </div>
-        <div className="tasks-header-actions">
-          <button className="cta-primary" onClick={onNewIndustry}>
-            Create Industry
-            <span className="cta-kbd">C</span>
-          </button>
-        </div>
+        {/* Search results keep the header as is, minus the CTA (the user,
+            2026-10-07). */}
+        {!q && (
+          <div className="tasks-header-actions">
+            <button className="cta-primary" onClick={onNewIndustry}>
+              Create Industry
+              <span className="cta-kbd">C</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {banner}
@@ -1250,100 +1245,107 @@ function Launcher({
       </div>
 
       {/* Figma 1306:1545 — the Large Table row at its 75px launcher cut, one
-          per industry: browse position, name, first sub-industries. Query
-          hits (sub-industries, certifications) take the same row with the
-          position left blank and what they hold / where they live below. */}
-      <div className="ind-launch-list" ref={listRef} onMouseLeave={onLeaveList}>
-          {noHits && <div className="ind-launch-empty">Nothing matches “{q}”</div>}
-          {items.map((item, idx) => {
-            const active = idx === activeIndex ? "is-active" : "";
-            const driven = {
-              role: "button",
-              tabIndex: -1,
-              onMouseEnter: () => onHover(idx),
-              onClick: () => onOpen(item),
-            };
-            if (item.kind === "industry") {
-              const { industry, position } = item;
-              return (
-                <LargeRow
-                  key={item.key}
-                  size="lg"
-                  className={`${active} ${overKey === industry.key ? "is-drop-over" : ""} ${menuKey === industry.key ? "menu-open" : ""}`}
-                  {...driven}
-                  onDragOver={(e) => {
-                    if (!canDrag || !e.dataTransfer.types.includes("ind/industry")) return;
-                    e.preventDefault();
-                    setOverKey(industry.key);
-                  }}
-                  onDragLeave={() => setOverKey(null)}
-                  onDrop={(e) => dropOn(e, industry.key)}
-                  // Only the handle drags here — the row itself is a click target.
-                  handle={
-                    canDrag
-                      ? {
-                          draggable: true,
-                          onClick: (e) => e.stopPropagation(),
-                          onDragStart: (e) => {
-                            e.dataTransfer.effectAllowed = "move";
-                            e.dataTransfer.setData("ind/industry", industry.key);
-                          },
-                        }
-                      : null
-                  }
-                  index={position || undefined}
-                  name={industry.name}
-                  hiddenPill={!!industry.hidden}
-                  icon={industry.icon ?? null}
-                  meta={subIndustriesLine(industry)}
-                  action={
-                    <RowKebab
-                      label="Industry options"
-                      onClick={(e) => onMenu(e, { kind: "industry", industryKey: industry.key })}
-                    />
-                  }
-                />
-              );
-            }
-            if (item.kind === "sub") {
-              const { industry, sub } = item;
-              return (
-                <LargeRow
-                  key={item.key}
-                  size="lg"
-                  className={`${active} ${menuKey === `${industry.key}/${sub.key}` ? "menu-open" : ""}`}
-                  {...driven}
-                  name={
-                    <>
-                      <span className="ind-row-parent">{industry.name} › </span>
-                      {sub.name}
-                    </>
-                  }
-                  hiddenPill={!!(sub.hidden || industry.hidden)}
-                  meta={certificationsLine(sub)}
-                  action={
-                    <RowKebab
-                      label="Sub-Industry options"
-                      onClick={(e) => onMenu(e, { kind: "sub", industryKey: industry.key, subKey: sub.key })}
-                    />
-                  }
-                />
-              );
-            }
-            return (
-              <LargeRow
-                key={item.key}
-                size="lg"
-                className={active}
-                {...driven}
-                name={item.cert.name}
-                meta={`in ${item.where}`}
-              />
-            );
-          })}
+          per industry: browse position, name, first sub-industries. A query
+          turns the list into "Certifications with “q”" — the hub's 60px row
+          with no position (Figma 1600:3579). */}
+      <div
+        className={`ind-launch-list ${q ? "ind-launch-list--results" : ""}`}
+        ref={listRef}
+        onMouseLeave={onLeaveList}
+      >
+        {/* Figma 1537:1505 — the shared table no-results block. */}
+        {noHits && <TableEmpty />}
+        {q ? (
+          items.length > 0 && (
+            <section className="ind-section">
+              <SecHead title={`Certifications with “${q}”`} />
+              <div className="ind-rowlist">{items.map((item, i) => renderItem(item, i))}</div>
+            </section>
+          )
+        ) : (
+          items.map((item, idx) => renderItem(item, idx))
+        )}
       </div>
     </div>
   );
+
+  /** One row; `idx` is its place in `items` (the ↑↓ order). */
+  function renderItem(item: LaunchItem, idx: number) {
+    const active = idx === activeIndex ? "is-active" : "";
+    const driven = {
+      role: "button",
+      tabIndex: -1,
+      onMouseEnter: () => onHover(idx),
+      onClick: () => onOpen(item),
+    };
+    if (item.kind === "industry") {
+      const { industry, position } = item;
+      return (
+        <LargeRow
+          key={item.key}
+          size="lg"
+          className={`${active} ${overKey === industry.key ? "is-drop-over" : ""} ${menuKey === industry.key ? "menu-open" : ""}`}
+          {...driven}
+          onDragOver={(e) => {
+            if (!canDrag || !e.dataTransfer.types.includes("ind/industry")) return;
+            e.preventDefault();
+            setOverKey(industry.key);
+          }}
+          onDragLeave={() => setOverKey(null)}
+          onDrop={(e) => dropOn(e, industry.key)}
+          // Only the handle drags here — the row itself is a click target.
+          handle={
+            canDrag
+              ? {
+                  draggable: true,
+                  onClick: (e) => e.stopPropagation(),
+                  onDragStart: (e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("ind/industry", industry.key);
+                  },
+                }
+              : null
+          }
+          index={position || undefined}
+          name={industry.name}
+          hiddenPill={!!industry.hidden}
+          icon={rowIcon(industry)}
+          meta={subIndustriesLine(industry)}
+          action={
+            <RowKebab
+              label="Industry options"
+              onClick={(e) => onMenu(e, { kind: "industry", industryKey: industry.key })}
+            />
+          }
+        />
+      );
+    }
+    return (
+      <LargeRow
+        key={item.key}
+        className={`ind-row--bare ${active}`}
+        {...driven}
+        handle={null}
+        name={item.cert.name}
+        // Figma 1600:3579: "Industry: Plumbing Fundamentals > Basics".
+        meta={`Industry: ${item.where}`}
+        action={
+          <span className="row-action-bar">
+            <button
+              className="row-action-btn row-action-btn--label"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(item);
+              }}
+            >
+              View Industry
+              <RowChevronIcon />
+            </button>
+          </span>
+        }
+      />
+    );
+  }
 }
 
 /* ─── Hub (4a) — an industry, or a sub-industry one level down ────────────── */
@@ -1477,14 +1479,9 @@ function Hub({
               onAdd={onNewSub}
             />
             {orderedSubs.length === 0 ? (
-              /* The same empty state as the Certifications list below
-                 (user, 2026-10-06). */
-              <div className="ind-empty">
-                <div className="ind-empty-title">No sub-industries yet</div>
-                <div className="ind-empty-sub">
-                  Every certification here is shown to every {industry.name} learner.
-                </div>
-              </div>
+              /* Figma 1600:3477 — one grey line under the head, the same
+                 for the Certifications list below. */
+              <p className="ind-empty-line">No Sub-Industries added. Click the + icon to start adding</p>
             ) : (
               /* Figma 1306:1393 — the Large Table row, the same one the
                  certifications below use: position, name, its first
@@ -1521,6 +1518,7 @@ function Hub({
                     }}
                     handle={{}}
                     index={subPositions.get(s.key)}
+                    icon={rowIcon(s)}
                     name={s.name}
                     hiddenPill={!!s.hidden}
                     meta={certificationsLine(s)}
@@ -1560,15 +1558,18 @@ function SecHead({
   onAdd,
 }: {
   title: string;
-  addLabel: string;
-  onAdd: () => void;
+  /** Leave both out for a head with no "+" (the search results'). */
+  addLabel?: string;
+  onAdd?: () => void;
 }) {
   return (
     <div className="ind-sechead">
       <h2 className="ind-sechead-title">{title}</h2>
-      <button className="ind-sechead-add" onClick={onAdd} aria-label={addLabel} title={addLabel}>
-        <TreeAddIcon />
-      </button>
+      {onAdd && (
+        <button className="ind-sechead-add" onClick={onAdd} aria-label={addLabel} title={addLabel}>
+          <TreeAddIcon />
+        </button>
+      )}
     </div>
   );
 }
@@ -1589,12 +1590,8 @@ function CertList({
 
   if (certIds.length === 0) {
     return (
-      <div className="ind-empty">
-        <div className="ind-empty-title">No certifications tagged here yet</div>
-        <div className="ind-empty-sub">
-          Use <strong>Add Certification</strong> to attach existing certifications.
-        </div>
-      </div>
+      /* Figma 1600:3477's line, worded for this list. */
+      <p className="ind-empty-line">No Certifications added. Click the + icon to start adding</p>
     );
   }
 

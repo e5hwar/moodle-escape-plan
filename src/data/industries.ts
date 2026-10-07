@@ -12,6 +12,22 @@ const seedIcon = (name: string, size: number, url: string): PickedImage => ({
   url,
 });
 
+/* Stand-in icons until every Industry / Sub-Industry has its own (the user,
+   2026-10-07: "Just use these for now everywhere so it isn't blank anywhere").
+   A row with no uploaded icon borrows one of the three seed glyphs, picked
+   from its key so it stays put across renders and reorders. */
+const PLACEHOLDER_ICONS: PickedImage[] = [
+  seedIcon("hvac.svg", 3295, hvacIcon),
+  seedIcon("plumbing.svg", 961, plumbingIcon),
+  seedIcon("electrical.svg", 553, electricalIcon),
+];
+export function rowIcon(item: { key: string; icon?: PickedImage }): PickedImage {
+  if (item.icon?.url) return item.icon;
+  let h = 0;
+  for (const ch of item.key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return PLACEHOLDER_ICONS[h % PLACEHOLDER_ICONS.length];
+}
+
 export type CareerStage = "Apprentice" | "Journeyman" | "Master";
 
 export type IndustryCert = {

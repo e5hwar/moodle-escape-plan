@@ -3,7 +3,7 @@
    Product Config now, since a template is platform configuration rather than a
    piece of content. The Awards page still *reads* templates (the Award wizard
    picks one), it just no longer manages them. */
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   awards as seedAwards,
   awardsUsingTemplate,
@@ -313,10 +313,8 @@ function TemplateRow({
   return (
     <tr className={`${selected ? "selected" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
       <td className="aw-col-thumb">
-        {/* The colour rides a custom property: the plain-text cell rule
-            clears `background` with !important, and its exception for this
-            cell paints `var(--swatch)` back. */}
-        <span className="aw-row-thumb" style={{ "--swatch": template.swatch } as CSSProperties} />
+        {/* A placeholder, not the artwork (user, 2026-10-07). */}
+        <span className="art-ph aw-row-thumb">Image</span>
       </td>
       <td className="col-name">{template.name}</td>
       {shown.map((c) => (

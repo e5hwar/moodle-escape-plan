@@ -57,7 +57,9 @@ export function ImageUploadField({
           <div className="file-card-meta">
             <FileNameLink name={value.name} url={value.url} />
             <div className="file-sub">
-              {value.ext} · {(value.size / 1024 / 1024).toFixed(1)} MB
+              {value.ext}
+              {/* A saved image has no byte size on record. */}
+              {value.size > 0 && ` · ${(value.size / 1024 / 1024).toFixed(1)} MB`}
             </div>
           </div>
         </div>

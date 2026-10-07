@@ -14,8 +14,7 @@ import { nameChangeRequests } from "../data/nameChangeRequests";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
 import { useToast } from "./useToast";
-import { EditUserModal, UserSummary, useUserPreview } from "./UserProfilePage";
-import { PreviewPanel } from "./PreviewPanel";
+import { EditUserModal } from "./UserProfilePage";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -195,15 +194,9 @@ export function UsersPage({
 }) {
   const [list, setList] = useState<User[]>(() => seedUsers);
   // "S" opens Scholarships from the page 3-dot menu.
-  // The User whose row was clicked — read back in the side drawer, the way a
-  // Task or Certification row opens its own. Held by id so the drawer follows
-  // an edit made from it.
-  const [drawerId, setDrawerId] = useState<string | null>(null);
-  // Both page shortcuts stand down while the drawer is open: each would open a
-  // page or a menu behind (or above) its scrim.
-  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships && !drawerId, "s");
+  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships, "s");
   // "N" is the landing banner's Review Names badge.
-  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges && !drawerId, "n");
+  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges, "n");
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
@@ -233,13 +226,6 @@ export function UsersPage({
   /** The page's own success toast — "Profile Updated" after an Edit User
    *  save (the user, 2026-10-04), "Subscription Canceled" after a cancel. */
   const [toast, toastNode] = useToast();
-  const drawerUser = drawerId ? list.find((u) => u.id === drawerId) : undefined;
-  // A row menu opened from the preview panel's kebab: every item that opens a
-  // modal or another view closes the panel first, so nothing is left under it.
-  function closePanelThen(run: () => void) {
-    setDrawerId(null);
-    run();
-  }
 
   const rows = useMemo<Row[]>(
     () => list.map((u) => ({ u, f: profiles.get(u.id)! })),
@@ -489,7 +475,6 @@ export function UsersPage({
                           key={row.u.id}
                           row={row}
                           cols={visibleCols}
-                          onOpen={() => setDrawerId(row.u.id)}
                           onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
                           onEdit={() => setEditing(row.u)}
                           menuOpen={menu?.user.id === row.u.id}
@@ -523,18 +508,15 @@ export function UsersPage({
           onOpenProfile={() => openProfile(menu.user)}
           onViewCompany={
             menu.user.userType === "B2B" && menu.user.companyName && onViewCompany
-              ? () => closePanelThen(() => onViewCompany(menu.user.companyName!))
+              ? () => onViewCompany(menu.user.companyName!)
               : undefined
           }
           onViewAllEmployees={
             menu.user.userType === "B2B" && menu.user.companyName
-              ? () =>
-                  closePanelThen(() =>
-                    setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] })),
-                  )
+              ? () => setFilters((prev) => ({ ...prev, companies: [menu.user.companyName!] }))
               : undefined
           }
-          onManageCompletions={() => closePanelThen(() => onManageCompletions(menu.user.id))}
+          onManageCompletions={() => onManageCompletions(menu.user.id)}
           onCancelSubscription={
             /* Only subscribers billed through a platform we can cancel from
                here — Apple subs are managed by Apple, and company-seat users
@@ -543,10 +525,10 @@ export function UsersPage({
             !menu.user.companyName &&
             (menu.user.platform === "Stripe" || menu.user.platform === "Google") &&
             !canceledSubs.has(menu.user.id)
-              ? () => closePanelThen(() => setCancelSub(menu.user))
+              ? () => setCancelSub(menu.user)
               : undefined
           }
-          onEdit={() => closePanelThen(() => setEditing(menu.user))}
+          onEdit={() => setEditing(menu.user)}
         />
       )}
       {pageMenu && (
@@ -580,15 +562,6 @@ export function UsersPage({
             setEditing(null);
             toast("Profile Updated");
           }}
-        />
-      )}
-      {drawerUser && (
-        <UserDrawer
-          key={drawerUser.id}
-          user={drawerUser}
-          subCanceled={canceledSubs.has(drawerUser.id)}
-          onClose={() => setDrawerId(null)}
-          onMore={(rect) => setMenu({ user: drawerUser, rect })}
         />
       )}
 
@@ -646,15 +619,12 @@ function TypePill({ type }: { type: UserType }) {
 function UserRow({
   row,
   cols,
-  onOpen,
   onOpenMenu,
   onEdit,
   menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
-  /** Row click — opens the User's drawer. The row's buttons stop propagation. */
-  onOpen: () => void;
   onOpenMenu: (anchor: HTMLElement) => void;
   onEdit: () => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
@@ -662,7 +632,9 @@ function UserRow({
 }) {
   const { u, f } = row;
   return (
-    <tr className={menuOpen ? "menu-open" : ""} onClick={onOpen}>
+    /* No preview panel for Users (user, 2026-10-07): the row itself opens
+       nothing — its hover actions and ⋯ menu do the work. */
+    <tr className={`is-static${menuOpen ? " menu-open" : ""}`}>
       <td className="col-name">{u.name}</td>
       {cols.map((c) => (
         <td key={c.key} className={c.className} data-copyable={c.copyable ? "" : undefined}>
@@ -967,40 +939,6 @@ function EditUserDialog({
 
 /* ─── Open the full profile in a new browser tab ─── */
 /* Opens a real in-app page via URL params, rendered standalone by App. */
-
-/** A User's row preview panel (Figma 1514:2860): the Full Profile's own
- *  review cards as accordions, then their figures as Activity. No learner
- *  preview to come — a person isn't content. */
-function UserDrawer({
-  user,
-  subCanceled,
-  onClose,
-  onMore,
-}: {
-  user: User;
-  subCanceled: boolean;
-  onClose: () => void;
-  onMore: (rect: DOMRect) => void;
-}) {
-  const pv = useUserPreview(user);
-  return (
-    <PreviewPanel
-      kind="User"
-      title={user.name}
-      // Only one of email/phone is required — list whichever are on file.
-      subtitle={[user.email, user.phone].filter(Boolean).join(" · ")}
-      onMore={onMore}
-      stats={[
-        { count: String(pv.skills), title: "Skills", sub: "Earned" },
-        { count: String(pv.awards), title: "Awards", sub: "Earned" },
-        { count: String(pv.purchases), title: "Purchases", sub: `${pv.spent} spent` },
-      ]}
-      onClose={onClose}
-    >
-      <UserSummary user={user} subCanceled={subCanceled} />
-    </PreviewPanel>
-  );
-}
 
 function openProfile(user: User) {
   window.open(

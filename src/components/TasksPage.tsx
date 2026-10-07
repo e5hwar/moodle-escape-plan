@@ -22,7 +22,7 @@ import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { CERT_BY_USEDIN } from "../data/certifications";
 import { TaskSummary } from "./NewTaskWizard";
 import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
-import { ConfirmCard } from "./ConfirmCard";
+import { ListCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
@@ -709,24 +709,12 @@ function TaskDrawer({
       ];
 
   return (
-    <PreviewPanel kind="Task" title={task.name} subtitle={task.description} onMore={onMore} stats={stats} onClose={onClose}>
+    <PreviewPanel title={task.name} subtitle={task.description} onMore={onMore} stats={stats} onClose={onClose}>
       <TaskSummary task={task} />
-      <ConfirmCard title={`Certifications · ${certs.length}`} tableBody={certs.length > 0}>
-        {certs.length > 0 ? (
-          <div className="ctb-tasktable">
-            {certs.map((c) => (
-              <div key={c.name} className="cdr-task">
-                <div className="cdr-task-name-row">
-                  <span className="cdr-task-name">{c.name}</span>
-                </div>
-                {c.industry && <span className="ctb-row-meta">{c.industry}</span>}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="form-help">Not in any Certification yet.</p>
-        )}
-      </ConfirmCard>
+      <ListCard
+        title="Certifications"
+        items={certs.map((c) => ({ key: c.name, name: c.name, meta: c.industry || undefined }))}
+      />
     </PreviewPanel>
   );
 }

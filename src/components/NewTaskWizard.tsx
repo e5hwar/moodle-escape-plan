@@ -971,7 +971,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           ) : isQuiz ? (
             step === 0 ? <QuizBasicsStep data={data} update={update} nameError={showNameError} missing={missing} touch={touch} /> :
             step === 1 ? <QuizStructureStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} /> :
-            step === 2 ? <QuizQuestionsStep data={data} update={update} host={questionHost} /> :
+            step === 2 ? <QuizQuestionsStep data={data} update={update} host={questionHost} missing={missing} /> :
             step === 3 ? <QuizCompletionStep data={data} update={update} locked={isEditing} missing={missing} touch={touch} {...gateProps} /> :
             step === 4 ? <QuizAttemptsStep data={data} update={update} missing={missing} touch={touch} /> :
             step === 5 ? <QuizIntegrityStep data={data} update={update} missing={missing} touch={touch} /> :
@@ -1770,7 +1770,7 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
             <span className="form-label-error">Select at least one media type.</span>
           )}
         </label>
-        <div className="qsec qsec--rev qsec--media">
+        <div className={`qsec qsec--rev qsec--media${noneSelected ? " has-error" : ""}`}>
           <div className="qsec-hd">
             <span className="qsec-revtext">MEDIA TYPE</span>
             <span className="qsec-shown">ALLOWED?</span>
@@ -2141,7 +2141,14 @@ function QuizStructureStep({
                 Section, and an Add Section row closing the card. The two
                 grading columns only exist under section-level grading; under
                 quiz-level the Sections are display-only groupings. */}
-            <div className={`qsec${belowFloor ? " has-error" : ""}`}>
+            <div
+              className={`qsec${
+                belowFloor ||
+                (missing?.has(REQUIRED_FIELD_KEYS.sectionName) && data.sections.some((sec) => !sec.name.trim()))
+                  ? " has-error"
+                  : ""
+              }`}
+            >
               <div className="qsec-hd">
                 <span className="qsec-ord">
                   {/* The grip column keeps its 16px in the header, but with no
@@ -2210,8 +2217,16 @@ function QuizStructureStep({
   );
 }
 
-function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionHost }) {
+function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: QuestionHost }) {
   const sectioned = data.structure === "sectioned";
+  /* Card-table error (Figma 1570:3366): a blocked publish with no questions,
+     or a random set drawing more than its pool, flags the label row and
+     outlines the card — never a field inside it. */
+  const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.questions);
+  const bare = (st: StaticQuestion[], po: RandomPool[]) => st.length === 0 && po.length === 0;
+  const overDrawn = (pools: RandomPool[]) =>
+    pools.some((p) => (parseInt(p.draw, 10) || 0) > p.questionIds.length);
+  const emptyError = <span className="form-label-error">Questions cannot be left empty</span>;
 
   const updateSection = (
     id: string,
@@ -2234,10 +2249,17 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
               <label className="form-label">
                 {`Section ${i + 1}: ${s.name || "Untitled"}`}
                 <span className="req">*</span>
-                <OverDrawError pools={s.randomPools} />
+                {flagEmpty && bare(s.staticQuestions, s.randomPools) ? (
+                  emptyError
+                ) : (
+                  <OverDrawError pools={s.randomPools} />
+                )}
               </label>
               <QuestionGroupEditor
                 host={host}
+                flagged={
+                  (flagEmpty && bare(s.staticQuestions, s.randomPools)) || overDrawn(s.randomPools)
+                }
                 staticQuestions={s.staticQuestions}
                 pools={s.randomPools}
                 onChange={(patch) => updateSection(s.id, patch)}
@@ -2250,10 +2272,15 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
         <div className="form-group">
           <label className="form-label">
             Questions<span className="req">*</span>
-            <OverDrawError pools={data.blockPools} />
+            {flagEmpty && bare(data.blockStatic, data.blockPools) ? (
+              emptyError
+            ) : (
+              <OverDrawError pools={data.blockPools} />
+            )}
           </label>
           <QuestionGroupEditor
             host={host}
+            flagged={(flagEmpty && bare(data.blockStatic, data.blockPools)) || overDrawn(data.blockPools)}
             staticQuestions={data.blockStatic}
             pools={data.blockPools}
             shortcut
@@ -2329,9 +2356,9 @@ function QuizQuestionsStep({ data, update, host }: StepProps & { host: QuestionH
  * per-question points value. New rows come from the Add Question menu
  * (752:2708): create a brand-new question, pick statics from the Bank, or
  * build a random set. */
-/* A random set drawing more questions than its pool holds. The pool's Pick box
-   goes red (`.qz-pt-input.invalid`); the message sits in the field's label row
-   like every other field error (Figma 1369:1669), naming the first such pool. */
+/* A random set drawing more questions than its pool holds. The message sits in
+   the field's label row (Figma 1369:1669), naming the first such pool; the
+   card is outlined (1570:3366) and the offending Pick box goes red too. */
 function OverDrawError({ pools }: { pools: RandomPool[] }) {
   const over = pools.find((p) => (parseInt(p.draw, 10) || 0) > p.questionIds.length);
   return over ? (
@@ -2347,8 +2374,11 @@ function QuestionGroupEditor({
   pools,
   onChange,
   shortcut = false,
+  flagged = false,
 }: {
   host: QuestionHost;
+  /** Draw the card-table error outline (1570:3366). */
+  flagged?: boolean;
   staticQuestions: StaticQuestion[];
   pools: RandomPool[];
   onChange: (patch: {
@@ -2568,7 +2598,7 @@ function QuestionGroupEditor({
   let slot = 1;
 
   return (
-    <div className={`qz${drag ? " qz-dragging" : ""}`}>
+    <div className={`qz${drag ? " qz-dragging" : ""}${flagged ? " has-error" : ""}`}>
       <div className="qz-hd">
         <span className="qz-ord-col">
           <span className="qz-drag qz-drag--ghost" aria-hidden="true">
@@ -2646,7 +2676,6 @@ function QuestionGroupEditor({
         const key = `p:${p.id}`;
         const drawNum = parseInt(p.draw, 10) || 0;
         const size = p.questionIds.length;
-        const overDrawn = drawNum > size;
         const span = Math.max(1, drawNum);
         const label = span === 1 ? String(slot) : `${slot}-${slot + span - 1}`;
         slot += span;
@@ -2673,7 +2702,7 @@ function QuestionGroupEditor({
               <div className="qz-pool-line">
                 <span>Pick</span>
                 <input
-                  className={`qz-pt-input ${overDrawn ? "invalid" : ""}`}
+                  className={`qz-pt-input${drawNum > size ? " has-error" : ""}`}
                   value={p.draw}
                   aria-label="Questions drawn per attempt"
                   onChange={(e) => {
@@ -2913,7 +2942,14 @@ function QuizCompletionStep(props: StepProps) {
                 <span className="form-label-error">Section Pass Marks cannot be left empty</span>
               )}
           </label>
-          <div className="qsec qsec--pass">
+          <div
+            className={`qsec qsec--pass${
+              missing?.has(REQUIRED_FIELD_KEYS.passingPct) &&
+              data.sections.some((sec) => !sec.passingPct.trim())
+                ? " has-error"
+                : ""
+            }`}
+          >
             <div className="qsec-hd">
               <span className="qsec-name">SECTION</span>
               <span className="qsec-pct">% TO PASS</span>

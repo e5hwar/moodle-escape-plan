@@ -15,6 +15,8 @@ type Props = {
   bank: Question[];
   onUpdate: (links: FormQuestionLink[]) => void;
   onCreateQuestion: () => void;
+  /** The field is flagged — the card takes the error outline (1570:3366). */
+  flagged?: boolean;
 };
 
 const TODAY = "2026-07-09";
@@ -37,7 +39,7 @@ const TYPE_LABEL: Record<QuestionType, string> = {
  * features genuinely disagree on — a form has no points and no random pools, so
  * the POINTS column becomes a MANDATORY toggle (810:1285), and the menu drops
  * "Add Random Set". */
-export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: Props) {
+export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, flagged = false }: Props) {
   const [picking, setPicking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const addWrapRef = useRef<HTMLDivElement>(null);
@@ -178,7 +180,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion }: P
 
   return (
     <>
-      <div className={`qz${drag ? " qz-dragging" : ""}`}>
+      <div className={`qz${drag ? " qz-dragging" : ""}${flagged ? " has-error" : ""}`}>
         <div className="qz-hd">
           <span className="qz-ord-col">
             <span className="qz-drag qz-drag--ghost" aria-hidden="true">

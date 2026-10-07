@@ -38,7 +38,6 @@ import { questionsFromImport, type ImportReport } from "../data/questionImport";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { QuestionSearch } from "./QuestionSearch";
 import { QuestionVersionsPage } from "./QuestionVersionsPage";
-import { QuestionAnswers } from "./QuestionAnswers";
 import { ConfirmCard } from "./ConfirmCard";
 import { PreviewPanel } from "./PreviewPanel";
 import { TableEmpty } from "./TableEmpty";
@@ -2201,6 +2200,9 @@ function QuestionRow({
  *  Overview, Answers and the Quizzes and Feedback Forms using it, as
  *  accordions, then its attempts as Activity. The blank preview column is
  *  where the old "Preview as Learner" went. */
+/** "A", "B"… for an option's position, as the editor letters them. */
+const letterOf = (i: number) => "ABCDEFGHIJ"[i] ?? String(i + 1);
+
 function QuestionPanel({
   q,
   dates: datesProp,
@@ -2217,33 +2219,73 @@ function QuestionPanel({
   onMore?: (rect: DOMRect) => void;
 }) {
   const dates = datesProp ?? questionDates(q);
-  const attempts = attemptCount(q);
   const [category, ...subs] = q.categoryPath;
-  const listCard = (title: string, names: string[], empty: string) => (
-    <ConfirmCard title={`${title} · ${names.length}`} tableBody={names.length > 0}>
-      {names.length > 0 ? (
-        <div className="ctb-tasktable">
-          {names.map((n) => (
-            <div key={n} className="cdr-task">
-              <div className="cdr-task-name-row">
-                <span className="cdr-task-name">{n}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="form-help">{empty}</p>
-      )}
-    </ConfirmCard>
-  );
-
+  const lines = (names: string[]) => names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
+  /* Answers (user, 2026-10-07): a Short Answer has none to show; a Linear
+     Scale and a File Upload read back as label/value pairs; the option types
+     keep the shared read-only list. */
+  const answers =
+    q.type === "Short answer" ? null : q.scale ? (
+      <ConfirmCard
+        title="Answers"
+        fillBlanks
+        rows={[
+          ["Min. Value", String(q.scale.min)],
+          ["Max. Value", String(q.scale.max)],
+          [`Label for ${q.scale.min}`, q.scale.minLabel],
+          [`Label for ${q.scale.max}`, q.scale.maxLabel],
+        ]}
+      />
+    ) : q.fileRules ? (
+      <ConfirmCard
+        title="Answers"
+        fillBlanks
+        rows={[
+          ["Max. Files Allowed", String(q.fileRules.maxFiles)],
+          ["Max. File Size", `${q.fileRules.maxSizeMb} MB`],
+        ]}
+      />
+    ) : q.options && q.options.length > 0 ? (
+      /* Multiple choice / multi-select: "Option A"… one per line, then
+         "Correct Answer" as the letters graded above 0 ("A, B"); an ungraded
+         question has none, so "-". */
+      <ConfirmCard
+        title="Answers"
+        fillBlanks
+        rows={[
+          ...q.options.map((o, i): [string, string] => [`Option ${letterOf(i)}`, o.text]),
+          [
+            "Correct Answer",
+            q.options
+              .map((o, i) => (o.grade > 0 ? letterOf(i) : ""))
+              .filter(Boolean)
+              .join(", "),
+          ],
+        ]}
+      />
+    ) : q.type === "True/False" ? (
+      <ConfirmCard
+        title="Answers"
+        fillBlanks
+        rows={[["Correct Answer", q.tfAnswer === undefined ? "" : q.tfAnswer ? "True" : "False"]]}
+      />
+    ) : q.pairs && q.pairs.length > 0 ? (
+      /* Match the Following: the editor's ANSWER side is the label here and
+         its QUESTION side the value — the question side is the one that can
+         carry formatting and images. A spare answer with no question reads
+         "-". */
+      <ConfirmCard
+        title="Answers"
+        fillBlanks
+        rows={q.pairs.map((p): [string, string] => [p.right, p.left])}
+      />
+    ) : null;
+  /* No Activity accordion on a question (user, 2026-10-07). */
   return (
     <PreviewPanel
-      kind="Question"
       title={q.text}
       subtitle={longQuestionType(q.type)}
       onMore={onMore}
-      stats={[{ count: formatCount(attempts), title: "Attempts", sub: "Across all versions" }]}
       onClose={onClose}
     >
       <ConfirmCard
@@ -2265,11 +2307,16 @@ function QuestionPanel({
           ["Last Modified", dates.modified],
         ]}
       />
-      <ConfirmCard title="Answers">
-        <QuestionAnswers question={q} hideText />
-      </ConfirmCard>
-      {listCard("Quizzes", q.quizzes, "Not used in any Quiz Task.")}
-      {listCard("Feedback Forms", q.forms, "Not used in any Feedback Form.")}
+      {answers}
+      {/* One "Used In" accordion for both kinds of use (user, 2026-10-07). */}
+      <ConfirmCard
+        title="Used In"
+        fillBlanks
+        rows={[
+          ["Quizzes", lines(q.quizzes)],
+          ["Feedback Forms", lines(q.forms)],
+        ]}
+      />
     </PreviewPanel>
   );
 }

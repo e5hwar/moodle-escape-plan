@@ -1,9 +1,10 @@
 import { createContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDownSquareIcon } from "./icons";
 
-/* Accordion (Figma 1517:3788 collapsed / 1517:3792 expanded, "Preview Panel"
- * 1514:2860): a 20px SemiBold title with the 16px square-cap chevron opposite,
- * over a hairline rule; open, its body sits under the title on the same rule.
+/* Accordion (Figma 1586:1622 / 1586:1669, "Preview Panel - Certification"
+ * 1582:1452): a 20px SemiBold title with the 16px square-cap chevron opposite,
+ * 12px above and below, over a hairline rule; open, its body sits under the
+ * title on the same rule. Head and insets are the same open or shut.
  * The body opens on the 0fr → 1fr grid track, so it grows rather than pops.
  *
  * `defaultOpen` left unset opens only the first accordion of a stack (the
@@ -72,8 +73,9 @@ export function Accordion({
 export function AccordionRows({ rows }: { rows: [label: string, value: ReactNode][] }) {
   return (
     <dl className="acc-rows">
-      {rows.map(([label, value]) => (
-        <div className="acc-row" key={label}>
+      {/* Keyed by position too: labels can repeat (a Match pair's answer). */}
+      {rows.map(([label, value], i) => (
+        <div className="acc-row" key={`${i}:${label}`}>
           <dt className="acc-label">{label}</dt>
           <dd className="acc-value">{value}</dd>
         </div>
